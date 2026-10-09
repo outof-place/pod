@@ -8,6 +8,7 @@ import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import type { MainWindowStateLifecycle } from './main-window-state-lifecycle'
 import { syncTrafficLightPosition } from './main-window-visual-lifecycle'
 import { consumeUserQuitWindowClose } from './user-quit-window-close'
+import { productDisplayName } from '../product-identity/product-overlay'
 
 export const WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS = QUIT_RENDERER_ACK_TIMEOUT_MS
 
@@ -76,7 +77,7 @@ export function installMainWindowCloseLifecycle(args: {
     if (store.getUI().trayMinimizeNoticeShown !== true) {
       try {
         new Notification({
-          title: 'Orca',
+          title: productDisplayName(),
           body: translateMain(
             'tray.minimizeNotice.body',
             'Orca is still running in the system tray'
