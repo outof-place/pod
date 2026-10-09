@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { discoverFiles } from './session-scanner-discovery'
@@ -8,21 +8,22 @@ import {
   applySessionTreeWatchState,
   forgetSessionTreePaths,
   installSessionTreeWatchRequests,
+  refreshSessionTreeCache,
   resetSessionTreeCacheForTests
 } from './session-tree-cache'
 
 let root: string
 
-async function discovered(): Promise<string[]> {
+async function discovered(scanRoot = root): Promise<string[]> {
   const discovery = await discoverFiles({
-    rootDir: root,
+    rootDir: scanRoot,
     limit: 100,
     agent: 'claude',
     issues: [],
     extensions: ['.jsonl'],
     directoryPredicate: (name) => name !== 'subagents'
   })
-  return discovery.files.map((file) => file.path.slice(root.length + 1)).sort()
+  return discovery.files.map((file) => file.path.slice(scanRoot.length + 1)).sort()
 }
 
 beforeEach(async () => {
@@ -79,5 +80,65 @@ describe('discoverFiles over a watched root', () => {
     await rm(deleted)
     forgetSessionTreePaths([deleted])
     expect(await discovered()).toEqual([])
+  })
+
+  it('rereads descendants when a directory update summarizes their changes', async () => {
+    installSessionTreeWatchRequests(() => undefined)
+    applySessionTreeWatchState(root, 'live')
+    await mkdir(join(root, 'proj', 'nested'))
+    const nested = join(root, 'proj', 'nested', 'old.jsonl')
+    await writeFile(nested, '{}\n')
+    expect(await discovered()).toEqual(['proj/a.jsonl', 'proj/nested/old.jsonl'])
+
+    await utimes(nested, new Date(5_000), new Date(5_000))
+    await writeFile(join(root, 'proj', 'nested', 'new.jsonl'), '{}\n')
+    applySessionTreeChanges(root, [{ type: 'update', path: join(root, 'proj') }])
+
+    const discovery = await discoverFiles({
+      rootDir: root,
+      limit: 100,
+      agent: 'claude',
+      issues: [],
+      extensions: ['.jsonl'],
+      directoryPredicate: (name) => name !== 'subagents'
+    })
+    expect(discovery.files.find((file) => file.path === nested)?.mtimeMs).toBe(5_000)
+    expect(
+      discovery.files.some((file) => file.path === join(root, 'proj', 'nested', 'new.jsonl'))
+    ).toBe(true)
+  })
+
+  it('rebinds a retargeted symlink before trusting any cached paths', async () => {
+    const alias = join(root, 'alias')
+    const other = join(root, 'other')
+    await mkdir(other)
+    await writeFile(join(other, 'b.jsonl'), '{}\n')
+    await symlink(join(root, 'proj'), alias, 'junction')
+    const requests: { root: string; restart?: boolean }[] = []
+    installSessionTreeWatchRequests((root, restart) => requests.push({ root, restart }))
+    applySessionTreeWatchState(alias, 'live', await stat(alias))
+    expect(await discovered(alias)).toEqual(['a.jsonl'])
+
+    await rm(alias)
+    await symlink(other, alias, 'junction')
+    expect(await discovered(alias)).toEqual(['b.jsonl'])
+    expect(requests).toEqual([{ root: alias, restart: true }])
+
+    applySessionTreeWatchState(alias, 'live', await stat(alias))
+    expect(await discovered(alias)).toEqual(['b.jsonl'])
+    await writeFile(join(other, 'c.jsonl'), '{}\n')
+    applySessionTreeChanges(alias, [{ type: 'create', path: join(alias, 'c.jsonl') }])
+    expect(await discovered(alias)).toEqual(['b.jsonl', 'c.jsonl'])
+  })
+
+  it('allows an explicit refresh to find a change whose watcher event was missed', async () => {
+    installSessionTreeWatchRequests(() => undefined)
+    applySessionTreeWatchState(root, 'live')
+    expect(await discovered()).toEqual(['proj/a.jsonl'])
+    await writeFile(join(root, 'proj', 'b.jsonl'), '{}\n')
+    expect(await discovered()).toEqual(['proj/a.jsonl'])
+
+    refreshSessionTreeCache()
+    expect(await discovered()).toEqual(['proj/a.jsonl', 'proj/b.jsonl'])
   })
 })

@@ -228,7 +228,7 @@ export class AiVaultScannerServiceClient {
       return
     }
     if (message.type === 'sessionTreeWatch') {
-      this.options.treeWatch?.watch(this.child, message.root)
+      this.options.treeWatch?.watch(this.child, message.root, message.restart)
       return
     }
     if (message.type === 'ready') {

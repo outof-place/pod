@@ -50,6 +50,10 @@ function readerFor(root: string) {
   return reader
 }
 
+function transcriptStatReads(): number {
+  return fsMocks.stat.mock.calls.filter(([path]) => path !== ROOT).length
+}
+
 let requests: string[]
 
 beforeEach(() => {
@@ -99,7 +103,7 @@ describe('sessionTreeReader', () => {
       await reader.stat(TRANSCRIPT)
     }
     expect(fsMocks.readdir).toHaveBeenCalledTimes(2)
-    expect(fsMocks.stat).toHaveBeenCalledTimes(1)
+    expect(transcriptStatReads()).toBe(1)
 
     fsMocks.stat.mockImplementation(async () => fileStats(2))
     applySessionTreeChanges(ROOT, [{ type: 'update', path: TRANSCRIPT }])
@@ -107,7 +111,7 @@ describe('sessionTreeReader', () => {
     await reader.readDirectory(PROJECT)
     expect((await reader.stat(TRANSCRIPT)).mtimeMs).toBe(2)
     expect(fsMocks.readdir).toHaveBeenCalledTimes(2)
-    expect(fsMocks.stat).toHaveBeenCalledTimes(2)
+    expect(transcriptStatReads()).toBe(2)
   })
 
   it('drops the parent listing and the whole subtree on a create or delete', async () => {
@@ -123,7 +127,7 @@ describe('sessionTreeReader', () => {
     await reader.readDirectory(PROJECT)
     await reader.stat(TRANSCRIPT)
     expect(fsMocks.readdir).toHaveBeenCalledTimes(4)
-    expect(fsMocks.stat).toHaveBeenCalledTimes(2)
+    expect(transcriptStatReads()).toBe(2)
 
     forgetSessionTreePaths([TRANSCRIPT])
     await reader.readDirectory(ROOT)
@@ -188,5 +192,19 @@ describe('sessionTreeReader', () => {
     await readerFor(ROOT).readDirectory(ROOT)
     await readerFor(ROOT).readDirectory(ROOT)
     expect(fsMocks.readdir).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops trusting an existing reader as soon as its watch is lost', async () => {
+    installSessionTreeWatchRequests(() => undefined)
+    applySessionTreeWatchState(ROOT, 'live')
+    const reader = readerFor(ROOT)
+    await reader.readDirectory(PROJECT)
+    await reader.stat(TRANSCRIPT)
+
+    applySessionTreeWatchState(ROOT, 'lost')
+    fsMocks.stat.mockResolvedValue(fileStats(2))
+    fsMocks.readdir.mockResolvedValue([dirent('b.jsonl', false)])
+    expect((await reader.stat(TRANSCRIPT)).mtimeMs).toBe(2)
+    expect((await reader.readDirectory(PROJECT)).map((entry) => entry.name)).toEqual(['b.jsonl'])
   })
 })

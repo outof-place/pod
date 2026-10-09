@@ -5,34 +5,32 @@ import type {
   WatcherProcessSubscription
 } from '../ipc/parcel-watcher-process'
 import type { AiVaultServiceParentMessage } from './session-scanner-service-protocol'
+import type { SessionTreeRootIdentity } from './session-tree-cache'
+import { BoundedMap } from '../../shared/bounded-map'
+import { RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS } from '../../shared/runtime-file-watch-limits'
+import { SESSION_TREE_CACHE_MAX_ROOTS } from './session-tree-cache-budget'
 
 export type SessionTreeWatchSubscribe = (
   root: string,
   callback: WatcherProcessCallback,
   hooks: WatcherProcessHooks
-) => Promise<WatcherProcessSubscription>
+) => Promise<WatcherProcessSubscription & { identity?: SessionTreeRootIdentity }>
 
 type RootWatch = {
   controller: AbortController
   subscription: WatcherProcessSubscription | null
 }
 
-// Why: FSEvents drops events under system-wide load and Parcel ends the stream
-// with an error; resubscribing at once costs the child one cold walk, while a
-// root that keeps failing is left for the child to ask about again.
+// Retry retired subscriptions promptly once, then let discovery's backoff apply.
 export const SESSION_TREE_RESUBSCRIBE_MIN_INTERVAL_MS = 30_000
 
-/**
- * Watches the transcript roots the scanner child asks about and relays what
- * changed, so the child can rewalk only those directories.
- *
- * Subscriptions belong to one child: a respawned child starts cold and asks
- * again, so nothing it relies on can outlive the process that relied on it.
- */
+/** Root subscriptions and their event delivery belong to one scanner child. */
 export class AiVaultServiceTreeWatch {
   private child: ChildProcess | null = null
   private readonly watches = new Map<string, RootWatch>()
-  private readonly lostAt = new Map<string, number>()
+  private readonly lostAt = new BoundedMap<string, number>({ maxEntries: 128 })
+  private pendingDelivery: { settled: boolean } | null = null
+  private readonly resetRoots = new Set<string>()
 
   constructor(private readonly subscribe: SessionTreeWatchSubscribe | null) {}
 
@@ -52,11 +50,27 @@ export class AiVaultServiceTreeWatch {
     }
     this.watches.clear()
     this.lostAt.clear()
+    this.pendingDelivery = null
+    this.resetRoots.clear()
   }
 
-  watch(child: ChildProcess | null, root: string): void {
+  watch(child: ChildProcess | null, root: string, restart = false): void {
     const subscribe = this.subscribe
-    if (!subscribe || !child || child !== this.child || this.watches.has(root)) {
+    if (!subscribe || !child || child !== this.child) {
+      return
+    }
+    const existing = this.watches.get(root)
+    if (existing && !restart) {
+      return
+    }
+    if (existing) {
+      this.watches.delete(root)
+      this.resetRoots.delete(root)
+      closeRootWatch(existing)
+      send(child, { type: 'sessionTree', root, state: 'lost' })
+    }
+    if (this.watches.size >= SESSION_TREE_CACHE_MAX_ROOTS) {
+      send(child, { type: 'sessionTree', root, state: 'lost' })
       return
     }
     const watch: RootWatch = { controller: new AbortController(), subscription: null }
@@ -67,6 +81,7 @@ export class AiVaultServiceTreeWatch {
         return
       }
       this.watches.delete(root)
+      this.resetRoots.delete(root)
       closeRootWatch(watch)
       send(child, { type: 'sessionTree', root, state: 'lost' })
       const now = Date.now()
@@ -78,7 +93,7 @@ export class AiVaultServiceTreeWatch {
     }
     const reset = (): void => {
       if (current()) {
-        send(child, { type: 'sessionTree', root, state: 'reset' })
+        this.deliver(child, root, { type: 'sessionTree', root, state: 'reset' })
       }
     }
     subscribe(
@@ -93,15 +108,17 @@ export class AiVaultServiceTreeWatch {
           return
         }
         if (events.length > 0) {
-          send(child, {
+          this.deliver(child, root, {
             type: 'sessionTreeChanges',
             root,
-            changes: events.map(({ type, path }) => ({ type, path }))
+            changes: events
           })
         }
       },
       {
         signal: watch.controller.signal,
+        subscribeTimeoutMs: RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS,
+        delivery: { includeDirectoryMetadata: true },
         onOverflow: reset,
         onInterruption: reset,
         onTerminalError: lose
@@ -112,8 +129,43 @@ export class AiVaultServiceTreeWatch {
         return
       }
       watch.subscription = subscription
-      send(child, { type: 'sessionTree', root, state: 'live' })
+      send(child, {
+        type: 'sessionTree',
+        root,
+        state: 'live',
+        ...(subscription.identity ? { identity: subscription.identity } : {})
+      })
     }, lose)
+  }
+
+  private deliver(child: ChildProcess, root: string, message: AiVaultServiceParentMessage): void {
+    if (this.pendingDelivery) {
+      this.resetRoots.add(root)
+      return
+    }
+    if (!child.connected) {
+      return
+    }
+    const delivery = { settled: false }
+    const writable = child.send(message, () => {
+      delivery.settled = true
+      if (this.child !== child || this.pendingDelivery !== delivery) {
+        return
+      }
+      this.pendingDelivery = null
+      const roots = [...this.resetRoots]
+      this.resetRoots.clear()
+      for (const root of roots) {
+        if (this.watches.has(root)) {
+          this.deliver(child, root, { type: 'sessionTree', root, state: 'reset' })
+        }
+      }
+    })
+    if (!writable && !delivery.settled) {
+      // Retain one dirty bit per root while the child channel is full.
+      this.pendingDelivery = delivery
+      this.resetRoots.add(root)
+    }
   }
 }
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks,
@@ -11,8 +11,11 @@ import {
   type SessionTreeWatchSubscribe
 } from './session-scanner-service-tree-watch'
 import { AiVaultServiceTestChild } from './session-scanner-service-test-child'
+import { RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS } from '../../shared/runtime-file-watch-limits'
 
 const ROOT = '/home/u/.claude/projects'
+
+afterEach(() => vi.useRealTimers())
 
 type FakeSubscription = {
   root: string
@@ -89,7 +92,7 @@ describe('AiVaultServiceTreeWatch', () => {
       {
         type: 'sessionTreeChanges',
         root: ROOT,
-        changes: [{ type: 'update', path: `${ROOT}/p/a.jsonl` }]
+        changes: [{ type: 'update', path: `${ROOT}/p/a.jsonl`, isDirectory: false }]
       }
     ])
   })
@@ -146,7 +149,108 @@ describe('AiVaultServiceTreeWatch', () => {
     watcher.subscriptions[2].reject(new Error('ENOENT'))
     await settle()
     expect(watcher.subscriptions).toHaveLength(4)
-    vi.useRealTimers()
+  })
+
+  it('rebinds a replaced root and ignores callbacks from its old subscription', async () => {
+    const watcher = fakeWatcher()
+    const watch = new AiVaultServiceTreeWatch(watcher.subscribe)
+    const child = connectedChild()
+    watch.attach(child.asChildProcess())
+    watch.watch(child.asChildProcess(), ROOT)
+    const previous = watcher.subscriptions[0]
+    previous.resolve()
+    await settle()
+
+    watch.watch(child.asChildProcess(), ROOT, true)
+    expect(previous.unsubscribe).toHaveBeenCalledTimes(1)
+    expect(previous.hooks.signal?.aborted).toBe(true)
+    previous.callback(null, [{ type: 'delete', path: `${ROOT}/a.jsonl` }])
+    previous.hooks.onOverflow?.()
+    watcher.subscriptions[1].resolve()
+    await settle()
+    watcher.subscriptions[1].callback(null, [
+      { type: 'update', path: `${ROOT}/project`, isDirectory: true }
+    ])
+
+    expect(treeMessages(child)).toEqual([
+      { type: 'sessionTree', root: ROOT, state: 'live' },
+      { type: 'sessionTree', root: ROOT, state: 'lost' },
+      { type: 'sessionTree', root: ROOT, state: 'live' },
+      {
+        type: 'sessionTreeChanges',
+        root: ROOT,
+        changes: [{ type: 'update', path: `${ROOT}/project`, isDirectory: true }]
+      }
+    ])
+    expect(watcher.subscriptions[1].hooks).toEqual(
+      expect.objectContaining({
+        subscribeTimeoutMs: RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS,
+        delivery: { includeDirectoryMetadata: true }
+      })
+    )
+    watch.detach()
+  })
+
+  it('closes a replaced subscription even when it becomes ready late', async () => {
+    const watcher = fakeWatcher()
+    const watch = new AiVaultServiceTreeWatch(watcher.subscribe)
+    const child = connectedChild()
+    watch.attach(child.asChildProcess())
+    watch.watch(child.asChildProcess(), ROOT)
+    watch.watch(child.asChildProcess(), ROOT, true)
+    watcher.subscriptions[0].resolve()
+    await settle()
+    expect(watcher.subscriptions[0].unsubscribe).toHaveBeenCalledTimes(1)
+    expect(treeMessages(child)).toEqual([{ type: 'sessionTree', root: ROOT, state: 'lost' }])
+    watch.detach()
+  })
+
+  it('bounds relayed changes while the child channel is full and resets affected roots', async () => {
+    const watcher = fakeWatcher()
+    const watch = new AiVaultServiceTreeWatch(watcher.subscribe)
+    const child = connectedChild()
+    watch.attach(child.asChildProcess())
+    watch.watch(child.asChildProcess(), ROOT)
+    watcher.subscriptions[0].resolve()
+    await settle()
+    let release: () => void = () => undefined
+    vi.spyOn(child, 'send').mockImplementationOnce((message, callback) => {
+      child.sent.push(message)
+      release = () => callback?.(null)
+      return false
+    })
+
+    for (let index = 0; index < 10_000; index++) {
+      watcher.subscriptions[0].callback(null, [
+        { type: 'create', path: `${ROOT}/session-${index}.jsonl` }
+      ])
+      watcher.subscriptions[0].hooks.onOverflow?.()
+    }
+    expect(treeMessages(child)).toHaveLength(2)
+    release()
+    expect(treeMessages(child).at(-1)).toEqual({ type: 'sessionTree', root: ROOT, state: 'reset' })
+    watcher.subscriptions[0].callback(null, [{ type: 'update', path: `${ROOT}/latest.jsonl` }])
+    expect(treeMessages(child).at(-1)).toEqual({
+      type: 'sessionTreeChanges',
+      root: ROOT,
+      changes: [{ type: 'update', path: `${ROOT}/latest.jsonl` }]
+    })
+    watch.detach()
+  })
+
+  it('falls back to uncached discovery after reaching the watched-root limit', () => {
+    const watcher = fakeWatcher()
+    const watch = new AiVaultServiceTreeWatch(watcher.subscribe)
+    const child = connectedChild()
+    watch.attach(child.asChildProcess())
+    for (let index = 0; index < 65; index++) {
+      watch.watch(child.asChildProcess(), `${ROOT}-${index}`)
+    }
+    expect(watcher.subscriptions).toHaveLength(64)
+    expect(treeMessages(child)).toEqual([
+      { type: 'sessionTree', root: `${ROOT}-64`, state: 'lost' }
+    ])
+    watch.detach()
   })
 
   it('drops every subscription with the child it served', async () => {
