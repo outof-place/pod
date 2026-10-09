@@ -15,49 +15,56 @@
       "forkOnly": "perf experiments: CADisplayLink pacing on by default on macOS, Skia Graphite env-only, Electron 43.7.8"
     },
     {
-      "branch": "perf/git-status-untracked-cache",
-      "upstream": "https://github.com/stablyai/orca/pull/26979"
-    },
-    {
-      "branch": "perf/native-proc-info-darwin",
-      "upstream": "https://github.com/stablyai/orca/pull/26985",
-      "note": "Adds a macOS native addon plus a beforePack guard"
-    },
-    {
-      "branch": "fix/xterm-empty-write-barrier",
-      "upstream": "https://github.com/stablyai/orca/pull/26956"
+      "branch": "fork/no-official-updater",
+      "forkOnly": "Pod must not install Orca's official updates; upstream opt-out PR planned"
     },
     {
       "branch": "fix/computer-macos-swiftbuild",
       "upstream": "https://github.com/stablyai/orca/pull/26945"
     },
     {
+      "branch": "perf/git-status-untracked-cache",
+      "upstream": "https://github.com/stablyai/orca/pull/26979"
+    },
+    {
+      "branch": "perf/daemon-binary-pty-frames",
+      "upstream": "https://github.com/stablyai/orca/pull/27006",
+      "note": "nt-perf main-feed builds on its DaemonEvent path"
+    },
+    {
       "branch": "feat/native-ghostty-terminal",
       "upstream": "https://github.com/stablyai/orca/pull/26914"
+    },
+    {
+      "branch": "stack/proc-info",
+      "upstream": "https://github.com/stablyai/orca/pull/26985",
+      "base": "origin/feat/native-ghostty-terminal",
+      "note": "perf/native-proc-info-darwin replayed onto feat/native-ghostty-terminal (package.json build steps merged); refresh when #26985 changes"
+    },
+    {
+      "branch": "stack/ps-locale",
+      "upstream": "https://github.com/stablyai/orca/pull/27005",
+      "base": "origin/stack/proc-info",
+      "note": "fix/ps-locale-independent-start-time replayed onto stack/proc-info (imports merged); refresh when #27005 changes"
+    },
+    {
+      "branch": "fix/xterm-empty-write-barrier",
+      "upstream": "https://github.com/stablyai/orca/pull/26956"
     },
     {
       "branch": "app-identity-constant",
       "upstream": "https://github.com/stablyai/orca/pull/26973"
     },
     {
-      "branch": "feat/plugin-platforms",
-      "upstream": "https://github.com/stablyai/orca/pull/26975"
+      "branch": "stack/plugins",
+      "upstream": "https://github.com/stablyai/orca/pull/26953",
+      "note": "#26953, #26975 and #26991 stacked by b1-plugins-ui; each commit carries its own Upstream trailer"
     },
     {
-      "branch": "feat/plugin-settings-pages",
-      "upstream": "https://github.com/stablyai/orca/pull/26991"
-    },
-    {
-      "branch": "plugins/status-bar-live-panels",
-      "upstream": "https://github.com/stablyai/orca/pull/26953"
-    },
-    {
-      "branch": "fork/no-official-updater",
-      "forkOnly": "Pod must not install Orca's official updates; upstream opt-out PR planned"
-    },
-    {
-      "branch": "pod/identity",
-      "forkOnly": "Pod identity: name, bundle id, icon, URL scheme and CLI name"
+      "branch": "stack/pod-identity",
+      "forkOnly": "Pod identity: name, bundle id, icon, URL scheme and CLI name",
+      "base": "origin/app-identity-constant",
+      "note": "pod/identity replayed onto app-identity-constant (#26973); refresh when pod/identity changes, or rebase pod/identity itself"
     },
     {
       "branch": "pod/overlay",
@@ -68,8 +75,10 @@
       "forkOnly": "README visuals"
     },
     {
-      "branch": "pod/acc",
-      "forkOnly": "claude-acc built into Pod: bundled plugin, payload and tray"
+      "branch": "stack/pod-acc",
+      "forkOnly": "claude-acc built into Pod: bundled plugin, payload and tray",
+      "base": "80cb9c0f659400021a432b052e29c23f680d2fca",
+      "note": "pod/acc minus its own status-bar copies, replayed onto the stack (plugin-marketplace imports merged); refresh when pod/acc changes, or rebase pod/acc onto stack/plugins and stack/pod-identity"
     }
   ]
 }
