@@ -342,15 +342,18 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
-      # The cross-version harness needs full history and Orca's tags, so it runs in its own job.
-      # One retry: a few PTY and grammar-loading tests time out under full-suite load.
+      # ORCA_BALANCE_UNIT_SHARDS selects Orca's CI file list, which leaves out the cross-version
+      # harness (its own job below) and the live-shell tests Orca runs elsewhere.
+      # One retry: a few grammar-loading tests time out under full-suite load.
       - name: Test shard
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_BALANCE_UNIT_SHARDS: '1'
         run: |
+          ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
+          export ORCA_SHARD_SOURCE_SHA
           node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
-            "--shard=${{ matrix.shard }}/$UNIT_SHARDS" --maxWorkers=4 --retry=1 \
-            --exclude 'tests/e2e/cross-version-wire/**'
+            "--shard=${{ matrix.shard }}/$UNIT_SHARDS" --maxWorkers=4 --retry=1
 
   cross_version:
     name: Cross-version wire compatibility
@@ -358,6 +361,8 @@ jobs:
     if: needs.rebase.outputs.result == 'clean'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
+    outputs:
+      journeys: ${{ steps.journeys.outcome }}
     steps:
       # Full history without historical blobs: the harness checks out old releases by tag.
       - uses: actions/checkout@v6
@@ -376,7 +381,11 @@ jobs:
           node-version: '24'
       - name: Daemon protocol crossing against the newest release
         run: pnpm run check:daemon-protocol-crossing
+      # Advisory: Orca runs these only on pull requests that touch wire code, so Orca's main is
+      # sometimes red here on its own. The result goes into the pull request body.
       - name: Old and new client and server journeys
+        id: journeys
+        continue-on-error: true
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/
@@ -424,6 +433,7 @@ jobs:
       REBASE_JOB: ${{ needs.rebase.result }}
       REBASE_RESULT: ${{ needs.rebase.outputs.result }}
       CHECKS: typecheck=${{ needs.typecheck.result }} unit=${{ needs.unit.result }} cross-version=${{ needs.cross_version.result }} build=${{ needs.build.result }}
+      JOURNEYS: ${{ needs.cross_version.outputs.journeys }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Checkout the quarantine script
@@ -456,7 +466,12 @@ jobs:
               echo "Rebases \`$PRODUCT_BRANCH\` from Orca ${OLD_LABEL:-$OLD_SHA} to Orca main [\`$short\`](https://github.com/$UPSTREAM_REPO/commit/$NEW_SHA) ($LABEL), the newest commit whose Orca checks all passed."
               echo
               echo "- Orca changes in this range: $compare"
-              echo "- Typecheck, unit tests ($UNIT_SHARDS shards), cross-version wire checks and the macOS build passed: $RUN_URL"
+              echo "- Typecheck, unit tests ($UNIT_SHARDS shards), the daemon protocol crossing and the macOS build passed: $RUN_URL"
+              if [ "$JOURNEYS" = success ]; then
+                echo "- Cross-version wire journeys passed."
+              else
+                echo "- **Cross-version wire journeys failed (advisory).** Orca's main is sometimes red there on its own; check whether the failing files involve Pod's changes before promoting."
+              fi
               echo "- \`upstream.json\` now pins \`$NEW_SHA\`; release notes say \"Based on Orca $NEAREST_TAG\"."
               echo
               echo "**Do not press Merge.** A rebase replaces the branch. To promote it, run the sync with \`promote\`:"
