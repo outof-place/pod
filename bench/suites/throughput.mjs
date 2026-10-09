@@ -20,7 +20,6 @@ import {
 } from '../lib/bench-session.mjs'
 import {
   SUBJECTS,
-  appUsage,
   cli,
   closeInstance,
   createProfile,
@@ -31,7 +30,7 @@ import {
   processSnapshot,
   waitForPrompts
 } from '../lib/orca-instance.mjs'
-import { ensureLogFile, workloads } from '../lib/terminal-workloads.mjs'
+import { ensureLogFile, measureWorkload, workloads } from '../lib/terminal-workloads.mjs'
 
 const { values: options } = parseArgs({
   options: {
@@ -45,74 +44,6 @@ const names = options.subjects.split(',')
 const logFile = ensureLogFile()
 const allWorkloads = workloads(logFile)
 const workloadNames = options.workloads.split(',')
-const IDLE_WINDOW_MS = 2_000
-const SETTLE_WINDOW_MS = 300
-const SETTLE_MARGIN_CORES = 0.1
-const SETTLE_TIMEOUT_MS = 30_000
-const RESULT_TIMEOUT_MS = 300_000
-
-async function cpuRate(instance, ms) {
-  const before = await processSnapshot(instance)
-  await sleep(ms)
-  const after = await processSnapshot(instance)
-  return appUsage(before, after).cpuMs / (after.atMs - before.atMs)
-}
-
-async function runWorkload(instance, handle, workload) {
-  const out = path.join(instance.profile.ud, `result-${Date.now()}.json`)
-  const idleCores = await cpuRate(instance, IDLE_WINDOW_MS)
-  const before = await processSnapshot(instance)
-  await cli(instance, [
-    'terminal',
-    'send',
-    '--terminal',
-    handle,
-    '--text',
-    workload.command(out),
-    '--enter'
-  ])
-  const deadline = Date.now() + RESULT_TIMEOUT_MS
-  while (!existsSync(out)) {
-    if (Date.now() > deadline) {
-      throw new Error(`no result for ${workload.label}`)
-    }
-    await sleep(20)
-  }
-  const result = JSON.parse(readFileSync(out, 'utf8'))
-  rmSync(out)
-  // Settled: the app's CPU rate over the last window is back near its idle rate.
-  let previous = await processSnapshot(instance)
-  let settledAtMs = null
-  const settleDeadline = Date.now() + SETTLE_TIMEOUT_MS
-  while (Date.now() < settleDeadline) {
-    await sleep(SETTLE_WINDOW_MS)
-    const current = await processSnapshot(instance)
-    const cores = appUsage(previous, current).cpuMs / (current.atMs - previous.atMs)
-    previous = current
-    if (cores <= idleCores + SETTLE_MARGIN_CORES) {
-      settledAtMs = current.atMs - SETTLE_WINDOW_MS
-      break
-    }
-  }
-  const usage = appUsage(before, previous)
-  const bytes = workload.bytes ?? result.bytes
-  return {
-    synced: result.synced,
-    daReply: result.daReply,
-    cols: result.cols,
-    rows: result.rows,
-    producerMs: result.producerMs,
-    totalMs: result.totalMs,
-    settleMs: settledAtMs === null ? null : settledAtMs - result.startedAtMs,
-    mibPerS: bytes / 2 ** 20 / (result.totalMs / 1000),
-    cpuMs: usage.cpuMs,
-    cpuByRole: Object.fromEntries(
-      Object.entries(usage.byRole).map(([role, value]) => [role, Number(value.cpuMs.toFixed(1))])
-    ),
-    idleCores: Number(idleCores.toFixed(3))
-  }
-}
-
 // A pane can report a tiny PTY size until its view is laid out (seen once at 2x1 in Pod native).
 async function waitForGeometry(instance, handle) {
   const out = path.join(instance.profile.ud, 'geometry')
@@ -173,7 +104,22 @@ for (let round = 0; round <= rounds; round += 1) {
           label: `throughput ${name} ${workload} round ${round}`,
           count: round === 0 ? 0 : 1,
           warmup: round === 0 ? 1 : 0,
-          measure: () => runWorkload(instance, handle, allWorkloads[workload])
+          measure: () =>
+            measureWorkload({
+              workload: allWorkloads[workload],
+              out: path.join(profile.ud, `result-${Date.now()}.json`),
+              snapshot: () => processSnapshot(instance),
+              start: (command) =>
+                cli(instance, [
+                  'terminal',
+                  'send',
+                  '--terminal',
+                  handle,
+                  '--text',
+                  command,
+                  '--enter'
+                ])
+            })
         })
         samples[`${name}.${workload}`].push({ ...sample, index: round })
       }
