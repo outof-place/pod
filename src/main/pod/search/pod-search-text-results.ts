@@ -12,6 +12,17 @@ import { isOgdMessage, type OgdMessage } from './ogd-connection'
 
 // Mirrors buildRgArgs' `--max-filesize 5M`.
 const SEARCH_MAX_FILE_SIZE = 5 * 1024 * 1024
+// ogd cuts `text` at this many bytes and only reports the ranges inside the cut.
+const OGD_LINE_EXCERPT_BYTES = 2000
+
+/** A line ogd clipped, or decoded lossily, has ranges that cannot match ripgrep's exactly. */
+function isInexactOgdLine(text: string, match: OgdMessage): boolean {
+  return (
+    match.clipped === true ||
+    Buffer.byteLength(text, 'utf8') >= OGD_LINE_EXCERPT_BYTES ||
+    text.includes('\uFFFD')
+  )
+}
 
 export function textSearchLimit(options: SearchOptions): number {
   return Math.max(
@@ -51,7 +62,8 @@ export function buildOgdSearchRequest(
 
 /**
  * Builds Orca's SearchResult from an ogd `search` reply. `ranges` are byte offsets into `text`,
- * converted to UTF-16 columns exactly as ripgrep's JSON submatches are.
+ * converted to UTF-16 columns exactly as ripgrep's JSON submatches are. Null when a matched line
+ * was clipped or lossily decoded, so ripgrep answers instead of silently dropping matches.
  */
 export function ogdSearchReplyToResult(
   reply: OgdMessage,
@@ -69,6 +81,9 @@ export function ogdSearchReplyToResult(
       acc.truncated = true
       continue
     }
+    if (isInexactOgdLine(match.text, match)) {
+      return null
+    }
     const relativePath = normalizeRelativePath(match.path, resultRootPath)
     const filePath = joinSearchRoot(resultRootPath, relativePath)
     let fileResult = acc.fileMap.get(filePath)
@@ -83,7 +98,7 @@ export function ogdSearchReplyToResult(
         Array.isArray(range) && typeof range[0] === 'number' ? readOffset(range[0]) : null
       const end = Array.isArray(range) && typeof range[1] === 'number' ? readOffset(range[1]) : null
       if (start === null || end === null) {
-        // A match beyond the daemon's 2,000-byte line excerpt cannot be placed.
+        // A range outside its own line is a daemon fault; report a partial page, not a wrong one.
         acc.truncated = true
         continue
       }
