@@ -16,6 +16,7 @@ import { translate } from '@/i18n/i18n'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { areStablyServicesAvailable } from '@/lib/product-ui-identity'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { POD_FEATURE_PROMOS } from '../../../../shared/product/features'
 
 export function shouldShowMobileButton(
   settings: Partial<Pick<GlobalSettings, 'showMobileButton'>> | null | undefined
@@ -119,7 +120,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           ))}
         </span>
       </button>
-      <SetupGuideSidebarEntry />
+      {POD_FEATURE_PROMOS ? <SetupGuideSidebarEntry /> : null}
       <SidebarTaskNavButton />
       {showArtifactsButton ? (
         <ContextMenu>
