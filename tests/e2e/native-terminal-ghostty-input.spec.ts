@@ -144,6 +144,26 @@ test('native terminal panes keep Orca drops, app chords and held-modifier UI', a
   await expect
     .poll(async () => nativeSurfaceField(electronApp, surfaceId, 'windowFirstResponder'))
     .toBe('OrcaGhosttySurfaceView')
+  // A tooltip over the pane (markup as TooltipContent renders it) shows through a hole but
+  // leaves the keyboard on the native view; the startup hint once took it for 12 s.
+  await orcaPage.evaluate(() => {
+    const pane = document.querySelector('[data-native-surface-id]')?.getBoundingClientRect()
+    const tooltip = document.createElement('div')
+    tooltip.id = 'native-input-tooltip'
+    tooltip.setAttribute('data-radix-popper-content-wrapper', '')
+    tooltip.style.cssText = `position:fixed;left:${(pane?.left ?? 0) + 20}px;top:${(pane?.bottom ?? 0) - 60}px;width:200px;height:30px`
+    const content = document.createElement('div')
+    content.setAttribute('data-slot', 'tooltip-content')
+    content.textContent = 'tooltip'
+    tooltip.appendChild(content)
+    document.body.appendChild(tooltip)
+  })
+  await expect.poll(async () => nativeSurfaceField(electronApp, surfaceId, 'masked')).toBe(true)
+  expect(await nativeSurfaceField(electronApp, surfaceId, 'windowFirstResponder')).toBe(
+    'OrcaGhosttySurfaceView'
+  )
+  await orcaPage.evaluate(() => document.getElementById('native-input-tooltip')?.remove())
+  await expect.poll(async () => nativeSurfaceField(electronApp, surfaceId, 'masked')).toBe(false)
   await orcaPage.evaluate(() => {
     const released: string[] = []
     Reflect.set(window, '__nativeReleasedKeys', released)
