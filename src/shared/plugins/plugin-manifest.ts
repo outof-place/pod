@@ -20,6 +20,7 @@ import {
   PLUGIN_STATUS_BAR_ITEM_LIMIT,
   pluginStatusBarItemContributionSchema
 } from './plugin-status-bar'
+import { pluginPlatformsSchema } from './plugin-platforms'
 
 /**
  * Plugin manifest v1 (`orca-plugin.json` at the plugin root). The
@@ -94,6 +95,9 @@ export const pluginManifestSchema = z
     icon: pluginRelativePathSchema.optional(),
     /** Minimum host version gate; the host refuses to load below it. */
     engines: z.object({ orca: orcaEngineRangeSchema }),
+    /** Operating systems the plugin supports; absent means all. Other hosts
+     *  list it as unavailable and never run any of its contributions. */
+    platforms: pluginPlatformsSchema.optional(),
     /** Host-API major version this plugin targets. */
     pluginApi: z.literal(1),
     /** Node entry executed inside the out-of-process plugin worker. */
