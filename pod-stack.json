@@ -19,6 +19,10 @@
       "forkOnly": "Pod must not install Orca's official updates; upstream opt-out PR planned"
     },
     {
+      "branch": "fix/computer-macos-swiftbuild",
+      "upstream": "https://github.com/stablyai/orca/pull/26945"
+    },
+    {
       "branch": "pod/identity",
       "forkOnly": "Pod identity: name, bundle id codes.pod.app, icon, URL scheme and podx CLI"
     },
