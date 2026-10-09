@@ -2,12 +2,15 @@
 // Fork-only (Pod): required (`electron -r`) into the E2E app's main process before its first line.
 // Records each outbound host and fails lookups of Stably's hosts, so a broken gate fails the spec
 // without any request reaching Stably.
+const childProcess = require('node:child_process')
 const dc = require('node:diagnostics_channel')
 const dns = require('node:dns')
 const fs = require('node:fs')
 
 const logPath = process.env.ORCA_E2E_NETWORK_PROBE_LOG
 const STABLY_HOST = /(^|\.)(onorca\.dev|orca\.dev|posthog\.com)$/i
+// Git and other CLIs open their own connections, so their argv is the only place to see them.
+const STABLY_COMMAND = /onorca\.dev|orca\.dev|posthog\.com|github\.com[/:]stablyai\/orca-plugins/i
 
 function record(layer, target) {
   try {
@@ -42,6 +45,16 @@ if (logPath) {
       return Promise.reject(blockedLookup(hostname))
     }
     return promisesLookup.call(this, hostname, ...rest)
+  }
+  for (const name of ['spawn', 'spawnSync', 'execFile', 'execFileSync']) {
+    const original = childProcess[name]
+    childProcess[name] = function probedChildProcess(file, args, ...rest) {
+      const argv = [file, ...(Array.isArray(args) ? args : [])].map(String).join(' ')
+      if (STABLY_COMMAND.test(argv)) {
+        record('exec', argv)
+      }
+      return original.call(this, file, args, ...rest)
+    }
   }
   dc.subscribe('undici:request:create', ({ request }) => {
     record('fetch', `${request.origin}${request.path}`)
