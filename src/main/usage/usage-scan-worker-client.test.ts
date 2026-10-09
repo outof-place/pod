@@ -53,7 +53,7 @@ class FakeWorker {
 }
 
 function createClient(factory: () => FakeWorker): UsageScanWorkerClient {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeWorker implements the on/off/postMessage/terminate surface LazyWorkerThreadHost uses, and nothing here touches the rest of Worker.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeWorker implements the transport lifecycle; absent threadId skips optional owner cleanup.
   return new UsageScanWorkerClient({ workerFactory: factory as never, log: () => {} })
 }
 

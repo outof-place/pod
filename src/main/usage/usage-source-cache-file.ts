@@ -1,5 +1,6 @@
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join, parse } from 'node:path'
+import { threadId } from 'node:worker_threads'
 import {
   durableWriteTempPath,
   removeStaleDurableWriteTempFiles,
@@ -51,7 +52,7 @@ export async function writeUsageSourceCache(
   // Why: a worker terminated mid-write orphans a multi-MB temp file; reclaim earlier launches' ones.
   await removeStaleDurableWriteTempFiles(ref.path)
   await writeFileDurable(
-    durableWriteTempPath(ref.path),
+    durableWriteTempPath(ref.path, threadId > 0 ? String(threadId) : undefined),
     ref.path,
     JSON.stringify({
       schemaVersion: ref.schemaVersion,
