@@ -1,4 +1,5 @@
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 
 // A local index (a daemon, a native addon) that may answer workspace searches before ripgrep.
 // Every query method resolves null to let the bundled ripgrep path answer instead, so a
@@ -47,6 +48,13 @@ export type ExternalRankedPathSearchQuery = {
   followSymlinks: boolean
 }
 
+/** The user opened (made active) or saved a local file; an index may rank recent work higher. */
+export type ExternalFileActivity = {
+  /** Authorized absolute path on this machine. */
+  filePath: string
+  kind: 'open' | 'write'
+}
+
 export type ExternalWorkspaceSearchProvider = {
   listFiles(request: ExternalFileListRequest): Promise<string[] | null>
   searchFilePaths(
@@ -57,6 +65,7 @@ export type ExternalWorkspaceSearchProvider = {
   supportsRankedPathSearch(query: ExternalRankedPathSearchQuery): Promise<boolean>
   worktreeAdded(worktreePath: string): void
   worktreeRemoved(worktreePath: string): void
+  fileActivity?(activity: ExternalFileActivity): void
 }
 
 let provider: ExternalWorkspaceSearchProvider | null = null
@@ -135,5 +144,12 @@ export function notifyExternalSearchWorktreeLifecycle(event: {
     provider?.worktreeAdded(event.path)
   } else {
     provider?.worktreeRemoved(event.path)
+  }
+}
+
+export function notifyExternalSearchFileActivity(activity: ExternalFileActivity): void {
+  // Why: a WSL file arrives as a UNC path that a local index never holds.
+  if (!parseWslUncPath(activity.filePath)) {
+    provider?.fileActivity?.(activity)
   }
 }
