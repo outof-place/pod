@@ -5,6 +5,8 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
+import { getProductIdentity } from '../product-identity/product-identity'
+import { applyProductIdentityPreReady } from '../product-identity/product-first-run'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import { checkServeUserDataPath } from './serve-user-data-path-guard'
@@ -189,7 +191,8 @@ export function patchPackagedProcessPath(): void {
   }
 }
 
-export function configureDevUserDataPath(isDev: boolean): void {
+/** Returns false when startup must stop (a product's first-run import could not run). */
+export function configureDevUserDataPath(isDev: boolean, isServeMode = false): boolean {
   const e2eConfig = getMainE2EConfig()
   if (e2eConfig.userDataDir) {
     // Why: the E2E suite launches a fresh Electron app for each spec. A
@@ -207,20 +210,22 @@ export function configureDevUserDataPath(isDev: boolean): void {
     mkdirSync(e2eHomeDir, { recursive: true, mode: 0o700 })
     app.setPath('home', e2eHomeDir)
     app.setPath('userData', e2eConfig.userDataDir)
-    return
+    return true
   }
 
   if (!isDev) {
-    return
+    const productIdentity = getProductIdentity()
+    return productIdentity ? applyProductIdentityPreReady(productIdentity, isServeMode) : true
   }
   const overrideUserDataPath = process.env.ORCA_DEV_USER_DATA_PATH
   if (overrideUserDataPath) {
     // Why: automated repros need an isolated profile so the dev's persisted tabs/worktrees don't skew startup and hide window bugs.
     app.setPath('userData', overrideUserDataPath)
-    return
+    return true
   }
   // Why: without a dev-only path, pnpm dev overwrites the packaged app's runtime pointer under userData and breaks the orca CLI.
   app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
+  return true
 }
 
 function areSameE2EHomePath(left: string, right: string): boolean {
