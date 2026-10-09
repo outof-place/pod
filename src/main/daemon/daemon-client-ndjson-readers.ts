@@ -10,7 +10,8 @@ import type { DaemonEvent, RpcResponse } from './types'
 
 export function attachControlResponseReader(
   socket: Socket,
-  onResponse: (response: RpcResponse) => void
+  onResponse: (response: RpcResponse) => void,
+  remainder: Buffer = Buffer.alloc(0)
 ): () => void {
   // Why: control responses may contain terminal/startup data with multibyte
   // text; keep incomplete UTF-8 bytes until the next socket chunk.
@@ -22,6 +23,8 @@ export function attachControlResponseReader(
 
   const onData = (chunk: Buffer) => parser.feed(decoder.write(chunk))
   socket.on('data', onData)
+  onData(remainder)
+  socket.resume()
   return () => socket.off('data', onData)
 }
 
@@ -38,9 +41,10 @@ export function attachStreamEventReader(
 ): () => void {
   if (streamFraming === BINARY_STREAM_FRAMING) {
     const reader = createBinaryStreamFrameReader(onEvent, (error) => socket.destroy(error))
-    reader.feed(remainder)
     const onFrameData = (chunk: Buffer) => reader.feed(chunk)
     socket.on('data', onFrameData)
+    reader.feed(remainder)
+    socket.resume()
     return () => socket.off('data', onFrameData)
   }
   // Why: PTY output streams include emoji/box-drawing tables; socket chunks
@@ -57,7 +61,8 @@ export function attachStreamEventReader(
   )
 
   const onData = (chunk: Buffer) => parser.feed(decoder.write(chunk))
-  onData(remainder)
   socket.on('data', onData)
+  onData(remainder)
+  socket.resume()
   return () => socket.off('data', onData)
 }

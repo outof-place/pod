@@ -1,5 +1,5 @@
 import type { Socket } from 'node:net'
-import { encodeNdjson } from './ndjson'
+import { encodeNdjson, NDJSON_MAX_LINE_BYTES } from './ndjson'
 import { BINARY_STREAM_FRAMING, type DaemonStreamFraming } from './daemon-stream-binary-framing'
 import { CLEAN_DISCONNECT_PROTOCOL_VERSION, DaemonProtocolError } from './types'
 import type { DaemonEndpointIdentity, HelloMessage, HelloResponse } from './types'
@@ -40,7 +40,8 @@ export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHell
       ...(requestBinaryStream ? { streamFraming: BINARY_STREAM_FRAMING } : {})
     }
 
-    let buffered: Buffer = Buffer.alloc(0)
+    const chunks: Buffer[] = []
+    let bufferedBytes = 0
     let settled = false
     let timer: ReturnType<typeof setTimeout> | null = null
     const cleanup = (): void => {
@@ -64,17 +65,26 @@ export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHell
       }
       resolve(outcome)
     }
-    // Why bytes, not a decoded string: a binary stream's first frames can share this read, and
-    // only an exact byte remainder keeps their length prefixes aligned.
+    // Binary frame prefixes following hello must remain exact bytes.
     const onData = (chunk: Buffer): void => {
-      buffered = buffered.length === 0 ? chunk : Buffer.concat([buffered, chunk])
-      const newlineIdx = buffered.indexOf(0x0a)
+      const newlineIdx = chunk.indexOf(0x0a)
+      const lineBytes = bufferedBytes + (newlineIdx === -1 ? chunk.length : newlineIdx)
+      if (lineBytes > NDJSON_MAX_LINE_BYTES) {
+        finish(new DaemonProtocolError('Hello response exceeds maximum line size'))
+        socket.destroy()
+        return
+      }
       if (newlineIdx === -1) {
+        chunks.push(chunk)
+        bufferedBytes = lineBytes
         return
       }
 
-      const line = buffered.toString('utf8', 0, newlineIdx)
-      const remainder = buffered.subarray(newlineIdx + 1)
+      // Flowing sockets otherwise drain buffered chunks before the awaiting reader can attach.
+      socket.pause()
+      chunks.push(chunk.subarray(0, newlineIdx))
+      const line = Buffer.concat(chunks, lineBytes).toString('utf8')
+      const remainder = chunk.subarray(newlineIdx + 1)
       try {
         const response = JSON.parse(line) as HelloResponse
         if (response.ok) {
