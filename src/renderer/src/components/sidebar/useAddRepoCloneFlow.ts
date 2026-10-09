@@ -11,6 +11,7 @@ import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { resolveAddRepoRuntimeTarget, worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { usePodCloneDestination } from '@/pod/workspace/use-pod-clone-destination'
 
 export function useAddRepoCloneFlow({
   step,
@@ -88,6 +89,15 @@ export function useAddRepoCloneFlow({
     cloneStepAutoFilledRef.current = true
     setCloneDestination(cloneDestinationAutoFill.destination)
   }
+  // Fork-only (Pod): replaces the default above with <root>/<owner> while the user has not chosen.
+  usePodCloneDestination({
+    step,
+    cloneUrl,
+    cloneDestination,
+    setCloneDestination,
+    workspaceDir,
+    isLocalClone: !activeRuntimeEnvironmentId?.trim() && !sshTargetId?.trim()
+  })
 
   const resetCloneFlow = useCallback((): void => {
     cloneGenRef.current++
