@@ -5,6 +5,7 @@ import i18next, {
   type TOptions
 } from 'i18next'
 import { initReactI18next } from 'react-i18next'
+import { POD_UI_LOCALES } from '../../../shared/product/features'
 
 import enRuntimeRequired from './en-runtime-required.json'
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from './pseudo-localization'
@@ -42,7 +43,7 @@ const lazyLocaleBackend: BackendModule = {
   init: () => {},
   read: (language: string, _namespace: string, callback: ReadCallback) => {
     const loader = NON_DEFAULT_LOCALE_LOADERS[language as Exclude<SupportedUiLocale, 'en'>]
-    if (!loader) {
+    if (!POD_UI_LOCALES || !loader) {
       // English (and unknown locales) are served from bundled resources; signal
       // "nothing to load" so i18next falls back to the in-memory catalog.
       callback(null, false)
