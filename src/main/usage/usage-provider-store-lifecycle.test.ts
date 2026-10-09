@@ -399,7 +399,11 @@ describe('UsageProviderStoreLifecycle', () => {
 
   it('flush waits for a pending migration and its report rewrite', async () => {
     const cacheFile = join(tempDirectory, 'provider.json')
-    writeFileSync(cacheFile, JSON.stringify(makeState({ processedSources: [{ id: 'inline' }] })))
+    writeFileSync(
+      cacheFile,
+      JSON.stringify(makeState({ processedSources: [{ id: 'inline' }] })) +
+        ' '.repeat(9 * 1024 * 1024)
+    )
     const pendingSplit = createDeferred<UsageCacheSplitResult>()
     split.mockReturnValueOnce(pendingSplit.promise)
     const store = createStore(cacheFile)
