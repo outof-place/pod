@@ -348,6 +348,8 @@ async function startOrcadRuntime(
   // Why before the RPC server binds: like `--serve`, the first client must find a ready graph.
   const { publishHeadlessRuntimeGraph } = await import('../runtime/headless-runtime-graph')
   publishHeadlessRuntimeGraph(runtime)
+  const { installPodNativeSearch } = await import('../pod/search/install-pod-native-search')
+  installPodNativeSearch(profileStore, runtime)
 
   const bindHost = resolveOrcadBindHost(options.bind)
   const rpc = new OrcaRuntimeRpcServer({
