@@ -7215,6 +7215,11 @@
             "modeAriaLabel": "智能体仪表盘打开模式",
             "modeInWindow": "窗口内",
             "modePopout": "弹出窗口"
+          },
+          "nativeTerminal": {
+            "title": "原生终端",
+            "description": "在 macOS 上使用原生 Ghostty 视图绘制终端。",
+            "copy": "新打开的终端窗格使用原生 Ghostty 视图（Metal）绘制，而不是网页渲染器。网页终端仍保留在下方，用于搜索、复制以及显示在窗格上方的内容。在我们弥补功能差距期间，此功能为实验性。"
           }
         },
         "FloatingWorkspacePane": {
@@ -9670,6 +9675,13 @@
               "board": "木板",
               "inWindow": "窗口内",
               "worktrees": "工作树"
+            },
+            "nativeTerminal": {
+              "title": "原生终端",
+              "description": "在 macOS 上使用原生 Ghostty 视图绘制终端。",
+              "ghostty": "ghostty",
+              "native": "原生",
+              "metal": "metal"
             }
           }
         },
@@ -17885,8 +17897,7 @@
         "agentNotSignedIn": "请登录 {{agent}}。",
         "thenSendAgain": "然后再次发送消息。",
         "runCommandWhenDone": "完成后再运行 /{{command}}。",
-        "commandAfterAnswer": "请先回答智能体的问题或审批，然后再运行 /{{command}}。",
-        "sessionNotRestored": "{{agent}} 无法重新打开之前的会话，因此此聊天将在新会话中继续。{{agent}} 不记得之前的消息。"
+        "commandAfterAnswer": "请先回答智能体的问题或审批，然后再运行 /{{command}}。"
       },
       "writeNotice": {
         "notDoneReadHistory": "无法加载此聊天的历史记录。",

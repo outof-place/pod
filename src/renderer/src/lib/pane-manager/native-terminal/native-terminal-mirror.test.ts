@@ -1,0 +1,115 @@
+import { describe, expect, it, vi } from 'vitest'
+import type { Terminal } from '@xterm/xterm'
+import { installNativeTerminalMirror } from './native-terminal-mirror'
+
+type FakeTerminal = {
+  write: (data: string | Uint8Array, callback?: () => void) => void
+  clear: () => void
+  focus: () => void
+  parsed: string[]
+  callbacks: (() => void)[]
+  flush: () => void
+}
+
+function fakeTerminal(): FakeTerminal {
+  const fake: FakeTerminal = {
+    parsed: [],
+    callbacks: [],
+    write(data, callback) {
+      fake.parsed.push(typeof data === 'string' ? data : new TextDecoder().decode(data))
+      if (callback) {
+        fake.callbacks.push(callback)
+      }
+    },
+    clear: vi.fn(),
+    focus: vi.fn(),
+    flush() {
+      const pending = fake.callbacks.splice(0)
+      for (const callback of pending) {
+        callback()
+      }
+    }
+  }
+  return fake
+}
+
+function asTerminal(fake: FakeTerminal): Terminal {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mirror only touches write/clear/focus, which the fake implements.
+  return fake as unknown as Terminal
+}
+
+describe('installNativeTerminalMirror', () => {
+  it('does not forward anything before a surface is attached', () => {
+    const fake = fakeTerminal()
+    const send = vi.fn()
+    installNativeTerminalMirror(asTerminal(fake), send)
+    fake.write('before')
+    expect(send).not.toHaveBeenCalled()
+    expect(fake.parsed).toEqual(['before'])
+  })
+
+  it('seeds with a snapshot, then the bytes written while seeding, then live output', () => {
+    const fake = fakeTerminal()
+    const send = vi.fn()
+    const mirror = installNativeTerminalMirror(asTerminal(fake), send)
+    mirror.attach(7, () => 'SNAPSHOT')
+    fake.write('during')
+    expect(send).not.toHaveBeenCalled()
+    fake.flush()
+    expect(send).toHaveBeenLastCalledWith(7, 'SNAPSHOTduring')
+    fake.write('live')
+    expect(send).toHaveBeenLastCalledWith(7, 'live')
+  })
+
+  it('keeps write arity 2 for the output pipeline', () => {
+    const fake = fakeTerminal()
+    installNativeTerminalMirror(asTerminal(fake), vi.fn())
+    expect(fake.write.length).toBe(2)
+  })
+
+  it('skips empty probe writes', () => {
+    const fake = fakeTerminal()
+    const send = vi.fn()
+    const mirror = installNativeTerminalMirror(asTerminal(fake), send)
+    mirror.attach(1, () => '')
+    fake.flush()
+    send.mockClear()
+    fake.write('')
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('re-seeds from a reset after clear()', () => {
+    const fake = fakeTerminal()
+    const send = vi.fn()
+    const mirror = installNativeTerminalMirror(asTerminal(fake), send)
+    mirror.attach(3, () => 'S')
+    fake.flush()
+    fake.clear()
+    fake.flush()
+    expect(send).toHaveBeenLastCalledWith(3, '\x1bcS')
+  })
+
+  it('keeps DOM focus on xterm and then hands the keyboard to the native view', () => {
+    const fake = fakeTerminal()
+    const originalFocus = fake.focus
+    const mirror = installNativeTerminalMirror(asTerminal(fake), vi.fn())
+    const focusNative = vi.fn(() => true)
+    mirror.setFocusTarget(focusNative)
+    fake.focus()
+    expect(originalFocus).toHaveBeenCalledTimes(1)
+    expect(focusNative).toHaveBeenCalledTimes(1)
+    mirror.focusShadow()
+    expect(originalFocus).toHaveBeenCalledTimes(2)
+    expect(focusNative).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops a stale seed when detached before the marker parses', () => {
+    const fake = fakeTerminal()
+    const send = vi.fn()
+    const mirror = installNativeTerminalMirror(asTerminal(fake), send)
+    mirror.attach(5, () => 'S')
+    mirror.detach()
+    fake.flush()
+    expect(send).not.toHaveBeenCalled()
+  })
+})

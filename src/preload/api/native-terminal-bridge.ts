@@ -1,0 +1,27 @@
+import { ipcRenderer, type IpcRendererEvent } from 'electron'
+import {
+  NATIVE_TERMINAL_EVENT_CHANNEL,
+  type NativeTerminalEvent
+} from '../../shared/native-terminal-ipc'
+import type { PreloadApi } from '../api-types'
+
+export const nativeTerminalApi = {
+  isSupported: () => ipcRenderer.invoke('nativeTerminal:isSupported'),
+  create: (appearance, zoomFactor) =>
+    ipcRenderer.invoke('nativeTerminal:create', appearance, zoomFactor),
+  write: (surfaceId, data) => ipcRenderer.send('nativeTerminal:write', surfaceId, data),
+  setFrames: (frames) => ipcRenderer.send('nativeTerminal:setFrames', frames),
+  focus: (surfaceId) => ipcRenderer.send('nativeTerminal:focus', surfaceId),
+  readSelection: (surfaceId) => ipcRenderer.invoke('nativeTerminal:readSelection', surfaceId),
+  setAppearance: (appearance, zoomFactor) =>
+    ipcRenderer.send('nativeTerminal:setAppearance', appearance, zoomFactor),
+  destroy: (surfaceId) => ipcRenderer.send('nativeTerminal:destroy', surfaceId),
+  onEvent: (callback) => {
+    const listener = (_event: IpcRendererEvent, payload: NativeTerminalEvent): void =>
+      callback(payload)
+    ipcRenderer.on(NATIVE_TERMINAL_EVENT_CHANNEL, listener)
+    return () => {
+      ipcRenderer.removeListener(NATIVE_TERMINAL_EVENT_CHANNEL, listener)
+    }
+  }
+} satisfies PreloadApi['nativeTerminal']
