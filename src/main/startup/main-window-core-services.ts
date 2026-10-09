@@ -22,6 +22,7 @@ import {
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
 import { RELAY_HOST_CLOSE_REASON } from '../../shared/relay-host-close-reason'
 import { notifyExternalSearchWorktreeLifecycle } from '../search/external-workspace-search-provider'
+import { notifyPodWorkspaceWorktreeLifecycle } from '../pod/workspace/workspace-lifecycle-hook'
 
 export function attachMainWindowCoreServices(
   window: BrowserWindow,
@@ -139,6 +140,7 @@ export function attachMainWindowCoreServices(
       onWorktreeLifecycle: (event) => {
         emitPluginWorktreeLifecycle(event)
         notifyExternalSearchWorktreeLifecycle(event)
+        notifyPodWorkspaceWorktreeLifecycle(event)
       }
     }
   )
