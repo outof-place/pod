@@ -1,15 +1,16 @@
 // Fork-only (Pod): the product overlay's view of product/identity.json. Every hook in an upstream
 // file goes through here, and each one is a no-op when the build ships no identity (upstream Orca).
 import { getProductIdentity } from './product-identity'
+import { isStablyServicesOffByEnv } from '../../shared/stably-services-env'
 import { brandProductName, type ProductNameBranding } from '../../shared/product-name-branding'
 import {
   formatProductUiIdentityArgument,
   type ProductUiIdentity
 } from '../../shared/product-ui-identity'
 
-/** False only in a product whose identity ships `"stablyServices": false`. */
+/** False in a product whose identity ships `"stablyServices": false`, and in the orcad it launches. */
 export function areStablyServicesEnabled(): boolean {
-  return getProductIdentity()?.stablyServices !== false
+  return getProductIdentity()?.stablyServices !== false && !isStablyServicesOffByEnv(process.env)
 }
 
 export function productDisplayName(): string {
