@@ -15,24 +15,61 @@
       "forkOnly": "perf experiments: CADisplayLink pacing on by default on macOS, Skia Graphite env-only, Electron 43.7.8"
     },
     {
-      "branch": "fork/no-official-updater",
-      "forkOnly": "Pod must not install Orca's official updates; upstream opt-out PR planned"
+      "branch": "perf/git-status-untracked-cache",
+      "upstream": "https://github.com/stablyai/orca/pull/26979"
+    },
+    {
+      "branch": "perf/native-proc-info-darwin",
+      "upstream": "https://github.com/stablyai/orca/pull/26985",
+      "note": "Adds a macOS native addon plus a beforePack guard"
+    },
+    {
+      "branch": "fix/xterm-empty-write-barrier",
+      "upstream": "https://github.com/stablyai/orca/pull/26956"
     },
     {
       "branch": "fix/computer-macos-swiftbuild",
       "upstream": "https://github.com/stablyai/orca/pull/26945"
     },
     {
-      "branch": "pod/identity",
-      "forkOnly": "Pod identity: name, bundle id codes.pod.app, icon, URL scheme and podx CLI"
-    },
-    {
       "branch": "feat/native-ghostty-terminal",
       "upstream": "https://github.com/stablyai/orca/pull/26914"
     },
     {
+      "branch": "app-identity-constant",
+      "upstream": "https://github.com/stablyai/orca/pull/26973"
+    },
+    {
+      "branch": "feat/plugin-platforms",
+      "upstream": "https://github.com/stablyai/orca/pull/26975"
+    },
+    {
+      "branch": "feat/plugin-settings-pages",
+      "upstream": "https://github.com/stablyai/orca/pull/26991"
+    },
+    {
       "branch": "plugins/status-bar-live-panels",
       "upstream": "https://github.com/stablyai/orca/pull/26953"
+    },
+    {
+      "branch": "fork/no-official-updater",
+      "forkOnly": "Pod must not install Orca's official updates; upstream opt-out PR planned"
+    },
+    {
+      "branch": "pod/identity",
+      "forkOnly": "Pod identity: name, bundle id, icon, URL scheme and CLI name"
+    },
+    {
+      "branch": "pod/overlay",
+      "forkOnly": "Pod overlay: Stably-hosted services off, product name in UI copy"
+    },
+    {
+      "branch": "pod/readme",
+      "forkOnly": "README visuals"
+    },
+    {
+      "branch": "pod/acc",
+      "forkOnly": "claude-acc built into Pod: bundled plugin, payload and tray"
     }
   ]
 }
