@@ -18,6 +18,7 @@ import { SKILLS_PAGE_COLUMN } from './skills-page-column'
 import type { SkillsFilterState } from './skills-filter'
 import type { SkillsPageView } from './skills-page-view'
 import type { SkillAgentOption } from './skill-agent-filter'
+import { areStablyServicesAvailable } from '@/lib/product-ui-identity'
 
 const SOURCE_KINDS: SkillSourceKind[] = ['home', 'repo', 'bundled', 'plugin']
 
@@ -131,9 +132,11 @@ export function SkillsFilterToolbar({
             <ToggleGroupItem value="skills" className="rounded-full px-2.5 text-xs">
               {translate('auto.components.skills.SkillsPage.f43ad6edf3', 'Skills')}
             </ToggleGroupItem>
-            <ToggleGroupItem value="shared" className="rounded-full px-2.5 text-xs">
-              {translate('auto.components.skills.SkillsPage.sharedLinks', 'Shared links')}
-            </ToggleGroupItem>
+            {areStablyServicesAvailable() ? (
+              <ToggleGroupItem value="shared" className="rounded-full px-2.5 text-xs">
+                {translate('auto.components.skills.SkillsPage.sharedLinks', 'Shared links')}
+              </ToggleGroupItem>
+            ) : null}
           </ToggleGroup>
           {sharedView ? null : (
             <>

@@ -25,6 +25,10 @@ import {
 } from './app-root-surface-settings'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
 import type { OnboardingGate } from './use-onboarding-and-feature-tips'
+import { areStablyServicesAvailable } from '@/lib/product-ui-identity'
+
+// Fork-only (Pod): telemetry and crash reports go to Stably; star prompts promote upstream.
+const STABLY_SERVICES = areStablyServicesAvailable()
 
 const QuickOpen = lazy(() => import('../components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('../components/WorktreeJumpPalette'))
@@ -293,21 +297,29 @@ export function AppRootSurfaces(props: {
             <UnexpectedSignoutCard />
           </OverlayBoundary>
         </Suspense>
-        <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
-          <StarNagCard />
-        </OverlayBoundary>
+        {STABLY_SERVICES ? (
+          <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
+            <StarNagCard />
+          </OverlayBoundary>
+        ) : null}
       </NotificationCardStack>
       <OverlayBoundary boundaryId="overlay.native-chat-resume-on-restart" resetKey={activeView}>
         <NativeChatResumeOnRestartModal />
       </OverlayBoundary>
-      <OverlayBoundary boundaryId="overlay.star-nag-toast" resetKey={activeView}>
-        <StarNagToastHost />
-      </OverlayBoundary>
-      <StarNagAgentValueMomentObserver />
+      {STABLY_SERVICES ? (
+        <>
+          <OverlayBoundary boundaryId="overlay.star-nag-toast" resetKey={activeView}>
+            <StarNagToastHost />
+          </OverlayBoundary>
+          <StarNagAgentValueMomentObserver />
+        </>
+      ) : null}
       {/* Why: mount at App root to render once per session; internal cohort gate limits it to pre-telemetry users — see telemetry-plan.md §First-launch experience. */}
-      <OverlayBoundary boundaryId="overlay.telemetry-first-launch" resetKey={telemetryOptedIn}>
-        <TelemetryFirstLaunchSurface />
-      </OverlayBoundary>
+      {STABLY_SERVICES ? (
+        <OverlayBoundary boundaryId="overlay.telemetry-first-launch" resetKey={telemetryOptedIn}>
+          <TelemetryFirstLaunchSurface />
+        </OverlayBoundary>
+      ) : null}
       <OverlayBoundary boundaryId="overlay.zoom" resetKey={activeView}>
         <ZoomOverlay />
       </OverlayBoundary>
@@ -345,7 +357,7 @@ export function AppRootSurfaces(props: {
           'Use the Help menu after retrying if you still need diagnostics.'
         )}
       >
-        <CrashReportDialog />
+        {STABLY_SERVICES ? <CrashReportDialog /> : null}
       </RecoverableRenderErrorBoundary>
       {onboardingGate.onboarding && onboardingGate.shouldRender ? (
         <Suspense fallback={null}>
