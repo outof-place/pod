@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FileListingCancelledError } from '../../../shared/file-listing-cancellation'
 import type { ExternalFileListRequest } from '../../search/external-workspace-search-provider'
 import { OgdClient } from './ogd-client'
@@ -262,5 +262,42 @@ describe('Pod search provider: text search', () => {
       totalMatches: 0,
       truncated: true
     })
+  })
+})
+
+describe('Pod search provider: editor activity', () => {
+  const fuzzyRequest = () => ({
+    rootPath: repo,
+    excludePathPrefixes: [],
+    includeIgnored: false,
+    followSymlinks: false,
+    query: 'term',
+    limit: 5
+  })
+
+  it('touches opened and saved files and ranks quick open around the active file', async () => {
+    const search = await provider((request) =>
+      request.op === 'touch' ? { message: { accepted: 1 } } : { message: { results: [] } }
+    )
+    // Registers the root, so activity under it can name a current file.
+    await search.searchFilePaths(fuzzyRequest())
+    search.fileActivity?.({ filePath: join(repo, 'src', 'TermPane.tsx'), kind: 'open' })
+    search.fileActivity?.({ filePath: join(repo, 'README.md'), kind: 'write' })
+    await vi.waitFor(() =>
+      expect(mock?.requests.filter((request) => request.op === 'touch')).toHaveLength(2)
+    )
+    expect(mock?.requests.filter((request) => request.op === 'touch')).toMatchObject([
+      { paths: [join(repo, 'src', 'TermPane.tsx')], kind: 'open', agent: false },
+      { paths: [join(repo, 'README.md')], kind: 'write', agent: false }
+    ])
+    await search.searchFilePaths(fuzzyRequest())
+    expect(mock?.requests.at(-1)).toMatchObject({ op: 'fuzzy', current: 'src/TermPane.tsx' })
+  })
+
+  it('sends nothing while Pod search is off', async () => {
+    const search = await provider(() => ({ message: {} }), { enabled: false })
+    search.fileActivity?.({ filePath: join(repo, 'a.ts'), kind: 'open' })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(mock?.requests).toEqual([])
   })
 })
