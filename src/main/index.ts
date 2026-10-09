@@ -1,6 +1,7 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { productUrlSchemes } from './product-identity/product-identity'
+import { completeProductImportBeforeWindows } from './product-identity/product-first-run'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch } from './window/foreground-activation-policy'
 import {
@@ -122,6 +123,8 @@ if (preflightReady) {
   installMainProcessQuitHandlers()
   void app.whenReady().then(async () => {
     try {
+      // Why first: a downstream product's import must finish before any window or browser session.
+      await completeProductImportBeforeWindows()
       await initializeMainProcessReady({
         openMainWindow,
         handleMacAppActivation

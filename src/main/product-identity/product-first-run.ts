@@ -1,4 +1,3 @@
-import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, dialog, shell } from 'electron'
 import {
@@ -6,9 +5,16 @@ import {
   PROTOCOL_VERSION
 } from '../daemon/daemon-protocol-version'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
-import { migrateLegacyProfile, PRODUCT_MIGRATION_MARKER } from './legacy-profile-migration'
+import {
+  pendingDeferredImport,
+  readMigrationMarker,
+  runDeferredProfileImport,
+  updateMigrationMarker
+} from './deferred-profile-import'
+import { openImportProgressWindow } from './import-progress-window'
+import { migrateLegacyProfile } from './legacy-profile-migration'
 import { createMacSafeStorageKeychain } from './macos-safe-storage-keychain'
-import type { ProductIdentity } from './product-identity'
+import { getProductIdentity, type ProductIdentity } from './product-identity'
 
 const PRIVACY_SETTINGS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy'
 
@@ -32,13 +38,14 @@ export function applyProductIdentityPreReady(
 }
 
 /**
- * Runs before the instance lock on a product build's first launch. Returns false when startup must
- * stop (the legacy app is still running, so its databases cannot be copied consistently).
+ * The synchronous half of the first-launch import (state, daemons, keychain). Returns false when
+ * startup must stop: the legacy app is still running, so its databases cannot be copied consistently.
  */
 export function runProductFirstRun(identity: ProductIdentity): boolean {
   if (!identity.legacyProfile) {
     return true
   }
+  const started = performance.now()
   const result = migrateLegacyProfile({
     legacyUserData: join(app.getPath('appData'), identity.legacyProfile.userDataName),
     productUserData: app.getPath('userData'),
@@ -49,7 +56,9 @@ export function runProductFirstRun(identity: ProductIdentity): boolean {
     attachableDaemonProtocols: [...PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION],
     appVersion: app.getVersion()
   })
-  console.log(`[product-migration] ${JSON.stringify(result)}`)
+  console.log(
+    `[product-migration] ${JSON.stringify(result)} in ${Math.round(performance.now() - started)}ms`
+  )
   if (result.status === 'blocked') {
     dialog.showErrorBox(
       `${identity.displayName} can't import your Orca profile yet`,
@@ -60,37 +69,59 @@ export function runProductFirstRun(identity: ProductIdentity): boolean {
     app.exit(0)
     return false
   }
-  // Why from the marker: a background launch defers the notice to the next interactive one.
-  const marker = readMarker()
-  if (marker && Reflect.get(marker, 'permissionsNoticeShown') === false && !isBackgroundLaunch()) {
-    void app.whenReady().then(() => showImportNotice(identity, marker))
-  }
   return true
 }
 
-function readMarker(): object | null {
-  try {
-    const marker: unknown = JSON.parse(
-      readFileSync(join(app.getPath('userData'), PRODUCT_MIGRATION_MARKER), 'utf8')
-    )
-    return typeof marker === 'object' && marker !== null ? marker : null
-  } catch {
-    return null
+/**
+ * The asynchronous half: clones the deferred entries (browser partitions, large stores) behind a
+ * small progress window, then shows the one-time permissions notice. Awaited after `ready`, before
+ * the first window.
+ */
+export async function completeProductImportBeforeWindows(): Promise<void> {
+  const identity = getProductIdentity()
+  if (!identity?.legacyProfile) {
+    return
+  }
+  const userData = app.getPath('userData')
+  const pending = pendingDeferredImport(userData)
+  if (pending) {
+    const started = performance.now()
+    const progressWindow = isBackgroundLaunch() ? null : openImportProgressWindow(identity)
+    try {
+      const done = await runDeferredProfileImport(userData, pending, (progress) =>
+        progressWindow?.update(progress)
+      )
+      console.log(
+        `[product-migration] deferred ${pending.entries.join(',')}: ${done.copied}/${done.total} files in ${Math.round(performance.now() - started)}ms`
+      )
+    } catch (error) {
+      // Why continue: the marker keeps the entries pending, so the next launch fills in what is missing.
+      console.error('[product-migration] deferred import failed', error)
+    } finally {
+      progressWindow?.close()
+    }
+  }
+  const marker = readMigrationMarker(userData)
+  // Why from the marker: a background launch defers the notice to the next interactive one.
+  if (marker?.permissionsNoticeShown === false && !isBackgroundLaunch()) {
+    void showImportNotice(identity, marker)
   }
 }
 
-async function showImportNotice(identity: ProductIdentity, marker: object): Promise<void> {
-  const linkedDaemons = Reflect.get(marker, 'linkedDaemons')
-  const daemons = Array.isArray(linkedDaemons) ? linkedDaemons.map(String) : []
+async function showImportNotice(
+  identity: ProductIdentity,
+  marker: Record<string, unknown>
+): Promise<void> {
+  const daemons = Array.isArray(marker.linkedDaemons) ? marker.linkedDaemons.map(String) : []
   const lines = [
     `${identity.displayName} imported your Orca profile. Orca's own copy was not changed.`,
     daemons.length > 0
       ? `Running terminals were handed over (daemon protocol ${daemons.join(', ')}).`
       : 'No running terminals needed a hand-over.',
-    Reflect.get(marker, 'safeStorage') === 'unavailable'
+    marker.safeStorage === 'unavailable'
       ? 'Saved sign-ins could not be carried over because keychain access was denied. Sign in again where asked.'
       : 'Saved sign-ins were carried over.',
-    `macOS privacy permissions belong to each app, so grant ${identity.displayName} (and its Computer Use helper) Accessibility, Screen Recording, Full Disk Access and Automation again as you need them.`
+    `macOS privacy permissions belong to each app, so grant ${identity.displayName} (and ${identity.computerUseDisplayName ?? 'its Computer Use helper'}) Accessibility, Screen Recording, Full Disk Access and Automation again as you need them.`
   ]
   const choice = await dialog.showMessageBox({
     type: 'info',
@@ -101,10 +132,7 @@ async function showImportNotice(identity: ProductIdentity, marker: object): Prom
     cancelId: 1
   })
   try {
-    writeFileSync(
-      join(app.getPath('userData'), PRODUCT_MIGRATION_MARKER),
-      `${JSON.stringify({ ...marker, permissionsNoticeShown: true }, null, 2)}\n`
-    )
+    updateMigrationMarker(app.getPath('userData'), { permissionsNoticeShown: true })
   } catch (error) {
     console.warn('[product-migration] could not update the migration marker', error)
   }
