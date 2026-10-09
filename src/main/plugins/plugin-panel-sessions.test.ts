@@ -38,4 +38,15 @@ describe('PluginPanelSessions', () => {
     expect(sessions.resolve('connection:one', second)).toBeNull()
     expect(sessions.resolve('connection:two', other)).toEqual(binding)
   })
+
+  it('resolves a settings page session only for callers that accept settings pages', () => {
+    const sessions = new PluginPanelSessions()
+    const page = { ...binding, surface: 'settingsPage' as const }
+    const token = sessions.issue('renderer:1', page)
+
+    // Panel-only by default, so a panel-keyed channel never takes a page token.
+    expect(sessions.resolve('renderer:1', token)).toBeNull()
+    expect(sessions.resolve('renderer:1', token, ['panel'])).toBeNull()
+    expect(sessions.resolve('renderer:1', token, ['panel', 'settingsPage'])).toEqual(page)
+  })
 })
