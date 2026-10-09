@@ -16,7 +16,7 @@ type PluginClientSurfacesHost = {
     pluginKey: string,
     method: string,
     params: unknown,
-    options: { viaPanel: boolean }
+    options: { viaPanel: boolean; viaSettingsPage?: boolean }
   ) => Promise<PluginPanelActionOutcome>
   log: (pluginKey: string, level: 'warn' | 'error') => (line: string) => void
   statusBarIntervalMs?: number
@@ -37,8 +37,8 @@ export class PluginClientSurfaces {
     this.panels = new PluginPanelController({
       resolveApprovedPlugin: host.resolveApprovedPlugin,
       contentVerifier: host.contentVerifier,
-      executeHostCall: (pluginKey, method, params) =>
-        host.executeHostCall(pluginKey, method, params, { viaPanel: true }),
+      executeHostCall: (pluginKey, method, params, viaSettingsPage) =>
+        host.executeHostCall(pluginKey, method, params, { viaPanel: true, viaSettingsPage }),
       log: (pluginKey) => host.log(pluginKey, 'error'),
       deliverToWorker: (pluginKey, panelId, message) =>
         this.deliverToWorker(pluginKey, panelId, message)

@@ -11852,7 +11852,8 @@
             "eventsSubscribe": "Get notified when worktrees are created or removed and when agent status changes",
             "settingsOwn": "Read and change the plugin's own settings",
             "statusBar": "Show short text items in the status bar, labeled with the plugin name",
-            "panelMessaging": "Exchange live messages between the plugin's worker and its own panels"
+            "panelMessaging": "Exchange live messages between the plugin's worker and its own panels",
+            "settingsPage": "Show the plugin's own settings page inside Orca's Settings"
           },
           "decisionFailed": "Could not save the permission decision. Try again."
         },
@@ -12013,7 +12014,11 @@
           "logsFailed": "Could not load plugin logs.",
           "rollbackFailed": "Could not roll back this plugin. A previous immutable version may not be available."
         },
+        "PluginSettingsPageDialog": {
+          "description": "Provided by the {{value0}} plugin and shown in a sandbox."
+        },
         "PluginSettingsRow": {
+          "openSettingsPage": "Open {{value0}} for {{value1}}",
           "blocked": "Blocked",
           "needsReview": "Needs review",
           "restarting": "Restarting",
