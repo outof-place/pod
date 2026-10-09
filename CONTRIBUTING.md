@@ -1,6 +1,6 @@
 # Contributing to Pod
 
-Pod is Orca's code at a tagged release plus a short stack of Pod patches. Orca's
+Pod is Orca's code at a recent, green `main` commit plus a short stack of Pod patches. Orca's
 [contributing guide](.github/CONTRIBUTING.md) covers setup, code standards and pull requests, and
 all of it applies here. This file adds what is specific to Pod.
 
@@ -8,11 +8,11 @@ all of it applies here. This file adds what is specific to Pod.
 
 | Branch | What it is | Who writes it |
 | --- | --- | --- |
-| `main` (default) | The product. An Orca release tag plus a linear stack of Pod commits, each with a trailer. | `scripts/pod-stack.sh` and the sync workflow, always with a lease. Don't commit to it directly. |
+| `main` (default) | The product. A green Orca `main` commit plus a linear stack of Pod commits, each with a trailer. | `scripts/pod-stack.sh` and the sync workflow, always with a lease. Don't commit to it directly. |
 | `orca-main` | An untouched mirror of Orca's `main`. | The sync workflow, fast-forward only. |
 | Orca-style topic branches: `feat/*`, `fix/*`, `perf/*`, `plugins/*`, `native-terminal/*` | One branch per Orca pull request, cut from `orca-main`. | You. |
 | `pod/*` | Pod-only work, one branch per change. `pod/infra` holds these docs, `upstream.json`, the sync workflow and the stack scripts. | You. |
-| `sync/orca-<tag>` | A rebase of `main` onto a new Orca release, prepared by the sync workflow and waiting for review. | The sync workflow. |
+| `sync/orca-main` | The next rebase of `main` onto a newer green Orca commit, prepared by the sync workflow and waiting for review. | The sync workflow. |
 
 - Branches keep their names once they have an open Orca pull request.
 - Don't name local branches `upstream/*`: the `upstream` remote (Orca) makes `upstream/<name>`
@@ -65,18 +65,26 @@ Fork-only: Pod identity: name, bundle id, icon
 
 ## How `main` is built
 
-- [`upstream.json`](upstream.json) pins the Orca release tag and commit that `main` sits on.
+- [`upstream.json`](upstream.json) pins the Orca commit `main` sits on: `ref`, its `date`, and
+  `nearestTag`, the newest Orca release whose branch point that commit contains. Release notes use
+  `nearestTag` for the "Based on Orca vX" label. Orca tags sit on release branches, so `git
+  describe` cannot find them; `scripts/pod-orca-base.sh pin <sha>` computes the file.
+- A commit is green when every GitHub Actions check suite on it has completed and every check run
+  passed or was skipped. `scripts/pod-orca-base.sh green` prints the newest green commit on Orca's
+  `main`.
 - [`pod-stack.json`](pod-stack.json) lists the topic branches, in order, with their trailers.
-- `scripts/pod-stack.sh` replays those branches onto the tag. It is a dry run unless you pass
+- `scripts/pod-stack.sh` replays those branches onto the pinned commit, or onto another one with
+  `--onto <sha>` or `--green`. It is a dry run unless you pass
   `--apply` or `--push`. It stops on the first conflict with a report. It refuses to drop commits
   that are on `main` but in no listed branch, and to replace a `main` that is not a Pod build.
   Run `scripts/pod-stack.sh --help` for the options.
 - The [upstream sync](.github/workflows/upstream-sync.yml) workflow runs daily. It fast-forwards
-  `orca-main`. On a new stable Orca release it rebases `main` into `sync/orca-<tag>`, runs the
-  typecheck, unit tests and macOS build, and opens a "Rebase on Orca vX" pull request. A conflict
-  or a failed check opens or updates one `upstream-sync` issue instead.
+  `orca-main`. When Orca's `main` has a newer green commit, it rebases `main` into
+  `sync/orca-main`, runs the typecheck, unit tests and macOS build, and opens or refreshes the one
+  "Rebase on Orca main" pull request. A conflict or a failed check opens or updates one
+  `upstream-sync` issue instead.
 - Do not press Merge on a sync pull request: a rebase replaces the branch. Promote it with
-  `gh workflow run upstream-sync.yml -R outof-place/pod -f tag=<tag> -f promote=true`, which moves
+  `gh workflow run upstream-sync.yml -R outof-place/pod -f promote=true`, which moves
   `main` with a lease and checks that the branch has not changed since its checks passed.
 
 ## Inherited Orca workflows
@@ -91,7 +99,7 @@ yourself. Pod's own workflows are `upstream-sync.yml` and files named `pod-*.yml
 ## Maintainers: the sync token
 
 The sync workflow needs a repository secret named `POD_SYNC_TOKEN`. The built-in `GITHUB_TOKEN`
-cannot push commits that change `.github/workflows`, and every Orca release changes them.
+cannot push commits that change `.github/workflows`, and Orca's `main` changes them constantly.
 
 - Fine-grained token: resource owner `outof-place`, repository `outof-place/pod` only, with
   Contents, Pull requests, Issues and Workflows set to read and write.
