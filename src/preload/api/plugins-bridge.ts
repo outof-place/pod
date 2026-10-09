@@ -2,7 +2,8 @@ import { ipcRenderer } from 'electron'
 import type {
   PanelLiveMessageDelivery,
   PluginPanelActionOutcome,
-  PluginPanelEntry
+  PluginPanelEntry,
+  PluginPanelSurface
 } from '../../shared/plugins/plugin-panel-bridge'
 import type { PluginStatusBarItemSnapshot } from '../../shared/plugins/plugin-status-bar'
 import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
@@ -25,6 +26,7 @@ export const pluginsApi = {
   readPanelEntry: (args: {
     pluginKey: string
     panelId: string
+    surface?: PluginPanelSurface
   }): Promise<PluginPanelEntry | null> => ipcRenderer.invoke('plugins:readPanelEntry', args),
   invokeCommand: (args: { pluginKey: string; commandId: string; args?: unknown }) =>
     ipcRenderer.invoke('plugins:invokeCommand', args),
