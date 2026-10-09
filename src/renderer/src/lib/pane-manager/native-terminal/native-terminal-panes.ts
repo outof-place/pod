@@ -22,6 +22,7 @@ export type NativeTerminalPaneHost = {
   isActivePane: () => boolean
   // Focus-follows-mouse for pointer entry the pane's DOM never sees under the native view.
   followMouseFocus: (pointer: { mouseButtons: number; windowHasFocus: boolean }) => void
+  onSurfaceAttached: () => void
 }
 
 type NativePaneState = {
@@ -58,10 +59,20 @@ export function isNativeTerminalRequested(settings: GlobalSettings | null | unde
 export function installNativeTerminalMirrorForPane(terminal: Terminal): void {
   mirrors.set(
     terminal,
-    installNativeTerminalMirror(terminal, (surfaceId, data) =>
-      nativeTerminalApi()?.write(surfaceId, data)
+    installNativeTerminalMirror(
+      terminal,
+      (surfaceId, data) => nativeTerminalApi()?.write(surfaceId, data),
+      releaseNativeKeyboard
     )
   )
+}
+
+// Why: AppKit keeps the keyboard on a native view until told otherwise, so focusing a pane
+// that has no native view on screen (keyboard pane navigation) must hand it to the page.
+function releaseNativeKeyboard(): void {
+  if (terminalsBySurface.size > 0) {
+    nativeTerminalApi()?.releaseKeyboard()
+  }
 }
 
 export function getNativeTerminalGrid(terminal: Terminal): { cols: number; rows: number } | null {
@@ -234,6 +245,7 @@ export function attachNativeTerminal(
       },
       (frames) => api.setFrames(frames)
     )
+    state.host.onSurfaceAttached()
   })()
 }
 

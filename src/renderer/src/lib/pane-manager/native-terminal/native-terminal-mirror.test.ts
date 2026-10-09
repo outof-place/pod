@@ -111,6 +111,21 @@ describe('installNativeTerminalMirror', () => {
     expect(focusNative).toHaveBeenCalledTimes(1)
   })
 
+  it('hands the keyboard back to the page when no native view on screen takes it', () => {
+    const fake = fakeTerminal()
+    const releaseKeyboard = vi.fn()
+    const mirror = installNativeTerminalMirror(asTerminal(fake), vi.fn(), releaseKeyboard)
+    fake.focus()
+    expect(releaseKeyboard).toHaveBeenCalledTimes(1)
+    mirror.setFocusTarget(() => false)
+    fake.focus()
+    expect(releaseKeyboard).toHaveBeenCalledTimes(2)
+    mirror.setFocusTarget(() => true)
+    fake.focus()
+    mirror.focusShadow()
+    expect(releaseKeyboard).toHaveBeenCalledTimes(2)
+  })
+
   it('drops a stale seed when detached before the marker parses', () => {
     const fake = fakeTerminal()
     const send = vi.fn()

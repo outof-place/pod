@@ -21,6 +21,7 @@ import {
 const CONTROL = 1 << 18
 const OPTION = 1 << 19
 const KEY_C = 0x08
+const KEY_E = 0x0e
 const KEY_H = 0x04
 const KEY_TAB = 0x30
 const KEY_RETURN = 0x24
@@ -45,6 +46,14 @@ async function activeTabAndPane(page: Page): Promise<string | null> {
     const tabId = window.__store?.getState().activeTabId
     const pane = tabId ? window.__paneManagers?.get(tabId)?.getActivePane() : null
     return tabId && pane ? `${tabId}:${pane.id}` : null
+  })
+}
+
+async function shownPaneCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const tabId = window.__store?.getState().activeTabId
+    const panes = tabId ? (window.__paneManagers?.get(tabId)?.getPanes() ?? []) : []
+    return panes.filter((pane) => pane.container.checkVisibility()).length
   })
 }
 
@@ -74,6 +83,8 @@ test('native terminal panes keep Orca drops, app chords and held-modifier UI', a
   const worktreeId = await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage, 30_000)
+  // The first pane must stay an xterm pane: its PTY binds before the native setting is on.
+  await waitForPtyShellEcho(orcaPage, await waitForActivePanePtyId(orcaPage), 30_000)
   await orcaPage.evaluate(async () => {
     await window.__store?.getState().updateSettings({ experimentalNativeTerminal: true })
   })
@@ -88,6 +99,7 @@ test('native terminal panes keep Orca drops, app chords and held-modifier UI', a
       return surfaceId
     })
     .toBeGreaterThan(0)
+  expect(await nativeSurfaceIds(electronApp)).toEqual([surfaceId])
   await expect.poll(async () => nativeSurfaceField(electronApp, surfaceId, 'hidden')).toBe(false)
   // Unwrapped, so a long path reads as one line.
   const paneContent = async (): Promise<string> =>
@@ -104,24 +116,34 @@ test('native terminal panes keep Orca drops, app chords and held-modifier UI', a
   await expect.poll(paneContent, { timeout: 10_000 }).toContain(`'${droppedFile}'`)
   await key(electronApp, surfaceId, 'c', KEY_C, CONTROL)
 
-  // App chords: a user binding reaches the native view and Orca claims it; the PTY never
-  // sees it (cat -v would echo the chord as ^[^H).
+  // App chords: user bindings reach the native view and Orca claims them; the PTY never
+  // sees them (cat -v would echo a chord as ^[^E).
   await execInTerminal(orcaPage, ptyId, 'cat -v')
+  // The startup hint covers the bottom-left of an expanded pane, which hides the native view.
+  await expect(
+    orcaPage.getByRole('tooltip').filter({ hasText: 'Workspace board moved to the bottom bar' })
+  ).toBeHidden({ timeout: 20_000 })
   await orcaPage.evaluate(async () => {
+    await window.api.keybindings.setAction({
+      actionId: 'terminal.expandPane',
+      bindings: ['Ctrl+Alt+E']
+    })
     await window.api.keybindings.setAction({
       actionId: 'terminal.focusPreviousPane',
       bindings: ['Ctrl+Alt+H']
     })
   })
+  await expect.poll(async () => forwardsChord(electronApp, 'e', CONTROL | OPTION)).toBe(true)
   await expect.poll(async () => forwardsChord(electronApp, 'h', CONTROL | OPTION)).toBe(true)
   await nativeTerminalDebug(electronApp, 'focus', [surfaceId])
-  const beforeChord = await activeTabAndPane(orcaPage)
-  await key(electronApp, surfaceId, 'h', KEY_H, CONTROL | OPTION)
-  await expect.poll(async () => activeTabAndPane(orcaPage)).not.toBe(beforeChord)
+  await key(electronApp, surfaceId, 'e', KEY_E, CONTROL | OPTION)
+  await expect.poll(async () => shownPaneCount(orcaPage)).toBe(1)
   // The chord's modifiers are released over the native view; Orca still gets their keyups.
-  expect(await nativeSurfaceField(electronApp, surfaceId, 'windowFirstResponder')).toBe(
-    'OrcaGhosttySurfaceView'
-  )
+  // Why refocus: the relayout can re-show the view, and only a key window takes it back itself.
+  await nativeTerminalDebug(electronApp, 'focus', [surfaceId])
+  await expect
+    .poll(async () => nativeSurfaceField(electronApp, surfaceId, 'windowFirstResponder'))
+    .toBe('OrcaGhosttySurfaceView')
   await orcaPage.evaluate(() => {
     const released: string[] = []
     Reflect.set(window, '__nativeReleasedKeys', released)
@@ -131,6 +153,16 @@ test('native terminal panes keep Orca drops, app chords and held-modifier UI', a
   await expect
     .poll(async () => orcaPage.evaluate(() => Reflect.get(window, '__nativeReleasedKeys')))
     .toEqual(expect.arrayContaining(['Control', 'Alt']))
+  await key(electronApp, surfaceId, 'e', KEY_E, CONTROL | OPTION)
+  await expect.poll(async () => shownPaneCount(orcaPage)).toBe(2)
+
+  // Keyboard pane navigation onto the xterm pane takes AppKit's keyboard along to the page.
+  const beforeChord = await activeTabAndPane(orcaPage)
+  await key(electronApp, surfaceId, 'h', KEY_H, CONTROL | OPTION)
+  await expect.poll(async () => activeTabAndPane(orcaPage)).not.toBe(beforeChord)
+  await expect
+    .poll(async () => nativeSurfaceField(electronApp, surfaceId, 'windowFirstResponder'))
+    .toBe('RenderWidgetHostViewCocoa')
   for (const character of 'zq') {
     await key(electronApp, surfaceId, character, 0)
   }

@@ -11,6 +11,7 @@ export type NativeTerminalApi = {
   readSelection: (surfaceId: number) => Promise<string | null>
   setAppearance: (appearance: NativeTerminalAppearance, zoomFactor: number) => void
   setForwardedChords: (chords: NativeTerminalForwardedChord[]) => void
+  releaseKeyboard: () => void
   destroy: (surfaceId: number) => void
   onEvent: (callback: (event: NativeTerminalEvent) => void) => () => void
 }

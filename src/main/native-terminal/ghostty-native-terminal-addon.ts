@@ -45,6 +45,7 @@ export type GhosttyTerminalAddon = {
   performAction: (surfaceId: number, action: string) => boolean
   destroySurface: (surfaceId: number) => void
   gridSize: (surfaceId: number) => { columns: number; rows: number } | null
+  releaseKeyboard: (surfaceIds: number[]) => void
   setForwardedChords: (
     chords: [keyCode: number, modifierFlags: number, character: string][]
   ) => void

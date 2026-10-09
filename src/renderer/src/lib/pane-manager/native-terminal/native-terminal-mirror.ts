@@ -30,7 +30,9 @@ const SEED_MARKER = new Uint8Array(0)
 
 export function installNativeTerminalMirror(
   terminal: Terminal,
-  send: (surfaceId: number, data: string) => void
+  send: (surfaceId: number, data: string) => void,
+  // DOM focus landed on this xterm with no native view on screen to take the keyboard.
+  onFocusWithoutNativeView: () => void = () => undefined
 ): NativeTerminalMirror {
   let state: MirrorState = { kind: 'detached' }
   let serializeSnapshot: (() => string) | null = null
@@ -93,7 +95,9 @@ export function installNativeTerminalMirror(
   // is on screen it becomes the first responder and receives the keyboard.
   terminal.focus = function mirroredFocus(): void {
     originalFocus()
-    focusTarget?.()
+    if (!focusTarget?.()) {
+      onFocusWithoutNativeView()
+    }
   }
 
   return {

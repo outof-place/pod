@@ -5,6 +5,7 @@ import {
   type NativeTerminalForwardedChord
 } from './native-terminal-forwarded-chords'
 import { NS_CONTROL, NS_OPTION, NS_SHIFT } from './native-terminal-keys'
+import { KEYBINDING_DEFINITIONS, getDefaultBindings, isDoubleTapBinding } from './keybindings'
 
 const TAB = 0x30
 const PAGE_UP = 0x74
@@ -84,6 +85,21 @@ describe('buildNativeTerminalForwardedChords', () => {
     })
     expect(chords.every((chord) => chord.character !== '' || chord.keyCode >= 0)).toBe(true)
     expect(chords).not.toContainEqual(expect.objectContaining({ modifierFlags: NS_SHIFT }))
+  })
+})
+
+describe('double-tap bindings', () => {
+  // A bare-modifier gesture over the native view never leaves Ghostty; forwarding one would
+  // need replaying the taps to Orca's detectors. No default needs it today.
+  it('has no default double-tap binding that a native terminal would have to forward', () => {
+    const doubleTaps = KEYBINDING_DEFINITIONS.flatMap((definition) =>
+      (['darwin', 'linux', 'win32'] as const).flatMap((platform) =>
+        getDefaultBindings(definition, platform)
+          .filter(isDoubleTapBinding)
+          .map((binding) => `${definition.id}:${binding}`)
+      )
+    )
+    expect(doubleTaps).toEqual([])
   })
 })
 
