@@ -47,6 +47,11 @@ export function pluginCapabilityDescription(kind: string, fallback: string): str
         'auto.components.settings.PluginConsentDialog.capability.panelMessaging',
         "Exchange live messages between the plugin's worker and its own panels"
       )
+    case 'settingsPage':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.capability.settingsPage',
+        "Show the plugin's own settings page inside Orca's Settings"
+      )
     default:
       return fallback
   }
