@@ -710,6 +710,7 @@ describe('ClaudeUsageStore', () => {
     expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], {
       path: join(tempUserData, 'orca-claude-usage-sources.json'),
       schemaVersion: 6,
+      worktreeFingerprint: '[]',
       reuse: false
     })
     const persisted = readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')
