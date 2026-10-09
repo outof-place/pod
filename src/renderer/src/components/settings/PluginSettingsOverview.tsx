@@ -3,7 +3,10 @@ import type { PluginHostListEntry } from '../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
 import { PluginCatalogEmptyState } from '../plugin-catalog/PluginCatalogEmptyState'
 import { PluginDevelopmentSection } from './PluginDevelopmentSection'
-import { PluginMarketplaceBrowser } from './PluginMarketplaceBrowser'
+import {
+  ProductPluginMarketplaceGate,
+  ProductThirdPartyPluginsSetting
+} from './ProductThirdPartyPluginsSetting'
 import { PluginSettingsRow, type PluginLogsState } from './PluginSettingsRow'
 import type { OpenPluginSettingsPage } from './PluginSettingsPageDialog'
 import { SettingsRow, SettingsSwitch } from './SettingsFormControls'
@@ -88,6 +91,7 @@ export function PluginSettingsOverview({
         }
       />
       {settingsError ? <p className="text-xs text-destructive">{settingsError}</p> : null}
+      <ProductThirdPartyPluginsSetting />
       <div className="my-4 border-t border-border/60" />
       {!featureEnabled ? (
         <div className="rounded-lg border border-dashed border-border px-5 py-6 text-center text-[13px] leading-6 text-muted-foreground">
@@ -103,7 +107,7 @@ export function PluginSettingsOverview({
         </div>
       ) : (
         <>
-          <PluginMarketplaceBrowser
+          <ProductPluginMarketplaceGate
             installedPlugins={plugins}
             onInstalled={onMarketplaceInstalled}
             onRefreshInstalled={onRefresh}
