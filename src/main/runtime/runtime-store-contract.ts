@@ -77,6 +77,7 @@ export type RuntimeStore = {
   getSettings(): {
     workspaceDir: string
     nestWorkspaces: boolean
+    worktreeLayout?: GlobalSettings['worktreeLayout']
     // Read by worktree placement: decides whether this project's worktrees
     // mirror into a WSL distro instead of the Windows drive.
     localWindowsRuntimeDefault?: GlobalSettings['localWindowsRuntimeDefault']
