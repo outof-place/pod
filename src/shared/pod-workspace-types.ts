@@ -29,3 +29,13 @@ export type PodWorkspaceRootValidation = {
   root: string | null
   issues: PodWorkspaceRootIssue[]
 }
+
+/** One worktree as the search index daemon reports it (ogd `status`, per worktree). */
+export type PodWorkspaceIndexStatus = {
+  /** ogd reports `building`, `ready` or `failed`. */
+  state: string
+  docs: number
+  generation: number
+  settled: boolean
+  buildMs: number
+}
