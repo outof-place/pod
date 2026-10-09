@@ -108,6 +108,8 @@ for (const name of names) {
     metrics.push({
       id: `startup.${mode}.${name}`,
       subject: SUBJECTS[name].label,
+      branch: SUBJECTS[name].branch,
+      upstream: SUBJECTS[name].upstream,
       metric: `startup to first shell prompt (${mode})`,
       unit: 'ms',
       better: 'lower',
@@ -121,4 +123,12 @@ for (const profile of Object.values(profiles)) {
   await removeProfile(profile)
 }
 
-writeSuiteResult('startup', { versions, config: { rounds, subjects: names }, metrics, samples })
+writeSuiteResult('startup', {
+  caveats: [
+    'Time to the first shell prompt, from the hermetic zsh prompt log; drawing the prompt is not included. The OS file cache is not purged for cold launches.'
+  ],
+  versions,
+  config: { rounds, subjects: names },
+  metrics,
+  samples
+})
