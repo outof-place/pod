@@ -12,15 +12,16 @@ import {
 import { installNativeTerminalMirror, type NativeTerminalMirror } from './native-terminal-mirror'
 import { isNativeTerminalRequested } from './native-terminal-requested'
 import { createNativeTerminalSurface } from './native-terminal-surface-create'
+import { connectNativeTerminalSource } from './native-terminal-pty-source'
 import {
   createNativeTerminalRenderPause,
   type NativeTerminalRenderPause
 } from './native-terminal-render-pause'
 import {
+  rememberCreatedSurfaceAppearance,
   rememberNativeTerminalSettings,
   sendSurfaceAppearance,
   setNativeTerminalFontSize,
-  surfaceAppearanceKey,
   trackNativeSurfaceAppearance,
   type NativeTerminalPaneFont
 } from './native-terminal-surface-appearance'
@@ -208,7 +209,7 @@ export function attachNativeTerminal(
     existing.host = host
     if (existing.ptyId !== ptyId) {
       existing.ptyId = ptyId
-      mirror.resync()
+      void connectNativeTerminalSource(api, existing, mirror, true)
       if (existing.surfaceId !== null) {
         host.onSurfaceBound(existing.surfaceId, ptyId)
       }
@@ -252,11 +253,9 @@ export function attachNativeTerminal(
     state.surfaceId = surfaceId
     // Lets E2E map each native surface to the pane drawing it.
     container.dataset.nativeSurfaceId = String(surfaceId)
-    // Main gives the new surface this appearance as its own config.
-    state.fontSize = appearance.fontSize
-    state.appearanceKey = surfaceAppearanceKey(appearance, zoomFactor)
+    rememberCreatedSurfaceAppearance(state, appearance, zoomFactor)
     terminalsBySurface.set(surfaceId, terminal)
-    mirror.attach(surfaceId, () => state.host.serialize())
+    void connectNativeTerminalSource(api, state, mirror, false)
     mirror.setFocusTarget(() => focusNativeIfShown(surfaceId))
     const renderPause = createNativeTerminalRenderPause(terminal, scheduleNativeTerminalFrames)
     state.renderPause = renderPause

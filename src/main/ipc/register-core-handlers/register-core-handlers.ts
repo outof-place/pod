@@ -185,7 +185,7 @@ export function registerCoreHandlers(
   registerDiagnosticsHandlers()
   registerTerminalRenderDesyncEvidenceHandler()
   registerComputerUsePermissionHandlers()
-  registerNativeTerminalHandlers()
+  registerNativeTerminalHandlers(runtime)
   registerSettingsHandlers(store, agentAwakeService)
   registerSkillsHandlers(store, runtime)
   registerSkillDeleteIpcHandlers(store, runtime)
