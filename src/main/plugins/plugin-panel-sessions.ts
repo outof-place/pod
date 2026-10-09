@@ -55,9 +55,16 @@ export class PluginPanelSessions {
     return token
   }
 
-  resolve(ownerKey: string, token: string): PluginPanelSessionBinding | null {
+  /** Resolves only sessions for `surfaces`. Why panels by default: a caller
+   *  that predates settings pages (say, a channel keyed by panel id) must never
+   *  accept a settings page token as a panel. */
+  resolve(
+    ownerKey: string,
+    token: string,
+    surfaces: readonly PluginPanelSurface[] = ['panel']
+  ): PluginPanelSessionBinding | null {
     const session = this.sessions.get(token)
-    if (!session || session.ownerKey !== ownerKey) {
+    if (!session || session.ownerKey !== ownerKey || !surfaces.includes(session.surface)) {
       return null
     }
     return {
