@@ -241,7 +241,19 @@ describe('Pod search provider: text search', () => {
     expect(mock?.requests.at(-1)).toMatchObject({ globs: ['!dist/**'] })
   })
 
-  it('marks the result truncated when a match lies beyond the daemon line excerpt', async () => {
+  it('falls back to ripgrep when ogd clipped or lossily decoded a matched line', async () => {
+    const long = `${'x'.repeat(1990)} useEffect`
+    for (const text of [long, 'useEffect \uFFFD']) {
+      const search = await provider(() => ({
+        message: { matches: [{ path: 'a.ts', line: 1, text, ranges: [[0, 9]] }], truncated: false }
+      }))
+      expect(await search.searchText({ options, rootPath: repo, resultRootPath: repo })).toBeNull()
+      await mock?.close()
+      ogd?.close()
+    }
+  })
+
+  it('marks the result truncated when a range lies outside its line', async () => {
     const search = await provider(() => ({
       message: { matches: [{ path: 'a.ts', line: 1, text: 'abc', ranges: [[5000, 5009]] }] }
     }))
