@@ -15,6 +15,7 @@ import type { SessionSearchScanRoots } from '../ai-vault-search/session-search-s
 import type { ReadAiVaultFirstUserPromptArgs } from './session-first-user-prompt-read'
 import type { SessionParseCachePersistenceOptions } from './session-parse-cache-persistence'
 import type { AiVaultScanOptions } from './session-scanner-types'
+import type { SessionTreeChange, SessionTreeWatchState } from './session-tree-cache'
 
 export const AI_VAULT_SERVICE_PROTOCOL_VERSION = 1
 
@@ -66,6 +67,8 @@ export type AiVaultServiceInit = {
   protocol: typeof AI_VAULT_SERVICE_PROTOCOL_VERSION
   sessionParseCache: SessionParseCachePersistenceOptions | null
   sessionSearch: AiVaultSessionSearchInit | null
+  /** The parent relays file-watcher events for roots the child asks it to watch. */
+  sessionTreeWatch?: boolean
 }
 
 export type AiVaultServiceRequestBody =
@@ -106,6 +109,8 @@ export type AiVaultServiceParentMessage =
   // Fire-and-forget: the child closes the live pair and constructs from this.
   | { type: 'sessionSearch'; init: AiVaultSessionSearchInit }
   | { type: 'sessionSearchRoots'; id: number; roots: SessionSearchScanRoots | null }
+  | { type: 'sessionTree'; root: string; state: SessionTreeWatchState }
+  | { type: 'sessionTreeChanges'; root: string; changes: SessionTreeChange[] }
   | { type: 'shutdown' }
 
 export type AiVaultServiceResultValue =
@@ -120,6 +125,7 @@ export type AiVaultServiceResultValue =
 
 export type AiVaultServiceChildMessage =
   | { type: 'sessionSearchRoots'; id: number }
+  | { type: 'sessionTreeWatch'; root: string }
   | {
       type: 'ready'
       protocol: typeof AI_VAULT_SERVICE_PROTOCOL_VERSION
@@ -159,6 +165,9 @@ export function isAiVaultServiceChildMessage(value: unknown): value is AiVaultSe
   }
   if (message.type === 'sessionSearchRoots') {
     return Number.isSafeInteger(message.id)
+  }
+  if (message.type === 'sessionTreeWatch') {
+    return typeof message.root === 'string' && message.root.length > 0
   }
   if (message.type === 'invalidated') {
     return Number.isSafeInteger(message.generation)
