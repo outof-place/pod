@@ -137,6 +137,7 @@
     "../src/main/claude/statusline-script.ts",
     "../src/main/claude/windows-hook-files.ts",
     "../src/main/claude-accounts/keychain.ts",
+    "../src/main/product-identity/product-identity.ts",
     "../src/main/macos-keychain/generic-password.ts",
     "../src/main/codex/codex-app-server-capability-cache.ts",
     "../src/main/codex/codex-app-server-capability-signal.ts",
