@@ -22,11 +22,7 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') },
   clipboard: {
     readText: clipboardReadText,
-    readBuffer: vi.fn(),
-    writeText: clipboardWriteText,
-    readImage: clipboardReadImage,
-    writeImage: clipboardWriteImage,
-    writeBuffer: clipboardWriteBuffer
+    writeText: clipboardWriteText
   },
   ipcMain: {
     removeHandler: (channel: string) => handlers.delete(channel),
@@ -36,6 +32,12 @@ vi.mock('electron', () => ({
   nativeImage: { createFromBuffer: vi.fn() }
 }))
 
+vi.mock('./clipboard-electron-io', () => ({
+  readClipboardImage: clipboardReadImage,
+  readClipboardSnapshot: async () => ({ types: [], readBuffer: async () => Buffer.alloc(0) }),
+  writeClipboardImage: clipboardWriteImage,
+  writeClipboardBuffer: clipboardWriteBuffer
+}))
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer }))
 vi.mock('./clipboard-remote-file-copy', () => ({
   cleanupExpiredRemoteClipboardFiles: vi.fn(async () => undefined),
@@ -106,7 +108,7 @@ describe('dashboard popout clipboard access', () => {
     await expect(handlers.get('clipboard:saveImageAsTempFile')?.(popoutEvent)).rejects.toThrow(
       'Unauthorized clipboard IPC sender'
     )
-    expect(() => handlers.get('clipboard:readFilePaths')?.(popoutEvent)).toThrow(
+    await expect(handlers.get('clipboard:readFilePaths')?.(popoutEvent)).rejects.toThrow(
       'Unauthorized clipboard IPC sender'
     )
     expect(() =>
