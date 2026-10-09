@@ -9,6 +9,7 @@ import {
   isPluginUiLanguage,
   type UiLanguage
 } from './ui-language'
+import { POD_UI_LOCALES } from './product/features'
 
 export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es', 'fr'] as const
 export type SupportedUiLocale = (typeof SUPPORTED_UI_LOCALES)[number]
@@ -37,10 +38,10 @@ export function resolveUiLocale(
   language: UiLanguage,
   systemLocale: string | undefined = DEFAULT_UI_LOCALE
 ): string {
-  if (isPluginUiLanguage(language)) {
+  if (POD_UI_LOCALES && isPluginUiLanguage(language)) {
     return language
   }
-  if (language === UI_LANGUAGE_ENGLISH) {
+  if (!POD_UI_LOCALES || language === UI_LANGUAGE_ENGLISH) {
     return DEFAULT_UI_LOCALE
   }
   if (language === UI_LANGUAGE_CHINESE) {
