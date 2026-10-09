@@ -17,6 +17,7 @@ import { translate } from '@/i18n/i18n'
 import { hasGitHubBackedProject, type PreflightIssue } from './landing-preflight-issues'
 import { useLandingPreflightRuntime } from './landing-preflight-runtime'
 import { useLandingOrcaStarState, type LandingStarState } from './landing-github-star-state'
+import { POD_FEATURE_PROMOS } from '../../../shared/product/features'
 
 type ShortcutItem = {
   id: string
@@ -314,7 +315,7 @@ export default function Landing(): React.JSX.Element {
         </div>
       </div>
 
-      {showGitHubSupportFooter && (
+      {POD_FEATURE_PROMOS && showGitHubSupportFooter && (
         <div className="absolute bottom-6 left-0 right-0 flex justify-center">
           <GitHubStarButton hasRepos={repos.length > 0} state={starState} setState={setStarState} />
         </div>
