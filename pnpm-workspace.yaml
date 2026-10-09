@@ -12,6 +12,33 @@ packages:
   - src/packages/*
 
 minimumReleaseAge: 4320
+# Pod tracks the newest Electron runtime and core toolchain on release day, so these skip the
+# 3-day gate. Their platform binaries and electron-builder's own packages are listed too, or a
+# fresh release would still wait on them. Every other package, transitive ones included, waits.
+minimumReleaseAgeExclude:
+  - electron
+  - '@electron/*'
+  - electron-builder
+  - electron-builder-squirrel-windows
+  - app-builder-lib
+  - builder-util
+  - builder-util-runtime
+  - dmg-builder
+  - electron-publish
+  - xterm
+  - '@xterm/*'
+  - typescript
+  - '@typescript/*'
+  - vite
+  - rolldown-vite
+  - rolldown
+  - '@rolldown/*'
+  - oxlint
+  - '@oxlint/*'
+  - oxlint-tsgolint
+  - '@oxlint-tsgolint/*'
+  - oxfmt
+  - '@oxfmt/*'
 shamefullyHoist: true
 
 # Orca always launches the user's own resolved Claude CLI via
