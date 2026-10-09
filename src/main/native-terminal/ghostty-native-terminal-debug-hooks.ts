@@ -28,9 +28,25 @@ export function installGhosttyDebugHooks(sources: DebugHookSources): void {
       scrollbarScroll: (surfaceId: number, fraction: number) =>
         addon()?.debugScrollbarScroll(surfaceId, fraction) ?? false,
       focus: (surfaceId: number) => addon()?.focus(surfaceId),
+      action: (surfaceId: number, action: string) => addon()?.performAction(surfaceId, action),
       modifiersChanged: (surfaceId: number, keyCode: number, modifierFlags: number) =>
         addon()?.debugModifiersChanged(surfaceId, keyCode, modifierFlags),
       drop: (surfaceId: number, paths: string[]) => addon()?.debugDrop(surfaceId, paths) ?? null,
+      flags: (surfaceId: number, keyCode: number, modifierFlags: number) =>
+        addon()?.debugFlags(surfaceId, keyCode, modifierFlags),
+      insertText: (surfaceId: number, text: string) => addon()?.debugInsertText(surfaceId, text),
+      markedText: (surfaceId: number, text: string | null, caret = 0) =>
+        addon()?.debugMarkedText(surfaceId, text, caret) ?? null,
+      imeRect: (surfaceId: number, location = 0) =>
+        addon()?.debugImeRect(surfaceId, location) ?? null,
+      services: (surfaceId: number, op: 'validate' | 'write' | 'read', text?: string) =>
+        addon()?.debugServices(surfaceId, op, text) ?? null,
+      accessibility: (surfaceId: number) => addon()?.debugAccessibility(surfaceId) ?? null,
+      accessibilitySet: (surfaceId: number, attribute: 'selectedText' | 'value', text: string) =>
+        addon()?.debugAccessibilitySet(surfaceId, attribute, text),
+      secureInput: (surfaceId: number, simulate?: boolean) =>
+        addon()?.debugSecureInput(surfaceId, simulate) ?? null,
+      textInputMenu: () => addon()?.debugTextInputMenu() ?? [],
       forwardedChords: sources.forwardedChords
     }
   })

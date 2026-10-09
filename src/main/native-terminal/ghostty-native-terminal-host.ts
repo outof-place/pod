@@ -12,12 +12,11 @@ import {
 } from './ghostty-native-terminal-addon'
 import { ghosttyConfigPath, writeGhosttyConfig } from './ghostty-native-terminal-config-file'
 import { forgetGhosttySurfaceConfig } from './ghostty-native-terminal-surface-configs'
-import { toKeyboardInputEvents } from './ghostty-forwarded-key'
 import { installGhosttyDebugHooks } from './ghostty-native-terminal-debug-hooks'
 import {
   appliedForwardedChords,
   applyForwardedChords,
-  toMouseEnterEvent
+  routeNativeInputEvent
 } from './ghostty-native-terminal-input'
 
 type SurfaceOwner = {
@@ -127,17 +126,6 @@ function handleSurfaceEvent(surfaceId: number, kind: string, args: unknown[]): v
       sendEvent(owner, { surfaceId, kind: 'focus', focused })
       return
     }
-    case 'key':
-      for (const input of toKeyboardInputEvents({
-        characters: String(args[0] ?? ''),
-        keyCode: Number(args[1]),
-        modifierFlags: Number(args[2]),
-        isRepeat: args[3] === true,
-        isRelease: args[4] === true
-      })) {
-        owner.webContents.sendInputEvent(input)
-      }
-      return
     case 'contextMenu': {
       // Replay as a right click at the same window point so the pane's DOM context menu opens.
       const x = Math.round(Number(args[0]))
@@ -160,10 +148,8 @@ function handleSurfaceEvent(surfaceId: number, kind: string, args: unknown[]): v
     case 'bell':
       sendEvent(owner, { surfaceId, kind: 'bell' })
       break
-    case 'mouseEnter':
-      sendEvent(owner, toMouseEnterEvent(surfaceId, args))
-      break
     default:
+      routeNativeInputEvent(owner, surfaceId, kind, args, (event) => sendEvent(owner, event))
       break
   }
 }
@@ -232,6 +218,12 @@ export function setSurfaceFrames(webContents: WebContents, frames: NativeTermina
 export function focusSurface(webContents: WebContents, surfaceId: number): void {
   if (addon && ownedBy(surfaceId, webContents)) {
     addon.focus(surfaceId)
+  }
+}
+
+export function setSurfaceShellPid(webContents: WebContents, surfaceId: number, pid: number): void {
+  if (addon && ownedBy(surfaceId, webContents)) {
+    addon.setSurfaceShellPid(surfaceId, pid)
   }
 }
 

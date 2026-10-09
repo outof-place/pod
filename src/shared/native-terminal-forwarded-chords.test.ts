@@ -4,7 +4,7 @@ import {
   isNativeTerminalForwardedChord,
   type NativeTerminalForwardedChord
 } from './native-terminal-forwarded-chords'
-import { NS_CONTROL, NS_OPTION, NS_SHIFT } from './native-terminal-keys'
+import { NS_COMMAND, NS_CONTROL, NS_OPTION, NS_SHIFT } from './native-terminal-keys'
 import { KEYBINDING_DEFINITIONS, getDefaultBindings, isDoubleTapBinding } from './keybindings'
 
 const TAB = 0x30
@@ -78,13 +78,22 @@ describe('buildNativeTerminalForwardedChords', () => {
     expect(chords).not.toContainEqual(named(PAGE_DOWN, NS_CONTROL))
   })
 
-  it('skips double-tap bindings, which carry no key for the native view to match', () => {
+  it('watches both keys of a double-tap binding modifier, Mod resolving to Command', () => {
     const chords = buildNativeTerminalForwardedChords({
-      overrides: { 'terminal.focusNextPane': ['DoubleTap+Shift'] },
+      overrides: {
+        'sidebar.left.toggle': ['DoubleTap+Shift'],
+        'sidebar.right.toggle': ['DoubleTap+Mod']
+      },
       terminalShortcutPolicy: 'orca-first'
     })
-    expect(chords.every((chord) => chord.character !== '' || chord.keyCode >= 0)).toBe(true)
-    expect(chords).not.toContainEqual(expect.objectContaining({ modifierFlags: NS_SHIFT }))
+    expect(chords).toEqual(
+      expect.arrayContaining([
+        named(0x38, NS_SHIFT),
+        named(0x3c, NS_SHIFT),
+        named(0x37, NS_COMMAND),
+        named(0x36, NS_COMMAND)
+      ])
+    )
   })
 })
 

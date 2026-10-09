@@ -17,6 +17,8 @@ export type NativeTerminalApi = {
     appearance: NativeTerminalAppearance,
     zoomFactor: number
   ) => void
+  // The surface shows a pty this Mac hosts; its tty drives Secure Keyboard Entry.
+  bindLocalPty: (surfaceId: number, ptyId: string) => void
   destroy: (surfaceId: number) => void
   onEvent: (callback: (event: NativeTerminalEvent) => void) => () => void
 }

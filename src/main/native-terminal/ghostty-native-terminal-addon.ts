@@ -17,6 +17,8 @@ export type NativeSurfaceFrame =
   | SurfacePlacement
   | [...SurfacePlacement, holes: [number, number, number, number][]]
 
+type DebugRect = { x: number; y: number; width: number; height: number }
+
 export type NativeSurfaceEventHandler = (kind: string, ...args: unknown[]) => void
 
 // Rows as Ghostty reports them; hit* name the view a click on / beside the scroller reaches.
@@ -53,6 +55,27 @@ export type GhosttyTerminalAddon = {
   destroySurface: (surfaceId: number) => void
   gridSize: (surfaceId: number) => { columns: number; rows: number } | null
   releaseKeyboard: (surfaceIds: number[]) => void
+  setSurfaceShellPid: (surfaceId: number, pid: number) => string | null
+  debugInsertText: (surfaceId: number, text: string) => void
+  debugMarkedText: (
+    surfaceId: number,
+    text: string | null,
+    caret: number
+  ) => { hasMarkedText: boolean } | null
+  debugImeRect: (
+    surfaceId: number,
+    location: number
+  ) => { caret: DebugRect; view: DebugRect } | null
+  debugFlags: (surfaceId: number, keyCode: number, modifierFlags: number) => void
+  debugServices: (surfaceId: number, op: 'validate' | 'write' | 'read', text?: string) => unknown
+  debugAccessibility: (surfaceId: number) => Record<string, unknown> | null
+  debugAccessibilitySet: (
+    surfaceId: number,
+    attribute: 'selectedText' | 'value',
+    text: string
+  ) => void
+  debugSecureInput: (surfaceId: number, simulate?: boolean) => Record<string, unknown>
+  debugTextInputMenu: () => { action: string; keyEquivalent: string; modifiers: number }[]
   setForwardedChords: (
     chords: [keyCode: number, modifierFlags: number, character: string][]
   ) => void
