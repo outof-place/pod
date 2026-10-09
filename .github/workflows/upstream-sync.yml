@@ -1,0 +1,573 @@
+# Rebases Pod's product branch (`main`) onto each new stable Orca release.
+#
+# Daily (and on demand): fast-forward `orca-main` to Orca's main, look for a newer stable Orca
+# release than the one upstream.json pins, rebase `main` onto it in a `sync/orca-<tag>` branch,
+# run typecheck, unit tests and the macOS build, then open one "Rebase on Orca vX" pull request.
+# A conflict or a failed check opens or updates ONE issue labelled `upstream-sync` instead; the
+# next successful sync closes it. Run it with `promote` to move `main` to a reviewed sync branch.
+# Every push it makes is followed by scripts/pod-workflow-quarantine.sh, which keeps Orca's
+# workflows disabled.
+#
+# Requires the POD_SYNC_TOKEN repository secret. GITHUB_TOKEN cannot push commits that touch
+# .github/workflows, and every Orca release does. Use a fine-grained token scoped to
+# outof-place/pod with Contents, Pull requests, Issues and Workflows set to read and write, or a
+# classic token with the `repo` and `workflow` scopes. See CONTRIBUTING.md.
+name: Upstream sync
+
+on:
+  schedule:
+    - cron: '37 6 * * *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Orca release tag to rebase on (default is the latest stable release). Setting it also re-runs a sync that already has an open PR or issue.
+        required: false
+        type: string
+      promote:
+        description: Instead of syncing, move main to the reviewed "Rebase on Orca <tag>" pull request (needs tag).
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: stablyai/orca
+  PRODUCT_BRANCH: main
+  MIRROR_BRANCH: orca-main
+  ISSUE_LABEL: upstream-sync
+  UNIT_SHARDS: '5'
+
+jobs:
+  mirror:
+    name: Mirror Orca main into orca-main
+    if: ${{ !inputs.promote }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout the quarantine script
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.PRODUCT_BRANCH }}
+          sparse-checkout: scripts/pod-workflow-quarantine.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Keep Orca workflows disabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/pod-workflow-quarantine.sh
+
+      - name: Fast-forward orca-main
+        env:
+          GH_TOKEN: ${{ secrets.POD_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::POD_SYNC_TOKEN is not set. See CONTRIBUTING.md, section 'Maintainers: the sync token'."
+            exit 1
+          fi
+          upstream=$(gh api "repos/$UPSTREAM_REPO/branches/main" --jq .commit.sha)
+          current=$(gh api "repos/$GITHUB_REPOSITORY/branches/$MIRROR_BRANCH" --jq .commit.sha 2>/dev/null || true)
+          # The fork shares Orca's objects, so the ref can point at a commit only Orca has pushed.
+          if [ -z "$current" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/heads/$MIRROR_BRANCH" -f "sha=$upstream" >/dev/null
+          elif [ "$current" != "$upstream" ]; then
+            # force=false: a stray commit on orca-main makes this fail instead of being overwritten.
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$MIRROR_BRANCH" -f "sha=$upstream" -F force=false >/dev/null
+          fi
+          echo "$MIRROR_BRANCH is at $upstream" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep Orca workflows disabled after the push
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sleep 15
+          bash scripts/pod-workflow-quarantine.sh
+
+  detect:
+    name: Find a new Orca release
+    if: ${{ !inputs.promote }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      needed: ${{ steps.plan.outputs.needed }}
+      old_tag: ${{ steps.plan.outputs.old_tag }}
+      old_sha: ${{ steps.plan.outputs.old_sha }}
+      new_tag: ${{ steps.plan.outputs.new_tag }}
+      new_sha: ${{ steps.plan.outputs.new_sha }}
+      pod_sha: ${{ steps.plan.outputs.pod_sha }}
+      sync_branch: ${{ steps.plan.outputs.sync_branch }}
+    steps:
+      - name: Require the sync token
+        env:
+          POD_SYNC_TOKEN: ${{ secrets.POD_SYNC_TOKEN }}
+        run: |
+          if [ -z "$POD_SYNC_TOKEN" ]; then
+            echo "::error::POD_SYNC_TOKEN is not set. See CONTRIBUTING.md, section 'Maintainers: the sync token'."
+            exit 1
+          fi
+
+      - name: Checkout upstream.json
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.PRODUCT_BRANCH }}
+          sparse-checkout: upstream.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Plan
+        id: plan
+        env:
+          GH_TOKEN: ${{ secrets.POD_SYNC_TOKEN }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          old_tag=$(jq -er .tag upstream.json)
+          old_sha=$(jq -er .sha upstream.json)
+          pod_sha=$(git rev-parse HEAD)
+
+          if [ -n "$REQUESTED_TAG" ]; then
+            new_tag=$REQUESTED_TAG
+          else
+            # Desktop releases only: mobile-* and prerelease tags never move the base.
+            new_tag=$(gh release list -R "$UPSTREAM_REPO" --exclude-drafts --exclude-pre-releases \
+              --limit 50 --json tagName \
+              --jq '[.[].tagName | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))][0] // ""')
+          fi
+          if [ -z "$new_tag" ]; then
+            echo "::error::No stable Orca release found in $UPSTREAM_REPO."
+            exit 1
+          fi
+          new_sha=$(gh api "repos/$UPSTREAM_REPO/commits/$new_tag" --jq .sha)
+          sync_branch="sync/orca-$new_tag"
+
+          needed=true
+          if [ "$new_sha" = "$old_sha" ]; then
+            needed=false
+            echo "Pod is already on Orca $old_tag."
+          elif [ -z "$REQUESTED_TAG" ]; then
+            open_prs=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$sync_branch" --state open --json number --jq 'length')
+            if [ "$open_prs" != 0 ]; then
+              needed=false
+              echo "A pull request for $sync_branch is already open."
+            fi
+            # A known failure for this exact tag and Pod commit would only fail again.
+            marker="<!-- upstream-sync tag=$new_tag pod=$pod_sha -->"
+            issue_body=$(gh issue list -R "$GITHUB_REPOSITORY" --label "$ISSUE_LABEL" --state open \
+              --limit 1 --json body --jq '.[0].body // ""')
+            if [ "$needed" = true ] && printf '%s' "$issue_body" | grep -qF -- "$marker"; then
+              needed=false
+              echo "The open $ISSUE_LABEL issue already covers $new_tag on $PRODUCT_BRANCH $pod_sha."
+            fi
+          fi
+
+          {
+            echo "needed=$needed"
+            echo "old_tag=$old_tag"
+            echo "old_sha=$old_sha"
+            echo "new_tag=$new_tag"
+            echo "new_sha=$new_sha"
+            echo "pod_sha=$pod_sha"
+            echo "sync_branch=$sync_branch"
+          } >> "$GITHUB_OUTPUT"
+          echo "Plan: $old_tag ($old_sha) -> $new_tag ($new_sha), needed=$needed" >> "$GITHUB_STEP_SUMMARY"
+
+  rebase:
+    name: Rebase main
+    needs: detect
+    if: needs.detect.outputs.needed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write
+    outputs:
+      result: ${{ steps.rebase.outputs.result }}
+      head_sha: ${{ steps.push.outputs.head_sha }}
+    env:
+      OLD_TAG: ${{ needs.detect.outputs.old_tag }}
+      OLD_SHA: ${{ needs.detect.outputs.old_sha }}
+      NEW_TAG: ${{ needs.detect.outputs.new_tag }}
+      NEW_SHA: ${{ needs.detect.outputs.new_sha }}
+      POD_SHA: ${{ needs.detect.outputs.pod_sha }}
+      SYNC_BRANCH: ${{ needs.detect.outputs.sync_branch }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.detect.outputs.pod_sha }}
+          fetch-depth: 0
+          token: ${{ secrets.POD_SYNC_TOKEN }}
+
+      - name: Fetch the Orca release
+        run: |
+          set -euo pipefail
+          git remote add upstream "https://github.com/$UPSTREAM_REPO.git"
+          git fetch --no-tags upstream "+refs/tags/$NEW_TAG:refs/tags/$NEW_TAG"
+          if [ "$(git rev-parse "$NEW_TAG^{commit}")" != "$NEW_SHA" ]; then
+            echo "::error::$NEW_TAG resolves to a different commit than the release API reported."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$OLD_SHA" HEAD; then
+            echo "::error::$PRODUCT_BRANCH is not built on $OLD_SHA, the commit upstream.json pins. Fix upstream.json first."
+            exit 1
+          fi
+
+      - name: Rebase onto the new release
+        id: rebase
+        run: |
+          set -uo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$SYNC_BRANCH"
+          mkdir -p "$RUNNER_TEMP/sync"
+          report="$RUNNER_TEMP/sync/report.md"
+
+          record_conflict() {
+            local stage=$1 stopped files
+            stopped=$(git rev-parse --verify -q REBASE_HEAD || true)
+            files=$(git diff --name-only --diff-filter=U)
+            git rebase --abort
+            {
+              echo "**Stage:** $stage"
+              echo
+              if [ -n "$stopped" ]; then
+                echo "**Stopped at:** \`$(git log -1 --format='%h %s' "$stopped")\`"
+                trailer=$(git log -1 --format='%(trailers:key=Upstream,key=Fork-only,separator=%x3B )' "$stopped")
+                [ -n "$trailer" ] && echo "**Trailer:** $trailer"
+                echo
+              fi
+              echo "**Conflicted files:**"
+              echo
+              echo '```'
+              echo "${files:-(none reported)}"
+              echo '```'
+            } > "$report"
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          git rebase --onto "$NEW_SHA" "$OLD_SHA" || record_conflict "rebase --onto $NEW_TAG"
+
+          # Fold the new pin into the commit that owns upstream.json, so the stack stays one commit per change.
+          if ! jq --arg tag "$NEW_TAG" --arg sha "$NEW_SHA" '.tag = $tag | .sha = $sha' upstream.json > "$RUNNER_TEMP/upstream.json"; then
+            echo "::error::Could not rewrite upstream.json after the rebase."
+            exit 1
+          fi
+          mv "$RUNNER_TEMP/upstream.json" upstream.json
+          git add upstream.json
+          pin_commit=$(git log -1 --format=%H "$NEW_SHA..HEAD" -- upstream.json)
+          if [ -n "$pin_commit" ]; then
+            git commit --quiet --fixup="$pin_commit"
+            GIT_SEQUENCE_EDITOR=: git rebase --quiet -i --autosquash "$NEW_SHA" || record_conflict "autosquash of the upstream.json pin"
+          else
+            git commit --quiet -m "build(pod): pin the Orca release base in upstream.json" \
+              -m "Fork-only: release base pin read by CI and the release notes"
+          fi
+
+          git range-diff --no-color "$OLD_SHA..$POD_SHA" "$NEW_SHA..HEAD" > "$RUNNER_TEMP/sync/range-diff.txt" || true
+          echo "result=clean" >> "$GITHUB_OUTPUT"
+
+      - name: Push the sync branch
+        id: push
+        if: steps.rebase.outputs.result == 'clean'
+        run: |
+          set -euo pipefail
+          git push --force origin "HEAD:refs/heads/$SYNC_BRANCH"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Keep Orca workflows disabled after the push
+        if: steps.rebase.outputs.result == 'clean'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sleep 15
+          bash scripts/pod-workflow-quarantine.sh
+
+      - name: Upload the sync report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: upstream-sync-report
+          path: ${{ runner.temp }}/sync/
+          if-no-files-found: ignore
+
+  typecheck:
+    name: Typecheck
+    needs: rebase
+    if: needs.rebase.outputs.result == 'clean'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.rebase.outputs.head_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+      - run: pnpm tc
+
+  unit:
+    name: Unit tests ${{ matrix.shard }}
+    needs: rebase
+    if: needs.rebase.outputs.result == 'clean'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.rebase.outputs.head_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+          cache-electron-package: 'true'
+      - run: node config/scripts/install-electron-package-binary.mjs
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/.bun-version
+      - name: Test shard
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: |
+          node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
+            "--shard=${{ matrix.shard }}/$UNIT_SHARDS" --maxWorkers=4
+
+  build:
+    name: macOS build
+    needs: rebase
+    if: needs.rebase.outputs.result == 'clean'
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.rebase.outputs.head_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+      - uses: ./.github/actions/install-mobile-dependencies
+      - name: Build
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: pnpm build
+
+  report:
+    name: Open the PR or the issue
+    needs: [detect, rebase, typecheck, unit, build]
+    if: always() && needs.detect.outputs.needed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    env:
+      GH_TOKEN: ${{ secrets.POD_SYNC_TOKEN }}
+      OLD_TAG: ${{ needs.detect.outputs.old_tag }}
+      OLD_SHA: ${{ needs.detect.outputs.old_sha }}
+      NEW_TAG: ${{ needs.detect.outputs.new_tag }}
+      NEW_SHA: ${{ needs.detect.outputs.new_sha }}
+      POD_SHA: ${{ needs.detect.outputs.pod_sha }}
+      SYNC_BRANCH: ${{ needs.detect.outputs.sync_branch }}
+      HEAD_SHA: ${{ needs.rebase.outputs.head_sha }}
+      REBASE_JOB: ${{ needs.rebase.result }}
+      REBASE_RESULT: ${{ needs.rebase.outputs.result }}
+      CHECKS: typecheck=${{ needs.typecheck.result }} unit=${{ needs.unit.result }} build=${{ needs.build.result }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Checkout the quarantine script
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.detect.outputs.pod_sha }}
+          sparse-checkout: scripts/pod-workflow-quarantine.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Download the sync report
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: upstream-sync-report
+          path: sync
+
+      - name: Open the PR or the issue
+        run: |
+          set -euo pipefail
+          repo=$GITHUB_REPOSITORY
+          compare="https://github.com/$UPSTREAM_REPO/compare/$OLD_TAG...$NEW_TAG"
+          open_issue=$(gh issue list -R "$repo" --label "$ISSUE_LABEL" --state open --limit 1 --json number --jq '.[0].number // ""')
+
+          if [ "$REBASE_RESULT" = clean ] && [ "$CHECKS" = "typecheck=success unit=success build=success" ]; then
+            {
+              echo "<!-- upstream-sync promote base=$POD_SHA head=$HEAD_SHA -->"
+              echo "Rebases \`$PRODUCT_BRANCH\` from Orca $OLD_TAG to [Orca $NEW_TAG](https://github.com/$UPSTREAM_REPO/releases/tag/$NEW_TAG)."
+              echo
+              echo "- Orca changes in this range: $compare"
+              echo "- Typecheck, unit tests ($UNIT_SHARDS shards) and the macOS build passed: $RUN_URL"
+              echo "- \`upstream.json\` now pins \`$NEW_TAG\` (\`$NEW_SHA\`)."
+              echo
+              echo "**Do not press Merge.** A rebase replaces the branch. To promote it, run the sync with \`promote\`:"
+              echo
+              echo '```sh'
+              echo "gh workflow run upstream-sync.yml -R $repo -f tag=$NEW_TAG -f promote=true"
+              echo '```'
+              echo
+              echo "It moves \`$PRODUCT_BRANCH\` from \`$POD_SHA\` to \`$HEAD_SHA\` with a lease, keeps Orca's workflows disabled, and GitHub then shows this pull request as merged."
+              if [ -s sync/range-diff.txt ]; then
+                echo
+                echo "<details><summary>Range diff of the Pod stack (old base vs new base)</summary>"
+                echo
+                echo '```'
+                head -c 50000 sync/range-diff.txt
+                echo '```'
+                echo "</details>"
+              fi
+            } > pr-body.md
+            existing=$(gh pr list -R "$repo" --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number // ""')
+            if [ -n "$existing" ]; then
+              gh pr edit "$existing" -R "$repo" --body-file pr-body.md
+              pr_url=$(gh pr view "$existing" -R "$repo" --json url --jq .url)
+            else
+              pr_url=$(gh pr create -R "$repo" --base "$PRODUCT_BRANCH" --head "$SYNC_BRANCH" \
+                --title "Rebase on Orca $NEW_TAG" --body-file pr-body.md)
+            fi
+            if [ -n "$open_issue" ]; then
+              gh issue close "$open_issue" -R "$repo" --comment "Orca $NEW_TAG synced cleanly: $pr_url"
+            fi
+            echo "Opened $pr_url" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ "$REBASE_RESULT" = conflict ]; then
+            headline="Pod does not rebase cleanly on Orca $NEW_TAG."
+          elif [ "$REBASE_RESULT" = clean ]; then
+            headline="Pod rebases on Orca $NEW_TAG, but checks failed ($CHECKS)."
+          else
+            headline="The sync job failed before it could rebase (rebase job: $REBASE_JOB)."
+          fi
+          {
+            echo "<!-- upstream-sync tag=$NEW_TAG pod=$POD_SHA -->"
+            echo "$headline"
+            echo
+            echo "- Current base: Orca $OLD_TAG (\`$OLD_SHA\`), \`$PRODUCT_BRANCH\` at \`$POD_SHA\`"
+            echo "- Target: [Orca $NEW_TAG](https://github.com/$UPSTREAM_REPO/releases/tag/$NEW_TAG) (\`$NEW_SHA\`), changes: $compare"
+            [ -n "$HEAD_SHA" ] && echo "- Rebased stack: branch \`$SYNC_BRANCH\` at \`$HEAD_SHA\`"
+            echo "- Run: $RUN_URL"
+            echo
+            [ -s sync/report.md ] && cat sync/report.md && echo
+            echo "**To fix by hand:**"
+            echo
+            echo '```sh'
+            echo "git fetch origin && git fetch upstream tag $NEW_TAG"
+            echo "git switch -c $SYNC_BRANCH origin/$PRODUCT_BRANCH"
+            echo "git rebase --onto $NEW_TAG $OLD_SHA   # resolve, then update upstream.json"
+            echo '```'
+            echo
+            echo "Or fix the offending topic branch and rebuild the stack: \`scripts/pod-stack.sh --tag $NEW_TAG\`."
+            echo
+            echo "This is the only \`$ISSUE_LABEL\` issue: later runs update it instead of opening another, and the next clean sync closes it."
+          } > issue-body.md
+
+          gh label create "$ISSUE_LABEL" -R "$repo" --color B60205 \
+            --description "Automatic rebase on a new Orca release needs a human" 2>/dev/null || true
+          if [ -n "$open_issue" ]; then
+            gh issue edit "$open_issue" -R "$repo" --title "Upstream sync: Orca $NEW_TAG needs a hand" --body-file issue-body.md
+            gh issue comment "$open_issue" -R "$repo" --body "$headline $RUN_URL"
+          else
+            gh issue create -R "$repo" --label "$ISSUE_LABEL" \
+              --title "Upstream sync: Orca $NEW_TAG needs a hand" --body-file issue-body.md
+          fi
+          echo "$headline" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep Orca workflows disabled after the PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sleep 15
+          bash scripts/pod-workflow-quarantine.sh
+
+  promote:
+    name: Promote a sync pull request to main
+    if: ${{ inputs.promote }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Find the reviewed sync
+        id: find
+        env:
+          GH_TOKEN: ${{ secrets.POD_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::POD_SYNC_TOKEN is not set. See CONTRIBUTING.md, section 'Maintainers: the sync token'."
+            exit 1
+          fi
+          if [ -z "$TAG" ]; then
+            echo "::error::promote needs the tag of the sync pull request, e.g. v1.4.224."
+            exit 1
+          fi
+          pr=$(gh pr list -R "$GITHUB_REPOSITORY" --head "sync/orca-$TAG" --base "$PRODUCT_BRANCH" --state open \
+            --json number,headRefOid,body --jq '.[0] // empty')
+          if [ -z "$pr" ]; then
+            echo "::error::No open sync pull request for Orca $TAG."
+            exit 1
+          fi
+          marker=$(printf '%s' "$pr" | jq -r '.body' | grep -oE 'upstream-sync promote base=[0-9a-f]{40} head=[0-9a-f]{40}' || true)
+          base=$(printf '%s' "$marker" | sed -E 's/.*base=([0-9a-f]{40}).*/\1/')
+          head=$(printf '%s' "$marker" | sed -E 's/.*head=([0-9a-f]{40}).*/\1/')
+          if [ -z "$marker" ] || [ "$head" != "$(printf '%s' "$pr" | jq -r '.headRefOid')" ]; then
+            echo "::error::sync/orca-$TAG changed after its checks passed; re-run the sync with tag=$TAG."
+            exit 1
+          fi
+          {
+            echo "base=$base"
+            echo "head=$head"
+            echo "number=$(printf '%s' "$pr" | jq -r '.number')"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the sync branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.find.outputs.head }}
+          token: ${{ secrets.POD_SYNC_TOKEN }}
+
+      - name: Move main with a lease
+        env:
+          BASE: ${{ steps.find.outputs.base }}
+          HEAD: ${{ steps.find.outputs.head }}
+        run: |
+          set -euo pipefail
+          git push --force-with-lease="refs/heads/$PRODUCT_BRANCH:$BASE" origin "$HEAD:refs/heads/$PRODUCT_BRANCH"
+          echo "$PRODUCT_BRANCH moved from $BASE to $HEAD (Orca $TAG)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep Orca workflows disabled after the push
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sleep 15
+          bash scripts/pod-workflow-quarantine.sh
