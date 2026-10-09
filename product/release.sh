@@ -146,6 +146,7 @@ printf '%s\n' "$gatekeeper"
 grep -Fq "source=Notarized Developer ID" <<<"$gatekeeper" || die "$app is not notarized: $gatekeeper"
 spctl -a -vv -t open --context context:primary-signature "$dmg"
 [ -f "$app/Contents/Resources/product-identity.json" ] || die "app lacks product-identity.json"
+node product/scripts/verify-claude-acc-host.mjs "$app"
 
 if [ "$publish" -eq 1 ]; then
   [ -n "$feed_repo" ] || die "identity.updateFeed is null; nothing to publish to"
