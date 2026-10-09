@@ -76,6 +76,7 @@ function install(dir, into) {
   renameSync(next, into)
 }
 
+/** @param {{ from?: string | null, into?: string, pin?: { repository: string, tag: string, asset: string, sha256: string | null }, download?: typeof fetch }} [options] */
 export async function fetchPayload({
   from = null,
   into = PAYLOAD_DIR,
