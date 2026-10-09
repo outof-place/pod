@@ -7,6 +7,7 @@ import {
   getPreviousVisibleContextualTourStepIndex
 } from '../../../components/contextual-tours/contextual-tour-gate'
 import { hasFeatureInteraction } from '../../../../../shared/feature-interactions'
+import { POD_FEATURE_PROMOS } from '../../../../../shared/product/features'
 
 export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
@@ -50,7 +51,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         const tour = getContextualTour(id)
         const decision = getContextualTourRequestDecision({
           tour,
-          persistedUIReady: s.persistedUIReady,
+          persistedUIReady: POD_FEATURE_PROMOS && s.persistedUIReady,
           autoEligible: options?.force === true || s.contextualToursAutoEligible === true,
           onboardingVisible: s.contextualToursOnboardingVisible,
           seenIds: options?.force === true ? [] : s.contextualToursSeenIds,
