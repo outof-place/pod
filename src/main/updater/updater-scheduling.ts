@@ -8,6 +8,7 @@ import {
   MAX_AUTO_UPDATE_RETRY_INTERVAL_MS
 } from './updater-state'
 import { UpdaterCheckFailure } from './updater-check-failure'
+import { isOfficialUpdateFeedDisabled } from './official-update-opt-out'
 
 /** Owns timer-driven checks and the shared check-launch bookkeeping. */
 export abstract class UpdaterScheduling extends UpdaterCheckFailure {
@@ -65,7 +66,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     if (this.backgroundCheckLaunchPending || this.currentStatus.state === 'checking') {
       return false
     }
-    if (!app.isPackaged || is.dev) {
+    if (!app.isPackaged || is.dev || isOfficialUpdateFeedDisabled()) {
       this.sendStatus({ state: 'not-available' })
       return false
     }
