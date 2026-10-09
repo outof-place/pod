@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import type { NativeTerminalAppearance } from '../../shared/native-terminal-appearance'
 import type { NativeTerminalFrame } from '../../shared/native-terminal-ipc'
 import { isNativeTerminalForwardedChord } from '../../shared/native-terminal-forwarded-chords'
+import { localPtyShellPid } from '../native-terminal/ghostty-native-terminal-tty'
 import {
   createSurface,
   destroyOwnedSurface,
@@ -11,6 +12,7 @@ import {
   readSurfaceSelection,
   releaseSurfaceKeyboard,
   setForwardedChords,
+  setSurfaceShellPid,
   setSurfaceFrames,
   updateAppearance,
   ownedSurfaceAddon,
@@ -85,6 +87,7 @@ const SEND_CHANNELS = [
   'nativeTerminal:setForwardedChords',
   'nativeTerminal:releaseKeyboard',
   'nativeTerminal:setSurfaceAppearance',
+  'nativeTerminal:bindLocalPty',
   'nativeTerminal:destroy'
 ]
 
@@ -153,6 +156,11 @@ export function registerNativeTerminalHandlers(): void {
       }
     }
   )
+  ipcMain.on('nativeTerminal:bindLocalPty', (event, surfaceId: unknown, ptyId: unknown) => {
+    if (isSurfaceId(surfaceId) && typeof ptyId === 'string') {
+      void localPtyShellPid(ptyId).then((pid) => setSurfaceShellPid(event.sender, surfaceId, pid))
+    }
+  })
   ipcMain.on('nativeTerminal:destroy', (event, surfaceId: unknown) => {
     if (isSurfaceId(surfaceId)) {
       destroyOwnedSurface(event.sender, surfaceId)

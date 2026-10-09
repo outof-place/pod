@@ -10,6 +10,7 @@ import {
   trackNativeTerminalFrame
 } from './native-terminal-frames'
 import { installNativeTerminalMirror, type NativeTerminalMirror } from './native-terminal-mirror'
+import { isNativeTerminalRequested } from './native-terminal-requested'
 import {
   createNativeTerminalRenderPause,
   type NativeTerminalRenderPause
@@ -34,7 +35,10 @@ export type NativeTerminalPaneHost = {
   isActivePane: () => boolean
   // Focus-follows-mouse for pointer entry the pane's DOM never sees under the native view.
   followMouseFocus: (pointer: { mouseButtons: number; windowHasFocus: boolean }) => void
-  onSurfaceAttached: () => void
+  // The surface is bound to `ptyId`, first or after a rebind.
+  onSurfaceBound: (surfaceId: number, ptyId: string) => void
+  // Text the surface was handed to paste (Services menu).
+  pasteText: (text: string) => void
 }
 
 type NativePaneState = {
@@ -60,14 +64,6 @@ let lastAppearance: NativeTerminalAppearance | null = null
 
 function nativeTerminalApi(): Window['api']['nativeTerminal'] | null {
   return typeof window === 'undefined' ? null : (window.api?.nativeTerminal ?? null)
-}
-
-export function isNativeTerminalRequested(settings: GlobalSettings | null | undefined): boolean {
-  return (
-    settings?.experimentalNativeTerminal === true &&
-    typeof navigator !== 'undefined' &&
-    navigator.userAgent.includes('Mac')
-  )
 }
 
 // Installed for every pane at construction so no byte reaches xterm unseen; it stays
@@ -126,6 +122,9 @@ function handleEvent(event: NativeTerminalEvent): void {
       if (/^https?:\/\//i.test(event.url)) {
         void window.api.shell.openUrl(event.url)
       }
+      break
+    case 'pasteText':
+      state.host.pasteText(event.text)
       break
     case 'mouseEnter':
       // Why the native flag: the page reports unfocused while the native view has the keyboard.
@@ -209,6 +208,9 @@ export function attachNativeTerminal(
     if (existing.ptyId !== ptyId) {
       existing.ptyId = ptyId
       mirror.resync()
+      if (existing.surfaceId !== null) {
+        host.onSurfaceBound(existing.surfaceId, ptyId)
+      }
     }
     return
   }
@@ -291,7 +293,7 @@ export function attachNativeTerminal(
       },
       (frames) => api.setFrames(frames)
     )
-    state.host.onSurfaceAttached()
+    state.host.onSurfaceBound(surfaceId, state.ptyId)
   })()
 }
 

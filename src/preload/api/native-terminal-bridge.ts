@@ -19,6 +19,8 @@ export const nativeTerminalApi = {
   releaseKeyboard: () => ipcRenderer.send('nativeTerminal:releaseKeyboard'),
   setSurfaceAppearance: (surfaceId, appearance, zoomFactor) =>
     ipcRenderer.send('nativeTerminal:setSurfaceAppearance', surfaceId, appearance, zoomFactor),
+  bindLocalPty: (surfaceId, ptyId) =>
+    ipcRenderer.send('nativeTerminal:bindLocalPty', surfaceId, ptyId),
   destroy: (surfaceId) => ipcRenderer.send('nativeTerminal:destroy', surfaceId),
   onEvent: (callback) => {
     const listener = (_event: IpcRendererEvent, payload: NativeTerminalEvent): void =>
