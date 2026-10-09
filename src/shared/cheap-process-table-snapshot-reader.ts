@@ -1,5 +1,6 @@
 import { runProcess } from '@orca/process-host'
 import { getNativeProcessInfo } from './native-process-info'
+import { psLocaleEnvironment } from './ps-locale-environment'
 import {
   CHEAP_PS_ARGS,
   PS_MAX_BUFFER_BYTES,
@@ -27,6 +28,7 @@ const cheapProcessTableReader = createProcessTableSnapshotReader<CheapProcessTab
     const result = await runProcess({
       program: 'ps',
       args: CHEAP_PS_ARGS,
+      env: psLocaleEnvironment(),
       timeoutMs: PS_TIMEOUT_MS,
       maxOutputBytes: PS_MAX_BUFFER_BYTES
     })
