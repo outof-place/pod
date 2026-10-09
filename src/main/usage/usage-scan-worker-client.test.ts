@@ -5,10 +5,8 @@ import {
   UsageScanWorkerClient,
   scanCodexUsageOnWorker
 } from './usage-scan-worker-client'
-import type {
-  UsageScanWorkerRequest,
-  UsageScanWorkerRequestBody
-} from './usage-scan-worker-protocol'
+import type { UsageScanWorkerRequest, UsageScanWorkerScanBody } from './usage-scan-worker-protocol'
+import type { UsageSourceCacheRef } from './usage-source-cache-file'
 
 // A worker_threads stand-in the tests drive directly: it records posted requests
 // and lets a test emit message/error/exit without a built worker bundle.
@@ -59,10 +57,24 @@ function createClient(factory: () => FakeWorker): UsageScanWorkerClient {
   return new UsageScanWorkerClient({ workerFactory: factory as never, log: () => {} })
 }
 
-const CODEX_BODY: UsageScanWorkerRequestBody = {
+const SOURCE_CACHE: UsageSourceCacheRef = {
+  path: '/tmp/orca-codex-usage-sources.json',
+  schemaVersion: 6,
+  reuse: true
+}
+
+const CODEX_BODY: UsageScanWorkerScanBody = {
+  operation: 'scan',
   providerId: 'codex',
   worktrees: [],
-  previous: []
+  sourceCache: SOURCE_CACHE
+}
+
+const CODEX_VALUE = {
+  operation: 'scan',
+  providerId: 'codex',
+  sessions: [{ sessionId: 'session-1' }],
+  dailyAggregates: []
 }
 
 describe('UsageScanWorkerClient', () => {
@@ -70,21 +82,43 @@ describe('UsageScanWorkerClient', () => {
     const worker = new FakeWorker()
     const client = createClient(() => worker)
 
-    const pending = scanCodexUsageOnWorker((body) => client.scan(body), [], [])
+    const pending = scanCodexUsageOnWorker((body) => client.scan(body), [], SOURCE_CACHE)
     await vi.waitFor(() => expect(worker.postedRequests).toHaveLength(1))
-    expect(worker.postedRequests[0]?.providerId).toBe('codex')
+    // The request names where the worker keeps the per-source cache instead of carrying it.
+    expect(worker.postedRequests[0]).toMatchObject({
+      operation: 'scan',
+      providerId: 'codex',
+      sourceCache: SOURCE_CACHE
+    })
+    worker.emit('message', { id: worker.lastId(), ok: true, value: CODEX_VALUE })
+
+    await expect(pending).resolves.toEqual({
+      sessions: [{ sessionId: 'session-1' }],
+      dailyAggregates: []
+    })
+  })
+
+  it('routes a cache split to the worker and hands back the report text', async () => {
+    const worker = new FakeWorker()
+    const client = createClient(() => worker)
+
+    const pending = client.splitCacheFile({
+      cacheFile: '/tmp/usage.json',
+      sourceKey: 'processedFiles'
+    })
+    await vi.waitFor(() => expect(worker.postedRequests).toHaveLength(1))
+    expect(worker.postedRequests[0]).toMatchObject({
+      operation: 'splitCacheFile',
+      cacheFile: '/tmp/usage.json',
+      sourceKey: 'processedFiles'
+    })
     worker.emit('message', {
       id: worker.lastId(),
       ok: true,
-      value: {
-        providerId: 'codex',
-        source: [{ path: 'a.jsonl' }],
-        sessions: [],
-        dailyAggregates: []
-      }
+      value: { operation: 'splitCacheFile', reportText: '{}', migrated: true }
     })
 
-    await expect(pending).resolves.toMatchObject({ source: [{ path: 'a.jsonl' }] })
+    await expect(pending).resolves.toEqual({ reportText: '{}', migrated: true })
   })
 
   it('fails closed instead of scanning on the calling thread when spawn fails', async () => {
@@ -126,18 +160,9 @@ describe('UsageScanWorkerClient', () => {
         worker.emit('message', { id: worker.lastId(), filesScanned: window * 100 })
       }
       await vi.advanceTimersByTimeAsync(USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS - 1)
-      worker.emit('message', {
-        id: worker.lastId(),
-        ok: true,
-        value: {
-          providerId: 'codex',
-          source: [{ path: 'a.jsonl' }],
-          sessions: [],
-          dailyAggregates: []
-        }
-      })
+      worker.emit('message', { id: worker.lastId(), ok: true, value: CODEX_VALUE })
 
-      await expect(pending).resolves.toMatchObject({ source: [{ path: 'a.jsonl' }] })
+      await expect(pending).resolves.toMatchObject({ sessions: [{ sessionId: 'session-1' }] })
     } finally {
       vi.useRealTimers()
     }
@@ -201,12 +226,12 @@ describe('UsageScanWorkerClient', () => {
     const worker = new FakeWorker()
     const client = createClient(() => worker)
 
-    const pending = scanCodexUsageOnWorker((body) => client.scan(body), [], [])
+    const pending = scanCodexUsageOnWorker((body) => client.scan(body), [], SOURCE_CACHE)
     await vi.waitFor(() => expect(worker.postedRequests).toHaveLength(1))
     worker.emit('message', {
       id: worker.lastId(),
       ok: true,
-      value: { providerId: 'claude', source: [], sessions: [], dailyAggregates: [] }
+      value: { operation: 'scan', providerId: 'claude', sessions: [], dailyAggregates: [] }
     })
 
     await expect(pending).rejects.toThrow(/answered for claude/)
