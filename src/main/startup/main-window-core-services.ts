@@ -20,6 +20,8 @@ import {
 } from './codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
 import { RELAY_HOST_CLOSE_REASON } from '../../shared/relay-host-close-reason'
+import { notifyExternalSearchWorktreeLifecycle } from '../search/external-workspace-search-provider'
+import { installPodNativeSearch } from '../pod/search/install-pod-native-search'
 
 export function attachMainWindowCoreServices(
   window: BrowserWindow,
@@ -60,6 +62,7 @@ export function attachMainWindowCoreServices(
   ) {
     throw new Error('Main window services must be initialized before attaching')
   }
+  installPodNativeSearch(store, runtime)
   registerCoreHandlers(
     store,
     runtime,
@@ -134,7 +137,10 @@ export function attachMainWindowCoreServices(
       },
       onBeforeUpdateQuitFailure: 'abort',
       updateInstallMode: resolveUpdateInstallMode(state.isServeMode),
-      onWorktreeLifecycle: emitPluginWorktreeLifecycle
+      onWorktreeLifecycle: (event) => {
+        emitPluginWorktreeLifecycle(event)
+        notifyExternalSearchWorktreeLifecycle(event)
+      }
     }
   )
   // Why: attach the durable renderer pull now, but launch the diagnostic process after first paint.
