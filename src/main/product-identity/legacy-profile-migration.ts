@@ -1,8 +1,5 @@
 import {
-  constants,
-  cpSync,
   existsSync,
-  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -12,35 +9,17 @@ import {
   symlinkSync,
   writeFileSync
 } from 'node:fs'
-import { basename, dirname, join, relative, sep } from 'node:path'
+import { basename, dirname, join } from 'node:path'
+import { PRODUCT_MIGRATION_MARKER } from './deferred-profile-import'
+import { cloneProfileTreeSync, DEFERRED_PROFILE_ENTRIES } from './profile-clone'
 
 // First launch of a renamed product: clone the legacy Orca profile into the product's own userData,
 // hand the live terminal daemons over by symlink, and reuse the legacy safeStorage key. The legacy
 // profile, keychain item and daemons are never modified, so going back to Orca stays possible.
+// This half runs before `ready`; DEFERRED_PROFILE_ENTRIES follow in deferred-profile-import.ts.
 
-export const PRODUCT_MIGRATION_MARKER = 'product-profile-migration.json'
+export { PRODUCT_MIGRATION_MARKER }
 
-// Chromium process locks regenerate; the daemon dir is linked, not copied.
-const SKIPPED_TOP_LEVEL = new Set([
-  'Crashpad',
-  'Shared Dictionary',
-  'SingletonCookie',
-  'SingletonLock',
-  'SingletonSocket',
-  'daemon'
-])
-// Chromium caches, in the default session and every browser partition: most of a profile's files.
-const SKIPPED_CHROMIUM_CACHES = new Set([
-  'Cache',
-  'Code Cache',
-  'GPUCache',
-  'DawnGraphiteCache',
-  'DawnWebGPUCache',
-  'GrShaderCache',
-  'ShaderCache',
-  'CacheStorage',
-  'ScriptCache'
-])
 // Any of these means the product profile holds real state and must not be overwritten.
 const PROFILE_STATE_ENTRIES = ['orca-data.json', 'orca-profile-index.json', 'profiles']
 const DAEMON_PID_FILE = /^daemon-v(\d+)\.pid$/
@@ -111,28 +90,6 @@ function readPid(path: string): number | null {
     return typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0 ? pid : null
   } catch {
     return null
-  }
-}
-
-function shouldCopy(legacyUserData: string, source: string): boolean {
-  const rel = relative(legacyUserData, source)
-  if (rel === '') {
-    return true
-  }
-  const segments = rel.split(sep)
-  if (SKIPPED_TOP_LEVEL.has(segments[0] ?? '')) {
-    return false
-  }
-  const inChromiumStorage = segments.length === 1 || segments[0] === 'Partitions'
-  if (inChromiumStorage && SKIPPED_CHROMIUM_CACHES.has(segments.at(-1) ?? '')) {
-    return false
-  }
-  try {
-    const stat = lstatSync(source)
-    // Sockets and FIFOs belong to running processes and cannot be copied.
-    return stat.isFile() || stat.isDirectory() || stat.isSymbolicLink()
-  } catch {
-    return false
   }
 }
 
@@ -252,15 +209,7 @@ export function migrateLegacyProfile(
   writeFileSync(stagingOwnerFile, JSON.stringify({ pid: process.pid }))
 
   // Why clone: APFS clonefile makes a multi-GB profile copy near-instant and space-free.
-  cpSync(legacyUserData, staging, {
-    recursive: true,
-    force: false,
-    errorOnExist: false,
-    preserveTimestamps: true,
-    verbatimSymlinks: true,
-    mode: constants.COPYFILE_FICLONE,
-    filter: (source) => shouldCopy(legacyUserData, source)
-  })
+  cloneProfileTreeSync(legacyUserData, staging, 'essential')
   const linkedDaemons = linkLiveDaemons(
     legacyUserData,
     staging,
@@ -277,6 +226,9 @@ export function migrateLegacyProfile(
         appVersion: options.appVersion,
         linkedDaemons,
         safeStorage,
+        deferred: DEFERRED_PROFILE_ENTRIES.filter((entry) =>
+          existsSync(join(legacyUserData, entry))
+        ),
         permissionsNoticeShown: false
       },
       null,
