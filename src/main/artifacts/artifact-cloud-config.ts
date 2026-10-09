@@ -1,4 +1,8 @@
 import { app } from 'electron'
+import {
+  areStablyServicesEnabled,
+  StablyServiceDisabledError
+} from '../product-identity/product-overlay'
 
 const PRODUCTION_ARTIFACTS_API_URL = 'https://share.onorca.dev'
 
@@ -15,6 +19,10 @@ export function resolveArtifactCloudApiUrl(
   env: NodeJS.ProcessEnv = process.env,
   packaged = isPackaged()
 ): string {
+  // Why here: every artifact and skill-share request (signed-in or anonymous) resolves this origin.
+  if (!areStablyServicesEnabled()) {
+    throw new StablyServiceDisabledError('Sharing')
+  }
   const candidate = override?.trim() || env.ORCA_ARTIFACTS_API_URL?.trim()
   const url = new URL(candidate || PRODUCTION_ARTIFACTS_API_URL)
   const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
