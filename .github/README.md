@@ -246,10 +246,19 @@ Anything generic goes to Orca as a pull request first. Status updates live:
 | [#26973](https://github.com/stablyai/orca/pull/26973) | Derive the bundle id from one runtime constant | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26973?label=) |
 | [#26975](https://github.com/stablyai/orca/pull/26975) | Plugin manifest platforms field and an official publisher allowlist | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26975?label=) |
 | [#26979](https://github.com/stablyai/orca/pull/26979) | Let Git's untracked cache answer status polls | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26979?label=) |
+| [#26980](https://github.com/stablyai/orca/pull/26980) | Keep per-source usage caches off the main thread | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26980?label=) |
 | [#26985](https://github.com/stablyai/orca/pull/26985) | Read pane process info from the macOS kernel instead of forking ps | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26985?label=) |
 | [#26991](https://github.com/stablyai/orca/pull/26991) | Plugin settings pages in Settings | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26991?label=) |
 | [#27005](https://github.com/stablyai/orca/pull/27005) | Read ps under a pinned locale, so process start times parse in every locale | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27005?label=) |
 | [#27006](https://github.com/stablyai/orca/pull/27006) | Send PTY output from the daemon to main as raw bytes, not NDJSON | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27006?label=) |
+| [#27009](https://github.com/stablyai/orca/pull/27009) | Reuse watched transcript trees instead of walking them again | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27009?label=) |
+| [#27011](https://github.com/stablyai/orca/pull/27011) | One helper for Orca's home directory | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27011?label=) |
+| [#27014](https://github.com/stablyai/orca/pull/27014) | Let a local index answer quick open and file search first | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27014?label=) |
+| [#27016](https://github.com/stablyai/orca/pull/27016) | Choose where new worktrees go: nested, flat or next to the repository | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27016?label=) |
+| [#27018](https://github.com/stablyai/orca/pull/27018) | Relink a moved repository instead of adding it again | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27018?label=) |
+| [#27020](https://github.com/stablyai/orca/pull/27020) | Flag merged, stale-agent, prunable and stray worktree folders | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27020?label=) |
+| [#27028](https://github.com/stablyai/orca/pull/27028) | Opt-in recommended Git performance settings for large repositories | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27028?label=) |
+| [#27033](https://github.com/stablyai/orca/pull/27033) | Send hidden sidecar bytes past the view, so throttled renderers can't pace agents | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27033?label=) |
 
 All of them: [pull requests from outof-place on stablyai/orca](https://github.com/stablyai/orca/pulls?q=is%3Apr+author%3Aoutof-place).
 
