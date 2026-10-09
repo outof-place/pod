@@ -102,12 +102,14 @@ export function registerNativeTerminalHandlers(): void {
   ipcMain.handle('nativeTerminal:isSupported', (): boolean => isNativeTerminalSupported())
   ipcMain.handle(
     'nativeTerminal:create',
-    (event, appearance: unknown, zoomFactor: unknown): number | null => {
+    (event, appearance: unknown, zoomFactor: unknown, label: unknown): number | null => {
       if (!isAppearance(appearance)) {
         return null
       }
       const zoom = zoomOf(zoomFactor)
-      const surfaceId = createSurface(event.sender, appearance, zoom)
+      const accessibilityLabel =
+        typeof label === 'string' && label.length > 0 && label.length <= 80 ? label : null
+      const surfaceId = createSurface(event.sender, appearance, zoom, accessibilityLabel)
       // The new surface starts on its pane's own config, before its first frame.
       const native = surfaceId === null ? null : ownedSurfaceAddon(event.sender, surfaceId)
       if (native && surfaceId !== null) {

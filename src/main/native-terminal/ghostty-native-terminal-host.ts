@@ -161,7 +161,8 @@ export function isNativeTerminalSupported(): boolean {
 export function createSurface(
   webContents: WebContents,
   appearance: NativeTerminalAppearance,
-  zoomFactor: number
+  zoomFactor: number,
+  accessibilityLabel: string | null
 ): number | null {
   const window = BrowserWindow.fromWebContents(webContents)
   if (!window || window.isDestroyed()) {
@@ -182,6 +183,9 @@ export function createSurface(
     (kind, ...args) => handleSurfaceEvent(surfaceId, kind, args)
   )
   owners.set(surfaceId, { webContents, window, placed: null })
+  if (accessibilityLabel) {
+    native.setSurfaceAccessibilityLabel(surfaceId, accessibilityLabel)
+  }
   native.setFrames([[surfaceId, 0, 0, 1, 1, false]])
   return surfaceId
 }
