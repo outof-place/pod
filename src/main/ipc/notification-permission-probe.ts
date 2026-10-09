@@ -1,6 +1,7 @@
 import { Notification } from 'electron'
 import type { NotificationDeliveryProbeResult } from '../../shared/notification-settings-types'
 import { activeNotifications } from './native-notification-lifecycle'
+import { brandProductCopy } from '../product-identity/product-overlay'
 
 const NOTIFICATION_PROBE_RESULT_TIMEOUT_MS = 3000
 const NOTIFICATION_PROBE_BANNER_CLOSE_DELAY_MS = 4000
@@ -44,8 +45,8 @@ export function probeNotificationDelivery(): Promise<NotificationDeliveryProbeRe
   permissionDialogTriggeredThisSession = true
 
   const probe = new Notification({
-    title: 'Orca notifications are on',
-    body: 'Orca will alert you when agents finish or terminals need attention.',
+    title: brandProductCopy('Orca notifications are on'),
+    body: brandProductCopy('Orca will alert you when agents finish or terminals need attention.'),
     silent: true
   })
   activeNotifications.add(probe)

@@ -6,6 +6,7 @@ import {
   type PluginKillListEntry
 } from '../../shared/plugins/plugin-kill-list'
 import { PluginKillListStore } from './plugin-kill-list-store'
+import { areStablyServicesEnabled } from '../product-identity/product-overlay'
 
 export const PLUGIN_KILL_LIST_URL = 'https://onorca.dev/plugins/kill-list.json'
 const PLUGIN_KILL_LIST_DOWNLOAD_LIMIT = 4 * 1024 * 1024
@@ -66,6 +67,10 @@ export class PluginKillListService {
   }
 
   refresh(): Promise<PluginKillList> {
+    // Why: the list is served from Stably's onorca.dev; a cached copy on disk stays enforced.
+    if (!areStablyServicesEnabled()) {
+      return this.initialize().then(() => this.currentList ?? emptyKillList())
+    }
     const refresh = this.refreshChain
       .catch(() => this.currentList ?? emptyKillList())
       .then(() => this.performRefresh())
