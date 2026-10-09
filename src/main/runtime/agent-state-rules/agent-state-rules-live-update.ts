@@ -238,13 +238,15 @@ type SettingsStore = {
  */
 export function startAgentStateRulesLiveUpdates(
   store: SettingsStore,
-  onActivated: AgentStateRulesLiveUpdateDeps['onActivated']
+  onActivated: AgentStateRulesLiveUpdateDeps['onActivated'],
+  // Why: a downstream product must not download rules from the official release repo.
+  options: { officialDownloads?: boolean } = {}
 ): void {
   const environment = getAppEnvironment()
   const updater = new AgentStateRulesLiveUpdater({
     userDataPath: environment.getPath('userData'),
     appVersion: environment.getVersion(),
-    isPackaged: environment.isPackaged(),
+    isPackaged: environment.isPackaged() && options.officialDownloads !== false,
     fetch: (url, init) => getMainHttpClient().fetch(url, init),
     readSettings: () => store.getSettings(),
     onActivated
