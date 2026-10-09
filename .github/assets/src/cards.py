@@ -66,7 +66,7 @@ VMS = Card(
 PRIVACY = Card(
     "EyeSlash",
     "Zero telemetry",
-    "Pod sends no telemetry and makes no calls to Stably services.",
+    "Pod sends no telemetry and makes no calls to Stably's servers.",
     "0.1",
 )
 LEGEND = "0.1 marks what the first release brings; Coming, what follows it. Per-worktree setup via orca.yaml is inherited from Orca."
