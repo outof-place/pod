@@ -10,6 +10,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
 import { createAppMenuQuitItem } from './app-menu-quit-item'
 import { createAppWindowMenu } from './app-menu-window'
+import { areStablyServicesEnabled } from '../product-identity/product-overlay'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -141,6 +142,8 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const crashReportItem: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.reportCrash', 'Report Crash...'),
+    // Fork-only (Pod): crash reports post to Stably's feedback endpoint.
+    visible: areStablyServicesEnabled(),
     click: (_menuItem, window) => onOpenCrashReport(window)
   }
 
@@ -264,6 +267,8 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       {
         label: translateMain('menu.showMobileButton', 'Show Orca Mobile Button'),
         type: 'checkbox',
+        // Fork-only (Pod): Orca Mobile is Stably's app and pairs through Stably's relay.
+        visible: areStablyServicesEnabled(),
         checked: appearance.showMobileButton,
         click: () => onToggleAppearance('showMobileButton')
       },

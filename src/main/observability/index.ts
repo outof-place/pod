@@ -50,6 +50,7 @@ import {
 } from './diagnostic-bundle-upload'
 import { setActiveSink, startSpan } from './tracer'
 import { setSecurePathHardeningReporter } from '../../shared/secure-path-hardening-report'
+import { areStablyServicesEnabled } from '../product-identity/product-overlay'
 
 const CI_ENV_VARS = [
   'CI',
@@ -91,6 +92,14 @@ function inCI(): boolean {
 /** Resolve the per-launch consent state for this lane. Pure — reads only
  *  process.env, so callers can re-evaluate any time without holding state. */
 export function resolveObservabilityConsent(): ObservabilityConsent {
+  // Why: bundles upload to Stably; the local file never leaves the machine.
+  if (!areStablyServicesEnabled()) {
+    return {
+      localFileEnabled: true,
+      bundleEnabled: false,
+      disabledReason: 'orca_telemetry_disabled'
+    }
+  }
   // CI and DNT/disabled have different effects on which sub-lanes are gated.
   // Keep the ordering aligned with §Consent boundaries above.
   const dnt = envOn('DO_NOT_TRACK')

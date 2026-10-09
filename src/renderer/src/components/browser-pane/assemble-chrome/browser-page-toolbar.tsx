@@ -1,5 +1,6 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
+import { areStablyServicesAvailable } from '@/lib/product-ui-identity'
 import { translate } from '@/i18n/i18n'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
@@ -193,7 +194,8 @@ export function BrowserPageToolbar({
         canShowDiscoveryHint: isActive
       }}
       shareControl={
-        shareableArtifactFile
+        // Fork-only (Pod): artifacts publish to Stably's share.onorca.dev.
+        shareableArtifactFile && areStablyServicesAvailable()
           ? (control) => {
               const props = {
                 sourceKey: shareableArtifactFile.filePath,
