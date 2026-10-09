@@ -337,6 +337,8 @@ const windowConditions = `visible focused window ${frame.width}x${frame.height} 
 const latencyMetrics = names.map((name) => ({
   id: `latency.${name}`,
   subject: labels[name],
+  branch: SUBJECTS[name]?.branch,
+  upstream: SUBJECTS[name]?.upstream,
   metric: 'keystroke to pixels on screen',
   unit: 'ms',
   better: 'lower',
@@ -351,6 +353,9 @@ const latencyMetrics = names.map((name) => ({
   conditions: `${windowConditions}, ${options.keys} keys x ${rounds} rounds, zsh line editor echo, cursor blink off`
 }))
 writeSuiteResult('latency', {
+  caveats: [
+    `Resolution is one display frame (${(1000 / display.refreshHz).toFixed(1)} ms at ${display.refreshHz} Hz); keys are posted at a random phase.`
+  ],
   versions,
   config: { rounds, keys: Number(options.keys), frame, display, preflight },
   metrics: latencyMetrics,
@@ -368,6 +373,8 @@ if (options.throughput) {
         {
           id: `throughput-visible.${workload}.wall.${name}`,
           subject: labels[name],
+          branch: SUBJECTS[name]?.branch,
+          upstream: SUBJECTS[name]?.upstream,
           metric: `${definition.label}: wall time (visible window)`,
           unit: 'ms',
           better: 'lower',
@@ -378,6 +385,8 @@ if (options.throughput) {
         {
           id: `throughput-visible.${workload}.cpu.${name}`,
           subject: labels[name],
+          branch: SUBJECTS[name]?.branch,
+          upstream: SUBJECTS[name]?.upstream,
           metric: `${definition.label}: app CPU time (visible window)`,
           unit: 'ms',
           better: 'lower',

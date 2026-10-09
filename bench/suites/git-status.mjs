@@ -4,7 +4,7 @@
 // Both with GIT_OPTIONAL_LOCKS=0, as Orca polls; read-only on the repo.
 //
 //   node bench/suites/git-status.mjs [--repo DIR] [--runs 30]
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
@@ -42,6 +42,17 @@ function git(args) {
         resolve({ ms, stdout: Buffer.concat(chunks).toString('utf8') })
       }
     })
+  })
+}
+
+function resetUntrackedCache() {
+  return new Promise((resolve, reject) => {
+    execFile(
+      options.git,
+      ['status', '--porcelain'],
+      { cwd: repo, maxBuffer: 64 * 1024 * 1024 },
+      (error) => (error ? reject(error) : resolve())
+    )
   })
 }
 
@@ -114,6 +125,9 @@ const samples = await collectSamples({
   count: runs,
   warmup: 3,
   measure: async (index) => {
+    // The untracked cache keeps the mode that last wrote it. A plain `git status` (optional locks
+    // on) leaves it in normal mode, the state every terminal and agent keeps it in.
+    await resetUntrackedCache()
     // Alternate which variant runs first so cache warmth cannot favour one.
     const first = index % 2 === 0 ? orcaPoll : podPoll
     const second = first === orcaPoll ? podPoll : orcaPoll
@@ -140,6 +154,9 @@ const samples = await collectSamples({
 const stats = summarizeFields(samples, { orcaMs: 'ms', podMs: 'ms', podStatusMs: 'ms' })
 const conditions = `${repoFacts.trackedFiles} tracked files, fsmonitor=${repoFacts.fsmonitor}, untrackedCache=${repoFacts.untrackedCache}, GIT_OPTIONAL_LOCKS=0`
 writeSuiteResult('git-status', {
+  caveats: [
+    "Before each sample a plain `git status` (optional locks on) leaves the untracked cache in normal mode, as terminals and agents do; Orca's `all` poll cannot use a cache in that mode."
+  ],
   versions: { git: commandVersion(options.git) },
   repo: repoFacts,
   config: { runs, warmup: 3 },
@@ -159,8 +176,9 @@ writeSuiteResult('git-status', {
     },
     {
       id: 'git-status.pod',
-      subject:
-        'Fix 8706019 (perf/git-status-untracked-cache): status --untracked-files=normal + ls-files per untracked dir',
+      subject: 'Pod: status --untracked-files=normal + ls-files per untracked dir',
+      branch: 'perf/git-status-untracked-cache',
+      upstream: 'https://github.com/stablyai/orca/pull/26979',
       metric: 'Source Control status poll',
       unit: 'ms',
       better: 'lower',
