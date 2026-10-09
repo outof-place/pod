@@ -8,7 +8,12 @@
 // Keep this file free of imports and non-erasable TypeScript: product/pod-slim-packaging.cjs
 // require()s it through Node's type stripping.
 
-export const POD_FEATURE_IDS = ['featurePromos', 'nonMacPayloads', 'cloudSources'] as const
+export const POD_FEATURE_IDS = [
+  'featurePromos',
+  'uiLocales',
+  'nonMacPayloads',
+  'cloudSources'
+] as const
 
 export type PodFeatureId = (typeof POD_FEATURE_IDS)[number]
 
@@ -32,6 +37,8 @@ type PodFeature = {
   readonly packaging?: PodPackagingCut
   /** Settings section ids (useSettingsNavigationMetadata) that belong to the feature. */
   readonly settingsSections?: readonly string[]
+  /** Modules compiled to an empty stub; rolldown still emits a chunk for a dead import(). */
+  readonly stubModules?: readonly RegExp[]
 }
 
 export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
@@ -40,6 +47,11 @@ export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
     reason: 'Feature wall, feature tips, contextual tours, onboarding checklist and the star nag',
     packaging: { dropExtraResources: ['resources/onboarding/feature-wall'] },
     settingsSections: ['setup-guide']
+  },
+  uiLocales: {
+    pod: false,
+    reason: 'Pod is English-only: no es/fr/ja/ko/zh catalogs, no language picker, en at startup',
+    stubModules: [/\/src\/renderer\/src\/i18n\/locales\/(?:es|fr|ja|ko|zh)\.json$/]
   },
   nonMacPayloads: {
     pod: false,
@@ -65,11 +77,14 @@ declare global {
 // false flag drops the gated code; reads through a shared object would keep it.
 export const POD_FEATURE_PROMOS: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.featurePromos
+export const POD_UI_LOCALES: boolean =
+  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.uiLocales
 
 export function podFeatureFlags(profile: PodBuildProfile): PodFeatureFlags {
   const on = (id: PodFeatureId): boolean => profile === 'orca' || POD_FEATURES[id].pod
   return {
     featurePromos: on('featurePromos'),
+    uiLocales: on('uiLocales'),
     nonMacPayloads: on('nonMacPayloads'),
     cloudSources: on('cloudSources')
   }
@@ -83,6 +98,11 @@ export function podFeatureDefines(profile: PodBuildProfile): Record<string, stri
     defines[`__POD_FEATURES__.${id}`] = String(flags[id])
   }
   return defines
+}
+
+export function podStubModules(profile: PodBuildProfile): RegExp[] {
+  const flags = podFeatureFlags(profile)
+  return POD_FEATURE_IDS.flatMap((id) => (flags[id] ? [] : (POD_FEATURES[id].stubModules ?? [])))
 }
 
 export function isPodSettingsSectionEnabled(sectionId: string): boolean {
