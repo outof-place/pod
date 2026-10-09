@@ -5,6 +5,7 @@ import { observeFreebuffTerminalStatus } from './freebuff-terminal-status'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import { detectAgentStatusFromTitle, normalizeTerminalTitle } from '../../shared/agent-detection'
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
+import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { chunkDataAfterSeed } from './main-terminal-model-dormancy'
 
 export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
@@ -217,6 +218,10 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
             })
           }
         }
+      }
+      // Native surfaces bound to this PTY take the chunk in the model's own order.
+      if (fresh && this.headlessTerminals.get(ptyId) === state) {
+        getRuntimeDesktopSurface().feedNativeTerminalPty?.(ptyId, state, fresh)
       }
       state.outputSequence =
         state.seedCoverageSeq === undefined
