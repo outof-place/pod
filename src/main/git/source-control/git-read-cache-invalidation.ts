@@ -7,12 +7,15 @@ import { GitStatusReadLeaseOwner } from '../git-status-read-lease-owner'
 import { invalidateGitUpstreamStatusReads } from '../upstream'
 import { clearSubmodulePathsCache } from './submodule-paths'
 import { resolvedUpstreamNameCache } from './resolved-upstream-name-cache'
+import { GitStatusUntrackedMode } from '../../../shared/git-status-untracked-mode'
 import { SettledDiffCache } from './settled-diff-cache'
 
 export const gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult>()
 
 /** Settled diff results, valid only while their stamped git state holds. */
 export const settledDiffCache = new SettledDiffCache()
+
+export const statusUntrackedMode = new GitStatusUntrackedMode()
 
 export const statusReadLeaseOwner = new GitStatusReadLeaseOwner<GitStatusResult>()
 
@@ -22,6 +25,7 @@ export function invalidateGitReadCaches(): void {
   gitDiffReadDedupe.clear()
   settledDiffCache.clear()
   statusReadLeaseOwner.invalidate()
+  statusUntrackedMode.clear()
   invalidateGitBranchLineTotalInFlight()
   invalidateGitUpstreamStatusReads()
   clearGitStatusLineStatsCache()
