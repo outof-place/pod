@@ -5,6 +5,7 @@ import {
   getAppBundleId,
   type AppIdentity
 } from '../../shared/app-identity'
+import { getProductIdentity } from '../product-identity/product-identity'
 
 const BASE_APP_NAME = 'Orca'
 const MAX_LABEL_LENGTH = 80
@@ -69,16 +70,18 @@ export function getDevInstanceIdentity(
   env: NodeJS.ProcessEnv = process.env
 ): DevInstanceIdentity {
   if (!isDev) {
+    const product = getProductIdentity()
     return {
-      name: BASE_APP_NAME,
-      appName: BASE_APP_NAME,
+      name: product?.displayName ?? BASE_APP_NAME,
+      appName: product?.displayName ?? BASE_APP_NAME,
       isDev: false,
       devLabel: null,
       devBranch: null,
       devWorktreeName: null,
       devRepoRoot: null,
       dockBadgeLabel: null,
-      appUserModelId: getAppBundleId()
+      // Why product first: this runs before the product identity sets the runtime bundle id.
+      appUserModelId: product?.appId ?? getAppBundleId()
     }
   }
 
