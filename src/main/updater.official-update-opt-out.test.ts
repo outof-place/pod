@@ -6,6 +6,11 @@ const { autoUpdaterMock, powerMonitorOnMock, fetchNudgeMock, moduleFactories, re
   await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
 
 const optOut = vi.hoisted(() => ({ disabled: true }))
+type ProductFeedIdentity = { updateFeed: { provider: 'github'; owner: string; repo: string } }
+const product = vi.hoisted(() => {
+  const state: { identity: ProductFeedIdentity | null } = { identity: null }
+  return state
+})
 
 vi.mock('electron', () => moduleFactories.electron())
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
@@ -25,6 +30,10 @@ vi.mock('./updater/official-update-opt-out', () => ({
   isOfficialUpdateFeedDisabled: () => optOut.disabled
 }))
 
+vi.mock('./product-identity/product-identity', () => ({
+  getProductIdentity: () => product.identity
+}))
+
 warmUpdaterModule()
 
 function mainWindowFixture(send = vi.fn()): BrowserWindow {
@@ -36,6 +45,7 @@ describe('updater with orcaOfficialUpdates=false', () => {
   beforeEach(() => {
     resetUpdaterMocks()
     optOut.disabled = true
+    product.identity = null
     vi.useFakeTimers()
   })
 
@@ -76,6 +86,39 @@ describe('updater with orcaOfficialUpdates=false', () => {
     expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledTimes(1)
     await vi.waitFor(() => {
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('updates a downstream product from its own GitHub releases, never the official feed', async () => {
+    product.identity = { updateFeed: { provider: 'github', owner: 'outof-place', repo: 'pod' } }
+    const { setupAutoUpdater } = await loadUpdaterModule()
+
+    setupAutoUpdater(mainWindowFixture(), { getLastUpdateCheckAt: () => null })
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+
+    expect(autoUpdaterMock.setFeedURL.mock.calls).toEqual([
+      [{ provider: 'github', owner: 'outof-place', repo: 'pod' }]
+    ])
+    expect(fetchNudgeMock).not.toHaveBeenCalled()
+  })
+
+  it('checks the product feed from the menu without pinning an official tag', async () => {
+    product.identity = { updateFeed: { provider: 'github', owner: 'outof-place', repo: 'pod' } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
+
+    setupAutoUpdater(mainWindowFixture(), { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledWith({
+      provider: 'github',
+      owner: 'outof-place',
+      repo: 'pod'
     })
   })
 })
