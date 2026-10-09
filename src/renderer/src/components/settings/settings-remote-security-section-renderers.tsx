@@ -5,6 +5,8 @@ import { SshPane } from './SshPane'
 import { SettingsSection } from './SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { SettingsRenderContext } from './settings-render-context'
+import { PrivacyDiagnosticsSection } from './PrivacyDiagnosticsSection'
+import { areStablyServicesAvailable } from '@/lib/product-ui-identity'
 
 export function renderServersSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, navigation, view } = context
@@ -91,7 +93,12 @@ export function renderPrivacySettingsSection(context: SettingsRenderContext): Re
       )}
       searchEntries={navigation.getSectionSearchEntries('privacy')}
     >
-      {view.isSectionMounted('privacy') ? <PrivacyPane settings={model.settings} /> : null}
+      {/* Fork-only (Pod): no telemetry to opt into; local diagnostics stay. */}
+      {!view.isSectionMounted('privacy') ? null : areStablyServicesAvailable() ? (
+        <PrivacyPane settings={model.settings} />
+      ) : (
+        <PrivacyDiagnosticsSection />
+      )}
     </SettingsSection>
   )
 }
