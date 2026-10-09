@@ -11896,6 +11896,11 @@
         "PluginSettingsPageDialog": {
           "description": "Fourni par le plugin {{value0}} et affiché dans un bac à sable."
         },
+        "ProductThirdPartyPlugins": {
+          "label": "Plugins tiers",
+          "description": "Installez des plugins depuis des marketplaces, Git et des dossiers locaux. Tant que c'est désactivé, seuls les plugins fournis avec {{product}} s'exécutent.",
+          "revocationNote": "La révocation à distance n'est pas disponible dans {{product}} : un plugin jugé dangereux plus tard ne pourra pas être bloqué pour vous."
+        },
         "PluginSettingsRow": {
           "openSettingsPage": "Ouvrir {{value0}} pour {{value1}}",
           "blocked": "Bloquée",
