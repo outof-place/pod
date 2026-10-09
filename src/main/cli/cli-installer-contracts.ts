@@ -3,6 +3,8 @@ import type { WindowsUserPathReadResult } from './windows-user-path-registry'
 
 export type CliInstallerOptions = {
   platform?: NodeJS.Platform
+  // A downstream product's shell command, so it never claims Orca's `orca`.
+  productCliName?: string | null
   isPackaged?: boolean
   userDataPath?: string
   resourcesPath?: string
