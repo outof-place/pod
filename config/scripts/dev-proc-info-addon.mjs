@@ -14,10 +14,19 @@ function mtimeMs(filePath) {
 export function prepareDevProcInfoAddon(repoRoot) {
   const addonDir = path.join(repoRoot, 'native', 'proc-info-darwin')
   const addon = path.join(addonDir, '.build', 'release', 'orca-proc-info.node')
-  if (
-    process.platform !== 'darwin' ||
-    mtimeMs(addon) >= mtimeMs(path.join(addonDir, 'src', 'proc_info.c'))
-  ) {
+  if (process.platform !== 'darwin') {
+    return
+  }
+  const sourceMtime = Math.max(
+    ...[
+      'proc_info.c',
+      'proc_tty_names.c',
+      'proc_tty_names.h',
+      'proc_api_arguments.c',
+      'proc_api_arguments.h'
+    ].map((name) => mtimeMs(path.join(addonDir, 'src', name)))
+  )
+  if (mtimeMs(addon) >= sourceMtime) {
     return
   }
   try {

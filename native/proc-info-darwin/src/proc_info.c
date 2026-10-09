@@ -1,17 +1,14 @@
-// In-process macOS process table reads for Orca: the columns Orca used to fork `ps` and `lsof`
-// for, read straight from the kernel with sysctl(2) and proc_pidinfo(2).
-//
-// Field formats deliberately match `ps` so rows from either source compare equal:
-//   stat      the run-state letter plus the job-control flags ps prints (s, +, <, N, X, E, V)
-//   tty       devname(3) of the controlling terminal ("ttys003"), or "??" without one
-//   startTime strftime "%c" in the C locale, as `ps -o lstart=` under the pinned en_US.UTF-8
-//   command   argv joined with spaces, as `ps -o command=`
+// macOS process metadata from sysctl and proc_pidinfo, using ps-compatible formats.
 #define NAPI_VERSION 8
 #include <node_api.h>
+#include "proc_tty_names.h"
+#include "proc_api_arguments.h"
 
 #include <errno.h>
+#include <dirent.h>
 #include <libproc.h>
 #include <locale.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,7 +16,10 @@
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <time.h>
+#include <vis.h>
 #include <xlocale.h>
+
+#define PROCESS_CAPTURE_MAX_BYTES ((size_t)32 * 1024 * 1024)
 
 #define CHECK(call)                                                                                \
   do {                                                                                             \
@@ -30,12 +30,16 @@
 
 // Why C: Orca's lstart parsers expect `Sat Oct 10 00:04:51 2026`, and the `ps` fallback is run
 // under a pinned en_US.UTF-8 (#27004), whose `%c` is the same. The user's locale would reorder it.
+static locale_t cached_start_time_locale = NULL;
+static pthread_once_t start_time_locale_once = PTHREAD_ONCE_INIT;
+
+static void initialize_start_time_locale(void) {
+  cached_start_time_locale = newlocale(LC_ALL_MASK, "C", NULL);
+}
+
 static locale_t start_time_locale(void) {
-  static locale_t cached = NULL;
-  if (cached == NULL) {
-    cached = newlocale(LC_ALL_MASK, "C", NULL);
-  }
-  return cached;
+  pthread_once(&start_time_locale_once, initialize_start_time_locale);
+  return cached_start_time_locale;
 }
 
 static void format_stat(const struct kinfo_proc *proc, char *out) {
@@ -81,38 +85,6 @@ static void format_stat(const struct kinfo_proc *proc, char *out) {
   *cp = '\0';
 }
 
-// Why cached: devname(3) scans /dev on every call (~0.5 ms), which is what makes `ps -o tty=`
-// slow. A device number names the same terminal for as long as the node exists.
-#define TTY_NAME_CACHE_SIZE 512
-static struct {
-  dev_t dev;
-  char name[32];
-} tty_name_cache[TTY_NAME_CACHE_SIZE];
-static size_t tty_name_cache_length = 0;
-
-static void format_tty(const struct kinfo_proc *proc, char *out, size_t size) {
-  dev_t dev = proc->kp_eproc.e_tdev;
-  if (dev == NODEV) {
-    strlcpy(out, "??", size);
-    return;
-  }
-  for (size_t i = 0; i < tty_name_cache_length; i++) {
-    if (tty_name_cache[i].dev == dev) {
-      strlcpy(out, tty_name_cache[i].name, size);
-      return;
-    }
-  }
-  const char *name = devname(dev, S_IFCHR);
-  strlcpy(out, name != NULL ? name : "??", size);
-  if (name != NULL) {
-    size_t slot = tty_name_cache_length < TTY_NAME_CACHE_SIZE
-                      ? tty_name_cache_length++
-                      : (size_t)dev % TTY_NAME_CACHE_SIZE;
-    tty_name_cache[slot].dev = dev;
-    strlcpy(tty_name_cache[slot].name, name, sizeof(tty_name_cache[slot].name));
-  }
-}
-
 static void format_start(const struct kinfo_proc *proc, char *out, size_t size) {
   time_t started = proc->kp_proc.p_starttime.tv_sec;
   struct tm local;
@@ -128,25 +100,35 @@ typedef struct {
   size_t capacity;
   char *text;
   size_t text_capacity;
+  locale_t locale;
+  size_t command_bytes;
 } args_buffer;
 
 static int args_buffer_init(args_buffer *buffer) {
   int mib[2] = {CTL_KERN, KERN_ARGMAX};
   int argmax = 0;
   size_t size = sizeof(argmax);
-  if (sysctl(mib, 2, &argmax, &size, NULL, 0) != 0 || argmax <= 0) {
+  if (sysctl(mib, 2, &argmax, &size, NULL, 0) != 0) {
+    return 0;
+  }
+  if (argmax <= 0) {
+    errno = EINVAL;
     return 0;
   }
   buffer->capacity = (size_t)argmax;
   buffer->data = malloc(buffer->capacity);
   buffer->text = NULL;
   buffer->text_capacity = 0;
-  return buffer->data != NULL;
+  buffer->locale = newlocale(LC_CTYPE_MASK, "en_US.UTF-8", NULL);
+  return buffer->data != NULL && buffer->locale != NULL;
 }
 
 static void args_buffer_free(args_buffer *buffer) {
   free(buffer->data);
   free(buffer->text);
+  if (buffer->locale != NULL) {
+    freelocale(buffer->locale);
+  }
 }
 
 // argv joined with spaces in place; 0 when the kernel refuses (another user's process) or it exited.
@@ -158,6 +140,9 @@ static int read_command(pid_t pid, args_buffer *buffer, const char **command, si
   }
   int argc = 0;
   memcpy(&argc, buffer->data, sizeof(argc));
+  if (argc <= 0) {
+    return 0;
+  }
   char *cursor = buffer->data + sizeof(argc);
   char *end = buffer->data + size;
   // Skip the exec path and the NUL padding before argv[0].
@@ -169,9 +154,12 @@ static int read_command(pid_t pid, args_buffer *buffer, const char **command, si
   }
   char *first = cursor;
   char *last_end = cursor;
-  for (int index = 0; index < argc && cursor < end; index++) {
-    size_t arg_length = strnlen(cursor, (size_t)(end - cursor));
+  for (int index = 0; index < argc; index++) {
+    size_t arg_length = cursor < end ? strnlen(cursor, (size_t)(end - cursor)) : 0;
     last_end = cursor + arg_length;
+    if (last_end == end) {
+      return 0;
+    }
     cursor = last_end + 1;
     if (index + 1 < argc && cursor < end) {
       *last_end = ' ';
@@ -197,19 +185,19 @@ static int read_command(pid_t pid, args_buffer *buffer, const char **command, si
     buffer->text = grown;
     buffer->text_capacity = needed;
   }
-  // Why \ooo for control bytes only: that is what ps prints under a UTF-8 locale. Under the C
-  // locale ps also mangles every non-ASCII byte into vis(3) meta notation; raw UTF-8 is the argv.
-  size_t written = 0;
-  for (const unsigned char *byte = (const unsigned char *)first; byte < (const unsigned char *)last_end;
-       byte++) {
-    if (*byte < 0x20 || *byte == 0x7f) {
-      written += (size_t)snprintf(buffer->text + written, 5, "\\%03o", *byte);
-    } else {
-      buffer->text[written++] = (char)*byte;
-    }
+  // Match ps's vis flags and UTF-8 locale without changing another thread's locale.
+  locale_t previous = uselocale(buffer->locale);
+  if (previous == NULL) {
+    return 0;
+  }
+  int written = strnvisx(buffer->text, buffer->text_capacity, first, raw_length,
+                         VIS_TAB | VIS_NL | VIS_NOSLASH);
+  uselocale(previous);
+  if (written < 0) {
+    return 0;
   }
   *command = buffer->text;
-  *length = written;
+  *length = (size_t)written;
   return 1;
 }
 
@@ -229,10 +217,11 @@ static napi_status set_int(napi_env env, napi_value object, const char *name, in
   return status == napi_ok ? napi_set_named_property(env, object, name, number) : status;
 }
 
-static napi_value make_row(napi_env env, const struct kinfo_proc *proc, args_buffer *args) {
+static napi_value make_row(napi_env env, const struct kinfo_proc *proc, args_buffer *args,
+                           const char *tty_override) {
   napi_value row;
   char stat[16];
-  char tty[64];
+  char tty[MAXNAMLEN];
   char start[128];
   CHECK(napi_create_object(env, &row));
   CHECK(set_int(env, row, "pid", proc->kp_proc.p_pid));
@@ -240,7 +229,11 @@ static napi_value make_row(napi_env env, const struct kinfo_proc *proc, args_buf
   CHECK(set_int(env, row, "pgid", proc->kp_eproc.e_pgid));
   CHECK(set_int(env, row, "tpgid", proc->kp_eproc.e_tpgid));
   format_stat(proc, stat);
-  format_tty(proc, tty, sizeof(tty));
+  if (tty_override != NULL) {
+    strlcpy(tty, tty_override, sizeof(tty));
+  } else {
+    format_process_tty_name(proc->kp_eproc.e_tdev, tty, sizeof(tty));
+  }
   format_start(proc, start, sizeof(start));
   CHECK(napi_set_named_property(env, row, "stat", make_string(env, stat)));
   CHECK(napi_set_named_property(env, row, "tty", make_string(env, tty)));
@@ -248,6 +241,7 @@ static napi_value make_row(napi_env env, const struct kinfo_proc *proc, args_buf
   if (args == NULL) {
     return row;
   }
+  args->command_bytes = 0;
   // Why: the kernel's short name still identifies a process whose argv another user owns.
   CHECK(napi_set_named_property(env, row, "name", make_string(env, proc->kp_proc.p_comm)));
   napi_value command;
@@ -256,8 +250,10 @@ static napi_value make_row(napi_env env, const struct kinfo_proc *proc, args_buf
   if (proc->kp_proc.p_stat == SZOMB) {
     // Why: ps prints exactly this for a zombie, whose argv is gone.
     CHECK(napi_create_string_utf8(env, "<defunct>", NAPI_AUTO_LENGTH, &command));
+    args->command_bytes = strlen("<defunct>");
   } else if (read_command(proc->kp_proc.p_pid, args, &text, &length)) {
     CHECK(napi_create_string_utf8(env, text, length, &command));
+    args->command_bytes = length;
   } else {
     CHECK(napi_get_null(env, &command));
     // Why: unlike argv and PROC_PIDTBSDINFO, the executable path stays readable for root-owned
@@ -265,6 +261,7 @@ static napi_value make_row(napi_env env, const struct kinfo_proc *proc, args_buf
     char path[PROC_PIDPATHINFO_MAXSIZE];
     if (proc_pidpath(proc->kp_proc.p_pid, path, sizeof(path)) > 0) {
       CHECK(napi_set_named_property(env, row, "path", make_string(env, path)));
+      args->command_bytes = strlen(path);
     }
   }
   CHECK(napi_set_named_property(env, row, "command", command));
@@ -303,21 +300,41 @@ static struct kinfo_proc *read_kinfo(int *mib, u_int mib_length, size_t *count) 
 }
 
 static napi_value rows_from_kinfo(napi_env env, struct kinfo_proc *procs, size_t count,
-                                  int with_command) {
+                                  int with_command, const char *tty_override) {
   napi_value rows;
-  args_buffer args = {NULL, 0, NULL, 0};
+  args_buffer args = {0};
+  if (with_command && !args_buffer_init(&args)) {
+    int error = errno;
+    args_buffer_free(&args);
+    free(procs);
+    errno = error;
+    return throw_syscall_error(env, "initialize process arguments failed");
+  }
+  if (tty_override == NULL) {
+    preload_process_tty_names(procs, count);
+  }
   // Why not presized: rows for pid 0 are skipped, which would leave holes at the end.
-  if ((with_command && !args_buffer_init(&args)) || napi_create_array(env, &rows) != napi_ok) {
+  if (napi_create_array(env, &rows) != napi_ok) {
     args_buffer_free(&args);
     free(procs);
     return NULL;
   }
   uint32_t index = 0;
+  size_t capture_bytes = 0;
   for (size_t i = 0; i < count; i++) {
     if (procs[i].kp_proc.p_pid <= 0) {
       continue;
     }
-    napi_value row = make_row(env, &procs[i], with_command ? &args : NULL);
+    napi_value row = make_row(env, &procs[i], with_command ? &args : NULL, tty_override);
+    // Keep the ps capture's 32 MiB ceiling; 512 covers every fixed-width metadata field.
+    size_t row_bytes = 512 + args.command_bytes;
+    if (with_command && row_bytes > PROCESS_CAPTURE_MAX_BYTES - capture_bytes) {
+      args_buffer_free(&args);
+      free(procs);
+      napi_throw_error(env, "ORCA_PROC_INFO_CAPTURE_LIMIT", "process capture exceeds 32 MiB");
+      return NULL;
+    }
+    capture_bytes += row_bytes;
     if (row == NULL || napi_set_element(env, rows, index++, row) != napi_ok) {
       args_buffer_free(&args);
       free(procs);
@@ -338,7 +355,7 @@ static napi_value ListProcesses(napi_env env, napi_callback_info info) {
   if (procs == NULL) {
     return throw_syscall_error(env, "sysctl(KERN_PROC_ALL) failed");
   }
-  return rows_from_kinfo(env, procs, count, 0);
+  return rows_from_kinfo(env, procs, count, 0, NULL);
 }
 
 // listProcessesWithCommands(): every process plus argv, as the full `ps` capture reads it.
@@ -350,24 +367,13 @@ static napi_value ListProcessesWithCommands(napi_env env, napi_callback_info inf
   if (procs == NULL) {
     return throw_syscall_error(env, "sysctl(KERN_PROC_ALL) failed");
   }
-  return rows_from_kinfo(env, procs, count, 1);
-}
-
-static int read_pid_argument(napi_env env, napi_callback_info info, int32_t *pid) {
-  size_t argc = 1;
-  napi_value argv[1];
-  if (napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok || argc < 1 ||
-      napi_get_value_int32(env, argv[0], pid) != napi_ok || *pid <= 0) {
-    napi_throw_type_error(env, "ORCA_PROC_INFO_ARGUMENT", "expected a positive pid");
-    return 0;
-  }
-  return 1;
+  return rows_from_kinfo(env, procs, count, 1, NULL);
 }
 
 // readProcess(pid): one row, or null when the pid does not exist.
 static napi_value ReadProcess(napi_env env, napi_callback_info info) {
   int32_t pid = 0;
-  if (!read_pid_argument(env, info, &pid)) {
+  if (!read_process_pid_argument(env, info, &pid)) {
     return NULL;
   }
   int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, pid};
@@ -381,22 +387,38 @@ static napi_value ReadProcess(napi_env env, napi_callback_info info) {
     CHECK(napi_get_null(env, &null_value));
     return null_value;
   }
-  return make_row(env, &proc, NULL);
+  char tty[MAXNAMLEN];
+  proc_tty_argument_status tty_argument =
+      read_process_tty_argument(env, info, 1, 1, tty, sizeof(tty));
+  if (tty_argument == PROC_TTY_ARGUMENT_ERROR) {
+    return NULL;
+  }
+  if (tty_argument == PROC_TTY_ARGUMENT_PRESENT) {
+    const char *name = strncmp(tty, "/dev/", 5) == 0 ? tty + 5 : tty;
+    char path[sizeof("/dev/") + MAXNAMLEN];
+    snprintf(path, sizeof(path), "/dev/%s", name);
+    struct stat device;
+    if (stat(path, &device) != 0 || !S_ISCHR(device.st_mode) ||
+        device.st_rdev != proc.kp_eproc.e_tdev) {
+      strlcpy(tty, "??", sizeof(tty));
+    } else {
+      memmove(tty, name, strlen(name) + 1);
+    }
+  } else if (!format_cached_process_tty_name(proc.kp_eproc.e_tdev, tty, sizeof(tty))) {
+    napi_throw_error(env, "ORCA_PROC_INFO_TTY_UNKNOWN", "terminal name is not cached");
+    return NULL;
+  }
+  return make_row(env, &proc, NULL, tty);
 }
 
 // listTerminalProcesses(ttyName): the processes holding one terminal, with argv, as `ps -t`.
 static napi_value ListTerminalProcesses(napi_env env, napi_callback_info info) {
-  size_t argc = 1;
-  napi_value argv[1];
-  char name[128];
-  size_t name_length = 0;
-  if (napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok || argc < 1 ||
-      napi_get_value_string_utf8(env, argv[0], name, sizeof(name), &name_length) != napi_ok ||
-      name_length == 0) {
-    napi_throw_type_error(env, "ORCA_PROC_INFO_ARGUMENT", "expected a terminal name");
+  char name[MAXNAMLEN];
+  if (read_process_tty_argument(env, info, 0, 0, name, sizeof(name)) !=
+      PROC_TTY_ARGUMENT_PRESENT) {
     return NULL;
   }
-  char path[160];
+  char path[sizeof("/dev/") + MAXNAMLEN];
   snprintf(path, sizeof(path), "%s%s", strncmp(name, "/dev/", 5) == 0 ? "" : "/dev/", name);
   struct stat info_stat;
   if (stat(path, &info_stat) != 0 || !S_ISCHR(info_stat.st_mode)) {
@@ -410,13 +432,14 @@ static napi_value ListTerminalProcesses(napi_env env, napi_callback_info info) {
   if (procs == NULL) {
     return throw_syscall_error(env, "sysctl(KERN_PROC_TTY) failed");
   }
-  return rows_from_kinfo(env, procs, count, 1);
+  const char *tty_name = strncmp(name, "/dev/", 5) == 0 ? name + 5 : name;
+  return rows_from_kinfo(env, procs, count, 1, tty_name);
 }
 
 // readProcessCwd(pid): the working directory, or null when the kernel will not say.
 static napi_value ReadProcessCwd(napi_env env, napi_callback_info info) {
   int32_t pid = 0;
-  if (!read_pid_argument(env, info, &pid)) {
+  if (!read_process_pid_argument(env, info, &pid)) {
     return NULL;
   }
   struct proc_vnodepathinfo vnode;
