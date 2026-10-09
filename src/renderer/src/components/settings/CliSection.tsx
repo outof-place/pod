@@ -29,6 +29,7 @@ import { WslCliRegistration } from './WslCliRegistration'
 import { useCliRegistrationActions } from './use-cli-registration-actions'
 import { useLocalCliSkillFreshnessName } from './use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
+import { brandProductCopy, getProductUiIdentity } from '@/lib/product-ui-identity'
 
 type CliSectionProps = {
   currentPlatform: string
@@ -62,7 +63,8 @@ function getInstallDescription(platform: string): string {
 }
 
 function getFallbackCommandName(platform: string): string {
-  return platform === 'linux' ? 'orca-ide' : 'orca'
+  // Fork-only (Pod): a product registers its own command name on macOS.
+  return platform === 'linux' ? 'orca-ide' : (getProductUiIdentity()?.cliName ?? 'orca')
 }
 
 export function CliSection({
@@ -190,7 +192,7 @@ export function CliSection({
                     'auto.components.settings.CliSection.d363e5929b',
                     'Checking CLI registration…'
                   )
-                : (status?.detail ?? getInstallDescription(currentPlatform))}
+                : (status?.detail ?? brandProductCopy(getInstallDescription(currentPlatform)))}
             </p>
           </div>
           <div className="flex items-center gap-2">
