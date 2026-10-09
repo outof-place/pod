@@ -217,7 +217,7 @@ describe('getStatus', () => {
       'status',
       '--porcelain=v2',
       '--branch',
-      '--untracked-files=all'
+      '--untracked-files=normal'
     ])
     expect(result.entries).toEqual([
       { path: 'docs/日本語/sample.md', status: 'modified', area: 'unstaged' }
@@ -368,7 +368,7 @@ describe('getStatus', () => {
       'status',
       '--porcelain=v2',
       '--branch',
-      '--untracked-files=all'
+      '--untracked-files=normal'
     ])
     expect('ignoredPaths' in result).toBe(false)
   })
