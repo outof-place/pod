@@ -57,4 +57,25 @@ describe('GPU acceleration About panel', () => {
       credits: 'GPU acceleration: Disabled (Safe Graphics Mode)'
     })
   })
+
+  it('credits Orca and shows the product copyright for a downstream product', () => {
+    expect(
+      createGpuAccelerationAboutPanelOptions({
+        appName: 'Pod',
+        appVersion: '1.2.3',
+        platform: 'darwin',
+        gpuFallbackActive: false,
+        gpuFeatureStatus: { gpu_compositing: 'enabled' },
+        product: {
+          copyright: 'Copyright © 2026 outofplace',
+          credits: 'Built on Orca by Stably (MIT)'
+        }
+      })
+    ).toEqual({
+      applicationName: 'Pod',
+      applicationVersion: '1.2.3',
+      copyright: 'Copyright © 2026 outofplace',
+      credits: 'Built on Orca by Stably (MIT)\n\nGPU acceleration: Enabled'
+    })
+  })
 })
