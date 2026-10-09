@@ -105,6 +105,27 @@ async function nativeScrollbar(
   }
 }
 
+// The renderer tags each pane's terminal box with the surface drawing it.
+async function paneSurfaceId(page: Page, ptyId: string): Promise<number> {
+  const id = await page
+    .locator(`.pane[data-pty-id="${ptyId}"] .xterm-container`)
+    .getAttribute('data-native-surface-id')
+  return Number(id ?? 0)
+}
+
+async function paneXtermCols(page: Page, ptyId: string): Promise<number | null> {
+  return page.evaluate((id) => {
+    for (const manager of window.__paneManagers?.values() ?? []) {
+      for (const pane of manager.getPanes()) {
+        if (pane.container.dataset.ptyId === id) {
+          return pane.terminal.cols
+        }
+      }
+    }
+    return null
+  }, ptyId)
+}
+
 async function activeXtermGrid(page: Page): Promise<{ cols: number; rows: number } | null> {
   return page.evaluate(() => {
     const tabId = window.__store?.getState().activeTabId
@@ -310,4 +331,67 @@ test('a native surface with scrollback shows an overlay scrollbar that scrolls G
     })
     .toBe(0)
   await expect.poll(async () => screenText(electronApp, surfaceId)).toContain('NATIVE-ROW-300')
+})
+
+test('panes that bind after the setting turns on each draw through their own seeded surface', async ({
+  orcaPage,
+  electronApp
+}) => {
+  await waitForSessionReady(orcaPage)
+  // On before the first pane binds its PTY, so both panes attach a native surface.
+  await orcaPage.evaluate(async () => {
+    await window.__store?.getState().updateSettings({ experimentalNativeTerminal: true })
+  })
+  await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+  await waitForActiveTerminalManager(orcaPage, 30_000)
+  const firstPty = await waitForActivePanePtyId(orcaPage)
+  await waitForPtyShellEcho(orcaPage, firstPty, 30_000)
+  await splitActiveTerminalPane(orcaPage, 'vertical')
+  await waitForPaneCount(orcaPage, 2)
+  await waitForActiveTerminalManager(orcaPage, 30_000)
+  const secondPty = await waitForActivePanePtyId(orcaPage)
+  await waitForPtyShellEcho(orcaPage, secondPty, 30_000)
+  const panes = [firstPty, secondPty]
+
+  // Every surface belongs to exactly one pane: none is left over, none shared.
+  await expect
+    .poll(async () => {
+      const owned = await Promise.all(panes.map((ptyId) => paneSurfaceId(orcaPage, ptyId)))
+      const all = (await surfaceIds(electronApp)).toSorted((a, b) => a - b)
+      return `${owned.toSorted((a, b) => a - b).join(',')} = ${all.join(',')}`
+    })
+    .toMatch(/^(\d+,\d+) = \1$/)
+  const surfaces = await Promise.all(panes.map((ptyId) => paneSurfaceId(orcaPage, ptyId)))
+  expect(new Set(surfaces).size).toBe(2)
+
+  // A surface not placed yet (DOM UI such as a startup hint can cover its pane) must not size
+  // the PTY from Ghostty's 1x1 placeholder grid.
+  for (const ptyId of panes) {
+    expect(await paneXtermCols(orcaPage, ptyId)).toBeGreaterThan(20)
+  }
+  await expect(orcaPage.getByRole('tooltip')).toHaveCount(0, { timeout: 20_000 })
+  for (const surfaceId of surfaces) {
+    await expect.poll(async () => isHidden(electronApp, surfaceId)).toBe(false)
+  }
+
+  // Each surface was seeded and mirrors its own pane, not its neighbour.
+  for (const [index, ptyId] of panes.entries()) {
+    await execInTerminal(orcaPage, ptyId, `printf 'NATIVE-PANE-%s\\n' ${index}`)
+  }
+  for (const [index, surfaceId] of surfaces.entries()) {
+    await expect
+      .poll(async () => {
+        const text = await screenText(electronApp, surfaceId)
+        return text.includes(`NATIVE-PANE-${index}`) && !text.includes(`NATIVE-PANE-${1 - index}`)
+      })
+      .toBe(true)
+  }
+  await expect
+    .poll(async () => {
+      const native = await nativeGrid(electronApp, surfaces[1])
+      const xterm = await paneXtermCols(orcaPage, secondPty)
+      return native?.split('x')[0] === String(xterm)
+    })
+    .toBe(true)
 })

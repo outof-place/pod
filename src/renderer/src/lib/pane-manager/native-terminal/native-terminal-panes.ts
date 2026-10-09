@@ -201,6 +201,8 @@ export function attachNativeTerminal(
     }
     ensureGlobalListeners()
     state.surfaceId = surfaceId
+    // Lets E2E map each native surface to the pane drawing it.
+    container.dataset.nativeSurfaceId = String(surfaceId)
     terminalsBySurface.set(surfaceId, terminal)
     mirror.attach(surfaceId, () => state.host.serialize())
     mirror.setFocusTarget(() => focusNativeIfShown(surfaceId))
@@ -239,6 +241,7 @@ export function disposeNativeTerminal(terminal: Terminal): void {
   state.untrack?.()
   if (state.surfaceId !== null) {
     terminalsBySurface.delete(state.surfaceId)
+    terminal.element?.parentElement?.removeAttribute('data-native-surface-id')
     nativeTerminalApi()?.destroy(state.surfaceId)
   }
 }
