@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { runProcessSync, type ProcessResult } from '../shared/child-process/run-process'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
-import { ORCA_APP_BUNDLE_ID } from '../shared/app-identity'
+import { getAppBundleId } from '../shared/app-identity'
 
 /**
  * Turns off the macOS accent picker for Orca's own preferences domain (#14746).
@@ -82,7 +82,8 @@ export type PressAndHoldHost = {
 /** Only Orca's own bundle: an unpackaged run is `com.github.Electron`, shared with every other
  *  unpackaged Electron app on the machine. */
 export function isOrcaPreferencesDomain(domain: string): boolean {
-  return domain === ORCA_APP_BUNDLE_ID || domain.startsWith(`${ORCA_APP_BUNDLE_ID}.`)
+  const own = getAppBundleId()
+  return domain === own || domain.startsWith(`${own}.`)
 }
 
 /** `<bundle>/Contents/MacOS/<exe>` → `<bundle>/Contents/Info.plist`. */
