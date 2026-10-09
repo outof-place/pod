@@ -5,13 +5,14 @@ import {
   describeOverlay,
   mergeOverlappingRects,
   overlayHoles,
+  overlaysTakeKeyboard,
   type NativeTerminalOverlay
 } from './native-terminal-overlay-holes'
 
 const PANE = new DOMRect(0, 0, 800, 600)
 
 function overlay(rect: DOMRect, alwaysCovers = false): NativeTerminalOverlay {
-  return { rect, padded: rect, alwaysCovers }
+  return { rect, padded: rect, alwaysCovers, takesKeyboard: true }
 }
 
 function box(rect: DOMRect): number[] {
@@ -87,6 +88,25 @@ describe('describeOverlay', () => {
     const described = describeOverlay(wrapper, new DOMRect(100, 100, 200, 100))
     expect(box(described.padded)).toEqual([93, 97, 214, 114])
     expect(described.alwaysCovers).toBe(false)
+  })
+
+  it('lets menus take the keyboard but never tooltips', () => {
+    const tooltip = document.createElement('div')
+    tooltip.setAttribute('data-radix-popper-content-wrapper', '')
+    const label = document.createElement('div')
+    label.setAttribute('data-slot', 'tooltip-content')
+    tooltip.appendChild(label)
+    const menu = document.createElement('div')
+    menu.setAttribute('role', 'menu')
+    document.body.append(tooltip, menu)
+    const rect = new DOMRect(10, 10, 20, 20)
+    const tip = describeOverlay(tooltip, rect)
+    expect(tip.takesKeyboard).toBe(false)
+    expect(overlaysTakeKeyboard(PANE, [tip])).toBe(false)
+    expect(overlaysTakeKeyboard(PANE, [tip, describeOverlay(menu, rect)])).toBe(true)
+    expect(overlaysTakeKeyboard(PANE, [describeOverlay(menu, new DOMRect(900, 0, 9, 9))])).toBe(
+      false
+    )
   })
 
   it('treats a dialog inside a popper as a popover, and one outside as modal', () => {

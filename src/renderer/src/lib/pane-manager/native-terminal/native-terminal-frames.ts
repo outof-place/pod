@@ -6,6 +6,7 @@ import { cssPxToWindowDip } from '../../ui-zoom'
 import {
   describeOverlay,
   overlayHoles,
+  overlaysTakeKeyboard,
   type NativeTerminalOverlay
 } from './native-terminal-overlay-holes'
 
@@ -20,7 +21,8 @@ export type NativeTerminalFrameEntry = {
   onShownChange: (shown: boolean) => void
   // True while the xterm under the view may not show the current buffer yet.
   isDomViewStale?: () => boolean
-  // DOM overlays started or stopped showing through holes in the shown view.
+  // DOM overlays that take the keyboard (not tooltips) started or stopped showing through
+  // holes in the shown view.
   onOverlaidChange?: (overlaid: boolean) => void
 }
 
@@ -155,7 +157,7 @@ function flush(): void {
       entry.lastShown = onScreen
       entry.onShownChange(onScreen)
     }
-    const overlaid = holes !== null && holes.length > 0
+    const overlaid = holes !== null && holes.length > 0 && overlaysTakeKeyboard(rect, overlays)
     if (entry.lastOverlaid !== overlaid) {
       entry.lastOverlaid = overlaid
       entry.onOverlaidChange?.(overlaid)
