@@ -66,11 +66,10 @@ VMS = Card(
 PRIVACY = Card(
     "EyeSlash",
     "Zero telemetry",
-    "Pod sends nothing home: its builds carry no analytics key, and Stably's relay, push, "
-    "share and feedback services are switched off.",
+    "Pod sends no telemetry and makes no calls to Stably services.",
     "0.1",
 )
-LEGEND = "0.1 marks what the first release brings; Coming, what follows it."
+LEGEND = "0.1 marks what the first release brings; Coming, what follows it. Per-worktree setup via orca.yaml is inherited from Orca."
 ACC_TITLE = "claude-acc, built in"
 ACC_BODY = "The studio's toolkit for running many Claude Code agents on one Mac, now part of the IDE."
 ACC_TAG = "0.1"
