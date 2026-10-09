@@ -3,6 +3,7 @@ import {
   PLUGIN_COMMIT_PATTERN
 } from '../../shared/plugins/plugin-install-lockfile'
 import { gitExecFileAsync } from '../git/runner'
+import { assertThirdPartyPluginsAllowed } from '../product-identity/product-plugin-policy'
 
 const PLUGIN_GIT_TIMEOUT_MS = 120_000
 
@@ -23,6 +24,8 @@ export async function checkoutPluginGitSource(input: {
   destination: string
   workingDirectory: string
 }): Promise<string> {
+  // Why here: marketplace fetches and Git installs all check out through this one function.
+  assertThirdPartyPluginsAllowed()
   if (!isAllowedPluginGitUrl(input.url)) {
     throw new Error('plugin Git URL must use HTTPS or SSH')
   }
