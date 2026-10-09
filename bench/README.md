@@ -124,6 +124,7 @@ and Pod run there too, so the visible numbers compare all five apps with paintin
 results go to `throughput-visible.json`.
 
 How the command gets into each terminal:
+
 - Orca and Pod: `orca terminal send`;
 - Terminal.app: AppleScript `do script`;
 - Ghostty: a queue file that a loop in its window runs, because Ghostty cannot be typed into from
