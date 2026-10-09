@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { setAppBundleId } from '../shared/app-identity'
 import type { ProcessResult } from '../shared/child-process/run-process'
 import {
   ensureMacPressAndHoldDefault,
@@ -146,6 +147,25 @@ describe('ensureMacPressAndHoldDefault', () => {
       expect(isOrcaPreferencesDomain('com.github.Electron')).toBe(false)
       // Why: a prefix test without the dot would accept a lookalike bundle id.
       expect(isOrcaPreferencesDomain('com.stablyai.orcafake')).toBe(false)
+    })
+
+    it("writes a rebranded build's own domain and never Orca's", () => {
+      setAppBundleId('com.example.rebrand')
+      try {
+        expect(isOrcaPreferencesDomain('com.example.rebrand')).toBe(true)
+        expect(isOrcaPreferencesDomain(ORCA_DOMAIN)).toBe(false)
+
+        const own = createHost({ resolveBundleIdentifier: () => 'com.example.rebrand' })
+        expect(ensureMacPressAndHoldDefault(own.host)).toBe('applied')
+        expect(own.writes).toEqual([{ domain: 'com.example.rebrand', value: false }])
+
+        // Why: a rebranded build that resolves Orca's id must not change the user's Orca.
+        const orca = createHost()
+        expect(ensureMacPressAndHoldDefault(orca.host)).toBe('foreign-bundle')
+        expect(orca.writes).toEqual([])
+      } finally {
+        setAppBundleId(null)
+      }
     })
   })
 
