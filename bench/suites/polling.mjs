@@ -3,7 +3,7 @@
 // reading the kernel's process table with sysctl.
 //
 //   node bench/suites/polling.mjs [--runs 7] [--calls 100]
-import { execFile, spawn } from 'node:child_process'
+import { execFile, execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import os from 'node:os'
@@ -30,11 +30,22 @@ const run = promisify(execFile)
 // A pane-like terminal: a shell holding the pty with two children, as `login -> zsh -> agent`.
 const holder = spawn(
   '/usr/bin/script',
-  ['-q', '/dev/null', '/bin/zsh', '-fc', 'sleep 3600 & sleep 3600 & wait'],
+  ['-q', '/dev/null', '/bin/zsh', '-fc', 'sleep 86400 & sleep 86400 & wait'],
   {
     stdio: 'ignore'
   }
 )
+// The load gate can wait for hours; never leave the pty behind.
+const stopHolder = () => {
+  try {
+    execFileSync('/usr/bin/pkill', ['-TERM', '-g', String(holder.pid)])
+  } catch {}
+  holder.kill('SIGTERM')
+}
+process.on('exit', stopHolder)
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(signal, () => process.exit(130))
+}
 await sleep(1_000)
 const { stdout: children } = await run('/usr/bin/pgrep', ['-P', String(holder.pid)])
 const rootPid = Number(children.trim().split('\n')[0])
@@ -136,7 +147,7 @@ const samples = await collectSamples({
     return row
   }
 })
-holder.kill('SIGTERM')
+stopHolder()
 
 const subjects = {
   'c-ps-tty': ['Orca 1.4.223 way: fork `ps -o tty= -p PID` (C posix_spawn)', 'terminal lookup'],
