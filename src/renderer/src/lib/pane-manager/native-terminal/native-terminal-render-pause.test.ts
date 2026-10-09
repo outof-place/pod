@@ -121,6 +121,19 @@ describe('createNativeTerminalRenderPause', () => {
     expect(forceRepaintThroughRenderPause(terminal)).toBe(true)
   })
 
+  it('follows the native view: pauses when shown, repaints then calls back before a hide', () => {
+    const fake = fakeTerminal()
+    const afterRepaint = vi.fn()
+    const pause = createNativeTerminalRenderPause(asTerminal(fake), afterRepaint)
+    pause.setShown(true)
+    vi.advanceTimersByTime(200)
+    expect(pause.isStale()).toBe(true)
+    pause.setShown(false)
+    fake.render()
+    expect(afterRepaint).toHaveBeenCalledTimes(1)
+    expect(pause.isStale()).toBe(false)
+  })
+
   it('restores the screen on dispose', () => {
     const fake = fakeTerminal()
     const pause = createNativeTerminalRenderPause(asTerminal(fake))

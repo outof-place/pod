@@ -20,6 +20,8 @@ export function isXtermPausedUnderNativeView(terminal: unknown): boolean {
 }
 
 export type NativeTerminalRenderPause = {
+  // Follows whether the native view is on screen: pause, or repaint before it hides.
+  setShown: (shown: boolean) => void
   // The native view is on screen.
   pause: () => void
   // The native view is about to hide: repaint xterm, then call onRepainted.
@@ -29,7 +31,10 @@ export type NativeTerminalRenderPause = {
   dispose: () => void
 }
 
-export function createNativeTerminalRenderPause(terminal: Terminal): NativeTerminalRenderPause {
+export function createNativeTerminalRenderPause(
+  terminal: Terminal,
+  afterRepaint: () => void = () => {}
+): NativeTerminalRenderPause {
   let phase: 'live' | 'paused' | 'repainting' = 'live'
   let pauseTimer: ReturnType<typeof setTimeout> | null = null
   let repaintTimer: ReturnType<typeof setTimeout> | null = null
@@ -59,7 +64,8 @@ export function createNativeTerminalRenderPause(terminal: Terminal): NativeTermi
     }
   }
 
-  return {
+  const pause: NativeTerminalRenderPause = {
+    setShown: (shown) => (shown ? pause.pause() : pause.resume(afterRepaint)),
     pause: () => {
       cancelPending()
       if (phase === 'paused') {
@@ -100,4 +106,5 @@ export function createNativeTerminalRenderPause(terminal: Terminal): NativeTermi
       phase = 'live'
     }
   }
+  return pause
 }

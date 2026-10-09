@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 
-export type NativeSurfaceFrame = [
+type SurfacePlacement = [
   surfaceId: number,
   x: number,
   y: number,
@@ -11,6 +11,11 @@ export type NativeSurfaceFrame = [
   height: number,
   visible: boolean
 ]
+
+// Holes ([x, y, width, height] in window points) are cut out of the view's mask and hit-testing.
+export type NativeSurfaceFrame =
+  | SurfacePlacement
+  | [...SurfacePlacement, holes: [number, number, number, number][]]
 
 export type NativeSurfaceEventHandler = (kind: string, ...args: unknown[]) => void
 

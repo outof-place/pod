@@ -189,8 +189,15 @@ test('native terminal panes keep Orca drops, app chords and held-modifier UI', a
   await key(electronApp, surfaceId, '\t', KEY_TAB, CONTROL)
   await expect(orcaPage.getByRole('listbox', { name: 'Switch tabs' })).toBeVisible()
   expect(await orcaPage.evaluate(() => window.__store?.getState().activeTabId)).toBe(tabs.nativeTab)
-  // The switcher covers the native view, which hands the keyboard back to the web contents.
-  await expect.poll(async () => nativeSurfaceField(electronApp, surfaceId, 'hidden')).toBe(true)
+  // The switcher shows through the native view (a hole, or a hide when it covers most of the
+  // pane), which hands the keyboard back to the web contents.
+  await expect
+    .poll(
+      async () =>
+        (await nativeSurfaceField(electronApp, surfaceId, 'hidden')) === true ||
+        (await nativeSurfaceField(electronApp, surfaceId, 'masked')) === true
+    )
+    .toBe(true)
   expect(await nativeSurfaceField(electronApp, surfaceId, 'windowFirstResponder')).toBe(
     'RenderWidgetHostViewCocoa'
   )

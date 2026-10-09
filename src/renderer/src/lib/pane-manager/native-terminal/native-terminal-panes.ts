@@ -14,6 +14,14 @@ import {
   createNativeTerminalRenderPause,
   type NativeTerminalRenderPause
 } from './native-terminal-render-pause'
+import {
+  rememberNativeTerminalSettings,
+  sendSurfaceAppearance,
+  setNativeTerminalFontSize,
+  surfaceAppearanceKey,
+  trackNativeSurfaceAppearance,
+  type NativeTerminalPaneFont
+} from './native-terminal-surface-appearance'
 
 // What the pane's PTY session lends the native view: input forwarding, the visibility
 // signal and how to make its pane active.
@@ -42,9 +50,6 @@ type NativePaneState = {
   appearanceKey: string | null
 }
 
-// A pane and the font size its xterm uses (the pane's zoom, else the global setting).
-export type NativeTerminalPaneFont = { terminal: Terminal; fontSize: number }
-
 const mirrors = new WeakMap<Terminal, NativeTerminalMirror>()
 const states = new WeakMap<Terminal, NativePaneState>()
 const terminalsBySurface = new Map<number, Terminal>()
@@ -52,7 +57,6 @@ let supported: Promise<boolean> | null = null
 let eventsUnsubscribe: (() => void) | null = null
 let lastAppearanceKey: string | null = null
 let lastAppearance: NativeTerminalAppearance | null = null
-let lastSettings: GlobalSettings | null | undefined = null
 
 function nativeTerminalApi(): Window['api']['nativeTerminal'] | null {
   return typeof window === 'undefined' ? null : (window.api?.nativeTerminal ?? null)
@@ -178,37 +182,6 @@ function sendAppearance(appearance: NativeTerminalAppearance): void {
   scheduleNativeTerminalFrames()
 }
 
-function surfaceAppearanceKey(appearance: NativeTerminalAppearance, zoomFactor: number): string {
-  return JSON.stringify([appearance, zoomFactor])
-}
-
-// Ghostty's app config only holds defaults; each surface runs its own config so a pane's
-// font zoom reaches its native view.
-function sendSurfaceAppearance(terminal: Terminal, state: NativePaneState, fontSize: number): void {
-  const api = nativeTerminalApi()
-  if (!api || state.surfaceId === null || state.disposed) {
-    return
-  }
-  const appearance = { ...buildNativeTerminalAppearance(terminal.options, lastSettings), fontSize }
-  const zoomFactor = getUIZoomFactorForNativeViews()
-  const key = surfaceAppearanceKey(appearance, zoomFactor)
-  state.fontSize = fontSize
-  if (key === state.appearanceKey) {
-    return
-  }
-  state.appearanceKey = key
-  api.setSurfaceAppearance(state.surfaceId, appearance, zoomFactor)
-  scheduleNativeTerminalFrames()
-}
-
-// Per-pane font zoom writes xterm's fontSize directly, outside applyTerminalAppearance.
-export function setNativeTerminalFontSize(terminal: Terminal, fontSize: number): void {
-  const state = states.get(terminal)
-  if (state) {
-    sendSurfaceAppearance(terminal, state, fontSize)
-  }
-}
-
 function focusNativeIfShown(surfaceId: number): boolean {
   if (!isNativeTerminalShown(surfaceId)) {
     return false
@@ -251,7 +224,8 @@ export function attachNativeTerminal(
     appearanceKey: null
   }
   states.set(terminal, state)
-  lastSettings = settings
+  trackNativeSurfaceAppearance(terminal, state)
+  rememberNativeTerminalSettings(settings)
   supported ??= api.isSupported().catch(() => false)
   void (async () => {
     if (!(await supported)) {
@@ -281,7 +255,7 @@ export function attachNativeTerminal(
     terminalsBySurface.set(surfaceId, terminal)
     mirror.attach(surfaceId, () => state.host.serialize())
     mirror.setFocusTarget(() => focusNativeIfShown(surfaceId))
-    const renderPause = createNativeTerminalRenderPause(terminal)
+    const renderPause = createNativeTerminalRenderPause(terminal, scheduleNativeTerminalFrames)
     state.renderPause = renderPause
     state.untrack = trackNativeTerminalFrame(
       {
@@ -291,11 +265,7 @@ export function attachNativeTerminal(
         isDomViewStale: renderPause.isStale,
         onShownChange: (shown) => {
           // Why: xterm needs not paint under a shown native view; it repaints before a hide.
-          if (shown) {
-            renderPause.pause()
-          } else {
-            renderPause.resume(scheduleNativeTerminalFrames)
-          }
+          renderPause.setShown(shown)
           // Hand the keyboard across whichever view just became visible for the active pane.
           if (!state.host.isActivePane() || !document.hasFocus()) {
             return
@@ -304,6 +274,18 @@ export function attachNativeTerminal(
             api.focus(surfaceId)
           } else {
             mirrors.get(terminal)?.focusShadow()
+          }
+        },
+        onOverlaidChange: (overlaid) => {
+          // Why: menus and switchers over the pane take the keyboard, as when the view hid;
+          // typing meanwhile reaches the PTY through xterm's focused textarea.
+          if (overlaid) {
+            api.releaseKeyboard()
+          } else if (
+            state.host.isActivePane() &&
+            terminal.element?.contains(document.activeElement)
+          ) {
+            api.focus(surfaceId)
           }
         }
       },
@@ -344,7 +326,7 @@ export function syncNativeTerminalAppearance(
   if (!api || !first) {
     return
   }
-  lastSettings = settings
+  rememberNativeTerminalSettings(settings)
   sendAppearance({
     ...buildNativeTerminalAppearance(first.terminal.options, settings),
     fontSize: settings?.terminalFontSize ?? first.fontSize
