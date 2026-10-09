@@ -14,6 +14,7 @@ import { registerFilesystemMutationHandlers } from '../filesystem-mutations'
 import { registerAgentSessionAttachmentUploadHandlers } from '../agent-session-attachment-upload-ipc'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { assertLocalWriteTargetIsRegularFile } from './local-regular-file-read'
+import { notifyExternalSearchFileActivity } from '../../search/external-workspace-search-provider'
 
 export function registerFilesystemWriteHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -54,6 +55,7 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
       }
       await assertLocalWriteTargetIsRegularFile(filePath)
       await writeFile(filePath, args.content, 'utf-8')
+      notifyExternalSearchFileActivity({ filePath, kind: 'write' })
     }
   )
 
