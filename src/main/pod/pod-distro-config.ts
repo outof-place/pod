@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DistroPluginPolicy } from '../../shared/distro/distro-plugin-policy'
+import { PRODUCT_IDENTITY_RESOURCE } from '../product-identity/product-identity'
 
 // Why its own reader: the product identity file (product/identity.json, packaged as
 // Resources/product-identity.json) also carries Pod's claude-acc keys; the generic identity
 // parser ignores them, and an upstream build ships no file at all.
-export const PRODUCT_IDENTITY_RESOURCE = 'product-identity.json'
 // Unpackaged runs (dev, e2e) read no resource; this points them at an identity file instead.
 export const POD_DISTRO_IDENTITY_ENV = 'POD_DISTRO_IDENTITY_PATH'
 
