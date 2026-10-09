@@ -353,7 +353,8 @@ jobs:
     name: macOS build
     needs: rebase
     if: needs.rebase.outputs.result == 'clean'
-    runs-on: macos-15
+    # The free 3-core macos-15 may run short of memory on `pnpm build`; POD_MAC_RUNNER switches it (CONTRIBUTING.md).
+    runs-on: ${{ vars.POD_MAC_RUNNER || 'macos-15' }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
