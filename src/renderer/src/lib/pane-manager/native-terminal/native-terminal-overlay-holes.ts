@@ -5,6 +5,8 @@ export type NativeTerminalOverlay = {
   // The rect plus the overlay's shadow, which also has to show through.
   padded: DOMRect
   alwaysCovers: boolean
+  // Menus and switchers take the keys; tooltips are pointer-events-none labels that never do.
+  takesKeyboard: boolean
 }
 
 type Edges = { top: number; right: number; bottom: number; left: number }
@@ -13,6 +15,7 @@ const POPPER_SELECTOR = '[data-radix-popper-content-wrapper]'
 // Why: modal dialogs dim the whole window, and in-pane search highlights are drawn by xterm.
 const ALWAYS_COVERS_SELECTOR =
   '[role="dialog"], [role="alertdialog"], [data-terminal-search-root], .pane-drop-overlay'
+const TOOLTIP_SELECTOR = '[data-slot="tooltip-content"], [role="tooltip"]'
 // Antialiased edges and subpixel layout around the overlay box.
 const HOLE_MARGIN_PX = 2
 // Beyond this share of the pane, hiding beats painting a native frame that is mostly holes.
@@ -72,7 +75,9 @@ export function describeOverlay(element: Element, rect: DOMRect): NativeTerminal
   )
   const alwaysCovers =
     element.matches(ALWAYS_COVERS_SELECTOR) && element.closest(POPPER_SELECTOR) === null
-  return { rect, padded, alwaysCovers }
+  const takesKeyboard =
+    !element.matches(TOOLTIP_SELECTOR) && element.querySelector(TOOLTIP_SELECTOR) === null
+  return { rect, padded, alwaysCovers, takesKeyboard }
 }
 
 function intersection(a: DOMRect, b: DOMRect): DOMRect | null {
@@ -108,6 +113,16 @@ function overlappingPair(rects: readonly DOMRect[]): [number, number] | null {
     }
   }
   return null
+}
+
+// Why: a tooltip over the pane (the 12 s startup hint, say) must not take the keys from its view.
+export function overlaysTakeKeyboard(
+  pane: DOMRect,
+  overlays: readonly NativeTerminalOverlay[]
+): boolean {
+  return overlays.some(
+    (overlay) => overlay.takesKeyboard && intersection(pane, overlay.rect) !== null
+  )
 }
 
 // Holes (CSS px, clipped to the pane) for the overlays over this pane, or null when the
