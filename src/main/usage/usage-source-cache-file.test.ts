@@ -16,7 +16,12 @@ describe('usage source cache file', () => {
 
   beforeEach(() => {
     directory = mkdtempSync(join(tmpdir(), 'orca-usage-source-cache-'))
-    ref = { path: join(directory, 'usage-sources.json'), schemaVersion: 6, reuse: true }
+    ref = {
+      path: join(directory, 'usage-sources.json'),
+      schemaVersion: 6,
+      worktreeFingerprint: '[]',
+      reuse: true
+    }
   })
 
   afterEach(() => {
@@ -33,6 +38,19 @@ describe('usage source cache file', () => {
     await writeUsageSourceCache(ref, [{ path: 'a.jsonl' }])
 
     await expect(readUsageSourceCache(ref)).resolves.toEqual([{ path: 'a.jsonl' }])
+  })
+
+  it('rejects attribution from a sidecar committed ahead of its report', async () => {
+    await writeUsageSourceCache({ ...ref, worktreeFingerprint: 'new-worktrees' }, [
+      { path: 'a.jsonl', repoId: 'new-repo' }
+    ])
+
+    await expect(
+      readUsageSourceCache({ ...ref, worktreeFingerprint: 'old-worktrees' })
+    ).resolves.toEqual([])
+    await expect(
+      readUsageSourceCache({ ...ref, worktreeFingerprint: 'new-worktrees' })
+    ).resolves.toEqual([{ path: 'a.jsonl', repoId: 'new-repo' }])
   })
 
   it('starts cold when told not to reuse, on another schema, or on a torn file', async () => {
@@ -67,6 +85,7 @@ describe('usage source cache file', () => {
     })
     expect(JSON.parse(readFileSync(usageSourceCachePath(cacheFile), 'utf-8'))).toEqual({
       schemaVersion: 6,
+      worktreeFingerprint: '[]',
       sources: [{ path: 'a.jsonl' }]
     })
   })

@@ -272,7 +272,11 @@ describe('UsageProviderStoreLifecycle', () => {
 
   it('invalidates prior sources on fingerprint changes and reuses them for forced scans', async () => {
     const store = createStore()
-    const sourceCache = { path: join(tempDirectory, 'usage-0-sources.json'), schemaVersion: 1 }
+    const sourceCache = {
+      path: join(tempDirectory, 'usage-0-sources.json'),
+      schemaVersion: 1,
+      worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT
+    }
     store.replaceState(
       makeState({
         worktreeFingerprint: 'outdated',
@@ -305,20 +309,30 @@ describe('UsageProviderStoreLifecycle', () => {
     expect(persisted).not.toContain('\n')
   })
 
-  it('drops inline records from a small legacy cache it parses on the main thread', () => {
+  it('preserves a small legacy cache for the next warm scan', async () => {
     const cacheFile = join(tempDirectory, 'provider.json')
     writeFileSync(
       cacheFile,
       JSON.stringify(
-        makeState({ processedSources: [{ id: 'inline' }], sessions: [{ id: 'session' }] })
+        makeState({
+          worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
+          processedSources: [{ id: 'inline' }],
+          sessions: [{ id: 'session' }]
+        })
       )
     )
 
     const store = createStore(cacheFile)
 
-    expect(split).not.toHaveBeenCalled()
+    await store.whenLoaded()
+    expect(split).toHaveBeenCalledWith({ cacheFile, sourceKey: 'processedSources' })
     expect(store.getState().sessions).toEqual([{ id: 'session' }])
     expect(store.getState().processedSources).toEqual([])
+    expect(
+      JSON.parse(readFileSync(join(tempDirectory, 'provider-sources.json'), 'utf-8'))
+    ).toMatchObject({
+      sources: [{ id: 'inline' }]
+    })
   })
 
   it('splits a large legacy cache on the worker before any reader or writer sees it', async () => {
@@ -355,7 +369,11 @@ describe('UsageProviderStoreLifecycle', () => {
     expect(report).not.toHaveProperty('processedSources')
     expect(report).toMatchObject({ sessions: [{ id: 'session' }], scanState: { enabled: false } })
     const sidecar = JSON.parse(readFileSync(join(tempDirectory, 'provider-sources.json'), 'utf-8'))
-    expect(sidecar).toEqual({ schemaVersion: 1, sources: processedSources })
+    expect(sidecar).toEqual({
+      schemaVersion: 1,
+      worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
+      sources: processedSources
+    })
   })
 
   it('reads a large cache on the main thread when the worker cannot split it', async () => {
@@ -377,6 +395,25 @@ describe('UsageProviderStoreLifecycle', () => {
 
     expect(store.getState().sessions).toEqual([{ id: 'session' }])
     expect(store.getState().processedSources).toEqual([])
+  })
+
+  it('flush waits for a pending migration and its report rewrite', async () => {
+    const cacheFile = join(tempDirectory, 'provider.json')
+    writeFileSync(cacheFile, JSON.stringify(makeState({ processedSources: [{ id: 'inline' }] })))
+    const pendingSplit = createDeferred<UsageCacheSplitResult>()
+    split.mockReturnValueOnce(pendingSplit.promise)
+    const store = createStore(cacheFile)
+    let flushed = false
+    const flushing = store.flush().then(() => {
+      flushed = true
+    })
+
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(flushed).toBe(false)
+    pendingSplit.resolve({ reportText: JSON.stringify(makeState()), migrated: true })
+    await flushing
+
+    expect(JSON.parse(readFileSync(cacheFile, 'utf-8'))).not.toHaveProperty('processedSources')
   })
 
   it('shares one in-flight scan and exposes its live state', async () => {

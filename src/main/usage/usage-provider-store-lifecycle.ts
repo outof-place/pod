@@ -19,8 +19,7 @@ import {
 } from './usage-source-cache-file'
 
 const STALE_MS = 5 * 60_000
-// Why: once the per-source records live in the sidecar, a report is a few MB and parses in a few
-// ms. Only a cache that still carries them inline is bigger; that one is split on the worker.
+// Keep large cache parsing on the worker; small reports retain synchronous reads.
 const MAIN_THREAD_PARSE_MAX_BYTES = 8 * 1024 * 1024
 
 type UsageProviderScanState = {
@@ -69,8 +68,7 @@ export abstract class UsageProviderStoreLifecycle<
   State extends UsageProviderStoreState<SourceKey>,
   DataPresenceKey extends string
 > {
-  // Why: the per-source records stay on the worker (see usage-source-cache-file), so
-  // `state[sourceKey]` is always empty here and is never written to the report.
+  // Per-source records belong to the worker and are excluded from report state.
   protected state: State
   private readonly loaded: Promise<void>
   private readonly schemaVersion: number
@@ -117,6 +115,7 @@ export abstract class UsageProviderStoreLifecycle<
 
   /** Await queued cache writes so quit does not drop the final snapshot. */
   async flush(): Promise<void> {
+    await this.loaded
     await this.tokenReporter?.flush()
     await Promise.all([this.writer.flush(), this.analyticsSessionIds?.flush()])
   }
@@ -157,7 +156,14 @@ export abstract class UsageProviderStoreLifecycle<
       if (statSync(cacheFile).size > MAIN_THREAD_PARSE_MAX_BYTES) {
         return this.loadOnWorker(cacheFile)
       }
-      this.state = this.parseReport(readFileSync(cacheFile, 'utf-8'))
+      const parsed: State = JSON.parse(readFileSync(cacheFile, 'utf-8'))
+      this.state = this.normalizeReport(parsed)
+      if (
+        Array.isArray(parsed[this.config.sourceKey]) &&
+        parsed[this.config.sourceKey].length > 0
+      ) {
+        return this.loadOnWorker(cacheFile)
+      }
     } catch (error) {
       if (!isMissingFileError(error)) {
         console.error(
@@ -174,16 +180,16 @@ export abstract class UsageProviderStoreLifecycle<
       const { reportText, migrated } = await this.config
         .splitCacheFile({ cacheFile, sourceKey: this.config.sourceKey })
         .catch(async (error: unknown) => {
-          // Why: a worker that cannot run must not cost the user their usage history.
+          // Preserve usage history when the worker cannot start.
           console.warn(`${this.config.logTag} Reading the usage cache on the main thread:`, error)
           return { reportText: await readFile(cacheFile, 'utf-8'), migrated: false }
         })
       if (reportText === null) {
         return
       }
-      this.state = this.parseReport(reportText)
+      this.state = this.normalizeReport(JSON.parse(reportText))
       if (migrated) {
-        // Why: rewrite without the inline records so the next launch takes the small-file path.
+        // Future launches can read the compact report synchronously.
         await this.writeToDisk().catch(() => {})
       }
     } catch (error) {
@@ -191,18 +197,14 @@ export abstract class UsageProviderStoreLifecycle<
     }
   }
 
-  private parseReport(text: string): State {
+  private normalizeReport(parsed: State): State {
     const defaults = this.config.createDefaultState()
-    const parsed: State = JSON.parse(text)
-    // Why: a cache read on the main-thread fallback may still carry its records; drop them here too.
-    return {
-      ...this.config.normalizeState({
-        ...defaults,
-        ...parsed,
-        scanState: { ...defaults.scanState, ...parsed.scanState }
-      }),
-      [this.config.sourceKey]: []
-    }
+    return this.config.normalizeState({
+      ...defaults,
+      ...parsed,
+      [this.config.sourceKey]: [],
+      scanState: { ...defaults.scanState, ...parsed.scanState }
+    })
   }
 
   private async runScan(): Promise<void> {
@@ -223,6 +225,7 @@ export abstract class UsageProviderStoreLifecycle<
         const result = await this.config.scan(createWorktreeRefs(repos, worktreesByRepo), {
           path: usageSourceCachePath(this.config.resolveCacheFile()),
           schemaVersion: this.schemaVersion,
+          worktreeFingerprint,
           reuse: this.state.worktreeFingerprint === worktreeFingerprint
         })
         this.state.sessions = result.sessions

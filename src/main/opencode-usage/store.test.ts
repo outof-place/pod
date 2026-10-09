@@ -191,6 +191,7 @@ describe('OpenCodeUsageStore', () => {
     expect(scanOpenCodeUsageDatabasesViaWorker).toHaveBeenCalledWith([], {
       path: join(tempUserData, 'orca-opencode-usage-sources.json'),
       schemaVersion: OPENCODE_USAGE_SCHEMA_VERSION,
+      worktreeFingerprint: '[]',
       reuse: false
     })
     expect(persistedJson).not.toContain('\n')

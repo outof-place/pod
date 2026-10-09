@@ -13,6 +13,7 @@ import {
 export type UsageSourceCacheRef = {
   path: string
   schemaVersion: number
+  worktreeFingerprint: string | null
   reuse: boolean
 }
 
@@ -31,7 +32,10 @@ export async function readUsageSourceCache<T>(ref: UsageSourceCacheRef): Promise
   }
   try {
     const parsed = JSON.parse(await readFile(ref.path, 'utf-8'))
-    return parsed?.schemaVersion === ref.schemaVersion && Array.isArray(parsed.sources)
+    // The sidecar can commit before its report, so validate attribution independently.
+    return parsed?.schemaVersion === ref.schemaVersion &&
+      parsed.worktreeFingerprint === ref.worktreeFingerprint &&
+      Array.isArray(parsed.sources)
       ? parsed.sources
       : []
   } catch {
@@ -49,7 +53,11 @@ export async function writeUsageSourceCache(
   await writeFileDurable(
     durableWriteTempPath(ref.path),
     ref.path,
-    JSON.stringify({ schemaVersion: ref.schemaVersion, sources })
+    JSON.stringify({
+      schemaVersion: ref.schemaVersion,
+      worktreeFingerprint: ref.worktreeFingerprint,
+      sources
+    })
   )
 }
 
@@ -78,6 +86,7 @@ export async function splitUsageCacheFile(
     {
       path: usageSourceCachePath(request.cacheFile),
       schemaVersion: report.schemaVersion,
+      worktreeFingerprint: report.worktreeFingerprint ?? null,
       reuse: true
     },
     sources

@@ -200,6 +200,7 @@ describe('usage scan worker event-loop occupancy', () => {
     const sourceCache: UsageSourceCacheRef = {
       path: join(corpusRoot, 'orca-codex-usage-sources.json'),
       schemaVersion: 1,
+      worktreeFingerprint: '[]',
       reuse: true
     }
     const worker = await measureCallerOccupancy(() =>
