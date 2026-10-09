@@ -4100,6 +4100,13 @@ private func isAuthorizedAgentPeer(_ pid: pid_t) -> Bool {
     return isTrustedOrcaApplication(parentPid)
 }
 
+// Why: a downstream build names this helper "<app id>.computer-use", so its own id names the app it serves.
+private let embeddingAppBundleId: String? = {
+    let suffix = ".computer-use"
+    guard let own = Bundle.main.bundleIdentifier, own.hasSuffix(suffix) else { return nil }
+    return String(own.dropLast(suffix.count))
+}()
+
 private func isTrustedOrcaApplication(_ pid: pid_t) -> Bool {
     guard let app = NSRunningApplication(processIdentifier: pid),
           let bundleId = app.bundleIdentifier
@@ -4109,6 +4116,7 @@ private func isTrustedOrcaApplication(_ pid: pid_t) -> Bool {
     // Why: dev validation runs from per-worktree wrapper apps with stable
     // Orca-owned bundle ids; the sidecar peer check must still authorize them.
     return bundleId == "com.stablyai.orca" ||
+        bundleId == embeddingAppBundleId ||
         bundleId.hasPrefix("com.stablyai.orca.dev.") ||
         bundleId == "com.github.Electron"
 }
