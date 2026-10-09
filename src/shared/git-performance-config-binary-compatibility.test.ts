@@ -147,7 +147,7 @@ describe.skipIf(!binary && !image)(
     })
 
     it('applies the version-gated plan, records it, and reverts only what it recorded', async () => {
-      const applied = await runGitPerformanceConfigAction(host(), 'apply')
+      const applied = await runGitPerformanceConfigAction(host(), 'apply', { fsmonitor: true })
       const action = (key: string) => applied.plan?.find((entry) => entry.key === key)
 
       expect(action('fetch.writeCommitGraph')).toMatchObject({ action: 'set' })
@@ -163,6 +163,14 @@ describe.skipIf(!binary && !image)(
       )
 
       await git(['config', '--local', 'core.untrackedCache', 'keep'])
+      // A partial revert drops one key and its record entry only.
+      const partial = await runGitPerformanceConfigAction(host(), 'revert', {
+        keys: ['fetch.writeCommitGraph']
+      })
+      expect(partial.reverted).toEqual(['fetch.writeCommitGraph'])
+      expect(await localValue('fetch.writeCommitGraph')).toBeNull()
+      expect(await localValue('core.untrackedCache')).toBe('keep')
+
       const reverted = await runGitPerformanceConfigAction(host(), 'revert')
 
       // The user's later edit no longer matches the exact-value pattern, so it stays.

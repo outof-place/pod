@@ -10,16 +10,28 @@ import {
 } from '../../../../shared/git-performance-config-types'
 import { translate } from '@/i18n/i18n'
 import { SearchableSetting } from './SearchableSetting'
-import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
+import { SettingsRow, SettingsSegmentedControl, SettingsSwitchRow } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
 import { GitPerformanceConfigRepoList } from './GitPerformanceConfigRepoList'
 import {
   GIT_PERFORMANCE_CONFIG_KEYWORDS,
   GIT_PERFORMANCE_CONFIG_SECTION_ID,
   getGitPerformanceConfigDescription,
+  getGitPerformanceConfigFsmonitorTitle,
   getGitPerformanceConfigKeyDescription,
   getGitPerformanceConfigTitle
 } from './git-performance-config-copy'
+
+// Git's builtin daemon exists only on macOS and Windows; the host's Git version is checked per repo.
+function clientSupportsBuiltinFsmonitor(): boolean {
+  if (typeof navigator === 'undefined') {
+    return false
+  }
+  return navigator.userAgent.includes('Mac') || navigator.userAgent.includes('Windows')
+}
+
+const FSMONITOR_KEY = 'core.fsmonitor'
+const RECOMMENDED_KEYS = GIT_PERFORMANCE_CONFIG_KEYS.filter((key) => key !== FSMONITOR_KEY)
 
 export function gitPerformanceConfigMatchesSearch(searchQuery: string): boolean {
   return matchesSettingsSearch(searchQuery, {
@@ -41,15 +53,13 @@ export function GitPerformanceConfigSetting({
   const mode = normalizeGitTuningMode(settings.gitTuning)
   const [refreshSignal, setRefreshSignal] = useState(0)
 
-  const changeMode = async (nextMode: GitTuningMode): Promise<void> => {
-    if (nextMode === mode) {
-      return
-    }
-    // Why await before refreshing: main queues its revert when the setting lands, and the
-    // rows' reads must arrive after it to show the reverted state.
-    await updateSettings({ gitTuning: nextMode })
+  // Why await before refreshing: main queues its revert when a setting lands, and the
+  // rows' reads must arrive after it to show the reverted state.
+  const persistThenRefresh = async (updates: Partial<GlobalSettings>): Promise<void> => {
+    await updateSettings(updates)
     setRefreshSignal((value) => value + 1)
   }
+  const fsmonitorEnabled = settings.gitTuningFsmonitor === true
 
   return (
     <SearchableSetting
@@ -66,7 +76,11 @@ export function GitPerformanceConfigSetting({
         control={
           <SettingsSegmentedControl<GitTuningMode>
             value={mode}
-            onChange={(nextMode) => void changeMode(nextMode)}
+            onChange={(nextMode) => {
+              if (nextMode !== mode) {
+                void persistThenRefresh({ gitTuning: nextMode })
+              }
+            }}
             ariaLabel={title}
             size="sm"
             options={[
@@ -86,7 +100,7 @@ export function GitPerformanceConfigSetting({
         }
       />
       <ul className="space-y-1">
-        {GIT_PERFORMANCE_CONFIG_KEYS.map((key) => (
+        {RECOMMENDED_KEYS.map((key) => (
           <li key={key} className="text-xs text-muted-foreground">
             <code className="font-mono text-foreground">
               {key}={GIT_PERFORMANCE_CONFIG_VALUES[key]}
@@ -95,6 +109,21 @@ export function GitPerformanceConfigSetting({
           </li>
         ))}
       </ul>
+      {mode === 'recommended' && clientSupportsBuiltinFsmonitor() ? (
+        <SettingsSwitchRow
+          label={getGitPerformanceConfigFsmonitorTitle()}
+          description={
+            <>
+              <code className="font-mono text-foreground">
+                {FSMONITOR_KEY}={GIT_PERFORMANCE_CONFIG_VALUES[FSMONITOR_KEY]}
+              </code>{' '}
+              {getGitPerformanceConfigKeyDescription(FSMONITOR_KEY)}
+            </>
+          }
+          checked={fsmonitorEnabled}
+          onChange={() => void persistThenRefresh({ gitTuningFsmonitor: !fsmonitorEnabled })}
+        />
+      ) : null}
       <GitPerformanceConfigRepoList mode={mode} refreshSignal={refreshSignal} />
     </SearchableSetting>
   )

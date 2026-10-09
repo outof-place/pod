@@ -74,9 +74,16 @@ describe('GitHandler git.repoPerformanceConfig', () => {
 
     await dispatcher.callRequest('git.repoPerformanceConfig', {
       repoPath: tmpDir,
-      action: 'revert'
+      action: 'revert',
+      keys: ['fetch.writeCommitGraph']
     })
     expect(localValue('fetch.writeCommitGraph')).toBeNull()
+    expect(localValue('orca.performanceConfig')).not.toBeNull()
+
+    await dispatcher.callRequest('git.repoPerformanceConfig', {
+      repoPath: tmpDir,
+      action: 'revert'
+    })
     expect(localValue('orca.performanceConfig')).toBeNull()
   })
 
@@ -84,7 +91,15 @@ describe('GitHandler git.repoPerformanceConfig', () => {
     [{ repoPath: '', action: 'apply' }, 'Invalid repository performance config request.'],
     [{ repoPath: 'a\0b', action: 'apply' }, 'Invalid repository performance config request.'],
     [{ action: 'apply' }, 'Invalid repository performance config request.'],
-    [{ repoPath: '/tmp', action: 'exec' }, 'Unknown repository performance config action.']
+    [{ repoPath: '/tmp', action: 'exec' }, 'Unknown repository performance config action.'],
+    [
+      { repoPath: '/tmp', action: 'apply', fsmonitor: 'yes' },
+      'Invalid repository performance config request.'
+    ],
+    [
+      { repoPath: '/tmp', action: 'revert', keys: ['core.editor'] },
+      'Invalid repository performance config request.'
+    ]
   ])('rejects %j', async (params, message) => {
     await expect(dispatcher.callRequest('git.repoPerformanceConfig', params)).rejects.toThrow(
       message

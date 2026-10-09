@@ -12,6 +12,7 @@ import {
 import {
   normalizeGitTuningMode,
   type GitPerformanceConfigAction,
+  type GitPerformanceConfigOptions,
   type GitTuningMode,
   type RepoPerformanceConfigOutcome
 } from '../../shared/git-performance-config-types'
@@ -28,17 +29,20 @@ import { gitExecFileAsync } from './runner'
  */
 
 type PerformanceConfigRepo = Pick<Repo, 'id' | 'path' | 'kind' | 'connectionId' | 'executionHostId'>
+type GitTuningSettings = { gitTuning?: GitTuningMode; gitTuningFsmonitor?: boolean }
 type GitTuningStore = {
-  getSettings(): { gitTuning?: GitTuningMode }
+  getSettings(): GitTuningSettings
   getRepos(): readonly PerformanceConfigRepo[]
-  onSettingsChanged(listener: (updates: { gitTuning?: GitTuningMode }) => void): () => void
+  onSettingsChanged(listener: (updates: GitTuningSettings) => void): () => void
 }
+type RunOptions = GitPerformanceConfigOptions & { admissionTier?: GitAdmissionTier }
 
 // Why per repo: a registration apply, a settings revert and the pane's read
 // must not interleave their config writes and reads.
 const perRepo = new KeyedSerialRunner()
-// Mirrors the persisted setting; owned by startup so no registration path reads the store.
+// Mirror the persisted settings; owned by startup so no registration path reads the store.
 let gitTuningMode: GitTuningMode = 'off'
+let gitTuningFsmonitor = false
 
 // Why: drvfs (/mnt/<drive>) does not keep directory mtimes the way the distro's ext4 does.
 function wslLinuxPathHasReliableMtime(linuxPath: string): boolean {
@@ -72,7 +76,7 @@ export function createLocalGitPerformanceConfigHost(
 async function runOnExecutionHost(
   repo: PerformanceConfigRepo,
   action: GitPerformanceConfigAction,
-  admissionTier: GitAdmissionTier
+  { admissionTier = 'interactive', ...options }: RunOptions
 ): Promise<RepoPerformanceConfigOutcome> {
   const sshTargetId = getRepoSshConnectionId(repo)
   if (sshTargetId) {
@@ -80,7 +84,7 @@ async function runOnExecutionHost(
     if (!provider) {
       return { status: 'unavailable', reason: 'ssh-disconnected' }
     }
-    const result = await provider.repoPerformanceConfig(repo.path, action)
+    const result = await provider.repoPerformanceConfig(repo.path, action, options)
     return result
       ? { status: 'ok', ...result }
       : { status: 'unavailable', reason: 'relay-outdated' }
@@ -88,7 +92,8 @@ async function runOnExecutionHost(
   const result = await withLocalGitCapabilityCacheForExecution({ cwd: repo.path }, (capabilities) =>
     runGitPerformanceConfigAction(
       createLocalGitPerformanceConfigHost(repo.path, capabilities, admissionTier),
-      action
+      action,
+      options
     )
   )
   return { status: 'ok', ...result }
@@ -97,14 +102,14 @@ async function runOnExecutionHost(
 export function runRepoPerformanceConfig(
   repo: PerformanceConfigRepo,
   action: GitPerformanceConfigAction,
-  options: { admissionTier?: GitAdmissionTier } = {}
+  options: RunOptions = {}
 ): Promise<RepoPerformanceConfigOutcome> {
   if (isFolderRepo(repo)) {
     return Promise.resolve({ status: 'unavailable', reason: 'not-git' })
   }
   return perRepo.run(repo.id, async () => {
     try {
-      return await runOnExecutionHost(repo, action, options.admissionTier ?? 'interactive')
+      return await runOnExecutionHost(repo, action, options)
     } catch (error) {
       return {
         status: 'unavailable',
@@ -126,16 +131,23 @@ export function applyRepoPerformanceConfigOnAdd(repo: PerformanceConfigRepo): vo
   if (gitTuningMode !== 'recommended' || isFolderRepo(repo)) {
     return
   }
-  void runRepoPerformanceConfig(repo, 'apply', { admissionTier: 'background' }).then(warnOnFailure)
+  void runRepoPerformanceConfig(repo, 'apply', {
+    admissionTier: 'background',
+    fsmonitor: gitTuningFsmonitor
+  }).then(warnOnFailure)
 }
 
-/** Turning the setting off removes only what Orca recorded, in every reachable repository. */
-function revertRepoPerformanceConfigForAll(repos: readonly PerformanceConfigRepo[]): void {
+/** Turning a setting off removes only what Orca recorded, in every reachable repository. */
+function revertRepoPerformanceConfigForAll(
+  repos: readonly PerformanceConfigRepo[],
+  options: GitPerformanceConfigOptions = {}
+): void {
   for (const repo of repos) {
     if (!isFolderRepo(repo)) {
-      void runRepoPerformanceConfig(repo, 'revert', { admissionTier: 'background' }).then(
-        warnOnFailure
-      )
+      void runRepoPerformanceConfig(repo, 'revert', {
+        ...options,
+        admissionTier: 'background'
+      }).then(warnOnFailure)
     }
   }
 }
@@ -145,14 +157,22 @@ function revertRepoPerformanceConfigForAll(repos: readonly PerformanceConfigRepo
  * Every settings writer (pane, CLI, paired client) then gets the same revert on Off.
  */
 export function trackGitTuningSetting(store: GitTuningStore): () => void {
-  gitTuningMode = normalizeGitTuningMode(store.getSettings().gitTuning)
+  const settings = store.getSettings()
+  gitTuningMode = normalizeGitTuningMode(settings.gitTuning)
+  gitTuningFsmonitor = settings.gitTuningFsmonitor === true
   return store.onSettingsChanged((updates) => {
-    if (!('gitTuning' in updates)) {
-      return
+    if ('gitTuningFsmonitor' in updates) {
+      gitTuningFsmonitor = updates.gitTuningFsmonitor === true
     }
-    gitTuningMode = normalizeGitTuningMode(updates.gitTuning)
-    if (gitTuningMode === 'off') {
-      revertRepoPerformanceConfigForAll(store.getRepos())
+    if ('gitTuning' in updates) {
+      gitTuningMode = normalizeGitTuningMode(updates.gitTuning)
+      if (gitTuningMode === 'off') {
+        revertRepoPerformanceConfigForAll(store.getRepos())
+        return
+      }
+    }
+    if ('gitTuningFsmonitor' in updates && !gitTuningFsmonitor) {
+      revertRepoPerformanceConfigForAll(store.getRepos(), { keys: ['core.fsmonitor'] })
     }
   })
 }

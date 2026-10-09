@@ -97,7 +97,7 @@ describe('runGitPerformanceConfigAction', () => {
     const repo = newRepo({ global: [['fetch.writeCommitGraph', 'false']] })
     const host = fakeHost(repo)
 
-    const applied = await runGitPerformanceConfigAction(host, 'apply')
+    const applied = await runGitPerformanceConfigAction(host, 'apply', { fsmonitor: true })
 
     expect(applied.state.orcaKeys).toEqual([
       { key: 'core.untrackedCache', value: 'true' },
@@ -130,13 +130,48 @@ describe('runGitPerformanceConfigAction', () => {
   it('is idempotent: a second apply writes nothing', async () => {
     const repo = newRepo()
     const host = fakeHost(repo)
-    await runGitPerformanceConfigAction(host, 'apply')
+    await runGitPerformanceConfigAction(host, 'apply', { fsmonitor: true })
     repo.calls = []
-    const second = await runGitPerformanceConfigAction(host, 'apply')
+    const second = await runGitPerformanceConfigAction(host, 'apply', { fsmonitor: true })
     expect(repo.calls.some((args) => args[0] === 'config' && !args.includes('--get-regexp'))).toBe(
       false
     )
     expect(second.plan?.filter((entry) => entry.action === 'keep')).toHaveLength(4)
+  })
+
+  it('never probes or writes the file watcher without its own opt-in', async () => {
+    const repo = newRepo()
+    const result = await runGitPerformanceConfigAction(fakeHost(repo), 'apply')
+    expect(repo.calls.some((args) => args[0] === 'fsmonitor--daemon')).toBe(false)
+    expect(result.plan?.find((entry) => entry.key === 'core.fsmonitor')).toEqual({
+      key: 'core.fsmonitor',
+      action: 'skip',
+      reason: 'not-opted-in'
+    })
+    expect(repo.local.some(([key]) => key === 'core.fsmonitor')).toBe(false)
+  })
+
+  it('takes back only the file watcher when the opt-in is withdrawn', async () => {
+    const repo = newRepo()
+    const host = fakeHost(repo)
+    await runGitPerformanceConfigAction(host, 'apply', { fsmonitor: true })
+
+    const reverted = await runGitPerformanceConfigAction(host, 'revert', {
+      keys: ['core.fsmonitor']
+    })
+    expect(reverted.reverted).toEqual(['core.fsmonitor'])
+    expect(reverted.state.orcaKeys.map((entry) => entry.key)).toEqual([
+      'core.untrackedCache',
+      'checkout.workers',
+      'fetch.writeCommitGraph'
+    ])
+    expect(repo.local.filter(([key]) => key === 'orca.performanceConfig')).toHaveLength(3)
+
+    // A later apply without the opt-in also removes a watcher Orca set earlier.
+    await runGitPerformanceConfigAction(host, 'apply', { fsmonitor: true })
+    const reapplied = await runGitPerformanceConfigAction(host, 'apply')
+    expect(reapplied.state.orcaKeys.map((entry) => entry.key)).not.toContain('core.fsmonitor')
+    expect(repo.local.some(([key]) => key === 'core.fsmonitor')).toBe(false)
   })
 
   it('inspect never writes and never probes', async () => {
@@ -234,7 +269,7 @@ describe('fsmonitor daemon capability', () => {
   ] as const)('does not probe on %s with %j', async (platform, version) => {
     const repo = newRepo({ version })
     const host: GitPerformanceConfigHost = { ...fakeHost(repo), platform }
-    const result = await runGitPerformanceConfigAction(host, 'apply')
+    const result = await runGitPerformanceConfigAction(host, 'apply', { fsmonitor: true })
     expect(repo.calls.some((args) => args[0] === 'fsmonitor--daemon')).toBe(false)
     expect(result.plan?.find((entry) => entry.key === 'core.fsmonitor')).toMatchObject({
       action: 'skip'

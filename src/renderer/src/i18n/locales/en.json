@@ -12712,7 +12712,6 @@
           "title": "Git Performance Tuning",
           "description": "Recommended sets repository-local Git options that make status, checkout and fetch faster in large repositories. Orca applies them to projects you add from now on, never changes an option you already set, and Off removes only the options Orca added.",
           "keyUntrackedCache": "Remembers untracked folders so status skips unchanged ones. Local macOS and Linux disks only.",
-          "keyFsmonitor": "Uses Git's built-in file watcher instead of scanning every file. macOS and Windows, Git 2.37 or newer. Git older than 2.36 on the same repository, such as in WSL, misreads it and can miss changes.",
           "keyIndexVersion": "Writes a smaller index for new worktrees in repositories with 10,000 or more tracked files.",
           "keyCheckoutWorkers": "Writes files in parallel on checkout and worktree creation. Git 2.32 or newer.",
           "keyWriteCommitGraph": "Updates the commit graph after fetch, which speeds up history and ahead/behind counts.",
@@ -12731,7 +12730,9 @@
           "unavailableDisabled": "Choose Recommended to apply",
           "unavailableSshDisconnected": "Connect the SSH host to check this repository",
           "unavailableRelayOutdated": "Reconnect the SSH host to update Orca there",
-          "unavailableFailed": "Could not read the Git config"
+          "unavailableFailed": "Could not read the Git config",
+          "fsmonitorTitle": "Git File Watcher",
+          "keyFsmonitorOptIn": "Uses Git's built-in file watcher instead of scanning every file. Git 2.37 or newer. Leave it off if an older Git also uses these checkouts, for example in WSL, a container or CI: Git before 2.36 misreads it and misses changes."
         }
       },
       "right": {

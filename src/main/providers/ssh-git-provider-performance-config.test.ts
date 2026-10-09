@@ -31,6 +31,18 @@ describe('SshGitProvider.repoPerformanceConfig', () => {
     })
   })
 
+  it('forwards the file-watcher opt-in and a partial revert only when set', async () => {
+    mux.request.mockResolvedValue(APPLIED)
+    await provider.repoPerformanceConfig('/home/me/repo', 'apply', { fsmonitor: true })
+    await provider.repoPerformanceConfig('/home/me/repo', 'apply', { fsmonitor: false })
+    await provider.repoPerformanceConfig('/home/me/repo', 'revert', { keys: ['core.fsmonitor'] })
+    expect(mux.request.mock.calls.map((call) => call[1])).toEqual([
+      { repoPath: '/home/me/repo', action: 'apply', fsmonitor: true },
+      { repoPath: '/home/me/repo', action: 'apply' },
+      { repoPath: '/home/me/repo', action: 'revert', keys: ['core.fsmonitor'] }
+    ])
+  })
+
   it('treats an older relay as unsupported once and stops asking', async () => {
     mux.request.mockRejectedValue(methodNotFound('git.repoPerformanceConfig'))
 

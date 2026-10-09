@@ -176,6 +176,9 @@ export function updateSettings(
   if ('gitTuning' in updates) {
     sanitizedUpdates.gitTuning = normalizeGitTuningMode(updates.gitTuning)
   }
+  if ('gitTuningFsmonitor' in updates) {
+    sanitizedUpdates.gitTuningFsmonitor = updates.gitTuningFsmonitor === true
+  }
   if ('sourceControlGroupOrder' in updates) {
     sanitizedUpdates.sourceControlGroupOrder = normalizeSourceControlGroupOrder(
       updates.sourceControlGroupOrder

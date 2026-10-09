@@ -14,6 +14,7 @@ import { CapabilityProbeCache } from '../../shared/capability-probe-cache'
 import { parseGitPerformanceConfigResult } from '../../shared/git-performance-config-wire'
 import type {
   GitPerformanceConfigAction,
+  GitPerformanceConfigOptions,
   GitPerformanceConfigResult
 } from '../../shared/git-performance-config-types'
 
@@ -28,13 +29,19 @@ export class SshGitProvider extends SshGitWorktreeProvider implements IGitProvid
   /** Runs host-side on the relay; null means the relay predates the method. */
   async repoPerformanceConfig(
     repoPath: string,
-    action: GitPerformanceConfigAction
+    action: GitPerformanceConfigAction,
+    options: GitPerformanceConfigOptions = {}
   ): Promise<GitPerformanceConfigResult | null> {
     return this.performanceConfigCapability.runWithFallback<GitPerformanceConfigResult | null>(
       REPO_PERFORMANCE_CONFIG_METHOD,
       async () =>
         parseGitPerformanceConfigResult(
-          await this.mux.request(REPO_PERFORMANCE_CONFIG_METHOD, { repoPath, action })
+          await this.mux.request(REPO_PERFORMANCE_CONFIG_METHOD, {
+            repoPath,
+            action,
+            ...(options.fsmonitor ? { fsmonitor: true } : {}),
+            ...(options.keys ? { keys: options.keys } : {})
+          })
         ),
       async () => null,
       isJsonRpcMethodNotFoundError

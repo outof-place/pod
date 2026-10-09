@@ -89,7 +89,6 @@ afterEach(async () => {
 describe('repository Git tuning against the real Git binary', () => {
   it('applies only unset keys, records them, and reverts exactly what it recorded', async () => {
     await execFileAsync('git', ['config', '--global', 'checkout.workers', '4'], { cwd: repoPath })
-    const minor = await gitMinor()
 
     const applied = await runRepoPerformanceConfig(repoRecord(), 'apply')
 
@@ -100,12 +99,8 @@ describe('repository Git tuning against the real Git binary', () => {
     if (process.platform !== 'win32') {
       expect(await localValue('core.untrackedCache')).toBe('true')
     }
-    if (process.platform === 'darwin' && minor >= 37) {
-      expect(await localValue('core.fsmonitor')).toBe('true')
-    }
-    if (process.platform === 'linux') {
-      expect(await localValue('core.fsmonitor')).toBeNull()
-    }
+    // The file watcher is its own opt-in, so Recommended alone never sets it.
+    expect(await localValue('core.fsmonitor')).toBeNull()
     expect(applied.status === 'ok' && applied.state.userKeys).toEqual(['checkout.workers'])
     expect((await localValue('orca.performanceConfig'))?.split('\n')).toContain(
       'fetch.writeCommitGraph=true'
@@ -120,6 +115,23 @@ describe('repository Git tuning against the real Git binary', () => {
     expect(await localValue('core.untrackedCache')).toBeNull()
     expect(await localValue('core.fsmonitor')).toBeNull()
     expect(await localValue('orca.performanceConfig')).toBeNull()
+  })
+
+  it('sets the file watcher only with its opt-in, where the host supports it', async () => {
+    const supported =
+      (process.platform === 'darwin' || process.platform === 'win32') && (await gitMinor()) >= 37
+
+    await runRepoPerformanceConfig(repoRecord(), 'apply', { fsmonitor: true })
+    expect(await localValue('core.fsmonitor')).toBe(supported ? 'true' : null)
+
+    const withdrawn = await runRepoPerformanceConfig(repoRecord(), 'revert', {
+      keys: ['core.fsmonitor']
+    })
+    expect(withdrawn.status === 'ok' && withdrawn.reverted).toEqual(
+      supported ? ['core.fsmonitor'] : []
+    )
+    expect(await localValue('core.fsmonitor')).toBeNull()
+    expect(await localValue('fetch.writeCommitGraph')).toBe('true')
   })
 
   it('uses index v4 for repositories with at least 10,000 tracked entries', async () => {
@@ -140,12 +152,15 @@ describe('repository Git tuning against the real Git binary', () => {
   })
 
   it('applies on add only after the tracked setting turns Recommended, and reverts on Off', async () => {
-    const settings: { gitTuning?: GitTuningMode } = {}
-    const listeners: ((updates: { gitTuning?: GitTuningMode }) => void)[] = []
-    const changeSetting = (gitTuning: GitTuningMode | undefined) => {
-      settings.gitTuning = gitTuning
-      listeners.forEach((listener) => listener(gitTuning === undefined ? {} : { gitTuning }))
+    type Settings = { gitTuning?: GitTuningMode; gitTuningFsmonitor?: boolean }
+    const settings: Settings = {}
+    const listeners: ((updates: Settings) => void)[] = []
+    const notify = (updates: Settings) => {
+      Object.assign(settings, updates)
+      listeners.forEach((listener) => listener(updates))
     }
+    const changeSetting = (gitTuning: GitTuningMode | undefined) =>
+      notify(gitTuning === undefined ? {} : { gitTuning })
     const untrack = trackGitTuningSetting({
       getSettings: () => settings,
       getRepos: () => [repoRecord(), repoRecord({ id: 'folder', kind: 'folder' })],
@@ -168,6 +183,14 @@ describe('repository Git tuning against the real Git binary', () => {
       // Unrelated settings changes leave the config alone.
       changeSetting(undefined)
       await runRepoPerformanceConfig(repoRecord(), 'inspect')
+      expect(await localValue('fetch.writeCommitGraph')).toBe('true')
+
+      // Withdrawing the file-watcher opt-in reverts that key only.
+      await git(['config', '--local', '--add', 'orca.performanceConfig', 'core.fsmonitor=true'])
+      await git(['config', '--local', 'core.fsmonitor', 'true'])
+      notify({ gitTuningFsmonitor: false })
+      await runRepoPerformanceConfig(repoRecord(), 'inspect')
+      expect(await localValue('core.fsmonitor')).toBeNull()
       expect(await localValue('fetch.writeCommitGraph')).toBe('true')
 
       changeSetting('off')

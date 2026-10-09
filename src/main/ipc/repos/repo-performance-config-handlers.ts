@@ -21,14 +21,17 @@ export function registerRepoPerformanceConfigHandlers(store: Store): void {
       if (!repo) {
         return { status: 'unavailable', reason: 'not-found' }
       }
-      // Why enforced here: the setting is the user's consent; no caller writes config without it.
-      if (
-        args.action === 'apply' &&
-        normalizeGitTuningMode(store.getSettings().gitTuning) !== 'recommended'
-      ) {
+      const settings = store.getSettings()
+      if (args.action !== 'apply') {
+        return runRepoPerformanceConfig(repo, args.action)
+      }
+      // Why enforced here: the settings are the user's consent; no caller writes config without them.
+      if (normalizeGitTuningMode(settings.gitTuning) !== 'recommended') {
         return { status: 'unavailable', reason: 'disabled' }
       }
-      return runRepoPerformanceConfig(repo, args.action)
+      return runRepoPerformanceConfig(repo, 'apply', {
+        fsmonitor: settings.gitTuningFsmonitor === true
+      })
     }
   )
 }

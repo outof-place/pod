@@ -1,7 +1,8 @@
 /**
  * Settings > Git > Git Performance Tuning: choosing Recommended offers to tune
- * existing repositories, Apply writes the repo-local config Orca records, and
- * Off removes exactly that config again. Assertions read the repository's real
+ * existing repositories, Apply writes the repo-local config Orca records, the
+ * separate file-watcher opt-in adds and removes core.fsmonitor alone, and Off
+ * removes exactly what Orca wrote. Assertions read the repository's real
  * `.git/config` and the rendered row, not the store.
  */
 import { execFileSync } from 'node:child_process'
@@ -21,6 +22,13 @@ function localConfig(repoPath: string, key: string): string | null {
   } catch {
     return null
   }
+}
+
+function gitMinorVersion(): number {
+  const match = /git version 2\.(\d+)/.exec(
+    execFileSync('git', ['--version'], { encoding: 'utf8' })
+  )
+  return match ? Number(match[1]) : 0
 }
 
 async function openGitTuningSettings(page: Page): Promise<void> {
@@ -80,7 +88,32 @@ test.describe('Git performance tuning setting', () => {
     expect(localConfig(repoPath, 'orca.performanceConfig')?.split('\n')).toContain(
       'fetch.writeCommitGraph=true'
     )
+    // The file watcher is its own opt-in, so Recommended alone never sets it.
+    expect(localConfig(repoPath, 'core.fsmonitor')).toBeNull()
     await attachScreenshot(orcaPage, testInfo, 'git-tuning-applied')
+
+    const watcher = section.getByRole('switch', { name: 'Git File Watcher' })
+    if (process.platform === 'darwin' || process.platform === 'win32') {
+      await expect(watcher).toHaveAttribute('aria-checked', 'false')
+      await watcher.click()
+      await expect(watcher).toHaveAttribute('aria-checked', 'true')
+      await section.getByRole('button', { name: 'Apply to existing repositories' }).click()
+      if (gitMinorVersion() >= 37) {
+        await expect(row).toContainText('core.fsmonitor=true', { timeout: 15_000 })
+        expect(localConfig(repoPath, 'core.fsmonitor')).toBe('true')
+      }
+      await attachScreenshot(orcaPage, testInfo, 'git-tuning-file-watcher')
+
+      // Withdrawing the opt-in removes the watcher and keeps the rest.
+      await watcher.click()
+      await expect(watcher).toHaveAttribute('aria-checked', 'false')
+      await expect.poll(() => localConfig(repoPath, 'core.fsmonitor')).toBeNull()
+      await expect(row).not.toContainText('core.fsmonitor=true', { timeout: 15_000 })
+      expect(localConfig(repoPath, 'fetch.writeCommitGraph')).toBe('true')
+    } else {
+      // Git's builtin daemon does not exist on Linux, so the control is not offered.
+      await expect(watcher).toHaveCount(0)
+    }
 
     await section.getByRole('radio', { name: 'Off' }).click()
     await expect(row).toContainText('No options set by Orca', { timeout: 15_000 })

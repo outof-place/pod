@@ -12,6 +12,7 @@ import {
   readGitPerformanceConfigRecord,
   summarizeGitPerformanceConfig,
   exactGitConfigValuePattern,
+  gitPerformanceConfigRecordPattern,
   isGitVersionAtLeast,
   type GitPerformanceConfigSnapshot,
   type GitPerformanceHostFacts
@@ -19,6 +20,8 @@ import {
 import { parseWorktreeList } from './git-worktree-porcelain-parser'
 import type {
   GitPerformanceConfigAction,
+  GitPerformanceConfigKey,
+  GitPerformanceConfigOptions,
   GitPerformanceConfigResult
 } from './git-performance-config-types'
 
@@ -132,12 +135,14 @@ async function readTrackedEntryCount(host: GitPerformanceConfigHost): Promise<nu
 
 async function collectHostFacts(
   host: GitPerformanceConfigHost,
-  snapshot: GitPerformanceConfigSnapshot
+  snapshot: GitPerformanceConfigSnapshot,
+  fsmonitorOptedIn: boolean
 ): Promise<GitPerformanceHostFacts> {
   const gitVersion = parseGitVersion((await host.git(['--version'])).stdout)
   const open = new Set(listUnconfiguredGitPerformanceConfigKeys(snapshot))
   const fsmonitorFloor = GIT_PERFORMANCE_CONFIG_MIN_GIT_VERSION['core.fsmonitor']
   const canUseFsmonitor =
+    fsmonitorOptedIn &&
     open.has('core.fsmonitor') &&
     (host.platform === 'darwin' || host.platform === 'win32') &&
     gitVersion !== null &&
@@ -157,16 +162,73 @@ async function collectHostFacts(
     platform: host.platform,
     gitVersion,
     reliableDirectoryMtime,
+    fsmonitorOptedIn,
     fsmonitor,
     trackedEntryCount
   }
 }
 
+async function stopFsmonitorDaemons(host: GitPerformanceConfigHost): Promise<void> {
+  const { stdout } = await host.git(['worktree', 'list', '--porcelain'])
+  for (const worktree of parseWorktreeList(stdout).slice(0, MAX_FSMONITOR_DAEMON_STOPS)) {
+    // Not running is the common answer; nothing to undo then.
+    await host.git(['-C', worktree.path, 'fsmonitor--daemon', 'stop']).catch(() => {})
+  }
+}
+
+async function revertOwnedKeys(
+  host: GitPerformanceConfigHost,
+  snapshot: GitPerformanceConfigSnapshot,
+  keys?: readonly GitPerformanceConfigKey[]
+): Promise<GitPerformanceConfigKey[]> {
+  const owned = planGitPerformanceConfigRevert(snapshot, keys)
+  for (const entry of owned) {
+    // Why the value pattern: a value the user changed since the snapshot is theirs and stays.
+    await host
+      .git(['config', '--local', '--unset', entry.key, exactGitConfigValuePattern(entry.value)])
+      .catch(ignoreExit5)
+  }
+  if (snapshot.local.has(GIT_PERFORMANCE_CONFIG_RECORD_KEY.toLowerCase())) {
+    const recordPatterns = keys ? keys.map(gitPerformanceConfigRecordPattern) : [null]
+    for (const pattern of recordPatterns) {
+      await host
+        .git([
+          'config',
+          '--local',
+          '--unset-all',
+          GIT_PERFORMANCE_CONFIG_RECORD_KEY,
+          ...(pattern ? [pattern] : [])
+        ])
+        .catch(ignoreExit5)
+    }
+  }
+  const reverted = owned.map((entry) => entry.key)
+  if (reverted.includes('core.fsmonitor')) {
+    const after = await readGitPerformanceConfigSnapshot(host)
+    if (!after.effective.has('core.fsmonitor')) {
+      await stopFsmonitorDaemons(host).catch(() => {})
+    }
+  }
+  return reverted
+}
+
 async function applyGitPerformanceConfig(
-  host: GitPerformanceConfigHost
+  host: GitPerformanceConfigHost,
+  options: GitPerformanceConfigOptions
 ): Promise<GitPerformanceConfigResult> {
-  const snapshot = await readGitPerformanceConfigSnapshot(host)
-  const plan = planGitPerformanceConfig(await collectHostFacts(host, snapshot), snapshot)
+  const fsmonitorOptedIn = options.fsmonitor === true
+  let snapshot = await readGitPerformanceConfigSnapshot(host)
+  // Why: an apply without the file-watcher opt-in also takes back a watcher Orca set earlier.
+  if (!fsmonitorOptedIn) {
+    const removed = await revertOwnedKeys(host, snapshot, ['core.fsmonitor'])
+    if (removed.length > 0) {
+      snapshot = await readGitPerformanceConfigSnapshot(host)
+    }
+  }
+  const plan = planGitPerformanceConfig(
+    await collectHostFacts(host, snapshot, fsmonitorOptedIn),
+    snapshot
+  )
   const recorded = readGitPerformanceConfigRecord(snapshot.local)
   for (const entry of plan) {
     if (entry.action !== 'set') {
@@ -191,47 +253,24 @@ async function applyGitPerformanceConfig(
   }
 }
 
-async function stopFsmonitorDaemons(host: GitPerformanceConfigHost): Promise<void> {
-  const { stdout } = await host.git(['worktree', 'list', '--porcelain'])
-  for (const worktree of parseWorktreeList(stdout).slice(0, MAX_FSMONITOR_DAEMON_STOPS)) {
-    // Not running is the common answer; nothing to undo then.
-    await host.git(['-C', worktree.path, 'fsmonitor--daemon', 'stop']).catch(() => {})
-  }
-}
-
-async function revertGitPerformanceConfig(
-  host: GitPerformanceConfigHost
-): Promise<GitPerformanceConfigResult> {
-  const snapshot = await readGitPerformanceConfigSnapshot(host)
-  const owned = planGitPerformanceConfigRevert(snapshot)
-  for (const entry of owned) {
-    // Why the value pattern: a value the user changed since the snapshot is theirs and stays.
-    await host
-      .git(['config', '--local', '--unset', entry.key, exactGitConfigValuePattern(entry.value)])
-      .catch(ignoreExit5)
-  }
-  if (snapshot.local.has(GIT_PERFORMANCE_CONFIG_RECORD_KEY.toLowerCase())) {
-    await host
-      .git(['config', '--local', '--unset-all', GIT_PERFORMANCE_CONFIG_RECORD_KEY])
-      .catch(ignoreExit5)
-  }
-  const after = await readGitPerformanceConfigSnapshot(host)
-  const reverted = owned.map((entry) => entry.key)
-  if (reverted.includes('core.fsmonitor') && !after.effective.has('core.fsmonitor')) {
-    await stopFsmonitorDaemons(host).catch(() => {})
-  }
-  return { state: summarizeGitPerformanceConfig(after), reverted }
-}
-
 export async function runGitPerformanceConfigAction(
   host: GitPerformanceConfigHost,
-  action: GitPerformanceConfigAction
+  action: GitPerformanceConfigAction,
+  options: GitPerformanceConfigOptions = {}
 ): Promise<GitPerformanceConfigResult> {
   if (action === 'apply') {
-    return applyGitPerformanceConfig(host)
+    return applyGitPerformanceConfig(host, options)
   }
   if (action === 'revert') {
-    return revertGitPerformanceConfig(host)
+    const reverted = await revertOwnedKeys(
+      host,
+      await readGitPerformanceConfigSnapshot(host),
+      options.keys
+    )
+    return {
+      state: summarizeGitPerformanceConfig(await readGitPerformanceConfigSnapshot(host)),
+      reverted
+    }
   }
   return { state: summarizeGitPerformanceConfig(await readGitPerformanceConfigSnapshot(host)) }
 }

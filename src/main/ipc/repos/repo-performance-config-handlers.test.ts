@@ -63,10 +63,16 @@ describe('repos:performanceConfig', () => {
     expect(runMock.mock.calls.map((call) => call[1])).toEqual(['inspect', 'revert'])
   })
 
-  it('applies when the user chose Recommended', async () => {
-    const { invoke } = register({ gitTuning: 'recommended' })
-    await invoke({ repoId: 'repo-1', action: 'apply' })
-    expect(runMock).toHaveBeenCalledWith(repo, 'apply')
+  it('applies when the user chose Recommended, with the file watcher only if opted in', async () => {
+    await register({ gitTuning: 'recommended' }).invoke({ repoId: 'repo-1', action: 'apply' })
+    await register({ gitTuning: 'recommended', gitTuningFsmonitor: true }).invoke({
+      repoId: 'repo-1',
+      action: 'apply'
+    })
+    expect(runMock.mock.calls).toEqual([
+      [repo, 'apply', { fsmonitor: false }],
+      [repo, 'apply', { fsmonitor: true }]
+    ])
   })
 
   it('rejects malformed arguments and unknown repositories', async () => {

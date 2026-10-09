@@ -60,6 +60,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   refreshLocalBaseRefOnWorktreeCreate: boolean
   /** Opt-in repo-local Git performance config; unset means 'off'. */
   gitTuning?: GitTuningMode
+  /** Separate opt-in for core.fsmonitor under 'recommended'; older Git misreads it. */
+  gitTuningFsmonitor?: boolean
   /** Set once the user dismisses the "local main is behind" suggestion toast, so
    *  the nudge to enable refreshLocalBaseRefOnWorktreeCreate never shows again. */
   localBaseRefSuggestionDismissed: boolean

@@ -21,12 +21,20 @@ export const GIT_PERFORMANCE_CONFIG_SKIP_REASONS = [
   'platform',
   'filesystem',
   'fsmonitor-incompatible',
-  'small-repository'
+  'small-repository',
+  'not-opted-in'
 ] as const
 
 export type GitPerformanceConfigSkipReason = (typeof GIT_PERFORMANCE_CONFIG_SKIP_REASONS)[number]
 
 export type GitPerformanceConfigEntry = { key: GitPerformanceConfigKey; value: string }
+
+export type GitPerformanceConfigOptions = {
+  /** `core.fsmonitor` is its own opt-in: Git < 2.36 on the same checkout misreads it. */
+  fsmonitor?: boolean
+  /** Revert only these keys; all of Orca's keys when absent. */
+  keys?: GitPerformanceConfigKey[]
+}
 
 export type GitPerformanceConfigKeyPlan =
   | { key: GitPerformanceConfigKey; value: string; action: 'set' | 'keep' }
@@ -66,4 +74,8 @@ export function normalizeGitTuningMode(value: unknown): GitTuningMode {
 
 export function isGitPerformanceConfigAction(value: unknown): value is GitPerformanceConfigAction {
   return value === 'inspect' || value === 'apply' || value === 'revert'
+}
+
+export function isGitPerformanceConfigKey(value: unknown): value is GitPerformanceConfigKey {
+  return GIT_PERFORMANCE_CONFIG_KEYS.some((key) => key === value)
 }

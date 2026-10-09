@@ -25,6 +25,13 @@ export function getGitPerformanceConfigTitle(): string {
   return translate('auto.components.settings.GitPerformanceConfig.title', 'Git Performance Tuning')
 }
 
+export function getGitPerformanceConfigFsmonitorTitle(): string {
+  return translate(
+    'auto.components.settings.GitPerformanceConfig.fsmonitorTitle',
+    'Git File Watcher'
+  )
+}
+
 export function getGitPerformanceConfigDescription(): string {
   return translate(
     'auto.components.settings.GitPerformanceConfig.description',
@@ -41,8 +48,8 @@ export function getGitPerformanceConfigKeyDescription(key: GitPerformanceConfigK
       )
     case 'core.fsmonitor':
       return translate(
-        'auto.components.settings.GitPerformanceConfig.keyFsmonitor',
-        "Uses Git's built-in file watcher instead of scanning every file. macOS and Windows, Git 2.37 or newer. Git older than 2.36 on the same repository, such as in WSL, misreads it and can miss changes."
+        'auto.components.settings.GitPerformanceConfig.keyFsmonitorOptIn',
+        "Uses Git's built-in file watcher instead of scanning every file. Git 2.37 or newer. Leave it off if an older Git also uses these checkouts, for example in WSL, a container or CI: Git before 2.36 misreads it and misses changes."
       )
     case 'index.version':
       return translate(
@@ -67,6 +74,7 @@ function describeSkip(
 ): string | null {
   switch (plan.reason) {
     case 'set-by-user':
+    case 'not-opted-in':
       return null
     case 'set-by-feature-many-files':
       return translate(

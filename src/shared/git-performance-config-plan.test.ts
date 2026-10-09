@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   exactGitConfigValuePattern,
+  gitPerformanceConfigRecordPattern,
   INDEX_V4_MIN_TRACKED_ENTRIES,
   listUnconfiguredGitPerformanceConfigKeys,
   parseGitConfigRegexpOutput,
@@ -35,6 +36,7 @@ const macFacts: GitPerformanceHostFacts = {
   platform: 'darwin',
   gitVersion: { major: 2, minor: 50, patch: 1 },
   reliableDirectoryMtime: true,
+  fsmonitorOptedIn: true,
   fsmonitor: 'compatible',
   trackedEntryCount: 18_600
 }
@@ -85,6 +87,19 @@ describe('planGitPerformanceConfig', () => {
       'checkout.workers': 'set',
       'fetch.writeCommitGraph': 'set'
     })
+  })
+
+  it('leaves the file watcher alone unless the user opted in separately', () => {
+    const plan = (facts: Partial<GitPerformanceHostFacts>) =>
+      byKey(
+        planGitPerformanceConfig({ ...macFacts, fsmonitorOptedIn: false, ...facts }, snapshot())
+      )
+    expect(plan({})['core.fsmonitor']).toBe('skip:not-opted-in')
+    // The opt-in is reported before version or platform, which would only add noise.
+    expect(plan({ gitVersion: { major: 2, minor: 30, patch: 0 } })['core.fsmonitor']).toBe(
+      'skip:not-opted-in'
+    )
+    expect(plan({})['checkout.workers']).toBe('set')
   })
 
   it('applies the version floors of each key', () => {
@@ -215,8 +230,20 @@ describe('Orca record and revert', () => {
     })
   })
 
+  it('limits a partial revert to the requested keys', () => {
+    const state = snapshot({
+      'checkout.workers': ['0'],
+      'core.fsmonitor': ['true'],
+      'orca.performanceconfig': ['checkout.workers=0', 'core.fsmonitor=true']
+    })
+    expect(planGitPerformanceConfigRevert(state, ['core.fsmonitor'])).toEqual([
+      { key: 'core.fsmonitor', value: 'true' }
+    ])
+  })
+
   it('builds exact value patterns for conditional unset', () => {
     expect(exactGitConfigValuePattern('true')).toBe('^true$')
     expect(exactGitConfigValuePattern('a.b+c')).toBe('^a\\.b\\+c$')
+    expect(gitPerformanceConfigRecordPattern('core.fsmonitor')).toBe('^core\\.fsmonitor=')
   })
 })

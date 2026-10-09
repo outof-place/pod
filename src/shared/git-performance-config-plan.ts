@@ -66,6 +66,8 @@ export type GitPerformanceHostFacts = {
   gitVersion: GitVersion | null
   /** True only on filesystems known to bump directory mtimes on every change. */
   reliableDirectoryMtime: boolean
+  /** The user's separate opt-in for `core.fsmonitor`. */
+  fsmonitorOptedIn: boolean
   fsmonitor: 'compatible' | 'incompatible' | 'unsupported'
   trackedEntryCount: number | null
 }
@@ -164,6 +166,9 @@ function gateKey(
   facts: GitPerformanceHostFacts,
   snapshot: GitPerformanceConfigSnapshot
 ): GitPerformanceConfigSkipReason | null {
+  if (key === 'core.fsmonitor' && !facts.fsmonitorOptedIn) {
+    return 'not-opted-in'
+  }
   const version = facts.gitVersion
   if (!version) {
     return 'git-version-unknown'
@@ -238,12 +243,22 @@ export function planGitPerformanceConfig(
 
 /** Only values still exactly as Orca wrote them are removed; anything the user changed stays. */
 export function planGitPerformanceConfigRevert(
-  snapshot: GitPerformanceConfigSnapshot
+  snapshot: GitPerformanceConfigSnapshot,
+  keys?: readonly GitPerformanceConfigKey[]
 ): GitPerformanceConfigEntry[] {
-  return ownedEntries(snapshot)
+  return ownedEntries(snapshot).filter((entry) => !keys || keys.includes(entry.key))
+}
+
+function escapeExtendedRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 /** Exact-match value pattern for `git config --unset <key> <pattern>`. */
 export function exactGitConfigValuePattern(value: string): string {
-  return `^${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`
+  return `^${escapeExtendedRegex(value)}$`
+}
+
+/** Matches the record entries for one key, so a partial revert drops only those. */
+export function gitPerformanceConfigRecordPattern(key: GitPerformanceConfigKey): string {
+  return `^${escapeExtendedRegex(key)}=`
 }
