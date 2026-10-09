@@ -14,6 +14,7 @@ import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import { isWebClientLocation } from '@/lib/web-client-location'
+import { withoutStablyServiceSections } from '@/lib/product-settings-sections'
 import {
   isWindowsTerminalCapabilityHost,
   useWindowsTerminalCapabilities
@@ -94,13 +95,13 @@ export function buildSettingsNavigationMetadata({
   // Why: this array's order must mirror SETTINGS_NAV_GROUPS so the Settings
   // sidebar and the Cmd+J palette both read top-to-bottom in the same grouped
   // order — keep each new entry beside its group's siblings.
-  return [
+  return withoutStablyServiceSections([
     ...buildCapabilitySettingsSections(options),
     ...buildSetupSettingsSections(options),
     ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries),
     ...buildInterfaceSettingsSections(options),
     ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById)
-  ]
+  ])
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
