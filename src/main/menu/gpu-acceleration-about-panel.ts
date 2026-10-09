@@ -6,6 +6,8 @@ export type GpuAccelerationAboutPanelOptions = {
   gpuFeatureStatus: Pick<Electron.GPUFeatureStatus, 'gpu_compositing'> | null
   // A downstream product credits Orca (MIT) here.
   product?: { copyright: string; credits: string } | null
+  // The Orca release/commit a downstream build is based on.
+  upstream?: { tag: string | null; sha: string } | null
 }
 
 export function describeGpuAcceleration(
@@ -41,15 +43,19 @@ export function createGpuAccelerationAboutPanelOptions({
   platform,
   gpuFallbackActive,
   gpuFeatureStatus,
-  product
+  product,
+  upstream
 }: GpuAccelerationAboutPanelOptions): Electron.AboutPanelOptionsOptions {
   const status = `GPU acceleration: ${describeGpuAcceleration(gpuFeatureStatus, gpuFallbackActive)}`
   if (product) {
+    const base = upstream
+      ? `\nBased on Orca ${[upstream.tag, `(${upstream.sha.slice(0, 10)})`].filter(Boolean).join(' ')}`
+      : ''
     return {
       applicationName: appName,
       applicationVersion: appVersion,
       copyright: product.copyright,
-      credits: `${product.credits}\n\n${status}`
+      credits: `${product.credits}${base}\n\n${status}`
     }
   }
   return {
