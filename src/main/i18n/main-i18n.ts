@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { POD_UI_LOCALES } from '../../shared/product/features'
 import i18next, {
   type BackendModule,
   type i18n as I18nInstance,
@@ -36,7 +37,7 @@ const lazyLocaleBackend: BackendModule = {
   init: () => {},
   read: (language: string, _namespace: string, callback: ReadCallback) => {
     const loader = LAZY_LOCALE_LOADERS[language as Exclude<SupportedUiLocale, 'en'>]
-    if (!loader) {
+    if (!POD_UI_LOCALES || !loader) {
       // English is intentionally represented by the empty bundled resource; its
       // user-visible copy comes from translateMain() defaultValue fallbacks.
       callback(null, false)
