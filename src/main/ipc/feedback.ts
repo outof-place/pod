@@ -20,6 +20,10 @@ import type {
   FeedbackSubmitArgs,
   FeedbackSubmitResult
 } from '../../shared/feedback-submit-contract'
+import {
+  areStablyServicesEnabled,
+  stablyServiceUnavailableMessage
+} from '../product-identity/product-overlay'
 
 export type {
   FeedbackDiagnosticBundleAttachment,
@@ -199,6 +203,10 @@ async function submitFeedbackWithDiagnosticBundle(
 export async function submitFeedback(
   args: InternalFeedbackSubmitArgs
 ): Promise<FeedbackSubmitResult> {
+  // Why here: the feedback and crash-report lanes both post to Stably's onorca.dev.
+  if (!areStablyServicesEnabled()) {
+    return { ok: false, status: null, error: stablyServiceUnavailableMessage('Feedback') }
+  }
   // Why: buildSubmitBody drops images on the crash lane, so validating them
   // there would abort a crash report over attachments it never meant to send.
   if (args.submissionType !== 'crash' && args.images !== undefined) {
