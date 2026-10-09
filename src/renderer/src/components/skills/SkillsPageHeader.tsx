@@ -13,6 +13,7 @@ import { skillCountLabel } from './skill-display-labels'
 import { SKILLS_PAGE_COLUMN } from './skills-page-column'
 import { SkillsSourcesPopover } from './SkillsSourcesPopover'
 import type { SkillSourceInventoryEntry } from './skill-source-inventory'
+import { areStablyServicesAvailable } from '@/lib/product-ui-identity'
 
 export function SkillsPageHeader({
   skillCount,
@@ -88,17 +89,22 @@ export function SkillsPageHeader({
             ) : null}
           </div>
         </div>
-        <Button type="button" size="sm" onClick={onStartShare}>
-          <Share2 className="size-3.5" />
-          {translate(
-            'auto.components.skills.SkillShareSelectionControls.01c5a15e02',
-            'Share skills'
-          )}
-        </Button>
-        <Button type="button" variant="outline" size="sm" onClick={onInstallFromLink}>
-          <Download className="size-3.5" />
-          {translate('auto.components.skills.SkillsPage.aee7b99cc6', 'Install from link')}
-        </Button>
+        {/* Fork-only (Pod): share links are hosted on Stably's share.onorca.dev. */}
+        {areStablyServicesAvailable() ? (
+          <>
+            <Button type="button" size="sm" onClick={onStartShare}>
+              <Share2 className="size-3.5" />
+              {translate(
+                'auto.components.skills.SkillShareSelectionControls.01c5a15e02',
+                'Share skills'
+              )}
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={onInstallFromLink}>
+              <Download className="size-3.5" />
+              {translate('auto.components.skills.SkillsPage.aee7b99cc6', 'Install from link')}
+            </Button>
+          </>
+        ) : null}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -118,10 +124,12 @@ export function SkillsPageHeader({
               <History />
               {translate('auto.components.skills.SkillsPage.c13b82793c', 'Manage installs')}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onOpenSharedLinks}>
-              <Link2 />
-              {translate('auto.components.skills.SkillsPage.sharedLinks', 'Shared links')}
-            </DropdownMenuItem>
+            {areStablyServicesAvailable() ? (
+              <DropdownMenuItem onSelect={onOpenSharedLinks}>
+                <Link2 />
+                {translate('auto.components.skills.SkillsPage.sharedLinks', 'Shared links')}
+              </DropdownMenuItem>
+            ) : null}
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="pointer-events-auto block">
