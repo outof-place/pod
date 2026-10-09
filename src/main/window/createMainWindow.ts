@@ -5,6 +5,7 @@ import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { getBrowserClientHostId } from '../browser/browser-client-host-id'
 import { formatBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
+import { productDisplayName, productUiIdentityArguments } from '../product-identity/product-overlay'
 import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
@@ -103,7 +104,7 @@ export function createMainWindow(
     ...(savedBounds ? { x: savedBounds.x, y: savedBounds.y } : {}),
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
-    title: opts?.title ?? 'Orca',
+    title: opts?.title ?? productDisplayName(),
     show: false,
     // Why: macOS swallows the app-activating click by default, so clicking back into Orca needed a second click (Windows/Linux already deliver it).
     acceptFirstMouse: true,
@@ -137,7 +138,10 @@ export function createMainWindow(
       // Why an argument and not an IPC read: this is the window whose webviews host browser guests,
       // and it has to know that before it interprets its first session snapshot — earlier than any
       // handler registration it could wait on.
-      additionalArguments: [formatBrowserClientHostIdArgument(getBrowserClientHostId())]
+      additionalArguments: [
+        formatBrowserClientHostIdArgument(getBrowserClientHostId()),
+        ...productUiIdentityArguments()
+      ]
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id
