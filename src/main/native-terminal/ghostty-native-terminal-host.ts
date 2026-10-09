@@ -1,6 +1,4 @@
 import { app, BrowserWindow, type WebContents } from 'electron'
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import type { NativeTerminalAppearance } from '../../shared/native-terminal-appearance'
 import type { NativeTerminalForwardedChord } from '../../shared/native-terminal-forwarded-chords'
 import {
@@ -12,8 +10,14 @@ import {
   loadGhosttyTerminalAddon,
   type GhosttyTerminalAddon
 } from './ghostty-native-terminal-addon'
-import { buildGhosttyConfig } from './ghostty-native-terminal-config'
+import { ghosttyConfigPath, writeGhosttyConfig } from './ghostty-native-terminal-config-file'
 import { toKeyboardInputEvents } from './ghostty-forwarded-key'
+import { installGhosttyDebugHooks } from './ghostty-native-terminal-debug-hooks'
+import {
+  appliedForwardedChords,
+  applyForwardedChords,
+  toMouseEnterEvent
+} from './ghostty-native-terminal-input'
 
 type SurfaceOwner = {
   webContents: WebContents
@@ -28,26 +32,6 @@ const firstResponderByWindow = new Map<number, number>()
 const trackedWindows = new WeakSet<BrowserWindow>()
 let addon: GhosttyTerminalAddon | null = null
 let initialized = false
-let lastConfigText: string | null = null
-let forwardedChords: NativeTerminalForwardedChord[] = []
-const forwardedChordsBySender = new WeakMap<WebContents, NativeTerminalForwardedChord[]>()
-
-function configPath(): string {
-  const dir = join(app.getPath('userData'), 'native-terminal')
-  mkdirSync(dir, { recursive: true })
-  return join(dir, 'ghostty.conf')
-}
-
-function writeConfig(appearance: NativeTerminalAppearance, zoomFactor: number): string | null {
-  const text = buildGhosttyConfig(appearance, zoomFactor)
-  if (text === lastConfigText) {
-    return null
-  }
-  lastConfigText = text
-  const path = configPath()
-  writeFileSync(path, text)
-  return path
-}
 
 function ensureInitialized(
   appearance: NativeTerminalAppearance,
@@ -60,7 +44,7 @@ function ensureInitialized(
   if (!addon) {
     return null
   }
-  const path = writeConfig(appearance, zoomFactor) ?? configPath()
+  const path = writeGhosttyConfig(appearance, zoomFactor) ?? ghosttyConfigPath()
   if (!addon.init(path)) {
     console.error('[native-terminal] Ghostty failed to initialize')
     addon = null
@@ -176,12 +160,7 @@ function handleSurfaceEvent(surfaceId: number, kind: string, args: unknown[]): v
       sendEvent(owner, { surfaceId, kind: 'bell' })
       break
     case 'mouseEnter':
-      sendEvent(owner, {
-        surfaceId,
-        kind: 'mouseEnter',
-        buttons: Number(args[0]),
-        windowFocused: args[1] === true
-      })
+      sendEvent(owner, toMouseEnterEvent(surfaceId, args))
       break
     default:
       break
@@ -205,7 +184,7 @@ export function createSurface(
   if (!native) {
     return null
   }
-  const path = writeConfig(appearance, zoomFactor)
+  const path = writeGhosttyConfig(appearance, zoomFactor)
   if (path) {
     native.updateConfig(path)
   }
@@ -220,10 +199,6 @@ export function createSurface(
     (kind, ...args) => handleSurfaceEvent(surfaceId, kind, args)
   )
   owners.set(surfaceId, { webContents, window, placed: null })
-  const chords = forwardedChordsBySender.get(webContents)
-  if (chords) {
-    applyForwardedChords(chords)
-  }
   native.setFrames([[surfaceId, 0, 0, 1, 1, false]])
   return surfaceId
 }
@@ -263,6 +238,11 @@ export function focusSurface(webContents: WebContents, surfaceId: number): void 
   }
 }
 
+// Asks AppKit directly rather than the async focus events, which can trail a quick hand-off.
+export function releaseSurfaceKeyboard(webContents: WebContents): void {
+  addon?.releaseKeyboard(ownedSurfaceIds(webContents))
+}
+
 export function readSurfaceSelection(webContents: WebContents, surfaceId: number): string | null {
   return addon && ownedBy(surfaceId, webContents) ? addon.readSelection(surfaceId) : null
 }
@@ -286,30 +266,23 @@ export function performNativeTerminalMenuAction(
   return true
 }
 
-function ownsAnySurface(webContents: WebContents): boolean {
-  for (const owner of owners.values()) {
-    if (owner.webContents === webContents) {
-      return true
-    }
-  }
-  return false
-}
-
-function applyForwardedChords(chords: NativeTerminalForwardedChord[]): void {
-  forwardedChords = chords
-  addon?.setForwardedChords(
-    chords.map((chord) => [chord.keyCode, chord.modifierFlags, chord.character])
+function ownedSurfaceIds(webContents: WebContents): number[] {
+  return [...owners].flatMap(([surfaceId, owner]) =>
+    owner.webContents === webContents ? [surfaceId] : []
   )
 }
 
-// Keybindings are app-wide; a window's resolved set applies once it hosts a surface.
+function ownsAnySurface(webContents: WebContents): boolean {
+  return ownedSurfaceIds(webContents).length > 0
+}
+
+// Only a renderer that hosts surfaces may change which keys they hand back.
 export function setForwardedChords(
   webContents: WebContents,
   chords: NativeTerminalForwardedChord[]
 ): void {
-  forwardedChordsBySender.set(webContents, chords)
-  if (ownsAnySurface(webContents)) {
-    applyForwardedChords(chords)
+  if (addon && ownsAnySurface(webContents)) {
+    applyForwardedChords(addon, chords)
   }
 }
 
@@ -322,7 +295,7 @@ export function updateAppearance(
   if (!addon || !ownsAnySurface(webContents)) {
     return
   }
-  const path = writeConfig(appearance, zoomFactor)
+  const path = writeGhosttyConfig(appearance, zoomFactor)
   if (path) {
     addon.updateConfig(path)
   }
@@ -340,30 +313,11 @@ export function destroySurface(surfaceId: number): void {
   addon?.destroySurface(surfaceId)
 }
 
-// Unpackaged builds only: lets E2E drive and inspect surfaces through electronApp.evaluate.
 export function installNativeTerminalDebugHooks(): void {
-  if (app.isPackaged) {
-    return
-  }
-  Object.assign(globalThis, {
-    __orcaNativeTerminalDebug: {
-      surfaceIds: (): number[] => [...owners.keys()],
-      state: (surfaceId: number) => addon?.debugState(surfaceId) ?? null,
-      grid: (surfaceId: number) => addon?.gridSize(surfaceId) ?? null,
-      screenText: (surfaceId: number) => addon?.debugScreenText(surfaceId) ?? null,
-      snapshotBase64: (surfaceId: number) =>
-        addon?.debugSnapshot(surfaceId)?.toString('base64') ?? null,
-      key: (surfaceId: number, characters: string, keyCode: number, modifierFlags = 0) =>
-        addon?.debugKey(surfaceId, characters, keyCode, modifierFlags),
-      scrollbar: (surfaceId: number) => addon?.debugState(surfaceId)?.scrollbar ?? null,
-      scrollbarScroll: (surfaceId: number, fraction: number) =>
-        addon?.debugScrollbarScroll(surfaceId, fraction) ?? false,
-      focus: (surfaceId: number) => addon?.focus(surfaceId),
-      modifiersChanged: (surfaceId: number, keyCode: number, modifierFlags: number) =>
-        addon?.debugModifiersChanged(surfaceId, keyCode, modifierFlags),
-      drop: (surfaceId: number, paths: string[]) => addon?.debugDrop(surfaceId, paths) ?? null,
-      forwardedChords: (): NativeTerminalForwardedChord[] => forwardedChords
-    }
+  installGhosttyDebugHooks({
+    surfaceIds: () => [...owners.keys()],
+    addon: () => addon,
+    forwardedChords: appliedForwardedChords
   })
 }
 

@@ -9,6 +9,7 @@ import {
   installNativeTerminalDebugHooks,
   isNativeTerminalSupported,
   readSurfaceSelection,
+  releaseSurfaceKeyboard,
   setForwardedChords,
   setSurfaceFrames,
   updateAppearance,
@@ -58,6 +59,7 @@ const SEND_CHANNELS = [
   'nativeTerminal:focus',
   'nativeTerminal:setAppearance',
   'nativeTerminal:setForwardedChords',
+  'nativeTerminal:releaseKeyboard',
   'nativeTerminal:destroy'
 ]
 
@@ -103,6 +105,7 @@ export function registerNativeTerminalHandlers(): void {
       setForwardedChords(event.sender, chords.filter(isNativeTerminalForwardedChord))
     }
   })
+  ipcMain.on('nativeTerminal:releaseKeyboard', (event) => releaseSurfaceKeyboard(event.sender))
   ipcMain.on('nativeTerminal:destroy', (event, surfaceId: unknown) => {
     if (isSurfaceId(surfaceId)) {
       destroyOwnedSurface(event.sender, surfaceId)

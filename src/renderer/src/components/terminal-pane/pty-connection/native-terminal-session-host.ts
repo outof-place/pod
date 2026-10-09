@@ -1,10 +1,7 @@
 import { useAppStore } from '@/store'
-import {
-  attachNativeTerminal,
-  isNativeTerminalRequested
-} from '@/lib/pane-manager/native-terminal/native-terminal-panes'
+import { attachNativeTerminal } from '@/lib/pane-manager/native-terminal/native-terminal-panes'
 import { followNativePaneMouseFocus } from '@/lib/pane-manager/native-terminal/native-terminal-mouse-focus'
-import { ensureNativeTerminalForwardedChordSync } from './native-terminal-forwarded-chords-sync'
+import { syncNativeTerminalForwardedChords } from './native-terminal-forwarded-chords-sync'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 // Lends the native terminal this session's input path, so native keystrokes take the same
@@ -14,10 +11,6 @@ export function attachNativeTerminalForSession(
   ptyId: string
 ): void {
   const { pane } = session
-  const settings = useAppStore.getState().settings
-  if (isNativeTerminalRequested(settings)) {
-    ensureNativeTerminalForwardedChordSync()
-  }
   attachNativeTerminal(
     pane.terminal,
     ptyId,
@@ -41,8 +34,9 @@ export function attachNativeTerminalForSession(
           pane.id,
           pointer,
           useAppStore.getState().settings?.terminalFocusFollowsMouse === true
-        )
+        ),
+      onSurfaceAttached: syncNativeTerminalForwardedChords
     },
-    settings
+    useAppStore.getState().settings
   )
 }
