@@ -6,6 +6,7 @@ import { createAppIconImage } from '../app-icon'
 import { translateMain } from '../i18n/main-i18n'
 import { composeTrayAttentionIcon, tintTrayTemplateForAttention } from './tray-attention-icon'
 import { stampTrayDevBadge } from './tray-dev-badge'
+import { productDisplayName } from '../product-identity/product-overlay'
 
 export type SystemTrayOptions = {
   /** App icon id from settings; the tray reuses the app icon image. */
@@ -47,7 +48,7 @@ let nativeThemeUpdatedListener: (() => void) | null = null
 // tooltip carries the worktree/branch label so hovering tells them apart.
 function baseTooltip(): string {
   if (!devIndicator) {
-    return 'Orca'
+    return productDisplayName()
   }
   return devIndicator.label ? `Orca DEV (${devIndicator.label})` : 'Orca DEV'
 }
