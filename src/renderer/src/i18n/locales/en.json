@@ -11993,6 +11993,11 @@
           "logsFailed": "Could not load plugin logs.",
           "rollbackFailed": "Could not roll back this plugin. A previous immutable version may not be available."
         },
+        "ProductThirdPartyPlugins": {
+          "label": "Third-party plugins",
+          "description": "Install plugins from marketplaces, Git and local folders. While this is off, only plugins bundled with {{product}} run.",
+          "revocationNote": "Remote revocation isn't available in {{product}}, so a plugin later found unsafe can't be blocked for you."
+        },
         "PluginSettingsRow": {
           "blocked": "Blocked",
           "needsReview": "Needs review",

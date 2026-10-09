@@ -11767,6 +11767,11 @@
           "logsFailed": "No se pudieron cargar los registros del plugin.",
           "rollbackFailed": "No se pudo revertir este plugin. Es posible que no haya una versión inmutable anterior disponible."
         },
+        "ProductThirdPartyPlugins": {
+          "label": "Plugins de terceros",
+          "description": "Instala plugins desde marketplaces, Git y carpetas locales. Mientras esté desactivado, solo se ejecutan los plugins incluidos en {{product}}.",
+          "revocationNote": "La revocación remota no está disponible en {{product}}, así que un plugin que más tarde resulte inseguro no se podrá bloquear por ti."
+        },
         "PluginSettingsRow": {
           "blocked": "Bloqueado",
           "needsReview": "Requiere revisión",

@@ -11864,6 +11864,11 @@
           "logsFailed": "Impossible de charger les logs du plugin.",
           "rollbackFailed": "Impossible de restaurer ce plugin. Une version immuable précédente n'est peut-être pas disponible."
         },
+        "ProductThirdPartyPlugins": {
+          "label": "Plugins tiers",
+          "description": "Installez des plugins depuis des marketplaces, Git et des dossiers locaux. Tant que c'est désactivé, seuls les plugins fournis avec {{product}} s'exécutent.",
+          "revocationNote": "La révocation à distance n'est pas disponible dans {{product}} : un plugin jugé dangereux plus tard ne pourra pas être bloqué pour vous."
+        },
         "PluginSettingsRow": {
           "blocked": "Bloquée",
           "needsReview": "En attente de relecture",

@@ -11767,6 +11767,11 @@
           "logsFailed": "プラグインログをロードできませんでした。",
           "rollbackFailed": "このプラグインをロールバックできませんでした。以前の不変バージョンが利用できない可能性があります。"
         },
+        "ProductThirdPartyPlugins": {
+          "label": "サードパーティ製プラグイン",
+          "description": "マーケットプレイス、Git、ローカルフォルダーからプラグインをインストールします。オフの間は、{{product}} に同梱されたプラグインのみが実行されます。",
+          "revocationNote": "{{product}} ではリモートでの失効を利用できないため、後で危険と判明したプラグインを代わりにブロックすることはできません。"
+        },
         "PluginSettingsRow": {
           "blocked": "ブロック中",
           "needsReview": "レビュー待ち",
