@@ -75,5 +75,61 @@
     "text": "sidebar",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/pod-native-terminal-setting.ts",
+    "kind": "object-property:title",
+    "text": "Native terminal (Ghostty, Metal)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/pod-native-terminal-setting.ts",
+    "kind": "object-property:description",
+    "text": "Draws newly opened terminal panes with a native Ghostty view (Metal) instead of the web renderer. The web terminal stays underneath for search, copy and anything shown on top of the pane.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/pod-native-terminal-setting.ts",
+    "kind": "object-property:keywords",
+    "text": "terminal",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/pod-native-terminal-setting.ts",
+    "kind": "object-property:keywords",
+    "text": "native",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/pod-native-terminal-setting.ts",
+    "kind": "object-property:keywords",
+    "text": "ghostty",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/pod-native-terminal-setting.ts",
+    "kind": "object-property:keywords",
+    "text": "metal",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/pod-native-terminal-setting.ts",
+    "kind": "object-property:keywords",
+    "text": "renderer",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/pod-native-terminal-setting.ts",
+    "kind": "object-property:keywords",
+    "text": "rendering",
+    "dynamic": false,
+    "count": 1
   }
 ]
