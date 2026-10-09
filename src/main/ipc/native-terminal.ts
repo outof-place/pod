@@ -13,8 +13,10 @@ import {
   setForwardedChords,
   setSurfaceFrames,
   updateAppearance,
+  ownedSurfaceAddon,
   writeSurfaceOutput
 } from '../native-terminal/ghostty-native-terminal-host'
+import { applyGhosttySurfaceConfig } from '../native-terminal/ghostty-native-terminal-surface-configs'
 
 function isAppearance(value: unknown): value is NativeTerminalAppearance {
   return (
@@ -60,6 +62,7 @@ const SEND_CHANNELS = [
   'nativeTerminal:setAppearance',
   'nativeTerminal:setForwardedChords',
   'nativeTerminal:releaseKeyboard',
+  'nativeTerminal:setSurfaceAppearance',
   'nativeTerminal:destroy'
 ]
 
@@ -74,8 +77,19 @@ export function registerNativeTerminalHandlers(): void {
   ipcMain.handle('nativeTerminal:isSupported', (): boolean => isNativeTerminalSupported())
   ipcMain.handle(
     'nativeTerminal:create',
-    (event, appearance: unknown, zoomFactor: unknown): number | null =>
-      isAppearance(appearance) ? createSurface(event.sender, appearance, zoomOf(zoomFactor)) : null
+    (event, appearance: unknown, zoomFactor: unknown): number | null => {
+      if (!isAppearance(appearance)) {
+        return null
+      }
+      const zoom = zoomOf(zoomFactor)
+      const surfaceId = createSurface(event.sender, appearance, zoom)
+      // The new surface starts on its pane's own config, before its first frame.
+      const native = surfaceId === null ? null : ownedSurfaceAddon(event.sender, surfaceId)
+      if (native && surfaceId !== null) {
+        applyGhosttySurfaceConfig(native, surfaceId, appearance, zoom)
+      }
+      return surfaceId
+    }
   )
   ipcMain.on('nativeTerminal:write', (event, surfaceId: unknown, data: unknown) => {
     if (isSurfaceId(surfaceId) && typeof data === 'string') {
@@ -106,6 +120,17 @@ export function registerNativeTerminalHandlers(): void {
     }
   })
   ipcMain.on('nativeTerminal:releaseKeyboard', (event) => releaseSurfaceKeyboard(event.sender))
+  ipcMain.on(
+    'nativeTerminal:setSurfaceAppearance',
+    (event, surfaceId: unknown, appearance: unknown, zoomFactor: unknown) => {
+      if (isSurfaceId(surfaceId) && isAppearance(appearance)) {
+        const native = ownedSurfaceAddon(event.sender, surfaceId)
+        if (native) {
+          applyGhosttySurfaceConfig(native, surfaceId, appearance, zoomOf(zoomFactor))
+        }
+      }
+    }
+  )
   ipcMain.on('nativeTerminal:destroy', (event, surfaceId: unknown) => {
     if (isSurfaceId(surfaceId)) {
       destroyOwnedSurface(event.sender, surfaceId)

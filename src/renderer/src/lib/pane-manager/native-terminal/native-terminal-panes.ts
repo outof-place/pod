@@ -10,6 +10,10 @@ import {
   trackNativeTerminalFrame
 } from './native-terminal-frames'
 import { installNativeTerminalMirror, type NativeTerminalMirror } from './native-terminal-mirror'
+import {
+  createNativeTerminalRenderPause,
+  type NativeTerminalRenderPause
+} from './native-terminal-render-pause'
 
 // What the pane's PTY session lends the native view: input forwarding, the visibility
 // signal and how to make its pane active.
@@ -32,7 +36,14 @@ type NativePaneState = {
   grid: { cols: number; rows: number } | null
   untrack: (() => void) | null
   disposed: boolean
+  renderPause: NativeTerminalRenderPause | null
+  // This pane's font size (per-pane zoom) and the surface config last sent for it.
+  fontSize: number | null
+  appearanceKey: string | null
 }
+
+// A pane and the font size its xterm uses (the pane's zoom, else the global setting).
+export type NativeTerminalPaneFont = { terminal: Terminal; fontSize: number }
 
 const mirrors = new WeakMap<Terminal, NativeTerminalMirror>()
 const states = new WeakMap<Terminal, NativePaneState>()
@@ -41,6 +52,7 @@ let supported: Promise<boolean> | null = null
 let eventsUnsubscribe: (() => void) | null = null
 let lastAppearanceKey: string | null = null
 let lastAppearance: NativeTerminalAppearance | null = null
+let lastSettings: GlobalSettings | null | undefined = null
 
 function nativeTerminalApi(): Window['api']['nativeTerminal'] | null {
   return typeof window === 'undefined' ? null : (window.api?.nativeTerminal ?? null)
@@ -145,6 +157,12 @@ function ensureGlobalListeners(): void {
     if (lastAppearance) {
       sendAppearance(lastAppearance)
     }
+    for (const terminal of terminalsBySurface.values()) {
+      const state = states.get(terminal)
+      if (state?.fontSize != null) {
+        sendSurfaceAppearance(terminal, state, state.fontSize)
+      }
+    }
   })
 }
 
@@ -158,6 +176,37 @@ function sendAppearance(appearance: NativeTerminalAppearance): void {
   lastAppearanceKey = key
   nativeTerminalApi()?.setAppearance(appearance, zoomFactor)
   scheduleNativeTerminalFrames()
+}
+
+function surfaceAppearanceKey(appearance: NativeTerminalAppearance, zoomFactor: number): string {
+  return JSON.stringify([appearance, zoomFactor])
+}
+
+// Ghostty's app config only holds defaults; each surface runs its own config so a pane's
+// font zoom reaches its native view.
+function sendSurfaceAppearance(terminal: Terminal, state: NativePaneState, fontSize: number): void {
+  const api = nativeTerminalApi()
+  if (!api || state.surfaceId === null || state.disposed) {
+    return
+  }
+  const appearance = { ...buildNativeTerminalAppearance(terminal.options, lastSettings), fontSize }
+  const zoomFactor = getUIZoomFactorForNativeViews()
+  const key = surfaceAppearanceKey(appearance, zoomFactor)
+  state.fontSize = fontSize
+  if (key === state.appearanceKey) {
+    return
+  }
+  state.appearanceKey = key
+  api.setSurfaceAppearance(state.surfaceId, appearance, zoomFactor)
+  scheduleNativeTerminalFrames()
+}
+
+// Per-pane font zoom writes xterm's fontSize directly, outside applyTerminalAppearance.
+export function setNativeTerminalFontSize(terminal: Terminal, fontSize: number): void {
+  const state = states.get(terminal)
+  if (state) {
+    sendSurfaceAppearance(terminal, state, fontSize)
+  }
 }
 
 function focusNativeIfShown(surfaceId: number): boolean {
@@ -196,9 +245,13 @@ export function attachNativeTerminal(
     surfaceId: null,
     grid: null,
     untrack: null,
-    disposed: false
+    disposed: false,
+    renderPause: null,
+    fontSize: null,
+    appearanceKey: null
   }
   states.set(terminal, state)
+  lastSettings = settings
   supported ??= api.isSupported().catch(() => false)
   void (async () => {
     if (!(await supported)) {
@@ -207,9 +260,8 @@ export function attachNativeTerminal(
     }
     const appearance = buildNativeTerminalAppearance(terminal.options, settings)
     lastAppearance = appearance
-    const surfaceId = await api
-      .create(appearance, getUIZoomFactorForNativeViews())
-      .catch(() => null)
+    const zoomFactor = getUIZoomFactorForNativeViews()
+    const surfaceId = await api.create(appearance, zoomFactor).catch(() => null)
     if (surfaceId === null) {
       states.delete(terminal)
       return
@@ -223,15 +275,27 @@ export function attachNativeTerminal(
     state.surfaceId = surfaceId
     // Lets E2E map each native surface to the pane drawing it.
     container.dataset.nativeSurfaceId = String(surfaceId)
+    // Main gives the new surface this appearance as its own config.
+    state.fontSize = appearance.fontSize
+    state.appearanceKey = surfaceAppearanceKey(appearance, zoomFactor)
     terminalsBySurface.set(surfaceId, terminal)
     mirror.attach(surfaceId, () => state.host.serialize())
     mirror.setFocusTarget(() => focusNativeIfShown(surfaceId))
+    const renderPause = createNativeTerminalRenderPause(terminal)
+    state.renderPause = renderPause
     state.untrack = trackNativeTerminalFrame(
       {
         surfaceId,
         element: container,
         isShown: () => state.host.isVisible(),
+        isDomViewStale: renderPause.isStale,
         onShownChange: (shown) => {
+          // Why: xterm needs not paint under a shown native view; it repaints before a hide.
+          if (shown) {
+            renderPause.pause()
+          } else {
+            renderPause.resume(scheduleNativeTerminalFrames)
+          }
           // Hand the keyboard across whichever view just became visible for the active pane.
           if (!state.host.isActivePane() || !document.hasFocus()) {
             return
@@ -260,6 +324,7 @@ export function disposeNativeTerminal(terminal: Terminal): void {
   }
   state.disposed = true
   state.untrack?.()
+  state.renderPause?.dispose()
   if (state.surfaceId !== null) {
     terminalsBySurface.delete(state.surfaceId)
     terminal.element?.parentElement?.removeAttribute('data-native-surface-id')
@@ -267,15 +332,24 @@ export function disposeNativeTerminal(terminal: Terminal): void {
   }
 }
 
-// Ghostty's config is app-wide; the first native pane's resolved xterm options stand for all.
+// Ghostty's app config holds the defaults, from the first native pane's resolved xterm options
+// at the global font size; every surface then gets its pane's own font size.
 export function syncNativeTerminalAppearance(
-  terminals: readonly Terminal[],
+  panes: readonly NativeTerminalPaneFont[],
   settings: GlobalSettings | null | undefined
 ): void {
   const api = nativeTerminalApi()
-  const terminal = terminals.find((candidate) => states.get(candidate)?.surfaceId != null)
-  if (!api || !terminal) {
+  const native = panes.filter(({ terminal }) => states.get(terminal)?.surfaceId != null)
+  const first = native[0]
+  if (!api || !first) {
     return
   }
-  sendAppearance(buildNativeTerminalAppearance(terminal.options, settings))
+  lastSettings = settings
+  sendAppearance({
+    ...buildNativeTerminalAppearance(first.terminal.options, settings),
+    fontSize: settings?.terminalFontSize ?? first.fontSize
+  })
+  for (const { terminal, fontSize } of native) {
+    setNativeTerminalFontSize(terminal, fontSize)
+  }
 }

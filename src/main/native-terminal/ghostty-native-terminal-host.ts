@@ -11,6 +11,7 @@ import {
   type GhosttyTerminalAddon
 } from './ghostty-native-terminal-addon'
 import { ghosttyConfigPath, writeGhosttyConfig } from './ghostty-native-terminal-config-file'
+import { forgetGhosttySurfaceConfig } from './ghostty-native-terminal-surface-configs'
 import { toKeyboardInputEvents } from './ghostty-forwarded-key'
 import { installGhosttyDebugHooks } from './ghostty-native-terminal-debug-hooks'
 import {
@@ -184,10 +185,6 @@ export function createSurface(
   if (!native) {
     return null
   }
-  const path = writeGhosttyConfig(appearance, zoomFactor)
-  if (path) {
-    native.updateConfig(path)
-  }
   trackWindow(window, webContents)
   // Created hidden at zero size; the renderer's first frame report places it.
   const surfaceId = native.createSurface(
@@ -301,6 +298,10 @@ export function updateAppearance(
   }
 }
 
+export function ownedSurfaceAddon(sender: WebContents, id: number): GhosttyTerminalAddon | null {
+  return addon && ownedBy(id, sender) ? addon : null
+}
+
 export function destroySurface(surfaceId: number): void {
   const owner = owners.get(surfaceId)
   if (!owner) {
@@ -311,6 +312,7 @@ export function destroySurface(surfaceId: number): void {
     firstResponderByWindow.delete(owner.window.id)
   }
   addon?.destroySurface(surfaceId)
+  forgetGhosttySurfaceConfig(surfaceId)
 }
 
 export function installNativeTerminalDebugHooks(): void {
