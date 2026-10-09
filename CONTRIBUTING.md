@@ -80,9 +80,11 @@ Fork-only: Pod identity: name, bundle id, icon
   Run `scripts/pod-stack.sh --help` for the options.
 - The [upstream sync](.github/workflows/upstream-sync.yml) workflow runs daily. It fast-forwards
   `orca-main`. When Orca's `main` has a newer green commit, it rebases `main` into
-  `sync/orca-main`, runs the typecheck, unit tests and macOS build, and opens or refreshes the one
-  "Rebase on Orca main" pull request. A conflict or a failed check opens or updates one
-  `upstream-sync` issue instead.
+  `sync/orca-main`, runs the typecheck, unit tests, cross-version wire checks and macOS build, and
+  opens or refreshes the one "Rebase on Orca main" pull request. A conflict or a failed check opens
+  or updates one `upstream-sync` issue instead.
+- "Green" covers only the workflows Orca runs on a push to `main`. Orca's unit suite runs on pull
+  requests, so the sync's own unit run is the first full test of that exact commit.
 - Do not press Merge on a sync pull request: a rebase replaces the branch. Promote it with
   `gh workflow run upstream-sync.yml -R outof-place/pod -f promote=true`, which moves
   `main` with a lease and checks that the branch has not changed since its checks passed.
