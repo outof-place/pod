@@ -14,21 +14,22 @@ const PNG = Buffer.from([0, 1, 2, 3])
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') },
-  clipboard: {
-    availableFormats: () => ['image/png'],
-    readImage: () => ({
-      getSize: () => ({ height: 1, width: 1 }),
-      isEmpty: () => false,
-      toPNG: () => PNG
-    }),
-    readText: vi.fn(),
-    readBuffer: vi.fn(() => Buffer.alloc(0)),
-    writeText: vi.fn(),
-    writeImage: vi.fn(),
-    writeBuffer: vi.fn()
-  },
+  clipboard: { readText: vi.fn(), writeText: vi.fn() },
   ipcMain: { removeHandler: vi.fn(), handle: handleMock },
   nativeImage: { createFromBuffer: vi.fn() }
+}))
+vi.mock('./clipboard-electron-io', () => ({
+  readClipboardImage: async () => ({
+    getSize: () => ({ height: 1, width: 1 }),
+    isEmpty: () => false,
+    toPNG: () => PNG
+  }),
+  readClipboardSnapshot: async () => ({
+    types: ['image/png'],
+    readBuffer: async () => Buffer.alloc(0)
+  }),
+  writeClipboardImage: vi.fn(),
+  writeClipboardBuffer: vi.fn()
 }))
 vi.mock('node:fs/promises', () => ({
   access: vi.fn(),
