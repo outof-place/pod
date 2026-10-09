@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ProductUiIdentity } from '../../../../shared/product-ui-identity'
 import { _resetProductUiIdentityForTests } from '@/lib/product-ui-identity'
+import { getExperimentalPaneSearchEntries } from './experimental-search'
 import {
   getPodNativeTerminalSearchEntries,
-  isPodNativeTerminalSetting
+  isPodNativeTerminalSetting,
+  withoutExperimentalNativeTerminalEntry
 } from './pod-native-terminal-setting'
+import { matchesSettingsSearch } from './settings-search'
 
 const POD: ProductUiIdentity = {
   displayName: 'Pod',
@@ -31,11 +34,16 @@ describe('Pod native terminal setting', () => {
     expect(getPodNativeTerminalSearchEntries().map((entry) => entry.title)).toEqual([
       'Native terminal (Ghostty, Metal)'
     ])
+    const experimental = withoutExperimentalNativeTerminalEntry(getExperimentalPaneSearchEntries())
+    expect(matchesSettingsSearch('ghostty', experimental)).toBe(false)
+    expect(experimental.length).toBe(getExperimentalPaneSearchEntries().length - 1)
   })
 
   it('stays an Experimental toggle in upstream Orca', () => {
     stamp(null, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')
     expect(isPodNativeTerminalSetting()).toBe(false)
     expect(getPodNativeTerminalSearchEntries()).toEqual([])
+    const experimental = withoutExperimentalNativeTerminalEntry(getExperimentalPaneSearchEntries())
+    expect(matchesSettingsSearch('ghostty', experimental)).toBe(true)
   })
 })
