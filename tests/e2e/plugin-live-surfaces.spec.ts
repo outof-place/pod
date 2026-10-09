@@ -110,6 +110,8 @@ test('drives a plugin status-bar item and live panel from the plugin worker', as
     await expect(frame.getByRole('heading', { name: 'Live Status' })).toBeVisible({
       timeout: 15_000
     })
+    // The panel's first message (sent on load) must round-trip without retries.
+    await expect(frame.locator('#snapshot')).toHaveText('received', { timeout: 5_000 })
     await expect(frame.locator('#resets')).toHaveText('1', { timeout: 10_000 })
     const readReceived = async (): Promise<number> =>
       Number((await frame.locator('#received').textContent()) ?? '0')
