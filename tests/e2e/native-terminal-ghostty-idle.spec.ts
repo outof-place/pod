@@ -255,3 +255,36 @@ async function presentedFramesBySurface(
   }
   return frames
 }
+
+// With no polling, a pane moved by a transition (no resize, no mutation mid-flight) must still
+// end up under its native view.
+test('a native view follows its pane through a transition that only moves it', async ({
+  orcaPage,
+  electronApp
+}) => {
+  await openFirstPane(orcaPage, electronApp, 'native')
+  const ptyId = await waitForActivePanePtyId(orcaPage)
+  const surfaceId = (await findNativeSurfaceForPane(orcaPage, ptyId)) ?? 0
+  await orcaPage.waitForTimeout(1_000)
+  const startX = Number(await nativeSurfaceField(electronApp, surfaceId, 'x'))
+  const shift = await orcaPage.evaluate(async (id) => {
+    const pane = document.querySelector<HTMLElement>(`.pane[data-pty-id="${id}"]`)
+    if (!pane) {
+      throw new Error(`no pane for PTY ${id}`)
+    }
+    const before = pane.getBoundingClientRect().left
+    const ended = new Promise((resolve) =>
+      pane.addEventListener('transitionend', resolve, { once: true })
+    )
+    pane.style.transition = 'transform 400ms linear'
+    pane.style.transform = 'translateX(48px)'
+    await ended
+    return pane.getBoundingClientRect().left - before
+  }, ptyId)
+  expect(shift).toBeGreaterThan(40)
+  await expect
+    .poll(async () =>
+      Math.abs(Number(await nativeSurfaceField(electronApp, surfaceId, 'x')) - startX - shift)
+    )
+    .toBeLessThanOrEqual(1)
+})

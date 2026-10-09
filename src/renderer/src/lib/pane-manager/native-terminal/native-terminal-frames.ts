@@ -43,7 +43,16 @@ const OVERLAY_SELECTOR = [
 // view starts below it so the controls stay clickable; hover-independent so the grid holds.
 const TOP_CHROME_SELECTOR = '.pane-title-bar, [data-native-terminal-exclude]'
 
-const SAFETY_POLL_MS = 500
+// Why: a transition or animation can move a pane, or an overlay over it, without resizing
+// anything; while a finite one runs, frames are re-read on every animation frame.
+const MOTION_EVENTS = [
+  'transitionrun',
+  'transitionend',
+  'transitioncancel',
+  'animationstart',
+  'animationend',
+  'animationcancel'
+] as const
 
 type Tracked = NativeTerminalFrameEntry & {
   lastFrame: NativeTerminalFrame | null
@@ -53,7 +62,7 @@ type Tracked = NativeTerminalFrameEntry & {
 
 const tracked = new Map<number, Tracked>()
 let rafId: number | null = null
-let pollTimer: ReturnType<typeof setInterval> | null = null
+let followingMotion = false
 let resizeObserver: ResizeObserver | null = null
 let mutationObserver: MutationObserver | null = null
 let sendFrames: ((frames: NativeTerminalFrame[]) => void) | null = null
@@ -170,6 +179,12 @@ function flush(): void {
   if (changed.length > 0) {
     sendFrames(changed)
   }
+  if (followingMotion) {
+    followingMotion = hasFiniteMotion()
+    if (followingMotion) {
+      scheduleNativeTerminalFrames()
+    }
+  }
 }
 
 export function scheduleNativeTerminalFrames(): void {
@@ -178,14 +193,44 @@ export function scheduleNativeTerminalFrames(): void {
   }
 }
 
-// Why: xterm's own DOM churns on every cursor blink and repaint; none of it moves a pane.
-function isXtermInternalMutation(record: MutationRecord): boolean {
-  const target = record.target instanceof Element ? record.target : record.target.parentElement
-  return target?.closest('.xterm') != null
+// Why: xterm's own DOM churns on every cursor blink, repaint and scroll; none of it moves a pane.
+function isInsideXterm(target: unknown): boolean {
+  const element =
+    target instanceof Element ? target : target instanceof Node ? target.parentElement : null
+  return element?.closest('.xterm') != null
 }
 
 function onMutations(records: MutationRecord[]): void {
-  if (!records.every(isXtermInternalMutation)) {
+  if (!records.every((record) => isInsideXterm(record.target))) {
+    scheduleNativeTerminalFrames()
+  }
+}
+
+// Infinite animations (spinners) never settle, so they cannot be what moves a pane.
+function hasFiniteMotion(): boolean {
+  if (typeof document.getAnimations !== 'function') {
+    return false
+  }
+  return document.getAnimations().some((animation) => {
+    const { effect } = animation
+    return (
+      animation.playState === 'running' &&
+      effect !== null &&
+      effect.getComputedTiming().endTime !== Infinity &&
+      !isInsideXterm(effect instanceof KeyframeEffect ? effect.target : null)
+    )
+  })
+}
+
+function onMotion(event: Event): void {
+  if (!isInsideXterm(event.target)) {
+    followingMotion = true
+    scheduleNativeTerminalFrames()
+  }
+}
+
+function onScroll(event: Event): void {
+  if (!isInsideXterm(event.target)) {
     scheduleNativeTerminalFrames()
   }
 }
@@ -201,8 +246,11 @@ function start(): void {
     attributeFilter: ['style', 'class', 'hidden', 'data-state', 'open']
   })
   window.addEventListener('resize', scheduleNativeTerminalFrames)
-  // Why: pane moves that change no size (sidebar animations) are invisible to observers.
-  pollTimer = setInterval(scheduleNativeTerminalFrames, SAFETY_POLL_MS)
+  // Why: moves that change no size (animations, scrolled containers) reach no observer.
+  for (const type of MOTION_EVENTS) {
+    document.addEventListener(type, onMotion, true)
+  }
+  document.addEventListener('scroll', onScroll, { capture: true, passive: true })
 }
 
 function stop(): void {
@@ -211,10 +259,11 @@ function stop(): void {
   resizeObserver = null
   mutationObserver = null
   window.removeEventListener('resize', scheduleNativeTerminalFrames)
-  if (pollTimer !== null) {
-    clearInterval(pollTimer)
-    pollTimer = null
+  for (const type of MOTION_EVENTS) {
+    document.removeEventListener(type, onMotion, true)
   }
+  document.removeEventListener('scroll', onScroll, true)
+  followingMotion = false
   if (rafId !== null) {
     cancelAnimationFrame(rafId)
     rafId = null
