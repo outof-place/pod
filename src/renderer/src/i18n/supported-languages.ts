@@ -1,4 +1,5 @@
 import { DEFAULT_UI_LOCALE, resolveRendererUiLocale } from '../../../shared/ui-locale'
+import { POD_UI_LOCALES } from '../../../shared/product/features'
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
@@ -13,7 +14,7 @@ import {
 
 export const DEFAULT_LOCALE = DEFAULT_UI_LOCALE
 
-export const SHOW_UI_LANGUAGE_SETTING = true
+export const SHOW_UI_LANGUAGE_SETTING = POD_UI_LOCALES
 
 export type UiLanguageChoice = {
   value: BuiltInUiLanguage
