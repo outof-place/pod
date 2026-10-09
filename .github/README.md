@@ -248,6 +248,8 @@ Anything generic goes to Orca as a pull request first. Status updates live:
 | [#26979](https://github.com/stablyai/orca/pull/26979) | Let Git's untracked cache answer status polls | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26979?label=) |
 | [#26985](https://github.com/stablyai/orca/pull/26985) | Read pane process info from the macOS kernel instead of forking ps | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26985?label=) |
 | [#26991](https://github.com/stablyai/orca/pull/26991) | Plugin settings pages in Settings | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26991?label=) |
+| [#27005](https://github.com/stablyai/orca/pull/27005) | Read ps under a pinned locale, so process start times parse in every locale | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27005?label=) |
+| [#27006](https://github.com/stablyai/orca/pull/27006) | Send PTY output from the daemon to main as raw bytes, not NDJSON | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27006?label=) |
 
 All of them: [pull requests from outof-place on stablyai/orca](https://github.com/stablyai/orca/pulls?q=is%3Apr+author%3Aoutof-place).
 
