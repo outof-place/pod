@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { Terminal as HeadlessTerminal } from '@xterm/headless'
 import type { Terminal } from '@xterm/xterm'
 import { installNativeTerminalMirror } from './native-terminal-mirror'
 
@@ -36,6 +37,13 @@ function fakeTerminal(): FakeTerminal {
 function asTerminal(fake: FakeTerminal): Terminal {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mirror only touches write/clear/focus, which the fake implements.
   return fake as unknown as Terminal
+}
+
+function headlessAsTerminal(terminal: HeadlessTerminal): Terminal {
+  // Headless xterm has no DOM focus; the mirror only wraps it.
+  Reflect.set(terminal, 'focus', vi.fn())
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mirror only touches write/clear/focus (focus stubbed above); headless xterm shares the core write buffer under test.
+  return terminal as unknown as Terminal
 }
 
 describe('installNativeTerminalMirror', () => {
@@ -111,5 +119,19 @@ describe('installNativeTerminalMirror', () => {
     mirror.detach()
     fake.flush()
     expect(send).not.toHaveBeenCalled()
+  })
+
+  it('still seeds when xterm resizes before the marker parses', () => {
+    const terminal = new HeadlessTerminal({ cols: 80, rows: 24, allowProposedApi: true })
+    const send = vi.fn()
+    const mirror = installNativeTerminalMirror(headlessAsTerminal(terminal), send)
+    terminal.write('before\r\n')
+    mirror.attach(9, () => 'SNAPSHOT')
+    terminal.write('after\r\n')
+    // Ghostty's first grid report resizes xterm, which flushes the queue synchronously.
+    terminal.resize(40, 10)
+    expect(send).toHaveBeenCalledWith(9, 'SNAPSHOTafter\r\n')
+    expect(terminal.buffer.active.getLine(1)?.translateToString(true)).toBe('after')
+    terminal.dispose()
   })
 })
