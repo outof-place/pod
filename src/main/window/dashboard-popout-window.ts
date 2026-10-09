@@ -6,6 +6,7 @@ import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import { productDisplayName, productUiIdentityArguments } from '../product-identity/product-overlay'
 import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
 import { nativeZoomCommandMatchesKeybindings } from '../../shared/window-shortcut-policy'
 import {
@@ -157,7 +158,7 @@ export function createOrFocusDashboardPopout(
     ...(savedBounds ? { x: savedBounds.x, y: savedBounds.y } : {}),
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
-    title: 'Orca Agent Dashboard',
+    title: `${productDisplayName()} Agent Dashboard`,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
@@ -175,7 +176,8 @@ export function createOrFocusDashboardPopout(
       // guest-embedding surface off for this window. For the same reason it is
       // deliberately not stamped with the browser-host id: no guest of ours can
       // run here, so every client-placed page is a mirror to this renderer.
-      webviewTag: false
+      webviewTag: false,
+      additionalArguments: productUiIdentityArguments()
     }
   })
   installPrivilegedWindowNavigationPolicy(window.webContents)
