@@ -19,7 +19,7 @@ import {
   getSafeRelativePath
 } from '../worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
-import { statusReadLeaseOwner } from './git-read-cache-invalidation'
+import { statusReadLeaseOwner, statusUntrackedMode } from './git-read-cache-invalidation'
 import { detectConflictOperation } from './git-conflict-operation'
 import { parseUnmergedEntry } from '../../../shared/git-status-conflict-entries'
 import { getEffectiveUpstreamStatusCacheKey } from './effective-upstream-status-cache'
@@ -146,26 +146,31 @@ async function runGetStatus(
   }
 
   // Why: stream + parse and stop at `limit` so a huge un-ignored folder can't buffer enough to crash the process.
-  const parser = new StatusPorcelainParser()
+  let parser = new StatusPorcelainParser()
   let didHitLimit = false
   // Why: attach rejection ownership before awaiting marker I/O, so a fast Git failure cannot become unhandled.
   const statusSettlementPromise = Promise.allSettled([
-    (async () => {
-      const result = await gitStreamStdout(statusArgs, {
-        cwd: worktreePath,
-        wslDistro: options.wslDistro,
-        admissionTier: options.admissionTier,
-        preferWslDirectGit: true,
-        // Why: status polling is read-like; disable optional locks to avoid racing terminal Git on index.lock.
-        env: gitOptionalLocksDisabledEnv(),
-        signal: options.signal,
-        onStdout: (chunk) => parser.update(chunk, limit)
-      })
-      if (!result.stoppedEarly) {
-        parser.finish()
-      }
-      return result
-    })()
+    statusUntrackedMode.read({
+      key: stableInFlightKey([worktreePath, options.wslDistro ?? '']),
+      statusArgs,
+      limit,
+      includeIgnored: options.includeIgnored,
+      signal: options.signal,
+      // Local status preserves parsed rows when Git fails after emitting a prefix.
+      onParser: (activeParser) => {
+        parser = activeParser
+      },
+      streamGit: (args, onStdout) =>
+        gitStreamStdout(args, {
+          cwd: worktreePath,
+          wslDistro: options.wslDistro,
+          admissionTier: options.admissionTier,
+          preferWslDirectGit: true,
+          env: gitOptionalLocksDisabledEnv(),
+          signal: options.signal,
+          onStdout
+        })
+    })
   ])
   const conflictOperation = await conflictPromise
 
@@ -174,6 +179,7 @@ async function runGetStatus(
     if (statusResult.status === 'rejected') {
       throw statusResult.reason
     }
+    parser = statusResult.value.parser
     didHitLimit = statusResult.value.stoppedEarly
     statusSucceeded = true
   } catch (error) {
