@@ -20,6 +20,9 @@ const {
 } = require('./scripts/verify-packaged-mobile-web-bundle.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
 const {
+  assertGhosttyTerminalAddonBuilt
+} = require('./scripts/verify-packaged-ghostty-terminal-addon.cjs')
+const {
   assertBundledRipgrepInstalled,
   bundledRipgrepExtraResources,
   bundledRipgrepMacSignIgnore,
@@ -345,6 +348,7 @@ module.exports = {
     assertBundledRipgrepInstalled()
     assertOrcadTemplateBuilt()
     assertMobileWebBundleBuilt(mobileWebBundleDir)
+    assertGhosttyTerminalAddonBuilt(context.electronPlatformName, { required: isMacRelease })
   },
   afterPack: async (context) => {
     const resourcesDir =
