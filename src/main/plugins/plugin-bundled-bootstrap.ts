@@ -3,7 +3,7 @@ import { isAbsolute, join, relative, sep } from 'node:path'
 import { z } from 'zod'
 import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
 import { pluginRelativeDirectorySchema } from '../../shared/plugins/plugin-manifest-fields'
-import { isOfficialPluginIdentity } from '../../shared/plugins/plugin-marketplace'
+import { isBundledPluginIdentity } from '../../shared/plugins/plugin-marketplace'
 import { getUserPluginsDir } from './plugin-discovery'
 import { installBundledPlugin, readPluginLockfile } from './plugin-install'
 import { inspectPluginInstallTree } from './plugin-install-staging'
@@ -23,7 +23,7 @@ const bundledPluginIndexSchema = z
             pluginKey: z
               .string()
               .refine(isQualifiedPluginKey, 'invalid qualified plugin identity')
-              .refine(isOfficialPluginIdentity, 'bundled plugins must use an official identity'),
+              .refine(isBundledPluginIdentity, 'bundled plugins must use an official identity'),
             path: pluginRelativeDirectorySchema,
             contentHash: z.string().regex(/^[0-9a-f]{64}$/)
           })
@@ -54,6 +54,18 @@ export type PluginBundledBootstrapResult = {
   errors: { pluginKey: string; error: string }[]
 }
 
+/** Resources folder for a downstream product's bundled plugins (`segments` under resources). */
+export function resolveDistroPluginRoot(options: {
+  isPackaged: boolean
+  resourcesPath: string
+  appPath: string
+  segments: readonly string[]
+}): string {
+  return options.isPackaged
+    ? join(options.resourcesPath, ...options.segments)
+    : join(options.appPath, 'resources', ...options.segments)
+}
+
 export function resolveBundledPluginRoot(options: {
   isPackaged: boolean
   resourcesPath: string
@@ -65,9 +77,10 @@ export function resolveBundledPluginRoot(options: {
 }
 
 async function readBundledPluginIndex(
-  root: string
+  root: string,
+  indexFilename: string
 ): Promise<z.infer<typeof bundledPluginIndexSchema>> {
-  const indexPath = join(root, BUNDLED_PLUGIN_INDEX_FILENAME)
+  const indexPath = join(root, indexFilename)
   const metadata = await stat(indexPath)
   if (!metadata.isFile() || metadata.size > BUNDLED_PLUGIN_INDEX_MAX_BYTES) {
     throw new Error(`bundled plugin index exceeds ${BUNDLED_PLUGIN_INDEX_MAX_BYTES} bytes`)
@@ -105,8 +118,13 @@ export async function bootstrapBundledPlugins(options: {
   userDataPath: string
   hostVersion: string
   blockedPluginReason?: (pluginKey: string) => string | null
+  /** A downstream product's own index (distro-plugins.json) next to Orca's bundled-plugins.json. */
+  indexFilename?: string
 }): Promise<PluginBundledBootstrapResult> {
-  const index = await readBundledPluginIndex(options.root)
+  const index = await readBundledPluginIndex(
+    options.root,
+    options.indexFilename ?? BUNDLED_PLUGIN_INDEX_FILENAME
+  )
   const pluginsDir = getUserPluginsDir(options.userDataPath)
   const lock = await readPluginLockfile(pluginsDir)
   const result: PluginBundledBootstrapResult = {
