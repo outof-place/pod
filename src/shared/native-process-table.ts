@@ -35,6 +35,10 @@ export async function readNativeFullProcessTable(): Promise<ProcessTableRow[] | 
         }
         command = row.path ?? `(${row.name})`
       }
+      command = command.trim()
+      if (!command) {
+        return null
+      }
       // Kernel rows are well-formed, so the strict and lenient parse modes can share them.
       const { pid, ppid, pgid, tpgid, stat, tty, startTime } = row
       rows.push({
@@ -45,7 +49,7 @@ export async function readNativeFullProcessTable(): Promise<ProcessTableRow[] | 
         stat,
         tty,
         ...(startTime ? { startTime } : {}),
-        command: command.trim()
+        command
       })
     }
     return rows.length > 0 ? rows : null
