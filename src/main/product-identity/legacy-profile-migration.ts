@@ -20,19 +20,26 @@ import { basename, dirname, join, relative, sep } from 'node:path'
 
 export const PRODUCT_MIGRATION_MARKER = 'product-profile-migration.json'
 
-// Caches and Chromium process locks regenerate; the daemon dir is linked, not copied.
+// Chromium process locks regenerate; the daemon dir is linked, not copied.
 const SKIPPED_TOP_LEVEL = new Set([
-  'Cache',
-  'Code Cache',
-  'GPUCache',
-  'DawnGraphiteCache',
-  'DawnWebGPUCache',
   'Crashpad',
   'Shared Dictionary',
   'SingletonCookie',
   'SingletonLock',
   'SingletonSocket',
   'daemon'
+])
+// Chromium caches, in the default session and every browser partition: most of a profile's files.
+const SKIPPED_CHROMIUM_CACHES = new Set([
+  'Cache',
+  'Code Cache',
+  'GPUCache',
+  'DawnGraphiteCache',
+  'DawnWebGPUCache',
+  'GrShaderCache',
+  'ShaderCache',
+  'CacheStorage',
+  'ScriptCache'
 ])
 // Any of these means the product profile holds real state and must not be overwritten.
 const PROFILE_STATE_ENTRIES = ['orca-data.json', 'orca-profile-index.json', 'profiles']
@@ -112,7 +119,12 @@ function shouldCopy(legacyUserData: string, source: string): boolean {
   if (rel === '') {
     return true
   }
-  if (SKIPPED_TOP_LEVEL.has(rel.split(sep)[0] ?? '')) {
+  const segments = rel.split(sep)
+  if (SKIPPED_TOP_LEVEL.has(segments[0] ?? '')) {
+    return false
+  }
+  const inChromiumStorage = segments.length === 1 || segments[0] === 'Partitions'
+  if (inChromiumStorage && SKIPPED_CHROMIUM_CACHES.has(segments.at(-1) ?? '')) {
     return false
   }
   try {
