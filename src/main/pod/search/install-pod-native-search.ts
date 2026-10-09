@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import {
   notifyExternalSearchWorktreeLifecycle,
@@ -10,7 +10,10 @@ import { createPodSearchProvider } from './pod-search-provider'
 
 let installed = false
 
-/** Routes local quick open and file search through ogd when Pod search is enabled. Idempotent. */
+/**
+ * Routes local quick open and file search through ogd when Pod search is enabled. Idempotent;
+ * Electron-free, so the desktop, `orca serve` and orcad share it.
+ */
 export function installPodNativeSearch(
   store: { getSettings(): GlobalSettings },
   runtime: {
@@ -33,7 +36,7 @@ export function installPodNativeSearch(
         if (socketPath !== clientSocketPath) {
           client?.close()
           client = socketPath
-            ? new OgdClient({ socketPath, client: `orca/${app.getVersion()}` })
+            ? new OgdClient({ socketPath, client: `orca/${getAppEnvironment().getVersion()}` })
             : null
           clientSocketPath = socketPath
         }
