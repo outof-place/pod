@@ -1,5 +1,6 @@
 import type { NativeTerminalAppearance } from '../../shared/native-terminal-appearance'
 import type { NativeTerminalEvent, NativeTerminalFrame } from '../../shared/native-terminal-ipc'
+import type { NativeTerminalForwardedChord } from '../../shared/native-terminal-forwarded-chords'
 
 export type NativeTerminalApi = {
   isSupported: () => Promise<boolean>
@@ -9,6 +10,7 @@ export type NativeTerminalApi = {
   focus: (surfaceId: number) => void
   readSelection: (surfaceId: number) => Promise<string | null>
   setAppearance: (appearance: NativeTerminalAppearance, zoomFactor: number) => void
+  setForwardedChords: (chords: NativeTerminalForwardedChord[]) => void
   destroy: (surfaceId: number) => void
   onEvent: (callback: (event: NativeTerminalEvent) => void) => () => void
 }
