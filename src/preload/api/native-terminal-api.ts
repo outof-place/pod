@@ -10,6 +10,8 @@ export type NativeTerminalApi = {
     zoomFactor: number,
     accessibilityLabel: string
   ) => Promise<number | null>
+  // True when main feeds the surface this PTY's output itself; false keeps the renderer mirror.
+  bindPty: (surfaceId: number, ptyId: string) => Promise<boolean>
   write: (surfaceId: number, data: string) => void
   setFrames: (frames: NativeTerminalFrame[]) => void
   focus: (surfaceId: number) => void

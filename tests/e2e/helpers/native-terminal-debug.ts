@@ -29,6 +29,7 @@ export type NativeTerminalDebugOp =
   | 'accessibilitySet'
   | 'secureInput'
   | 'textInputMenu'
+  | 'mainFeed'
 
 export const RETURN_KEY_CODE = 0x24
 

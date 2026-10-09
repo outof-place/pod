@@ -39,6 +39,16 @@ export function surfaceAppearanceKey(
   return JSON.stringify([appearance, zoomFactor])
 }
 
+// A new surface already runs the appearance main created it with as its own config.
+export function rememberCreatedSurfaceAppearance(
+  state: NativeSurfaceAppearanceState,
+  appearance: NativeTerminalAppearance,
+  zoomFactor: number
+): void {
+  state.fontSize = appearance.fontSize
+  state.appearanceKey = surfaceAppearanceKey(appearance, zoomFactor)
+}
+
 export function sendSurfaceAppearance(
   terminal: Terminal,
   state: NativeSurfaceAppearanceState,
