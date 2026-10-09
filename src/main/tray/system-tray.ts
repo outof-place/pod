@@ -44,6 +44,14 @@ let devIndicator: { label: string | null } | null = null
 
 let nativeThemeUpdatedListener: (() => void) | null = null
 
+// Why: a downstream product can ship its own menu bar helper (Pod's claude-acc ring); while it
+// runs, the tray icon would be a second one. Unset in upstream Orca.
+let macTrayYield: (() => boolean) | null = null
+
+export function setMacTrayYield(yieldTo: (() => boolean) | null): void {
+  macTrayYield = yieldTo
+}
+
 // Why: multiple dev instances can run side by side (one per worktree); the
 // tooltip carries the worktree/branch label so hovering tells them apart.
 function baseTooltip(): string {
@@ -302,7 +310,7 @@ export function setMacMenuBarIconVisible(visible: boolean, opts: SystemTrayOptio
   if (process.platform !== 'darwin') {
     return null
   }
-  if (!visible) {
+  if (!visible || macTrayYield?.()) {
     destroySystemTray()
     return null
   }
