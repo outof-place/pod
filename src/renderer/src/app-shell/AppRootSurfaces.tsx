@@ -13,6 +13,7 @@ import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeOn
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
+import { POD_FEATURE_PROMOS } from '../../../shared/product/features'
 import { ZoomOverlay } from '../components/ZoomOverlay'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store'
@@ -151,7 +152,7 @@ export function AppRootSurfaces(props: {
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const hasSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
 
-  const shouldMountSetupGuideTelemetryObserver = persistedUIReady
+  const shouldMountSetupGuideTelemetryObserver = POD_FEATURE_PROMOS && persistedUIReady
   const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
   const shouldMountDictationController = voiceEnabled || dictationState !== 'idle'
   const renderPetOverlay = shouldRenderPetOverlay({ persistedUIReady, petEnabled, petVisible })
@@ -250,17 +251,17 @@ export function AppRootSurfaces(props: {
             <WorktreeJumpPalette />
           </ModalBoundary>
         ) : null}
-        {mountedLazyModalIds.has('setup-guide') ? (
+        {POD_FEATURE_PROMOS && mountedLazyModalIds.has('setup-guide') ? (
           <ModalBoundary boundaryId="modal.setup-guide" resetKey={activeModal === 'setup-guide'}>
             <SetupGuideModal />
           </ModalBoundary>
         ) : null}
-        {mountedLazyModalIds.has('feature-wall') ? (
+        {POD_FEATURE_PROMOS && mountedLazyModalIds.has('feature-wall') ? (
           <ModalBoundary boundaryId="modal.feature-wall" resetKey={activeModal === 'feature-wall'}>
             <FeatureWallModal />
           </ModalBoundary>
         ) : null}
-        {mountedLazyModalIds.has('feature-tips') ? (
+        {POD_FEATURE_PROMOS && mountedLazyModalIds.has('feature-tips') ? (
           <ModalBoundary boundaryId="modal.feature-tips" resetKey={activeModal === 'feature-tips'}>
             <FeatureTipsModal />
           </ModalBoundary>
