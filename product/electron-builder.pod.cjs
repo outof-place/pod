@@ -43,7 +43,7 @@ module.exports = {
     ...base.extraMetadata,
     ...(version ? { version } : {}),
     // Pre-ready defaults (userData, keychain) then never resolve to Orca's "orca".
-    name: identity.userDataName,
+    name: identity.packageName || identity.userDataName.toLowerCase(),
     // Kept for builds whose updater lacks the product feed: never fall back to the official feed.
     orcaOfficialUpdates: false
   },
