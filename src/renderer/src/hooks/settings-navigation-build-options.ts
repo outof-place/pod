@@ -12,6 +12,8 @@ export type SettingsNavigationBuildOptions = {
   mobileEmulatorCreationEnabled: boolean
   isDev: boolean
   isLinearConnected: boolean
+  /** Fork-only (Pod): the workspace root section. */
+  podWorkspaceEnabled?: boolean
   repos: readonly Repo[]
   projectGrouping?: ProjectGroupingModel
 }
