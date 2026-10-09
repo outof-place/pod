@@ -11,6 +11,127 @@
   },
   "gates": [
     {
+      "id": "terminal.resize-signal-authority",
+      "title": "Explicit repaint signals stay with their known PTY",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "native-provider-contract",
+      "surfaces": [
+        "explicit SIGWINCH on terminal reattach or tab return"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime",
+        "mobile-relay"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon"
+      ],
+      "coverageNotes": "Real PTY plus packaged Electron Node-mode host invokes the shared resize helper. Full daemon lifecycle and renderer reattach ordering remain gaps; Linux, Windows, SSH, WSL and mobile/relay retain existing paths.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/26985"
+      ],
+      "invariant": "Only a live PID holding the supplied PTY may name its foreground group for an explicit SIGWINCH; the current host must not share that PTY. Missing or unverifiable group evidence keeps the existing root-only fallback.",
+      "oracle": "Native known-PTY rows match ps without warming a cache. Another device, missing PID, invalid PID and unsafe terminal paths cannot authorize a group. The shared host-PTY guard refuses group signaling; a real owned PTY acknowledges SIGWINCH through packaged native and ps fallback paths. Copied signing inputs remain inside the owned temporary app, and source-file fingerprints remain unchanged.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/native-process-info.test.ts src/main/pty/posix-pty-foreground-group.test.ts config/scripts/proc-info-macos-resources.test.mjs config/scripts/electron-builder-config.test.mjs config/scripts/macos-foreground-fixture-bundle.test.mjs",
+        "ORCA_BACKGROUND_LAUNCH=1 node config/scripts/smoke-macos-foreground-addon.mjs"
+      ],
+      "testFiles": [
+        "src/shared/native-process-info.test.ts",
+        "src/main/pty/posix-pty-foreground-group.test.ts",
+        "config/scripts/proc-info-macos-resources.test.mjs",
+        "config/scripts/electron-builder-config.test.mjs",
+        "config/scripts/smoke-macos-foreground-addon.mjs",
+        "config/scripts/macos-foreground-fixture-bundle.test.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/native-process-info.test.ts",
+          "assertions": [
+            "matches ps for a fresh known terminal without warming a cache",
+            "refuses another device and an absent terminal",
+            "returns null for a missing process"
+          ]
+        },
+        {
+          "file": "src/main/pty/posix-pty-foreground-group.test.ts",
+          "assertions": [
+            "refuses when the pid now answers for a different tty",
+            "refuses when this process shares the PTY",
+            "rechecks its own terminal membership when the supplied PTY changes"
+          ]
+        },
+        {
+          "file": "config/scripts/macos-foreground-fixture-bundle.test.mjs",
+          "assertions": [
+            "rejects an escaping symlink before signing",
+            "rejects a source-linked regular file before signing",
+            "detects source mutation and still removes only its owned scratch"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/native-process-info.test.ts src/main/pty/posix-pty-foreground-group.test.ts config/scripts/proc-info-macos-resources.test.mjs config/scripts/electron-builder-config.test.mjs config/scripts/macos-foreground-fixture-bundle.test.mjs",
+          "result": "passed",
+          "durationSeconds": 2.14,
+          "summary": "91 tests in five files passed on arm64, including real native PTY parity, targeting/refusal semantics, and copied signing/source-preservation boundaries."
+        },
+        {
+          "date": "2026-10-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 node config/scripts/smoke-macos-foreground-addon.mjs",
+          "result": "passed",
+          "durationSeconds": 7.52,
+          "summary": "Ad-hoc sealed Electron 43.7.5 Node-mode arm64 fixture delivered five owned-PTY SIGWINCH acknowledgments through valid, disabled, missing, incompatible and trusted dev paths. A separate real same-PTY host refused group signaling. All 602 copied entries stayed contained, and source fingerprints remained unchanged through cleanup."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Focused native/provider command; one signed arm64 fixture took 7.52 seconds. Cross-architecture runtime and long-term percentiles are not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Focused local pass and one signed fixture pass only; no long-term soak or promotion claim."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Behavioral real-PTY parity and signal refusal tests pass; deliberate production mutant and cross-architecture runtime CI remain to be recorded."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Six alternating fresh Node arm64 runs at 2244 processes: warm native median 0.50 ms/p95 1.44 ms versus ps median 14.83 ms/p95 43.70 ms, with zero native subprocesses. No Worker, retained native cache, polling loop or user-sized native allocation. Raw artifact /tmp/orca-native-foreground-benchmark.json; timings are diagnostic."
+      },
+      "knownGaps": [
+        "Actual x64 CI runtime pending.",
+        "Ad-hoc fixture signing does not prove Developer ID hardened-runtime or notarized release loading.",
+        "Physical full-daemon restart/reattach and renderer ordering are unproved; unrelated provider/platform paths are unchanged."
+      ],
+      "promotionCriteria": [
+        "Record actual arm64 and x64 CI plus a production signed release smoke.",
+        "Establish red/green targeting evidence and the manifest policy soak window with zero unexplained flakes."
+      ],
+      "demotionRule": "Keep experimental; remove coverage claims if PTY identity, own-host refusal, signed loading or acknowledged signal delivery fails."
+    },
+    {
       "id": "native-chat.transcript-consumed-boundary",
       "title": "Transcript replacement remains visible when it races message publication",
       "maturity": "experimental",
