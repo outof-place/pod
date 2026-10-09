@@ -1231,7 +1231,8 @@ void UpdateSecureInput();
 }
 
 - (NSString*)accessibilityLabel {
-  return @"Terminal";
+  // The renderer sets the label in Orca's UI language at creation.
+  return [super accessibilityLabel] ?: @"Terminal";
 }
 
 - (id)accessibilityValue {
@@ -2478,6 +2479,18 @@ napi_value Rect(napi_env env, NSRect rect) {
   return result;
 }
 
+// setSurfaceAccessibilityLabel(id, label): void — what VoiceOver calls the surface.
+napi_value SetSurfaceAccessibilityLabel(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value argv[2];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  OrcaGhosttySurfaceView* view = ViewForId(GetInt(env, argv[0]));
+  if (view != nil && argc >= 2 && IsString(env, argv[1])) {
+    [view setAccessibilityLabel:GetNSString(env, argv[1])];
+  }
+  return Undefined(env);
+}
+
 // setSurfaceShellPid(id, pid): string | null — the local shell whose tty's termios reveals a
 // password prompt (0 forgets it); returns that tty's path.
 napi_value SetSurfaceShellPid(napi_env env, napi_callback_info info) {
@@ -2760,6 +2773,8 @@ napi_value ModuleInit(napi_env env, napi_value exports) {
       {"debugDrop", nullptr, DebugDrop, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugModifiersChanged", nullptr, DebugModifiersChanged, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"setSurfaceShellPid", nullptr, SetSurfaceShellPid, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"setSurfaceAccessibilityLabel", nullptr, SetSurfaceAccessibilityLabel, nullptr, nullptr, nullptr, napi_default,
+       nullptr},
       {"debugInsertText", nullptr, DebugInsertText, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugMarkedText", nullptr, DebugMarkedText, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugImeRect", nullptr, DebugImeRect, nullptr, nullptr, nullptr, napi_default, nullptr},

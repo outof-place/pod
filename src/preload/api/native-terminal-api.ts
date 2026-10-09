@@ -4,7 +4,12 @@ import type { NativeTerminalForwardedChord } from '../../shared/native-terminal-
 
 export type NativeTerminalApi = {
   isSupported: () => Promise<boolean>
-  create: (appearance: NativeTerminalAppearance, zoomFactor: number) => Promise<number | null>
+  // The label is what VoiceOver calls the surface, in Orca's UI language.
+  create: (
+    appearance: NativeTerminalAppearance,
+    zoomFactor: number,
+    accessibilityLabel: string
+  ) => Promise<number | null>
   write: (surfaceId: number, data: string) => void
   setFrames: (frames: NativeTerminalFrame[]) => void
   focus: (surfaceId: number) => void

@@ -11,6 +11,7 @@ import {
 } from './native-terminal-frames'
 import { installNativeTerminalMirror, type NativeTerminalMirror } from './native-terminal-mirror'
 import { isNativeTerminalRequested } from './native-terminal-requested'
+import { createNativeTerminalSurface } from './native-terminal-surface-create'
 import {
   createNativeTerminalRenderPause,
   type NativeTerminalRenderPause
@@ -237,7 +238,7 @@ export function attachNativeTerminal(
     const appearance = buildNativeTerminalAppearance(terminal.options, settings)
     lastAppearance = appearance
     const zoomFactor = getUIZoomFactorForNativeViews()
-    const surfaceId = await api.create(appearance, zoomFactor).catch(() => null)
+    const surfaceId = await createNativeTerminalSurface(api, appearance, zoomFactor)
     if (surfaceId === null) {
       states.delete(terminal)
       return
