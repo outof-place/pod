@@ -1,0 +1,14 @@
+import type { NativeTerminalAppearance } from '../../shared/native-terminal-appearance'
+import type { NativeTerminalEvent, NativeTerminalFrame } from '../../shared/native-terminal-ipc'
+
+export type NativeTerminalApi = {
+  isSupported: () => Promise<boolean>
+  create: (appearance: NativeTerminalAppearance, zoomFactor: number) => Promise<number | null>
+  write: (surfaceId: number, data: string) => void
+  setFrames: (frames: NativeTerminalFrame[]) => void
+  focus: (surfaceId: number) => void
+  readSelection: (surfaceId: number) => Promise<string | null>
+  setAppearance: (appearance: NativeTerminalAppearance, zoomFactor: number) => void
+  destroy: (surfaceId: number) => void
+  onEvent: (callback: (event: NativeTerminalEvent) => void) => () => void
+}

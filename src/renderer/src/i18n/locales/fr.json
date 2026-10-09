@@ -7330,6 +7330,11 @@
             "modeAriaLabel": "Mode d'ouverture du tableau de bord des agents",
             "modeInWindow": "Dans la fenêtre",
             "modePopout": "Fenêtre indépendante"
+          },
+          "nativeTerminal": {
+            "title": "Terminal natif",
+            "description": "Dessine les terminaux avec une vue Ghostty native sur macOS.",
+            "copy": "Dessine les nouveaux volets de terminal avec une vue Ghostty native (Metal) plutôt qu’avec le moteur de rendu web. Le terminal web reste en dessous pour la recherche, la copie et tout ce qui s’affiche par-dessus le volet. Expérimental le temps de combler les écarts."
           }
         },
         "FloatingWorkspacePane": {
@@ -9827,6 +9832,13 @@
               "board": "conseil",
               "inWindow": "dans la fenêtre",
               "worktrees": "arbres de travail"
+            },
+            "nativeTerminal": {
+              "title": "Terminal natif",
+              "description": "Dessine les terminaux avec une vue Ghostty native sur macOS.",
+              "ghostty": "ghostty",
+              "native": "natif",
+              "metal": "metal"
             }
           }
         },
@@ -17970,8 +17982,7 @@
         "agentNotSignedIn": "Connectez-vous à {{agent}}.",
         "thenSendAgain": "Puis envoyez à nouveau votre message.",
         "runCommandWhenDone": "Lancez /{{command}} quand il aura terminé.",
-        "commandAfterAnswer": "Répondez à la question ou à la demande d'approbation de l'agent, puis lancez /{{command}}.",
-        "sessionNotRestored": "{{agent}} n'a pas pu rouvrir sa session précédente, cette discussion continue donc dans une nouvelle. {{agent}} ne se souvient pas des messages précédents."
+        "commandAfterAnswer": "Répondez à la question ou à la demande d'approbation de l'agent, puis lancez /{{command}}."
       },
       "writeNotice": {
         "notDoneReadHistory": "L'historique de ce chat n'a pas pu être chargé.",

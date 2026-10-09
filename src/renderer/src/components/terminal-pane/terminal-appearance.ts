@@ -31,6 +31,7 @@ import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-he
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+import { syncNativeTerminalAppearance } from '@/lib/pane-manager/native-terminal/native-terminal-panes'
 
 export function hexToRgba(hex: string, alpha: number): string {
   let clean = hex.replace('#', '')
@@ -238,6 +239,10 @@ export function applyTerminalAppearance(
       safeFit(pane)
     }
   }
+  syncNativeTerminalAppearance(
+    manager.getPanes().map((pane) => pane.terminal),
+    settings
+  )
 
   manager.setPaneStyleOptions({
     splitBackground: paneBackground,

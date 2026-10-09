@@ -594,6 +594,10 @@ module.exports = {
         from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
         to: 'Orca Computer Use.app'
       },
+      {
+        from: 'native/ghostty-terminal-macos/build/ghostty_terminal.node',
+        to: 'ghostty-terminal-macos/ghostty_terminal.node'
+      },
       featureWallResources
     ],
     // Why: the notification-status helper must execute from Contents/MacOS —
