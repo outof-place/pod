@@ -54,6 +54,7 @@ import {
   renderPluginsSettingsSection
 } from './settings-advanced-section-renderers'
 import { renderProjectSettingsSections } from './settings-project-section-renderer'
+import { renderPodWorkspaceSettingsSection } from '@/pod/workspace/render-pod-workspace-settings-section'
 
 export function renderSettingsLoading(
   interactions: SettingsInteractionController
@@ -124,6 +125,7 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
                 {renderOrcaAccountSettingsSection(context)}
                 {renderSetupGuideSettingsSection(context)}
                 {renderGeneralSettingsSection(context)}
+                {renderPodWorkspaceSettingsSection(context)}
                 {renderIntegrationsSettingsSection(context)}
                 {renderMobileSettingsSection(context)}
                 {renderAutomationsSettingsSection(context)}
