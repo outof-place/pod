@@ -10,6 +10,7 @@ import {
   waitForTerminalOutput
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { openTerminalTabInActiveGroup } from './helpers/terminal-tab-open'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 type NativeTerminalDebugOp =
@@ -338,14 +339,30 @@ test('panes that bind after the setting turns on each draw through their own see
   electronApp
 }) => {
   await waitForSessionReady(orcaPage)
-  // On before the first pane binds its PTY, so both panes attach a native surface.
-  await orcaPage.evaluate(async () => {
-    await window.__store?.getState().updateSettings({ experimentalNativeTerminal: true })
-  })
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage, 30_000)
-  const firstPty = await waitForActivePanePtyId(orcaPage)
+  // The startup pane binds before the setting, so it never gets a surface; a fresh tab's panes
+  // bind after it. The covering dialog keeps their surfaces unplaced while they attach.
+  const startupPty = await waitForActivePanePtyId(orcaPage)
+  await waitForPtyShellEcho(orcaPage, startupPty, 30_000)
+  await orcaPage.evaluate(async () => {
+    const overlay = document.createElement('div')
+    overlay.id = 'native-terminal-e2e-cover'
+    overlay.setAttribute('role', 'dialog')
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999'
+    document.body.appendChild(overlay)
+    await window.__store?.getState().updateSettings({ experimentalNativeTerminal: true })
+  })
+  await openTerminalTabInActiveGroup(orcaPage)
+  let firstPty = ''
+  await expect
+    .poll(async () => {
+      firstPty = await waitForActivePanePtyId(orcaPage)
+      return firstPty
+    })
+    .not.toBe(startupPty)
+  await waitForActiveTerminalManager(orcaPage, 30_000)
   await waitForPtyShellEcho(orcaPage, firstPty, 30_000)
   await splitActiveTerminalPane(orcaPage, 'vertical')
   await waitForPaneCount(orcaPage, 2)
@@ -365,11 +382,15 @@ test('panes that bind after the setting turns on each draw through their own see
   const surfaces = await Promise.all(panes.map((ptyId) => paneSurfaceId(orcaPage, ptyId)))
   expect(new Set(surfaces).size).toBe(2)
 
-  // A surface not placed yet (DOM UI such as a startup hint can cover its pane) must not size
-  // the PTY from Ghostty's 1x1 placeholder grid.
+  // An unplaced surface must not size the PTY from Ghostty's 1x1 placeholder grid.
+  for (const surfaceId of surfaces) {
+    expect(await isHidden(electronApp, surfaceId)).toBe(true)
+  }
   for (const ptyId of panes) {
     expect(await paneXtermCols(orcaPage, ptyId)).toBeGreaterThan(20)
   }
+  await orcaPage.evaluate(() => document.getElementById('native-terminal-e2e-cover')?.remove())
+  // The one-time sidebar hint tooltip can still cover the left pane for a few seconds.
   await expect(orcaPage.getByRole('tooltip')).toHaveCount(0, { timeout: 20_000 })
   for (const surfaceId of surfaces) {
     await expect.poll(async () => isHidden(electronApp, surfaceId)).toBe(false)
