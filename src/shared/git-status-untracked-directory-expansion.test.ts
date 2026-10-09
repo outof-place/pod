@@ -36,7 +36,7 @@ describe('statusUntrackedFilesArg', () => {
 })
 
 describe('buildUntrackedDirectoryListingArgs', () => {
-  it('anchors literal pathspecs at the repository root', () => {
+  it('anchors literal pathspecs to the repository root', () => {
     expect(buildUntrackedDirectoryListingArgs(['new/', '[k]eep/'])).toEqual([
       'ls-files',
       '-z',
@@ -188,5 +188,23 @@ describe('expandUntrackedDirectoryRecords', () => {
     expect(entryPaths(expansion!.records)).toEqual(
       directories.map((directory) => `${directory}f.txt`)
     )
+  })
+
+  it('keeps the stdout byte backstop across batches when the entry cap is disabled', async () => {
+    const directories = Array.from({ length: 300 }, (_, index) => `dir-${index}/`)
+    const parser = parseStatus(directories.map((directory) => `? ${directory}\n`).join(''))
+    const listUntracked = vi.fn<UntrackedDirectoryListingStream>(async (args, onStdout) => {
+      const directory = args[6].slice(':(top,literal)'.length)
+      const chunk = Array.from(
+        { length: 8_192 },
+        (_, index) => `${directory}${index}-${'x'.repeat(800)}\0`
+      ).join('')
+      return { stoppedEarly: onStdout(chunk) }
+    })
+
+    await expect(
+      expandUntrackedDirectoryRecords({ records: parser.statusRecords, limit: 0, listUntracked })
+    ).rejects.toThrow('Git output byte limit')
+    expect(listUntracked).toHaveBeenCalledTimes(2)
   })
 })

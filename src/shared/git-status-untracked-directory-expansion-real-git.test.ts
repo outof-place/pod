@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcess } from './child-process/run-process'
+import { isStatusRepositoryRoot } from './git-status-stream-read'
 import { StatusPorcelainParser } from './git-status-porcelain-parser'
 import {
   expandParsedStatusUntrackedDirectories,
@@ -74,6 +75,10 @@ async function readExpandedStatus(
     listUntracked:
       listUntracked ??
       (async (args, onStdout) => ({ stoppedEarly: onStdout(await fixture.git(args)) })),
+    isRepositoryRoot: () =>
+      isStatusRepositoryRoot(async (args, onStdout) => ({
+        stoppedEarly: onStdout(await fixture.git(args))
+      })),
     readAllStatus: async () => {
       const baseline = await readStatus(fixture, 'all', limit)
       return {
@@ -91,6 +96,32 @@ afterEach(async () => {
 })
 
 describe('untracked directory expansion against real Git', () => {
+  it.each([true, false])(
+    'preserves nested workspace status with status.relativePaths=%s',
+    async (relativePaths) => {
+      const fixture = await createFixture()
+      await fixture.git(['config', 'status.relativePaths', String(relativePaths)])
+      await fixture.write('workspace/inside/new.txt', 'first\nsecond\n')
+      await fixture.write('sibling/new.txt')
+      const cwd = join(fixture.repo, 'workspace')
+      const folderFixture = { ...fixture, git: (args: string[]) => fixture.git(args, cwd) }
+      const baseline = await readStatus(folderFixture, 'all')
+      const listing = async () => {
+        throw new Error('Nested status must not run ls-files')
+      }
+      const expanded = await readExpandedStatus(folderFixture, 0, listing)
+
+      expect(expanded.records).toEqual(baseline.parser.statusRecords)
+      expect(
+        expanded.records.map((record) => record.type === 'entry' && record.entry.path)
+      ).toEqual(
+        relativePaths
+          ? ['../sibling/new.txt', 'inside/new.txt']
+          : ['sibling/new.txt', 'workspace/inside/new.txt']
+      )
+    }
+  )
+
   it.each([2, 3, 4])('keeps the ordered file prefix at limit %i', async (limit) => {
     const fixture = await createFixture()
     for (const file of ['aaa/a', 'aaa/b', 'aaa/c', 'b', 'c', 'd', 'e']) {

@@ -148,7 +148,7 @@ async function runGetStatus(
   }
 
   // Why: stream + parse and stop at `limit` so a huge un-ignored folder can't buffer enough to crash the process.
-  const parser = new StatusPorcelainParser()
+  let parser = new StatusPorcelainParser()
   let didHitLimit = false
   // Why: attach rejection ownership before awaiting marker I/O, so a fast Git failure cannot become unhandled.
   const statusSettlementPromise = Promise.allSettled([
@@ -193,8 +193,10 @@ async function runGetStatus(
       worktreePath,
       { parser, stoppedEarly: didHitLimit },
       limit,
-      options
+      options,
+      statusArgs
     )
+    parser = expanded.parser
     statusRecords = expanded.records
     statusLength = expanded.statusLength
     didHitLimit = expanded.stoppedEarly

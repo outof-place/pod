@@ -142,12 +142,13 @@ export async function getStatusOp(
     if (statusResult.status === 'rejected') {
       throw statusResult.reason
     }
-    const { parser } = statusResult.value
-    const expanded = await expandRelayStatusUntrackedDirectories(streamGit, statusResult.value, {
-      worktreePath,
-      limit,
-      signal: options.signal
-    })
+    const expanded = await expandRelayStatusUntrackedDirectories(
+      streamGit,
+      statusResult.value,
+      { worktreePath, limit, signal: options.signal },
+      statusArgs
+    )
+    const { parser } = expanded
     head = parser.branch.head
     branch = parser.branch.branch
     ignoredPaths = parser.ignoredPaths

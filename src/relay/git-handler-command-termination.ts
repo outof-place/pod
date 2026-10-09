@@ -8,7 +8,8 @@ import { GitAdmissionScheduler } from '../shared/git-admission-scheduler'
 import type { GitAdmissionRequest } from '../shared/git-admission-state'
 import { gitCommandTimeoutMs } from '../shared/git-command-timeout'
 
-export const MAX_GIT_BUFFER = 10 * 1024 * 1024
+import { GIT_OUTPUT_MAX_BYTES as MAX_GIT_BUFFER } from '../shared/git-output-byte-limit'
+export { MAX_GIT_BUFFER }
 let scheduler = new GitAdmissionScheduler()
 
 export function _resetRelayGitAdmissionForTests(replacement = new GitAdmissionScheduler()): void {

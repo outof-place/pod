@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
+import { isStatusRepositoryRoot } from './git-status-stream-read'
 import { StatusPorcelainParser } from './git-status-porcelain-parser'
 import {
   expandUntrackedDirectoryRecords,
@@ -56,6 +57,17 @@ export function registerUntrackedDirectoryExpansionBinaryCompatibilityCases(
       await runGit(['-C', `${gitCwd}/${nested}`, 'init', '-q'])
       await writeFile(join(hostPath, nested, 'inner.txt'), 'nested\n')
     }
+
+    expect(
+      await isStatusRepositoryRoot(async (args, onStdout) => ({
+        stoppedEarly: onStdout((await runFixtureGit(args)).stdout)
+      }))
+    ).toBe(true)
+    expect(
+      await isStatusRepositoryRoot(async (args, onStdout) => ({
+        stoppedEarly: onStdout((await runGit(['-C', `${gitCwd}/sp ace`, ...args])).stdout)
+      }))
+    ).toBe(false)
 
     const allRecords = await readStatusRecords(runFixtureGit, statusUntrackedFilesArg(true))
     const expansion = await expandUntrackedDirectoryRecords({
