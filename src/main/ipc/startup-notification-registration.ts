@@ -3,6 +3,7 @@ import type { Store } from '../persistence'
 import { activeNotifications, logNativeNotificationFailure } from './native-notification-lifecycle'
 import { recordNotificationDeliveryOutcome } from './notification-permission-probe'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
+import { brandProductCopy } from '../product-identity/product-overlay'
 
 /**
  * On first launch (macOS permission 'not-determined'), show a welcome notification to trigger the system prompt.
@@ -21,8 +22,10 @@ export function triggerStartupNotificationRegistration(store: Store): void {
   store.updateUI({ notificationPermissionRequested: true })
 
   const notification = new Notification({
-    title: 'Orca is ready to notify you',
-    body: 'Allow notifications so Orca can alert you when agents finish or terminals need attention.'
+    title: brandProductCopy('Orca is ready to notify you'),
+    body: brandProductCopy(
+      'Allow notifications so Orca can alert you when agents finish or terminals need attention.'
+    )
   })
 
   // Why: prevent GC from collecting the notification and its click handler while it's still visible.
