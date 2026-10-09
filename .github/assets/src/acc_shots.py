@@ -105,26 +105,39 @@ def window_html(img: dict[str, str], narrow: bool) -> tuple[str, int, int]:
 
 
 def menu_html(img: dict[str, str], narrow: bool) -> tuple[str, int, int]:
-    """The menu bar helper's panel (Claude Acc.app today, Pod Menu planned)."""
+    """
+    The menu bar helper's panel (Claude Acc.app today, Pod Menu planned), cropped to its first three
+    columns: the fourth, Ultra, shows demo before/after figures, and the README carries no demo
+    numbers. The foot fades out before the builds summary for the same reason.
+    """
+    # panel.png is 2768 x 1567 px at 2x; the crop keeps x < 2125 and fades out by y = 1384.
+    crop_w, crop_h, full_w = 2125 / 2, 1384 / 2, 2768 / 2
     if narrow:
-        w, h = 720, 740
-        body = f"""
-<div class="stage" style="width:{w}px;height:{h}px">
- <div style="left:40px;top:44px"><span class="chip"><i></i>In the menu bar</span></div>
- <h2 style="left:40px;top:96px;font-size:46px">In the menu bar.<span>The whole Mac, in one panel.</span></h2>
- <div class="card" style="left:40px;top:262px;width:640px"><img src="{img['panel.png']}"></div>
- <div class="cap" style="left:40px;top:{262 + 362 + 18}px">The menu bar helper. Demo data.</div>
-</div>"""
-        return body, w, h
-    w, h = 1280, 940
+        w = 720
+        card_w = 640
+    else:
+        w = 1280
+        card_w = crop_w
+    k = card_w / crop_w
+    card_h = crop_h * k
+    top = 262 if narrow else 228
+    h = top + card_h + 70
+    head = (
+        '<div style="left:40px;top:44px"><span class="chip"><i></i>In the menu bar</span></div>'
+        '<h2 style="left:40px;top:96px;font-size:46px">In the menu bar.<span>The whole Mac, in one panel.</span></h2>'
+        if narrow
+        else '<div style="left:64px;top:56px"><span class="chip"><i></i>In the menu bar</span></div>'
+        '<h2 style="left:64px;top:104px;font-size:44px">In the menu bar.<span>The whole Mac, in one panel.</span></h2>'
+    )
+    left = 40 if narrow else (w - card_w) / 2
     body = f"""
-<div class="stage" style="width:{w}px;height:{h}px">
- <div style="left:64px;top:56px"><span class="chip"><i></i>In the menu bar</span></div>
- <h2 style="left:64px;top:104px;font-size:44px">In the menu bar.<span>The whole Mac, in one panel.</span></h2>
- <div class="card" style="left:64px;top:228px;width:1152px"><img src="{img["panel.png"]}"></div>
- <div class="cap" style="left:64px;top:{228 + 652 + 18}px">The menu bar helper. Demo data.</div>
+<div class="stage" style="width:{w}px;height:{h:.0f}px">
+ {head}
+ <div class="card" style="left:{left:.0f}px;top:{top}px;width:{card_w:.0f}px;height:{card_h:.0f}px;background:#1c1c1e;mask-image:linear-gradient(#000 68%,transparent 90%)">
+  <img src="{img['panel.png']}" style="width:{full_w * k:.0f}px;max-width:none"></div>
+ <div class="cap" style="left:{40 if narrow else 64}px;top:{top + card_h + 22:.0f}px">The menu bar helper: accounts, dev servers and builds, Stay Awake, load and heat. Demo data.</div>
 </div>"""
-    return body, w, h
+    return body, w, int(h)
 
 
 def _shots(repo: Path) -> dict[str, str]:
