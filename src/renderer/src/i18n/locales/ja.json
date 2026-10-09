@@ -11798,6 +11798,11 @@
         "PluginSettingsPageDialog": {
           "description": "{{value0}} プラグインが提供し、サンドボックス内に表示されます。"
         },
+        "ProductThirdPartyPlugins": {
+          "label": "サードパーティ製プラグイン",
+          "description": "マーケットプレイス、Git、ローカルフォルダーからプラグインをインストールします。オフの間は、{{product}} に同梱されたプラグインのみが実行されます。",
+          "revocationNote": "{{product}} ではリモートでの失効を利用できないため、後で危険と判明したプラグインを代わりにブロックすることはできません。"
+        },
         "PluginSettingsRow": {
           "openSettingsPage": "{{value1}} の {{value0}} を開く",
           "blocked": "ブロック中",
