@@ -6,9 +6,16 @@ import {
   retainedSkillSelection,
   type SkillSelectionPolicy
 } from './skill-selection'
+import { areStablyServicesAvailable } from '@/lib/product-ui-identity'
 
 export function isSkillShareEligible(skill: DiscoveredSkill, local: boolean): boolean {
-  return local && skill.installed && (skill.sourceKind === 'home' || skill.sourceKind === 'repo')
+  // Fork-only (Pod): share links are hosted on Stably's share.onorca.dev.
+  return (
+    areStablyServicesAvailable() &&
+    local &&
+    skill.installed &&
+    (skill.sourceKind === 'home' || skill.sourceKind === 'repo')
+  )
 }
 
 export function skillShareEligibilityReason(
