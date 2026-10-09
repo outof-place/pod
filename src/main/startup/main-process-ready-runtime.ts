@@ -38,6 +38,7 @@ import { runAfterFirstWindowShown } from './first-window-deferral'
 import { logStartupMilestone } from './startup-diagnostics'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
+import { startPodAccFromStartup } from '../pod/acc/acc-startup'
 
 // Headless serve never opens a window, so the sweep still has to run off a timer there.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -99,6 +100,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   runAfterFirstWindowShown(() => {
     refreshInstalledOpenCodeStatusPlugins(store.getSettings())
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  // Pod only: install or update the bundled claude-acc payload; off the startup path like the sweeps
+  runAfterFirstWindowShown(() => startPodAccFromStartup(), WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   runAfterFirstWindowShown(() => {
     void pruneDesktopOrcadArtifactCache(app.getPath('userData')).catch((error) => {
       console.warn('[orcad-artifacts] Failed to bound the slot cache:', error)
