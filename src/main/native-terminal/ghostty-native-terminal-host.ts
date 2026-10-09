@@ -256,8 +256,22 @@ export function performNativeTerminalMenuAction(
   return true
 }
 
-export function updateAppearance(appearance: NativeTerminalAppearance, zoomFactor: number): void {
-  if (!addon) {
+function ownsAnySurface(webContents: WebContents): boolean {
+  for (const owner of owners.values()) {
+    if (owner.webContents === webContents) {
+      return true
+    }
+  }
+  return false
+}
+
+// Ghostty's config is app-wide, so only a renderer that hosts surfaces may restyle them.
+export function updateAppearance(
+  webContents: WebContents,
+  appearance: NativeTerminalAppearance,
+  zoomFactor: number
+): void {
+  if (!addon || !ownsAnySurface(webContents)) {
     return
   }
   const path = writeConfig(appearance, zoomFactor)
