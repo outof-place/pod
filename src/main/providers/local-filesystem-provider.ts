@@ -12,6 +12,7 @@ import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-r
 import { listMarkdownDocuments } from '../ipc/markdown-documents'
 import type { Store } from '../persistence'
 import { runBundledRipgrepTextSearch } from '../ripgrep/bundled-ripgrep-text-search'
+import { notifyExternalSearchFileActivity } from '../search/external-workspace-search-provider'
 import { parseWslPath } from '../wsl'
 import type { IFilesystemProvider } from './filesystem-provider-contract'
 
@@ -86,6 +87,7 @@ export function createLocalFilesystemProvider(
         }
       }
       await writeFile(authorizedPath, content, 'utf-8')
+      notifyExternalSearchFileActivity({ filePath: authorizedPath, kind: 'write' })
     },
     writeFileBase64: (filePath, contentBase64) => writeBase64(filePath, contentBase64, false),
     writeFileBase64Chunk: writeBase64,
