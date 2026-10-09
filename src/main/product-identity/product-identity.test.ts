@@ -43,12 +43,7 @@ describe('product identity', () => {
       updateFeed: { provider: 'github', owner: 'outof-place', repo: 'pod' },
       stablyServices: false,
       computerUseDisplayName: 'Pod Computer Use',
-      claudeManagedCredentialsService: 'Pod Claude Code Managed Credentials',
-      legacyProfile: {
-        userDataName: 'orca',
-        keychainName: 'orca',
-        claudeManagedCredentialsService: 'Orca Claude Code Managed Credentials'
-      }
+      legacyProfile: { userDataName: 'orca', keychainName: 'orca' }
     })
   })
 
@@ -72,7 +67,6 @@ describe('product identity', () => {
       homepage: _homepage,
       stablyServices: _stablyServices,
       computerUseDisplayName: _computerUseDisplayName,
-      claudeManagedCredentialsService: _claudeManagedCredentialsService,
       ...required
     } = Object(repoIdentity)
     expect(
@@ -82,7 +76,6 @@ describe('product identity', () => {
       homepage: null,
       stablyServices: true,
       computerUseDisplayName: null,
-      claudeManagedCredentialsService: null,
       updateFeed: null,
       legacyProfile: null
     })
