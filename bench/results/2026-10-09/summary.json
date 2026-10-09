@@ -1,0 +1,2249 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-09T23:56:34.306Z",
+  "resultsDir": "results/2026-10-09",
+  "methodology": {
+    "path": "bench/README.md",
+    "url": "https://github.com/outof-place/pod/blob/pod/bench/bench/README.md"
+  },
+  "hardware": "Mac16,5, Apple M4 Max (16 cores: 12 performance + 4 efficiency), 48 GB, macOS 27.0.1 (26A434)",
+  "machine": {
+    "model": "Mac16,5",
+    "chip": "Apple M4 Max",
+    "cores": 16,
+    "performanceCores": 12,
+    "efficiencyCores": 4,
+    "memoryGB": 48,
+    "macOS": "27.0.1 (26A434)",
+    "power": "AC Power",
+    "lowPowerMode": null,
+    "node": "v24.20.0"
+  },
+  "maxLoad": 8,
+  "aggregation": {
+    "version": 2,
+    "median": "average-middle",
+    "p95": "nearest-rank",
+    "p95Role": "descriptive",
+    "p95LinearDriftBoundLaunchSlots": 1
+  },
+  "podStack": {
+    "ref": "origin/main 62a1d7f0e0",
+    "branches": [
+      "pod/infra",
+      "perf/main-compile-cache",
+      "fork/perf-experiments",
+      "fork/no-official-updater",
+      "fix/computer-macos-swiftbuild",
+      "perf/git-status-untracked-cache",
+      "perf/daemon-binary-pty-frames",
+      "feat/native-ghostty-terminal",
+      "stack/proc-info",
+      "stack/ps-locale",
+      "fix/xterm-empty-write-barrier",
+      "app-identity-constant",
+      "stack/plugins",
+      "stack/pod-identity",
+      "pod/overlay",
+      "pod/readme",
+      "stack/pod-acc"
+    ],
+    "entries": [
+      {
+        "branch": "pod/infra",
+        "forkOnly": "Pod product docs, release base pin, upstream sync CI and this stack script"
+      },
+      {
+        "branch": "perf/main-compile-cache",
+        "upstream": "https://github.com/stablyai/orca/pull/13487",
+        "note": "Our own implementation of the change in nwparker's #13487; drop this entry once that PR is in the Orca release"
+      },
+      {
+        "branch": "fork/perf-experiments",
+        "forkOnly": "perf experiments: CADisplayLink pacing on by default on macOS, Skia Graphite env-only, Electron 43.7.8"
+      },
+      {
+        "branch": "fork/no-official-updater",
+        "forkOnly": "Pod must not install Orca's official updates; upstream opt-out PR planned"
+      },
+      {
+        "branch": "fix/computer-macos-swiftbuild",
+        "upstream": "https://github.com/stablyai/orca/pull/26945"
+      },
+      {
+        "branch": "perf/git-status-untracked-cache",
+        "upstream": "https://github.com/stablyai/orca/pull/26979"
+      },
+      {
+        "branch": "perf/daemon-binary-pty-frames",
+        "upstream": "https://github.com/stablyai/orca/pull/27006",
+        "note": "nt-perf main-feed builds on its DaemonEvent path"
+      },
+      {
+        "branch": "feat/native-ghostty-terminal",
+        "upstream": "https://github.com/stablyai/orca/pull/26914"
+      },
+      {
+        "branch": "stack/proc-info",
+        "upstream": "https://github.com/stablyai/orca/pull/26985",
+        "base": "origin/feat/native-ghostty-terminal",
+        "note": "perf/native-proc-info-darwin replayed onto feat/native-ghostty-terminal (package.json build steps merged); refresh when #26985 changes"
+      },
+      {
+        "branch": "stack/ps-locale",
+        "upstream": "https://github.com/stablyai/orca/pull/27005",
+        "base": "origin/stack/proc-info",
+        "note": "fix/ps-locale-independent-start-time replayed onto stack/proc-info (imports merged); refresh when #27005 changes"
+      },
+      {
+        "branch": "fix/xterm-empty-write-barrier",
+        "upstream": "https://github.com/stablyai/orca/pull/26956"
+      },
+      {
+        "branch": "app-identity-constant",
+        "upstream": "https://github.com/stablyai/orca/pull/26973"
+      },
+      {
+        "branch": "stack/plugins",
+        "upstream": "https://github.com/stablyai/orca/pull/26953",
+        "note": "#26953, #26975 and #26991 stacked by b1-plugins-ui; each commit carries its own Upstream trailer"
+      },
+      {
+        "branch": "stack/pod-identity",
+        "forkOnly": "Pod identity: name, bundle id, icon, URL scheme and CLI name",
+        "base": "origin/app-identity-constant",
+        "note": "pod/identity replayed onto app-identity-constant (#26973); refresh when pod/identity changes, or rebase pod/identity itself"
+      },
+      {
+        "branch": "pod/overlay",
+        "forkOnly": "Pod overlay: Stably-hosted services off, product name in UI copy"
+      },
+      {
+        "branch": "pod/readme",
+        "forkOnly": "README visuals"
+      },
+      {
+        "branch": "stack/pod-acc",
+        "forkOnly": "claude-acc built into Pod: bundled plugin, payload and tray",
+        "base": "80cb9c0f659400021a432b052e29c23f680d2fca",
+        "note": "pod/acc minus its own status-bar copies, replayed onto the stack (plugin-marketplace imports merged); refresh when pod/acc changes, or rebase pod/acc onto stack/plugins and stack/pod-identity"
+      }
+    ]
+  },
+  "caveats": [
+    "One Mac, one subject at a time in rotating order; every fresh sample started at a 1-minute load average of 8 or less.",
+    "Orca is the latest official release; Pod is the build named in versions. Pod sits on a newer Orca main commit than the Orca release, so part of any difference can come from upstream changes; the Pod (xterm.js) rows separate the native terminal from the rest of the build.",
+    "Historical rows (provenance.kind \"historical\") were measured earlier, under the conditions in their note, and are not re-measured in this run."
+  ],
+  "groups": {
+    "pod": "Pod vs Orca and other terminals, measured in this run",
+    "claude-acc": "claude-acc, which ships inside Pod: re-measured rows plus historical ones"
+  },
+  "suites": {
+    "claude-acc": {
+      "file": "claude-acc.json",
+      "writtenAt": "2026-10-09T23:56:34.164Z",
+      "group": "claude-acc",
+      "versions": {
+        "claudeAcc": "claude-acc 1.30.1",
+        "claudeAccSource": "/opt/homebrew/opt/claude-acc/libexec",
+        "node": "v24.20.0"
+      },
+      "config": {
+        "fresh": false,
+        "only": null,
+        "runs": 9
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    }
+  },
+  "metrics": [
+    {
+      "id": "claude-acc.ultra.hook-wait-async.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "synchronous memory (cavemem) hook",
+      "metric": "Ultra: hook wait on every agent tool call",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 53,
+      "p95": null,
+      "min": 53,
+      "max": 53,
+      "extra": {
+        "note": "p50; p90 73 ms",
+        "role": null
+      },
+      "conditions": "From Claude Code transcripts, Orca with nine Claude Code sessions running.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit e90c92f",
+        "note": "From Claude Code transcripts, Orca with nine Claude Code sessions running."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.hook-wait-async.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "the same hook with \"async\": true",
+      "metric": "Ultra: hook wait on every agent tool call",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 24,
+      "p95": null,
+      "min": 24,
+      "max": 24,
+      "extra": {
+        "note": "p50; p90 30 ms",
+        "role": null
+      },
+      "conditions": "From Claude Code transcripts, Orca with nine Claude Code sessions running.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit e90c92f",
+        "note": "From Claude Code transcripts, Orca with nine Claude Code sessions running."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.orca-status-hook-async.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "Orca's status hook, synchronous",
+      "metric": "Ultra: wait for Orca's status hook per tool call",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": null,
+      "p95": null,
+      "min": 36,
+      "max": 39,
+      "extra": {
+        "note": "p50 per call, range across hook events; the project memory gives 39-48 ms",
+        "role": null
+      },
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-06",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 791b811",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.orca-status-hook-async.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "the same hook with \"async\": true",
+      "metric": "Ultra: wait for Orca's status hook per tool call",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 0,
+      "p95": null,
+      "min": 0,
+      "max": 0,
+      "extra": {
+        "note": "an async hook does not block the tool call",
+        "role": null
+      },
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-06",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 791b811",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.guard-hook-native.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "devguard.py admit (Python)",
+      "metric": "Ultra: the guard's hook before every Bash command",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": null,
+      "p95": null,
+      "min": 25,
+      "max": 57,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-06",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 791b811",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.guard-hook-native.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "claude-acc-hook (native)",
+      "metric": "Ultra: the guard's hook before every Bash command",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": null,
+      "p95": null,
+      "min": 5,
+      "max": 8,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-06",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 791b811",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.rtk-hook-native.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "rtk's shell script hook",
+      "metric": "Ultra: rtk's hook before every Bash command",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": null,
+      "p95": null,
+      "min": 57,
+      "max": 80,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-06",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 791b811",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.rtk-hook-native.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "`rtk hook claude`",
+      "metric": "Ultra: rtk's hook before every Bash command",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": null,
+      "p95": null,
+      "min": 12,
+      "max": 14,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-06",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 791b811",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.pause-hook.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "shell guard",
+      "metric": "Ultra: limit-pause hook outside a pause",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 7.6,
+      "p95": null,
+      "min": 7.6,
+      "max": 7.6,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-06",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 398b8a8",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.pause-hook.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "claude-acc-pause (C)",
+      "metric": "Ultra: limit-pause hook outside a pause",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 3.1,
+      "p95": null,
+      "min": 3.1,
+      "max": 3.1,
+      "extra": {
+        "note": "the Swift fallback takes 5.0 ms",
+        "role": null
+      },
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-06",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 398b8a8",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.node-compile-cache.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "no compile cache",
+      "metric": "Ultra: `require('typescript')` in a process an agent session spawns",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 96,
+      "p95": null,
+      "min": 96,
+      "max": 96,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit e90c92f",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.node-compile-cache.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "NODE_COMPILE_CACHE",
+      "metric": "Ultra: `require('typescript')` in a process an agent session spawns",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 49,
+      "p95": null,
+      "min": 49,
+      "max": 49,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit e90c92f",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.git-speed.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "default config",
+      "metric": "Ultra: `git status` in an agent worktree repo",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 71,
+      "p95": null,
+      "min": 71,
+      "max": 71,
+      "extra": null,
+      "conditions": "The project memory gives 93 -> 28 ms for portivo's main checkout the same day.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit e90c92f",
+        "note": "The project memory gives 93 -> 28 ms for portivo's main checkout the same day."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.git-speed.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "core.untrackedCache + core.fsmonitor",
+      "metric": "Ultra: `git status` in an agent worktree repo",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 26,
+      "p95": null,
+      "min": 26,
+      "max": 26,
+      "extra": null,
+      "conditions": "The project memory gives 93 -> 28 ms for portivo's main checkout the same day.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit e90c92f",
+        "note": "The project memory gives 93 -> 28 ms for portivo's main checkout the same day."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.git-worktree-add.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "default checkout",
+      "metric": "Ultra: `git worktree add` in an 18,000-file repo",
+      "unit": "s",
+      "better": "lower",
+      "n": null,
+      "median": 2,
+      "p95": null,
+      "min": 2,
+      "max": 2,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit f57082c",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.git-worktree-add.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "checkout.workers=0 (parallel checkout)",
+      "metric": "Ultra: `git worktree add` in an 18,000-file repo",
+      "unit": "s",
+      "better": "lower",
+      "n": null,
+      "median": 1.55,
+      "p95": null,
+      "min": 1.55,
+      "max": 1.55,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit f57082c",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.fast-npx-hooks.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "`npx --no-install` in the hook",
+      "metric": "Ultra: format hook per .ts edit in the pnpm monorepo",
+      "unit": "s",
+      "better": "lower",
+      "n": null,
+      "median": 6.6,
+      "p95": null,
+      "min": 6.6,
+      "max": 6.6,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "Claude Code project memory claude-acc-ultra.md (2026-10-04, updated 2026-10-06)",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.fast-npx-hooks.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "npx-fast-wrap.sh",
+      "metric": "Ultra: format hook per .ts edit in the pnpm monorepo",
+      "unit": "s",
+      "better": "lower",
+      "n": null,
+      "median": 0.08,
+      "p95": null,
+      "min": 0.08,
+      "max": 0.08,
+      "extra": {
+        "note": "per .json edit 3.3 s -> 0.04 s",
+        "role": null
+      },
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "Claude Code project memory claude-acc-ultra.md (2026-10-04, updated 2026-10-06)",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.rg-threads.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "rg, 16 threads (default)",
+      "metric": "Ultra: ripgrep walk of a 17.7k-file repo",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 428,
+      "p95": null,
+      "min": 428,
+      "max": 428,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit b1d6c32",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.rg-threads.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "rg --threads=4 (rg-threads)",
+      "metric": "Ultra: ripgrep walk of a 17.7k-file repo",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 179,
+      "p95": null,
+      "min": 179,
+      "max": 179,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit b1d6c32",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.bg-helpers.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "default QoS",
+      "metric": "Ultra: CPU of a memory helper that scanned its 1.9 GB database all day",
+      "unit": "% of a P-core",
+      "better": "lower",
+      "n": null,
+      "median": 32,
+      "p95": null,
+      "min": 32,
+      "max": 32,
+      "extra": {
+        "note": "~1 W",
+        "role": null
+      },
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit e90c92f",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.bg-helpers.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "background QoS (efficiency cores)",
+      "metric": "Ultra: CPU of a memory helper that scanned its 1.9 GB database all day",
+      "unit": "% of a P-core",
+      "better": "lower",
+      "n": null,
+      "median": 0.1,
+      "p95": null,
+      "min": 0.1,
+      "max": 0.1,
+      "extra": {
+        "note": "~0.1 W",
+        "role": null
+      },
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit e90c92f",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.launcher-python.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "command line tools' Python 3.9",
+      "metric": "Ultra: Python interpreter start for every claude-acc script",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 37,
+      "p95": null,
+      "min": 37,
+      "max": 37,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-05",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 89c546c",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.ultra.launcher-python.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "uv's CPython 3.14",
+      "metric": "Ultra: Python interpreter start for every claude-acc script",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 26,
+      "p95": null,
+      "min": 26,
+      "max": 26,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-05",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 89c546c",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.perf-root.devtools.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "Orca not in Developer Tools",
+      "metric": "perf-root: first exec of a freshly built Go binary from an Orca terminal",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 196.2,
+      "p95": null,
+      "min": 196.2,
+      "max": 196.2,
+      "extra": null,
+      "conditions": "Measured with `claude-acc perf bench gatekeeper`; the before value is perf.py's DEVTOOLS_BEFORE_MS.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "Claude Code project memory claude-acc-ultra.md (2026-10-04, updated 2026-10-06)",
+        "note": "Measured with `claude-acc perf bench gatekeeper`; the before value is perf.py's DEVTOOLS_BEFORE_MS."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.perf-root.devtools.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "Orca in Developer Tools",
+      "metric": "perf-root: first exec of a freshly built Go binary from an Orca terminal",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": null,
+      "p95": null,
+      "min": 4.1,
+      "max": 4.4,
+      "extra": null,
+      "conditions": "Measured with `claude-acc perf bench gatekeeper`; the before value is perf.py's DEVTOOLS_BEFORE_MS.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "Claude Code project memory claude-acc-ultra.md (2026-10-04, updated 2026-10-06)",
+        "note": "Measured with `claude-acc perf bench gatekeeper`; the before value is perf.py's DEVTOOLS_BEFORE_MS."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.perf-root.vnodes.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "kern.maxvnodes 263,168",
+      "metric": "perf-root: second `lstat` pass over a pnpm store (358,000 entries)",
+      "unit": "s",
+      "better": "lower",
+      "n": null,
+      "median": 3.59,
+      "p95": null,
+      "min": 3.59,
+      "max": 3.59,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit c75f6d8",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.perf-root.vnodes.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "kern.maxvnodes 786,432",
+      "metric": "perf-root: second `lstat` pass over a pnpm store (358,000 entries)",
+      "unit": "s",
+      "better": "lower",
+      "n": null,
+      "median": 2.51,
+      "p95": null,
+      "min": 2.51,
+      "max": 2.51,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit c75f6d8",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.perf-root.iogpu.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "macOS default wired limit",
+      "metric": "perf-root: memory MLX can use on the GPU",
+      "unit": "GB",
+      "better": "higher",
+      "n": null,
+      "median": 40.2,
+      "p95": null,
+      "min": 40.2,
+      "max": 40.2,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit f57082c",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.perf-root.iogpu.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "iogpu.wired_limit_mb 40,960",
+      "metric": "perf-root: memory MLX can use on the GPU",
+      "unit": "GB",
+      "better": "higher",
+      "n": null,
+      "median": 42.9,
+      "p95": null,
+      "min": 42.9,
+      "max": 42.9,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit f57082c",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.devguard.restart.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "after agent edits",
+      "metric": "Dev server guard: memory of one Turbopack dev server",
+      "unit": "GB",
+      "better": "lower",
+      "n": null,
+      "median": 7.8,
+      "p95": null,
+      "min": 7.8,
+      "max": 7.8,
+      "extra": {
+        "note": "7-9 GB per server",
+        "role": null
+      },
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "Claude Code project memory claude-acc-devguard.md (2026-10-04)",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.devguard.restart.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "right after the guard's restart",
+      "metric": "Dev server guard: memory of one Turbopack dev server",
+      "unit": "GB",
+      "better": "lower",
+      "n": null,
+      "median": 2.3,
+      "p95": null,
+      "min": 2.3,
+      "max": 2.3,
+      "extra": {
+        "note": "it grew back to 7.8 GB within 10 minutes of edits, so the guard restarts again",
+        "role": null
+      },
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "Claude Code project memory claude-acc-devguard.md (2026-10-04)",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.devguard.eviction.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "turbopackMemoryEviction: auto",
+      "metric": "Dev server guard: Turbopack dev server memory after 30 agent edits (why the guard restarts rather than tunes)",
+      "unit": "GB",
+      "better": "lower",
+      "n": null,
+      "median": 5.97,
+      "p95": null,
+      "min": 5.97,
+      "max": 5.97,
+      "extra": {
+        "note": null,
+        "role": "context"
+      },
+      "conditions": "Evidence, not a win: the eviction setting changes nothing, both start at 1.2 GB.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 43140b3",
+        "note": "Evidence, not a win: the eviction setting changes nothing, both start at 1.2 GB."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists.",
+        "Context for a design choice, not a claude-acc improvement."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.devguard.eviction.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "turbopackMemoryEviction: full",
+      "metric": "Dev server guard: Turbopack dev server memory after 30 agent edits (why the guard restarts rather than tunes)",
+      "unit": "GB",
+      "better": "lower",
+      "n": null,
+      "median": 6.01,
+      "p95": null,
+      "min": 6.01,
+      "max": 6.01,
+      "extra": {
+        "note": null,
+        "role": "context"
+      },
+      "conditions": "Evidence, not a win: the eviction setting changes nothing, both start at 1.2 GB.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 43140b3",
+        "note": "Evidence, not a win: the eviction setting changes nothing, both start at 1.2 GB."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists.",
+        "Context for a design choice, not a claude-acc improvement."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.devguard.pass-cpu.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "ps, lsof and four orca CLI calls per pass",
+      "metric": "Dev server guard: CPU the guard's passes spend in child processes",
+      "unit": "s CPU per minute",
+      "better": "lower",
+      "n": null,
+      "median": 3.9,
+      "p95": null,
+      "min": 3.9,
+      "max": 3.9,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-05",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 89c546c",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.devguard.pass-cpu.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "sysctl, proc_pidfdinfo and Orca's socket",
+      "metric": "Dev server guard: CPU the guard's passes spend in child processes",
+      "unit": "s CPU per minute",
+      "better": "lower",
+      "n": null,
+      "median": 0.2,
+      "p95": null,
+      "min": 0.2,
+      "max": 0.2,
+      "extra": {
+        "note": "about 0.2 s",
+        "role": null
+      },
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-05",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 89c546c",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.sched.overlap.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "one-at-a-time lock (plock)",
+      "metric": "Build scheduler: total wait of 7 overlapping Go commands",
+      "unit": "s",
+      "better": "lower",
+      "n": null,
+      "median": 454,
+      "p95": null,
+      "min": 454,
+      "max": 454,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-05",
+        "source": "Claude Code project memory claude-acc-sched.md (2026-10-05)",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.sched.overlap.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "memory-aware scheduler (sched.py 1.3.4)",
+      "metric": "Build scheduler: total wait of 7 overlapping Go commands",
+      "unit": "s",
+      "better": "lower",
+      "n": null,
+      "median": 2.8,
+      "p95": null,
+      "min": 2.8,
+      "max": 2.8,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-05",
+        "source": "Claude Code project memory claude-acc-sched.md (2026-10-05)",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.sched.depot.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "local run",
+      "metric": "Build scheduler: a heavy Go test with Postgres",
+      "unit": "s",
+      "better": "lower",
+      "n": null,
+      "median": 53,
+      "p95": null,
+      "min": 53,
+      "max": 53,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-05",
+        "source": "Claude Code project memory claude-acc-sched.md (2026-10-05)",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.sched.depot.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "routed to Depot (--with pg)",
+      "metric": "Build scheduler: a heavy Go test with Postgres",
+      "unit": "s",
+      "better": "lower",
+      "n": null,
+      "median": 3.4,
+      "p95": null,
+      "min": 3.4,
+      "max": 3.4,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-05",
+        "source": "Claude Code project memory claude-acc-sched.md (2026-10-05)",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.janitor.compress-apps.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "uncompressed",
+      "metric": "Janitor: disk used by /Applications (user-owned apps) after one compress pass",
+      "unit": "MB",
+      "better": "lower",
+      "n": null,
+      "median": 724,
+      "p95": null,
+      "min": 724,
+      "max": 724,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "Claude Code project memory claude-acc-janitor.md (2026-10-08 and 2026-10-09)",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.janitor.compress-apps.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "APFS LZFSE (janitor compress)",
+      "metric": "Janitor: disk used by /Applications (user-owned apps) after one compress pass",
+      "unit": "MB",
+      "better": "lower",
+      "n": null,
+      "median": 360,
+      "p95": null,
+      "min": 360,
+      "max": 360,
+      "extra": null,
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "Claude Code project memory claude-acc-janitor.md (2026-10-08 and 2026-10-09)",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.janitor.compress-transcripts.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "APFS LZFSE (janitor compress)",
+      "metric": "Janitor: space saved on Claude Code transcripts by APFS compression",
+      "unit": "%",
+      "better": "higher",
+      "n": null,
+      "median": 75,
+      "p95": null,
+      "min": 75,
+      "max": 75,
+      "extra": {
+        "note": "Word.app 39%",
+        "role": null
+      },
+      "conditions": "",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-08",
+        "source": "Claude Code project memory claude-acc-janitor.md (2026-10-08 and 2026-10-09)",
+        "note": null
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.mcp-share.cavemem-memory.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "one stdio copy per session",
+      "metric": "Shared MCP servers: memory of cavemem across nine sessions",
+      "unit": "MB",
+      "better": "lower",
+      "n": null,
+      "median": 490,
+      "p95": null,
+      "min": 490,
+      "max": 490,
+      "extra": null,
+      "conditions": "torbaczov the same day: 321 -> 131 MB; together about -520 MB idle, and a new session adds nothing.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 3813249",
+        "note": "torbaczov the same day: 321 -> 131 MB; together about -520 MB idle, and a new session adds nothing."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.mcp-share.cavemem-memory.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "one shared server and its bridge",
+      "metric": "Shared MCP servers: memory of cavemem across nine sessions",
+      "unit": "MB",
+      "better": "lower",
+      "n": null,
+      "median": 165,
+      "p95": null,
+      "min": 165,
+      "max": 165,
+      "extra": null,
+      "conditions": "torbaczov the same day: 321 -> 131 MB; together about -520 MB idle, and a new session adds nothing.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 3813249",
+        "note": "torbaczov the same day: 321 -> 131 MB; together about -520 MB idle, and a new session adds nothing."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.mcp-share.connect.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "stdio copy",
+      "metric": "Shared MCP servers: cavemem connect time per session",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 83,
+      "p95": null,
+      "min": 83,
+      "max": 83,
+      "extra": null,
+      "conditions": "torbaczov: 26 -> 7 ms.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 3813249",
+        "note": "torbaczov: 26 -> 7 ms."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.mcp-share.connect.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "shared server",
+      "metric": "Shared MCP servers: cavemem connect time per session",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 8,
+      "p95": null,
+      "min": 8,
+      "max": 8,
+      "extra": null,
+      "conditions": "torbaczov: 26 -> 7 ms.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 3813249",
+        "note": "torbaczov: 26 -> 7 ms."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.hotspot.ping-p90.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "off",
+      "metric": "Hotspot turbo: ping p90 on an iPhone USB hotspot with other sessions uploading",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 95,
+      "p95": null,
+      "min": 95,
+      "max": 95,
+      "extra": null,
+      "conditions": "Three 40 s rounds off and three on, alternating; p99 367 -> 274 ms.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-08",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 08301e7",
+        "note": "Three 40 s rounds off and three on, alternating; p99 367 -> 274 ms."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.hotspot.ping-p90.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "Hotspot turbo (adaptive tbr)",
+      "metric": "Hotspot turbo: ping p90 on an iPhone USB hotspot with other sessions uploading",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 53,
+      "p95": null,
+      "min": 53,
+      "max": 53,
+      "extra": null,
+      "conditions": "Three 40 s rounds off and three on, alternating; p99 367 -> 274 ms.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-08",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 08301e7",
+        "note": "Three 40 s rounds off and three on, alternating; p99 367 -> 274 ms."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.hotspot.api-p90.historical.before",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "off",
+      "metric": "Hotspot turbo: small request to api.anthropic.com, p90, on an iPhone USB hotspot",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 608,
+      "p95": null,
+      "min": 608,
+      "max": 608,
+      "extra": null,
+      "conditions": "A 2 MB upload got no slower: 1.01 -> 0.90 s at p50.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-08",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 08301e7",
+        "note": "A 2 MB upload got no slower: 1.01 -> 0.90 s at p50."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    },
+    {
+      "id": "claude-acc.hotspot.api-p90.historical.after",
+      "suite": "claude-acc",
+      "group": "claude-acc",
+      "subject": "Hotspot turbo (adaptive tbr)",
+      "metric": "Hotspot turbo: small request to api.anthropic.com, p90, on an iPhone USB hotspot",
+      "unit": "ms",
+      "better": "lower",
+      "n": null,
+      "median": 550,
+      "p95": null,
+      "min": 550,
+      "max": 550,
+      "extra": null,
+      "conditions": "A 2 MB upload got no slower: 1.01 -> 0.90 s at p50.",
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-08",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 08301e7",
+        "note": "A 2 MB upload got no slower: 1.01 -> 0.90 s at p50."
+      },
+      "branch": null,
+      "upstream": null,
+      "inPodStack": null,
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ],
+      "source": "claude-acc.json"
+    }
+  ],
+  "comparisons": [
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Ultra: hook wait on every agent tool call",
+      "label": "Ultra: hook wait on every agent tool call (historical, 2026-10-04)",
+      "baseline": {
+        "id": "claude-acc.ultra.hook-wait-async.historical.before",
+        "subject": "synchronous memory (cavemem) hook",
+        "median": 53
+      },
+      "candidate": {
+        "id": "claude-acc.ultra.hook-wait-async.historical.after",
+        "subject": "the same hook with \"async\": true",
+        "median": 24
+      },
+      "unit": "ms",
+      "factor": 2.208,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit e90c92f",
+        "note": "From Claude Code transcripts, Orca with nine Claude Code sessions running."
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Ultra: limit-pause hook outside a pause",
+      "label": "Ultra: limit-pause hook outside a pause (historical, 2026-10-06)",
+      "baseline": {
+        "id": "claude-acc.ultra.pause-hook.historical.before",
+        "subject": "shell guard",
+        "median": 7.6
+      },
+      "candidate": {
+        "id": "claude-acc.ultra.pause-hook.historical.after",
+        "subject": "claude-acc-pause (C)",
+        "median": 3.1
+      },
+      "unit": "ms",
+      "factor": 2.452,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-06",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 398b8a8",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Ultra: `require('typescript')` in a process an agent session spawns",
+      "label": "Ultra: `require('typescript')` in a process an agent session spawns (historical, 2026-10-04)",
+      "baseline": {
+        "id": "claude-acc.ultra.node-compile-cache.historical.before",
+        "subject": "no compile cache",
+        "median": 96
+      },
+      "candidate": {
+        "id": "claude-acc.ultra.node-compile-cache.historical.after",
+        "subject": "NODE_COMPILE_CACHE",
+        "median": 49
+      },
+      "unit": "ms",
+      "factor": 1.959,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit e90c92f",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Ultra: `git status` in an agent worktree repo",
+      "label": "Ultra: `git status` in an agent worktree repo (historical, 2026-10-04)",
+      "baseline": {
+        "id": "claude-acc.ultra.git-speed.historical.before",
+        "subject": "default config",
+        "median": 71
+      },
+      "candidate": {
+        "id": "claude-acc.ultra.git-speed.historical.after",
+        "subject": "core.untrackedCache + core.fsmonitor",
+        "median": 26
+      },
+      "unit": "ms",
+      "factor": 2.731,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit e90c92f",
+        "note": "The project memory gives 93 -> 28 ms for portivo's main checkout the same day."
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Ultra: `git worktree add` in an 18,000-file repo",
+      "label": "Ultra: `git worktree add` in an 18,000-file repo (historical, 2026-10-09)",
+      "baseline": {
+        "id": "claude-acc.ultra.git-worktree-add.historical.before",
+        "subject": "default checkout",
+        "median": 2
+      },
+      "candidate": {
+        "id": "claude-acc.ultra.git-worktree-add.historical.after",
+        "subject": "checkout.workers=0 (parallel checkout)",
+        "median": 1.55
+      },
+      "unit": "s",
+      "factor": 1.29,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit f57082c",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Ultra: format hook per .ts edit in the pnpm monorepo",
+      "label": "Ultra: format hook per .ts edit in the pnpm monorepo (historical, 2026-10-04)",
+      "baseline": {
+        "id": "claude-acc.ultra.fast-npx-hooks.historical.before",
+        "subject": "`npx --no-install` in the hook",
+        "median": 6.6
+      },
+      "candidate": {
+        "id": "claude-acc.ultra.fast-npx-hooks.historical.after",
+        "subject": "npx-fast-wrap.sh",
+        "median": 0.08
+      },
+      "unit": "s",
+      "factor": 82.5,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "Claude Code project memory claude-acc-ultra.md (2026-10-04, updated 2026-10-06)",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Ultra: ripgrep walk of a 17.7k-file repo",
+      "label": "Ultra: ripgrep walk of a 17.7k-file repo (historical, 2026-10-09)",
+      "baseline": {
+        "id": "claude-acc.ultra.rg-threads.historical.before",
+        "subject": "rg, 16 threads (default)",
+        "median": 428
+      },
+      "candidate": {
+        "id": "claude-acc.ultra.rg-threads.historical.after",
+        "subject": "rg --threads=4 (rg-threads)",
+        "median": 179
+      },
+      "unit": "ms",
+      "factor": 2.391,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit b1d6c32",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Ultra: CPU of a memory helper that scanned its 1.9 GB database all day",
+      "label": "Ultra: CPU of a memory helper that scanned its 1.9 GB database all day (historical, 2026-10-04)",
+      "baseline": {
+        "id": "claude-acc.ultra.bg-helpers.historical.before",
+        "subject": "default QoS",
+        "median": 32
+      },
+      "candidate": {
+        "id": "claude-acc.ultra.bg-helpers.historical.after",
+        "subject": "background QoS (efficiency cores)",
+        "median": 0.1
+      },
+      "unit": "% of a P-core",
+      "factor": 320,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit e90c92f",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Ultra: Python interpreter start for every claude-acc script",
+      "label": "Ultra: Python interpreter start for every claude-acc script (historical, 2026-10-05)",
+      "baseline": {
+        "id": "claude-acc.ultra.launcher-python.historical.before",
+        "subject": "command line tools' Python 3.9",
+        "median": 37
+      },
+      "candidate": {
+        "id": "claude-acc.ultra.launcher-python.historical.after",
+        "subject": "uv's CPython 3.14",
+        "median": 26
+      },
+      "unit": "ms",
+      "factor": 1.423,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-05",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 89c546c",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "perf-root: second `lstat` pass over a pnpm store (358,000 entries)",
+      "label": "perf-root: second `lstat` pass over a pnpm store (358,000 entries) (historical, 2026-10-04)",
+      "baseline": {
+        "id": "claude-acc.perf-root.vnodes.historical.before",
+        "subject": "kern.maxvnodes 263,168",
+        "median": 3.59
+      },
+      "candidate": {
+        "id": "claude-acc.perf-root.vnodes.historical.after",
+        "subject": "kern.maxvnodes 786,432",
+        "median": 2.51
+      },
+      "unit": "s",
+      "factor": 1.43,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit c75f6d8",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "perf-root: memory MLX can use on the GPU",
+      "label": "perf-root: memory MLX can use on the GPU (historical, 2026-10-09)",
+      "baseline": {
+        "id": "claude-acc.perf-root.iogpu.historical.before",
+        "subject": "macOS default wired limit",
+        "median": 40.2
+      },
+      "candidate": {
+        "id": "claude-acc.perf-root.iogpu.historical.after",
+        "subject": "iogpu.wired_limit_mb 40,960",
+        "median": 42.9
+      },
+      "unit": "GB",
+      "factor": 1.067,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit f57082c",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Dev server guard: memory of one Turbopack dev server",
+      "label": "Dev server guard: memory of one Turbopack dev server (historical, 2026-10-04)",
+      "baseline": {
+        "id": "claude-acc.devguard.restart.historical.before",
+        "subject": "after agent edits",
+        "median": 7.8
+      },
+      "candidate": {
+        "id": "claude-acc.devguard.restart.historical.after",
+        "subject": "right after the guard's restart",
+        "median": 2.3
+      },
+      "unit": "GB",
+      "factor": 3.391,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-04",
+        "source": "Claude Code project memory claude-acc-devguard.md (2026-10-04)",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Dev server guard: CPU the guard's passes spend in child processes",
+      "label": "Dev server guard: CPU the guard's passes spend in child processes (historical, 2026-10-05)",
+      "baseline": {
+        "id": "claude-acc.devguard.pass-cpu.historical.before",
+        "subject": "ps, lsof and four orca CLI calls per pass",
+        "median": 3.9
+      },
+      "candidate": {
+        "id": "claude-acc.devguard.pass-cpu.historical.after",
+        "subject": "sysctl, proc_pidfdinfo and Orca's socket",
+        "median": 0.2
+      },
+      "unit": "s CPU per minute",
+      "factor": 19.5,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-05",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 89c546c",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Build scheduler: total wait of 7 overlapping Go commands",
+      "label": "Build scheduler: total wait of 7 overlapping Go commands (historical, 2026-10-05)",
+      "baseline": {
+        "id": "claude-acc.sched.overlap.historical.before",
+        "subject": "one-at-a-time lock (plock)",
+        "median": 454
+      },
+      "candidate": {
+        "id": "claude-acc.sched.overlap.historical.after",
+        "subject": "memory-aware scheduler (sched.py 1.3.4)",
+        "median": 2.8
+      },
+      "unit": "s",
+      "factor": 162.143,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-05",
+        "source": "Claude Code project memory claude-acc-sched.md (2026-10-05)",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Build scheduler: a heavy Go test with Postgres",
+      "label": "Build scheduler: a heavy Go test with Postgres (historical, 2026-10-05)",
+      "baseline": {
+        "id": "claude-acc.sched.depot.historical.before",
+        "subject": "local run",
+        "median": 53
+      },
+      "candidate": {
+        "id": "claude-acc.sched.depot.historical.after",
+        "subject": "routed to Depot (--with pg)",
+        "median": 3.4
+      },
+      "unit": "s",
+      "factor": 15.588,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-05",
+        "source": "Claude Code project memory claude-acc-sched.md (2026-10-05)",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Janitor: disk used by /Applications (user-owned apps) after one compress pass",
+      "label": "Janitor: disk used by /Applications (user-owned apps) after one compress pass (historical, 2026-10-09)",
+      "baseline": {
+        "id": "claude-acc.janitor.compress-apps.historical.before",
+        "subject": "uncompressed",
+        "median": 724
+      },
+      "candidate": {
+        "id": "claude-acc.janitor.compress-apps.historical.after",
+        "subject": "APFS LZFSE (janitor compress)",
+        "median": 360
+      },
+      "unit": "MB",
+      "factor": 2.011,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "Claude Code project memory claude-acc-janitor.md (2026-10-08 and 2026-10-09)",
+        "note": null
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Shared MCP servers: memory of cavemem across nine sessions",
+      "label": "Shared MCP servers: memory of cavemem across nine sessions (historical, 2026-10-09)",
+      "baseline": {
+        "id": "claude-acc.mcp-share.cavemem-memory.historical.before",
+        "subject": "one stdio copy per session",
+        "median": 490
+      },
+      "candidate": {
+        "id": "claude-acc.mcp-share.cavemem-memory.historical.after",
+        "subject": "one shared server and its bridge",
+        "median": 165
+      },
+      "unit": "MB",
+      "factor": 2.97,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 3813249",
+        "note": "torbaczov the same day: 321 -> 131 MB; together about -520 MB idle, and a new session adds nothing."
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Shared MCP servers: cavemem connect time per session",
+      "label": "Shared MCP servers: cavemem connect time per session (historical, 2026-10-09)",
+      "baseline": {
+        "id": "claude-acc.mcp-share.connect.historical.before",
+        "subject": "stdio copy",
+        "median": 83
+      },
+      "candidate": {
+        "id": "claude-acc.mcp-share.connect.historical.after",
+        "subject": "shared server",
+        "median": 8
+      },
+      "unit": "ms",
+      "factor": 10.375,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-09",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 3813249",
+        "note": "torbaczov: 26 -> 7 ms."
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Hotspot turbo: ping p90 on an iPhone USB hotspot with other sessions uploading",
+      "label": "Hotspot turbo: ping p90 on an iPhone USB hotspot with other sessions uploading (historical, 2026-10-08)",
+      "baseline": {
+        "id": "claude-acc.hotspot.ping-p90.historical.before",
+        "subject": "off",
+        "median": 95
+      },
+      "candidate": {
+        "id": "claude-acc.hotspot.ping-p90.historical.after",
+        "subject": "Hotspot turbo (adaptive tbr)",
+        "median": 53
+      },
+      "unit": "ms",
+      "factor": 1.792,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-08",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 08301e7",
+        "note": "Three 40 s rounds off and three on, alternating; p99 367 -> 274 ms."
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    },
+    {
+      "group": "claude-acc",
+      "suite": "claude-acc",
+      "metric": "Hotspot turbo: small request to api.anthropic.com, p90, on an iPhone USB hotspot",
+      "label": "Hotspot turbo: small request to api.anthropic.com, p90, on an iPhone USB hotspot (historical, 2026-10-08)",
+      "baseline": {
+        "id": "claude-acc.hotspot.api-p90.historical.before",
+        "subject": "off",
+        "median": 608
+      },
+      "candidate": {
+        "id": "claude-acc.hotspot.api-p90.historical.after",
+        "subject": "Hotspot turbo (adaptive tbr)",
+        "median": 550
+      },
+      "unit": "ms",
+      "factor": 1.105,
+      "candidateAhead": true,
+      "provenance": {
+        "kind": "historical",
+        "date": "2026-10-08",
+        "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 08301e7",
+        "note": "A 2 MB upload got no slower: 1.01 -> 0.90 s at p50."
+      },
+      "caveats": [
+        "claude-acc ships inside Pod. Historical rows were measured on this Mac on the dates given, with Orca and up to nine Claude Code sessions running, and are not re-measured unless a fresh row of the same name exists."
+      ]
+    }
+  ]
+}
