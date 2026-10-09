@@ -7,8 +7,8 @@ import type { PreloadApi } from '../api-types'
 
 export const nativeTerminalApi = {
   isSupported: () => ipcRenderer.invoke('nativeTerminal:isSupported'),
-  create: (appearance, zoomFactor) =>
-    ipcRenderer.invoke('nativeTerminal:create', appearance, zoomFactor),
+  create: (appearance, zoomFactor, accessibilityLabel) =>
+    ipcRenderer.invoke('nativeTerminal:create', appearance, zoomFactor, accessibilityLabel),
   write: (surfaceId, data) => ipcRenderer.send('nativeTerminal:write', surfaceId, data),
   setFrames: (frames) => ipcRenderer.send('nativeTerminal:setFrames', frames),
   focus: (surfaceId) => ipcRenderer.send('nativeTerminal:focus', surfaceId),

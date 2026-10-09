@@ -56,6 +56,7 @@ export type GhosttyTerminalAddon = {
   gridSize: (surfaceId: number) => { columns: number; rows: number } | null
   releaseKeyboard: (surfaceIds: number[]) => void
   setSurfaceShellPid: (surfaceId: number, pid: number) => string | null
+  setSurfaceAccessibilityLabel: (surfaceId: number, label: string) => void
   debugInsertText: (surfaceId: number, text: string) => void
   debugMarkedText: (
     surfaceId: number,
