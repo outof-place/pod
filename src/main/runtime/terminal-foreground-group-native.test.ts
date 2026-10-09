@@ -108,6 +108,19 @@ describe('readTerminalProcessRows with the native process-info addon', () => {
     expect(runProcessMock).not.toHaveBeenCalled()
   })
 
+  it('defers empty commands to ps instead of treating them as a foreground agent', async () => {
+    installPane(116, '\u00a0\u2002\u2028')
+
+    await readTerminalProcessRows(116)
+
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: 'ps',
+        args: ['-o', 'pid=,ppid=,pgid=,tpgid=,stat=,command=', '-t', 'ttys003']
+      })
+    )
+  })
+
   it('treats a vanished root as no terminal rather than asking ps', async () => {
     installPane(120, '/opt/bin/claude')
 

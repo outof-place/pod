@@ -69,7 +69,13 @@ function readNativeTerminalRows(tty: string, rootPid: number): ProcessTableRow[]
   try {
     const rows = getNativeProcessInfo()?.listTerminalProcesses(tty)
     const foregroundGroup = rows?.find((row) => row.pid === rootPid)?.tpgid
-    if (!rows || rows.some((row) => row.command === null && row.pgid === foregroundGroup)) {
+    if (
+      !rows ||
+      rows.some(
+        (row) =>
+          (row.command === null && row.pgid === foregroundGroup) || row.command?.trim() === ''
+      )
+    ) {
       return null
     }
     return rows.map(({ pid, ppid, pgid, tpgid, stat, command, name }) => ({
