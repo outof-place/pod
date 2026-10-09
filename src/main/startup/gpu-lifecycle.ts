@@ -25,6 +25,7 @@ import {
 } from './windows-install-dir-acl-recovery'
 import { mainProcessState as state, gpuFallbackEnvironment } from './main-process-state'
 import { createGpuAccelerationAboutPanelOptions } from '../menu/gpu-acceleration-about-panel'
+import { getProductIdentity } from '../product-identity/product-identity'
 
 export function createGpuCrashDiagnosticsRecorder(): GpuCrashDiagnosticsRecorder | null {
   if (process.platform !== 'win32') {
@@ -46,7 +47,8 @@ export function updateGpuAccelerationAboutPanel(): void {
       appVersion: app.getVersion(),
       platform: process.platform,
       gpuFallbackActive: state.gpuFallbackActiveThisLaunch,
-      gpuFeatureStatus: state.gpuFeatureStatus
+      gpuFeatureStatus: state.gpuFeatureStatus,
+      product: getProductIdentity()
     })
   )
 }
