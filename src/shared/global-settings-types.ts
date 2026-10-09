@@ -56,6 +56,10 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
+  /** Pod (macOS): turns the workspace root on outside Pod builds. */
+  experimentalPodWorkspace?: boolean
+  /** Pod (macOS): where repositories live, as `<root>/<owner>/<repo>`; absent means `~/pod`. */
+  podWorkspaceRoot?: string
   refreshLocalBaseRefOnWorktreeCreate: boolean
   /** Set once the user dismisses the "local main is behind" suggestion toast, so
    *  the nudge to enable refreshLocalBaseRefOnWorktreeCreate never shows again. */
