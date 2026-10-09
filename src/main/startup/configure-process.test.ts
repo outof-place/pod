@@ -668,6 +668,7 @@ describe('enableMainProcessGpuFeatures', () => {
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
 
     delete process.env.ORCA_E2E_USER_DATA_DIR
+    setPlatform('linux')
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     enableMainProcessGpuFeatures()
 
@@ -873,6 +874,7 @@ describe('enableMainProcessGpuFeatures', () => {
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
 
     delete process.env.ORCA_E2E_USER_DATA_DIR
+    setPlatform('linux')
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     vi.mocked(app.commandLine.getSwitchValue).mockReturnValue('ExistingFeature')
     enableMainProcessGpuFeatures()
