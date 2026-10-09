@@ -1,5 +1,6 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
+import { productUrlSchemes } from './product-identity/product-identity'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch } from './window/foreground-activation-policy'
 import {
@@ -95,7 +96,7 @@ const preflightReady = runMainProcessPreflight({
 // Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
 if (preflightReady) {
   app.on('open-url', (event, url) => {
-    if (!parseSkillShareId(url)) {
+    if (!parseSkillShareId(url, productUrlSchemes())) {
       return
     }
     event.preventDefault()
