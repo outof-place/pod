@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -26,8 +26,12 @@ import { buildOgdSearchRequest } from './pod-search-text-results'
 // Real-daemon parity: ogd must return exactly what Orca's bundled ripgrep returns, line by line
 // and range by range. Opt-in: ORCA_E2E_OGD_BIN=/path/to/ogd ORCA_OGD_PARITY_REPO=/path/to/repo.
 // ORCA_OGD_PARITY_RUNS=N also logs median engine latency per query (the pod-bench suite).
+// ORCA_OGD_PARITY_RG picks the reference rg (default: Orca's bundled one). og forks rg 15.2.0, so
+// a diff that shows against only one rg version is a ripgrep version delta, not an ogd bug.
+// ORCA_OGD_PARITY_REPORT=/path.json writes the rg version, mismatches and timings there.
 const ogdBin = process.env.ORCA_E2E_OGD_BIN
 const parityRepo = process.env.ORCA_OGD_PARITY_REPO
+const referenceRipgrep = process.env.ORCA_OGD_PARITY_RG
 const runs = Math.max(1, Number(process.env.ORCA_OGD_PARITY_RUNS ?? '1') || 1)
 const UNLIMITED = 10_000_000
 const MAX_OUTPUT_BYTES = 1024 * 1024 * 1024
@@ -51,6 +55,7 @@ let client: OgdClient | null = null
 let stateDir = ''
 let root = ''
 const timings: Record<string, { ogd: number; rg: number }> = {}
+const mismatches: Record<string, unknown> = {}
 
 function requireClient(): OgdClient {
   if (!client) {
@@ -59,7 +64,12 @@ function requireClient(): OgdClient {
   return client
 }
 
+let ripgrepVersion = ''
+
 function ripgrepPath(): string {
+  if (referenceRipgrep) {
+    return referenceRipgrep
+  }
   return join(
     process.cwd(),
     BUNDLED_RIPGREP_PACKAGE_BIN_DIR,
@@ -163,6 +173,8 @@ describe.skipIf(!ogdBin || !parityRepo || process.platform === 'win32')(
   () => {
     beforeAll(async () => {
       root = realpathSync(String(parityRepo))
+      const version = await runProcess({ program: ripgrepPath(), args: ['--version'] })
+      ripgrepVersion = version.stdout.split('\n')[0] ?? ''
       stateDir = mkdtempSync(join(tmpdir(), 'ogd-parity-'))
       const socketPath = join(stateDir, 'ogd.sock')
       daemon = spawnProcess({
@@ -192,9 +204,11 @@ describe.skipIf(!ogdBin || !parityRepo || process.platform === 'win32')(
       client?.close()
       daemon?.kill()
       rmSync(stateDir, { recursive: true, force: true })
-      if (runs > 1) {
-        console.log(`[ogd-parity] ${JSON.stringify({ repo: root, runs, timings }, null, 2)}`)
+      const summary = { repo: root, rg: ripgrepVersion, runs, mismatches, timings }
+      if (process.env.ORCA_OGD_PARITY_REPORT) {
+        writeFileSync(process.env.ORCA_OGD_PARITY_REPORT, `${JSON.stringify(summary, null, 2)}\n`)
       }
+      console.log(`[ogd-parity] ${JSON.stringify(summary, null, 2)}`)
     })
 
     it('returns the same lines and byte ranges as the bundled ripgrep', async () => {
@@ -222,9 +236,14 @@ describe.skipIf(!ogdBin || !parityRepo || process.platform === 'win32')(
           report[label] = diff.slice(0, 10)
         }
       }
-      expect(
-        Object.fromEntries(Object.entries(report).filter(([, v]) => !v[0]?.startsWith('skipped')))
-      ).toEqual({})
+      const textMismatches = Object.fromEntries(
+        Object.entries(report).filter(([, v]) => !v[0]?.startsWith('skipped'))
+      )
+      Object.assign(mismatches, report)
+      expect({ rg: ripgrepVersion, textMismatches }).toEqual({
+        rg: ripgrepVersion,
+        textMismatches: {}
+      })
     }, 1_800_000)
 
     it('lists the same quick-open files as the bundled ripgrep', async () => {
@@ -265,7 +284,19 @@ describe.skipIf(!ogdBin || !parityRepo || process.platform === 'win32')(
         const fromRg = new Set(ripgrep.value)
         const onlyOgd = [...fromOgd].filter((path) => !fromRg.has(path))
         const onlyRg = [...fromRg].filter((path) => !fromOgd.has(path))
-        expect({ ignored, onlyOgd: onlyOgd.slice(0, 10), onlyRg: onlyRg.slice(0, 10) }).toEqual({
+        if (onlyOgd.length > 0 || onlyRg.length > 0) {
+          mismatches[`files ignored=${ignored}`] = {
+            onlyOgd: onlyOgd.slice(0, 10),
+            onlyRg: onlyRg.slice(0, 10)
+          }
+        }
+        expect({
+          rg: ripgrepVersion,
+          ignored,
+          onlyOgd: onlyOgd.slice(0, 10),
+          onlyRg: onlyRg.slice(0, 10)
+        }).toEqual({
+          rg: ripgrepVersion,
           ignored,
           onlyOgd: [],
           onlyRg: []
