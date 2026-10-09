@@ -9,12 +9,16 @@
 #   --publish     create the GitHub release v<version> in identity.updateFeed's repo (needs gh auth)
 #   --skip-build  reuse out/ and the native helpers from a previous run; package/notarize only
 #
-# Signing:      POD_SIGN_IDENTITY="Developer ID Application: <Name> (<TEAMID>)" in the keychain.
-# Notarization, one of:
+# Signing:      POD_SIGN_IDENTITY (default: outofplace's Developer ID, whose key lives only in
+#               this Mac's login keychain; CI imports its own certificate).
+# Notarization, one of (default: NOTARY_PROFILE=pod-notary):
 #   NOTARY_PROFILE=<name>                      notarytool keychain profile (local; see RELEASING.md)
 #   APPLE_API_KEY=<path .p8> APPLE_API_KEY_ID APPLE_API_ISSUER   App Store Connect API key (CI)
 #   APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID           Apple ID (fallback)
 set -euo pipefail
+
+DEFAULT_SIGN_IDENTITY="Developer ID Application: OUTOFPLACE POLAND SP. Z O.O (75Y2KR6P5W)"
+DEFAULT_NOTARY_PROFILE=pod-notary
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
@@ -31,7 +35,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --publish) publish=1; shift ;;
     --skip-build) skip_build=1; shift ;;
-    -h | --help) sed -n '2,18p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,19p' "$0"; exit 0 ;;
     -*) die "unknown option $1" ;;
     *) [ -z "$version" ] || die "one version only"; version="${1#v}"; shift ;;
   esac
@@ -46,19 +50,25 @@ app_id="$(identity .appId)"
 feed_repo="$(node -p "const f=require('./product/identity.json').updateFeed; f ? f.owner + '/' + f.repo : ''")"
 arch=arm64
 
-sign_identity="${POD_SIGN_IDENTITY:-${CSC_NAME:-}}"
-[ -n "$sign_identity" ] || die "set POD_SIGN_IDENTITY to your \"Developer ID Application: …\" identity"
-security find-identity -v -p codesigning | grep -Fq "\"$sign_identity\"" ||
-  die "signing identity not in the keychain: $sign_identity"
+sign_identity="${POD_SIGN_IDENTITY:-${CSC_NAME:-$DEFAULT_SIGN_IDENTITY}}"
+identities="$(security find-identity -v -p codesigning)"
+grep -Fq "\"$sign_identity\"" <<<"$identities" || die "signing identity not in the keychain: $sign_identity"
 case "$sign_identity" in
   "Developer ID Application:"*) ;;
   *) die "notarized releases need a Developer ID Application identity, not: $sign_identity" ;;
 esac
+team_id="${sign_identity##*(}"
+team_id="${team_id%)}"
 
+if [ -z "${NOTARY_PROFILE:-}${APPLE_API_KEY:-}${APPLE_ID:-}" ]; then
+  NOTARY_PROFILE="$DEFAULT_NOTARY_PROFILE"
+fi
 notary_args=()
 if [ -n "${NOTARY_PROFILE:-}" ]; then
   notary_args=(--keychain-profile "$NOTARY_PROFILE")
   export APPLE_KEYCHAIN_PROFILE="$NOTARY_PROFILE"
+  # electron-builder prefers Apple ID and API-key variables over the profile.
+  unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER
 elif [ -n "${APPLE_API_KEY:-}" ] && [ -n "${APPLE_API_KEY_ID:-}" ] && [ -n "${APPLE_API_ISSUER:-}" ]; then
   notary_args=(--key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
 elif [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
@@ -67,7 +77,23 @@ else
   die "no notarization credentials: set NOTARY_PROFILE, or APPLE_API_KEY(+_ID,+ISSUER), or APPLE_ID(+APPLE_APP_SPECIFIC_PASSWORD,+APPLE_TEAM_ID)"
 fi
 
+# Fails fast (instead of hanging mid-build) when the key's ACL would raise a keychain prompt.
+preflight_sign() {
+  local dir status=0
+  dir="$(mktemp -d)"
+  cp /usr/bin/true "$dir/pod-sign-probe"
+  perl -e 'alarm 60; exec @ARGV' codesign --force --options runtime --timestamp \
+    --sign "$sign_identity" "$dir/pod-sign-probe" >/dev/null 2>&1 || status=$?
+  rm -rf "$dir"
+  [ "$status" -eq 0 ] && return 0
+  [ "$status" -eq 142 ] &&
+    die "codesign waited 60 s, most likely on a keychain prompt: allow access to the key (Always Allow), then rerun"
+  die "test signature with $sign_identity failed (exit $status)"
+}
+
 log "$display_name $version ($app_id, $arch), signed by $sign_identity"
+log "test signature (keychain access, timestamp server)"
+preflight_sign
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
 # Upstream's strict release signing for helpers and the bundle (hardened runtime, timestamps).
 export ORCA_MAC_RELEASE=1
@@ -87,6 +113,12 @@ if [ "$skip_build" -eq 0 ]; then
   pnpm run ensure:electron-runtime
 fi
 
+# claude-acc payload, once the pod/acc branch is in the stack; a no-op when already fetched.
+if [ -f config/scripts/fetch-claude-acc-payload.mjs ]; then
+  log "fetch the claude-acc payload pinned in config/claude-acc-payload.json"
+  node config/scripts/fetch-claude-acc-payload.mjs
+fi
+
 log "package, sign and notarize the app (electron-builder staples it)"
 rm -rf dist
 POD_RELEASE=1 POD_VERSION="$version" POD_ARCH="$arch" \
@@ -102,12 +134,16 @@ xcrun notarytool submit "$dmg" "${notary_args[@]}" --wait
 xcrun stapler staple "$dmg"
 node product/scripts/refresh-latest-mac-yml.mjs dist
 
-log "verify"
+log "verify (Gatekeeper gate)"
 codesign --verify --deep --strict --verbose=2 "$app"
+signature="$(codesign -dv "$app" 2>&1)"
+grep -Fqx "TeamIdentifier=$team_id" <<<"$signature" || die "$app is not signed by team $team_id"
 xcrun stapler validate "$app"
 xcrun stapler validate "$dmg"
-spctl --assess --type execute --verbose=2 "$app"
-spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+gatekeeper="$(spctl -a -vv "$app" 2>&1)" || die "spctl rejected $app: $gatekeeper"
+printf '%s\n' "$gatekeeper"
+grep -Fq "source=Notarized Developer ID" <<<"$gatekeeper" || die "$app is not notarized: $gatekeeper"
+spctl -a -vv -t open --context context:primary-signature "$dmg"
 [ -f "$app/Contents/Resources/product-identity.json" ] || die "app lacks product-identity.json"
 
 if [ "$publish" -eq 1 ]; then
