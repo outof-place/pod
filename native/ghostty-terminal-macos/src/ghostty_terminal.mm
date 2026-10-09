@@ -1373,14 +1373,20 @@ OrcaGhosttyHostView* HostViewForWindowHandle(napi_env env, napi_value handle) {
   return host;
 }
 
-// Hands the keyboard to the web contents under a surface that is being hidden, so the DOM UI
-// covering it (dialogs, search, the tab switcher) gets typed keys instead of the bare window.
+// Hands the keyboard to the web contents under a surface (hidden, or another pane took DOM
+// focus), so the page gets typed keys instead of the surface or the bare window.
 void ReturnKeyboardToWebContents(OrcaGhosttySurfaceView* view) {
   NSWindow* window = view.window;
   NSView* content = window.contentView;
-  NSPoint center = [view convertPoint:NSMakePoint(NSMidX(view.bounds), NSMidY(view.bounds)) toView:nil];
-  NSView* target = [content hitTest:content.superview ? [content.superview convertPoint:center fromView:nil] : center];
-  while (target != nil && (target == view || !target.acceptsFirstResponder)) target = target.superview;
+  const NSPoint center = [view convertPoint:NSMakePoint(NSMidX(view.bounds), NSMidY(view.bounds)) toView:content];
+  NSView* target = nil;
+  // Skip the host view that holds every surface: what lies under it is Chromium's view.
+  for (NSView* subview in content.subviews.reverseObjectEnumerator) {
+    if ([subview isKindOfClass:[OrcaGhosttyHostView class]]) continue;
+    target = [subview hitTest:center];
+    if (target != nil) break;
+  }
+  while (target != nil && !target.acceptsFirstResponder) target = target.superview;
   [window makeFirstResponder:target];
 }
 
@@ -1771,7 +1777,7 @@ napi_value DebugScrollbarScroll(napi_env env, napi_callback_info info) {
   return Bool(env, scrollbar != nil && [scrollbar debugScrollToFraction:GetDouble(env, argv[1])]);
 }
 
-#pragma mark Host chords and drag debugging
+#pragma mark Host chords, keyboard hand-off and drag debugging
 
 // setForwardedChords(chords: Array<[keyCode, modifierFlags, character]>): void — replaces the
 // non-Command chords every surface hands to Orca instead of Ghostty.
@@ -1867,6 +1873,22 @@ napi_value DebugDrop(napi_env env, napi_callback_info info) {
   return result;
 }
 
+// releaseKeyboard(ids): void — whichever of these surfaces holds the keyboard gives it to the page.
+napi_value ReleaseKeyboard(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argv[1];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  uint32_t count = 0;
+  if (argc < 1 || napi_get_array_length(env, argv[0], &count) != napi_ok) return Undefined(env);
+  for (uint32_t i = 0; i < count; i++) {
+    napi_value entry;
+    napi_get_element(env, argv[0], i, &entry);
+    OrcaGhosttySurfaceView* view = ViewForId(GetInt(env, entry));
+    if (view != nil && view.window.firstResponder == view) ReturnKeyboardToWebContents(view);
+  }
+  return Undefined(env);
+}
+
 // debugModifiersChanged(id, keyCode, modifierFlags): void — posts a flagsChanged event through the
 // app's event queue, so monitors and the first responder see it like a real modifier change.
 napi_value DebugModifiersChanged(napi_env env, napi_callback_info info) {
@@ -1910,6 +1932,7 @@ napi_value ModuleInit(napi_env env, napi_value exports) {
       {"debugScrollbarScroll", nullptr, DebugScrollbarScroll, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"gridSizeOf", nullptr, GridSize, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"setForwardedChords", nullptr, SetForwardedChords, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"releaseKeyboard", nullptr, ReleaseKeyboard, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugDrop", nullptr, DebugDrop, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugModifiersChanged", nullptr, DebugModifiersChanged, nullptr, nullptr, nullptr, napi_default, nullptr},
   };

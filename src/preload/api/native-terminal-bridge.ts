@@ -16,6 +16,7 @@ export const nativeTerminalApi = {
   setAppearance: (appearance, zoomFactor) =>
     ipcRenderer.send('nativeTerminal:setAppearance', appearance, zoomFactor),
   setForwardedChords: (chords) => ipcRenderer.send('nativeTerminal:setForwardedChords', chords),
+  releaseKeyboard: () => ipcRenderer.send('nativeTerminal:releaseKeyboard'),
   destroy: (surfaceId) => ipcRenderer.send('nativeTerminal:destroy', surfaceId),
   onEvent: (callback) => {
     const listener = (_event: IpcRendererEvent, payload: NativeTerminalEvent): void =>
