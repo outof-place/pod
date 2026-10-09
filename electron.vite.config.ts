@@ -5,6 +5,7 @@ import { defineConfig, type UserConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
+import { withPodBuildProfile } from './config/build-plugins/pod-build-profile'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
 import { createProcessHostDevRebuildPlugin } from './config/build-plugins/process-host-dev-rebuild'
 import {
@@ -367,4 +368,4 @@ export const electronViteConfig: UserConfig = {
   }
 }
 
-export default defineConfig(electronViteConfig)
+export default defineConfig(withPodBuildProfile(electronViteConfig))
