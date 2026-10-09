@@ -71,9 +71,12 @@ describe('PluginPanelController identity binding', () => {
         params: { title: 'Hello' }
       })
     ).resolves.toMatchObject({ ok: true })
-    expect(executeHostCall).toHaveBeenCalledWith(plugin.pluginKey, 'notifications.show', {
-      title: 'Hello'
-    })
+    expect(executeHostCall).toHaveBeenCalledWith(
+      plugin.pluginKey,
+      'notifications.show',
+      { title: 'Hello' },
+      false
+    )
     await expect(
       controller.execute('runtime:other', {
         sessionToken: entry!.sessionToken,
@@ -175,5 +178,139 @@ describe('PluginPanelController identity binding', () => {
       })
     ).resolves.toMatchObject({ ok: false, code: 'unavailable' })
     expect(executeHostCall).not.toHaveBeenCalled()
+  })
+})
+
+describe('PluginPanelController settings page surface', () => {
+  async function createSettingsPagePlugin(): Promise<ValidDiscoveredPlugin> {
+    const plugin = await createPlugin()
+    await writeFile(join(plugin.rootDir, 'settings.html'), '<h1>Settings</h1>')
+    return {
+      ...plugin,
+      manifest: pluginManifestSchema.parse({
+        ...plugin.manifest,
+        contributes: {
+          ...plugin.manifest.contributes,
+          settingsPages: [{ id: 'preferences', title: 'Preferences', entry: 'settings.html' }]
+        },
+        capabilities: [{ kind: 'settingsPage' }, { kind: 'settings:own' }]
+      })
+    }
+  }
+
+  it('opens settings pages as their own surface and marks their calls', async () => {
+    const plugin = await createSettingsPagePlugin()
+    const executeHostCall = vi.fn().mockResolvedValue({ ok: true, value: { ok: true } })
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: () => plugin,
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall,
+      log: () => vi.fn()
+    })
+
+    const page = await controller.open(
+      'renderer:1',
+      plugin.pluginKey,
+      'preferences',
+      'settingsPage'
+    )
+    expect(page?.html).toContain('<h1>Settings</h1>')
+    // Ids resolve only within their own surface.
+    await expect(controller.open('renderer:1', plugin.pluginKey, 'preferences')).resolves.toBeNull()
+    await expect(
+      controller.open('renderer:1', plugin.pluginKey, 'dashboard', 'settingsPage')
+    ).resolves.toBeNull()
+
+    const panel = await controller.open('renderer:1', plugin.pluginKey, 'dashboard')
+    expect(panel?.sessionToken).not.toBe(page?.sessionToken)
+    const call = { action: 'settings.set', params: { key: 'greeting', value: 'Hi' } }
+    await controller.execute('renderer:1', { sessionToken: page!.sessionToken, ...call })
+    await controller.execute('renderer:1', { sessionToken: panel!.sessionToken, ...call })
+    expect(executeHostCall).toHaveBeenNthCalledWith(
+      1,
+      plugin.pluginKey,
+      'settings.set',
+      call.params,
+      true
+    )
+    expect(executeHostCall).toHaveBeenNthCalledWith(
+      2,
+      plugin.pluginKey,
+      'settings.set',
+      call.params,
+      false
+    )
+  })
+
+  it('stops a settings page session once the page leaves the manifest', async () => {
+    let plugin = await createSettingsPagePlugin()
+    const executeHostCall = vi.fn()
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: () => plugin,
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall,
+      log: () => vi.fn()
+    })
+    const page = await controller.open(
+      'renderer:1',
+      plugin.pluginKey,
+      'preferences',
+      'settingsPage'
+    )
+    plugin = await createPlugin()
+
+    await expect(
+      controller.execute('renderer:1', {
+        sessionToken: page!.sessionToken,
+        action: 'settings.get',
+        params: {}
+      })
+    ).resolves.toMatchObject({ ok: false, code: 'unavailable' })
+    expect(executeHostCall).not.toHaveBeenCalled()
+  })
+
+  it('keeps the live channel to sidebar panels when a page reuses a panel id', async () => {
+    const base = await createSettingsPagePlugin()
+    const plugin: ValidDiscoveredPlugin = {
+      ...base,
+      manifest: pluginManifestSchema.parse({
+        ...base.manifest,
+        main: 'main.mjs',
+        contributes: {
+          ...base.manifest.contributes,
+          settingsPages: [{ id: 'dashboard', title: 'Dashboard settings', entry: 'settings.html' }]
+        },
+        capabilities: [{ kind: 'settingsPage' }, { kind: 'panelMessaging' }]
+      })
+    }
+    const deliverToWorker = vi.fn().mockResolvedValue({ ok: true, value: { delivered: true } })
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: () => plugin,
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall: vi.fn(),
+      log: () => vi.fn(),
+      deliverToWorker
+    })
+    const page = await controller.open('renderer:1', plugin.pluginKey, 'dashboard', 'settingsPage')
+    const panel = await controller.open('renderer:1', plugin.pluginKey, 'dashboard')
+    const deliver = vi.fn()
+
+    expect(controller.attach('renderer:1', { sessionToken: page!.sessionToken }, deliver)).toBe(
+      false
+    )
+    await expect(
+      controller.receiveFromPanel('renderer:1', { sessionToken: page!.sessionToken, message: 1 })
+    ).resolves.toMatchObject({ ok: false, code: 'unavailable' })
+    expect(deliverToWorker).not.toHaveBeenCalled()
+
+    expect(controller.attach('renderer:1', { sessionToken: panel!.sessionToken }, deliver)).toBe(
+      true
+    )
+    expect(controller.postToPanel(plugin.pluginKey, 'dashboard', 2)).toEqual({
+      ok: true,
+      delivered: true
+    })
+    expect(deliver).toHaveBeenCalledOnce()
+    expect(deliver).toHaveBeenCalledWith({ sessionToken: panel!.sessionToken, message: 2 })
   })
 })
