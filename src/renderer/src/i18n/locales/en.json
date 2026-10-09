@@ -19859,5 +19859,26 @@
   },
   "startupFailure": {
     "title": "Orca could not start"
+  },
+  "podWorkspace": {
+    "root": {
+      "title": "Workspace root",
+      "description": "Clones go to <root>/<owner>/<repo>; projects without a remote owner go to <root>/_local.",
+      "browse": "Browse",
+      "default": "Default: {{root}}",
+      "issue": {
+        "empty": "Enter a folder.",
+        "notAbsolute": "Use an absolute path or one that starts with ~/.",
+        "notDirectory": "This path is a file, not a folder.",
+        "icloudDrive": "iCloud Drive syncs every file agents and installs write. Choose a folder outside it.",
+        "icloudDesktopDocuments": "iCloud syncs Desktop and Documents on this Mac. Choose a folder outside them.",
+        "icloudDesktopDocumentsUnknown": "Could not tell whether iCloud syncs Desktop and Documents. If it does, choose another folder.",
+        "documentsDesktopTcc": "Background jobs need a privacy permission to read Desktop and Documents."
+      }
+    },
+    "section": {
+      "title": "Workspace",
+      "description": "Where repositories live, and how Spotlight, Time Machine and the volume treat that folder."
+    }
   }
 }
