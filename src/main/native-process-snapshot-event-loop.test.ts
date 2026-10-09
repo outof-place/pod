@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process'
+import { isBuiltin } from 'node:module'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { build } from 'esbuild'
+import { build } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 describe.runIf(process.platform === 'darwin')('native process snapshot worker', () => {
@@ -25,7 +26,7 @@ describe.runIf(process.platform === 'darwin')('native process snapshot worker', 
       { stdio: 'inherit' }
     )
     const harnessSource = join(scratch, 'harness.ts')
-    harnessPath = join(scratch, 'harness.cjs')
+    harnessPath = join(scratch, 'harness.js')
     writeFileSync(
       harnessSource,
       `import { performance } from 'node:perf_hooks'
@@ -71,18 +72,27 @@ async function main() {
 main().catch((error) => { console.error(error); process.exitCode = 1 })`
     )
     await build({
-      entryPoints: [harnessSource],
-      outfile: harnessPath,
-      platform: 'node',
-      format: 'cjs',
-      bundle: true
-    })
-    await build({
-      entryPoints: [resolve('src/main/native-process-snapshot-worker-entry.ts')],
-      outfile: join(scratch, 'native-process-snapshot-worker-entry.js'),
-      platform: 'node',
-      format: 'cjs',
-      bundle: true
+      configFile: false,
+      logLevel: 'silent',
+      build: {
+        ssr: true,
+        outDir: scratch,
+        emptyOutDir: false,
+        rollupOptions: {
+          input: {
+            harness: harnessSource,
+            'native-process-snapshot-worker-entry': resolve(
+              'src/main/native-process-snapshot-worker-entry.ts'
+            )
+          },
+          external: isBuiltin,
+          output: {
+            format: 'cjs',
+            entryFileNames: '[name].js',
+            chunkFileNames: 'chunks/[name]-[hash].js'
+          }
+        }
+      }
     })
   }, 120_000)
 

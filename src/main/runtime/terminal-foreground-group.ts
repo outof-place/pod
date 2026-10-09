@@ -78,7 +78,7 @@ function readNativeTerminalRows(tty: string, rootPid: number): ProcessTableRow[]
       pgid,
       tpgid,
       stat,
-      command: command ?? name
+      command: (command ?? name).trim()
     }))
   } catch {
     return null
