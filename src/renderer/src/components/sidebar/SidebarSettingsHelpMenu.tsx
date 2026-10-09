@@ -35,6 +35,7 @@ import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type * as SidebarFeedbackDialogModule from './SidebarFeedbackDialog'
 import { translate } from '@/i18n/i18n'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
+import { resolveProductHelpLinks } from '@/lib/product-help-links'
 
 // Why lazy: the feedback form is only reachable from this menu's own item, so it does not
 // belong on the renderer boot graph. Shared with the menu-open warm below so both hit the
@@ -52,6 +53,13 @@ const CHANGELOG_URL = 'https://onorca.dev/changelog'
 const GITHUB_URL = 'https://github.com/stablyai/orca'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
 const X_URL = 'https://x.com/orca_build'
+const HELP_LINKS = resolveProductHelpLinks({
+  docs: DOCS_URL,
+  changelog: CHANGELOG_URL,
+  github: GITHUB_URL,
+  discord: DISCORD_URL,
+  x: X_URL
+})
 const NO_UPDATE_CHECK_MODIFIERS = {
   altKey: false,
   ctrlKey: false,
@@ -253,13 +261,15 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               )}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={handleOpenFeedback}>
-              <MessageSquareText className="size-3.5" />
-              {translate(
-                'auto.components.sidebar.SidebarSettingsHelpMenu.4cf5b868d7',
-                'Send Feedback'
-              )}
-            </DropdownMenuItem>
+            {HELP_LINKS.feedback ? (
+              <DropdownMenuItem onSelect={handleOpenFeedback}>
+                <MessageSquareText className="size-3.5" />
+                {translate(
+                  'auto.components.sidebar.SidebarSettingsHelpMenu.4cf5b868d7',
+                  'Send Feedback'
+                )}
+              </DropdownMenuItem>
+            ) : null}
             {showMilestones ? (
               <DropdownMenuItem onSelect={openMilestones}>
                 <img
@@ -291,41 +301,51 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
                 'Onboarding'
               )}
             </DropdownMenuItem>
-            <ExternalMenuItem
-              label={translate(
-                'auto.components.sidebar.SidebarSettingsHelpMenu.cdc87f897e',
-                'Docs'
-              )}
-              url={DOCS_URL}
-              icon={<BookOpen className="size-3.5" />}
-            />
-            <ExternalMenuItem
-              label={translate(
-                'auto.components.sidebar.SidebarSettingsHelpMenu.5f83d86d92',
-                'Changelog'
-              )}
-              url={CHANGELOG_URL}
-              icon={<ScrollText className="size-3.5" />}
-            />
+            {HELP_LINKS.docs ? (
+              <ExternalMenuItem
+                label={translate(
+                  'auto.components.sidebar.SidebarSettingsHelpMenu.cdc87f897e',
+                  'Docs'
+                )}
+                url={HELP_LINKS.docs}
+                icon={<BookOpen className="size-3.5" />}
+              />
+            ) : null}
+            {HELP_LINKS.changelog ? (
+              <ExternalMenuItem
+                label={translate(
+                  'auto.components.sidebar.SidebarSettingsHelpMenu.5f83d86d92',
+                  'Changelog'
+                )}
+                url={HELP_LINKS.changelog}
+                icon={<ScrollText className="size-3.5" />}
+              />
+            ) : null}
             <DropdownMenuSeparator />
-            <ExternalMenuItem
-              label={translate(
-                'auto.components.sidebar.SidebarSettingsHelpMenu.5687ab246a',
-                'GitHub'
-              )}
-              url={GITHUB_URL}
-              icon={<Github className="size-3.5" />}
-            />
-            <DropdownMenuItem onSelect={() => openExternalUrl(DISCORD_URL)}>
-              <DiscordIcon />
-              {translate('auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b', 'Discord')}
-              <ExternalLink className="ml-auto size-3 text-muted-foreground" />
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => openExternalUrl(X_URL)}>
-              <XIcon />
-              {translate('auto.components.sidebar.SidebarSettingsHelpMenu.c4f8e1b72a', 'X')}
-              <ExternalLink className="ml-auto size-3 text-muted-foreground" />
-            </DropdownMenuItem>
+            {HELP_LINKS.github ? (
+              <ExternalMenuItem
+                label={translate(
+                  'auto.components.sidebar.SidebarSettingsHelpMenu.5687ab246a',
+                  'GitHub'
+                )}
+                url={HELP_LINKS.github}
+                icon={<Github className="size-3.5" />}
+              />
+            ) : null}
+            {HELP_LINKS.discord ? (
+              <DropdownMenuItem onSelect={() => openExternalUrl(DISCORD_URL)}>
+                <DiscordIcon />
+                {translate('auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b', 'Discord')}
+                <ExternalLink className="ml-auto size-3 text-muted-foreground" />
+              </DropdownMenuItem>
+            ) : null}
+            {HELP_LINKS.x ? (
+              <DropdownMenuItem onSelect={() => openExternalUrl(X_URL)}>
+                <XIcon />
+                {translate('auto.components.sidebar.SidebarSettingsHelpMenu.c4f8e1b72a', 'X')}
+                <ExternalLink className="ml-auto size-3 text-muted-foreground" />
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
