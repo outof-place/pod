@@ -28,13 +28,7 @@ export type ProductIdentity = {
   /** False turns off Stably's hosted services (telemetry, relay, push, share, feedback). */
   stablyServices: boolean
   computerUseDisplayName: string | null
-  /** Keychain service for Orca-managed Claude Code accounts; null keeps Orca's. */
-  claudeManagedCredentialsService: string | null
-  legacyProfile: {
-    userDataName: string
-    keychainName: string
-    claudeManagedCredentialsService: string | null
-  } | null
+  legacyProfile: { userDataName: string; keychainName: string } | null
 }
 
 export type ProductUpstream = { tag: string | null; sha: string }
@@ -44,7 +38,6 @@ const PACKAGE_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/
 const REVERSE_DNS = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/
 const URL_SCHEME = /^[a-z][a-z0-9+.-]{0,31}$/
 const GITHUB_NAME = /^[A-Za-z0-9_.-]{1,100}$/
-const KEYCHAIN_SERVICE = /^[A-Za-z0-9][A-Za-z0-9._ -]{0,127}$/
 
 function field(record: object, key: string): unknown {
   return Reflect.get(record, key)
@@ -92,12 +85,7 @@ function parseLegacyProfile(value: unknown): ProductIdentity['legacyProfile'] {
   }
   return {
     userDataName: requireString(value, 'userDataName', PATH_SEGMENT),
-    keychainName: requireString(value, 'keychainName', PATH_SEGMENT),
-    claudeManagedCredentialsService: optionalString(
-      value,
-      'claudeManagedCredentialsService',
-      KEYCHAIN_SERVICE
-    )
+    keychainName: requireString(value, 'keychainName', PATH_SEGMENT)
   }
 }
 
@@ -136,11 +124,6 @@ export function parseProductIdentity(value: unknown): ProductIdentity {
     credits: requireString(value, 'credits'),
     stablyServices: stablyServices ?? true,
     computerUseDisplayName: optionalString(value, 'computerUseDisplayName', PATH_SEGMENT),
-    claudeManagedCredentialsService: optionalString(
-      value,
-      'claudeManagedCredentialsService',
-      KEYCHAIN_SERVICE
-    ),
     legacyProfile: parseLegacyProfile(field(value, 'legacyProfile'))
   }
 }
