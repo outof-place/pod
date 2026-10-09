@@ -342,12 +342,44 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+      # The cross-version harness needs full history and Orca's tags, so it runs in its own job.
+      # One retry: a few PTY and grammar-loading tests time out under full-suite load.
       - name: Test shard
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: |
           node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
-            "--shard=${{ matrix.shard }}/$UNIT_SHARDS" --maxWorkers=4
+            "--shard=${{ matrix.shard }}/$UNIT_SHARDS" --maxWorkers=4 --retry=1 \
+            --exclude 'tests/e2e/cross-version-wire/**'
+
+  cross_version:
+    name: Cross-version wire compatibility
+    needs: rebase
+    if: needs.rebase.outputs.result == 'clean'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      # Full history without historical blobs: the harness checks out old releases by tag.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.rebase.outputs.head_sha }}
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - name: Fetch Orca's release tags
+        run: |
+          git fetch --no-tags --filter=blob:none "https://github.com/$UPSTREAM_REPO.git" \
+            '+refs/tags/v*:refs/tags/v*'
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+      - name: Daemon protocol crossing against the newest release
+        run: pnpm run check:daemon-protocol-crossing
+      - name: Old and new client and server journeys
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/
 
   build:
     name: macOS build
@@ -373,7 +405,7 @@ jobs:
 
   report:
     name: Open the PR or the issue
-    needs: [detect, rebase, typecheck, unit, build]
+    needs: [detect, rebase, typecheck, unit, cross_version, build]
     if: always() && needs.detect.outputs.needed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -391,7 +423,7 @@ jobs:
       HEAD_SHA: ${{ needs.rebase.outputs.head_sha }}
       REBASE_JOB: ${{ needs.rebase.result }}
       REBASE_RESULT: ${{ needs.rebase.outputs.result }}
-      CHECKS: typecheck=${{ needs.typecheck.result }} unit=${{ needs.unit.result }} build=${{ needs.build.result }}
+      CHECKS: typecheck=${{ needs.typecheck.result }} unit=${{ needs.unit.result }} cross-version=${{ needs.cross_version.result }} build=${{ needs.build.result }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Checkout the quarantine script
@@ -418,13 +450,13 @@ jobs:
           compare="https://github.com/$UPSTREAM_REPO/compare/$OLD_SHA...$NEW_SHA"
           open_issue=$(gh issue list -R "$repo" --label "$ISSUE_LABEL" --state open --limit 1 --json number --jq '.[0].number // ""')
 
-          if [ "$REBASE_RESULT" = clean ] && [ "$CHECKS" = "typecheck=success unit=success build=success" ]; then
+          if [ "$REBASE_RESULT" = clean ] && [ "$CHECKS" = "typecheck=success unit=success cross-version=success build=success" ]; then
             {
               echo "<!-- upstream-sync promote base=$POD_SHA head=$HEAD_SHA orca=$NEW_SHA -->"
               echo "Rebases \`$PRODUCT_BRANCH\` from Orca ${OLD_LABEL:-$OLD_SHA} to Orca main [\`$short\`](https://github.com/$UPSTREAM_REPO/commit/$NEW_SHA) ($LABEL), the newest commit whose Orca checks all passed."
               echo
               echo "- Orca changes in this range: $compare"
-              echo "- Typecheck, unit tests ($UNIT_SHARDS shards) and the macOS build passed: $RUN_URL"
+              echo "- Typecheck, unit tests ($UNIT_SHARDS shards), cross-version wire checks and the macOS build passed: $RUN_URL"
               echo "- \`upstream.json\` now pins \`$NEW_SHA\`; release notes say \"Based on Orca $NEAREST_TAG\"."
               echo
               echo "**Do not press Merge.** A rebase replaces the branch. To promote it, run the sync with \`promote\`:"
