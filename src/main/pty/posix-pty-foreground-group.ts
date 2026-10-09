@@ -63,13 +63,17 @@ function readProcessRow(pid: number, ptsName: string): string {
   return readNativeProcessRow(pid, ptsName) ?? runPs(pid)
 }
 
-let ownRowCache: { pid: number; ptsName: string; row: string } | null = null
+let ownRowCache: { pid: number; row: string } | null = null
 
-/** Native terminal membership depends on the supplied PTY, so cache per target. */
+/** Recheck native membership per target; cache only ps's actual controlling terminal. */
 function readOwnProcessRow(currentPid: number, ptsName: string): string {
-  if (ownRowCache?.pid !== currentPid || ownRowCache.ptsName !== ptsName) {
+  const native = readNativeProcessRow(currentPid, ptsName)
+  if (native !== null) {
+    return native
+  }
+  if (ownRowCache?.pid !== currentPid) {
     // A throw is not cached: the caller already treats a failed read as "no group".
-    ownRowCache = { pid: currentPid, ptsName, row: readProcessRow(currentPid, ptsName) }
+    ownRowCache = { pid: currentPid, row: runPs(currentPid) }
   }
   return ownRowCache.row
 }
