@@ -78,4 +78,30 @@ describe('GPU acceleration About panel', () => {
       credits: 'Built on Orca by Stably (MIT)\n\nGPU acceleration: Enabled'
     })
   })
+
+  it('names the Orca release a downstream product is based on', () => {
+    const options = createGpuAccelerationAboutPanelOptions({
+      appName: 'Pod',
+      appVersion: '0.1.0',
+      platform: 'darwin',
+      gpuFallbackActive: false,
+      gpuFeatureStatus: { gpu_compositing: 'enabled' },
+      product: { copyright: 'Copyright © 2026 outofplace', credits: 'Built on Orca.' },
+      upstream: { tag: 'v1.4.223', sha: '5272afeda68c2fe2bbdc3f09159c66688dc27328' }
+    })
+    expect(options.credits).toBe(
+      'Built on Orca.\nBased on Orca v1.4.223 (5272afeda6)\n\nGPU acceleration: Enabled'
+    )
+    expect(
+      createGpuAccelerationAboutPanelOptions({
+        appName: 'Pod',
+        appVersion: '0.1.0',
+        platform: 'darwin',
+        gpuFallbackActive: false,
+        gpuFeatureStatus: null,
+        product: { copyright: 'c', credits: 'Built on Orca.' },
+        upstream: { tag: null, sha: 'abcdef0123456789' }
+      }).credits
+    ).toBe('Built on Orca.\nBased on Orca (abcdef0123)\n\nGPU acceleration: Status unavailable')
+  })
 })
