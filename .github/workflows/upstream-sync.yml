@@ -29,6 +29,10 @@ on:
         required: false
         type: boolean
         default: false
+      check:
+        description: Instead of syncing, only run the checks on this branch or commit (no rebase, PR or issue).
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -48,7 +52,7 @@ env:
 jobs:
   mirror:
     name: Mirror Orca main into orca-main
-    if: ${{ !inputs.promote }}
+    if: ${{ !inputs.promote && !inputs.check }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -97,7 +101,7 @@ jobs:
 
   detect:
     name: Find a newer green Orca commit
-    if: ${{ !inputs.promote }}
+    if: ${{ !inputs.promote && !inputs.check }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -301,16 +305,36 @@ jobs:
           path: ${{ runner.temp }}/sync/
           if-no-files-found: ignore
 
+  target:
+    name: Resolve the ref to check
+    if: ${{ inputs.check != '' && !inputs.promote }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      result: ${{ steps.resolve.outputs.result }}
+      head_sha: ${{ steps.resolve.outputs.head_sha }}
+    steps:
+      - name: Resolve
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECK_REF: ${{ inputs.check }}
+        run: |
+          set -euo pipefail
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$CHECK_REF" --jq .sha)
+          echo "Checking $CHECK_REF at $sha" >> "$GITHUB_STEP_SUMMARY"
+          { echo "head_sha=$sha"; echo "result=clean"; } >> "$GITHUB_OUTPUT"
+
   typecheck:
     name: Typecheck
-    needs: rebase
-    if: needs.rebase.outputs.result == 'clean'
+    needs: [rebase, target]
+    if: ${{ !cancelled() && (needs.rebase.outputs.result == 'clean' || needs.target.outputs.result == 'clean') }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.rebase.outputs.head_sha }}
+          ref: ${{ needs.rebase.outputs.head_sha || needs.target.outputs.head_sha }}
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -320,8 +344,8 @@ jobs:
 
   unit:
     name: Unit tests ${{ matrix.shard }}
-    needs: rebase
-    if: needs.rebase.outputs.result == 'clean'
+    needs: [rebase, target]
+    if: ${{ !cancelled() && (needs.rebase.outputs.result == 'clean' || needs.target.outputs.result == 'clean') }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     strategy:
@@ -331,7 +355,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.rebase.outputs.head_sha }}
+          ref: ${{ needs.rebase.outputs.head_sha || needs.target.outputs.head_sha }}
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -357,8 +381,8 @@ jobs:
 
   cross_version:
     name: Cross-version wire compatibility
-    needs: rebase
-    if: needs.rebase.outputs.result == 'clean'
+    needs: [rebase, target]
+    if: ${{ !cancelled() && (needs.rebase.outputs.result == 'clean' || needs.target.outputs.result == 'clean') }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     outputs:
@@ -367,7 +391,7 @@ jobs:
       # Full history without historical blobs: the harness checks out old releases by tag.
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.rebase.outputs.head_sha }}
+          ref: ${{ needs.rebase.outputs.head_sha || needs.target.outputs.head_sha }}
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
@@ -392,15 +416,15 @@ jobs:
 
   build:
     name: macOS build
-    needs: rebase
-    if: needs.rebase.outputs.result == 'clean'
+    needs: [rebase, target]
+    if: ${{ !cancelled() && (needs.rebase.outputs.result == 'clean' || needs.target.outputs.result == 'clean') }}
     # The free 3-core macos-15 may run short of memory on `pnpm build`; POD_MAC_RUNNER switches it (CONTRIBUTING.md).
     runs-on: ${{ vars.POD_MAC_RUNNER || 'macos-15' }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.rebase.outputs.head_sha }}
+          ref: ${{ needs.rebase.outputs.head_sha || needs.target.outputs.head_sha }}
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies
         with:
