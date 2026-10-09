@@ -41,6 +41,7 @@ Manifest:
   }
   Each entry needs exactly one of "upstream" or "forkOnly". "base" is optional: an extra ref
   whose commits are excluded, for a topic branch cut from something other than Orca main.
+  "note" is free text for people and is ignored.
 EOF
 }
 
