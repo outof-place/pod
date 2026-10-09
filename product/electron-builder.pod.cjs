@@ -78,6 +78,15 @@ function productUsageDescriptions(extendInfo) {
   )
 }
 
+// claude-acc (orcahost.py) reads this to find the product's names. Only what differs from Orca:
+// the Claude accounts' keychain service, ~/.orca/agent-hooks and the data files stay shared.
+function claudeAccHost() {
+  return {
+    userData: `~/Library/Application Support/${identity.userDataName}`,
+    cli: identity.cliName
+  }
+}
+
 /** The Orca base this build was cut from: upstream.json when the stack pinned one, else git. */
 function readOrcaUpstream() {
   const pinned = join(repoRoot, 'upstream.json')
@@ -135,7 +144,10 @@ module.exports = {
   },
   mac: {
     ...base.mac,
-    extendInfo: productUsageDescriptions(base.mac.extendInfo),
+    extendInfo: {
+      ...productUsageDescriptions(base.mac.extendInfo),
+      ClaudeAccHost: claudeAccHost()
+    },
     hardenedRuntime: true,
     notarize: isRelease,
     extraResources: [
