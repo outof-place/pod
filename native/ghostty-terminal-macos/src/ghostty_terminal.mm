@@ -204,6 +204,8 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
 
 @interface OrcaGhosttySurfaceView : NSView <NSTextInputClient>
 @property(nonatomic, assign) SurfaceModel* model;
+- (void)setOverlayHoles:(NSArray<NSValue*>*)holes;
+- (NSArray<NSValue*>*)overlayHoles;
 @end
 
 // Not registered for dragged types on purpose: AppKit then routes drags over the surface to the
@@ -229,6 +231,8 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
   NSMutableArray<NSString*>* _keyTextAccumulator;
   NSTrackingArea* _trackingArea;
   BOOL _focused;
+  // DOM overlays showing through this view, in view coordinates; nil when none.
+  NSArray<NSValue*>* _overlayHoles;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
@@ -324,6 +328,50 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
   });
 }
 
+#pragma mark Overlay holes
+
+// An even-odd mask cuts the holes out of what the view draws (scrollbar included), and
+// hit-testing lets clicks and the wheel over them reach the web contents underneath.
+- (void)setOverlayHoles:(NSArray<NSValue*>*)holes {
+  _overlayHoles = holes.count > 0 ? [holes copy] : nil;
+  CALayer* layer = self.layer;
+  if (layer == nil) return;
+  if (_overlayHoles == nil) {
+    layer.mask = nil;
+    return;
+  }
+  CAShapeLayer* mask =
+      [layer.mask isKindOfClass:[CAShapeLayer class]] ? (CAShapeLayer*)layer.mask : [CAShapeLayer layer];
+  mask.frame = layer.bounds;
+  mask.fillRule = kCAFillRuleEvenOdd;
+  CGMutablePathRef path = CGPathCreateMutable();
+  CGPathAddRect(path, nullptr, mask.bounds);
+  for (NSValue* hole in _overlayHoles) {
+    CGPathAddRect(path, nullptr, NSRectToCGRect([self convertRectToLayer:hole.rectValue]));
+  }
+  mask.path = path;
+  CGPathRelease(path);
+  layer.mask = mask;
+}
+
+- (NSArray<NSValue*>*)overlayHoles {
+  return _overlayHoles;
+}
+
+- (BOOL)overlayHoleContains:(NSPoint)point {
+  for (NSValue* hole in _overlayHoles) {
+    if (NSPointInRect(point, hole.rectValue)) return YES;
+  }
+  return NO;
+}
+
+- (NSView*)hitTest:(NSPoint)point {
+  if (_overlayHoles != nil && [self overlayHoleContains:[self convertPoint:point fromView:self.superview]]) {
+    return nil;
+  }
+  return [super hitTest:point];
+}
+
 #pragma mark Mouse
 
 - (void)sendMousePos:(NSEvent*)event {
@@ -383,6 +431,7 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
 
 - (void)mouseEntered:(NSEvent*)event {
   [super mouseEntered:event];
+  if ([self overlayHoleContains:[self convertPoint:event.locationInWindow fromView:nil]]) return;
   [self sendMousePos:event];
   [self emitMouseEntered:event];
 }
@@ -394,6 +443,11 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
 }
 
 - (void)mouseMoved:(NSEvent*)event {
+  // Hovering the overlay in a hole: Ghostty sees the pointer leave, not a hover underneath.
+  if ([self overlayHoleContains:[self convertPoint:event.locationInWindow fromView:nil]]) {
+    [self mouseExited:event];
+    return;
+  }
   [self sendMousePos:event];
 }
 
@@ -1523,7 +1577,28 @@ napi_value WriteOutput(napi_env env, napi_callback_info info) {
   return Undefined(env);
 }
 
-// setFrames(frames: Array<[id, x, y, width, height, visible]>): void
+// The optional 7th frame field: [[x, y, width, height], ...] in host (window) points.
+NSArray<NSValue*>* HolesForFrame(napi_env env, napi_value entry, OrcaGhosttySurfaceView* view) {
+  uint32_t length = 0;
+  if (napi_get_array_length(env, entry, &length) != napi_ok || length < 7) return nil;
+  napi_value list;
+  uint32_t count = 0;
+  napi_get_element(env, entry, 6, &list);
+  if (napi_get_array_length(env, list, &count) != napi_ok) return nil;
+  NSMutableArray<NSValue*>* holes = [NSMutableArray arrayWithCapacity:count];
+  for (uint32_t i = 0; i < count; i++) {
+    napi_value hole;
+    napi_value parts[4];
+    napi_get_element(env, list, i, &hole);
+    for (uint32_t k = 0; k < 4; k++) napi_get_element(env, hole, k, &parts[k]);
+    const NSRect inHost = NSMakeRect(GetDouble(env, parts[0]), GetDouble(env, parts[1]), GetDouble(env, parts[2]),
+                                     GetDouble(env, parts[3]));
+    [holes addObject:[NSValue valueWithRect:[view convertRect:inHost fromView:view.superview]]];
+  }
+  return holes;
+}
+
+// setFrames(frames: Array<[id, x, y, width, height, visible, holes?]>): void
 napi_value SetFrames(napi_env env, napi_callback_info info) {
   size_t argc = 1;
   napi_value argv[1];
@@ -1551,6 +1626,7 @@ napi_value SetFrames(napi_env env, napi_callback_info info) {
       if (view.model->surface) ghostty_surface_set_occlusion(view.model->surface, visible);
       if (!visible && hadKeyboard) ReturnKeyboardToWebContents(view);
     }
+    [view setOverlayHoles:visible ? HolesForFrame(env, entry, view) : nil];
   }
   [CATransaction commit];
   return Undefined(env);
@@ -1735,7 +1811,28 @@ napi_value ScrollbarDebugState(napi_env env, OrcaGhosttySurfaceView* view) {
   return result;
 }
 
-// debugState(id): { hidden, firstResponder, x, y, width, height, scrollbar } | null
+// [{ x, y, width, height, hit }] in host points; `hit` is the view class a click at its centre reaches.
+napi_value OverlayHolesDebugState(napi_env env, OrcaGhosttySurfaceView* view) {
+  napi_value result;
+  napi_create_array(env, &result);
+  uint32_t index = 0;
+  for (NSValue* hole in view.overlayHoles) {
+    const NSRect local = hole.rectValue;
+    const NSRect inHost = [view convertRect:local toView:view.superview];
+    napi_value entry;
+    napi_create_object(env, &entry);
+    napi_set_named_property(env, entry, "x", Number(env, inHost.origin.x));
+    napi_set_named_property(env, entry, "y", Number(env, inHost.origin.y));
+    napi_set_named_property(env, entry, "width", Number(env, inHost.size.width));
+    napi_set_named_property(env, entry, "height", Number(env, inHost.size.height));
+    napi_set_named_property(env, entry, "hit",
+                            String(env, HitClassAt(view, NSMakePoint(NSMidX(local), NSMidY(local)))));
+    napi_set_element(env, result, index++, entry);
+  }
+  return result;
+}
+
+// debugState(id): { hidden, firstResponder, x, y, width, height, scrollbar, holes, masked } | null
 napi_value DebugState(napi_env env, napi_callback_info info) {
   size_t argc = 1;
   napi_value argv[1];
@@ -1764,6 +1861,8 @@ napi_value DebugState(napi_env env, napi_callback_info info) {
   id responder = view.window.firstResponder;
   napi_set_named_property(env, result, "windowFirstResponder",
                           String(env, responder ? object_getClassName(responder) : "none"));
+  napi_set_named_property(env, result, "holes", OverlayHolesDebugState(env, view));
+  napi_set_named_property(env, result, "masked", Bool(env, view.layer.mask != nil));
   return result;
 }
 

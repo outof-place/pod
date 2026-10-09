@@ -9,7 +9,12 @@ export type NativeTerminalEvent =
   // The pointer entered the surface; the page cannot see it under the native view.
   | { surfaceId: number; kind: 'mouseEnter'; buttons: number; windowFocused: boolean }
 
-// [surfaceId, x, y, width, height, visible] in window points (CSS px × zoom factor).
-export type NativeTerminalFrame = [number, number, number, number, number, boolean]
+// [x, y, width, height] in window points where a DOM overlay shows through the native view.
+export type NativeTerminalHole = [number, number, number, number]
+
+// [surfaceId, x, y, width, height, visible, holes?] in window points (CSS px × zoom factor).
+export type NativeTerminalFrame =
+  | [number, number, number, number, number, boolean]
+  | [number, number, number, number, number, boolean, NativeTerminalHole[]]
 
 export const NATIVE_TERMINAL_EVENT_CHANNEL = 'nativeTerminal:event'
