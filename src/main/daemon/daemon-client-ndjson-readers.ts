@@ -1,6 +1,11 @@
 import type { Socket } from 'node:net'
 import { StringDecoder } from 'node:string_decoder'
 import { createNdjsonParser } from './ndjson'
+import {
+  BINARY_STREAM_FRAMING,
+  createBinaryStreamFrameReader,
+  type DaemonStreamFraming
+} from './daemon-stream-binary-framing'
 import type { DaemonEvent, RpcResponse } from './types'
 
 export function attachControlResponseReader(
@@ -20,10 +25,24 @@ export function attachControlResponseReader(
   return () => socket.off('data', onData)
 }
 
+export type StreamEventReaderFraming = {
+  streamFraming: DaemonStreamFraming
+  /** Stream bytes the hello reader already received past its line. */
+  remainder: Buffer
+}
+
 export function attachStreamEventReader(
   socket: Socket,
+  { streamFraming, remainder }: StreamEventReaderFraming,
   onEvent: (event: DaemonEvent) => void
 ): () => void {
+  if (streamFraming === BINARY_STREAM_FRAMING) {
+    const reader = createBinaryStreamFrameReader(onEvent, (error) => socket.destroy(error))
+    reader.feed(remainder)
+    const onFrameData = (chunk: Buffer) => reader.feed(chunk)
+    socket.on('data', onFrameData)
+    return () => socket.off('data', onFrameData)
+  }
   // Why: PTY output streams include emoji/box-drawing tables; socket chunks
   // can split those UTF-8 sequences across packets.
   const decoder = new StringDecoder('utf8')
@@ -38,6 +57,7 @@ export function attachStreamEventReader(
   )
 
   const onData = (chunk: Buffer) => parser.feed(decoder.write(chunk))
+  onData(remainder)
   socket.on('data', onData)
   return () => socket.off('data', onData)
 }
