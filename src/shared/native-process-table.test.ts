@@ -56,11 +56,11 @@ afterEach(() => {
 })
 
 describe('readNativeFullProcessTable', () => {
-  it('names a withheld-argv process by its executable when its argv cannot change a verdict', () => {
+  it('names a withheld-argv process by its executable when its argv cannot change a verdict', async () => {
     installNative(() => [...pane, row(560, { name: 'unbound' })])
 
     expect(
-      readNativeFullProcessTable()?.map(({ pid, tty, command }) => [pid, tty, command])
+      (await readNativeFullProcessTable())?.map(({ pid, tty, command }) => [pid, tty, command])
     ).toEqual([
       [1, '??', '/sbin/launchd'],
       // login never reads as a shell or an agent, so its path is all any verdict needs.
@@ -76,19 +76,19 @@ describe('readNativeFullProcessTable', () => {
     ['an interpreter whose script names the program', '/bin/bash'],
     ['an agent whose flags decide what it is', '/opt/bin/claude'],
     ['a process whose executable the kernel also withholds', undefined]
-  ])('defers to ps when a terminal holder is %s', (_label, path) => {
+  ])('defers to ps when a terminal holder is %s', async (_label, path) => {
     installNative(() => [
       ...pane,
       row(400, { ppid: 101, tty: 'ttys003', tpgid: 300, path, name: 'sudo-child' })
     ])
 
-    expect(readNativeFullProcessTable()).toBeNull()
+    expect(await readNativeFullProcessTable()).toBeNull()
   })
 
-  it('ignores withheld argv on processes that hold no terminal', () => {
+  it('ignores withheld argv on processes that hold no terminal', async () => {
     installNative(() => [row(42, { path: '/usr/bin/python3', name: 'python3' })])
 
-    expect(readNativeFullProcessTable()).toEqual([
+    expect(await readNativeFullProcessTable()).toEqual([
       {
         pid: 42,
         ppid: 1,
@@ -102,13 +102,13 @@ describe('readNativeFullProcessTable', () => {
     ])
   })
 
-  it('returns null when the addon throws or is absent', () => {
+  it('returns null when the addon throws or is absent', async () => {
     installNative(() => {
       throw new Error('sysctl(KERN_PROC_ALL) failed: Cannot allocate memory')
     })
-    expect(readNativeFullProcessTable()).toBeNull()
+    expect(await readNativeFullProcessTable()).toBeNull()
     setNativeProcessInfoForTests(null)
-    expect(readNativeFullProcessTable()).toBeNull()
+    expect(await readNativeFullProcessTable()).toBeNull()
   })
 })
 

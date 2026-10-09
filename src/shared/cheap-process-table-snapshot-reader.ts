@@ -20,7 +20,7 @@ import {
  */
 const cheapProcessTableReader = createProcessTableSnapshotReader<CheapProcessTableRow[]>({
   runPs: async () => {
-    const native = readNativeCheapProcessTable()
+    const native = await readNativeCheapProcessTable()
     if (native) {
       return native
     }
@@ -45,24 +45,23 @@ const cheapProcessTableReader = createProcessTableSnapshotReader<CheapProcessTab
   now: () => Date.now()
 })
 
-/**
- * The same columns from one sysctl instead of a `ps` fork (#24889): ~1 ms against ~16 ms plus the
- * spawn, polled by every visible pane. Null when the addon is absent or fails, so `ps` answers.
- */
-function readNativeCheapProcessTable(): CheapProcessTableRow[] | null {
+/** Native worker capture; null retains the ps fallback on unsupported or failed hosts. */
+async function readNativeCheapProcessTable(): Promise<CheapProcessTableRow[] | null> {
   const native = getNativeProcessInfo()
   if (!native) {
     return null
   }
   try {
-    const rows = native.listProcesses().map(({ pid, ppid, pgid, tpgid, stat, startTime }) => ({
-      pid,
-      ppid,
-      pgid,
-      tpgid,
-      stat,
-      ...(startTime ? { startTime } : {})
-    }))
+    const rows = (await native.listProcesses()).map(
+      ({ pid, ppid, pgid, tpgid, stat, startTime }) => ({
+        pid,
+        ppid,
+        pgid,
+        tpgid,
+        stat,
+        ...(startTime ? { startTime } : {})
+      })
+    )
     return rows.length > 0 ? rows : null
   } catch {
     return null
