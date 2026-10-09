@@ -6,6 +6,7 @@ import {
   enableNativeTerminal,
   findNativeSurfaceForPane,
   isNativeSurfaceHidden,
+  nativeTerminalDebug,
   splitNativeTerminalPane,
   xtermScreenTransform
 } from './helpers/native-terminal-debug'
@@ -27,11 +28,12 @@ import {
 } from './sustained-agent-typing-load-scripts'
 import { summarizeBenchmarkSamples } from '../../config/scripts/benchmark-sample-summary.mjs'
 
-// Same workloads with experimentalNativeTerminal off (xterm.js WebGL) and on (Ghostty/Metal):
-// an output flood, keystroke-to-echo latency, and idle CPU with four panes. Opt-in, not a gate.
+// Same workloads with experimentalNativeTerminal off (xterm.js WebGL), on (Ghostty/Metal fed by
+// main), and on with main's feed off (fed by the renderer mirror): an output flood,
+// keystroke-to-echo latency, and idle CPU with four panes. Opt-in, not a gate.
 //   ORCA_NATIVE_TERMINAL_BENCH=1 SKIP_BUILD=1 pnpm run test:e2e tests/e2e/native-terminal-ghostty-perf.spec.ts
 
-type Mode = 'xterm' | 'native'
+type Mode = 'xterm' | 'native' | 'native-mirror'
 
 const enabled = process.env.ORCA_NATIVE_TERMINAL_BENCH === '1'
 const rounds = Number(process.env.ORCA_NATIVE_TERMINAL_BENCH_ROUNDS ?? 5)
@@ -46,6 +48,7 @@ const KEY_TIMEOUT_MS = 2_000
 // Main-side screen polling for the native path; coarse during floods so it barely costs CPU.
 const FLOOD_POLL_MS = 5
 const KEY_POLL_MS = 1
+const MIRROR_WRITES_KEY = '__orcaE2eNativeMirrorWrites'
 
 test.use({
   orcaAppExtraArgs: [
@@ -69,13 +72,24 @@ type XtermWatch = {
   frames: number
 }
 
-type FloodSample = { wallMs: number; cpuMs: CpuByType; xtermRenders: number; frames: number }
+type FloodSample = {
+  wallMs: number
+  cpuMs: CpuByType
+  xtermRenders: number
+  frames: number
+  // Renderer-to-main 'nativeTerminal:write' messages; PTY chunks main's feed took, and the
+  // batched addon writes it made of them.
+  mirrorWrites: number
+  mainFeedChunks: number
+  mainFeedWrites: number
+}
 type KeySample = { keyToScreenMs: number; keyToParsedMs: number | null; keyToPtyMs: number | null }
 type ModeSamples = {
   flood: FloodSample[]
   keys: KeySample[]
   idleCpuMsPerS: CpuByType[]
   webgl: boolean[]
+  keyMirrorWrites: number[]
 }
 
 function now(): number {
@@ -115,6 +129,37 @@ function cpuBetween(before: CpuSnapshot, after: CpuSnapshot): CpuByType {
     }
   }
   return byType
+}
+
+// Counts renderer-to-main mirror writes; main's own feed sends none.
+async function installMirrorWriteCounter(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ ipcMain }, key) => {
+    const counter = { writes: 0 }
+    Reflect.set(globalThis, key, counter)
+    ipcMain.on('nativeTerminal:write', () => {
+      counter.writes += 1
+    })
+  }, MIRROR_WRITES_KEY)
+}
+
+function mirrorWrites(app: ElectronApplication): Promise<number> {
+  return app.evaluate(
+    (_electron, key) => Number(Reflect.get(Object(Reflect.get(globalThis, key)), 'writes')),
+    MIRROR_WRITES_KEY
+  )
+}
+
+async function mainFeedStats(
+  app: ElectronApplication
+): Promise<{ chunks: number; writes: number }> {
+  const stats: unknown = await nativeTerminalDebug(app, 'mainFeed')
+  const read = (field: string): number =>
+    typeof stats === 'object' && stats !== null ? Number(Reflect.get(stats, field)) : 0
+  return { chunks: read('chunks'), writes: read('writes') }
+}
+
+function emptySamples(): ModeSamples {
+  return { flood: [], keys: [], idleCpuMsPerS: [], webgl: [], keyMirrorWrites: [] }
 }
 
 function scaleCpu(cpu: CpuByType, factor: number): CpuByType {
@@ -334,11 +379,12 @@ async function openBenchmarkPane(
   app: ElectronApplication,
   mode: Mode
 ): Promise<{ tabId: string; ptyId: string; surfaceId: number | null }> {
-  await enableNativeTerminal(page, mode === 'native')
+  await nativeTerminalDebug(app, 'mainFeed', [mode !== 'native-mirror'])
+  await enableNativeTerminal(page, mode !== 'xterm')
   const tabId = await openTerminalTab(page)
   const ptyId = await waitForActivePanePtyId(page, 30_000)
   await waitForPtyShellEcho(page, ptyId, 30_000)
-  const surfaceId = await findNativeSurfaceForPane(page, ptyId, mode === 'native' ? 15_000 : 1_000)
+  const surfaceId = await findNativeSurfaceForPane(page, ptyId, mode === 'xterm' ? 1_000 : 15_000)
   // The xterm baseline must not have a native view; the native run must have one, on screen.
   expect(surfaceId === null).toBe(mode === 'xterm')
   if (surfaceId !== null) {
@@ -358,6 +404,8 @@ async function measureFlood(
   const id = randomUUID()
   const marker = `FLOOD-${id}`
   const watch = await armXtermWatch(page, ptyId, marker, surfaceId === null, FLOOD_TIMEOUT_MS)
+  const writesBefore = await mirrorWrites(app)
+  const feedBefore = await mainFeedStats(app)
   const before = await cpuSnapshot(app)
   const startedAt = now()
   const native =
@@ -371,11 +419,15 @@ async function measureFlood(
   if (shownAt === null) {
     throw new Error(`flood did not reach the ${surfaceId === null ? 'xterm' : 'native'} screen`)
   }
+  const feedAfter = await mainFeedStats(app)
   return {
     wallMs: shownAt - startedAt,
     cpuMs: cpuBetween(before, after),
     xtermRenders: xterm.renders,
-    frames: xterm.frames
+    frames: xterm.frames,
+    mirrorWrites: (await mirrorWrites(app)) - writesBefore,
+    mainFeedChunks: feedAfter.chunks - feedBefore.chunks,
+    mainFeedWrites: feedAfter.writes - feedBefore.writes
   }
 }
 
@@ -385,7 +437,7 @@ async function measureKeystrokes(
   ptyId: string,
   surfaceId: number | null,
   testInfo: TestInfo
-): Promise<KeySample[]> {
+): Promise<{ keys: KeySample[]; mirrorWrites: number }> {
   const runId = randomUUID().slice(0, 8)
   const scriptPath = testInfo.outputPath(`echo-${runId}.mjs`)
   const arrivalsPath = testInfo.outputPath(`arrivals-${runId}.jsonl`)
@@ -396,6 +448,7 @@ async function measureKeystrokes(
     await focusActiveTerminalInput(page)
   }
   const timings: { keyAt: number; parsedAt: number | null; shownAt: number }[] = []
+  const writesBefore = await mirrorWrites(app)
   for (let seq = 1; seq <= keyCount; seq += 1) {
     const character = String.fromCharCode(97 + ((seq - 1) % 26))
     const marker = `${typingKeyMarkerPrefix(runId)}${seq}`
@@ -416,6 +469,7 @@ async function measureKeystrokes(
     }
     await page.waitForTimeout(KEY_GAP_MS)
   }
+  const keyWrites = (await mirrorWrites(app)) - writesBefore
   await sendToTerminal(page, ptyId, '\x03')
   const arrivals = new Map<number, number>()
   if (existsSync(arrivalsPath)) {
@@ -432,7 +486,7 @@ async function measureKeystrokes(
       }
     }
   }
-  return timings.map((timing, index) => {
+  const keys = timings.map((timing, index) => {
     const arrivedAt = arrivals.get(index + 1)
     return {
       keyToScreenMs: timing.shownAt - timing.keyAt,
@@ -440,11 +494,12 @@ async function measureKeystrokes(
       keyToPtyMs: arrivedAt === undefined ? null : arrivedAt - timing.keyAt
     }
   })
+  return { keys, mirrorWrites: keyWrites }
 }
 
 async function measureIdle(page: Page, app: ElectronApplication, mode: Mode): Promise<CpuByType> {
   for (let pane = 1; pane < IDLE_PANES; pane += 1) {
-    if (mode === 'native') {
+    if (mode !== 'xterm') {
       await splitNativeTerminalPane(page, app)
     } else {
       const previous = await waitForActivePanePtyId(page)
@@ -480,6 +535,10 @@ function summarizeMode(samples: ModeSamples): Record<string, unknown> {
     floodCpuMs: summarizeCpu(samples.flood.map((sample) => sample.cpuMs)),
     floodXtermRenders: samples.flood.map((sample) => sample.xtermRenders),
     floodAnimationFrames: samples.flood.map((sample) => sample.frames),
+    floodMirrorWrites: samples.flood.map((sample) => sample.mirrorWrites),
+    floodMainFeedChunks: samples.flood.map((sample) => sample.mainFeedChunks),
+    floodMainFeedWrites: samples.flood.map((sample) => sample.mainFeedWrites),
+    keyMirrorWrites: samples.keyMirrorWrites,
     keyToScreenMs: summarize(samples.keys.map((sample) => sample.keyToScreenMs)),
     keyToXtermParsedMs: summarize(
       samples.keys.flatMap((sample) =>
@@ -524,31 +583,38 @@ test('native terminal vs xterm.js: output flood, keystroke echo, idle CPU', asyn
       timeout: 30_000
     })
     .toBe(0)
+  await installMirrorWriteCounter(electronApp)
 
+  const modes: Mode[] = ['xterm', 'native', 'native-mirror']
   const samples: Record<Mode, ModeSamples> = {
-    xterm: { flood: [], keys: [], idleCpuMsPerS: [], webgl: [] },
-    native: { flood: [], keys: [], idleCpuMsPerS: [], webgl: [] }
+    xterm: emptySamples(),
+    native: emptySamples(),
+    'native-mirror': emptySamples()
   }
   for (let round = 0; round < rounds; round += 1) {
-    // Alternate the order so warm-up and thermal drift do not favor one mode.
-    const order: Mode[] = round % 2 === 0 ? ['xterm', 'native'] : ['native', 'xterm']
-    for (const mode of order) {
+    // Rotate the order so warm-up and thermal drift do not favor one mode.
+    for (const mode of modes.map((_, index) => modes[(index + round) % modes.length])) {
       const { tabId, ptyId, surfaceId } = await openBenchmarkPane(orcaPage, electronApp, mode)
       samples[mode].webgl.push(await activePaneUsesWebgl(orcaPage))
       samples[mode].flood.push(await measureFlood(orcaPage, electronApp, ptyId, surfaceId))
-      samples[mode].keys.push(
-        ...(await measureKeystrokes(orcaPage, electronApp, ptyId, surfaceId, testInfo))
-      )
+      const typed = await measureKeystrokes(orcaPage, electronApp, ptyId, surfaceId, testInfo)
+      samples[mode].keys.push(...typed.keys)
+      samples[mode].keyMirrorWrites.push(typed.mirrorWrites)
       samples[mode].idleCpuMsPerS.push(await measureIdle(orcaPage, electronApp, mode))
       await closeTab(orcaPage, tabId)
       await orcaPage.waitForTimeout(1_000)
     }
   }
+  await nativeTerminalDebug(electronApp, 'mainFeed', [true])
 
-  const report = {
-    config: { rounds, floodLines, keyCount, idleMs, idlePanes: IDLE_PANES },
+  const summaries = {
     xterm: summarizeMode(samples.xterm),
     native: summarizeMode(samples.native),
+    'native-mirror': summarizeMode(samples['native-mirror'])
+  }
+  const report = {
+    config: { rounds, floodLines, keyCount, idleMs, idlePanes: IDLE_PANES },
+    ...summaries,
     samples
   }
   const output =
@@ -556,5 +622,5 @@ test('native terminal vs xterm.js: output flood, keystroke echo, idle CPU', asyn
     testInfo.outputPath('native-terminal-perf.json')
   writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`)
   await testInfo.attach('native-terminal-perf', { path: output, contentType: 'application/json' })
-  console.log(JSON.stringify({ xterm: report.xterm, native: report.native }, null, 2))
+  console.log(JSON.stringify(summaries, null, 2))
 })

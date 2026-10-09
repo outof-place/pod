@@ -19,6 +19,10 @@ import {
   writeSurfaceOutput
 } from '../native-terminal/ghostty-native-terminal-host'
 import { applyGhosttySurfaceConfig } from '../native-terminal/ghostty-native-terminal-surface-configs'
+import {
+  bindNativeTerminalPty,
+  type NativeTerminalFeedRuntime
+} from '../native-terminal/ghostty-native-terminal-pty-feed'
 
 function isAppearance(value: unknown): value is NativeTerminalAppearance {
   return (
@@ -77,7 +81,8 @@ function zoomOf(value: unknown): number {
 const INVOKE_CHANNELS = [
   'nativeTerminal:isSupported',
   'nativeTerminal:create',
-  'nativeTerminal:readSelection'
+  'nativeTerminal:readSelection',
+  'nativeTerminal:bindPty'
 ]
 const SEND_CHANNELS = [
   'nativeTerminal:write',
@@ -91,7 +96,9 @@ const SEND_CHANNELS = [
   'nativeTerminal:destroy'
 ]
 
-export function registerNativeTerminalHandlers(): void {
+export function registerNativeTerminalHandlers(
+  runtime: NativeTerminalFeedRuntime | null = null
+): void {
   installNativeTerminalDebugHooks()
   for (const channel of INVOKE_CHANNELS) {
     ipcMain.removeHandler(channel)
@@ -133,6 +140,14 @@ export function registerNativeTerminalHandlers(): void {
       focusSurface(event.sender, surfaceId)
     }
   })
+  ipcMain.handle(
+    'nativeTerminal:bindPty',
+    (event, surfaceId: unknown, ptyId: unknown): boolean =>
+      isSurfaceId(surfaceId) &&
+      typeof ptyId === 'string' &&
+      ownedSurfaceAddon(event.sender, surfaceId) !== null &&
+      bindNativeTerminalPty(surfaceId, ptyId, runtime)
+  )
   ipcMain.handle('nativeTerminal:readSelection', (event, surfaceId: unknown): string | null =>
     isSurfaceId(surfaceId) ? readSurfaceSelection(event.sender, surfaceId) : null
   )

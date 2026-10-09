@@ -12,6 +12,10 @@ import {
 } from './ghostty-native-terminal-addon'
 import { ghosttyConfigPath, writeGhosttyConfig } from './ghostty-native-terminal-config-file'
 import { forgetGhosttySurfaceConfig } from './ghostty-native-terminal-surface-configs'
+import {
+  forgetNativeTerminalSurface,
+  nativeTerminalSurfacePlaced
+} from './ghostty-native-terminal-pty-feed'
 import { installGhosttyDebugHooks } from './ghostty-native-terminal-debug-hooks'
 import {
   appliedForwardedChords,
@@ -114,6 +118,8 @@ function handleSurfaceEvent(surfaceId: number, kind: string, args: unknown[]): v
         return
       }
       sendEvent(owner, { surfaceId, kind: 'resize', cols: Number(args[0]), rows: Number(args[1]) })
+      // Ghostty's terminal now has the pane's grid, so a main-fed seed lands where it should.
+      nativeTerminalSurfacePlaced(surfaceId)
       return
     }
     case 'focus': {
@@ -309,6 +315,7 @@ export function destroySurface(surfaceId: number): void {
   }
   addon?.destroySurface(surfaceId)
   forgetGhosttySurfaceConfig(surfaceId)
+  forgetNativeTerminalSurface(surfaceId)
 }
 
 export function installNativeTerminalDebugHooks(): void {

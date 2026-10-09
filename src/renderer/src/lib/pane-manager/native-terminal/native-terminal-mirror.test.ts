@@ -136,6 +136,21 @@ describe('installNativeTerminalMirror', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('forwards nothing while main feeds the surface, and re-seeds with a reset on fallback', () => {
+    const fake = fakeTerminal()
+    const send = vi.fn()
+    const mirror = installNativeTerminalMirror(asTerminal(fake), send)
+    mirror.followMain(4)
+    fake.write('from the PTY')
+    fake.clear()
+    fake.flush()
+    expect(send).not.toHaveBeenCalled()
+    expect(mirror.getSurfaceId()).toBe(4)
+    mirror.attach(4, () => 'S', true)
+    fake.flush()
+    expect(send).toHaveBeenCalledWith(4, '\x1bcS')
+  })
+
   it('still seeds when xterm resizes before the marker parses', () => {
     const terminal = new HeadlessTerminal({ cols: 80, rows: 24, allowProposedApi: true })
     const send = vi.fn()

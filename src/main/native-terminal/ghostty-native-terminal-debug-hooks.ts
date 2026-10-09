@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import type { NativeTerminalForwardedChord } from '../../shared/native-terminal-forwarded-chords'
 import type { GhosttyTerminalAddon } from './ghostty-native-terminal-addon'
+import { nativeTerminalFeedDebug } from './ghostty-native-terminal-pty-feed'
 
 type DebugHookSources = {
   surfaceIds: () => number[]
@@ -47,7 +48,8 @@ export function installGhosttyDebugHooks(sources: DebugHookSources): void {
       secureInput: (surfaceId: number, simulate?: boolean) =>
         addon()?.debugSecureInput(surfaceId, simulate) ?? null,
       textInputMenu: () => addon()?.debugTextInputMenu() ?? [],
-      forwardedChords: sources.forwardedChords
+      forwardedChords: sources.forwardedChords,
+      mainFeed: nativeTerminalFeedDebug
     }
   })
 }
