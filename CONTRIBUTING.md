@@ -12,6 +12,7 @@ all of it applies here. This file adds what is specific to Pod.
 | `orca-main` | An untouched mirror of Orca's `main`. | The sync workflow, fast-forward only. |
 | Orca-style topic branches: `feat/*`, `fix/*`, `perf/*`, `plugins/*`, `native-terminal/*` | One branch per Orca pull request, cut from `orca-main`. | You. |
 | `pod/*` | Pod-only work, one branch per change. `pod/infra` holds these docs, `upstream.json`, the sync workflow and the stack scripts. | You. |
+| `stack/<topic>` | A copy of a topic branch replayed onto the Pod stack, when two topic branches conflict with each other. Its `pod-stack.json` entry says what it was replayed onto. | Whoever settles the conflict. Refresh it when its source branch changes, or drop it once the source is rebased. |
 | `sync/orca-main` | The next rebase of `main` onto a newer green Orca commit, prepared by the sync workflow and waiting for review. | The sync workflow. |
 
 - Branches keep their names once they have an open Orca pull request.
@@ -86,6 +87,8 @@ Fork-only: Pod identity: name, bundle id, icon
   run too, but only as advisory, and their result goes into the pull request body.
 - "Green" covers only the workflows Orca runs on a push to `main`. Orca's unit suite runs on pull
   requests, so the sync's own unit run is the first full test of that exact commit.
+- To run only the checks on any branch or commit, without a rebase, pull request or issue:
+  `gh workflow run upstream-sync.yml -R outof-place/pod -f check=main`.
 - Do not press Merge on a sync pull request: a rebase replaces the branch. Promote it with
   `gh workflow run upstream-sync.yml -R outof-place/pod -f promote=true`, which moves
   `main` with a lease and checks that the branch has not changed since its checks passed.
