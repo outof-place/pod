@@ -1,11 +1,14 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  parseProductIdentity,
+  PRODUCT_IDENTITY_RESOURCE
+} from '../product-identity/product-identity'
+import {
   parsePodDistroConfig,
   POD_DISTRO_IDENTITY_ENV,
-  PRODUCT_IDENTITY_RESOURCE,
   readPodDistroConfig
 } from './pod-distro-config'
 
@@ -61,5 +64,22 @@ describe('Pod distro config', () => {
     expect(
       readPodDistroConfig({ resourcesPath: join(dir, 'missing'), packaged: true, env: {} })
     ).toEqual({ bundledPlugins: null, claudeAcc: null })
+  })
+
+  it("Pod's shipped identity passes both readers and names the bundled distro plugin", () => {
+    const root = join(__dirname, '../../..')
+    const identity: unknown = JSON.parse(readFileSync(join(root, 'product/identity.json'), 'utf8'))
+    expect(parseProductIdentity(identity).displayName).toBe('Pod')
+    const config = parsePodDistroConfig(identity)
+    expect(config.bundledPlugins).toEqual({
+      publishers: ['outof-place'],
+      idPrefix: 'pod-',
+      enablePluginSystem: true
+    })
+    const index: unknown = JSON.parse(
+      readFileSync(join(root, 'resources/plugins/distro/distro-plugins.json'), 'utf8')
+    )
+    expect(JSON.stringify(index)).toContain(`"pluginKey":"${config.claudeAcc?.pluginKey}"`)
+    expect(config.claudeAcc?.payload).toBe('claude-acc')
   })
 })
