@@ -3,7 +3,10 @@ import type {
   PluginPanelEntry,
   PluginPanelSurface
 } from '../../shared/plugins/plugin-panel-bridge'
-import { panelActionCallSchema } from '../../shared/plugins/plugin-panel-bridge'
+import {
+  PLUGIN_PANEL_SURFACES,
+  panelActionCallSchema
+} from '../../shared/plugins/plugin-panel-bridge'
 import {
   admitPluginPanelCall,
   createPluginPanelCallAdmission,
@@ -88,7 +91,8 @@ export class PluginPanelController {
     if (!sessionToken) {
       return { ok: false, code: 'invalid_request', error: 'invalid panel session' }
     }
-    const binding = this.sessions.resolve(ownerKey, sessionToken)
+    // Host actions serve both surfaces; the binding's surface picks the allowed methods.
+    const binding = this.sessions.resolve(ownerKey, sessionToken, PLUGIN_PANEL_SURFACES)
     if (!binding) {
       return { ok: false, code: 'invalid_request', error: 'invalid panel session' }
     }
