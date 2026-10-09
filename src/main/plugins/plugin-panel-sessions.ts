@@ -1,8 +1,11 @@
 import { randomBytes } from 'node:crypto'
+import type { PluginPanelSurface } from '../../shared/plugins/plugin-panel-bridge'
 
 export type PluginPanelSessionBinding = {
   pluginKey: string
+  /** Contribution id: a panel id, or a settings page id when `surface` says so. */
   panelId: string
+  surface: PluginPanelSurface
   rootDir: string
   manifestRevision: string
 }
@@ -18,6 +21,7 @@ function bindingKey(ownerKey: string, binding: PluginPanelSessionBinding): strin
     ownerKey,
     binding.pluginKey,
     binding.panelId,
+    binding.surface,
     binding.rootDir,
     binding.manifestRevision
   ])
@@ -59,6 +63,7 @@ export class PluginPanelSessions {
     return {
       pluginKey: session.pluginKey,
       panelId: session.panelId,
+      surface: session.surface,
       rootDir: session.rootDir,
       manifestRevision: session.manifestRevision
     }
