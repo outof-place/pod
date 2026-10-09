@@ -274,7 +274,7 @@
     "devalue": "6.0.2",
     "diff": "8.0.4",
     "dompurify": "3.4.16",
-    "electron": "43.7.5",
+    "electron": "44.7.0",
     "electron-builder": "26.15.3",
     "electron-builder-squirrel-windows": "26.15.3",
     "electron-vite": "^5.0.0",
