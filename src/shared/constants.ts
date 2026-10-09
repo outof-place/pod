@@ -13,6 +13,7 @@ import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-vi
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
 import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar-usage-mode'
 import { buildDefaultSettings } from './default-global-settings'
+import { getProductSettingDefaults } from './product-setting-defaults'
 import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy'
 import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser-page-zoom'
 import { getDefaultNotificationSettings } from './notification-settings-defaults'
@@ -108,7 +109,7 @@ export function getDefaultWorkspaceDir(homeDir: string): string {
 }
 
 export function getDefaultSettings(homedir: string): GlobalSettings {
-  return buildDefaultSettings({
+  const defaults = buildDefaultSettings({
     workspaceDir: getDefaultWorkspaceDir(homedir),
     appFontFamily: DEFAULT_APP_FONT_FAMILY,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
@@ -122,6 +123,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
 
     voice: getDefaultVoiceSettings()
   })
+  return { ...defaults, ...getProductSettingDefaults() }
 }
 
 export function getDefaultVoiceSettings(): VoiceSettings {
