@@ -8,6 +8,7 @@ import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { recordSessionScanIssue } from './session-scan-issues'
 import type { SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
+import { sessionTreeReader, type SessionTreeReader } from './session-tree-cache'
 
 export async function discoverFiles(args: {
   rootDir: string
@@ -21,6 +22,7 @@ export async function discoverFiles(args: {
 }): Promise<SessionFileDiscovery> {
   const files = new SessionNewestFiles(args.limit)
   let refusedSidecar = false
+  const reader = sessionTreeReader(args.rootDir)
   try {
     await forEachSessionFile(
       args.rootDir,
@@ -29,13 +31,14 @@ export async function discoverFiles(args: {
       {
         extensions: new Set(args.extensions),
         filePredicate: args.filePredicate,
-        directoryPredicate: args.directoryPredicate
+        directoryPredicate: args.directoryPredicate,
+        readDirectory: reader?.readDirectory
       },
       async (path) => {
         try {
-          const fileStat = await wslGatedStat(path, 'scan')
+          const fileStat = await (reader ? reader.stat(path) : wslGatedStat(path, 'scan'))
           const sidecarPath = await args.contentDependencyPath?.(path)
-          const sidecar = await observeSessionSidecar(sidecarPath)
+          const sidecar = await observeSessionSidecar(sidecarPath, reader)
           if (sidecar === 'unknown' && !refusedSidecar) {
             // One issue per root: a refused sibling is a property of the tree,
             // not of each transcript that happens to point at it.
@@ -90,13 +93,14 @@ export async function discoverFiles(args: {
  * a stalled WSL distro, EACCES, EIO — is `'unknown'`.
  */
 async function observeSessionSidecar(
-  filePath: string | undefined
+  filePath: string | undefined,
+  reader: SessionTreeReader | null
 ): Promise<SessionSidecarObservation> {
   if (!filePath) {
     return 'none'
   }
   try {
-    const fileStat = await wslGatedStat(filePath, 'scan')
+    const fileStat = await (reader ? reader.stat(filePath) : wslGatedStat(filePath, 'scan'))
     return { path: filePath, mtimeMs: fileStat.mtimeMs, sizeBytes: fileStat.size }
   } catch (error) {
     return isMissingSidecarError(error) ? 'none' : 'unknown'

@@ -23,6 +23,8 @@ import { buildAiVaultServiceEnv } from './session-scanner-service-env'
 import { AiVaultScannerServiceClient } from './session-scanner-service-client'
 import { getAiVaultServiceEntryPath } from './session-scanner-service-entry-path'
 import { lowerAiVaultServicePriority } from './session-scanner-service-priority'
+import { subscribeViaWatcherProcess } from '../ipc/parcel-watcher-process'
+import { AiVaultServiceTreeWatch } from './session-scanner-service-tree-watch'
 import type {
   AiVaultServiceScanOptions,
   AiVaultServiceSubagentRequest,
@@ -47,13 +49,23 @@ export function spawnAiVaultServiceProcess(): ChildProcess {
 
 let sharedClient: AiVaultScannerServiceClient | null = null
 
+// Why: one FSEvents stream covers a whole tree with no initial crawl; inotify
+// needs a watch per directory, so other hosts keep walking every scan.
+const sessionTreeWatch = new AiVaultServiceTreeWatch(
+  process.platform === 'darwin'
+    ? (root, callback, hooks) => subscribeViaWatcherProcess(root, callback, {}, hooks)
+    : null
+)
+
 function getSharedClient(): AiVaultScannerServiceClient {
   sharedClient ??= new AiVaultScannerServiceClient({
     processFactory: spawnAiVaultServiceProcess,
     resolveSessionSearchRoots: localAiVaultScanRoots,
+    treeWatch: sessionTreeWatch,
     init: () => ({
       sessionParseCache: getSessionParseCachePersistenceOptions(),
-      sessionSearch: sessionSearchServiceInit()
+      sessionSearch: sessionSearchServiceInit(),
+      sessionTreeWatch: sessionTreeWatch.supported
     }),
     onStderr: (text) => console.error('[ai-vault-service]', text.trimEnd())
   })
