@@ -32,7 +32,14 @@ const run = promisify(execFile)
 export const SUBJECTS = {
   orca: { app: ORCA_APP, nativeTerminal: false, label: 'Orca (xterm.js)' },
   'pod-xterm': { app: POD_APP, nativeTerminal: false, label: 'Pod (xterm.js)' },
-  'pod-native': { app: POD_APP, nativeTerminal: true, label: 'Pod (native Ghostty terminal)' }
+  'pod-native': {
+    app: POD_APP,
+    nativeTerminal: true,
+    label: 'Pod (native Ghostty terminal)',
+    // Where the native terminal comes from.
+    branch: 'feat/native-ghostty-terminal',
+    upstream: 'https://github.com/stablyai/orca/pull/26914'
+  }
 }
 
 function plistValue(file, key) {
