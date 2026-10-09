@@ -3,6 +3,10 @@
   "include": [
     "../src/cli/**/*",
     "../src/shared/**/*",
+    "../src/main/native-process-snapshot-client.ts",
+    "../src/main/native-process-snapshot-protocol.ts",
+    "../src/main/lazy-worker-thread-host.ts",
+    "../src/main/worker-thread-request-queue.ts",
     "../src/main/agent-state-file-reader.ts",
     "../src/main/gitlab/project-ref-parser.ts",
     "../src/main/agent-hooks/grok-replay-guard.ts",

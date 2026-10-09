@@ -56,6 +56,12 @@ afterEach(() => {
 })
 
 describe('readNativeFullProcessTable', () => {
+  it('trims command whitespace like the existing ps parser', async () => {
+    installNative(() => [row(42, { command: '/opt/bin/claude\u00a0\u2002\u2028' })])
+
+    expect((await readNativeFullProcessTable())?.[0]?.command).toBe('/opt/bin/claude')
+  })
+
   it('names a withheld-argv process by its executable when its argv cannot change a verdict', async () => {
     installNative(() => [...pane, row(560, { name: 'unbound' })])
 

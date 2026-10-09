@@ -37,7 +37,16 @@ export async function readNativeFullProcessTable(): Promise<ProcessTableRow[] | 
       }
       // Kernel rows are well-formed, so the strict and lenient parse modes can share them.
       const { pid, ppid, pgid, tpgid, stat, tty, startTime } = row
-      rows.push({ pid, ppid, pgid, tpgid, stat, tty, ...(startTime ? { startTime } : {}), command })
+      rows.push({
+        pid,
+        ppid,
+        pgid,
+        tpgid,
+        stat,
+        tty,
+        ...(startTime ? { startTime } : {}),
+        command: command.trim()
+      })
     }
     return rows.length > 0 ? rows : null
   } catch {

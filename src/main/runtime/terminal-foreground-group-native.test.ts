@@ -99,6 +99,15 @@ describe('readTerminalProcessRows with the native process-info addon', () => {
     expect(rows?.find((candidate) => candidate.pid === 300)?.command).toBe('/opt/bin/claude')
   })
 
+  it('trims command whitespace like the existing ps parser', async () => {
+    installPane(115, '/opt/bin/claude\u00a0\u2002\u2028')
+
+    const rows = await readTerminalProcessRows(115)
+
+    expect(rows?.find((candidate) => candidate.pid === 300)?.command).toBe('/opt/bin/claude')
+    expect(runProcessMock).not.toHaveBeenCalled()
+  })
+
   it('treats a vanished root as no terminal rather than asking ps', async () => {
     installPane(120, '/opt/bin/claude')
 
