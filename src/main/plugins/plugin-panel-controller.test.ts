@@ -300,7 +300,7 @@ describe('PluginPanelController settings page surface', () => {
     )
     await expect(
       controller.receiveFromPanel('renderer:1', { sessionToken: page!.sessionToken, message: 1 })
-    ).resolves.toMatchObject({ ok: false, code: 'unavailable' })
+    ).resolves.toMatchObject({ ok: false, code: 'invalid_request', error: 'invalid panel session' })
     expect(deliverToWorker).not.toHaveBeenCalled()
 
     expect(controller.attach('renderer:1', { sessionToken: panel!.sessionToken }, deliver)).toBe(
