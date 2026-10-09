@@ -91,8 +91,9 @@ function claudeAccHost() {
 function readOrcaUpstream() {
   const pinned = join(repoRoot, 'upstream.json')
   if (existsSync(pinned)) {
-    const { tag = null, sha } = JSON.parse(readFileSync(pinned, 'utf8'))
-    return { tag, sha }
+    // pod-stack's pin: { ref, nearestTag }, a commit at or after that tag.
+    const { tag, sha, ref, nearestTag } = JSON.parse(readFileSync(pinned, 'utf8'))
+    return { tag: tag ?? (nearestTag ? `${nearestTag}+` : null), sha: sha ?? ref }
   }
   const git = (args) =>
     execFileSync('git', args, {
