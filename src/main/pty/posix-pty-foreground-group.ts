@@ -46,36 +46,30 @@ function runPs(pid: number): string {
  * The same `pid tpgid tty` row from one sysctl, so a SIGWINCH no longer blocks this thread on a
  * `ps` child (#24889). Null when the addon cannot answer; '' when the pid is gone, as `ps` finds.
  */
-function readNativeProcessRow(pid: number): string | null {
+function readNativeProcessRow(pid: number, ptsName: string): string | null {
   try {
     const native = getNativeProcessInfo()
     if (!native) {
       return null
     }
-    const row = native.readProcess(pid)
+    const row = native.readProcess(pid, ptsName)
     return row ? `${row.pid} ${row.tpgid} ${row.tty}` : ''
   } catch {
     return null
   }
 }
 
-function readProcessRow(pid: number): string {
-  return readNativeProcessRow(pid) ?? runPs(pid)
+function readProcessRow(pid: number, ptsName: string): string {
+  return readNativeProcessRow(pid, ptsName) ?? runPs(pid)
 }
 
-let ownRowCache: { pid: number; row: string } | null = null
+let ownRowCache: { pid: number; ptsName: string; row: string } | null = null
 
-/**
- * Orca's own row, read once per process. It feeds exactly one guard — the
- * "does this process share the PTY" check below — and the only field that guard
- * reads is the controlling tty, which cannot change for a process's lifetime.
- * Re-forking `ps` for it on every SIGWINCH doubled a ~3ms synchronous stall that
- * the renderer fires twice per revealed pane.
- */
-function readOwnProcessRow(currentPid: number): string {
-  if (ownRowCache?.pid !== currentPid) {
+/** Native terminal membership depends on the supplied PTY, so cache per target. */
+function readOwnProcessRow(currentPid: number, ptsName: string): string {
+  if (ownRowCache?.pid !== currentPid || ownRowCache.ptsName !== ptsName) {
     // A throw is not cached: the caller already treats a failed read as "no group".
-    ownRowCache = { pid: currentPid, row: readProcessRow(currentPid) }
+    ownRowCache = { pid: currentPid, ptsName, row: readProcessRow(currentPid, ptsName) }
   }
   return ownRowCache.row
 }
@@ -92,8 +86,8 @@ export function resetPosixPtyForegroundGroupOwnRowCache(): void {
  * blew the timeout below, so the group lookup silently fell back to the very
  * root-pid delivery this module exists to replace.
  */
-function readForegroundGroupTable(rootPid: number, currentPid: number): string {
-  return `${readProcessRow(rootPid)}\n${readOwnProcessRow(currentPid)}`
+function readForegroundGroupTable(rootPid: number, currentPid: number, ptsName: string): string {
+  return `${readProcessRow(rootPid, ptsName)}\n${readOwnProcessRow(currentPid, ptsName)}`
 }
 
 function parseProcessRows(output: string): ProcessRow[] {
@@ -167,7 +161,7 @@ export function signalPosixPtyForegroundGroup(
   let pgid: number | null
   try {
     pgid = getPosixPtyForegroundGroup(
-      (deps.readProcessTable ?? (() => readForegroundGroupTable(rootPid, currentPid)))(),
+      (deps.readProcessTable ?? (() => readForegroundGroupTable(rootPid, currentPid, ptsName)))(),
       rootPid,
       ptsName,
       currentPid

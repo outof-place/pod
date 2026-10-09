@@ -273,7 +273,7 @@ async function captureProcessTable(args: readonly string[]): Promise<string> {
 
 const processTableReader = createProcessTableSnapshotReader<ProcessTableCapture>({
   runPs: async () => {
-    const native = readNativeFullProcessTable()
+    const native = await readNativeFullProcessTable()
     if (native) {
       return { lenient: () => native, strict: () => native }
     }
@@ -289,7 +289,7 @@ const processTableReader = createProcessTableSnapshotReader<ProcessTableCapture>
 // macOS capture time, and a shell proof must not queue behind a full capture it cannot use.
 const shellForegroundReader = createProcessTableSnapshotReader<ProcessTableRow[]>({
   runPs: async () =>
-    readNativeShellForegroundRows() ??
+    (await readNativeShellForegroundRows()) ??
     parseShellForegroundRows(await captureProcessTable(SHELL_FOREGROUND_PS_ARGS)),
   now: () => Date.now()
 })
