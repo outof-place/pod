@@ -4,6 +4,8 @@ export type GpuAccelerationAboutPanelOptions = {
   platform: NodeJS.Platform
   gpuFallbackActive: boolean
   gpuFeatureStatus: Pick<Electron.GPUFeatureStatus, 'gpu_compositing'> | null
+  // A downstream product credits Orca (MIT) here.
+  product?: { copyright: string; credits: string } | null
 }
 
 export function describeGpuAcceleration(
@@ -38,9 +40,18 @@ export function createGpuAccelerationAboutPanelOptions({
   appVersion,
   platform,
   gpuFallbackActive,
-  gpuFeatureStatus
+  gpuFeatureStatus,
+  product
 }: GpuAccelerationAboutPanelOptions): Electron.AboutPanelOptionsOptions {
   const status = `GPU acceleration: ${describeGpuAcceleration(gpuFeatureStatus, gpuFallbackActive)}`
+  if (product) {
+    return {
+      applicationName: appName,
+      applicationVersion: appVersion,
+      copyright: product.copyright,
+      credits: `${product.credits}\n\n${status}`
+    }
+  }
   return {
     applicationName: appName,
     applicationVersion: appVersion,
