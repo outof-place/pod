@@ -187,7 +187,7 @@ importers:
         version: 0.3.284(@anthropic-ai/sdk@0.122.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.5))(zod@4.6.5)
       '@electron-toolkit/utils':
         specifier: ^4.0.0
-        version: 4.0.0(electron@44.7.0(supports-color@7.2.0))
+        version: 4.0.0(electron@45.0.0-beta.1(supports-color@7.2.0))
       '@floating-ui/dom':
         specifier: 1.8.0
         version: 1.8.0
@@ -445,8 +445,8 @@ importers:
         specifier: 3.4.16
         version: 3.4.16
       electron:
-        specifier: 44.7.0
-        version: 44.7.0(supports-color@7.2.0)
+        specifier: 45.0.0-beta.1
+        version: 45.0.0-beta.1(supports-color@7.2.0)
       electron-builder:
         specifier: 26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)(supports-color@7.2.0)
@@ -5020,8 +5020,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@44.7.0:
-    resolution: {integrity: sha512-aUq9/zLAAFYc+a9gy6cd0C3Y/N/RmovLCD8TV8LhIzNhuND6HEgsu96jJz9cbAxvckSPv+Trf2PKEjktoZgFkw==}
+  electron@45.0.0-beta.1:
+    resolution: {integrity: sha512-g2hymDQImDcwzISFZne2IHZ4XgeRFKigPQ2mDcdk3w5wBoLeBLpAQnoIWPoh84gZr3rnmIDnpgcbrS94RorTFw==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -8324,9 +8324,9 @@ snapshots:
     dependencies:
       '@types/node': 25.9.5
 
-  '@electron-toolkit/utils@4.0.0(electron@44.7.0(supports-color@7.2.0))':
+  '@electron-toolkit/utils@4.0.0(electron@45.0.0-beta.1(supports-color@7.2.0))':
     dependencies:
-      electron: 44.7.0(supports-color@7.2.0)
+      electron: 45.0.0-beta.1(supports-color@7.2.0)
 
   '@electron/asar@3.4.1':
     dependencies:
@@ -12113,7 +12113,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@44.7.0(supports-color@7.2.0):
+  electron@45.0.0-beta.1(supports-color@7.2.0):
     dependencies:
       '@electron-internal/extract-zip': 1.0.4
       '@electron/get': 5.0.0(supports-color@7.2.0)
