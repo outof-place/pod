@@ -1,6 +1,7 @@
 import * as path from 'node:path'
 import type { RequestContext } from './dispatcher'
 import { GitHandlerOperationContext } from './git-handler-operation-context'
+import { GitStatusUntrackedMode } from '../shared/git-status-untracked-mode'
 import { getStatusOp } from './git-handler-status-ops'
 import { streamRelayGitStdout } from './git-stdout-stream'
 import { capGitStatusEntries, resolveGitStatusLimit } from '../shared/git-status-limit'
@@ -28,10 +29,13 @@ function resolveSubmoduleStatusArea(
 }
 
 export class GitHandlerReadOperations extends GitHandlerOperationContext {
+  private readonly statusUntrackedMode = new GitStatusUntrackedMode()
+
   async getStatus(params: Record<string, unknown>, context: RequestContext) {
     this.gitDiffReadDedupe.invalidate()
     return getStatusOp(this.git.bind(this), streamRelayGitStdout, params, {
-      signal: context.signal
+      signal: context.signal,
+      untrackedMode: this.statusUntrackedMode
     })
   }
 
@@ -53,7 +57,7 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
             ...params,
             worktreePath: resolved
           },
-          { signal: context.signal }
+          { signal: context.signal, untrackedMode: this.statusUntrackedMode }
         )
     // Why: pointer/range probes are part of the same SSH request and must not outlive its cancellation.
     const requestGit: GitExec = (args, cwd, options) =>
