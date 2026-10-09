@@ -7158,6 +7158,10 @@
           "connectionTestAction": "测试连接"
         },
         "ExperimentalPane": {
+          "editorGpuAcceleration": {
+            "copy": "使用 GPU (WebGPU) 绘制文件编辑器文本，可降低滚动大文件时的 CPU 占用。GPU 渲染器无法绘制的行会回退到常规渲染器。对更改后打开的文件生效。",
+            "toggleLabel": "切换 GPU 编辑器渲染"
+          },
           "9762364929": "在可能时在 macOS 上使用 APFS clone-copy；否则，将配置的文件夹或文件符号链接到创建的工作树中。",
           "24416f42cd": "工作树上的共享路径",
           "fb82ea1d7a": "自动将配置的文件或文件夹放入新创建的工作树中。",
@@ -9583,6 +9587,16 @@
         },
         "experimental": {
           "search": {
+            "editorGpuAcceleration": {
+              "title": "GPU 编辑器渲染",
+              "description": "使用 GPU (WebGPU) 而非页面布局引擎绘制文件编辑器文本。",
+              "gpu": "gpu",
+              "webgpu": "webgpu",
+              "editor": "编辑器",
+              "rendering": "渲染",
+              "scroll": "滚动",
+              "performance": "性能"
+            },
             "44c7f209d5": "节点模块",
             "4ad605f222": "环境",
             "3021571c30": "共享",

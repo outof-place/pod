@@ -7158,6 +7158,10 @@
           "connectionTestAction": "연결 테스트"
         },
         "ExperimentalPane": {
+          "editorGpuAcceleration": {
+            "copy": "파일 편집기 텍스트를 GPU(WebGPU)로 그려 큰 파일을 스크롤할 때 CPU 사용량을 줄입니다. GPU 렌더러가 그릴 수 없는 줄은 일반 렌더러로 표시됩니다. 변경 후 여는 파일에 적용됩니다.",
+            "toggleLabel": "GPU 편집기 렌더링 전환"
+          },
           "9762364929": "가능하면 macOS에서 APFS clone-copy를 사용하고, 그렇지 않으면 구성된 폴더나 파일을 생성된 작업 트리에 심볼릭 링크합니다.",
           "24416f42cd": "작업 트리의 공유 경로",
           "fb82ea1d7a": "구성된 파일이나 폴더를 새로 생성된 작업 트리에 자동으로 배치합니다.",
@@ -9583,6 +9587,16 @@
         },
         "experimental": {
           "search": {
+            "editorGpuAcceleration": {
+              "title": "GPU 편집기 렌더링",
+              "description": "파일 편집기 텍스트를 페이지 레이아웃 엔진 대신 GPU(WebGPU)로 그립니다.",
+              "gpu": "gpu",
+              "webgpu": "webgpu",
+              "editor": "편집기",
+              "rendering": "렌더링",
+              "scroll": "스크롤",
+              "performance": "성능"
+            },
             "44c7f209d5": "node_modules",
             "4ad605f222": "환경",
             "3021571c30": "공유됨",

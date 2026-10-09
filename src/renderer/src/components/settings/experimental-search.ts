@@ -5,6 +5,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
+import { getEditorGpuAccelerationSearchEntry } from './editor-gpu-acceleration-search-entry'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -180,6 +181,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     getNewWorktreeCardStyleSearchEntry(),
+    getEditorGpuAccelerationSearchEntry(),
     getEphemeralVmsSearchEntry()
   ]
 )
@@ -220,6 +222,12 @@ export function getExperimentalSearchEntry() {
       translate(
         'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
         'New card style'
+      )
+    ),
+    editorGpuAcceleration: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.editorGpuAcceleration.title',
+        'GPU editor rendering'
       )
     ),
     ephemeralVms: findEntry(

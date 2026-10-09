@@ -276,6 +276,8 @@ export default function MonacoEditor({
               }
             : undefined,
           smoothScrolling: true,
+          // Why: Monaco reads this only when an editor view is created, so a toggle applies to newly opened files.
+          experimentalGpuAcceleration: settings?.experimentalEditorGpuAcceleration ? 'on' : 'off',
           cursorSmoothCaretAnimation: 'off',
           padding: { top: 0 },
           find: monacoFindOptions,

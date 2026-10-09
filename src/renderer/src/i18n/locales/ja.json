@@ -7158,6 +7158,10 @@
           "connectionTestAction": "テスト接続"
         },
         "ExperimentalPane": {
+          "editorGpuAcceleration": {
+            "copy": "ファイルエディターのテキストを GPU (WebGPU) で描画し、大きなファイルをスクロールするときの CPU 使用率を下げます。GPU レンダラーで描画できない行は通常のレンダラーで描画されます。変更後に開いたファイルに適用されます。",
+            "toggleLabel": "GPU によるエディター描画の切り替え"
+          },
           "9762364929": "可能な場合は macOS で APFS clone-copy を使用し、それ以外の場合は設定済みのフォルダーまたはファイルを作成済みワークツリーへシンボリックリンクします。",
           "24416f42cd": "ワークツリーの共有パス",
           "fb82ea1d7a": "設定済みのファイルまたはフォルダーを新しく作成されたワークツリーに自動的に配置します。",
@@ -9620,6 +9624,16 @@
         },
         "experimental": {
           "search": {
+            "editorGpuAcceleration": {
+              "title": "GPU によるエディター描画",
+              "description": "ファイルエディターのテキストを、ページのレイアウトエンジンではなく GPU (WebGPU) で描画します。",
+              "gpu": "gpu",
+              "webgpu": "webgpu",
+              "editor": "エディター",
+              "rendering": "描画",
+              "scroll": "スクロール",
+              "performance": "パフォーマンス"
+            },
             "44c7f209d5": "ノードモジュール",
             "4ad605f222": "環境",
             "3021571c30": "共有",

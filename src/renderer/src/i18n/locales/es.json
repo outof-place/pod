@@ -7173,6 +7173,10 @@
           "connectionTestAction": "Conexión de prueba"
         },
         "ExperimentalPane": {
+          "editorGpuAcceleration": {
+            "copy": "Dibuja el texto del editor de archivos con la GPU (WebGPU), lo que reduce el uso de CPU al desplazarse por archivos grandes. Las líneas que el renderizador de GPU no puede dibujar usan el renderizador habitual. Se aplica a los archivos que abras después de cambiarlo.",
+            "toggleLabel": "Alternar renderizado del editor por GPU"
+          },
           "9762364929": "Usa APFS clone-copy en macOS cuando sea posible; si no, crea symlinks de las carpetas o archivos configurados en los worktrees creados.",
           "24416f42cd": "Rutas compartidas en worktrees",
           "fb82ea1d7a": "Materializa automáticamente archivos o carpetas configurados en worktrees recién creados.",
@@ -9598,6 +9602,16 @@
         },
         "experimental": {
           "search": {
+            "editorGpuAcceleration": {
+              "title": "Renderizado del editor por GPU",
+              "description": "Dibuja el texto del editor de archivos con la GPU (WebGPU) en lugar del motor de diseño de la página.",
+              "gpu": "gpu",
+              "webgpu": "webgpu",
+              "editor": "editor",
+              "rendering": "renderizado",
+              "scroll": "desplazamiento",
+              "performance": "rendimiento"
+            },
             "44c7f209d5": "node_modules",
             "4ad605f222": "env",
             "3021571c30": "compartido",

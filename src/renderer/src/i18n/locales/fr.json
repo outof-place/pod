@@ -7278,6 +7278,10 @@
           "connectionTestAction": "Tester la connexion"
         },
         "ExperimentalPane": {
+          "editorGpuAcceleration": {
+            "copy": "Affiche le texte de l'éditeur de fichiers avec le GPU (WebGPU), ce qui réduit l'utilisation du processeur lors du défilement de gros fichiers. Les lignes que le rendu GPU ne peut pas afficher utilisent le rendu habituel. S'applique aux fichiers ouverts après la modification.",
+            "toggleLabel": "Activer le rendu GPU de l'éditeur"
+          },
           "9762364929": "Utilise le clonage APFS sur macOS quand c'est possible, sinon crée des liens symboliques vers les dossiers ou fichiers configurés dans les worktrees créés.",
           "24416f42cd": "Chemins partagés sur les worktrees",
           "fb82ea1d7a": "Matérialise automatiquement les fichiers ou dossiers configurés dans les worktrees nouvellement créés.",
@@ -9745,6 +9749,16 @@
         },
         "experimental": {
           "search": {
+            "editorGpuAcceleration": {
+              "title": "Rendu GPU de l'éditeur",
+              "description": "Affiche le texte de l'éditeur de fichiers avec le GPU (WebGPU) au lieu du moteur de mise en page.",
+              "gpu": "gpu",
+              "webgpu": "webgpu",
+              "editor": "éditeur",
+              "rendering": "rendu",
+              "scroll": "défilement",
+              "performance": "performances"
+            },
             "44c7f209d5": "node_modules",
             "4ad605f222": "env",
             "3021571c30": "partagé",

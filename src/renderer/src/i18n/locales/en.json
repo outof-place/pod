@@ -7395,6 +7395,10 @@
           "connectionTestAction": "Test Connection"
         },
         "ExperimentalPane": {
+          "editorGpuAcceleration": {
+            "copy": "Draws file-editor text with the GPU (WebGPU), which lowers CPU use while scrolling large files. Lines the GPU renderer cannot draw fall back to the regular renderer. Applies to files opened after you change it.",
+            "toggleLabel": "Toggle GPU editor rendering"
+          },
           "9762364929": "Uses APFS clone-copy on macOS when possible, otherwise symlinks configured folders or files into created worktrees.",
           "24416f42cd": "Shared paths on worktrees",
           "fb82ea1d7a": "Automatically materialize configured files or folders into newly created worktrees.",
@@ -9873,6 +9877,16 @@
         },
         "experimental": {
           "search": {
+            "editorGpuAcceleration": {
+              "title": "GPU editor rendering",
+              "description": "Draw file-editor text with the GPU (WebGPU) instead of the page layout engine.",
+              "gpu": "gpu",
+              "webgpu": "webgpu",
+              "editor": "editor",
+              "rendering": "rendering",
+              "scroll": "scroll",
+              "performance": "performance"
+            },
             "44c7f209d5": "node_modules",
             "4ad605f222": "env",
             "3021571c30": "shared",
