@@ -1,5 +1,5 @@
 # Release workflow for the downstream product described by product/identity.json (Pod).
-# Push a tag v<semver> to build an arm64 DMG + zip, sign them with Developer ID, notarize and
+# Push a tag v0.<minor>.<patch> to build an arm64 DMG + zip, sign them with Developer ID, notarize and
 # staple them, and publish a GitHub release (with latest-mac.yml for the in-app updater) in the
 # identity's update-feed repo. All steps live in product/release.sh so a local release matches.
 #
@@ -16,7 +16,9 @@ name: Pod release
 
 on:
   push:
-    tags: ['v*']
+    # Why v0.* only: this fork also carries Orca's ~1100 v1.x tags, and a `git push --tags` from a
+    # clone holding new ones must not start a release per tag. Revisit before Pod 1.0.
+    tags: ['v0.*']
   workflow_dispatch:
     inputs:
       tag:
