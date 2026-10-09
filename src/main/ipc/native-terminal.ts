@@ -90,9 +90,9 @@ export function registerNativeTerminalHandlers(): void {
   ipcMain.handle('nativeTerminal:readSelection', (event, surfaceId: unknown): string | null =>
     isSurfaceId(surfaceId) ? readSurfaceSelection(event.sender, surfaceId) : null
   )
-  ipcMain.on('nativeTerminal:setAppearance', (_event, appearance: unknown, zoomFactor: unknown) => {
+  ipcMain.on('nativeTerminal:setAppearance', (event, appearance: unknown, zoomFactor: unknown) => {
     if (isAppearance(appearance)) {
-      updateAppearance(appearance, zoomOf(zoomFactor))
+      updateAppearance(event.sender, appearance, zoomOf(zoomFactor))
     }
   })
   ipcMain.on('nativeTerminal:destroy', (event, surfaceId: unknown) => {
