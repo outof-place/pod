@@ -47,7 +47,7 @@ brew install --cask outof-place/tap/pod
   <source media="(prefers-color-scheme: dark) and (max-width: 600px)" srcset="assets/why-narrow-dark.svg">
   <source media="(max-width: 600px)" srcset="assets/why-narrow-light.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/why-dark.svg">
-  <img alt="Agents got fast. The tools around them didn't. Native terminal (experimental), claude-acc built in (in progress), indexed code search (coming), worktree slots, OrbStack VMs (coming), zero telemetry. The same list follows as text." src="assets/why-light.svg" width="100%">
+  <img alt="Agents got fast. The tools around them didn't. In the first release (0.1): the native terminal, claude-acc built in and zero telemetry. Coming after it: indexed code search, Pod Workspace and OrbStack VMs. The same list follows as text." src="assets/why-light.svg" width="100%">
 </picture>
 
 <details>
@@ -62,9 +62,12 @@ brew install --cask outof-place/tap/pod
 - **Pod Workspace** (coming). A managed `~/pod` root for your repositories, with git tuned for many
   worktrees and the worktrees kept tidy.
 - **OrbStack VMs** (coming). A clean Linux machine for a task that should not touch your Mac.
-- **Zero telemetry** (0.1). Pod sends no telemetry and makes no calls to Stably's servers, as an
-  [end-to-end test](https://github.com/outof-place/pod/blob/pod/overlay/tests/e2e/pod-stably-services-offline.spec.ts)
-  checks. Plugin and skill sources still come from public GitHub.
+- **Zero telemetry** (0.1). Pod sends no telemetry and makes no calls to Stably's servers: one
+  [switch](https://github.com/outof-place/pod/blob/main/src/main/product-identity/product-overlay.ts)
+  gates every service, and an
+  [end-to-end test](https://github.com/outof-place/pod/blob/main/tests/e2e/pod-stably-services-offline.spec.ts)
+  checks that no request reaches a Stably host. Marketplace installs are off by default in Pod (no
+  remote plugin revocation).
 
 0.1 marks what the first release brings; coming, what follows it. Per-worktree setup through
 `orca.yaml` is inherited from Orca.
@@ -92,7 +95,7 @@ looked after while the agents work.
 
 <picture>
   <source media="(max-width: 600px)" srcset="assets/acc-menu-narrow.webp">
-  <img alt="In the menu bar: the claude-acc helper's panel with Claude accounts, dev servers and builds, Stay Awake, load and heat with the fans, and Ultra. Demo data." src="assets/acc-menu.webp" width="100%">
+  <img alt="In the menu bar: the claude-acc helper's panel with Claude accounts, dev servers and builds, Stay Awake, and load and heat with the fans. Demo data." src="assets/acc-menu.webp" width="100%">
 </picture>
 
 ### Measured
@@ -107,7 +110,7 @@ looked after while the agents work.
   <source media="(prefers-color-scheme: dark) and (max-width: 600px)" srcset="assets/arch-acc-narrow-dark.svg">
   <source media="(max-width: 600px)" srcset="assets/arch-acc-narrow-light.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/arch-acc-dark.svg">
-  <img alt="claude-acc inside Pod: Pod's acc supervisor runs the bundled claude-acc setup, which bootstraps the LaunchAgents (subscription rotation, memory guard, cleanup, perf) and installs the menu helper; the jobs write state files that Pod's plugin polls for the status bar and panel. Agents' commands pass a hook into the memory guard and the build scheduler. Fans and lid run as root daemons installed separately." src="assets/arch-acc-light.svg" width="100%">
+  <img alt="claude-acc inside Pod: Pod's acc supervisor runs the bundled claude-acc setup, which bootstraps the LaunchAgents (subscription rotation, memory guard, cleanup, perf) and installs the menu helper; the jobs write state files that Pod's plugin polls for the status bar and panel. Agents' commands pass a hook into the memory guard and the build scheduler. Fans and lid run as root daemons installed separately. A planned layer, after the first release: Pod Menu.app as a login item, codes.pod.app.acc LaunchAgents, an embedded Python and a single pod-rootd helper in place of the root daemons." src="assets/arch-acc-light.svg" width="100%">
 </picture>
 
 - Pod carries a pinned claude-acc release inside the app; the build checks its sha256.
@@ -190,7 +193,7 @@ Pod differs. Every cell links to its source. As of 2026-10-09.
 
 | | Integrated terminal | Parallel agents in worktrees | Agent CLIs | Usage telemetry |
 | --- | --- | --- | --- | --- |
-| **Pod** | [Ghostty on Metal, in a native view](https://github.com/stablyai/orca/pull/26914) (experimental), or Orca's xterm.js | [Yes, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L51) | [Any CLI agent, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L171-L210) | [None, and no calls to Stably's servers (0.1)](https://github.com/outof-place/pod/blob/pod/overlay/src/main/product-identity/product-overlay.ts) |
+| **Pod** | [Ghostty on Metal, in a native view](https://github.com/stablyai/orca/pull/26914) (experimental), or Orca's xterm.js | [Yes, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L51) | [Any CLI agent, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L171-L210) | [None, and no calls to Stably's servers (0.1)](https://github.com/outof-place/pod/blob/main/src/main/product-identity/product-overlay.ts) |
 | **Orca** | [xterm.js, WebGL renderer](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/package.json#L266-L274) | [Yes](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L51) | [Any CLI agent](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L171-L210) | [Anonymous usage events in official builds, opt-out](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/src/main/telemetry/client.ts#L21-L36) |
 | **Conductor** | [xterm.js, DOM renderer](https://www.conductor.build/changelog/0.49.0-conductor-allegro-gpt-5-5) | [Yes](https://www.conductor.build/docs/concepts/git-worktrees) | [Claude Code, Codex, Cursor, OpenCode](https://www.conductor.build/docs/reference/harnesses) | [PostHog analytics; default not documented](https://www.conductor.build/docs/account/privacy) |
 | **Claude Squad** | [Your own terminal, a tmux session per agent](https://github.com/smtg-ai/claude-squad/blob/main/README.md) | [Yes](https://github.com/smtg-ai/claude-squad/blob/main/README.md) | [Claude Code, Codex, Gemini, Aider and others](https://github.com/smtg-ai/claude-squad/blob/main/README.md) | [None found in its source](https://github.com/smtg-ai/claude-squad/blob/main/go.mod) |
