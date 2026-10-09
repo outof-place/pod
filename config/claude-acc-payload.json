@@ -1,7 +1,7 @@
 {
-  "//": "The claude-acc payload Pod ships in Contents/Resources/claude-acc (scripts/payload.sh in outof-place/claude-acc). Bump tag, asset and sha256 together; config/scripts/fetch-claude-acc-payload.mjs refuses a download that does not match.",
+  "//": "The claude-acc payload Pod ships in Contents/Resources/claude-acc (scripts/payload.sh in outof-place/claude-acc, from v1.28.0 on: the first release with owner.json support). Bump tag, asset and sha256 together; config/scripts/fetch-claude-acc-payload.mjs refuses a download that does not match, and refuses to download at all while sha256 is null.",
   "repository": "outof-place/claude-acc",
-  "tag": "v1.27.0",
-  "asset": "claude-acc-payload-1.27.0.tar.gz",
+  "tag": "v1.28.0",
+  "asset": "claude-acc-payload-1.28.0.tar.gz",
   "sha256": null
 }
