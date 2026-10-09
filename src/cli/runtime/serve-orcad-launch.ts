@@ -12,6 +12,8 @@ import {
 } from '../../shared/orcad-local-serve-selection'
 import { waitForRecipeJson } from './serve-recipe-json'
 import { superviseForegroundServe } from './serve-update-supervisor'
+import { getProductIdentity } from '../../main/product-identity/product-identity'
+import { stablyServicesLaunchEnv } from '../../shared/stably-services-env'
 
 type SupervisorArgs = Parameters<typeof superviseForegroundServe>[0]
 
@@ -102,7 +104,9 @@ export function serveWithOrcad(
       ...baseEnv,
       // The desktop's profile: its instance lock makes the two refuse each other.
       ORCA_USER_DATA: userDataPath,
-      ORCA_VERSION: selection.version
+      ORCA_VERSION: selection.version,
+      // Fork-only (Pod): orcad runs on bundled Node and cannot read the app's identity itself.
+      ...Object.fromEntries(stablyServicesLaunchEnv(getProductIdentity()?.stablyServices !== false))
     }
   }
   const child = spawnChild(selection.runtime, childArgs, spawnOptions)
