@@ -23,6 +23,10 @@ import { hashPluginTree } from './plugin-content-hash'
 import { publishPluginInstall } from './plugin-install-publication'
 import { readPluginManifestText } from './plugin-manifest-file'
 import { pluginInstallTrustError } from './plugin-install-trust'
+import {
+  areThirdPartyPluginsAllowedInMain,
+  thirdPartyPluginsOffMessage
+} from '../product-identity/product-plugin-policy'
 
 export type PluginInstallResult =
   | {
@@ -126,6 +130,10 @@ export async function installStagedPluginTree(input: {
   repairCorruptedVersion?: boolean
   blockedPluginReason?: (pluginKey: string) => string | null
 }): Promise<PluginInstallResult> {
+  // Fork-only (Pod): every non-bundled install (local path, Git, marketplace) lands here.
+  if (input.source.kind !== 'bundled' && !areThirdPartyPluginsAllowedInMain()) {
+    return { ok: false, error: thirdPartyPluginsOffMessage() }
+  }
   const sourceInspection = await inspectPluginInstallTree({
     rootDir: input.stagingDir,
     hostVersion: input.hostVersion,
