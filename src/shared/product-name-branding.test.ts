@@ -26,6 +26,10 @@ describe('brandProductName', () => {
     )
     expect(brandProductName('Registered `orca` in PATH.', pod)).toBe('Registered `podx` in PATH.')
     expect(brandProductName("Allow this host's orca CLI", pod)).toBe("Allow this host's podx CLI")
+    expect(brandProductName('orca\n\nUsage: orca <command> [options]', pod)).toBe(
+      'podx\n\nUsage: podx <command> [options]'
+    )
+    expect(brandProductName('Run orca --help', pod)).toBe('Run podx --help')
     for (const literal of [
       'orca.yaml',
       'orca://pair',
