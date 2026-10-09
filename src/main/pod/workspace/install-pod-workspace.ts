@@ -2,21 +2,35 @@ import { homedir } from 'node:os'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { setDefaultCreateProjectParentOverride } from '../../ipc/repos/repo-creation-handlers'
 import { isPodWorkspaceEnabled } from './pod-workspace-flag'
 import { workspaceCreateProjectParent } from './workspace-clone-destination'
 import { registerWorkspaceIpc } from './workspace-ipc'
 import {
+  notifyPodWorkspaceWorktreeLifecycle,
+  setPodWorkspaceWorktreeLifecycleHandler,
+  type WorkspaceWorktreeLifecycleEvent
+} from './workspace-lifecycle-hook'
+import { createPostCreateHygiene } from './workspace-post-create'
+import { createWorkspaceGitRunner } from './workspace-repo-inventory'
+import {
   computeWorkspaceRoots,
   primeWorkspaceRoots,
   syncWorkspaceRoots
 } from './workspace-root-events'
-import { resolveWorkspaceRoot, workspaceRootSetting } from './workspace-root-path'
+import {
+  isLocalGitRepo,
+  isPathInsideWorkspaceRoot,
+  resolveWorkspaceRoot,
+  workspaceRootSetting
+} from './workspace-root-path'
 import {
   isInsideICloudDrive,
   readDesktopDocumentsSync,
   type DesktopDocumentsSync
 } from './workspace-root-validation'
+import { createWorkspaceStatusService } from './workspace-status'
 import { createWorkspaceToolRunner } from './workspace-tool-runner'
 
 const FINDER_SYNC_CACHE_MS = 10 * 60 * 1000
@@ -33,6 +47,7 @@ type PodWorkspaceRuntime = {
     listener: (event: RuntimeClientEvent) => void,
     options?: { consumesTerminalSideEffects?: boolean }
   ): () => void
+  onWorktreeLifecycle(listener: (event: WorkspaceWorktreeLifecycleEvent) => void): () => void
 }
 
 let installed = false
@@ -57,11 +72,19 @@ export function installPodWorkspace(store: PodWorkspaceStore, runtime: PodWorksp
       return finderSync.value
     }
   }
+  const status = createWorkspaceStatusService({
+    store,
+    run,
+    git: createWorkspaceGitRunner(),
+    home,
+    validation
+  })
   // Other platforms still answer the renderer's gate query (false), and do nothing else.
   registerWorkspaceIpc({
     isEnabled,
     getRootSetting: () => workspaceRootSetting(store.getSettings()),
-    validation
+    validation,
+    status
   })
   if (process.platform !== 'darwin') {
     return
@@ -96,4 +119,21 @@ export function installPodWorkspace(store: PodWorkspaceStore, runtime: PodWorksp
       syncWorkspaceRoots(currentRoots())
     }
   })
+
+  const postCreate = createPostCreateHygiene({
+    exclude: (checkoutPath) => status.excludeCheckoutBuildFolders(checkoutPath)
+  })
+  setPodWorkspaceWorktreeLifecycleHandler((event) => {
+    if (event.kind === 'removed') {
+      postCreate.checkoutRemoved(event.path)
+      return
+    }
+    const repoId = getRepoIdFromWorktreeId(event.worktreeId)
+    const repo = store.getRepos().find((candidate) => candidate.id === repoId)
+    const root = resolveWorkspaceRoot(store.getSettings(), home)
+    if (isEnabled() && repo && isLocalGitRepo(repo) && isPathInsideWorkspaceRoot(repo.path, root)) {
+      postCreate.checkoutCreated(event.path)
+    }
+  })
+  runtime.onWorktreeLifecycle(notifyPodWorkspaceWorktreeLifecycle)
 }
