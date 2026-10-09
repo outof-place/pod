@@ -240,7 +240,10 @@ export function applyTerminalAppearance(
     }
   }
   syncNativeTerminalAppearance(
-    manager.getPanes().map((pane) => pane.terminal),
+    manager.getPanes().map((pane) => ({
+      terminal: pane.terminal,
+      fontSize: paneFontSizes.get(pane.id) ?? settings.terminalFontSize
+    })),
     settings
   )
 

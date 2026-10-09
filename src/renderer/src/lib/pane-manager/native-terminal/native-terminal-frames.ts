@@ -9,6 +9,8 @@ export type NativeTerminalFrameEntry = {
   element: HTMLElement
   isShown: () => boolean
   onShownChange: (shown: boolean) => void
+  // True while the xterm under the view may not show the current buffer yet.
+  isDomViewStale?: () => boolean
 }
 
 // Portaled Radix UI, ARIA popups, and anything else that opts in.
@@ -109,19 +111,18 @@ function flush(): void {
   const changed: NativeTerminalFrame[] = []
   for (const entry of tracked.values()) {
     const rect = belowTopChrome(contentBox(entry.element), chrome)
-    const onScreen =
-      entry.isShown() &&
-      entry.element.isConnected &&
-      rect.width > 0 &&
-      rect.height > 0 &&
-      !overlays.some((overlay) => intersects(rect, overlay))
+    const paneOnScreen =
+      entry.isShown() && entry.element.isConnected && rect.width > 0 && rect.height > 0
+    const onScreen = paneOnScreen && !overlays.some((overlay) => intersects(rect, overlay))
+    // Why: an overlay hide keeps the view up until the paused xterm underneath has repainted.
+    const visible = onScreen || (paneOnScreen && entry.isDomViewStale?.() === true)
     const frame: NativeTerminalFrame = [
       entry.surfaceId,
       cssPxToWindowDip(rect.left),
       cssPxToWindowDip(rect.top),
       cssPxToWindowDip(rect.width),
       cssPxToWindowDip(rect.height),
-      onScreen
+      visible
     ]
     if (!framesEqual(entry.lastFrame, frame)) {
       entry.lastFrame = frame

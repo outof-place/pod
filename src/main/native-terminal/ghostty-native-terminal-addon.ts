@@ -29,6 +29,8 @@ export type NativeSurfaceScrollbarState = {
 export type GhosttyTerminalAddon = {
   init: (configPath: string) => boolean
   updateConfig: (configPath: string) => void
+  // Gives one surface a config of its own; app-wide updateConfig then leaves it alone.
+  updateSurfaceConfig: (surfaceId: number, configPath: string) => void
   createSurface: (
     windowHandle: Buffer,
     x: number,

@@ -12,6 +12,11 @@ export type NativeTerminalApi = {
   setAppearance: (appearance: NativeTerminalAppearance, zoomFactor: number) => void
   setForwardedChords: (chords: NativeTerminalForwardedChord[]) => void
   releaseKeyboard: () => void
+  setSurfaceAppearance: (
+    surfaceId: number,
+    appearance: NativeTerminalAppearance,
+    zoomFactor: number
+  ) => void
   destroy: (surfaceId: number) => void
   onEvent: (callback: (event: NativeTerminalEvent) => void) => () => void
 }

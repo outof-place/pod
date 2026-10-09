@@ -31,6 +31,8 @@ struct SurfaceModel {
   ghostty_surface_t surface = nullptr;
   napi_threadsafe_function events = nullptr;
   bool closed = false;
+  // A config of this surface's own (per-pane font size); null follows the app config.
+  ghostty_config_t config = nullptr;
 };
 
 // No C++ globals with dynamic constructors: Xcode's linker rejects them in this bundle.
@@ -778,7 +780,8 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
   if (!create) return nil;
   OrcaGhosttyScrollbarView* scrollbar = [[self alloc] initWithFrame:NSZeroRect];
   scrollbar.surfaceView = surfaceView;
-  [scrollbar applyKnobStyleFromConfig:g_config];
+  SurfaceModel* model = surfaceView.model;
+  [scrollbar applyKnobStyleFromConfig:model != nullptr && model->config != nullptr ? model->config : g_config];
   [surfaceView addSubview:scrollbar];
   [scrollbar pinToSuperviewEdge];
   return scrollbar;
@@ -1430,10 +1433,25 @@ napi_value UpdateConfig(napi_env env, napi_callback_info info) {
   ghostty_config_t next = LoadConfig(GetString(env, argv[0]));
   ghostty_app_update_config(g_app, next);
   for (OrcaGhosttySurfaceView* view in g_views.allValues) {
-    if (view.model->surface) ghostty_surface_update_config(view.model->surface, next);
+    if (view.model->surface && view.model->config == nullptr) ghostty_surface_update_config(view.model->surface, next);
   }
   if (g_config) ghostty_config_free(g_config);
   g_config = next;
+  return Undefined(env);
+}
+
+// updateSurfaceConfig(id, configPath: string): void — the surface keeps this config across app updates.
+napi_value UpdateSurfaceConfig(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value argv[2];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  if (ThrowIf(env, g_app == nullptr || argc < 2, "ghostty not initialized")) return nullptr;
+  OrcaGhosttySurfaceView* view = ViewForId(GetInt(env, argv[0]));
+  if (view == nil || view.model->surface == nullptr) return Undefined(env);
+  ghostty_config_t next = LoadConfig(GetString(env, argv[1]));
+  ghostty_surface_update_config(view.model->surface, next);
+  if (view.model->config) ghostty_config_free(view.model->config);
+  view.model->config = next;
   return Undefined(env);
 }
 
@@ -1630,6 +1648,8 @@ napi_value DestroySurface(napi_env env, napi_callback_info info) {
   [g_views removeObjectForKey:@(id)];
   if (model->surface) ghostty_surface_free(model->surface);
   model->surface = nullptr;
+  if (model->config) ghostty_config_free(model->config);
+  model->config = nullptr;
   view.model = nullptr;
   napi_release_threadsafe_function(model->events, napi_tsfn_abort);
   delete model;
@@ -1915,6 +1935,7 @@ napi_value ModuleInit(napi_env env, napi_value exports) {
   const napi_property_descriptor props[] = {
       {"init", nullptr, Init, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"updateConfig", nullptr, UpdateConfig, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"updateSurfaceConfig", nullptr, UpdateSurfaceConfig, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"createSurface", nullptr, CreateSurface, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"writeOutput", nullptr, WriteOutput, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"setFrames", nullptr, SetFrames, nullptr, nullptr, nullptr, napi_default, nullptr},
