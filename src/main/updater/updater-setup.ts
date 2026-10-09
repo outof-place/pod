@@ -19,10 +19,8 @@ import { registerAutoUpdaterHandlers } from '../updater-events'
 import { getServeUpdateHandoffFailure } from '../serve-update-handoff'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { AUTO_UPDATE_CHECK_INTERVAL_MS } from './updater-state'
-import {
-  isOfficialUpdateFeedDisabled,
-  OFFICIAL_UPDATES_MANIFEST_FIELD
-} from './official-update-opt-out'
+import { OFFICIAL_UPDATES_MANIFEST_FIELD } from './official-update-opt-out'
+import { getUpdateFeedPolicy } from './update-feed-policy'
 import { UpdaterDownloadInstall } from './updater-download-install'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
 
@@ -104,6 +102,9 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     channel: ReleaseChannel,
     options?: ReleaseBuildListOptions
   ): Promise<ReleaseBuild[]> {
+    if (getUpdateFeedPolicy().kind !== 'official') {
+      return []
+    }
     return super.listAvailableReleaseBuilds(channel, options)
   }
 
@@ -145,7 +146,8 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     if (is.dev) {
       return
     }
-    if (isOfficialUpdateFeedDisabled()) {
+    const feedPolicy = getUpdateFeedPolicy()
+    if (feedPolicy.kind === 'disabled') {
       console.log(
         `[updater] update checks disabled: this build sets ${OFFICIAL_UPDATES_MANIFEST_FIELD}=false (a fork whose signature official releases cannot replace)`
       )
@@ -168,7 +170,14 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     autoUpdater.logger = createUpdaterDiagnosticLogger() as never
 
     // Security: never re-add a verifyUpdateCodeSignature override — a no-op disables electron-updater's built-in Authenticode check and accepts any installer.
-    if (this.activeUpdateSource === 'release') {
+    if (feedPolicy.kind === 'product') {
+      // Why the github provider: product releases carry latest-mac.yml; the generic feed plus tag
+      // pinning below is specific to the official stablyai/orca release pipeline.
+      autoUpdater.setFeedURL({ ...feedPolicy.feed })
+      console.log(
+        `[updater] product feed: github.com/${feedPolicy.feed.owner}/${feedPolicy.feed.repo} (official feed not used)`
+      )
+    } else if (this.activeUpdateSource === 'release') {
       autoUpdater.setFeedURL({
         provider: 'generic',
         url: 'https://github.com/stablyai/orca/releases/latest/download'
