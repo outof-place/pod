@@ -147,16 +147,14 @@ export class DaemonClient {
       const pendingControlSocket = await connectDaemonSocket(this.socketPath, remainingMs())
       this.assertConnectionAttemptCurrent(attemptGeneration, pendingControlSocket)
       this.controlSocket = pendingControlSocket
-      const { identity: controlIdentity } = await this.sendHello(
-        this.controlSocket,
-        token,
-        'control',
-        remainingMs()
-      )
+      const controlHello = await this.sendHello(this.controlSocket, token, 'control', remainingMs())
+      const controlIdentity = controlHello.identity
       this.assertConnectionAttemptCurrent(attemptGeneration, this.controlSocket)
       pendingListenerCleanups.push(
-        attachControlResponseReader(this.controlSocket, (response) =>
-          this.pendingRequests.settle(response)
+        attachControlResponseReader(
+          this.controlSocket,
+          (response) => this.pendingRequests.settle(response),
+          controlHello.remainder
         )
       )
 
