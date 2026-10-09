@@ -19,6 +19,7 @@ import type {
 } from './api/agent-usage-api'
 import type { AiVaultApi } from './api/ai-vault-api'
 import type { AppApi, E2EApi, PlatformApi } from './api/app-api'
+import type { ProductApi } from './api/product-api'
 import type { AutomationsApi } from './api/automation-api'
 import type { BrowserApi } from './api/browser-api'
 import type { CliApi } from './api/cli-install-api'
@@ -74,6 +75,7 @@ export type PreloadApi = {
   app: AppApi
   orcaProfiles: OrcaProfileApi
   platform: PlatformApi
+  product: ProductApi
   e2e: E2EApi
   repos: RepositoryApi
   projects: ProjectsApi
