@@ -171,7 +171,7 @@ function isPackagedElectron(resourcesPath: unknown): resourcesPath is string {
   return (
     typeof resourcesPath === 'string' &&
     resourcesPath.length > 0 &&
-    !process.defaultApp &&
+    !Reflect.get(process, 'defaultApp') &&
     process.versions.electron !== undefined
   )
 }
@@ -179,7 +179,7 @@ function isPackagedElectron(resourcesPath: unknown): resourcesPath is string {
 /** The packaged build's identity; null for upstream builds, dev and unpackaged runs. */
 export function getProductIdentity(): ProductIdentity | null {
   if (cached === undefined) {
-    const resourcesPath: unknown = process.resourcesPath
+    const resourcesPath: unknown = Reflect.get(process, 'resourcesPath')
     const e2ePath = process.env[PRODUCT_IDENTITY_E2E_ENV]
     if (isPackagedElectron(resourcesPath)) {
       cached = readProductIdentity(resourcesPath)
@@ -195,7 +195,7 @@ export function getProductIdentity(): ProductIdentity | null {
 
 /** The Orca release/commit this product build is based on, when packaging recorded it. */
 export function getProductUpstream(): ProductUpstream | null {
-  const resourcesPath: unknown = process.resourcesPath
+  const resourcesPath: unknown = Reflect.get(process, 'resourcesPath')
   if (!getProductIdentity() || !isPackagedElectron(resourcesPath)) {
     return null
   }
