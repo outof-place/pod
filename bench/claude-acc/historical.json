@@ -1,0 +1,541 @@
+{
+  "about": "claude-acc numbers measured before this benchmark suite existed, each with the date and the source it was measured and published in. They are not re-measured by a normal run; suites/claude-acc.mjs emits them as provenance.kind \"historical\". Every value is copied from its source as written; a range in the source stays a range (min and max, no median).",
+  "sources": {
+    "readme": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10)",
+    "memory-ultra": "Claude Code project memory claude-acc-ultra.md (2026-10-04, updated 2026-10-06)",
+    "memory-sched": "Claude Code project memory claude-acc-sched.md (2026-10-05)",
+    "memory-devguard": "Claude Code project memory claude-acc-devguard.md (2026-10-04)",
+    "memory-janitor": "Claude Code project memory claude-acc-janitor.md (2026-10-08 and 2026-10-09)",
+    "memory-hotspot": "Claude Code project memory hotspot-turbo.md (2026-10-08)",
+    "memory-mcp": "Claude Code project memory mcp-shared.md (2026-10-09)",
+    "perf-py": "outof-place/claude-acc perf.py, DEVTOOLS_BEFORE_MS (origin/main c5e9367)"
+  },
+  "items": [
+    {
+      "id": "claude-acc.ultra.hook-wait-async",
+      "area": "Ultra",
+      "metric": "hook wait on every agent tool call",
+      "unit": "ms",
+      "better": "lower",
+      "before": {
+        "subject": "synchronous memory (cavemem) hook",
+        "median": 53,
+        "note": "p50; p90 73 ms"
+      },
+      "after": {
+        "subject": "the same hook with \"async\": true",
+        "median": 24,
+        "note": "p50; p90 30 ms"
+      },
+      "date": "2026-10-04",
+      "source": "readme",
+      "commit": "e90c92f",
+      "note": "From Claude Code transcripts, Orca with nine Claude Code sessions running."
+    },
+    {
+      "id": "claude-acc.ultra.orca-status-hook-async",
+      "area": "Ultra",
+      "metric": "wait for Orca's status hook per tool call",
+      "unit": "ms",
+      "better": "lower",
+      "before": {
+        "subject": "Orca's status hook, synchronous",
+        "min": 36,
+        "max": 39,
+        "note": "p50 per call, range across hook events; the project memory gives 39-48 ms"
+      },
+      "after": {
+        "subject": "the same hook with \"async\": true",
+        "median": 0,
+        "note": "an async hook does not block the tool call"
+      },
+      "date": "2026-10-06",
+      "source": "readme",
+      "commit": "791b811"
+    },
+    {
+      "id": "claude-acc.ultra.guard-hook-native",
+      "area": "Ultra",
+      "metric": "the guard's hook before every Bash command",
+      "unit": "ms",
+      "better": "lower",
+      "before": {
+        "subject": "devguard.py admit (Python)",
+        "min": 25,
+        "max": 57
+      },
+      "after": {
+        "subject": "claude-acc-hook (native)",
+        "min": 5,
+        "max": 8
+      },
+      "date": "2026-10-06",
+      "source": "readme",
+      "commit": "791b811",
+      "remeasured": "claude-acc.ultra.guard-hook-native"
+    },
+    {
+      "id": "claude-acc.ultra.rtk-hook-native",
+      "area": "Ultra",
+      "metric": "rtk's hook before every Bash command",
+      "unit": "ms",
+      "better": "lower",
+      "before": {
+        "subject": "rtk's shell script hook",
+        "min": 57,
+        "max": 80
+      },
+      "after": {
+        "subject": "`rtk hook claude`",
+        "min": 12,
+        "max": 14
+      },
+      "date": "2026-10-06",
+      "source": "readme",
+      "commit": "791b811"
+    },
+    {
+      "id": "claude-acc.ultra.pause-hook",
+      "area": "Ultra",
+      "metric": "limit-pause hook outside a pause",
+      "unit": "ms",
+      "better": "lower",
+      "before": {
+        "subject": "shell guard",
+        "median": 7.6
+      },
+      "after": {
+        "subject": "claude-acc-pause (C)",
+        "median": 3.1,
+        "note": "the Swift fallback takes 5.0 ms"
+      },
+      "date": "2026-10-06",
+      "source": "readme",
+      "commit": "398b8a8"
+    },
+    {
+      "id": "claude-acc.ultra.node-compile-cache",
+      "area": "Ultra",
+      "metric": "`require('typescript')` in a process an agent session spawns",
+      "unit": "ms",
+      "better": "lower",
+      "before": {
+        "subject": "no compile cache",
+        "median": 96
+      },
+      "after": {
+        "subject": "NODE_COMPILE_CACHE",
+        "median": 49
+      },
+      "date": "2026-10-04",
+      "source": "readme",
+      "commit": "e90c92f",
+      "remeasured": "claude-acc.ultra.node-compile-cache"
+    },
+    {
+      "id": "claude-acc.ultra.git-speed",
+      "area": "Ultra",
+      "metric": "`git status` in an agent worktree repo",
+      "unit": "ms",
+      "better": "lower",
+      "before": {
+        "subject": "default config",
+        "median": 71
+      },
+      "after": {
+        "subject": "core.untrackedCache + core.fsmonitor",
+        "median": 26
+      },
+      "date": "2026-10-04",
+      "source": "readme",
+      "commit": "e90c92f",
+      "note": "The project memory gives 93 -> 28 ms for portivo's main checkout the same day.",
+      "remeasured": "claude-acc.ultra.git-speed"
+    },
+    {
+      "id": "claude-acc.ultra.git-worktree-add",
+      "area": "Ultra",
+      "metric": "`git worktree add` in an 18,000-file repo",
+      "unit": "s",
+      "better": "lower",
+      "before": {
+        "subject": "default checkout",
+        "median": 2.0
+      },
+      "after": {
+        "subject": "checkout.workers=0 (parallel checkout)",
+        "median": 1.55
+      },
+      "date": "2026-10-09",
+      "source": "readme",
+      "commit": "f57082c"
+    },
+    {
+      "id": "claude-acc.ultra.fast-npx-hooks",
+      "area": "Ultra",
+      "metric": "format hook per .ts edit in the pnpm monorepo",
+      "unit": "s",
+      "better": "lower",
+      "before": {
+        "subject": "`npx --no-install` in the hook",
+        "median": 6.6
+      },
+      "after": {
+        "subject": "npx-fast-wrap.sh",
+        "median": 0.08,
+        "note": "per .json edit 3.3 s -> 0.04 s"
+      },
+      "date": "2026-10-04",
+      "source": "memory-ultra"
+    },
+    {
+      "id": "claude-acc.ultra.rg-threads",
+      "area": "Ultra",
+      "metric": "ripgrep walk of a 17.7k-file repo",
+      "unit": "ms",
+      "better": "lower",
+      "before": {
+        "subject": "rg, 16 threads (default)",
+        "median": 428
+      },
+      "after": {
+        "subject": "rg --threads=4 (rg-threads)",
+        "median": 179
+      },
+      "date": "2026-10-09",
+      "source": "readme",
+      "commit": "b1d6c32",
+      "remeasured": "claude-acc.ultra.rg-threads"
+    },
+    {
+      "id": "claude-acc.ultra.bg-helpers",
+      "area": "Ultra",
+      "metric": "CPU of a memory helper that scanned its 1.9 GB database all day",
+      "unit": "% of a P-core",
+      "better": "lower",
+      "before": {
+        "subject": "default QoS",
+        "median": 32,
+        "note": "~1 W"
+      },
+      "after": {
+        "subject": "background QoS (efficiency cores)",
+        "median": 0.1,
+        "note": "~0.1 W"
+      },
+      "date": "2026-10-04",
+      "source": "readme",
+      "commit": "e90c92f"
+    },
+    {
+      "id": "claude-acc.ultra.launcher-python",
+      "area": "Ultra",
+      "metric": "Python interpreter start for every claude-acc script",
+      "unit": "ms",
+      "better": "lower",
+      "before": {
+        "subject": "command line tools' Python 3.9",
+        "median": 37
+      },
+      "after": {
+        "subject": "uv's CPython 3.14",
+        "median": 26
+      },
+      "date": "2026-10-05",
+      "source": "readme",
+      "commit": "89c546c",
+      "remeasured": "claude-acc.ultra.launcher-python"
+    },
+    {
+      "id": "claude-acc.perf-root.devtools",
+      "area": "perf-root",
+      "metric": "first exec of a freshly built Go binary from an Orca terminal",
+      "unit": "ms",
+      "better": "lower",
+      "before": {
+        "subject": "Orca not in Developer Tools",
+        "median": 196.2
+      },
+      "after": {
+        "subject": "Orca in Developer Tools",
+        "min": 4.1,
+        "max": 4.4
+      },
+      "date": "2026-10-04",
+      "source": "memory-ultra",
+      "note": "Measured with `claude-acc perf bench gatekeeper`; the before value is perf.py's DEVTOOLS_BEFORE_MS.",
+      "remeasured": "claude-acc.perf-root.devtools"
+    },
+    {
+      "id": "claude-acc.perf-root.vnodes",
+      "area": "perf-root",
+      "metric": "second `lstat` pass over a pnpm store (358,000 entries)",
+      "unit": "s",
+      "better": "lower",
+      "before": {
+        "subject": "kern.maxvnodes 263,168",
+        "median": 3.59
+      },
+      "after": {
+        "subject": "kern.maxvnodes 786,432",
+        "median": 2.51
+      },
+      "date": "2026-10-04",
+      "source": "readme",
+      "commit": "c75f6d8"
+    },
+    {
+      "id": "claude-acc.perf-root.iogpu",
+      "area": "perf-root",
+      "metric": "memory MLX can use on the GPU",
+      "unit": "GB",
+      "better": "higher",
+      "before": {
+        "subject": "macOS default wired limit",
+        "median": 40.2
+      },
+      "after": {
+        "subject": "iogpu.wired_limit_mb 40,960",
+        "median": 42.9
+      },
+      "date": "2026-10-09",
+      "source": "readme",
+      "commit": "f57082c"
+    },
+    {
+      "id": "claude-acc.devguard.restart",
+      "area": "Dev server guard",
+      "metric": "memory of one Turbopack dev server",
+      "unit": "GB",
+      "better": "lower",
+      "before": {
+        "subject": "after agent edits",
+        "median": 7.8,
+        "note": "7-9 GB per server"
+      },
+      "after": {
+        "subject": "right after the guard's restart",
+        "median": 2.3,
+        "note": "it grew back to 7.8 GB within 10 minutes of edits, so the guard restarts again"
+      },
+      "date": "2026-10-04",
+      "source": "memory-devguard"
+    },
+    {
+      "id": "claude-acc.devguard.eviction",
+      "area": "Dev server guard",
+      "metric": "Turbopack dev server memory after 30 agent edits (why the guard restarts rather than tunes)",
+      "unit": "GB",
+      "better": "lower",
+      "before": {
+        "subject": "turbopackMemoryEviction: auto",
+        "median": 5.97
+      },
+      "after": {
+        "subject": "turbopackMemoryEviction: full",
+        "median": 6.01
+      },
+      "date": "2026-10-04",
+      "source": "readme",
+      "commit": "43140b3",
+      "note": "Evidence, not a win: the eviction setting changes nothing, both start at 1.2 GB.",
+      "role": "context"
+    },
+    {
+      "id": "claude-acc.devguard.pass-cpu",
+      "area": "Dev server guard",
+      "metric": "CPU the guard's passes spend in child processes",
+      "unit": "s CPU per minute",
+      "better": "lower",
+      "before": {
+        "subject": "ps, lsof and four orca CLI calls per pass",
+        "median": 3.9
+      },
+      "after": {
+        "subject": "sysctl, proc_pidfdinfo and Orca's socket",
+        "median": 0.2,
+        "note": "about 0.2 s"
+      },
+      "date": "2026-10-05",
+      "source": "readme",
+      "commit": "89c546c"
+    },
+    {
+      "id": "claude-acc.sched.overlap",
+      "area": "Build scheduler",
+      "metric": "total wait of 7 overlapping Go commands",
+      "unit": "s",
+      "better": "lower",
+      "before": {
+        "subject": "one-at-a-time lock (plock)",
+        "median": 454
+      },
+      "after": {
+        "subject": "memory-aware scheduler (sched.py 1.3.4)",
+        "median": 2.8
+      },
+      "date": "2026-10-05",
+      "source": "memory-sched",
+      "remeasured": "claude-acc.sched.overlap"
+    },
+    {
+      "id": "claude-acc.sched.depot",
+      "area": "Build scheduler",
+      "metric": "a heavy Go test with Postgres",
+      "unit": "s",
+      "better": "lower",
+      "before": {
+        "subject": "local run",
+        "median": 53
+      },
+      "after": {
+        "subject": "routed to Depot (--with pg)",
+        "median": 3.4
+      },
+      "date": "2026-10-05",
+      "source": "memory-sched"
+    },
+    {
+      "id": "claude-acc.janitor.compress-apps",
+      "area": "Janitor",
+      "metric": "disk used by /Applications (user-owned apps) after one compress pass",
+      "unit": "MB",
+      "better": "lower",
+      "before": {
+        "subject": "uncompressed",
+        "median": 724
+      },
+      "after": {
+        "subject": "APFS LZFSE (janitor compress)",
+        "median": 360
+      },
+      "date": "2026-10-09",
+      "source": "memory-janitor"
+    },
+    {
+      "id": "claude-acc.janitor.compress-transcripts",
+      "area": "Janitor",
+      "metric": "space saved on Claude Code transcripts by APFS compression",
+      "unit": "%",
+      "better": "higher",
+      "after": {
+        "subject": "APFS LZFSE (janitor compress)",
+        "median": 75,
+        "note": "Word.app 39%"
+      },
+      "date": "2026-10-08",
+      "source": "memory-janitor",
+      "remeasured": "claude-acc.janitor.compress-transcripts"
+    },
+    {
+      "id": "claude-acc.mcp-share.cavemem-memory",
+      "area": "Shared MCP servers",
+      "metric": "memory of cavemem across nine sessions",
+      "unit": "MB",
+      "better": "lower",
+      "before": {
+        "subject": "one stdio copy per session",
+        "median": 490
+      },
+      "after": {
+        "subject": "one shared server and its bridge",
+        "median": 165
+      },
+      "date": "2026-10-09",
+      "source": "readme",
+      "commit": "3813249",
+      "note": "torbaczov the same day: 321 -> 131 MB; together about -520 MB idle, and a new session adds nothing."
+    },
+    {
+      "id": "claude-acc.mcp-share.connect",
+      "area": "Shared MCP servers",
+      "metric": "cavemem connect time per session",
+      "unit": "ms",
+      "better": "lower",
+      "before": {
+        "subject": "stdio copy",
+        "median": 83
+      },
+      "after": {
+        "subject": "shared server",
+        "median": 8
+      },
+      "date": "2026-10-09",
+      "source": "readme",
+      "commit": "3813249",
+      "note": "torbaczov: 26 -> 7 ms."
+    },
+    {
+      "id": "claude-acc.hotspot.ping-p90",
+      "area": "Hotspot turbo",
+      "metric": "ping p90 on an iPhone USB hotspot with other sessions uploading",
+      "unit": "ms",
+      "better": "lower",
+      "before": {
+        "subject": "off",
+        "median": 95
+      },
+      "after": {
+        "subject": "Hotspot turbo (adaptive tbr)",
+        "median": 53
+      },
+      "date": "2026-10-08",
+      "source": "readme",
+      "commit": "08301e7",
+      "note": "Three 40 s rounds off and three on, alternating; p99 367 -> 274 ms."
+    },
+    {
+      "id": "claude-acc.hotspot.api-p90",
+      "area": "Hotspot turbo",
+      "metric": "small request to api.anthropic.com, p90, on an iPhone USB hotspot",
+      "unit": "ms",
+      "better": "lower",
+      "before": {
+        "subject": "off",
+        "median": 608
+      },
+      "after": {
+        "subject": "Hotspot turbo (adaptive tbr)",
+        "median": 550
+      },
+      "date": "2026-10-08",
+      "source": "readme",
+      "commit": "08301e7",
+      "note": "A 2 MB upload got no slower: 1.01 -> 0.90 s at p50."
+    }
+  ],
+  "excluded": [
+    {
+      "item": "zsh startup 794 -> 170 ms",
+      "why": "a manual .zshrc change (lazy nvm), not a claude-acc feature"
+    },
+    {
+      "item": "jev-memory-router warm connection 671 -> 502 ms",
+      "why": "the user's own hook and daemon in ~/.claude/hooks, not in the claude-acc repo"
+    },
+    {
+      "item": "fasthooks hook ports",
+      "why": "the user's own Go hooks in ~/.claude/hooks/fasthooks, not in the claude-acc repo"
+    },
+    {
+      "item": "CLAUDE_CODE_GZIP_REQUEST_BODIES 77 -> 26 KB",
+      "why": "a manual Claude Code setting, only mentioned in claude-acc's research notes"
+    },
+    {
+      "item": "Spotlight privacy, reduce motion, High Power mode",
+      "why": "general Mac tuning (mac-perf-tuning.md)"
+    },
+    {
+      "item": "account rotation without rate-limit stalls",
+      "why": "no measured number exists in the README, the tests or the memory notes"
+    },
+    {
+      "item": "Docker VM capped at 6 GB",
+      "why": "a configured cap, not a measured effect"
+    },
+    {
+      "item": "fan speeds and the 115 °C sensor reading",
+      "why": "hardware control, not a speed or memory metric"
+    }
+  ]
+}
