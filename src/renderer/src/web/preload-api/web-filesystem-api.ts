@@ -127,6 +127,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     },
     // Paired-web roots are remote to this client; the host's index is not reachable from here.
     rankedPathSearch: async () => false,
+    noteFileOpened: async () => undefined,
     cancelSearch: async ({ requestToken }) => {
       searches.get(requestToken)?.abort()
     },

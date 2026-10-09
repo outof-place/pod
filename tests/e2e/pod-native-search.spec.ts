@@ -31,7 +31,8 @@ test.use({
 
 let daemon: ChildProcess | null = null
 let proxy: Server | null = null
-const proxiedOps: string[] = []
+const proxiedRequests: Record<string, unknown>[] = []
+const proxiedOps = () => proxiedRequests.map((request) => request.op)
 
 function startRecordingProxy(): Promise<Server> {
   const server = createServer((client: Socket) => {
@@ -40,8 +41,7 @@ function startRecordingProxy(): Promise<Server> {
     client.on('data', (chunk: Buffer) => {
       for (const frame of decoder.push(chunk)) {
         if (frame.kind === OGD_FRAME_JSON) {
-          const op: unknown = JSON.parse(frame.payload.toString('utf8')).op
-          proxiedOps.push(typeof op === 'string' ? op : '?')
+          proxiedRequests.push(JSON.parse(frame.payload.toString('utf8')))
         }
       }
       upstream.write(chunk)
@@ -196,7 +196,7 @@ test('local quick open and file search are answered by ogd, and match ripgrep', 
     ['ogd', 'ogd', false]
   ] as const) {
     await useEngine(orcaPage, engine, ignored)
-    const opsBefore = proxiedOps.length
+    const opsBefore = proxiedRequests.length
     for (const [query, expected] of pathQueries) {
       const samples: number[] = []
       for (let run = 0; run < runs; run++) {
@@ -213,7 +213,7 @@ test('local quick open and file search are answered by ogd, and match ripgrep', 
       }
       timings[`${mode} search "${query}"`] = median(samples)
     }
-    const ops = proxiedOps.slice(opsBefore)
+    const ops = proxiedOps().slice(opsBefore)
     if (engine === 'ogd') {
       expect(ops).toContain('fuzzy')
       expect(ops).toContain('search')
@@ -235,6 +235,20 @@ test('local quick open and file search are answered by ogd, and match ripgrep', 
   }
   if (!benchRepo) {
     expect(answers['ogd:ogdQuickOpenNeedle'].files).toEqual([target])
+    // Opening a result tells ogd (frecency), and the next query ranks around the active file.
+    await useEngine(orcaPage, 'ogd', false)
+    await openQuickOpen()
+    const dialog = orcaPage.getByRole('dialog', { name: 'Go to file' })
+    await dialog.locator('input[placeholder="Go to file..."]').fill('OgdQuickOpenTarget')
+    await dialog.getByRole('option').filter({ hasText: 'OgdQuickOpenTarget.ts' }).first().click()
+    await expect(dialog).toBeHidden()
+    await expect
+      .poll(() => proxiedRequests.findLast((request) => request.op === 'touch'))
+      .toMatchObject({ kind: 'open', paths: [path.join(root, target)] })
+    await quickOpenToResults(orcaPage, openQuickOpen, 'OgdQuick', 'OgdQuickOpenTarget.ts')
+    expect(proxiedRequests.findLast((request) => request.op === 'fuzzy')).toMatchObject({
+      current: target
+    })
   }
   const status = await ogdRequest({ op: 'status' })
   console.log(
