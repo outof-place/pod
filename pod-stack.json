@@ -1,0 +1,25 @@
+{
+  "branch": "main",
+  "stack": [
+    {
+      "branch": "pod/infra",
+      "forkOnly": "Pod product docs, release base pin, upstream sync CI and this stack script"
+    },
+    {
+      "branch": "fork/no-official-updater",
+      "forkOnly": "Pod must not install Orca's official updates; upstream opt-out PR planned"
+    },
+    {
+      "branch": "pod/identity",
+      "forkOnly": "Pod identity: name, bundle id codes.pod.app, icon, URL scheme and podx CLI"
+    },
+    {
+      "branch": "feat/native-ghostty-terminal",
+      "upstream": "https://github.com/stablyai/orca/pull/26914"
+    },
+    {
+      "branch": "plugins/status-bar-live-panels",
+      "upstream": "https://github.com/stablyai/orca/pull/26953"
+    }
+  ]
+}
