@@ -183,6 +183,9 @@ export const fsApi = {
     includeIgnored?: boolean
     followSymlinks?: boolean
   }): Promise<boolean> => ipcRenderer.invoke('fs:rankedPathSearch', args),
+  /** Tells a local index the editor made this file active; a no-op without one. */
+  noteFileOpened: (args: { filePath: string }): Promise<void> =>
+    ipcRenderer.invoke('fs:noteFileOpened', args),
   cancelSearch: (args: { requestToken: string }): Promise<void> =>
     ipcRenderer.invoke('fs:cancelSearch', args),
   search: (args: {
