@@ -41,10 +41,21 @@ describe('mobile push without Stably services', () => {
   afterEach(() => {
     identity.current = null
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
   })
 
   it('starts for upstream Orca when a phone is paired', () => {
     expect(DesktopPushService.create(createOptions())).not.toBeNull()
+  })
+
+  it('never creates the client in an orcad launched by the product', () => {
+    // orcad runs on bundled Node, so it sees the launcher's flag instead of the identity file.
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubEnv('POD_STABLY_SERVICES_OFF', '1')
+
+    expect(DesktopPushService.create(createOptions())).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('never creates the push.onorca.dev client', () => {
