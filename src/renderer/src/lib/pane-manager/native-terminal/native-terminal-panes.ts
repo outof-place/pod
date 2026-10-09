@@ -20,6 +20,8 @@ export type NativeTerminalPaneHost = {
   forwardInput: (data: string) => void
   activatePane: () => void
   isActivePane: () => boolean
+  // Focus-follows-mouse for pointer entry the pane's DOM never sees under the native view.
+  followMouseFocus: (pointer: { mouseButtons: number; windowHasFocus: boolean }) => void
 }
 
 type NativePaneState = {
@@ -97,6 +99,13 @@ function handleEvent(event: NativeTerminalEvent): void {
       if (/^https?:\/\//i.test(event.url)) {
         void window.api.shell.openUrl(event.url)
       }
+      break
+    case 'mouseEnter':
+      // Why the native flag: the page reports unfocused while the native view has the keyboard.
+      state.host.followMouseFocus({
+        mouseButtons: event.buttons,
+        windowHasFocus: event.windowFocused
+      })
       break
     case 'title':
     case 'bell':

@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type { NativeTerminalAppearance } from '../../shared/native-terminal-appearance'
 import type { NativeTerminalFrame } from '../../shared/native-terminal-ipc'
+import { isNativeTerminalForwardedChord } from '../../shared/native-terminal-forwarded-chords'
 import {
   createSurface,
   destroyOwnedSurface,
@@ -8,6 +9,7 @@ import {
   installNativeTerminalDebugHooks,
   isNativeTerminalSupported,
   readSurfaceSelection,
+  setForwardedChords,
   setSurfaceFrames,
   updateAppearance,
   writeSurfaceOutput
@@ -55,6 +57,7 @@ const SEND_CHANNELS = [
   'nativeTerminal:setFrames',
   'nativeTerminal:focus',
   'nativeTerminal:setAppearance',
+  'nativeTerminal:setForwardedChords',
   'nativeTerminal:destroy'
 ]
 
@@ -93,6 +96,11 @@ export function registerNativeTerminalHandlers(): void {
   ipcMain.on('nativeTerminal:setAppearance', (event, appearance: unknown, zoomFactor: unknown) => {
     if (isAppearance(appearance)) {
       updateAppearance(event.sender, appearance, zoomOf(zoomFactor))
+    }
+  })
+  ipcMain.on('nativeTerminal:setForwardedChords', (event, chords: unknown) => {
+    if (Array.isArray(chords)) {
+      setForwardedChords(event.sender, chords.filter(isNativeTerminalForwardedChord))
     }
   })
   ipcMain.on('nativeTerminal:destroy', (event, surfaceId: unknown) => {

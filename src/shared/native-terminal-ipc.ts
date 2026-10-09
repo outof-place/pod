@@ -6,6 +6,8 @@ export type NativeTerminalEvent =
   | { surfaceId: number; kind: 'title'; title: string }
   | { surfaceId: number; kind: 'openUrl'; url: string }
   | { surfaceId: number; kind: 'bell' }
+  // The pointer entered the surface; the page cannot see it under the native view.
+  | { surfaceId: number; kind: 'mouseEnter'; buttons: number; windowFocused: boolean }
 
 // [surfaceId, x, y, width, height, visible] in window points (CSS px × zoom factor).
 export type NativeTerminalFrame = [number, number, number, number, number, boolean]
