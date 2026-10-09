@@ -11,14 +11,14 @@ import {
 import { QuickOpenPathRanker } from '../../../shared/quick-open-path-search'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { registerFilesystemContentSearchHandler } from './filesystem-content-search-handler'
-import { registerFilesystemRankedPathSearchHandler } from './filesystem-ranked-path-search-handler'
+import { registerFilesystemExternalSearchHandlers } from './filesystem-external-search-handlers'
 
 // 32 visible matches plus one truncation sentinel stays below the legacy frame ceiling.
 const QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT = 33
 
 export function registerFilesystemSearchHandlers(context: FilesystemHandlerContext): void {
   registerFilesystemContentSearchHandler(context)
-  registerFilesystemRankedPathSearchHandler(context)
+  registerFilesystemExternalSearchHandlers(context)
   const { store } = context
   const { listFilesCancellations } = context
   ipcMain.handle(
