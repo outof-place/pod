@@ -30,7 +30,10 @@ export type StreamDataPayloadMeta = {
 }
 
 export function encodeBinaryStreamEventFrame(event: unknown): Buffer {
-  const json = JSON.stringify(event)
+  return encodeBinaryStreamJsonFrame(JSON.stringify(event))
+}
+
+function encodeBinaryStreamJsonFrame(json: string): Buffer {
   const bodyBytes = Buffer.byteLength(json, 'utf8')
   const frame = Buffer.allocUnsafe(FRAME_HEADER_BYTES + bodyBytes)
   frame[0] = EVENT_FRAME
@@ -58,8 +61,32 @@ export function binaryStreamDataFrameOverheadBytes(
 export function encodeBinaryStreamDataFrame(
   sessionId: string,
   data: string,
-  payload: StreamDataPayloadMeta = {}
-): Buffer {
+  payload?: StreamDataPayloadMeta
+): Buffer
+export function encodeBinaryStreamDataFrame(
+  sessionId: string,
+  data: string,
+  payload: StreamDataPayloadMeta,
+  maxFrameBytes: number
+): Buffer | null
+export function encodeBinaryStreamDataFrame(
+  sessionId: string,
+  data: string,
+  payload: StreamDataPayloadMeta = {},
+  maxFrameBytes = Number.POSITIVE_INFINITY
+): Buffer | null {
+  // UTF-8 would replace surrogate halves that a producer can release in separate emissions.
+  if (!data.isWellFormed()) {
+    const json = JSON.stringify({
+      type: 'event',
+      event: 'data',
+      sessionId,
+      payload: { ...payload, data }
+    })
+    return FRAME_HEADER_BYTES + Buffer.byteLength(json, 'utf8') <= maxFrameBytes
+      ? encodeBinaryStreamJsonFrame(json)
+      : null
+  }
   const meta = encodeDataMeta(sessionId, payload)
   const metaBytes = Buffer.byteLength(meta, 'utf8')
   if (metaBytes > MAX_DATA_META_BYTES) {
@@ -67,6 +94,9 @@ export function encodeBinaryStreamDataFrame(
   }
   const dataBytes = Buffer.byteLength(data, 'utf8')
   const bodyBytes = DATA_META_LENGTH_BYTES + metaBytes + dataBytes
+  if (FRAME_HEADER_BYTES + bodyBytes > maxFrameBytes) {
+    return null
+  }
   const frame = Buffer.allocUnsafe(FRAME_HEADER_BYTES + bodyBytes)
   frame[0] = DATA_FRAME
   frame.writeUInt32BE(bodyBytes, 1)

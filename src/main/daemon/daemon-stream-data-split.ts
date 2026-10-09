@@ -168,17 +168,35 @@ function writeBinaryStreamDataEvents(
     return
   }
   const carriesMetadata = explicitRawLength !== undefined || seq !== undefined
+  const whole = encodeBinaryStreamDataFrame(
+    sessionId,
+    data,
+    dataPayloadMeta(
+      explicitRawLength === 0 ? 0 : carriesMetadata ? data.length : undefined,
+      seq,
+      false
+    ),
+    maxFrameBytes
+  )
+  if (whole !== null) {
+    streamSocket.write(whole)
+    return
+  }
   const worstCaseOverhead = binaryStreamDataFrameOverheadBytes(
     sessionId,
     carriesMetadata ? dataPayloadMeta(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, false) : {}
   )
   const dataBudgetBytes = Math.max(3, maxFrameBytes - worstCaseOverhead)
-  const fitsWhole = Buffer.byteLength(data, 'utf8') <= dataBudgetBytes
+  // JSON fallback must budget escaped bytes with the existing splitter.
+  const jsonChunks = data.isWellFormed()
+    ? undefined
+    : splitStreamDataForNdjson(sessionId, data, Math.max(1, maxFrameBytes - 96), explicitRawLength)
   const chunkChars = Math.max(1, Math.floor(dataBudgetBytes / 3))
+  let chunkIndex = 0
   let start = 0
   do {
-    const end = fitsWhole
-      ? data.length
+    const end = jsonChunks
+      ? start + jsonChunks[chunkIndex++].length
       : Math.max(
           nextSafeSplitIndex(data, start),
           clampToSafeSplitIndex(data, start, Math.min(data.length, start + chunkChars))
