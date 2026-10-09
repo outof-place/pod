@@ -1,13 +1,28 @@
 {
   "formatVersion": 1,
   "displayName": "Pod",
-  "appId": "space.outofplace.pod",
-  "cliName": "pod-cli",
-  "userDataName": "pod",
-  "keychainName": "pod",
+  "appId": "codes.pod.app",
+  "packageName": "pod",
+  "cliName": "podx",
+  "userDataName": "Pod",
+  "keychainName": "Pod",
   "protocols": ["pod"],
+  "homepage": "https://pod.codes",
   "updateFeed": { "provider": "github", "owner": "outof-place", "repo": "pod" },
   "copyright": "Copyright © 2026 outofplace",
-  "credits": "Built on Orca by Stably (MIT License, Copyright (c) 2026 Lovecast Inc.). https://github.com/stablyai/orca",
-  "legacyProfile": { "userDataName": "orca", "keychainName": "orca" }
+  "credits": "Built on Orca by Stably AI, MIT. Not affiliated.",
+  "stablyServices": false,
+  "computerUseDisplayName": "Pod Computer Use",
+  "claudeManagedCredentialsService": "Pod Claude Code Managed Credentials",
+  "legacyProfile": {
+    "userDataName": "orca",
+    "keychainName": "orca",
+    "claudeManagedCredentialsService": "Orca Claude Code Managed Credentials"
+  },
+  "bundledPlugins": {
+    "publishers": ["outof-place"],
+    "idPrefix": "pod-",
+    "enablePluginSystem": true
+  },
+  "claudeAcc": { "payload": "claude-acc", "pluginKey": "outof-place.pod-acc" }
 }
