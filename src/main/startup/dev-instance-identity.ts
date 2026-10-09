@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import {
-  ORCA_APP_BUNDLE_ID,
-  ORCA_DEV_APP_BUNDLE_ID,
+  DEV_APP_BUNDLE_ID_SUFFIX,
+  getAppBundleId,
   type AppIdentity
 } from '../../shared/app-identity'
 
@@ -58,10 +58,10 @@ function formatLabel(branch: string | null, worktreeName: string | null): string
 
 function createDevAppUserModelId(identityKey: string | null): string {
   if (!identityKey) {
-    return ORCA_APP_BUNDLE_ID
+    return getAppBundleId()
   }
   const hash = createHash('sha1').update(identityKey).digest('hex').slice(0, 10)
-  return `${ORCA_DEV_APP_BUNDLE_ID}.${hash}`
+  return `${getAppBundleId()}${DEV_APP_BUNDLE_ID_SUFFIX}.${hash}`
 }
 
 export function getDevInstanceIdentity(
@@ -78,7 +78,7 @@ export function getDevInstanceIdentity(
       devWorktreeName: null,
       devRepoRoot: null,
       dockBadgeLabel: null,
-      appUserModelId: ORCA_APP_BUNDLE_ID
+      appUserModelId: getAppBundleId()
     }
   }
 
