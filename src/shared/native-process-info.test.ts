@@ -19,9 +19,8 @@ function psRow(pid: number): {
   const line = execFileSync(
     'ps',
     ['-o', 'ppid=,pgid=,tpgid=,stat=,tty=,lstart=', '-p', String(pid)],
-    {
-      encoding: 'utf8'
-    }
+    // Why: the addon formats lstart like ps under a uniform en_US.UTF-8, whatever LANG says.
+    { encoding: 'utf8', env: { PATH: process.env.PATH, LC_ALL: 'en_US.UTF-8' } }
   ).trim()
   const [ppid, pgid, tpgid, stat, tty, ...start] = line.split(/\s+/)
   return {
