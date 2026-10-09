@@ -2,6 +2,7 @@ import { app, BrowserWindow, type WebContents } from 'electron'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { NativeTerminalAppearance } from '../../shared/native-terminal-appearance'
+import type { NativeTerminalForwardedChord } from '../../shared/native-terminal-forwarded-chords'
 import {
   NATIVE_TERMINAL_EVENT_CHANNEL,
   type NativeTerminalEvent,
@@ -28,6 +29,8 @@ const trackedWindows = new WeakSet<BrowserWindow>()
 let addon: GhosttyTerminalAddon | null = null
 let initialized = false
 let lastConfigText: string | null = null
+let forwardedChords: NativeTerminalForwardedChord[] = []
+const forwardedChordsBySender = new WeakMap<WebContents, NativeTerminalForwardedChord[]>()
 
 function configPath(): string {
   const dir = join(app.getPath('userData'), 'native-terminal')
@@ -144,7 +147,8 @@ function handleSurfaceEvent(surfaceId: number, kind: string, args: unknown[]): v
         characters: String(args[0] ?? ''),
         keyCode: Number(args[1]),
         modifierFlags: Number(args[2]),
-        isRepeat: args[3] === true
+        isRepeat: args[3] === true,
+        isRelease: args[4] === true
       })) {
         owner.webContents.sendInputEvent(input)
       }
@@ -170,6 +174,14 @@ function handleSurfaceEvent(surfaceId: number, kind: string, args: unknown[]): v
     }
     case 'bell':
       sendEvent(owner, { surfaceId, kind: 'bell' })
+      break
+    case 'mouseEnter':
+      sendEvent(owner, {
+        surfaceId,
+        kind: 'mouseEnter',
+        buttons: Number(args[0]),
+        windowFocused: args[1] === true
+      })
       break
     default:
       break
@@ -208,6 +220,10 @@ export function createSurface(
     (kind, ...args) => handleSurfaceEvent(surfaceId, kind, args)
   )
   owners.set(surfaceId, { webContents, window, placed: null })
+  const chords = forwardedChordsBySender.get(webContents)
+  if (chords) {
+    applyForwardedChords(chords)
+  }
   native.setFrames([[surfaceId, 0, 0, 1, 1, false]])
   return surfaceId
 }
@@ -279,6 +295,24 @@ function ownsAnySurface(webContents: WebContents): boolean {
   return false
 }
 
+function applyForwardedChords(chords: NativeTerminalForwardedChord[]): void {
+  forwardedChords = chords
+  addon?.setForwardedChords(
+    chords.map((chord) => [chord.keyCode, chord.modifierFlags, chord.character])
+  )
+}
+
+// Keybindings are app-wide; a window's resolved set applies once it hosts a surface.
+export function setForwardedChords(
+  webContents: WebContents,
+  chords: NativeTerminalForwardedChord[]
+): void {
+  forwardedChordsBySender.set(webContents, chords)
+  if (ownsAnySurface(webContents)) {
+    applyForwardedChords(chords)
+  }
+}
+
 // Ghostty's config is app-wide, so only a renderer that hosts surfaces may restyle them.
 export function updateAppearance(
   webContents: WebContents,
@@ -323,7 +357,12 @@ export function installNativeTerminalDebugHooks(): void {
         addon?.debugKey(surfaceId, characters, keyCode, modifierFlags),
       scrollbar: (surfaceId: number) => addon?.debugState(surfaceId)?.scrollbar ?? null,
       scrollbarScroll: (surfaceId: number, fraction: number) =>
-        addon?.debugScrollbarScroll(surfaceId, fraction) ?? false
+        addon?.debugScrollbarScroll(surfaceId, fraction) ?? false,
+      focus: (surfaceId: number) => addon?.focus(surfaceId),
+      modifiersChanged: (surfaceId: number, keyCode: number, modifierFlags: number) =>
+        addon?.debugModifiersChanged(surfaceId, keyCode, modifierFlags),
+      drop: (surfaceId: number, paths: string[]) => addon?.debugDrop(surfaceId, paths) ?? null,
+      forwardedChords: (): NativeTerminalForwardedChord[] => forwardedChords
     }
   })
 }

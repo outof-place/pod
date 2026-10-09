@@ -15,6 +15,7 @@ export const nativeTerminalApi = {
   readSelection: (surfaceId) => ipcRenderer.invoke('nativeTerminal:readSelection', surfaceId),
   setAppearance: (appearance, zoomFactor) =>
     ipcRenderer.send('nativeTerminal:setAppearance', appearance, zoomFactor),
+  setForwardedChords: (chords) => ipcRenderer.send('nativeTerminal:setForwardedChords', chords),
   destroy: (surfaceId) => ipcRenderer.send('nativeTerminal:destroy', surfaceId),
   onEvent: (callback) => {
     const listener = (_event: IpcRendererEvent, payload: NativeTerminalEvent): void =>

@@ -12,6 +12,7 @@
 #import <CoreImage/CoreImage.h>
 #import <IOSurface/IOSurface.h>
 #import <QuartzCore/QuartzCore.h>
+#import <objc/message.h>
 #include <IOKit/hidsystem/ev_keymap.h>
 #include <node_api.h>
 
@@ -39,7 +40,7 @@ std::atomic<bool> g_tick_pending{false};
 std::atomic<int32_t> g_next_id{1};
 NSMutableDictionary<NSNumber*, id>* g_views = nil;
 
-enum class SurfaceEventKind { Input, Resize, Focus, Key, Title, Pwd, OpenUrl, Bell, MouseShape, ContextMenu };
+enum class SurfaceEventKind { Input, Resize, Focus, Key, Title, Pwd, OpenUrl, Bell, MouseShape, ContextMenu, MouseEnter };
 
 struct SurfaceEvent {
   SurfaceEventKind kind;
@@ -140,6 +141,50 @@ void ScheduleTick() {
 
 }  // namespace
 
+namespace {
+
+#pragma mark Host-owned chords
+
+// A non-Command chord Orca intercepts while a terminal is focused (Ctrl+Tab, user bindings).
+struct ForwardedChord {
+  uint16_t keyCode;
+  uint32_t modifiers;
+  // Lowercase unmodified character for layout-dependent keys; 0 matches by keyCode instead.
+  unichar character;
+};
+
+constexpr NSEventModifierFlags kChordModifiers =
+    NSEventModifierFlagShift | NSEventModifierFlagControl | NSEventModifierFlagOption | NSEventModifierFlagCommand;
+
+// Replaced wholesale by setForwardedChords; plain data so the bundle keeps no dynamic initializers.
+ForwardedChord* g_forwarded_chords = nullptr;
+size_t g_forwarded_chord_count = 0;
+
+bool IsForwardedChord(NSEvent* event) {
+  if (g_forwarded_chord_count == 0) return false;
+  const auto modifiers = static_cast<uint32_t>(event.modifierFlags & kChordModifiers);
+  NSString* base = [[event charactersByApplyingModifiers:0] lowercaseString];
+  const unichar character = base.length == 1 ? [base characterAtIndex:0] : 0;
+  for (size_t i = 0; i < g_forwarded_chord_count; i++) {
+    const ForwardedChord& chord = g_forwarded_chords[i];
+    if (chord.modifiers != modifiers) continue;
+    if (chord.character != 0 ? chord.character == character : chord.keyCode == event.keyCode) return true;
+  }
+  return false;
+}
+
+// Left-hand key for a modifier flag, unless the flagsChanged event names its right-hand twin.
+uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
+  switch (flag) {
+    case NSEventModifierFlagShift: return changedKeyCode == kVK_RightShift ? kVK_RightShift : kVK_Shift;
+    case NSEventModifierFlagControl: return changedKeyCode == kVK_RightControl ? kVK_RightControl : kVK_Control;
+    case NSEventModifierFlagOption: return changedKeyCode == kVK_RightOption ? kVK_RightOption : kVK_Option;
+    default: return changedKeyCode == kVK_RightCommand ? kVK_RightCommand : kVK_Command;
+  }
+}
+
+}  // namespace
+
 // Flipped so frames match DOM coordinates; hit-testing falls through to web contents
 // everywhere except over a visible surface.
 @interface OrcaGhosttyHostView : NSView
@@ -157,6 +202,24 @@ void ScheduleTick() {
 
 @interface OrcaGhosttySurfaceView : NSView <NSTextInputClient>
 @property(nonatomic, assign) SurfaceModel* model;
+@end
+
+// Not registered for dragged types on purpose: AppKit then routes drags over the surface to the
+// web contents beneath, where Orca's DOM drop owner for the pane handles them as usual.
+@interface OrcaGhosttySurfaceView () {
+  // Modifiers still held from a chord handed to Orca, whose release Orca also needs.
+  NSEventModifierFlags _hostHeldModifiers;
+  id _hostModifierMonitor;
+  NSMutableIndexSet* _hostForwardedKeyCodes;
+}
+@end
+
+@interface OrcaGhosttySurfaceView (HostInput)
+- (void)forwardChordToHost:(NSEvent*)event;
+- (BOOL)consumeHostKeyUp:(NSEvent*)event;
+- (void)hostModifiersChanged:(NSEvent*)event;
+- (void)endHostModifierTracking;
+- (void)emitMouseEntered:(NSEvent*)event;
 @end
 
 @implementation OrcaGhosttySurfaceView {
@@ -319,6 +382,7 @@ void ScheduleTick() {
 - (void)mouseEntered:(NSEvent*)event {
   [super mouseEntered:event];
   [self sendMousePos:event];
+  [self emitMouseEntered:event];
 }
 
 - (void)mouseExited:(NSEvent*)event {
@@ -371,9 +435,11 @@ void ScheduleTick() {
 
 #pragma mark Keyboard
 
-// Command chords belong to Orca (menus, tab and pane shortcuts), not the terminal.
+// Command chords belong to Orca (menus, tab and pane shortcuts), not the terminal, and so do
+// the other chords Orca pushed through setForwardedChords.
 - (BOOL)forwardsToHost:(NSEvent*)event {
-  return (event.modifierFlags & NSEventModifierFlagCommand) != 0 && _markedText.length == 0;
+  if (_markedText.length > 0) return NO;
+  return (event.modifierFlags & NSEventModifierFlagCommand) != 0 || IsForwardedChord(event);
 }
 
 - (void)emitForwardedKey:(NSEvent*)event {
@@ -449,7 +515,7 @@ void ScheduleTick() {
     return;
   }
   if ([self forwardsToHost:event]) {
-    [self emitForwardedKey:event];
+    [self forwardChordToHost:event];
     return;
   }
 
@@ -523,7 +589,7 @@ void ScheduleTick() {
 }
 
 - (void)keyUp:(NSEvent*)event {
-  if ([self forwardsToHost:event]) return;
+  if ([self consumeHostKeyUp:event] || [self forwardsToHost:event]) return;
   [self keyAction:GHOSTTY_ACTION_RELEASE event:event translationEvent:nil text:nil composing:NO];
 }
 
@@ -871,6 +937,128 @@ void ScheduleTick() {
 
 @end
 
+@implementation OrcaGhosttySurfaceView (HostInput)
+
+#pragma mark Host chords and pointer
+
+- (void)forwardChordToHost:(NSEvent*)event {
+  [self emitForwardedKey:event];
+  if (_hostForwardedKeyCodes == nil) _hostForwardedKeyCodes = [NSMutableIndexSet indexSet];
+  [_hostForwardedKeyCodes addIndex:event.keyCode];
+  const NSEventModifierFlags held = event.modifierFlags & kChordModifiers;
+  _hostHeldModifiers |= held;
+  if (held == 0 || _hostModifierMonitor != nil) return;
+  // Why a monitor: UI the chord opened (the Ctrl+Tab switcher) can hide this view and take the
+  // keyboard, yet it still commits on the modifier's release.
+  __weak OrcaGhosttySurfaceView* weakSelf = self;
+  _hostModifierMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskFlagsChanged
+                                                               handler:^NSEvent*(NSEvent* flagsEvent) {
+                                                                 [weakSelf hostModifiersChanged:flagsEvent];
+                                                                 return flagsEvent;
+                                                               }];
+}
+
+// The release of a key whose press went to Orca must not reach Ghostty as a stray release.
+- (BOOL)consumeHostKeyUp:(NSEvent*)event {
+  if (![_hostForwardedKeyCodes containsIndex:event.keyCode]) return NO;
+  [_hostForwardedKeyCodes removeIndex:event.keyCode];
+  return YES;
+}
+
+- (void)hostModifiersChanged:(NSEvent*)event {
+  const NSEventModifierFlags released = _hostHeldModifiers & ~(event.modifierFlags & kChordModifiers);
+  if (released == 0) return;
+  _hostHeldModifiers &= ~released;
+  if (_hostHeldModifiers == 0) [self endHostModifierTracking];
+  // The web contents sees the release itself once it holds the keyboard again.
+  id responder = self.window.firstResponder;
+  if ([responder isKindOfClass:[NSView class]] && ![responder isKindOfClass:[OrcaGhosttySurfaceView class]]) return;
+  for (NSEventModifierFlags flag : {NSEventModifierFlagShift, NSEventModifierFlagControl,
+                                    NSEventModifierFlagOption, NSEventModifierFlagCommand}) {
+    if ((released & flag) == 0) continue;
+    auto* release = new SurfaceEvent{SurfaceEventKind::Key};
+    release->a = ModifierKeyCode(flag, event.keyCode);
+    release->b = static_cast<uint32_t>(event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask);
+    release->d = 1;
+    Emit(self.model, release);
+  }
+}
+
+- (void)endHostModifierTracking {
+  _hostHeldModifiers = 0;
+  if (_hostModifierMonitor == nil) return;
+  id monitor = _hostModifierMonitor;
+  _hostModifierMonitor = nil;
+  // Removed outside the handler that may be running it.
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [NSEvent removeMonitor:monitor];
+  });
+}
+
+- (void)emitMouseEntered:(NSEvent*)event {
+  auto* entered = new SurfaceEvent{SurfaceEventKind::MouseEnter};
+  entered->a = static_cast<uint32_t>(NSEvent.pressedMouseButtons);
+  // Chromium reports the page unfocused while this view holds the keyboard, so say it here.
+  entered->b = NSApp.isActive && self.window.isKeyWindow ? 1 : 0;
+  Emit(self.model, entered);
+}
+
+@end
+
+// A file drag for debugDrop, standing in for the session AppKit would hand a destination.
+@interface OrcaDebugDraggingInfo : NSObject <NSDraggingInfo>
+@property(nonatomic, strong) NSPasteboard* pasteboard;
+@property(nonatomic, weak) NSWindow* window;
+@property(nonatomic, assign) NSPoint location;
+@end
+
+@implementation OrcaDebugDraggingInfo
+@synthesize draggingFormation = _draggingFormation;
+@synthesize animatesToDestination = _animatesToDestination;
+@synthesize numberOfValidItemsForDrop = _numberOfValidItemsForDrop;
+
+- (NSWindow*)draggingDestinationWindow {
+  return self.window;
+}
+- (NSDragOperation)draggingSourceOperationMask {
+  return NSDragOperationCopy | NSDragOperationLink | NSDragOperationGeneric;
+}
+- (NSPoint)draggingLocation {
+  return self.location;
+}
+- (NSPoint)draggedImageLocation {
+  return self.location;
+}
+- (NSImage*)draggedImage {
+  return nil;
+}
+- (NSPasteboard*)draggingPasteboard {
+  return self.pasteboard;
+}
+- (id)draggingSource {
+  return nil;
+}
+- (NSInteger)draggingSequenceNumber {
+  return 1;
+}
+- (void)slideDraggedImageTo:(NSPoint)screenPoint {
+}
+- (NSArray<NSString*>*)namesOfPromisedFilesDroppedAtDestination:(NSURL*)dropDestination {
+  return nil;
+}
+- (void)enumerateDraggingItemsWithOptions:(NSDraggingItemEnumerationOptions)enumOpts
+                                  forView:(NSView*)view
+                                  classes:(NSArray<Class>*)classArray
+                            searchOptions:(NSDictionary<NSPasteboardReadingOptionKey, id>*)searchOptions
+                               usingBlock:(void (^)(NSDraggingItem*, NSInteger, BOOL*))block {
+}
+- (NSSpringLoadingHighlight)springLoadingHighlight {
+  return NSSpringLoadingHighlightNone;
+}
+- (void)resetSpringLoading {
+}
+@end
+
 namespace {
 
 #pragma mark Runtime callbacks
@@ -1080,7 +1268,7 @@ OrcaGhosttySurfaceView* ViewForId(int32_t id) {
 void CallJs(napi_env env, napi_value callback, void*, void* data) {
   auto* event = static_cast<SurfaceEvent*>(data);
   if (env != nullptr && callback != nullptr) {
-    napi_value argv[5];
+    napi_value argv[6];
     size_t argc = 1;
     switch (event->kind) {
       case SurfaceEventKind::Input: {
@@ -1109,7 +1297,9 @@ void CallJs(napi_env env, napi_value callback, void*, void* data) {
         argv[2] = Number(env, event->a);
         argv[3] = Number(env, event->b);
         argv[4] = Bool(env, event->c != 0);
-        argc = 5;
+        // A modifier's release after a forwarded chord: keyup only.
+        argv[5] = Bool(env, event->d != 0);
+        argc = 6;
         break;
       case SurfaceEventKind::Title:
         argv[0] = String(env, "title");
@@ -1136,6 +1326,12 @@ void CallJs(napi_env env, napi_value callback, void*, void* data) {
         argv[0] = String(env, "contextMenu");
         argv[1] = Number(env, event->a);
         argv[2] = Number(env, event->b);
+        argc = 3;
+        break;
+      case SurfaceEventKind::MouseEnter:
+        argv[0] = String(env, "mouseEnter");
+        argv[1] = Number(env, event->a);
+        argv[2] = Bool(env, event->b != 0);
         argc = 3;
         break;
     }
@@ -1175,6 +1371,17 @@ OrcaGhosttyHostView* HostViewForWindowHandle(napi_env env, napi_value handle) {
   // Chromium keeps views it does not own above web contents; see native_widget_ns_window_bridge.mm.
   [contentView addSubview:host positioned:NSWindowAbove relativeTo:nil];
   return host;
+}
+
+// Hands the keyboard to the web contents under a surface that is being hidden, so the DOM UI
+// covering it (dialogs, search, the tab switcher) gets typed keys instead of the bare window.
+void ReturnKeyboardToWebContents(OrcaGhosttySurfaceView* view) {
+  NSWindow* window = view.window;
+  NSView* content = window.contentView;
+  NSPoint center = [view convertPoint:NSMakePoint(NSMidX(view.bounds), NSMidY(view.bounds)) toView:nil];
+  NSView* target = [content hitTest:content.superview ? [content.superview convertPoint:center fromView:nil] : center];
+  while (target != nil && (target == view || !target.acceptsFirstResponder)) target = target.superview;
+  [window makeFirstResponder:target];
 }
 
 #pragma mark Exports
@@ -1314,9 +1521,11 @@ napi_value SetFrames(napi_env env, napi_callback_info info) {
                               GetDouble(env, fields[4]));
     }
     if (view.hidden == visible) {
+      // Read first: hiding a first responder already hands the keyboard to the bare window.
+      const bool hadKeyboard = view.window.firstResponder == view;
       view.hidden = !visible;
       if (view.model->surface) ghostty_surface_set_occlusion(view.model->surface, visible);
-      if (!visible && view.window.firstResponder == view) [view.window makeFirstResponder:nil];
+      if (!visible && hadKeyboard) ReturnKeyboardToWebContents(view);
     }
   }
   [CATransaction commit];
@@ -1409,6 +1618,7 @@ napi_value DestroySurface(napi_env env, napi_callback_info info) {
   if (view == nil) return Undefined(env);
   SurfaceModel* model = view.model;
   model->closed = true;
+  [view endHostModifierTracking];
   if (view.window.firstResponder == view) [view.window makeFirstResponder:nil];
   [view removeFromSuperview];
   [g_views removeObjectForKey:@(id)];
@@ -1525,6 +1735,9 @@ napi_value DebugState(napi_env env, napi_callback_info info) {
                           String(env, view.layer ? object_getClassName(view.layer) : "none"));
   napi_set_named_property(env, result, "sublayers", Number(env, view.layer.sublayers.count));
   napi_set_named_property(env, result, "scrollbar", ScrollbarDebugState(env, view));
+  id responder = view.window.firstResponder;
+  napi_set_named_property(env, result, "windowFirstResponder",
+                          String(env, responder ? object_getClassName(responder) : "none"));
   return result;
 }
 
@@ -1558,6 +1771,124 @@ napi_value DebugScrollbarScroll(napi_env env, napi_callback_info info) {
   return Bool(env, scrollbar != nil && [scrollbar debugScrollToFraction:GetDouble(env, argv[1])]);
 }
 
+#pragma mark Host chords and drag debugging
+
+// setForwardedChords(chords: Array<[keyCode, modifierFlags, character]>): void — replaces the
+// non-Command chords every surface hands to Orca instead of Ghostty.
+napi_value SetForwardedChords(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argv[1];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  uint32_t count = 0;
+  if (argc < 1 || napi_get_array_length(env, argv[0], &count) != napi_ok) return Undefined(env);
+  auto* chords = count > 0 ? new ForwardedChord[count] : nullptr;
+  for (uint32_t i = 0; i < count; i++) {
+    napi_value entry;
+    napi_get_element(env, argv[0], i, &entry);
+    napi_value fields[3];
+    for (uint32_t f = 0; f < 3; f++) napi_get_element(env, entry, f, &fields[f]);
+    NSString* character = [NSString stringWithUTF8String:GetString(env, fields[2]).c_str()];
+    chords[i] = {static_cast<uint16_t>(GetInt(env, fields[0])), static_cast<uint32_t>(GetInt(env, fields[1])),
+                 character.length == 1 ? [character.lowercaseString characterAtIndex:0] : static_cast<unichar>(0)};
+  }
+  delete[] g_forwarded_chords;
+  g_forwarded_chords = chords;
+  g_forwarded_chord_count = count;
+  return Undefined(env);
+}
+
+// The view AppKit's drag session targets at a window point: the deepest visible view registered
+// for a dragged type. Private AppKit hit test, used only by debugDrop.
+NSView* DragDestinationAt(NSWindow* window, NSPoint windowPoint, NSArray<NSPasteboardType>* types) {
+  NSView* content = window.contentView;
+  SEL hitTest = NSSelectorFromString(@"_hitTest:dragTypes:");
+  if (content == nil || ![content respondsToSelector:hitTest]) return nil;
+  CGPoint point = content.superview ? [content.superview convertPoint:windowPoint fromView:nil] : windowPoint;
+  using DragHitTest = id (*)(id, SEL, CGPoint*, id);
+  id hit = reinterpret_cast<DragHitTest>(objc_msgSend)(content, hitTest, &point, [NSSet setWithArray:types]);
+  return [hit isKindOfClass:[NSView class]] ? hit : nil;
+}
+
+// debugDrop(id, paths): { destination, operation } | null — drops files at the surface's center
+// through whichever destination AppKit would pick, paced like a real drag session (the web
+// contents only accepts a drop once its page answered a dragover), for headless tests.
+napi_value DebugDrop(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value argv[2];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  OrcaGhosttySurfaceView* view = ViewForId(GetInt(env, argv[0]));
+  napi_value result;
+  napi_get_null(env, &result);
+  uint32_t count = 0;
+  if (view == nil || view.window == nil || argc < 2 || napi_get_array_length(env, argv[1], &count) != napi_ok) {
+    return result;
+  }
+  NSMutableArray<NSURL*>* urls = [NSMutableArray arrayWithCapacity:count];
+  for (uint32_t i = 0; i < count; i++) {
+    napi_value entry;
+    napi_get_element(env, argv[1], i, &entry);
+    [urls addObject:[NSURL fileURLWithPath:[NSString stringWithUTF8String:GetString(env, entry).c_str()]]];
+  }
+  NSPasteboard* pasteboard = [NSPasteboard pasteboardWithUniqueName];
+  [pasteboard clearContents];
+  [pasteboard writeObjects:urls];
+
+  OrcaDebugDraggingInfo* drag = [[OrcaDebugDraggingInfo alloc] init];
+  drag.pasteboard = pasteboard;
+  drag.window = view.window;
+  drag.location = [view convertPoint:NSMakePoint(NSMidX(view.bounds), NSMidY(view.bounds)) toView:nil];
+  NSView* destination = DragDestinationAt(view.window, drag.location, pasteboard.types);
+  if (destination == nil) return result;
+
+  NSDragOperation operation = NSDragOperationNone;
+  if ([destination respondsToSelector:@selector(draggingEntered:)]) operation = [destination draggingEntered:drag];
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 200 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+    NSDragOperation updated = operation;
+    if ([destination respondsToSelector:@selector(draggingUpdated:)]) updated = [destination draggingUpdated:drag];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 200 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+      NSDragOperation last = updated;
+      if ([destination respondsToSelector:@selector(draggingUpdated:)]) last = [destination draggingUpdated:drag];
+      if (last == NSDragOperationNone) {
+        if ([destination respondsToSelector:@selector(draggingExited:)]) [destination draggingExited:drag];
+      } else if ((![destination respondsToSelector:@selector(prepareForDragOperation:)] ||
+                  [destination prepareForDragOperation:drag]) &&
+                 [destination respondsToSelector:@selector(performDragOperation:)] &&
+                 [destination performDragOperation:drag] &&
+                 [destination respondsToSelector:@selector(concludeDragOperation:)]) {
+        [destination concludeDragOperation:drag];
+      }
+      if ([destination respondsToSelector:@selector(draggingEnded:)]) [destination draggingEnded:drag];
+    });
+  });
+
+  napi_create_object(env, &result);
+  napi_set_named_property(env, result, "destination", String(env, object_getClassName(destination)));
+  napi_set_named_property(env, result, "operation", Number(env, operation));
+  return result;
+}
+
+// debugModifiersChanged(id, keyCode, modifierFlags): void — posts a flagsChanged event through the
+// app's event queue, so monitors and the first responder see it like a real modifier change.
+napi_value DebugModifiersChanged(napi_env env, napi_callback_info info) {
+  size_t argc = 3;
+  napi_value argv[3];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  OrcaGhosttySurfaceView* view = ViewForId(GetInt(env, argv[0]));
+  if (view == nil || view.window == nil) return Undefined(env);
+  NSEvent* event = [NSEvent keyEventWithType:NSEventTypeFlagsChanged
+                                    location:NSZeroPoint
+                               modifierFlags:static_cast<NSEventModifierFlags>(GetInt(env, argv[2]))
+                                   timestamp:NSProcessInfo.processInfo.systemUptime
+                                windowNumber:view.window.windowNumber
+                                     context:nil
+                                  characters:@""
+                 charactersIgnoringModifiers:@""
+                                   isARepeat:NO
+                                     keyCode:static_cast<unsigned short>(GetInt(env, argv[1]))];
+  if (event) [NSApp postEvent:event atStart:NO];
+  return Undefined(env);
+}
+
 napi_value ModuleInit(napi_env env, napi_value exports) {
   const napi_property_descriptor props[] = {
       {"init", nullptr, Init, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -1578,6 +1909,9 @@ napi_value ModuleInit(napi_env env, napi_value exports) {
       {"debugState", nullptr, DebugState, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugScrollbarScroll", nullptr, DebugScrollbarScroll, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"gridSizeOf", nullptr, GridSize, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"setForwardedChords", nullptr, SetForwardedChords, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugDrop", nullptr, DebugDrop, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugModifiersChanged", nullptr, DebugModifiersChanged, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   napi_define_properties(env, exports, sizeof(props) / sizeof(props[0]), props);
   return exports;

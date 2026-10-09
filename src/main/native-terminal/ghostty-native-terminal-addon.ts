@@ -45,7 +45,15 @@ export type GhosttyTerminalAddon = {
   performAction: (surfaceId: number, action: string) => boolean
   destroySurface: (surfaceId: number) => void
   gridSize: (surfaceId: number) => { columns: number; rows: number } | null
+  setForwardedChords: (
+    chords: [keyCode: number, modifierFlags: number, character: string][]
+  ) => void
   debugKey: (surfaceId: number, characters: string, keyCode: number, modifierFlags: number) => void
+  debugModifiersChanged: (surfaceId: number, keyCode: number, modifierFlags: number) => void
+  debugDrop: (
+    surfaceId: number,
+    paths: string[]
+  ) => { destination: string; operation: number } | null
   debugScreenText: (surfaceId: number) => string | null
   debugSnapshot: (surfaceId: number) => Buffer | null
   debugState: (surfaceId: number) => {
@@ -56,6 +64,7 @@ export type GhosttyTerminalAddon = {
     width: number
     height: number
     scrollbar: NativeSurfaceScrollbarState | null
+    windowFirstResponder: string
   } | null
   debugScrollbarScroll: (surfaceId: number, fraction: number) => boolean
 }
