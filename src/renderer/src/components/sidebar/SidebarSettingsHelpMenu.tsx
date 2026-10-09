@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { POD_FEATURE_PROMOS } from '../../../../shared/product/features'
 import {
   BookOpen,
   CircleHelp,
@@ -116,7 +117,9 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   const updateCheckHint = getUpdateCheckHint()
 
   const showMilestones =
-    setupProgress.ready && setupProgress.coreDoneCount < setupProgress.coreTotal
+    POD_FEATURE_PROMOS &&
+    setupProgress.ready &&
+    setupProgress.coreDoneCount < setupProgress.coreTotal
 
   const handleMenuOpenChange = (open: boolean): void => {
     setMenuOpen(open)

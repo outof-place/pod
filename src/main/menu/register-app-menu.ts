@@ -1,4 +1,5 @@
 import { BrowserWindow, Menu, app } from 'electron'
+import { POD_FEATURE_PROMOS } from '../../shared/product/features'
 import {
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
@@ -323,9 +324,9 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     label: translateMain('menu.help', 'Help'),
     submenu: [
       crashReportItem,
-      { type: 'separator' },
-      featureTourItem,
-      setupGuideItem,
+      ...(POD_FEATURE_PROMOS
+        ? [{ type: 'separator' } as const, featureTourItem, setupGuideItem]
+        : []),
       ...(isMac
         ? []
         : ([
