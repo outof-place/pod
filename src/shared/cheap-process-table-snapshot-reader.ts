@@ -1,4 +1,5 @@
 import { runProcess } from './child-process/run-process'
+import { getNativeProcessInfo } from './native-process-info'
 import {
   CHEAP_PS_ARGS,
   PS_MAX_BUFFER_BYTES,
@@ -19,6 +20,10 @@ import {
  */
 const cheapProcessTableReader = createProcessTableSnapshotReader<CheapProcessTableRow[]>({
   runPs: async () => {
+    const native = readNativeCheapProcessTable()
+    if (native) {
+      return native
+    }
     const result = await runProcess({
       program: 'ps',
       args: CHEAP_PS_ARGS,
@@ -39,6 +44,30 @@ const cheapProcessTableReader = createProcessTableSnapshotReader<CheapProcessTab
   },
   now: () => Date.now()
 })
+
+/**
+ * The same columns from one sysctl instead of a `ps` fork (#24889): ~1 ms against ~16 ms plus the
+ * spawn, polled by every visible pane. Null when the addon is absent or fails, so `ps` answers.
+ */
+function readNativeCheapProcessTable(): CheapProcessTableRow[] | null {
+  const native = getNativeProcessInfo()
+  if (!native) {
+    return null
+  }
+  try {
+    const rows = native.listProcesses().map(({ pid, ppid, pgid, tpgid, stat, startTime }) => ({
+      pid,
+      ppid,
+      pgid,
+      tpgid,
+      stat,
+      ...(startTime ? { startTime } : {})
+    }))
+    return rows.length > 0 ? rows : null
+  } catch {
+    return null
+  }
+}
 
 /** Same wait bound as the evidence read: a stalled cheap capture must fall through to the full
  *  path's own handling rather than pin a polled tick. */

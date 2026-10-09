@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { notifySpawnObserver } from '../../shared/child-process/spawn-observer'
+import { getNativeProcessInfo } from '../../shared/native-process-info'
 
 const PROCESS_TABLE_LOOKUP_TIMEOUT_MS = 250
 const PROCESS_TABLE_QUERY_TIMEOUT_MS = PROCESS_TABLE_LOOKUP_TIMEOUT_MS / 2
@@ -41,6 +42,27 @@ function runPs(pid: number): string {
   }
 }
 
+/**
+ * The same `pid tpgid tty` row from one sysctl, so a SIGWINCH no longer blocks this thread on a
+ * `ps` child (#24889). Null when the addon cannot answer; '' when the pid is gone, as `ps` finds.
+ */
+function readNativeProcessRow(pid: number): string | null {
+  try {
+    const native = getNativeProcessInfo()
+    if (!native) {
+      return null
+    }
+    const row = native.readProcess(pid)
+    return row ? `${row.pid} ${row.tpgid} ${row.tty}` : ''
+  } catch {
+    return null
+  }
+}
+
+function readProcessRow(pid: number): string {
+  return readNativeProcessRow(pid) ?? runPs(pid)
+}
+
 let ownRowCache: { pid: number; row: string } | null = null
 
 /**
@@ -53,7 +75,7 @@ let ownRowCache: { pid: number; row: string } | null = null
 function readOwnProcessRow(currentPid: number): string {
   if (ownRowCache?.pid !== currentPid) {
     // A throw is not cached: the caller already treats a failed read as "no group".
-    ownRowCache = { pid: currentPid, row: runPs(currentPid) }
+    ownRowCache = { pid: currentPid, row: readProcessRow(currentPid) }
   }
   return ownRowCache.row
 }
@@ -71,7 +93,7 @@ export function resetPosixPtyForegroundGroupOwnRowCache(): void {
  * root-pid delivery this module exists to replace.
  */
 function readForegroundGroupTable(rootPid: number, currentPid: number): string {
-  return `${runPs(rootPid)}\n${readOwnProcessRow(currentPid)}`
+  return `${readProcessRow(rootPid)}\n${readOwnProcessRow(currentPid)}`
 }
 
 function parseProcessRows(output: string): ProcessRow[] {
