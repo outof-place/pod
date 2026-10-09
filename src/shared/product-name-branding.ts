@@ -14,15 +14,15 @@ const UPSTREAM_PHRASES = [
   String.raw`\bOrca by Stably\b`
 ]
 
-// Lowercase `orca` is the shell command only when quoted or followed by a subcommand; the lookbehind
-// keeps paths, packages and handles (`~/.orca`, `acme/orca-notes`, `@orca`) intact.
+// Lowercase `orca` is the shell command when quoted, alone on a line, or followed by a subcommand,
+// placeholder or flag; the lookbehind keeps paths, packages and handles (`~/.orca`, `@orca`) intact.
 const PRODUCT_NAME_PATTERN = new RegExp(
   [
     `(${UPSTREAM_PHRASES.join('|')})`,
     String.raw`\b([Aa])n Orca\b`,
     String.raw`\bOrca\b`,
     String.raw`\bORCA\b`,
-    String.raw`(?<![\w./@~-])orca(?=\x60| (?:[a-z][a-z-]*|CLI)\b)`
+    String.raw`(?<![\w./@~-])orca(?=\x60|\n|$| (?:[a-z<[]|--?[a-z]|CLI\b))`
   ].join('|'),
   'g'
 )
