@@ -15,6 +15,7 @@ import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
 import { getCohortAtEmit } from './cohort-classifier'
 import { resolveConsent, type ConsentState } from './consent'
 import { commonPropsSchema, validate } from './validator'
+import { areStablyServicesEnabled } from '../product-identity/product-overlay'
 
 // Compile-time feature flag, independent of the build-identity gate — both must be satisfied to transmit.
 // NOTE: config/scripts/verify-telemetry-constants.mjs greps `const TELEMETRY_ENABLED = true|false`; keep that shape or update its regex.
@@ -71,7 +72,8 @@ export function initTelemetry(store: Store): void {
   // Reset per session: the "no app_opened until banner resolution" invariant is per-launch, not per-install.
   appOpenedTrackedThisSession = false
 
-  if (!TELEMETRY_ENABLED || !IS_OFFICIAL_BUILD) {
+  // Why: a product without Stably's services never constructs the client, so nothing is queued.
+  if (!TELEMETRY_ENABLED || !IS_OFFICIAL_BUILD || !areStablyServicesEnabled()) {
     return
   }
 
