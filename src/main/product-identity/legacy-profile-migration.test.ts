@@ -21,6 +21,11 @@ import {
   type LegacyProfileMigrationOptions,
   type SafeStorageKeychainPort
 } from './legacy-profile-migration'
+import {
+  pendingDeferredImport,
+  runDeferredProfileImport,
+  updateMigrationMarker
+} from './deferred-profile-import'
 
 const LEGACY_SECRET = 'c2FsdHlzYWx0eXNhbHR5c2FsdA=='
 const DEAD_PID = 2_147_000_000
@@ -167,10 +172,9 @@ describe('migrateLegacyProfile', () => {
     expect(readlinkSync(join(pod, 'relative-link'))).toBe('orca-data.json')
     // Caches, Chromium's lock and live sockets are not carried over.
     expect(existsSync(join(pod, 'Cache'))).toBe(false)
-    expect(existsSync(join(pod, 'Partitions/browser/Code Cache'))).toBe(false)
-    expect(readFileSync(join(pod, 'Partitions/browser/Cookies'), 'utf8')).toBe('cookies')
-    // A "Cache" outside Chromium's storage is app data and is kept.
-    expect(readFileSync(join(pod, 'speech-models/Cache/model.bin'), 'utf8')).toBe('model')
+    // Browser partitions and large stores are deferred to the post-ready half.
+    expect(existsSync(join(pod, 'Partitions'))).toBe(false)
+    expect(existsSync(join(pod, 'speech-models'))).toBe(false)
     expect(existsSync(join(pod, 'SingletonLock'))).toBe(false)
     expect(existsSync(join(pod, 'o-1-abc.sock'))).toBe(false)
     // Only the live v41 daemon is handed over, by symlink, and it still answers through the link.
@@ -194,11 +198,50 @@ describe('migrateLegacyProfile', () => {
       at: '2026-10-09T12:00:00.000Z',
       linkedDaemons: [41],
       safeStorage: 'adopted',
+      deferred: ['Partitions', 'speech-models'],
       permissionsNoticeShown: false
     })
     // Rollback stays possible: the legacy profile is byte-for-byte where it was.
     expect(listTree(legacy)).toEqual(legacyBefore)
     expect(existsSync(join(root, '.pod.migrating'))).toBe(false)
+  })
+
+  it('clones the deferred browser partitions after ready, with progress, without overwriting', async () => {
+    const legacy = join(root, 'orca')
+    await createLegacyProfile(legacy)
+    migrateLegacyProfile(baseOptions(null))
+    const pod = join(root, 'pod')
+    // Chromium already created this partition file before the deferred half ran.
+    mkdirSync(join(pod, 'Partitions', 'browser'), { recursive: true })
+    writeFileSync(join(pod, 'Partitions', 'browser', 'Preferences'), 'chromium')
+    writeFileSync(join(legacy, 'Partitions', 'browser', 'Preferences'), 'legacy')
+
+    const pending = pendingDeferredImport(pod)
+    expect(pending).toEqual({ legacyUserData: legacy, entries: ['Partitions', 'speech-models'] })
+    const seen: number[] = []
+    if (!pending) {
+      throw new Error('expected a pending deferred import')
+    }
+    const done = await runDeferredProfileImport(pod, pending, ({ copied }) => seen.push(copied))
+
+    expect(done).toEqual({ copied: 3, total: 3 })
+    expect(seen.at(-1)).toBe(3)
+    expect(readFileSync(join(pod, 'Partitions/browser/Cookies'), 'utf8')).toBe('cookies')
+    // A "Cache" outside Chromium's storage is app data and is kept.
+    expect(readFileSync(join(pod, 'speech-models/Cache/model.bin'), 'utf8')).toBe('model')
+    expect(readFileSync(join(pod, 'Partitions/browser/Preferences'), 'utf8')).toBe('chromium')
+    expect(existsSync(join(pod, 'Partitions/browser/Code Cache'))).toBe(false)
+    expect(pendingDeferredImport(pod)).toBeNull()
+  })
+
+  it('only resumes deferred entries it knows, never a path from a tampered marker', async () => {
+    const legacy = join(root, 'orca')
+    await createLegacyProfile(legacy)
+    migrateLegacyProfile(baseOptions(null))
+    const pod = join(root, 'pod')
+    updateMigrationMarker(pod, { deferred: ['../orca', 'terminal-history', 'Partitions'] })
+
+    expect(pendingDeferredImport(pod)).toEqual({ legacyUserData: legacy, entries: ['Partitions'] })
   })
 
   it('refuses to copy while the legacy app holds its profile lock', async () => {
