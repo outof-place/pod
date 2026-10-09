@@ -14,4 +14,10 @@ describe('parseSkillShareId', () => {
     expect(parseSkillShareId('https://app.orca.dev/skills/share/share_123/more')).toBeNull()
     expect(parseSkillShareId('javascript:share_123')).toBeNull()
   })
+
+  it('accepts a downstream product scheme only when it is registered', () => {
+    expect(parseSkillShareId('pod://skills/share/share_123', ['pod'])).toBe('share_123')
+    expect(parseSkillShareId('pod://skills/share/share_123')).toBeNull()
+    expect(parseSkillShareId('orca://skills/share/share_123', ['pod'])).toBeNull()
+  })
 })

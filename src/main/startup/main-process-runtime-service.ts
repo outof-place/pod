@@ -40,6 +40,7 @@ import {
 } from '../runtime/agent-status-observed-pane-identity'
 import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { getUpdateFeedPolicy } from '../updater/update-feed-policy'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -172,8 +173,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   })
   app.once('will-quit', () => sessionSearch?.dispose())
   // Why here: this runs for the desktop and headless `orca serve`, and each evaluates its own panes.
-  startAgentStateRulesLiveUpdates(store, (rules) =>
-    recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
+  startAgentStateRulesLiveUpdates(
+    store,
+    (rules) => recordDurableCrashBreadcrumb('agent_state_rules_active', rules),
+    { officialDownloads: getUpdateFeedPolicy().kind === 'official' }
   )
   state.runtime = runtime
   agentHookServer.subscribeEnrichedStatus((enriched) =>
