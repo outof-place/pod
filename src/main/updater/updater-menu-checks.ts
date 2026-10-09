@@ -4,7 +4,7 @@ import { isMacInstallRequested } from '../updater-mac-install'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import type { ReleaseChannel } from '../../shared/release-channel'
 import { UpdaterScheduling } from './updater-scheduling'
-import { isOfficialUpdateFeedDisabled } from './official-update-opt-out'
+import { getUpdateFeedPolicy } from './update-feed-policy'
 
 /** Handles checks initiated from the desktop menu and modifier-key variants. */
 export abstract class UpdaterMenuChecks extends UpdaterScheduling {
@@ -16,7 +16,8 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
     ) {
       return
     }
-    if (!app.isPackaged || is.dev || isOfficialUpdateFeedDisabled()) {
+    const feedPolicy = getUpdateFeedPolicy()
+    if (!app.isPackaged || is.dev || feedPolicy.kind === 'disabled') {
       this.sendStatus({ state: 'not-available', userInitiated: true })
       return
     }
@@ -24,7 +25,8 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
       void this.checkForLocalBuildFromMenu()
       return
     }
-    if (options?.targetTag && options.channel) {
+    // Why official only: pinned builds come from the stablyai/orca release channels.
+    if (options?.targetTag && options.channel && feedPolicy.kind === 'official') {
       void this.checkForPinnedBuild(options.channel, options.targetTag)
       return
     }

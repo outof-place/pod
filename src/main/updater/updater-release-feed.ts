@@ -8,6 +8,7 @@ import type { CheckFailureSource } from './updater-state'
 import type { UpdateCheckVariant } from './updater-types'
 import { ReleaseFeedPreflightError } from './updater-state'
 import { UpdaterInstallExecution } from './updater-install-execution'
+import { getUpdateFeedPolicy } from './update-feed-policy'
 
 /** Owns concrete release-feed pinning and the one-shot prerelease fallback. */
 export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
@@ -114,6 +115,10 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
   protected async pinDefaultReleaseFeed(
     variant: UpdateCheckVariant = 'default'
   ): Promise<'ready' | 'not-available'> {
+    // Why: a product feed was set once at setup; tag pinning targets the official repo only.
+    if (getUpdateFeedPolicy().kind === 'product') {
+      return 'ready'
+    }
     const attemptId = this.activeUpdateCheckAttemptId
     const autoUpdater = this.getAutoUpdater()
     // Why: the latest/download redirect can move between check and download, so pin the concrete tag (prerelease users resolve any channel, stable only stable).

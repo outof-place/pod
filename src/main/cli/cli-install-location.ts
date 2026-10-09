@@ -29,6 +29,7 @@ import {
   readWindowsUserPathRegistry,
   type WindowsUserPathReadResult
 } from './windows-user-path-registry'
+import { getProductIdentity } from '../product-identity/product-identity'
 
 export abstract class CliInstallLocation {
   protected abstract inspectSymlink(
@@ -47,6 +48,7 @@ export abstract class CliInstallLocation {
   protected readonly localAppDataPath: string
   protected readonly processPathEnv: string | null
   protected readonly commandPathOverride: string | null
+  protected readonly productCliName: string | null
   protected readonly macCommandPath: string
   protected readonly privilegedRunner: (command: string) => Promise<void>
   protected readonly userPathReader: () => Promise<WindowsUserPathReadResult>
@@ -65,7 +67,7 @@ export abstract class CliInstallLocation {
       return DEV_COMMAND_NAME
     }
     // Why: packaged Linux uses `orca-ide` to avoid shadowing GNOME Orca's /usr/bin/orca.
-    return this.platform === 'linux' ? LINUX_CLI_COMMAND_NAME : 'orca'
+    return this.platform === 'linux' ? LINUX_CLI_COMMAND_NAME : (this.productCliName ?? 'orca')
   }
 
   constructor(options: CliInstallerOptions = {}) {
@@ -84,10 +86,16 @@ export abstract class CliInstallLocation {
     this.commandPathOverride =
       options.commandPathOverride ?? process.env.ORCA_CLI_INSTALL_PATH ?? null
     // Why: resolved once here (getStatus is hot); /usr/local/bin is absent on Apple Silicon, so fall back to user-writable ~/.local/bin.
-    const candidateMacPath = options.defaultMacCommandPath ?? DEFAULT_MAC_COMMAND_PATH
+    this.productCliName =
+      options.productCliName === undefined
+        ? (getProductIdentity()?.cliName ?? null)
+        : options.productCliName
+    const candidateMacPath =
+      options.defaultMacCommandPath ??
+      (this.productCliName ? `/usr/local/bin/${this.productCliName}` : DEFAULT_MAC_COMMAND_PATH)
     this.macCommandPath = existsSync(dirname(candidateMacPath))
       ? candidateMacPath
-      : join(this.homePath, '.local', 'bin', 'orca')
+      : join(this.homePath, '.local', 'bin', this.productCliName ?? 'orca')
     this.privilegedRunner = options.privilegedRunner ?? runMacPrivilegedCommand
     this.userPathReader = options.userPathReader ?? readWindowsUserPathRegistry
     this.userPathMutationReader =
