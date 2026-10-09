@@ -19,6 +19,19 @@ type NativeTerminalDebugOp =
   | 'screenText'
   | 'snapshotBase64'
   | 'key'
+  | 'scrollbar'
+  | 'scrollbarScroll'
+
+type NativeScrollbar = {
+  total: number
+  offset: number
+  len: number
+  visible: boolean
+  knobProportion: number
+  knobPosition: number
+  hitScroller: string
+  hitBeside: string
+}
 
 const RETURN_KEY_CODE = 0x24
 
@@ -68,6 +81,28 @@ async function nativeGrid(app: ElectronApplication, surfaceId: number): Promise<
     return null
   }
   return `${Reflect.get(grid, 'columns')}x${Reflect.get(grid, 'rows')}`
+}
+
+async function nativeScrollbar(
+  app: ElectronApplication,
+  surfaceId: number
+): Promise<NativeScrollbar | null> {
+  const state = await debugCall(app, 'scrollbar', [surfaceId])
+  if (typeof state !== 'object' || state === null) {
+    return null
+  }
+  const numberAt = (key: string): number => Number(Reflect.get(state, key))
+  const textAt = (key: string): string => String(Reflect.get(state, key))
+  return {
+    total: numberAt('total'),
+    offset: numberAt('offset'),
+    len: numberAt('len'),
+    visible: Reflect.get(state, 'visible') === true,
+    knobProportion: numberAt('knobProportion'),
+    knobPosition: numberAt('knobPosition'),
+    hitScroller: textAt('hitScroller'),
+    hitBeside: textAt('hitBeside')
+  }
 }
 
 async function activeXtermGrid(page: Page): Promise<{ cols: number; rows: number } | null> {
@@ -189,4 +224,90 @@ test('a new terminal draws through a native Ghostty surface that mirrors its PTY
     writeFileSync(file, Buffer.from(png, 'base64'))
     await testInfo.attach('native-terminal', { path: file, contentType: 'image/png' })
   }
+})
+
+test('a native surface with scrollback shows an overlay scrollbar that scrolls Ghostty', async ({
+  orcaPage,
+  electronApp
+}) => {
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+  await waitForActiveTerminalManager(orcaPage, 30_000)
+  // The first pane binds before the setting flips, so only the split gets a native surface.
+  await waitForPtyShellEcho(orcaPage, await waitForActivePanePtyId(orcaPage), 30_000)
+  await orcaPage.evaluate(async () => {
+    await window.__store?.getState().updateSettings({ experimentalNativeTerminal: true })
+  })
+  await splitActiveTerminalPane(orcaPage, 'vertical')
+  await waitForPaneCount(orcaPage, 2)
+  await waitForActiveTerminalManager(orcaPage, 30_000)
+  const ptyId = await waitForActivePanePtyId(orcaPage)
+  await waitForPtyShellEcho(orcaPage, ptyId, 30_000)
+  let surfaceId = 0
+  await expect
+    .poll(async () => {
+      for (const id of await surfaceIds(electronApp)) {
+        if ((await isHidden(electronApp, id)) === false) {
+          surfaceId = id
+        }
+      }
+      return surfaceId
+    })
+    .toBeGreaterThan(0)
+
+  // Everything fits: no scroller, and the right edge stays the terminal's.
+  await expect
+    .poll(async () => {
+      const bar = await nativeScrollbar(electronApp, surfaceId)
+      return bar ? `${bar.visible} ${bar.total <= bar.len} ${bar.hitScroller}` : null
+    })
+    .toBe('false true OrcaGhosttySurfaceView')
+
+  await execInTerminal(orcaPage, ptyId, 'for i in $(seq 1 300); do echo NATIVE-ROW-$i; done')
+  await waitForTerminalOutput(orcaPage, 'NATIVE-ROW-300')
+  await expect
+    .poll(async () => screenText(electronApp, surfaceId), { timeout: 10_000 })
+    .toContain('NATIVE-ROW-300')
+
+  // Scrollback: a visible knob sized len/total, pinned to the bottom, that takes clicks.
+  await expect
+    .poll(async () => {
+      const bar = await nativeScrollbar(electronApp, surfaceId)
+      return (
+        bar !== null && bar.visible && bar.total > bar.len && bar.offset + bar.len === bar.total
+      )
+    })
+    .toBe(true)
+  const bottom = await nativeScrollbar(electronApp, surfaceId)
+  expect(bottom?.knobProportion).toBeCloseTo((bottom?.len ?? 0) / (bottom?.total ?? 1), 2)
+  expect(bottom?.knobPosition).toBeCloseTo(1, 2)
+  expect(bottom?.hitScroller).toContain('Scroller')
+  expect(bottom?.hitBeside).toBe('OrcaGhosttySurfaceView')
+  const bottomText = await screenText(electronApp, surfaceId)
+
+  // Dragging the knob to the top scrolls Ghostty's viewport to the first row.
+  expect(await debugCall(electronApp, 'scrollbarScroll', [surfaceId, 0])).toBe(true)
+  await expect.poll(async () => (await nativeScrollbar(electronApp, surfaceId))?.offset).toBe(0)
+  await expect.poll(async () => screenText(electronApp, surfaceId)).not.toContain('NATIVE-ROW-300')
+  expect(await screenText(electronApp, surfaceId)).not.toBe(bottomText)
+  expect((await nativeScrollbar(electronApp, surfaceId))?.knobPosition).toBeCloseTo(0, 2)
+
+  // Halfway lands on the middle row.
+  await debugCall(electronApp, 'scrollbarScroll', [surfaceId, 0.5])
+  await expect
+    .poll(async () => {
+      const bar = await nativeScrollbar(electronApp, surfaceId)
+      return bar ? Math.abs(bar.offset - Math.round((bar.total - bar.len) / 2)) : null
+    })
+    .toBeLessThanOrEqual(1)
+
+  await debugCall(electronApp, 'scrollbarScroll', [surfaceId, 1])
+  await expect
+    .poll(async () => {
+      const bar = await nativeScrollbar(electronApp, surfaceId)
+      return bar ? bar.total - bar.offset - bar.len : null
+    })
+    .toBe(0)
+  await expect.poll(async () => screenText(electronApp, surfaceId)).toContain('NATIVE-ROW-300')
 })

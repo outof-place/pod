@@ -14,6 +14,18 @@ export type NativeSurfaceFrame = [
 
 export type NativeSurfaceEventHandler = (kind: string, ...args: unknown[]) => void
 
+// Rows as Ghostty reports them; hit* name the view a click on / beside the scroller reaches.
+export type NativeSurfaceScrollbarState = {
+  total: number
+  offset: number
+  len: number
+  visible: boolean
+  knobProportion: number
+  knobPosition: number
+  hitScroller: string
+  hitBeside: string
+}
+
 export type GhosttyTerminalAddon = {
   init: (configPath: string) => boolean
   updateConfig: (configPath: string) => void
@@ -43,7 +55,9 @@ export type GhosttyTerminalAddon = {
     y: number
     width: number
     height: number
+    scrollbar: NativeSurfaceScrollbarState | null
   } | null
+  debugScrollbarScroll: (surfaceId: number, fraction: number) => boolean
 }
 
 const ADDON_FILE = 'ghostty_terminal.node'
