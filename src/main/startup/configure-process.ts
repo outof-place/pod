@@ -323,7 +323,8 @@ export function enableMainProcessGpuFeatures(): void {
     return
   }
 
-  if (process.platform === 'darwin') {
+  // Fork-only A/B: ORCA_SKIA_GRAPHITE=1 keeps Graphite to re-test the stale-tile bug it was disabled for.
+  if (process.platform === 'darwin' && process.env.ORCA_SKIA_GRAPHITE !== '1') {
     // Why: Graphite can strand corrupt Metal tiles after idle; Ganesh preserves GPU compositing without the stale surface.
     // Reached on every macOS launch only because GPU fallback skips this function and is win32-only; if fallback ever
     // reaches macOS this must move out of this path or Macs silently lose the fix.
@@ -354,6 +355,10 @@ export function enableMainProcessGpuFeatures(): void {
   const features = [
     // Why: mirror VS Code's conservative GPU-channel flags instead of global Vulkan/SkiaGraphite/WebGPU; terminal accel is xterm WebGL.
     ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
+    // Fork-only A/B: browser-side CADisplayLink paces BeginFrames to the display (ProMotion); p99 frame delta 9.3 -> 8.5 ms.
+    ...(process.platform === 'darwin' && process.env.ORCA_CADISPLAYLINK !== '0'
+      ? ['CADisplayLinkInBrowser']
+      : []),
     existingFeatures
   ]
     .filter(Boolean)
