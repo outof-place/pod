@@ -23,6 +23,7 @@ import { validateDeclaredPluginArtifacts } from './plugin-artifact-validation'
 import { readPluginManifestText } from './plugin-manifest-file'
 import { readPluginCurrentPointer } from './plugin-current-pointer'
 import { hashPluginTree } from './plugin-content-hash'
+import { withoutBlockedThirdPartyPlugins } from '../product-identity/product-plugin-policy'
 
 export { PLUGIN_CURRENT_POINTER_FILENAME } from './plugin-current-pointer'
 
@@ -267,7 +268,12 @@ export async function discoverPlugins(options: {
   )
   // Installed manifests are independent immutable trees. Read them in
   // a bounded pool so startup latency stays low without exhausting handles.
-  discovered.push(...(await readInstalledPlugins(options.pluginsDir, installedEntries, host)))
+  discovered.push(
+    ...(await withoutBlockedThirdPartyPlugins(
+      await readInstalledPlugins(options.pluginsDir, installedEntries, host),
+      options.pluginsDir
+    ))
+  )
   for (const devPath of options.devPluginPaths) {
     const plugin = await readManifestDir(devPath, host, true)
     // A dev path that duplicates an installed plugin's identity wins — that

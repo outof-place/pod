@@ -75,6 +75,9 @@ export function updateSettings(
   if ('artifactSharingEnabled' in updates) {
     sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
   }
+  if ('thirdPartyPluginsEnabled' in updates) {
+    sanitizedUpdates.thirdPartyPluginsEnabled = updates.thirdPartyPluginsEnabled === true
+  }
   if ('agentSkillSharingEnabled' in updates) {
     sanitizedUpdates.agentSkillSharingEnabled = updates.agentSkillSharingEnabled === true
   }
