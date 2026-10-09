@@ -269,7 +269,10 @@ export function installNativeTerminalDebugHooks(): void {
       snapshotBase64: (surfaceId: number) =>
         addon?.debugSnapshot(surfaceId)?.toString('base64') ?? null,
       key: (surfaceId: number, characters: string, keyCode: number, modifierFlags = 0) =>
-        addon?.debugKey(surfaceId, characters, keyCode, modifierFlags)
+        addon?.debugKey(surfaceId, characters, keyCode, modifierFlags),
+      scrollbar: (surfaceId: number) => addon?.debugState(surfaceId)?.scrollbar ?? null,
+      scrollbarScroll: (surfaceId: number, fraction: number) =>
+        addon?.debugScrollbarScroll(surfaceId, fraction) ?? false
     }
   })
 }
