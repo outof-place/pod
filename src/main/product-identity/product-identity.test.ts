@@ -33,13 +33,22 @@ describe('product identity', () => {
   it('parses the repo identity file that packaging ships', () => {
     expect(parseProductIdentity(repoIdentity)).toMatchObject({
       displayName: 'Pod',
-      appId: 'space.outofplace.pod',
-      cliName: 'pod-cli',
-      userDataName: 'pod',
-      keychainName: 'pod',
+      appId: 'codes.pod.app',
+      packageName: 'pod',
+      cliName: 'podx',
+      userDataName: 'Pod',
+      keychainName: 'Pod',
       protocols: ['pod'],
+      homepage: 'https://pod.codes',
       updateFeed: { provider: 'github', owner: 'outof-place', repo: 'pod' },
-      legacyProfile: { userDataName: 'orca', keychainName: 'orca' }
+      stablyServices: false,
+      computerUseDisplayName: 'Pod Computer Use',
+      claudeManagedCredentialsService: 'Pod Claude Code Managed Credentials',
+      legacyProfile: {
+        userDataName: 'orca',
+        keychainName: 'orca',
+        claudeManagedCredentialsService: 'Orca Claude Code Managed Credentials'
+      }
     })
   })
 
@@ -57,9 +66,35 @@ describe('product identity', () => {
     expect(() => parseProductIdentity(withBadFeed)).toThrow(/updateFeed/)
   })
 
-  it('allows a product without its own update feed or legacy profile', () => {
-    const minimal = { ...Object(repoIdentity), updateFeed: null, legacyProfile: null }
-    expect(parseProductIdentity(minimal)).toMatchObject({ updateFeed: null, legacyProfile: null })
+  it('defaults optional fields to upstream behaviour', () => {
+    const {
+      packageName: _packageName,
+      homepage: _homepage,
+      stablyServices: _stablyServices,
+      computerUseDisplayName: _computerUseDisplayName,
+      claudeManagedCredentialsService: _claudeManagedCredentialsService,
+      ...required
+    } = Object(repoIdentity)
+    expect(
+      parseProductIdentity({ ...required, updateFeed: null, legacyProfile: null })
+    ).toMatchObject({
+      packageName: 'pod',
+      homepage: null,
+      stablyServices: true,
+      computerUseDisplayName: null,
+      claudeManagedCredentialsService: null,
+      updateFeed: null,
+      legacyProfile: null
+    })
+  })
+
+  it('rejects a non-boolean stablyServices and a non-https homepage', () => {
+    expect(() => parseProductIdentity({ ...Object(repoIdentity), stablyServices: 'no' })).toThrow(
+      /stablyServices/
+    )
+    expect(() =>
+      parseProductIdentity({ ...Object(repoIdentity), homepage: 'http://pod.codes' })
+    ).toThrow(/homepage/)
   })
 
   it('finds the app bundle that owns the main executable', () => {
