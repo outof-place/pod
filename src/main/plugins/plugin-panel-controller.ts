@@ -1,6 +1,7 @@
 import type {
   PluginPanelActionOutcome,
-  PluginPanelEntry
+  PluginPanelEntry,
+  PluginPanelSurface
 } from '../../shared/plugins/plugin-panel-bridge'
 import {
   panelActionCallSchema,
@@ -34,7 +35,9 @@ type PluginPanelControllerOptions = {
   executeHostCall: (
     pluginKey: string,
     method: string,
-    params: unknown
+    params: unknown,
+    /** True for settings page sessions, which may also use the settings methods. */
+    viaSettingsPage: boolean
   ) => Promise<PluginPanelActionOutcome>
   log: (pluginKey: string) => (line: string) => void
   panelAdmission?: PluginPanelCallAdmission
@@ -51,6 +54,19 @@ type PluginPanelControllerOptions = {
 type SessionCallAdmission =
   | { ok: true; binding: PluginPanelSessionBinding }
   | { ok: false; outcome: PluginPanelActionOutcome }
+
+/** The contribution a session renders: a sidebar panel or a settings page. */
+function findSurfaceContribution(
+  plugin: ValidDiscoveredPlugin | null,
+  surface: PluginPanelSurface,
+  id: string
+): { id: string; entry: string } | null {
+  const contributions =
+    surface === 'settingsPage'
+      ? plugin?.manifest.contributes.settingsPages
+      : plugin?.manifest.contributes.panels
+  return contributions?.find((entry) => entry.id === id) ?? null
+}
 
 type LoadedPluginPanel = {
   entry: { html: string }
@@ -73,16 +89,21 @@ export class PluginPanelController {
       })
   }
 
-  async readEntry(pluginKey: string, panelId: string): Promise<{ html: string } | null> {
-    return (await this.load(pluginKey, panelId))?.entry ?? null
+  async readEntry(
+    pluginKey: string,
+    panelId: string,
+    surface: PluginPanelSurface = 'panel'
+  ): Promise<{ html: string } | null> {
+    return (await this.load(pluginKey, panelId, surface))?.entry ?? null
   }
 
   async open(
     ownerKey: string,
     pluginKey: string,
-    panelId: string
+    panelId: string,
+    surface: PluginPanelSurface = 'panel'
   ): Promise<PluginPanelEntry | null> {
-    const loaded = await this.load(pluginKey, panelId)
+    const loaded = await this.load(pluginKey, panelId, surface)
     if (!loaded) {
       return null
     }
@@ -107,7 +128,8 @@ export class PluginPanelController {
     return this.options.executeHostCall(
       admitted.binding.pluginKey,
       parsed.data.action,
-      parsed.data.params
+      parsed.data.params,
+      admitted.binding.surface === 'settingsPage'
     )
   }
 
@@ -121,7 +143,8 @@ export class PluginPanelController {
     if (!parsed.success) {
       return { ok: false, code: 'invalid_request', error: 'malformed panel message call' }
     }
-    if (!this.currentPlugin(admitted.binding)) {
+    // Why: the live channel is keyed by panel id; a settings page must not speak as a panel.
+    if (admitted.binding.surface !== 'panel' || !this.currentPlugin(admitted.binding)) {
       return { ok: false, code: 'unavailable', error: 'panel session is no longer available' }
     }
     const normalized = normalizePanelLiveMessage(parsed.data.message)
@@ -145,7 +168,7 @@ export class PluginPanelController {
     const binding = parsed.success
       ? this.sessions.resolve(ownerKey, parsed.data.sessionToken)
       : null
-    if (!parsed.success || !binding || !this.currentPlugin(binding)) {
+    if (!parsed.success || binding?.surface !== 'panel' || !this.currentPlugin(binding)) {
       return false
     }
     this.mounts.attach({ ownerKey, sessionToken: parsed.data.sessionToken, binding, deliver })
@@ -243,7 +266,7 @@ export class PluginPanelController {
       !plugin ||
       plugin.rootDir !== binding.rootDir ||
       JSON.stringify(plugin.manifest) !== binding.manifestRevision ||
-      !plugin.manifest.contributes.panels.some((panel) => panel.id === binding.panelId)
+      !findSurfaceContribution(plugin, binding.surface, binding.panelId)
     ) {
       return null
     }
@@ -262,9 +285,13 @@ export class PluginPanelController {
     }
   }
 
-  private async load(pluginKey: string, panelId: string): Promise<LoadedPluginPanel | null> {
+  private async load(
+    pluginKey: string,
+    panelId: string,
+    surface: PluginPanelSurface
+  ): Promise<LoadedPluginPanel | null> {
     const plugin = this.options.resolveApprovedPlugin(pluginKey)
-    const panel = plugin?.manifest.contributes.panels.find((entry) => entry.id === panelId)
+    const panel = findSurfaceContribution(plugin, surface, panelId)
     if (!plugin || !panel) {
       return null
     }
@@ -287,6 +314,7 @@ export class PluginPanelController {
         binding: {
           pluginKey,
           panelId,
+          surface,
           rootDir: plugin.rootDir,
           manifestRevision: JSON.stringify(plugin.manifest)
         }

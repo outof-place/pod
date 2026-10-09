@@ -21,7 +21,8 @@ export const PLUGIN_CAPABILITY_KINDS = [
   'events:subscribe',
   'settings:own',
   'statusBar',
-  'panelMessaging'
+  'panelMessaging',
+  'settingsPage'
 ] as const
 
 export type PluginCapabilityKind = (typeof PLUGIN_CAPABILITY_KINDS)[number]
@@ -44,7 +45,8 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
     'Get notified when worktrees are created or removed and when agent status changes',
   'settings:own': "Read and change the plugin's own settings",
   statusBar: 'Show short text items in the status bar, labeled with the plugin name',
-  panelMessaging: "Exchange live messages between the plugin's worker and its own panels"
+  panelMessaging: "Exchange live messages between the plugin's worker and its own panels",
+  settingsPage: "Show the plugin's own settings page inside Orca's Settings"
 }
 
 /**
