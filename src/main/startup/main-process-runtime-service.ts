@@ -7,6 +7,7 @@ import { sessionSearchScopeCatalogFromStore } from '../ai-vault-search/session-s
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { app } from 'electron'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { installPodNativeSearch } from '../pod/search/install-pod-native-search'
 import { getLocalPtyProvider, getSshPtyProvider, clearProviderPtyState } from '../ipc/pty'
 import { agentHookServer } from '../agent-hooks/server'
 import { browserManager } from '../browser/browser-manager'
@@ -179,6 +180,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     { officialDownloads: getUpdateFeedPolicy().kind === 'official' }
   )
   state.runtime = runtime
+  installPodNativeSearch(store, runtime)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
   )
