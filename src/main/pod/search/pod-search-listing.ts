@@ -1,10 +1,24 @@
 import { FileInventoryBudget } from '../../../shared/file-inventory-budget'
+import { buildRgArgsForQuickOpen } from '../../../shared/quick-open-filter'
 import { quickOpenListingPathFilter } from '../../../shared/quick-open-listing-path-filter'
 import {
   limitQuickOpenFilesBySerializedBytes,
   serializedQuickOpenPathBytes
 } from '../../../shared/quick-open-transport-budget'
 import type { ExternalFileListRequest } from '../../search/external-workspace-search-provider'
+
+/**
+ * The `--glob` values ripgrep's quick-open listing uses (blocklist and nested-worktree pruning),
+ * for a daemon that applies `globs` with rg `-g` semantics.
+ */
+export function quickOpenRipgrepGlobs(excludePathPrefixes: readonly string[]): string[] {
+  const { primary } = buildRgArgsForQuickOpen({
+    searchRoot: '.',
+    excludePathPrefixes,
+    forceSlashSeparator: false
+  })
+  return primary.filter((_arg, index) => primary[index - 1] === '--glob')
+}
 
 /** ogd `files` attachment: `\n`-separated root-relative paths in component order. */
 export function decodeOgdPathList(binary: Buffer | null): string[] {
