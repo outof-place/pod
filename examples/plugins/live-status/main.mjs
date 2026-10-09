@@ -32,7 +32,7 @@ export default function activate(orca) {
   // The panel asks for a snapshot when it mounts; Orca sends no open signal.
   orca.panels.onMessage('live', async (message) => {
     if (message?.type === 'ready') {
-      await orca.panels.postMessage('live', state())
+      await orca.panels.postMessage('live', { ...state(), snapshot: true })
     } else if (message?.type === 'reset') {
       await reset()
     }
