@@ -9,7 +9,7 @@ import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
 } from '../../shared/computer-use-permissions-types'
-import { ORCA_COMPUTER_USE_BUNDLE_ID } from '../../shared/app-identity'
+import { getComputerUseBundleId } from '../../shared/app-identity'
 
 export { getComputerUsePermissionStatus } from './macos-computer-use-permission-status'
 
@@ -106,7 +106,7 @@ async function resetComputerUsePermissionsAsync(): Promise<ComputerUsePermission
     throw new RuntimeClientError('accessibility_error', status.helperUnavailableReason)
   }
 
-  const bundleId = (await readMacosBundleId(helperAppPath)) ?? ORCA_COMPUTER_USE_BUNDLE_ID
+  const bundleId = (await readMacosBundleId(helperAppPath)) ?? getComputerUseBundleId()
   closeExistingPermissionHelpers()
   await resetTccPermission('Accessibility', bundleId)
   await resetTccPermission('ScreenCapture', bundleId)
