@@ -18,11 +18,15 @@ export type NativeTerminalProcessRow = NativeProcessRow & {
   command: string | null
   /** The kernel's short process name (`p_comm`). */
   name: string
+  /** The executable, present when argv is withheld but proc_pidpath still answers. */
+  path?: string
 }
 
 /** `native/proc-info-darwin`: sysctl/proc_pidinfo reads that replace forking `ps` and `lsof`. */
 export type NativeProcessInfo = {
   listProcesses(): NativeProcessRow[]
+  /** Every process with argv, as the full `ps` capture reads it. */
+  listProcessesWithCommands(): NativeTerminalProcessRow[]
   readProcess(pid: number): NativeProcessRow | null
   /** Every process on one terminal, or null when the terminal does not exist. */
   listTerminalProcesses(tty: string): NativeTerminalProcessRow[] | null
@@ -44,6 +48,8 @@ function isNativeProcessInfo(value: unknown): value is NativeProcessInfo {
     value !== null &&
     'listProcesses' in value &&
     typeof value.listProcesses === 'function' &&
+    'listProcessesWithCommands' in value &&
+    typeof value.listProcessesWithCommands === 'function' &&
     'readProcess' in value &&
     typeof value.readProcess === 'function' &&
     'listTerminalProcesses' in value &&

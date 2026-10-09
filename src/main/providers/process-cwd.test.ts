@@ -79,6 +79,7 @@ describe('resolveProcessCwd', () => {
     const native = await import('../../shared/native-process-info')
     native.setNativeProcessInfoForTests({
       listProcesses: () => [],
+      listProcessesWithCommands: () => [],
       readProcess: () => null,
       listTerminalProcesses: () => null,
       readProcessCwd: (pid) => (pid === 42 ? '/Users/me/repo' : null)

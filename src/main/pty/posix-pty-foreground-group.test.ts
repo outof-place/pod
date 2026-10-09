@@ -241,6 +241,7 @@ describe('signalPosixPtyForegroundGroup with the native process-info addon', () 
     resetPosixPtyForegroundGroupOwnRowCache()
     setNativeProcessInfoForTests({
       listProcesses: () => rows,
+      listProcessesWithCommands: () => [],
       readProcess: (pid) => rows.find((row) => row.pid === pid) ?? null,
       listTerminalProcesses: () => null,
       readProcessCwd: () => null

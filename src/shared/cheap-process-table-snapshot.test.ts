@@ -151,6 +151,7 @@ describe('getCheapProcessTableSnapshot with the native process-info addon', () =
   function installNative(listProcesses: NativeProcessInfo['listProcesses']): void {
     setNativeProcessInfoForTests({
       listProcesses,
+      listProcessesWithCommands: () => [],
       readProcess: () => null,
       listTerminalProcesses: () => null,
       readProcessCwd: () => null

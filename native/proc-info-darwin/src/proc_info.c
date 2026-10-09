@@ -124,28 +124,44 @@ static void format_start(const struct kinfo_proc *proc, char *out, size_t size) 
   }
 }
 
-// argv joined with spaces, or NULL when the kernel refuses (another user's process) or it exited.
-static char *read_command(pid_t pid) {
-  int argmax_mib[2] = {CTL_KERN, KERN_ARGMAX};
+// One KERN_ARGMAX-sized scratch buffer per listing: reading argv is the costly part of a row.
+typedef struct {
+  char *data;
+  size_t capacity;
+  char *text;
+  size_t text_capacity;
+} args_buffer;
+
+static int args_buffer_init(args_buffer *buffer) {
+  int mib[2] = {CTL_KERN, KERN_ARGMAX};
   int argmax = 0;
-  size_t argmax_size = sizeof(argmax);
-  if (sysctl(argmax_mib, 2, &argmax, &argmax_size, NULL, 0) != 0 || argmax <= 0) {
-    return NULL;
+  size_t size = sizeof(argmax);
+  if (sysctl(mib, 2, &argmax, &size, NULL, 0) != 0 || argmax <= 0) {
+    return 0;
   }
-  char *buffer = malloc((size_t)argmax);
-  if (buffer == NULL) {
-    return NULL;
-  }
+  buffer->capacity = (size_t)argmax;
+  buffer->data = malloc(buffer->capacity);
+  buffer->text = NULL;
+  buffer->text_capacity = 0;
+  return buffer->data != NULL;
+}
+
+static void args_buffer_free(args_buffer *buffer) {
+  free(buffer->data);
+  free(buffer->text);
+}
+
+// argv joined with spaces in place; 0 when the kernel refuses (another user's process) or it exited.
+static int read_command(pid_t pid, args_buffer *buffer, const char **command, size_t *length) {
   int mib[3] = {CTL_KERN, KERN_PROCARGS2, pid};
-  size_t size = (size_t)argmax;
-  if (sysctl(mib, 3, buffer, &size, NULL, 0) != 0 || size < sizeof(int)) {
-    free(buffer);
-    return NULL;
+  size_t size = buffer->capacity;
+  if (sysctl(mib, 3, buffer->data, &size, NULL, 0) != 0 || size < sizeof(int)) {
+    return 0;
   }
   int argc = 0;
-  memcpy(&argc, buffer, sizeof(argc));
-  char *cursor = buffer + sizeof(argc);
-  char *end = buffer + size;
+  memcpy(&argc, buffer->data, sizeof(argc));
+  char *cursor = buffer->data + sizeof(argc);
+  char *end = buffer->data + size;
   // Skip the exec path and the NUL padding before argv[0].
   while (cursor < end && *cursor != '\0') {
     cursor++;
@@ -153,28 +169,50 @@ static char *read_command(pid_t pid) {
   while (cursor < end && *cursor == '\0') {
     cursor++;
   }
-  char *command = malloc(size + 1);
-  if (command == NULL) {
-    free(buffer);
-    return NULL;
-  }
-  size_t length = 0;
+  char *first = cursor;
+  char *last_end = cursor;
   for (int index = 0; index < argc && cursor < end; index++) {
     size_t arg_length = strnlen(cursor, (size_t)(end - cursor));
-    if (index > 0) {
-      command[length++] = ' ';
+    last_end = cursor + arg_length;
+    cursor = last_end + 1;
+    if (index + 1 < argc && cursor < end) {
+      *last_end = ' ';
     }
-    memcpy(command + length, cursor, arg_length);
-    length += arg_length;
-    cursor += arg_length + 1;
   }
-  command[length] = '\0';
-  free(buffer);
-  if (length == 0) {
-    free(command);
-    return NULL;
+  // Why trim: Orca's ps parsers trim each line, and processes that retitle themselves pad argv.
+  while (first < last_end && *first == ' ') {
+    first++;
   }
-  return command;
+  while (last_end > first && last_end[-1] == ' ') {
+    last_end--;
+  }
+  size_t raw_length = (size_t)(last_end - first);
+  if (raw_length == 0) {
+    return 0;
+  }
+  size_t needed = raw_length * 4 + 1;
+  if (needed > buffer->text_capacity) {
+    char *grown = realloc(buffer->text, needed);
+    if (grown == NULL) {
+      return 0;
+    }
+    buffer->text = grown;
+    buffer->text_capacity = needed;
+  }
+  // Why \ooo for control bytes only: that is what ps prints under a UTF-8 locale. Under the C
+  // locale ps also mangles every non-ASCII byte into vis(3) meta notation; raw UTF-8 is the argv.
+  size_t written = 0;
+  for (const unsigned char *byte = (const unsigned char *)first; byte < (const unsigned char *)last_end;
+       byte++) {
+    if (*byte < 0x20 || *byte == 0x7f) {
+      written += (size_t)snprintf(buffer->text + written, 5, "\\%03o", *byte);
+    } else {
+      buffer->text[written++] = (char)*byte;
+    }
+  }
+  *command = buffer->text;
+  *length = written;
+  return 1;
 }
 
 static napi_value make_string(napi_env env, const char *value) {
@@ -193,7 +231,7 @@ static napi_status set_int(napi_env env, napi_value object, const char *name, in
   return status == napi_ok ? napi_set_named_property(env, object, name, number) : status;
 }
 
-static napi_value make_row(napi_env env, const struct kinfo_proc *proc, int with_command) {
+static napi_value make_row(napi_env env, const struct kinfo_proc *proc, args_buffer *args) {
   napi_value row;
   char stat[16];
   char tty[64];
@@ -209,14 +247,29 @@ static napi_value make_row(napi_env env, const struct kinfo_proc *proc, int with
   CHECK(napi_set_named_property(env, row, "stat", make_string(env, stat)));
   CHECK(napi_set_named_property(env, row, "tty", make_string(env, tty)));
   CHECK(napi_set_named_property(env, row, "startTime", make_string(env, start)));
-  if (with_command) {
-    char *command = read_command(proc->kp_proc.p_pid);
-    napi_value value = make_string(env, command);
-    free(command);
-    CHECK(napi_set_named_property(env, row, "command", value));
-    // Why: the kernel's short name still identifies a process whose argv another user owns.
-    CHECK(napi_set_named_property(env, row, "name", make_string(env, proc->kp_proc.p_comm)));
+  if (args == NULL) {
+    return row;
   }
+  // Why: the kernel's short name still identifies a process whose argv another user owns.
+  CHECK(napi_set_named_property(env, row, "name", make_string(env, proc->kp_proc.p_comm)));
+  napi_value command;
+  const char *text = NULL;
+  size_t length = 0;
+  if (proc->kp_proc.p_stat == SZOMB) {
+    // Why: ps prints exactly this for a zombie, whose argv is gone.
+    CHECK(napi_create_string_utf8(env, "<defunct>", NAPI_AUTO_LENGTH, &command));
+  } else if (read_command(proc->kp_proc.p_pid, args, &text, &length)) {
+    CHECK(napi_create_string_utf8(env, text, length, &command));
+  } else {
+    CHECK(napi_get_null(env, &command));
+    // Why: unlike argv and PROC_PIDTBSDINFO, the executable path stays readable for root-owned
+    // processes (login, sudo), which is all a verdict needs when the program ignores its argv.
+    char path[PROC_PIDPATHINFO_MAXSIZE];
+    if (proc_pidpath(proc->kp_proc.p_pid, path, sizeof(path)) > 0) {
+      CHECK(napi_set_named_property(env, row, "path", make_string(env, path)));
+    }
+  }
+  CHECK(napi_set_named_property(env, row, "command", command));
   return row;
 }
 
@@ -254,8 +307,10 @@ static struct kinfo_proc *read_kinfo(int *mib, u_int mib_length, size_t *count) 
 static napi_value rows_from_kinfo(napi_env env, struct kinfo_proc *procs, size_t count,
                                   int with_command) {
   napi_value rows;
+  args_buffer args = {NULL, 0, NULL, 0};
   // Why not presized: rows for pid 0 are skipped, which would leave holes at the end.
-  if (napi_create_array(env, &rows) != napi_ok) {
+  if ((with_command && !args_buffer_init(&args)) || napi_create_array(env, &rows) != napi_ok) {
+    args_buffer_free(&args);
     free(procs);
     return NULL;
   }
@@ -264,12 +319,14 @@ static napi_value rows_from_kinfo(napi_env env, struct kinfo_proc *procs, size_t
     if (procs[i].kp_proc.p_pid <= 0) {
       continue;
     }
-    napi_value row = make_row(env, &procs[i], with_command);
+    napi_value row = make_row(env, &procs[i], with_command ? &args : NULL);
     if (row == NULL || napi_set_element(env, rows, index++, row) != napi_ok) {
+      args_buffer_free(&args);
       free(procs);
       return NULL;
     }
   }
+  args_buffer_free(&args);
   free(procs);
   return rows;
 }
@@ -284,6 +341,18 @@ static napi_value ListProcesses(napi_env env, napi_callback_info info) {
     return throw_syscall_error(env, "sysctl(KERN_PROC_ALL) failed");
   }
   return rows_from_kinfo(env, procs, count, 0);
+}
+
+// listProcessesWithCommands(): every process plus argv, as the full `ps` capture reads it.
+static napi_value ListProcessesWithCommands(napi_env env, napi_callback_info info) {
+  (void)info;
+  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
+  size_t count = 0;
+  struct kinfo_proc *procs = read_kinfo(mib, 3, &count);
+  if (procs == NULL) {
+    return throw_syscall_error(env, "sysctl(KERN_PROC_ALL) failed");
+  }
+  return rows_from_kinfo(env, procs, count, 1);
 }
 
 static int read_pid_argument(napi_env env, napi_callback_info info, int32_t *pid) {
@@ -314,7 +383,7 @@ static napi_value ReadProcess(napi_env env, napi_callback_info info) {
     CHECK(napi_get_null(env, &null_value));
     return null_value;
   }
-  return make_row(env, &proc, 0);
+  return make_row(env, &proc, NULL);
 }
 
 // listTerminalProcesses(ttyName): the processes holding one terminal, with argv, as `ps -t`.
@@ -363,6 +432,8 @@ static napi_value ReadProcessCwd(napi_env env, napi_callback_info info) {
 NAPI_MODULE_INIT(/* napi_env env, napi_value exports */) {
   napi_property_descriptor properties[] = {
       {"listProcesses", NULL, ListProcesses, NULL, NULL, NULL, napi_enumerable, NULL},
+      {"listProcessesWithCommands", NULL, ListProcessesWithCommands, NULL, NULL, NULL,
+       napi_enumerable, NULL},
       {"readProcess", NULL, ReadProcess, NULL, NULL, NULL, napi_enumerable, NULL},
       {"listTerminalProcesses", NULL, ListTerminalProcesses, NULL, NULL, NULL, napi_enumerable,
        NULL},
