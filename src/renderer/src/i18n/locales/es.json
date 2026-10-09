@@ -524,6 +524,15 @@
       }
     },
     "lib": {
+      "native": {
+        "terminal": {
+          "surface": {
+            "create": {
+              "accessibilityLabel": "Terminal"
+            }
+          }
+        }
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -7230,6 +7239,11 @@
             "modeAriaLabel": "Modo de apertura del Panel de agentes",
             "modeInWindow": "En ventana",
             "modePopout": "Ventana emergente"
+          },
+          "nativeTerminal": {
+            "title": "Terminal nativo",
+            "description": "Dibuja los terminales con una vista nativa de Ghostty en macOS.",
+            "copy": "Dibuja los nuevos paneles de terminal con una vista nativa de Ghostty (Metal) en lugar del renderizador web. El terminal web sigue debajo para la búsqueda, la copia y todo lo que se muestre encima del panel. Experimental mientras cerramos las diferencias."
           }
         },
         "FloatingWorkspacePane": {
@@ -9685,6 +9699,13 @@
               "board": "junta",
               "inWindow": "en la ventana",
               "worktrees": "árboles de trabajo"
+            },
+            "nativeTerminal": {
+              "title": "Terminal nativo",
+              "description": "Dibuja los terminales con una vista nativa de Ghostty en macOS.",
+              "ghostty": "ghostty",
+              "native": "nativo",
+              "metal": "metal"
             }
           }
         },
@@ -17910,8 +17931,7 @@
         "agentNotSignedIn": "Inicia sesión en {{agent}}.",
         "thenSendAgain": "Después, envía tu mensaje de nuevo.",
         "runCommandWhenDone": "Ejecute /{{command}} cuando termine.",
-        "commandAfterAnswer": "Responda a la pregunta o aprobación del agente y luego ejecute /{{command}}.",
-        "sessionNotRestored": "{{agent}} no pudo reabrir su sesión anterior, así que este chat continúa en una nueva. {{agent}} no recuerda los mensajes anteriores."
+        "commandAfterAnswer": "Responda a la pregunta o aprobación del agente y luego ejecute /{{command}}."
       },
       "writeNotice": {
         "notDoneReadHistory": "No se pudo cargar el historial de este chat.",
