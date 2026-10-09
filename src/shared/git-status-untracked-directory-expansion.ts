@@ -1,18 +1,11 @@
 import type { GitStatusEntry } from './git-status-types'
 import type { StatusPorcelainParser, StatusPorcelainRecord } from './git-status-porcelain-parser'
+import { batchGitPathspecCommands } from './git-pathspec-command-batches'
+import { GIT_OUTPUT_MAX_BYTES } from './git-output-byte-limit'
 
-/**
- * Why normal mode plus expansion instead of `--untracked-files=all`: Git only serves `all`
- * from the index's untracked cache when the cache was last written in `all` mode. Status
- * polls run with optional locks off, so they never write it, and any plain `git status`
- * in the terminal rewrites it in normal mode. Every `all` poll then walks the whole tree
- * (~70-80 ms of `read_directory` on an 18k-file repo), while normal mode answers from the
- * cache (~6 ms). Normal mode collapses each untracked directory to one `? dir/` row, so a
- * pathspec-scoped `ls-files --others` recovers exactly the per-file rows `all` lists.
- */
+// Optional-locks-off polls can reuse the cache a terminal's normal-mode status writes.
 export function statusUntrackedFilesArg(includeIgnored: boolean): string {
-  // Why: ignored rows under an untracked directory depend on how that directory is
-  // collapsed, so the ignored listing keeps `all` to stay byte-identical.
+  // Ignored rows depend on directory collapsing, so preserve all mode for those reads.
   return includeIgnored ? '--untracked-files=all' : '--untracked-files=normal'
 }
 
@@ -29,12 +22,12 @@ export type UntrackedDirectoryExpansion = {
   statusLength: number
 }
 
-// Why: keeps argv well under every host's ARG_MAX even for repos with many new folders.
+export type ParsedGitStatus = UntrackedDirectoryExpansion & { parser: StatusPorcelainParser }
+
 const PATHSPECS_PER_LISTING = 256
 
 export function buildUntrackedDirectoryListingArgs(directories: readonly string[]): string[] {
-  // Why: `top` anchors pathspecs at the repo root like status paths; `literal` keeps
-  // glob characters in directory names from matching siblings. Both predate Git 2.25.
+  // Only repository-root status reads reach this listing.
   return [
     'ls-files',
     '-z',
@@ -44,6 +37,17 @@ export function buildUntrackedDirectoryListingArgs(directories: readonly string[
     '--',
     ...directories.map((directory) => `:(top,literal)${directory}`)
   ]
+}
+
+export function buildUntrackedDirectoryListingCommands(
+  directories: readonly string[],
+  measureCommandLine?: (args: readonly string[]) => number
+): string[][] {
+  const args = buildUntrackedDirectoryListingArgs(directories)
+  return batchGitPathspecCommands(args.slice(0, 6), args.slice(6), {
+    maximumPaths: PATHSPECS_PER_LISTING,
+    measureCommandLine
+  })
 }
 
 function collapsedUntrackedDirectory(record: StatusPorcelainRecord): string | null {
@@ -64,16 +68,12 @@ function findOwningDirectory(path: string, directories: ReadonlySet<string>): st
   return null
 }
 
-/**
- * Replace each `? dir/` row with the untracked files Git lists under it, in place, so the
- * result matches `--untracked-files=all` row for row. Nested repositories come back as
- * their own `dir/` row, exactly as `all` reports them. Returns null when nothing is
- * collapsed, so the common clean or files-only status costs no extra Git process.
- */
+/** Expand collapsed directory rows in order, preserving nested repository rows. */
 export async function expandUntrackedDirectoryRecords(input: {
   records: readonly StatusPorcelainRecord[]
   limit: number
   listUntracked: UntrackedDirectoryListingStream
+  listingCommands?: (directories: readonly string[]) => string[][]
 }): Promise<UntrackedDirectoryExpansion | null> {
   const directories = input.records.flatMap((record) => collapsedUntrackedDirectory(record) ?? [])
   if (directories.length === 0) {
@@ -81,37 +81,63 @@ export async function expandUntrackedDirectoryRecords(input: {
   }
   const directorySet = new Set(directories)
   const filesByDirectory = new Map<string, GitStatusEntry[]>()
-  let count = input.records.length - directories.length
+  const fixedBeforeDirectory = new Map<string, number>()
+  let fixedCount = 0
+  for (const record of input.records) {
+    const directory = collapsedUntrackedDirectory(record)
+    if (directory === null) {
+      fixedCount += 1
+    } else {
+      fixedBeforeDirectory.set(directory, fixedCount)
+    }
+  }
+  let listedCount = 0
+  let outputBytes = 0
   let stoppedEarly = false
 
-  for (let start = 0; start < directories.length && !stoppedEarly; start += PATHSPECS_PER_LISTING) {
+  const commands = (input.listingCommands ?? buildUntrackedDirectoryListingCommands)(directories)
+  for (const args of commands) {
     let carry = ''
-    const result = await input.listUntracked(
-      buildUntrackedDirectoryListingArgs(directories.slice(start, start + PATHSPECS_PER_LISTING)),
-      (chunk) => {
-        const parts = (carry + chunk).split('\0')
-        // Why: -z terminates every path, so the last part is either '' or a path split across chunks.
-        carry = parts.pop() ?? ''
-        for (const path of parts) {
-          const directory = path ? findOwningDirectory(path, directorySet) : null
-          if (!directory) {
-            continue
-          }
-          let files = filesByDirectory.get(directory)
-          if (!files) {
-            files = []
-            filesByDirectory.set(directory, files)
-          }
-          files.push({ path, status: 'untracked', area: 'untracked' })
-          count += 1
-          if (input.limit !== 0 && count > input.limit) {
-            return true
-          }
-        }
-        return false
+    const result = await input.listUntracked(args, (chunk) => {
+      outputBytes += Buffer.byteLength(chunk)
+      if (outputBytes > GIT_OUTPUT_MAX_BYTES) {
+        throw new Error('Untracked file listing exceeded the Git output byte limit.')
       }
-    )
+      const parts = (carry + chunk).split('\0')
+      // NUL terminates every path; only the last part can be incomplete.
+      carry = parts.pop() ?? ''
+      for (const path of parts) {
+        if (!path) {
+          continue
+        }
+        const directory = findOwningDirectory(path, directorySet)
+        if (!directory) {
+          throw new Error(
+            'Untracked file listing returned a path outside the requested directories.'
+          )
+        }
+        let files = filesByDirectory.get(directory)
+        if (!files) {
+          files = []
+          filesByDirectory.set(directory, files)
+        }
+        files.push({ path, status: 'untracked', area: 'untracked' })
+        listedCount += 1
+        // Later fixed rows must not consume the budget before this directory's files.
+        const count = listedCount + (fixedBeforeDirectory.get(directory) ?? 0)
+        if (input.limit !== 0 && count > input.limit) {
+          return true
+        }
+      }
+      return false
+    })
     stoppedEarly = result.stoppedEarly
+    if (stoppedEarly) {
+      break
+    }
+    if (carry) {
+      throw new Error('Untracked file listing ended with an incomplete path.')
+    }
   }
 
   const records: StatusPorcelainRecord[] = []
@@ -121,36 +147,65 @@ export async function expandUntrackedDirectoryRecords(input: {
       records.push(record)
       continue
     }
-    // Why no fallback row: a directory Git no longer lists (deleted, or now fully ignored)
-    // has no untracked files, which is what `all` would report at this moment.
+    // A vanished or newly ignored directory has no remaining untracked rows.
     for (const entry of filesByDirectory.get(directory) ?? []) {
       records.push({ type: 'entry', entry })
     }
   }
-  return { records, stoppedEarly, statusLength: count }
+  const exceededLimit = input.limit !== 0 && records.length > input.limit
+  return {
+    records: exceededLimit ? records.slice(0, input.limit + 1) : records,
+    stoppedEarly: stoppedEarly || exceededLimit,
+    statusLength: exceededLimit ? input.limit + 1 : records.length
+  }
 }
 
 /**
- * Expand a finished status parse, falling back to its collapsed rows if the listing fails:
- * a status that already succeeded should not fail on the follow-up read.
+ * Retry all-mode status after a listing failure so callers always receive file rows.
  */
 export async function expandParsedStatusUntrackedDirectories(
   parser: StatusPorcelainParser,
   stoppedEarly: boolean,
-  input: { limit: number; listUntracked: UntrackedDirectoryListingStream; signal?: AbortSignal }
-): Promise<UntrackedDirectoryExpansion> {
+  input: {
+    limit: number
+    includeIgnored?: boolean
+    listUntracked: UntrackedDirectoryListingStream
+    listingCommands?: (directories: readonly string[]) => string[][]
+    isRepositoryRoot: () => Promise<boolean>
+    readAllStatus: () => Promise<ParsedGitStatus>
+    signal?: AbortSignal
+  }
+): Promise<ParsedGitStatus> {
   const collapsed = {
+    parser,
     records: parser.statusRecords,
     stoppedEarly,
     statusLength: parser.statusLength
   }
+  if (input.includeIgnored) {
+    return collapsed
+  }
+  const directories = parser.statusRecords.flatMap(
+    (record) => collapsedUntrackedDirectory(record) ?? []
+  )
+  if (directories.length === 0) {
+    return collapsed
+  }
+  // Nested status honors user path settings; keep Git's canonical all-mode rows.
+  if (directories.some((directory) => directory === './' || directory.startsWith('../'))) {
+    return input.readAllStatus()
+  }
   try {
+    if (!(await input.isRepositoryRoot())) {
+      return input.readAllStatus()
+    }
     const expansion = await expandUntrackedDirectoryRecords({
       records: parser.statusRecords,
       ...input
     })
     return expansion
       ? {
+          parser,
           records: expansion.records,
           stoppedEarly: stoppedEarly || expansion.stoppedEarly,
           statusLength: Math.max(parser.statusLength, expansion.statusLength)
@@ -160,6 +215,6 @@ export async function expandParsedStatusUntrackedDirectories(
     if (input.signal?.aborted) {
       throw error
     }
-    return collapsed
+    return input.readAllStatus()
   }
 }

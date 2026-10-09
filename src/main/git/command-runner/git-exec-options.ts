@@ -1,5 +1,4 @@
-// Why: cap execFile output to prevent an uncatchable V8 string overflow; match relay MAX_GIT_BUFFER.
-export const DEFAULT_GIT_MAX_BUFFER = 10 * 1024 * 1024
+export { GIT_OUTPUT_MAX_BYTES as DEFAULT_GIT_MAX_BUFFER } from '../../../shared/git-output-byte-limit'
 
 // Why: the admission tier is a wire value, so it is declared with its params schema.
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
