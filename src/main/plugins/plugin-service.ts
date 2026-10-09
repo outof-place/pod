@@ -252,12 +252,12 @@ export class PluginService {
     pluginKey: string,
     method: string,
     params: unknown,
-    options: { viaPanel: boolean }
+    options: { viaPanel: boolean; viaSettingsPage?: boolean }
   ): Promise<PluginPanelActionOutcome> {
     return executePluginHostCallRequest({
       pluginKey,
       request: { method, params },
-      viaPanel: options.viaPanel,
+      ...options,
       resolvePolicy: (boundPluginKey) => ({
         grantedCapabilities: this.getGrantedCapabilities(boundPluginKey),
         services: this.runtimeDelegate
