@@ -19,6 +19,7 @@ import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
+import { areStablyServicesAvailable } from '@/lib/product-ui-identity'
 import { markdownArtifactSourceKey } from './markdown-artifact-upload'
 
 type EditorPanelHeaderProps = {
@@ -312,7 +313,10 @@ export function EditorPanelHeader({
           </Tooltip>
         </TooltipProvider>
       )}
-      {isMarkdown && !isDiffSurface && createMarkdownArtifactRequest ? (
+      {isMarkdown &&
+      !isDiffSurface &&
+      createMarkdownArtifactRequest &&
+      areStablyServicesAvailable() ? (
         <ArtifactPublishButton
           sourceKey={markdownArtifactSourceKey(activeFile)}
           className="size-6 [&_svg]:size-3.5!"

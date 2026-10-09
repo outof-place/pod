@@ -23,7 +23,9 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { setReactCommitCascadeRendererSurface } from './lib/react-commit-cascade-telemetry'
 import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
+import { brandDocumentTitle } from './lib/product-ui-identity'
 
+brandDocumentTitle()
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
 // Why: the pop-out window is a separate BrowserWindow with its own React root,

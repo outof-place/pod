@@ -10,6 +10,8 @@ import { isPseudoLocalizationLocale, pseudoLocalizeString } from '../../shared/p
 import { DEFAULT_UI_LOCALE, resolveUiLocale, type SupportedUiLocale } from '../../shared/ui-locale'
 import { UI_LANGUAGE_SYSTEM, type UiLanguage } from '../../shared/ui-language'
 import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin-language-pack-artifact'
+import { brandProductCatalog, brandProductName } from '../../shared/product-name-branding'
+import { getProductNameBranding } from '../product-identity/product-overlay'
 
 export const mainI18n: I18nInstance = i18next.createInstance()
 
@@ -43,7 +45,11 @@ const lazyLocaleBackend: BackendModule = {
       return
     }
     loader().then(
-      (mod) => callback(null, mod.default),
+      (mod) => {
+        // Fork-only (Pod): a product renames upstream copy as the catalog loads.
+        const branding = getProductNameBranding()
+        callback(null, branding ? brandProductCatalog(mod.default, branding) : mod.default)
+      },
       (error) => callback(error instanceof Error ? error : new Error(String(error)), false)
     )
   }
@@ -124,9 +130,12 @@ export function setMainPluginLanguagePacks(
 }
 
 export function translateMain(key: string, fallback: string, options?: TOptions): string {
+  // Fork-only (Pod): null for upstream Orca.
+  const branding = getProductNameBranding()
+  const defaultValue = branding ? brandProductName(fallback, branding) : fallback
   // Why: menu registration can run before async init finishes in tests; fall back
   // to the English default instead of returning undefined from an uninitialized i18n.
-  const raw = initialized ? mainI18n.t(key, { defaultValue: fallback, ...options }) : fallback
-  const value = typeof raw === 'string' && raw.length > 0 ? raw : fallback
+  const raw = initialized ? mainI18n.t(key, { defaultValue, ...options }) : defaultValue
+  const value = typeof raw === 'string' && raw.length > 0 ? raw : defaultValue
   return isPseudoLocalizationLocale(mainI18n.language) ? pseudoLocalizeString(value) : value
 }
