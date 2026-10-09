@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getPodNativeTerminalSearchEntries } from './pod-native-terminal-setting'
 
 const getTerminalTypographySearchEntryCatalog = createLocalizedCatalog(() => [
   {
@@ -177,7 +178,8 @@ export const getTerminalRenderingSearchEntries = createLocalizedCatalog(() => [
         'colors'
       )
     ]
-  }
+  },
+  ...getPodNativeTerminalSearchEntries()
 ])
 
 export const getTerminalCursorSearchEntries = createLocalizedCatalog(() => [
