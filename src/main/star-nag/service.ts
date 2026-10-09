@@ -64,10 +64,6 @@ export class StarNagService {
   }
 
   start(): void {
-    // Why: a downstream product credits Orca in About instead of prompting for upstream stars.
-    if (!areStablyServicesEnabled()) {
-      return
-    }
     ensureStarNagBaseline(this.store, this.stats)
     this.disposeStatsListener = this.stats.onAgentStarted((total) => {
       this.handleAgentSpawned(total)
@@ -114,7 +110,8 @@ export class StarNagService {
     source: StarNagPromptSource,
     surface: StarNagSurface = 'card'
   ): Promise<boolean> {
-    if (this.promptVisible || this.evaluating) {
+    // Why before the gh star check: a downstream product credits Orca in About instead of prompting.
+    if (!areStablyServicesEnabled() || this.promptVisible || this.evaluating) {
       return false
     }
     this.setEvaluating(true)
@@ -223,7 +220,7 @@ export class StarNagService {
   // ── Public actions (invoked from IPC) ─────────────────────────────
 
   private async prepareAgentValueMoment(): Promise<AgentValueMomentPreparation> {
-    return this.agentValueMoment.prepare()
+    return areStablyServicesEnabled() ? this.agentValueMoment.prepare() : { status: 'skipped' }
   }
 
   private showPreparedAgentValueMoment(): void {
