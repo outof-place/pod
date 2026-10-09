@@ -73,6 +73,13 @@ describe('changed-code quality line matching', () => {
     expect(isRootCodeQualityPath('cloud/apps/relay/src/index.ts')).toBe(false)
     expect(isRootCodeQualityPath('src/main/index.ts')).toBe(true)
   })
+
+  it('skips vendored distro plugins, whose bytes must match their content hash', () => {
+    expect(isRootCodeQualityPath('resources/plugins/distro/outof-place.pod-acc/worker.mjs')).toBe(
+      false
+    )
+    expect(isRootCodeQualityPath('resources/plugins/launch/x/worker.mjs')).toBe(true)
+  })
 })
 
 describe('moved-code exemption', () => {
