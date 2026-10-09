@@ -19,6 +19,7 @@ import type {
   UsageSourceCacheRef
 } from './usage-source-cache-file'
 import { isUsageScanWorkerProgress } from './usage-scan-worker-protocol'
+import { createUsageScanWorkerTransport } from './usage-scan-worker-cache-cleanup'
 
 // Why (#20940): this module owns the request half of the shared usage scan
 // worker — FIFO one-at-a-time dispatch, a no-progress deadline, respawn-on-fault
@@ -61,7 +62,7 @@ export class UsageScanWorkerClient {
   constructor(options: { workerFactory: WorkerThreadFactory; log?: (message: string) => void }) {
     const log = options.log ?? ((message: string) => console.warn(message))
     this.queue = new WorkerThreadRequestQueue({
-      factory: options.workerFactory,
+      factory: () => createUsageScanWorkerTransport(options.workerFactory),
       idleTeardownMs: IDLE_TEARDOWN_MS,
       maxConsecutiveDeaths: MAX_CONSECUTIVE_DEATHS,
       createUnavailableError: (message) => new UsageScanWorkerUnavailableError(message),
