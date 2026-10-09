@@ -34,6 +34,7 @@ import { buildRemoteSettingsSections } from './settings-navigation-remote-sectio
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
 import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabilityOwnerKey'
 import { isPodSettingsSectionEnabled } from '../../../shared/product/features'
+import { usePodWorkspaceEnabled } from '@/pod/workspace/use-pod-workspace-enabled'
 
 export { isWebClientLocation } from '@/lib/web-client-location'
 
@@ -48,6 +49,7 @@ export function buildSettingsNavigationMetadata({
   mobileEmulatorCreationEnabled = !isWebClient,
   isDev = import.meta.env.DEV,
   isLinearConnected = false,
+  podWorkspaceEnabled = false,
   repos,
   projectGrouping
 }: {
@@ -61,6 +63,7 @@ export function buildSettingsNavigationMetadata({
   mobileEmulatorCreationEnabled?: boolean
   isDev?: boolean
   isLinearConnected?: boolean
+  podWorkspaceEnabled?: boolean
   repos: readonly Repo[]
   projectGrouping?: ProjectGroupingModel
 }): SettingsNavSection[] {
@@ -89,6 +92,7 @@ export function buildSettingsNavigationMetadata({
     mobileEmulatorCreationEnabled,
     isDev,
     isLinearConnected,
+    podWorkspaceEnabled,
     repos,
     projectGrouping
   }
@@ -129,6 +133,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
   const isLinearConnected = useLinearProviderConnected()
+  const podWorkspaceEnabled = usePodWorkspaceEnabled()
   const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
@@ -172,6 +177,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         mobileEmulatorCreationEnabled,
         isDev: import.meta.env.DEV,
         isLinearConnected,
+        podWorkspaceEnabled,
         repos,
         projectGrouping: {
           projects: projectHostSetupProjection.projects,
@@ -189,6 +195,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       isLinearConnected,
+      podWorkspaceEnabled,
       repos,
       projectHostSetupProjection,
       activeLocale
