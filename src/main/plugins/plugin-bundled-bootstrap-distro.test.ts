@@ -70,13 +70,13 @@ describe('Pod bundled claude-acc plugin', () => {
     await expect(bootstrapBundledPlugins(request)).resolves.toMatchObject({ unchanged: [POD_ACC] })
   })
 
-  it('the coordinator adds the distro index and reports its plugins after the refresh', async () => {
+  it('the coordinator merges the distro index into every result list and reports its plugins', async () => {
     const calls: (string | undefined)[] = []
     const bootstrap = vi.fn(async (options: { root: string; indexFilename?: string }) => {
       calls.push(options.indexFilename && `${options.root}/${options.indexFilename}`)
       return options.indexFilename
-        ? { installed: [POD_ACC], unchanged: [], errors: [] }
-        : { installed: [], unchanged: ['stablyai.orca-theme'], errors: [] }
+        ? { installed: [POD_ACC], unchanged: [], skipped: ['outof-place.pod-other-os'], errors: [] }
+        : { installed: [], unchanged: ['stablyai.orca-theme'], skipped: [], errors: [] }
     })
     const order: string[] = []
     const coordinator = new PluginBundledBootstrapCoordinator({
@@ -96,6 +96,7 @@ describe('Pod bundled claude-acc plugin', () => {
     await expect(coordinator.request()).resolves.toEqual({
       installed: [POD_ACC],
       unchanged: ['stablyai.orca-theme'],
+      skipped: ['outof-place.pod-other-os'],
       errors: []
     })
     expect(calls).toEqual([undefined, `distro/${DISTRO_PLUGIN_INDEX_FILENAME}`])
@@ -115,7 +116,7 @@ describe('Pod bundled claude-acc plugin', () => {
         if (options.indexFilename) {
           throw enoent
         }
-        return { installed: [], unchanged: [], errors: [] }
+        return { installed: [], unchanged: [], skipped: [], errors: [] }
       }),
       distro: () => ({ root: 'distro', indexFilename: DISTRO_PLUGIN_INDEX_FILENAME }),
       onDistroPlugins
@@ -123,6 +124,7 @@ describe('Pod bundled claude-acc plugin', () => {
     await expect(coordinator.request()).resolves.toEqual({
       installed: [],
       unchanged: [],
+      skipped: [],
       errors: []
     })
     expect(onDistroPlugins).not.toHaveBeenCalled()

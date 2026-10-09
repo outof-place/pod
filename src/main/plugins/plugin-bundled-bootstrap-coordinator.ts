@@ -51,9 +51,13 @@ export class PluginBundledBootstrapCoordinator {
       ? await this.bootstrapDistro(bootstrap, { ...request, ...distroSource })
       : null
     if (distro) {
-      result.installed.push(...distro.installed)
-      result.unchanged.push(...distro.unchanged)
-      result.errors.push(...distro.errors)
+      // Why per key: the result's lists vary by host version (`skipped` came with plugin platforms).
+      for (const [key, entries] of Object.entries(distro)) {
+        const target: unknown = Reflect.get(result, key)
+        if (Array.isArray(target) && Array.isArray(entries)) {
+          target.push(...entries)
+        }
+      }
     }
     if (result.installed.length > 0) {
       await this.options.refreshPlugins()
