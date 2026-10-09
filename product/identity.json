@@ -1,0 +1,13 @@
+{
+  "formatVersion": 1,
+  "displayName": "Pod",
+  "appId": "space.outofplace.pod",
+  "cliName": "pod-cli",
+  "userDataName": "pod",
+  "keychainName": "pod",
+  "protocols": ["pod"],
+  "updateFeed": { "provider": "github", "owner": "outof-place", "repo": "pod" },
+  "copyright": "Copyright © 2026 outofplace",
+  "credits": "Built on Orca by Stably (MIT License, Copyright (c) 2026 Lovecast Inc.). https://github.com/stablyai/orca",
+  "legacyProfile": { "userDataName": "orca", "keychainName": "orca" }
+}
