@@ -16,6 +16,7 @@ import {
 } from './linux-package-downloaded-status'
 import { isExternallyManagedLinuxInstall } from './linux-update-package-type'
 import * as linuxPackageRecovery from './linux-package-update-recovery'
+import { getUpdateFeedPolicy } from './updater/update-feed-policy'
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
@@ -169,7 +170,7 @@ export function registerAutoUpdaterHandlers({
     void (async () => {
       try {
         const changelog =
-          isLocalBuildCheck() || isPinnedBuildCheck()
+          isLocalBuildCheck() || isPinnedBuildCheck() || getUpdateFeedPolicy().kind !== 'official'
             ? null
             : await fetchChangelog(info.version, app.getVersion()).catch(() => null)
 

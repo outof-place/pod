@@ -207,7 +207,9 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // it can only reach the main-process guard and breadcrumb store once this is registered.
   installMainProcessTreeKillGate()
   const isDev = is.dev
-  configureDevUserDataPath(isDev)
+  if (!configureDevUserDataPath(isDev, state.isServeMode)) {
+    return false
+  }
   configureOrcaUserDataPathEnv()
   // Why these four lines are one step (#16761): the two above decide where userData lives, and
   // everything below may resolve a path. Installing the accessor any later leaves a window where an
