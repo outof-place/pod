@@ -94,6 +94,11 @@ async function createLegacyProfile(legacy: string): Promise<void> {
   writeFileSync(join(legacy, 'profiles', 'local-default', 'profile-state.db-wal'), 'wal')
   mkdirSync(join(legacy, 'Cache', 'Cache_Data'), { recursive: true })
   writeFileSync(join(legacy, 'Cache', 'Cache_Data', 'blob'), 'cached')
+  mkdirSync(join(legacy, 'Partitions', 'browser', 'Code Cache'), { recursive: true })
+  writeFileSync(join(legacy, 'Partitions', 'browser', 'Code Cache', 'js'), 'cached')
+  writeFileSync(join(legacy, 'Partitions', 'browser', 'Cookies'), 'cookies')
+  mkdirSync(join(legacy, 'speech-models', 'Cache'), { recursive: true })
+  writeFileSync(join(legacy, 'speech-models', 'Cache', 'model.bin'), 'model')
   mkdirSync(join(legacy, 'terminal-history'))
   writeFileSync(join(legacy, 'terminal-history', 'scrollback.bin'), 'history')
   symlinkSync(`host.local-${DEAD_PID}`, join(legacy, 'SingletonLock'))
@@ -162,6 +167,10 @@ describe('migrateLegacyProfile', () => {
     expect(readlinkSync(join(pod, 'relative-link'))).toBe('orca-data.json')
     // Caches, Chromium's lock and live sockets are not carried over.
     expect(existsSync(join(pod, 'Cache'))).toBe(false)
+    expect(existsSync(join(pod, 'Partitions/browser/Code Cache'))).toBe(false)
+    expect(readFileSync(join(pod, 'Partitions/browser/Cookies'), 'utf8')).toBe('cookies')
+    // A "Cache" outside Chromium's storage is app data and is kept.
+    expect(readFileSync(join(pod, 'speech-models/Cache/model.bin'), 'utf8')).toBe('model')
     expect(existsSync(join(pod, 'SingletonLock'))).toBe(false)
     expect(existsSync(join(pod, 'o-1-abc.sock'))).toBe(false)
     // Only the live v41 daemon is handed over, by symlink, and it still answers through the link.
