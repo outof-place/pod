@@ -17,19 +17,15 @@ function argvCanChangeVerdict(executable: string): boolean {
   )
 }
 
-/**
- * The full `ps -axo pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command=` capture from sysctl
- * (#24889): ~5-15 ms in-process against 0.1-6 s for the setuid `ps`. Null sends the caller to
- * `ps`, which only root can make name a terminal-holding process whose argv we cannot read.
- */
-export function readNativeFullProcessTable(): ProcessTableRow[] | null {
+/** Capture on the native worker; defer to ps when withheld argv could change a pane verdict. */
+export async function readNativeFullProcessTable(): Promise<ProcessTableRow[] | null> {
   const native = getNativeProcessInfo()
   if (!native) {
     return null
   }
   try {
     const rows: ProcessTableRow[] = []
-    for (const row of native.listProcessesWithCommands()) {
+    for (const row of await native.listProcessesWithCommands()) {
       let command = row.command
       if (command === null) {
         // Why only terminal holders can force ps: every pane process holds its PTY, while the
@@ -50,9 +46,9 @@ export function readNativeFullProcessTable(): ProcessTableRow[] | null {
 }
 
 /** The shell-foreground tier's columns (no `tty`/`lstart`) from the same kernel read. */
-export function readNativeShellForegroundRows(): ProcessTableRow[] | null {
+export async function readNativeShellForegroundRows(): Promise<ProcessTableRow[] | null> {
   return (
-    readNativeFullProcessTable()?.map(({ pid, ppid, pgid, tpgid, stat, command }) => ({
+    (await readNativeFullProcessTable())?.map(({ pid, ppid, pgid, tpgid, stat, command }) => ({
       pid,
       ppid,
       pgid,

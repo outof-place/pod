@@ -1,6 +1,10 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from './app-environment'
+import {
+  NativeProcessSnapshotClient,
+  nativeProcessSnapshotWorkerFactory
+} from '../main/native-process-snapshot-client'
 
 /** One row as `ps -o pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=` would print it. */
 export type NativeProcessRow = {
@@ -23,14 +27,23 @@ export type NativeTerminalProcessRow = NativeProcessRow & {
 }
 
 /** `native/proc-info-darwin`: sysctl/proc_pidinfo reads that replace forking `ps` and `lsof`. */
-export type NativeProcessInfo = {
+export type NativeProcessInfoAddon = {
   listProcesses(): NativeProcessRow[]
   /** Every process with argv, as the full `ps` capture reads it. */
   listProcessesWithCommands(): NativeTerminalProcessRow[]
-  readProcess(pid: number): NativeProcessRow | null
+  /** With expectedTty, tty reports that terminal or '??' after checking its device identity. */
+  readProcess(pid: number, expectedTty?: string): NativeProcessRow | null
   /** Every process on one terminal, or null when the terminal does not exist. */
   listTerminalProcesses(tty: string): NativeTerminalProcessRow[] | null
   readProcessCwd(pid: number): string | null
+}
+
+export type NativeProcessInfo = Omit<
+  NativeProcessInfoAddon,
+  'listProcesses' | 'listProcessesWithCommands'
+> & {
+  listProcesses(): NativeProcessRow[] | Promise<NativeProcessRow[]>
+  listProcessesWithCommands(): NativeTerminalProcessRow[] | Promise<NativeTerminalProcessRow[]>
 }
 
 export const NATIVE_PROCESS_INFO_RESOURCE_PATH = join('native', 'orca-proc-info.node')
@@ -42,7 +55,7 @@ export const NATIVE_PROCESS_INFO_BUILD_PATH = join(
   'orca-proc-info.node'
 )
 
-function isNativeProcessInfo(value: unknown): value is NativeProcessInfo {
+function isNativeProcessInfo(value: unknown): value is NativeProcessInfoAddon {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -79,7 +92,7 @@ function candidatePaths(): string[] {
 }
 
 /** Load the addon at `path`; null when it is missing or not the expected module. */
-export function loadNativeProcessInfoFrom(path: string): NativeProcessInfo | null {
+export function loadNativeProcessInfoFrom(path: string): NativeProcessInfoAddon | null {
   try {
     const addon = { exports: {} }
     process.dlopen(addon, path)
@@ -90,6 +103,7 @@ export function loadNativeProcessInfoFrom(path: string): NativeProcessInfo | nul
 }
 
 let cached: NativeProcessInfo | null | undefined
+let snapshotClient: NativeProcessSnapshotClient | null = null
 
 /** Escape hatch back to the `ps`/`lsof` paths; the unit-test setup sets it so mocks stay in charge. */
 export const DISABLE_NATIVE_PROCESS_INFO_ENV = 'ORCA_DISABLE_NATIVE_PROCESS_INFO'
@@ -100,11 +114,27 @@ export function getNativeProcessInfo(): NativeProcessInfo | null {
     const enabled =
       process.platform === 'darwin' && process.env[DISABLE_NATIVE_PROCESS_INFO_ENV] !== '1'
     const path = enabled ? candidatePaths().find(existsSync) : undefined
-    cached = path ? loadNativeProcessInfoFrom(path) : null
+    const addon = path ? loadNativeProcessInfoFrom(path) : null
+    if (addon && path) {
+      const client = new NativeProcessSnapshotClient(nativeProcessSnapshotWorkerFactory(path))
+      snapshotClient = client
+      if (hasAppEnvironment()) {
+        getAppEnvironment().onWillQuit(() => client.dispose())
+      }
+      cached = {
+        ...addon,
+        listProcesses: () => client.listProcesses(),
+        listProcessesWithCommands: () => client.listProcessesWithCommands()
+      }
+    } else if (!enabled || hasAppEnvironment()) {
+      cached = null
+    }
   }
-  return cached
+  return cached ?? null
 }
 
 export function setNativeProcessInfoForTests(value: NativeProcessInfo | null | undefined): void {
+  snapshotClient?.dispose()
+  snapshotClient = null
   cached = value
 }

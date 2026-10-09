@@ -277,4 +277,35 @@ describe('signalPosixPtyForegroundGroup with the native process-info addon', () 
     expect(fallback).toHaveBeenCalledTimes(1)
     expect(execFileSync).not.toHaveBeenCalled()
   })
+
+  it('rechecks its own terminal membership when the supplied PTY changes', () => {
+    setNativeProcessInfoForTests({
+      listProcesses: () => rows,
+      listProcessesWithCommands: () => [],
+      readProcess: (pid, expectedTty) => {
+        const row = rows.find((candidate) => candidate.pid === pid)
+        return row ? { ...row, tty: expectedTty === `/dev/${row.tty}` ? row.tty : '??' } : null
+      },
+      listTerminalProcesses: () => null,
+      readProcessCwd: () => null
+    })
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    const fallback = vi.fn()
+    try {
+      signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
+        platform: 'darwin',
+        currentPid: 4242
+      })
+      signalPosixPtyForegroundGroup(4242, '/dev/ttys002', 'SIGWINCH', fallback, {
+        platform: 'darwin',
+        currentPid: 4242
+      })
+      expect(kill).toHaveBeenCalledTimes(1)
+      expect(kill).toHaveBeenCalledWith(-84985, 'SIGWINCH')
+      expect(fallback).toHaveBeenCalledTimes(1)
+      expect(execFileSync).not.toHaveBeenCalled()
+    } finally {
+      kill.mockRestore()
+    }
+  })
 })
