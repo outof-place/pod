@@ -238,6 +238,11 @@ Anything generic goes to Orca as a pull request first. Status updates live:
 | [#26945](https://github.com/stablyai/orca/pull/26945) | Build the Computer Use helper with Swift 6.4's default build system | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26945?label=) |
 | [#26953](https://github.com/stablyai/orca/pull/26953) | Status bar items and live panel messaging for plugins | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26953?label=) |
 | [#26956](https://github.com/stablyai/orca/pull/26956) | Keep xterm parse barriers, and the output behind them, across a resize | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26956?label=) |
+| [#26973](https://github.com/stablyai/orca/pull/26973) | Derive the bundle id from one runtime constant | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26973?label=) |
+| [#26975](https://github.com/stablyai/orca/pull/26975) | Plugin manifest platforms field and an official publisher allowlist | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26975?label=) |
+| [#26979](https://github.com/stablyai/orca/pull/26979) | Let Git's untracked cache answer status polls | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26979?label=) |
+| [#26985](https://github.com/stablyai/orca/pull/26985) | Read pane process info from the macOS kernel instead of forking ps | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26985?label=) |
+| [#26991](https://github.com/stablyai/orca/pull/26991) | Plugin settings pages in Settings | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26991?label=) |
 
 All of them: [pull requests from outof-place on stablyai/orca](https://github.com/stablyai/orca/pulls?q=is%3Apr+author%3Aoutof-place).
 
