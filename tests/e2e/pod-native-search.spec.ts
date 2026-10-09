@@ -55,6 +55,8 @@ function startRecordingProxy(): Promise<Server> {
   return new Promise((resolve) => server.listen(appSocket, () => resolve(server)))
 }
 
+let daemonFeatures: string[] = []
+
 /** One request on a fresh connection, straight to the daemon. */
 async function ogdRequest(message: Record<string, unknown>): Promise<Record<string, unknown>> {
   const socket = createConnection(daemonSocket)
@@ -70,6 +72,8 @@ async function ogdRequest(message: Record<string, unknown>): Promise<Record<stri
           }
         }
         if (replies.length === 2) {
+          const features = replies[0].features
+          daemonFeatures = Array.isArray(features) ? features.map(String) : []
           resolve(replies[1])
         }
       })
@@ -190,8 +194,13 @@ test('local quick open and file search are answered by ogd, and match ripgrep', 
   const timings: Record<string, number> = {}
   const answers: Record<string, Awaited<ReturnType<typeof textSearch>>> = {}
 
+  // What the client will hand to ogd; everything else must stay on ripgrep.
+  const servesSearch = ['search.full_lines', 'search.max_filesize'].every((feature) =>
+    daemonFeatures.includes(feature)
+  )
   for (const [mode, engine, ignored] of [
     ['rg (gitignored shown)', 'rg', true],
+    ['ogd (gitignored shown)', 'ogd', true],
     ['rg', 'rg', false],
     ['ogd', 'ogd', false]
   ] as const) {
@@ -215,8 +224,9 @@ test('local quick open and file search are answered by ogd, and match ripgrep', 
     }
     const ops = proxiedOps().slice(opsBefore)
     if (engine === 'ogd') {
-      expect(ops).toContain('fuzzy')
-      expect(ops).toContain('search')
+      const servesPaths = !ignored || daemonFeatures.includes('fuzzy.ignored')
+      expect(ops.includes('fuzzy')).toBe(servesPaths)
+      expect(ops.includes('search')).toBe(servesSearch)
     } else {
       expect(ops.filter((op) => op === 'fuzzy' || op === 'search' || op === 'files')).toEqual([])
     }
@@ -224,6 +234,8 @@ test('local quick open and file search are answered by ogd, and match ripgrep', 
 
   for (const query of textQueries) {
     const [indexed, ripgrep] = [answers[`ogd:${query}`], answers[`rg:${query}`]]
+    const withIgnored = answers[`ogd (gitignored shown):${query}`]
+    expect({ ...withIgnored, ms: 0 }).toEqual({ ...indexed, ms: 0 })
     // Truncated pages hold whichever files each engine reached first.
     expect(indexed.truncated).toBe(ripgrep.truncated)
     if (!ripgrep.truncated) {
@@ -252,6 +264,6 @@ test('local quick open and file search are answered by ogd, and match ripgrep', 
   }
   const status = await ogdRequest({ op: 'status' })
   console.log(
-    `[pod-native-search] ${JSON.stringify({ repo: root, timings, worktrees: status.worktrees }, null, 2)}`
+    `[pod-native-search] ${JSON.stringify({ repo: root, features: daemonFeatures, timings, worktrees: status.worktrees }, null, 2)}`
   )
 })
