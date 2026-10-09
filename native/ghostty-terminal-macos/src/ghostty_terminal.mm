@@ -15,6 +15,8 @@
 #import <objc/message.h>
 #include <IOKit/hidsystem/ev_keymap.h>
 #include <fcntl.h>
+#include <libproc.h>
+#include <mach/mach_time.h>
 #include <node_api.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
@@ -44,6 +46,12 @@ struct SurfaceModel {
 ghostty_app_t g_app = nullptr;
 ghostty_config_t g_config = nullptr;
 std::atomic<bool> g_tick_pending{false};
+// Idle-cost counters for debugCounters; E2E asserts an idle window adds none.
+std::atomic<uint64_t> g_tick_count{0};
+uint64_t g_set_frames_count = 0;
+uint64_t g_presented_frames = 0;
+// KVO context for the layer contents Ghostty swaps on every presented frame.
+char g_presented_frames_context = 0;
 std::atomic<int32_t> g_next_id{1};
 NSMutableDictionary<NSNumber*, id>* g_views = nil;
 
@@ -156,6 +164,7 @@ void ScheduleTick() {
   if (g_tick_pending.exchange(true)) return;
   dispatch_async(dispatch_get_main_queue(), ^{
     g_tick_pending.store(false);
+    g_tick_count.fetch_add(1, std::memory_order_relaxed);
     if (g_app != nullptr) ghostty_app_tick(g_app);
   });
 }
@@ -270,8 +279,11 @@ void UpdateSecureInput();
 
 @interface OrcaGhosttySurfaceView : NSView <NSTextInputClient>
 @property(nonatomic, assign) SurfaceModel* model;
+@property(nonatomic, readonly) uint64_t presentedFrames;
 - (void)setOverlayHoles:(NSArray<NSValue*>*)holes;
 - (NSArray<NSValue*>*)overlayHoles;
+- (void)observePresentedFrames;
+- (void)stopObservingPresentedFrames;
 @end
 
 // Not registered for dragged types on purpose: AppKit then routes drags over the surface to the
@@ -301,6 +313,8 @@ void UpdateSecureInput();
 @end
 
 @implementation OrcaGhosttySurfaceView {
+  // The layer whose contents Ghostty swaps per presented frame.
+  CALayer* _presentedLayer;
   NSMutableAttributedString* _markedText;
   NSMutableArray<NSString*>* _keyTextAccumulator;
   NSTrackingArea* _trackingArea;
@@ -315,6 +329,28 @@ void UpdateSecureInput();
     _markedText = [[NSMutableAttributedString alloc] init];
   }
   return self;
+}
+
+- (void)observePresentedFrames {
+  _presentedLayer = self.layer;
+  [_presentedLayer addObserver:self forKeyPath:@"contents" options:0 context:&g_presented_frames_context];
+}
+
+- (void)stopObservingPresentedFrames {
+  [_presentedLayer removeObserver:self forKeyPath:@"contents" context:&g_presented_frames_context];
+  _presentedLayer = nil;
+}
+
+- (void)observeValueForKeyPath:(NSString*)keyPath
+                      ofObject:(id)object
+                        change:(NSDictionary<NSKeyValueChangeKey, id>*)change
+                       context:(void*)context {
+  if (context != &g_presented_frames_context) {
+    [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+    return;
+  }
+  _presentedFrames++;
+  g_presented_frames++;
 }
 
 - (ghostty_surface_t)surface {
@@ -1981,6 +2017,7 @@ napi_value CreateSurface(napi_env env, napi_callback_info info) {
     return nullptr;
   }
   g_views[@(model->id)] = view;
+  [view observePresentedFrames];
   [view viewDidChangeBackingProperties];
   ScheduleTick();
   return Number(env, model->id);
@@ -2029,6 +2066,7 @@ napi_value SetFrames(napi_env env, napi_callback_info info) {
   napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
   uint32_t count = 0;
   if (argc < 1 || napi_get_array_length(env, argv[0], &count) != napi_ok) return Undefined(env);
+  g_set_frames_count++;
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
   for (uint32_t i = 0; i < count; i++) {
@@ -2148,6 +2186,7 @@ napi_value DestroySurface(napi_env env, napi_callback_info info) {
   [g_views removeObjectForKey:@(id)];
   [g_tty_paths removeObjectForKey:@(id)];
   UpdateSecureInput();
+  [view stopObservingPresentedFrames];
   if (model->surface) ghostty_surface_free(model->surface);
   model->surface = nullptr;
   if (model->config) ghostty_config_free(model->config);
@@ -2289,6 +2328,7 @@ napi_value DebugState(napi_env env, napi_callback_info info) {
                           String(env, responder ? object_getClassName(responder) : "none"));
   napi_set_named_property(env, result, "holes", OverlayHolesDebugState(env, view));
   napi_set_named_property(env, result, "masked", Bool(env, view.layer.mask != nil));
+  napi_set_named_property(env, result, "presentedFrames", Number(env, view.presentedFrames));
   return result;
 }
 
@@ -2747,6 +2787,43 @@ napi_value DebugTextInputMenu(napi_env env, napi_callback_info info) {
   return result;
 }
 
+// debugProcessUsage(pid): CPU time, wakeups, instructions and footprint of a process | null.
+napi_value DebugProcessUsage(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argv[1];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  napi_value result;
+  napi_get_null(env, &result);
+  rusage_info_v4 usage = {};
+  if (argc < 1 ||
+      proc_pid_rusage(GetInt(env, argv[0]), RUSAGE_INFO_V4, reinterpret_cast<rusage_info_t*>(&usage)) != 0) {
+    return result;
+  }
+  mach_timebase_info_data_t timebase = {};
+  mach_timebase_info(&timebase);
+  const auto toNs = [&](uint64_t ticks) { return static_cast<double>(ticks) * timebase.numer / timebase.denom; };
+  napi_create_object(env, &result);
+  napi_set_named_property(env, result, "userNs", Number(env, toNs(usage.ri_user_time)));
+  napi_set_named_property(env, result, "systemNs", Number(env, toNs(usage.ri_system_time)));
+  napi_set_named_property(env, result, "interruptWakeups", Number(env, usage.ri_interrupt_wkups));
+  napi_set_named_property(env, result, "idleWakeups", Number(env, usage.ri_pkg_idle_wkups));
+  napi_set_named_property(env, result, "instructions", Number(env, usage.ri_instructions));
+  napi_set_named_property(env, result, "cycles", Number(env, usage.ri_cycles));
+  napi_set_named_property(env, result, "footprint", Number(env, usage.ri_phys_footprint));
+  return result;
+}
+
+// debugCounters(): { ticks, setFrames, presentedFrames, surfaces } since load.
+napi_value DebugCounters(napi_env env, napi_callback_info) {
+  napi_value result;
+  napi_create_object(env, &result);
+  napi_set_named_property(env, result, "ticks", Number(env, g_tick_count.load()));
+  napi_set_named_property(env, result, "setFrames", Number(env, g_set_frames_count));
+  napi_set_named_property(env, result, "presentedFrames", Number(env, g_presented_frames));
+  napi_set_named_property(env, result, "surfaces", Number(env, g_views.count));
+  return result;
+}
+
 napi_value ModuleInit(napi_env env, napi_value exports) {
   const napi_property_descriptor props[] = {
       {"init", nullptr, Init, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -2784,6 +2861,8 @@ napi_value ModuleInit(napi_env env, napi_value exports) {
       {"debugAccessibilitySet", nullptr, DebugAccessibilitySet, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugSecureInput", nullptr, DebugSecureInput, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugTextInputMenu", nullptr, DebugTextInputMenu, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugProcessUsage", nullptr, DebugProcessUsage, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugCounters", nullptr, DebugCounters, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   napi_define_properties(env, exports, sizeof(props) / sizeof(props[0]), props);
   return exports;

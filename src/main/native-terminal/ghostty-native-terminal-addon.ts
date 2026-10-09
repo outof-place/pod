@@ -97,8 +97,27 @@ export type GhosttyTerminalAddon = {
     height: number
     scrollbar: NativeSurfaceScrollbarState | null
     windowFirstResponder: string
+    presentedFrames: number
   } | null
   debugScrollbarScroll: (surfaceId: number, fraction: number) => boolean
+  debugProcessUsage: (pid: number) => NativeProcessUsage | null
+  debugCounters: () => {
+    ticks: number
+    setFrames: number
+    presentedFrames: number
+    surfaces: number
+  }
+}
+
+// proc_pid_rusage of one process: cumulative CPU, wakeups and instructions, current footprint.
+export type NativeProcessUsage = {
+  userNs: number
+  systemNs: number
+  interruptWakeups: number
+  idleWakeups: number
+  instructions: number
+  cycles: number
+  footprint: number
 }
 
 const ADDON_FILE = 'ghostty_terminal.node'

@@ -30,6 +30,7 @@ export type NativeTerminalDebugOp =
   | 'secureInput'
   | 'textInputMenu'
   | 'mainFeed'
+  | 'counters'
 
 export const RETURN_KEY_CODE = 0x24
 
