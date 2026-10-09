@@ -1,6 +1,7 @@
 // Fork-only (Pod): the native Ghostty terminal is a regular Terminal setting in Pod, on by
 // default, instead of an Experimental toggle. Pod's own copy is English only.
 import { getProductUiIdentity } from '@/lib/product-ui-identity'
+import { getExperimentalSearchEntry } from './experimental-search'
 import type { SettingsSearchEntry } from './settings-search'
 
 export const POD_NATIVE_TERMINAL_SEARCH_ENTRY: SettingsSearchEntry = {
@@ -21,4 +22,15 @@ export function isPodNativeTerminalSetting(): boolean {
 
 export function getPodNativeTerminalSearchEntries(): SettingsSearchEntry[] {
   return isPodNativeTerminalSetting() ? [POD_NATIVE_TERMINAL_SEARCH_ENTRY] : []
+}
+
+// Why: in Pod the switch lives under Terminal, so a search must not lead to Experimental for it.
+export function withoutExperimentalNativeTerminalEntry(
+  entries: SettingsSearchEntry[]
+): SettingsSearchEntry[] {
+  if (!isPodNativeTerminalSetting()) {
+    return entries
+  }
+  const { title } = getExperimentalSearchEntry().nativeTerminal
+  return entries.filter((entry) => entry.title !== title)
 }
