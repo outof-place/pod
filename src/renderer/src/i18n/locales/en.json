@@ -19661,6 +19661,91 @@
     "terminal": "Terminal"
   },
   "podWorkspace": {
+    "volume": {
+      "pnpm": {
+        "label": "Same volume as the pnpm store",
+        "description": "pnpm clones packages from {{store}} only within one volume.",
+        "same": "Same volume",
+        "different": "Different volume"
+      },
+      "case": {
+        "label": "Letter case",
+        "description": "On a case-insensitive volume, README and readme name the same file.",
+        "sensitive": "Case-sensitive",
+        "insensitive": "Case-insensitive"
+      },
+      "free": {
+        "label": "Free space",
+        "value": "{{free}} free of {{total}}"
+      }
+    },
+    "unknown": "Unknown",
+    "spotlight": {
+      "label": "Spotlight",
+      "open": "Open Spotlight Settings",
+      "openFailed": "Could not open System Settings.",
+      "state": {
+        "indexed": "Indexed",
+        "excluded": "Excluded",
+        "unknown": "Unknown"
+      },
+      "detail": {
+        "indexed": "Spotlight indexes this folder and re-reads files as agents and installs write them. To stop it, open System Settings › Spotlight › Search Privacy…, click +, and add {{root}}.",
+        "excluded": "Spotlight did not find files older than two hours in this folder.",
+        "disabled": "Spotlight indexing is off for the startup disk.",
+        "noOldFiles": "No tracked files older than two hours yet; Spotlight needs a while to see a new folder.",
+        "error": "Spotlight did not answer in time."
+      }
+    },
+    "timeMachine": {
+      "label": "Time Machine",
+      "none": "No build folders yet",
+      "counts": "{{excluded}} of {{total}} build folders excluded",
+      "more": "+{{count}} more",
+      "exclude": "Exclude build folders",
+      "excludedNoBackups": "Backups are not configured yet.",
+      "excludeFailed": "{{count}} build folders could not be excluded.",
+      "excluded": "Excluded {{count}} build folders from Time Machine.",
+      "destination": {
+        "configured": "Backups are configured.",
+        "none": "Backups are not configured. Exclusions still apply once you add a backup disk.",
+        "unknown": "Could not read the backup destination."
+      }
+    },
+    "index": {
+      "label": "Search index",
+      "connectedDescription": "Repository rows show what the index holds for each checkout.",
+      "disconnectedDescription": "The search index is not connected, so no index state is shown.",
+      "connected": "Connected",
+      "disconnected": "Not connected"
+    },
+    "health": {
+      "title": "Health",
+      "description": "Checked when this page opens.",
+      "refresh": "Check again",
+      "loading": "Checking the workspace root…"
+    },
+    "repo": {
+      "index": {
+        "none": "Not indexed",
+        "state": "Index {{state}} · {{docs}} files"
+      },
+      "worktrees": "Worktrees: {{count}}",
+      "tuning": {
+        "none": "No git tuning set",
+        "orca": "Applied by Orca"
+      }
+    },
+    "repos": {
+      "title": "Repositories in the workspace root",
+      "description": "Local git projects under {{root}}.",
+      "empty": "No projects here yet. Clone one from Add Project; it lands in <root>/<owner>/<repo>."
+    },
+    "outside": {
+      "title": "Outside the workspace root",
+      "migrate": "These stay where they are. To move them under the root, run {{script}}.",
+      "migrateMissing": "These stay where they are. The migration script ({{script}}) is not installed."
+    },
     "root": {
       "title": "Workspace root",
       "description": "Clones go to <root>/<owner>/<repo>; projects without a remote owner go to <root>/_local.",

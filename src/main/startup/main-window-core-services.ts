@@ -20,6 +20,7 @@ import {
 } from './codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
 import { RELAY_HOST_CLOSE_REASON } from '../../shared/relay-host-close-reason'
+import { notifyPodWorkspaceWorktreeLifecycle } from '../pod/workspace/workspace-lifecycle-hook'
 
 export function attachMainWindowCoreServices(
   window: BrowserWindow,
@@ -138,7 +139,10 @@ export function attachMainWindowCoreServices(
       },
       onBeforeUpdateQuitFailure: 'abort',
       updateInstallMode: resolveUpdateInstallMode(state.isServeMode),
-      onWorktreeLifecycle: emitPluginWorktreeLifecycle
+      onWorktreeLifecycle: (event) => {
+        emitPluginWorktreeLifecycle(event)
+        notifyPodWorkspaceWorktreeLifecycle(event)
+      }
     }
   )
   // Why: attach the durable renderer pull now, but launch the diagnostic process after first paint.
