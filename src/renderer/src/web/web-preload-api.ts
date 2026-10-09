@@ -68,6 +68,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     ...createWebAppApi(),
     ...createWebStarNagApi(),
     ...createWebPlatformApi(),
+    // The web client is upstream's: Pod stamps its identity only on desktop renderers.
+    product: { get: () => null },
     ...createWebWorkspacePortsApi(),
     ...createWebOrcaProfilesApi(),
     ...createWebE2EApi(),
