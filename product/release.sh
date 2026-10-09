@@ -97,7 +97,8 @@ preflight_sign
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
 # Upstream's strict release signing for helpers and the bundle (hardened runtime, timestamps).
 export ORCA_MAC_RELEASE=1
-export CSC_NAME="$sign_identity"
+# electron-builder wants the name without the certificate-type prefix; codesign matches either.
+export CSC_NAME="${sign_identity#Developer ID Application: }"
 
 if [ "$skip_build" -eq 0 ]; then
   log "install dependencies"
