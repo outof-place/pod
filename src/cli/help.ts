@@ -5,28 +5,30 @@ import { formatCommandScopedFlagHelp } from './command-scoped-flag-help'
 import { FLAG_HELP_TEXT } from './flag-help-text'
 import { ROOT_HELP_TEXT_PRIMARY } from './root-help-text-primary'
 import { ROOT_HELP_TEXT_SECONDARY } from './root-help-text-secondary'
+import { brandCliHelp } from './product-cli-branding'
 
 const ROOT_HELP_TEXT = [ROOT_HELP_TEXT_PRIMARY, ROOT_HELP_TEXT_SECONDARY].join('\n')
 
 export function printHelp(specs: CommandSpec[], commandPath: string[] = []): void {
   const exactSpec = findCommandSpec(specs, commandPath)
   if (exactSpec) {
-    console.log(formatCommandHelp(exactSpec))
+    console.log(brandCliHelp(formatCommandHelp(exactSpec)))
     return
   }
 
   if (isCommandGroup(specs, commandPath)) {
-    console.log(formatGroupHelp(specs, commandPath))
+    console.log(brandCliHelp(formatGroupHelp(specs, commandPath)))
     return
   }
 
   if (commandPath.length > 0) {
     const { nextSteps } = unknownCommandData(specs, commandPath)
-    const recovery = nextSteps.map((step) => `Next step: ${step}`).join('\n')
+    // Why only the hints: the echoed command is what the user typed.
+    const recovery = brandCliHelp(nextSteps.map((step) => `Next step: ${step}`).join('\n'))
     console.log(`Unknown command: ${commandPath.join(' ')}${recovery ? `\n${recovery}` : ''}\n`)
   }
 
-  console.log(ROOT_HELP_TEXT)
+  console.log(brandCliHelp(ROOT_HELP_TEXT))
 }
 
 export function formatCommandHelp(spec: CommandSpec): string {
