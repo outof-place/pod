@@ -23,6 +23,11 @@ type MirrorState =
 // RIS: a re-seed starts from a blank surface; the snapshot restores modes and content.
 const RESET_TERMINAL = '\x1bc'
 
+// Why not '': xterm's resize() runs WriteBuffer.flushSync, whose `while (chunk = shift())`
+// stops at a falsy chunk and clears the rest of the queue, losing the callback and the bytes
+// behind it. A zero-length Uint8Array parses as nothing but is truthy.
+const SEED_MARKER = new Uint8Array(0)
+
 export function installNativeTerminalMirror(
   terminal: Terminal,
   send: (surfaceId: number, data: string) => void
@@ -58,7 +63,7 @@ export function installNativeTerminalMirror(
     state = { kind: 'seeding', surfaceId, pending: [], generation: seedGeneration }
     // Why: the empty write's callback runs once everything queued before it has parsed, so
     // the snapshot covers exactly the bytes ahead of the marker and `pending` the rest.
-    originalWrite('', () => {
+    originalWrite(SEED_MARKER, () => {
       if (state.kind !== 'seeding' || state.generation !== seedGeneration) {
         return
       }

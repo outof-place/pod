@@ -14,7 +14,12 @@ import {
 import { buildGhosttyConfig } from './ghostty-native-terminal-config'
 import { toKeyboardInputEvents } from './ghostty-forwarded-key'
 
-type SurfaceOwner = { webContents: WebContents; window: BrowserWindow }
+type SurfaceOwner = {
+  webContents: WebContents
+  window: BrowserWindow
+  // The last frame (window points) the view was shown at; null until it is first placed.
+  placed: { width: number; height: number } | null
+}
 
 const owners = new Map<number, SurfaceOwner>()
 // The surface that is AppKit's first responder right now, per window.
@@ -103,9 +108,18 @@ function handleSurfaceEvent(surfaceId: number, kind: string, args: unknown[]): v
         sendEvent(owner, { surfaceId, kind: 'input', data: args[0].toString('utf8') })
       }
       return
-    case 'resize':
+    case 'resize': {
+      // Ghostty reports grids for its creation placeholders (its default 800x600, then 1x1)
+      // before the renderer places the view; only a grid for the shown frame may size the PTY.
+      // Its sizes are backing pixels, never fewer than the frame's points.
+      const width = Number(args[2])
+      const height = Number(args[3])
+      if (!owner.placed || width < owner.placed.width - 1 || height < owner.placed.height - 1) {
+        return
+      }
       sendEvent(owner, { surfaceId, kind: 'resize', cols: Number(args[0]), rows: Number(args[1]) })
       return
+    }
     case 'focus': {
       const focused = args[0] === true
       if (focused) {
@@ -179,7 +193,7 @@ export function createSurface(
     1,
     (kind, ...args) => handleSurfaceEvent(surfaceId, kind, args)
   )
-  owners.set(surfaceId, { webContents, window })
+  owners.set(surfaceId, { webContents, window, placed: null })
   native.setFrames([[surfaceId, 0, 0, 1, 1, false]])
   return surfaceId
 }
@@ -199,9 +213,18 @@ export function writeSurfaceOutput(
 }
 
 export function setSurfaceFrames(webContents: WebContents, frames: NativeTerminalFrame[]): void {
-  if (addon) {
-    addon.setFrames(frames.filter(([surfaceId]) => ownedBy(surfaceId, webContents)))
+  if (!addon) {
+    return
   }
+  const owned = frames.filter(([surfaceId]) => ownedBy(surfaceId, webContents))
+  for (const [surfaceId, , , width, height, visible] of owned) {
+    const owner = owners.get(surfaceId)
+    // The addon applies a frame only while it is visible.
+    if (owner && visible) {
+      owner.placed = { width, height }
+    }
+  }
+  addon.setFrames(owned)
 }
 
 export function focusSurface(webContents: WebContents, surfaceId: number): void {
