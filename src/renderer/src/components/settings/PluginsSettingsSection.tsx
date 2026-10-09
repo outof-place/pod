@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { PluginConsentDialog } from './PluginConsentDialog'
 import { PluginInstallDialog } from './PluginInstallDialog'
+import { useThirdPartyPluginsAllowed } from './ProductThirdPartyPluginsSetting'
 import { PluginRemoveDialog } from './PluginRemoveDialog'
 import { PluginRollbackDialog } from './PluginRollbackDialog'
 import { PluginSettingsOverview } from './PluginSettingsOverview'
@@ -35,6 +36,7 @@ export function PluginsSettingsSection({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [installOpen, setInstallOpen] = useState(false)
+  const thirdPartyPluginsAllowed = useThirdPartyPluginsAllowed()
   const [consentPluginId, setConsentPluginId] = useState<string | null>(null)
   const [removePluginId, setRemovePluginId] = useState<string | null>(null)
   const [settingsPage, setSettingsPage] = useState<OpenPluginSettingsPage | null>(null)
@@ -314,6 +316,8 @@ export function PluginsSettingsSection({
   }
 
   const featureEnabled = settings.pluginSystemEnabled
+  // Fork-only (Pod): installs need the third-party opt-in while no kill list protects them.
+  const installAllowed = featureEnabled && thirdPartyPluginsAllowed
   return (
     <SettingsSection
       id="plugins"
@@ -322,7 +326,7 @@ export function PluginsSettingsSection({
         <Button
           variant="outline"
           size="sm"
-          disabled={!featureEnabled || featureBusy}
+          disabled={!installAllowed || featureBusy}
           onClick={() => setInstallOpen(true)}
         >
           <Plus />
