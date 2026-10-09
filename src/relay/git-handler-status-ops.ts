@@ -10,6 +10,8 @@ import type { GitExec } from './git-handler-ops'
 import type { RelayGitStreamExec } from './git-stdout-stream'
 import type { GitUpstreamStatus } from '../shared/git-status-types'
 import { StatusPorcelainParser } from '../shared/git-status-porcelain-parser'
+import { statusUntrackedFilesArg } from '../shared/git-status-untracked-directory-expansion'
+import { expandRelayStatusUntrackedDirectories } from './git-status-untracked-directories'
 import { splitRemoteBranchName } from '../shared/git-effective-upstream'
 import { collectGitStatusLineStatInputs } from '../shared/git-status-line-stat-inputs'
 import { readOrProbeNoEffectiveUpstreamStatus } from './git-status-upstream-negative-cache'
@@ -103,7 +105,7 @@ export async function getStatusOp(
     'status',
     '--porcelain=v2',
     '--branch',
-    '--untracked-files=all'
+    statusUntrackedFilesArg(includeIgnored)
   ]
   if (includeIgnored) {
     statusArgs.push('--ignored=matching')
@@ -140,12 +142,17 @@ export async function getStatusOp(
     if (statusResult.status === 'rejected') {
       throw statusResult.reason
     }
-    const { parser, stoppedEarly } = statusResult.value
+    const { parser } = statusResult.value
+    const expanded = await expandRelayStatusUntrackedDirectories(streamGit, statusResult.value, {
+      worktreePath,
+      limit,
+      signal: options.signal
+    })
     head = parser.branch.head
     branch = parser.branch.branch
     ignoredPaths = parser.ignoredPaths
-    statusLength = parser.statusLength
-    didHitLimit = stoppedEarly
+    statusLength = expanded.statusLength
+    didHitLimit = expanded.stoppedEarly
     statusSucceeded = true
     const { upstreamName, upstreamAheadBehind } = parser.branch
     upstreamStatus = upstreamName
@@ -179,7 +186,7 @@ export async function getStatusOp(
 
     // Why: resolve deferred conflicts in Git's output order so the cap cannot hide
     // an early conflict behind ordinary rows that appeared later in the stream.
-    for (const record of parser.statusRecords) {
+    for (const record of expanded.records) {
       if (didHitLimit && entries.length >= limit) {
         break
       }

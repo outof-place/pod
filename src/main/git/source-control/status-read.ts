@@ -4,6 +4,7 @@ import type {
   GitUpstreamStatus
 } from '../../../shared/git-status-types'
 import { StatusPorcelainParser } from '../../../shared/git-status-porcelain-parser'
+import { statusUntrackedFilesArg } from '../../../shared/git-status-untracked-directory-expansion'
 import { resolveGitStatusLimit } from '../../../shared/git-status-limit'
 import { stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
 import type { GitBranchLineTotal } from '../../../shared/git-branch-line-total'
@@ -29,6 +30,7 @@ import {
   shouldProbeEffectiveUpstreamStatus
 } from './effective-upstream-status-probe'
 import { attachLineStats } from './status-line-stats'
+import { expandStatusUntrackedDirectories } from './status-untracked-directories'
 import {
   createBranchLineTotalInput,
   getStatusLineStatsCacheKey
@@ -139,7 +141,7 @@ async function runGetStatus(
     'status',
     '--porcelain=v2',
     '--branch',
-    '--untracked-files=all'
+    statusUntrackedFilesArg(options.includeIgnored === true)
   ]
   if (options.includeIgnored) {
     statusArgs.push('--ignored=matching')
@@ -184,6 +186,20 @@ async function runGetStatus(
     // Not a git repo or git not available
   }
 
+  let statusRecords = parser.statusRecords
+  let statusLength = parser.statusLength
+  if (statusSucceeded) {
+    const expanded = await expandStatusUntrackedDirectories(
+      worktreePath,
+      { parser, stoppedEarly: didHitLimit },
+      limit,
+      options
+    )
+    statusRecords = expanded.records
+    statusLength = expanded.statusLength
+    didHitLimit = expanded.stoppedEarly
+  }
+
   const entries: GitStatusEntry[] = []
   const { head, branch, upstreamName, upstreamAheadBehind } = parser.branch
   // Why: git runs in the distro and answers in its namespace; the working-tree probes below run here.
@@ -191,7 +207,7 @@ async function runGetStatus(
 
   // Why: resolve deferred conflicts in Git's output order so the cap cannot hide
   // an early conflict behind ordinary rows that appeared later in the stream.
-  for (const record of parser.statusRecords) {
+  for (const record of statusRecords) {
     if (didHitLimit && entries.length >= limit) {
       break
     }
@@ -270,7 +286,7 @@ async function runGetStatus(
     branch,
     ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
     ...(branchLineTotal ? { branchLineTotal } : {}),
-    ...(didHitLimit ? { didHitLimit: true, statusLength: parser.statusLength } : {}),
+    ...(didHitLimit ? { didHitLimit: true, statusLength } : {}),
     ...(statusSucceeded
       ? {
           upstreamStatus:
