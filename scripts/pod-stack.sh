@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Assembles the Pod product branch from pod-stack.json.
 #
-# Each manifest entry names a topic branch. Its own commits (not on Orca main, not in the
-# release tag) are replayed in manifest order onto the Orca release tag, and every replayed
+# Each manifest entry names a topic branch. Its own commits (not on Orca main, not on an Orca
+# release branch) are replayed in manifest order onto the Orca base commit, and every replayed
 # commit gets the entry's `Upstream: <PR url>` or `Fork-only: <reason>` trailer. Commits are
 # built with `git merge-tree` and `git commit-tree`, so no working tree is touched and a dry
 # run is a complete assembly that only skips the final ref update.
@@ -14,11 +14,14 @@ usage() {
   cat <<'EOF'
 Usage: scripts/pod-stack.sh [options]
 
-Builds the product branch from pod-stack.json onto the Orca release tag. Dry run by default.
+Builds the product branch from pod-stack.json onto an Orca commit. Dry run by default.
 
 Options:
   --manifest PATH         manifest (default: pod-stack.json at the repository root)
-  --tag TAG               Orca release to build on (default: "tag" in upstream.json)
+  --onto REV              Orca commit to build on: a sha, an Orca tag or a ref
+                          (default: "ref" in upstream.json)
+  --green                 build on the newest Orca main commit whose GitHub Actions checks all
+                          passed (scripts/pod-orca-base.sh green; needs gh)
   --branch NAME           product branch to build (default: manifest "branch", else "main")
   --source origin|local   read topic branches from origin/<name> or local <name> (default: origin;
                           a branch that is only local is used with a note)
@@ -51,7 +54,8 @@ die() {
 }
 
 manifest=''
-tag=''
+onto=''
+green=0
 branch=''
 source_kind=origin
 upstream_remote=''
@@ -63,7 +67,8 @@ allow_drop=0
 while [ $# -gt 0 ]; do
   case $1 in
     --manifest) manifest=${2:?--manifest needs a path}; shift 2 ;;
-    --tag) tag=${2:?--tag needs a tag}; shift 2 ;;
+    --onto) onto=${2:?--onto needs a commit}; shift 2 ;;
+    --green) green=1; shift ;;
     --branch) branch=${2:?--branch needs a name}; shift 2 ;;
     --source) source_kind=${2:?--source needs origin or local}; shift 2 ;;
     --upstream-remote) upstream_remote=${2:?--upstream-remote needs a name}; shift 2 ;;
@@ -126,24 +131,35 @@ manifest_branch=$(printf '%s\n' "$entries" | head -n 1)
 entries=$(printf '%s\n' "$entries" | tail -n +2)
 branch=${branch:-${manifest_branch:-main}}
 
-if [ -z "$tag" ]; then
-  [ -f "$root/upstream.json" ] || die "no upstream.json at $root; pass --tag"
-  tag=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).tag || "")' "$root/upstream.json")
-  [ -n "$tag" ] || die "upstream.json has no \"tag\""
-fi
+base_script=$root/scripts/pod-orca-base.sh
+[ -f "$base_script" ] || die "no $base_script (run from a checkout of main or pod/infra)"
+[ -n "$onto" ] && [ "$green" -eq 1 ] && die "pass --onto or --green, not both"
 
 if [ "$fetch" -eq 1 ]; then
-  printf 'Fetching origin and %s (%s)...\n' "$upstream_remote" "$tag"
+  printf 'Fetching origin and %s...\n' "$upstream_remote"
   git fetch --quiet origin
   # Orca's release tags go to a private namespace so Pod's own tags never count as Orca's.
   git fetch --quiet --no-tags "$upstream_remote" \
-    "+refs/heads/main:refs/remotes/$upstream_remote/main" "+refs/tags/$tag:refs/tags/$tag" \
-    "+refs/tags/v*:refs/pod-stack/orca-tags/v*"
+    "+refs/heads/main:refs/remotes/$upstream_remote/main" "+refs/tags/v*:refs/pod-stack/orca-tags/v*"
 fi
 
-tag_sha=$(git rev-parse --verify --quiet "$tag^{commit}") || die "tag $tag not found (fetch it from $upstream_remote)"
 upstream_main=$(git rev-parse --verify --quiet "refs/remotes/$upstream_remote/main") \
   || die "refs/remotes/$upstream_remote/main not found; fetch $upstream_remote"
+
+if [ "$green" -eq 1 ]; then
+  upstream_repo=$(git remote get-url "$upstream_remote" | sed -E 's#^.*github\.com[:/]##; s#\.git$##')
+  onto=$(bash "$base_script" green "$upstream_repo") || die "could not find a green Orca main commit"
+  git cat-file -e "$onto^{commit}" 2>/dev/null || die "green commit $onto is newer than the fetched Orca main; fetch again"
+elif [ -z "$onto" ]; then
+  [ -f "$root/upstream.json" ] || die "no upstream.json at $root; pass --onto or --green"
+  onto=$(node -e 'const p=JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(p.ref || p.sha || "")' "$root/upstream.json")
+  [ -n "$onto" ] || die "upstream.json has no \"ref\""
+fi
+base_sha=$(git rev-parse --verify --quiet "$onto^{commit}" || git rev-parse --verify --quiet "refs/pod-stack/orca-tags/$onto^{commit}") \
+  || die "Orca commit $onto not found (fetch $upstream_remote)"
+git merge-base --is-ancestor "$base_sha" "$upstream_main" \
+  || printf 'Note: %s is not on Orca main (a release tag?).\n' "$onto" >&2
+base_label=$(bash "$base_script" describe "$base_sha" refs/pod-stack/orca-tags/ "refs/remotes/$upstream_remote/main")
 # Topic branches cut from a release tag carry that release branch's commits; every Orca tag excludes them.
 orca_tags=$(git for-each-ref --format='%(refname)' 'refs/pod-stack/orca-tags/')
 [ -n "$orca_tags" ] || printf 'Warning: no Orca tags under refs/pod-stack/orca-tags/; run without --no-fetch once.\n' >&2
@@ -151,9 +167,9 @@ orca_tags=$(git for-each-ref --format='%(refname)' 'refs/pod-stack/orca-tags/')
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-pin_blob=$(printf '{\n  "tag": "%s",\n  "sha": "%s"\n}\n' "$tag" "$tag_sha" | git hash-object -w --stdin)
+pin_blob=$(bash "$base_script" pin "$base_sha" refs/pod-stack/orca-tags/ "refs/remotes/$upstream_remote/main" | git hash-object -w --stdin)
 
-# Replace upstream.json in a tree with the pin for the target tag.
+# Replace upstream.json in a tree with the pin for the base commit.
 pin_tree() {
   GIT_INDEX_FILE=$tmp/index git read-tree "$1"
   GIT_INDEX_FILE=$tmp/index git update-index --add --cacheinfo "100644,$pin_blob,upstream.json"
@@ -162,12 +178,13 @@ pin_tree() {
 
 short() { git rev-parse --short "$1"; }
 
-tip=$tag_sha
+tip=$base_sha
 picked_total=0
 pinned=0
 seen=' '
 
-printf '\nPod stack: %s on Orca %s (%s), topic branches from %s\n\n' "$branch" "$tag" "$(short "$tag_sha")" "$source_kind"
+printf '\nPod stack: %s on Orca %s (%s, %s), topic branches from %s\n\n' "$branch" "$(short "$base_sha")" "$base_label" \
+  "$(TZ=UTC0 git log -1 --date=format-local:'%Y-%m-%d %H:%M UTC' --format=%cd "$base_sha")" "$source_kind"
 
 index=0
 while IFS=$'\t' read -r -u 3 topic key value base; do
@@ -192,7 +209,7 @@ while IFS=$'\t' read -r -u 3 topic key value base; do
   printf '%2d. %s @ %s  %s: %s%s\n' "$index" "$topic" "$(short "$ref_sha")" "$key" "$value" "$note"
 
   if [ "$key" = Upstream ]; then other_key=Fork-only; else other_key=Upstream; fi
-  exclude=("^$upstream_main" "^$tag_sha")
+  exclude=("^$upstream_main" "^$base_sha")
   [ "$base" = - ] || exclude+=("^$(git rev-parse --verify "$base^{commit}")")
 
   # Revs go through stdin: a thousand tag exclusions overflow a Windows command line.
@@ -216,14 +233,18 @@ while IFS=$'\t' read -r -u 3 topic key value base; do
     merge_out=$(git merge-tree --write-tree --name-only --no-messages --merge-base="$parent" "$tip" "$commit")
     merge_status=$?
     set -e
+    # upstream.json is rewritten with the pin below, so a conflict confined to it is no conflict.
+    if [ "$merge_status" -eq 1 ] && [ "$(printf '%s\n' "$merge_out" | tail -n +2 | grep -v '^$')" = upstream.json ]; then
+      merge_status=0
+    fi
     if [ "$merge_status" -eq 1 ]; then
       {
         printf '\nCONFLICT while stacking entry %d (%s)\n' "$index" "$topic"
         printf '  commit:   %s %s\n' "$(short "$commit")" "$subject"
-        printf '  onto:     %s (Orca %s plus %d stacked commit(s))\n' "$(short "$tip")" "$tag" "$picked_total"
+        printf '  onto:     %s (Orca %s plus %d stacked commit(s))\n' "$(short "$tip")" "$(short "$base_sha")" "$picked_total"
         printf '  files:\n'
         printf '%s\n' "$merge_out" | tail -n +2 | sed 's/^/    /'
-        printf '\nNothing was changed. Rebase %s onto %s and resolve, reorder the manifest, or drop the entry.\n' "$topic" "$tag"
+        printf '\nNothing was changed. Rebase %s onto %s and resolve, reorder the manifest, or drop the entry.\n' "$topic" "$(short "$base_sha")"
       } >&2
       exit 2
     elif [ "$merge_status" -ne 0 ]; then
@@ -265,18 +286,18 @@ if [ "$pinned" -eq 0 ]; then
   printf '\nWarning: no stacked commit owns upstream.json, so the result does not record its Orca base.\n'
 fi
 
-printf '\nResult: %s, %d commit(s) on Orca %s\n' "$(short "$tip")" "$picked_total" "$tag"
+printf '\nResult: %s, %d commit(s) on Orca %s (%s)\n' "$(short "$tip")" "$picked_total" "$(short "$base_sha")" "$base_label"
 
 # Compare with the published product branch, falling back to the local one.
 old=$(git rev-parse --verify --quiet "refs/remotes/origin/$branch^{commit}" || git rev-parse --verify --quiet "refs/heads/$branch^{commit}" || true)
 dropped=''
 if [ -n "$old" ]; then
-  old_base=$(git show "$old:upstream.json" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).sha||"")}catch{}})' || true)
+  old_base=$(git show "$old:upstream.json" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s);process.stdout.write(p.ref||p.sha||"")}catch{}})' || true)
   if [ -z "$old_base" ]; then
     printf 'Current %s: %s has no upstream.json, so it is not a Pod build.\n' "$branch" "$(short "$old")"
     dropped="everything on the current $branch (applying replaces it)"$'\n'
   else
-    git merge-base --is-ancestor "$old_base" "$old" || old_base=$(git merge-base "$old" "$tag_sha")
+    git merge-base --is-ancestor "$old_base" "$old" || old_base=$(git merge-base "$old" "$base_sha")
     # A commit that only re-pins upstream.json is replaced by the new pin, not lost.
     while read -r mark commit; do
       [ "$mark" = + ] || continue
