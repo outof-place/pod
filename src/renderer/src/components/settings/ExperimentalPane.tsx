@@ -11,6 +11,7 @@ import { translate } from '@/i18n/i18n'
 import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import { AgentDashboardExperimentalSetting } from './AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
+import { isPodNativeTerminalSetting } from './pod-native-terminal-setting'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
@@ -48,6 +49,7 @@ export function ExperimentalPane({
   // Why macOS only: the native view is a Ghostty NSView overlay.
   const showNativeTerminal =
     navigator.userAgent.includes('Mac') &&
+    !isPodNativeTerminalSetting() &&
     matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().nativeTerminal])
   const showAgentHibernation = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentHibernation
