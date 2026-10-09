@@ -19,6 +19,10 @@ import { registerAutoUpdaterHandlers } from '../updater-events'
 import { getServeUpdateHandoffFailure } from '../serve-update-handoff'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { AUTO_UPDATE_CHECK_INTERVAL_MS } from './updater-state'
+import {
+  isOfficialUpdateFeedDisabled,
+  OFFICIAL_UPDATES_MANIFEST_FIELD
+} from './official-update-opt-out'
 import { UpdaterDownloadInstall } from './updater-download-install'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
 
@@ -139,6 +143,12 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       return
     }
     if (is.dev) {
+      return
+    }
+    if (isOfficialUpdateFeedDisabled()) {
+      console.log(
+        `[updater] update checks disabled: this build sets ${OFFICIAL_UPDATES_MANIFEST_FIELD}=false (a fork whose signature official releases cannot replace)`
+      )
       return
     }
 
