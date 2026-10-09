@@ -49,6 +49,7 @@ Set `POD_SIGN_IDENTITY`, or `NOTARY_PROFILE` / `APPLE_API_KEY` (+`_ID`, `_ISSUER
    - `stapler validate` passes for the app and the DMG;
    - `spctl -a -vv` on the app reports `source=Notarized Developer ID`;
    - `spctl -a -vv -t open` accepts the DMG.
+   - Info.plist declares `ClaudeAccHost` (userData, cli), and claude-acc's `orcahost.py` resolves the app as Pod when the payload is bundled (`product/scripts/verify-claude-acc-host.mjs`).
 8. With `--publish` only: uploads the DMG, zip, zip blockmap and `latest-mac.yml` with `gh release create`.
 
 ## CI (later)
