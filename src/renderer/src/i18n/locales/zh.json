@@ -11798,6 +11798,11 @@
         "PluginSettingsPageDialog": {
           "description": "由 {{value0}} 插件提供，并在沙盒中显示。"
         },
+        "ProductThirdPartyPlugins": {
+          "label": "第三方插件",
+          "description": "从市场、Git 和本地文件夹安装插件。关闭时，只运行 {{product}} 自带的插件。",
+          "revocationNote": "{{product}} 不支持远程吊销，因此日后被发现不安全的插件无法替你拦截。"
+        },
         "PluginSettingsRow": {
           "openSettingsPage": "打开 {{value1}} 的 {{value0}}",
           "blocked": "已阻止",
