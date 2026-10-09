@@ -652,6 +652,225 @@ void ScheduleTick() {
 
 @end
 
+#pragma mark Scrollbar
+
+// Flipped so a row offset is the clip view's y origin.
+@interface OrcaGhosttyScrollDocumentView : NSView
+@end
+
+@implementation OrcaGhosttyScrollDocumentView
+- (BOOL)isFlipped {
+  return YES;
+}
+@end
+
+// Tells scroller-driven clip view moves (knob drags, track clicks) apart from layout-driven ones.
+@interface OrcaGhosttyScroller : NSScroller
+@property(nonatomic, readonly) BOOL tracking;
+@end
+
+@implementation OrcaGhosttyScroller
++ (BOOL)isCompatibleWithOverlayScrollers {
+  return YES;
+}
+
+- (void)mouseDown:(NSEvent*)event {
+  // NSScroller tracks the whole drag inside mouseDown.
+  _tracking = YES;
+  [super mouseDown:event];
+  _tracking = NO;
+}
+@end
+
+// A scroller-wide NSScrollView pinned to the surface's right edge: AppKit draws the overlay
+// scroller (fade, hover expansion, track clicks) while Ghostty keeps owning the viewport.
+// Rows map proportionally onto the strip, so the knob is len/total of the track.
+@interface OrcaGhosttyScrollbarView : NSScrollView
+@property(nonatomic, weak) OrcaGhosttySurfaceView* surfaceView;
+@property(nonatomic, readonly) uint64_t total;
+@property(nonatomic, readonly) uint64_t offset;
+@property(nonatomic, readonly) uint64_t len;
++ (instancetype)scrollbarOf:(OrcaGhosttySurfaceView*)surfaceView create:(BOOL)create;
+- (void)applyTotal:(uint64_t)total offset:(uint64_t)offset len:(uint64_t)len;
+- (void)applyKnobStyleFromConfig:(ghostty_config_t)config;
+- (BOOL)debugScrollToFraction:(double)fraction;
+@end
+
+@implementation OrcaGhosttyScrollbarView {
+  OrcaGhosttyScroller* _scroller;
+  int64_t _lastRow;
+  BOOL _syncing;
+  BOOL _liveScrolling;
+  BOOL _debugScrolling;
+}
+
++ (instancetype)scrollbarOf:(OrcaGhosttySurfaceView*)surfaceView create:(BOOL)create {
+  if (surfaceView == nil) return nil;
+  for (NSView* subview in surfaceView.subviews) {
+    if ([subview isKindOfClass:self]) return (OrcaGhosttyScrollbarView*)subview;
+  }
+  if (!create) return nil;
+  OrcaGhosttyScrollbarView* scrollbar = [[self alloc] initWithFrame:NSZeroRect];
+  scrollbar.surfaceView = surfaceView;
+  [scrollbar applyKnobStyleFromConfig:g_config];
+  [surfaceView addSubview:scrollbar];
+  [scrollbar pinToSuperviewEdge];
+  return scrollbar;
+}
+
+- (instancetype)initWithFrame:(NSRect)frame {
+  self = [super initWithFrame:frame];
+  if (!self) return nil;
+  _lastRow = -1;
+  self.hidden = YES;
+  self.drawsBackground = NO;
+  self.borderType = NSNoBorder;
+  self.hasHorizontalScroller = NO;
+  _scroller = [[OrcaGhosttyScroller alloc] initWithFrame:NSZeroRect];
+  self.verticalScroller = _scroller;
+  self.hasVerticalScroller = YES;
+  self.autohidesScrollers = NO;
+  self.scrollerStyle = NSScrollerStyleOverlay;
+  self.verticalScrollElasticity = NSScrollElasticityNone;
+  // Full-size-content windows would otherwise inset a strip near the titlebar.
+  self.automaticallyAdjustsContentInsets = NO;
+  self.documentView = [[OrcaGhosttyScrollDocumentView alloc] initWithFrame:NSZeroRect];
+  self.contentView.postsBoundsChangedNotifications = YES;
+  NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
+  [center addObserver:self
+             selector:@selector(clipViewDidScroll:)
+                 name:NSViewBoundsDidChangeNotification
+               object:self.contentView];
+  [center addObserver:self
+             selector:@selector(liveScrollWillStart:)
+                 name:NSScrollViewWillStartLiveScrollNotification
+               object:self];
+  [center addObserver:self
+             selector:@selector(liveScrollDidEnd:)
+                 name:NSScrollViewDidEndLiveScrollNotification
+               object:self];
+  return self;
+}
+
+// Overlay even when System Settings asks for always-visible scroll bars: a legacy track
+// would paint over the terminal's last column.
+- (void)setScrollerStyle:(NSScrollerStyle)style {
+  [super setScrollerStyle:NSScrollerStyleOverlay];
+}
+
+// Only the scroller takes the mouse; the rest of the strip is terminal underneath.
+- (NSView*)hitTest:(NSPoint)point {
+  NSView* hit = [super hitTest:point];
+  NSScroller* scroller = self.verticalScroller;
+  return hit != nil && scroller != nil && [hit isDescendantOf:scroller] ? hit : nil;
+}
+
+// The wheel stays Ghostty's (mouse reporting, momentum); the knob follows its viewport.
+- (void)scrollWheel:(NSEvent*)event {
+  [self.surfaceView scrollWheel:event];
+}
+
+- (void)resizeWithOldSuperviewSize:(NSSize)oldSize {
+  [self pinToSuperviewEdge];
+}
+
+- (void)setFrameSize:(NSSize)size {
+  [super setFrameSize:size];
+  [self syncDocument];
+}
+
+- (void)pinToSuperviewEdge {
+  NSView* superview = self.superview;
+  if (superview == nil) return;
+  const NSRect bounds = superview.bounds;
+  const CGFloat width = MIN(NSWidth(bounds), [NSScroller scrollerWidthForControlSize:NSControlSizeRegular
+                                                                       scrollerStyle:NSScrollerStyleOverlay]);
+  self.frame = NSMakeRect(NSMaxX(bounds) - width, NSMinY(bounds), width, NSHeight(bounds));
+}
+
+- (void)applyKnobStyleFromConfig:(ghostty_config_t)config {
+  ghostty_config_color_s background = {};
+  const char* key = "background";
+  if (config == nullptr || !ghostty_config_get(config, &background, key, strlen(key))) return;
+  const double luma = (0.299 * background.r + 0.587 * background.g + 0.114 * background.b) / 255.0;
+  self.scrollerKnobStyle = luma > 0.5 ? NSScrollerKnobStyleDark : NSScrollerKnobStyleLight;
+}
+
+- (BOOL)scrollable {
+  return _len > 0 && _total > _len;
+}
+
+- (void)applyTotal:(uint64_t)total offset:(uint64_t)offset len:(uint64_t)len {
+  const BOOL wasAtBottom = _offset + _len >= _total;
+  const BOOL atBottom = offset + len >= total;
+  // Output arriving at the bottom moves the offset too; only a viewport move flashes the knob.
+  const BOOL moved = offset != _offset && !(wasAtBottom && atBottom);
+  _total = total;
+  _offset = offset;
+  _len = len;
+  self.hidden = ![self scrollable];
+  if (self.hidden) return;
+  [self syncDocument];
+  if (moved && !_liveScrolling) [self flashScrollers];
+}
+
+- (void)syncDocument {
+  if (_syncing || ![self scrollable]) return;
+  NSClipView* clip = self.contentView;
+  const CGFloat height = NSHeight(clip.bounds);
+  if (height <= 0) return;
+  const CGFloat rowHeight = height / static_cast<CGFloat>(_len);
+  _syncing = YES;
+  [self.documentView setFrameSize:NSMakeSize(NSWidth(clip.bounds), rowHeight * static_cast<CGFloat>(_total))];
+  // Mid-drag the knob stays under the pointer; it settles on the row when the drag ends.
+  if (!_liveScrolling) {
+    [clip scrollToPoint:NSMakePoint(0, rowHeight * static_cast<CGFloat>(_offset))];
+    _lastRow = static_cast<int64_t>(_offset);
+  }
+  [self reflectScrolledClipView:clip];
+  _syncing = NO;
+}
+
+- (void)clipViewDidScroll:(NSNotification*)notification {
+  // Resizes move the clip view too; only the user's scrolling may move Ghostty's viewport.
+  const BOOL userScrolling = _scroller.tracking || _liveScrolling || _debugScrolling;
+  if (_syncing || !userScrolling || ![self scrollable]) return;
+  const CGFloat height = NSHeight(self.contentView.bounds);
+  if (height <= 0) return;
+  const double rows = NSMinY(self.contentView.bounds) / (height / static_cast<CGFloat>(_len));
+  const auto row = static_cast<int64_t>(llround(MAX(0.0, MIN(rows, static_cast<double>(_total - _len)))));
+  if (row == _lastRow) return;
+  _lastRow = row;
+  OrcaGhosttySurfaceView* surfaceView = self.surfaceView;
+  ghostty_surface_t surface = surfaceView.model ? surfaceView.model->surface : nullptr;
+  if (surface == nullptr) return;
+  const std::string action = "scroll_to_row:" + std::to_string(row);
+  ghostty_surface_binding_action(surface, action.c_str(), action.size());
+}
+
+- (void)liveScrollWillStart:(NSNotification*)notification {
+  _liveScrolling = YES;
+}
+
+- (void)liveScrollDidEnd:(NSNotification*)notification {
+  _liveScrolling = NO;
+  [self syncDocument];
+}
+
+// What dragging the knob to `fraction` (0 top, 1 bottom) does, for headless tests.
+- (BOOL)debugScrollToFraction:(double)fraction {
+  if (![self scrollable]) return NO;
+  NSClipView* clip = self.contentView;
+  const CGFloat range = NSHeight(self.documentView.frame) - NSHeight(clip.bounds);
+  _debugScrolling = YES;
+  [clip scrollToPoint:NSMakePoint(0, MAX(0.0, MIN(1.0, fraction)) * MAX(0.0, range))];
+  [self reflectScrolledClipView:clip];
+  _debugScrolling = NO;
+  return YES;
+}
+
+@end
+
 namespace {
 
 #pragma mark Runtime callbacks
@@ -711,6 +930,19 @@ bool OnAction(ghostty_app_t, ghostty_target_s target, ghostty_action_s action) {
       }
       [cursor set];
       return true;
+    }
+    case GHOSTTY_ACTION_SCROLLBAR: {
+      OrcaGhosttySurfaceView* view = ViewForSurfaceUserdata(model);
+      if (view == nil) return false;
+      const ghostty_action_scrollbar_s& bar = action.action.scrollbar;
+      [[OrcaGhosttyScrollbarView scrollbarOf:view create:YES] applyTotal:bar.total offset:bar.offset len:bar.len];
+      return true;
+    }
+    case GHOSTTY_ACTION_CONFIG_CHANGE: {
+      OrcaGhosttySurfaceView* view = ViewForSurfaceUserdata(model);
+      [[OrcaGhosttyScrollbarView scrollbarOf:view create:NO]
+          applyKnobStyleFromConfig:action.action.config_change.config];
+      return view != nil;
     }
     default:
       return false;
@@ -1236,7 +1468,38 @@ napi_value DebugScreenText(napi_env env, napi_callback_info info) {
   return result;
 }
 
-// debugState(id): { hidden, firstResponder, x, y, width, height } | null
+// Class of the view a click at `point` (surface coordinates) would reach, as the window routes it.
+std::string HitClassAt(OrcaGhosttySurfaceView* view, NSPoint point) {
+  NSView* content = view.window.contentView;
+  if (content == nil) return "none";
+  const NSPoint inWindow = [view convertPoint:point toView:nil];
+  NSView* hit = [content hitTest:content.superview ? [content.superview convertPoint:inWindow fromView:nil] : inWindow];
+  return hit ? object_getClassName(hit) : "none";
+}
+
+// { total, offset, len, visible, knobProportion, knobPosition, hitScroller, hitBeside } | null
+napi_value ScrollbarDebugState(napi_env env, OrcaGhosttySurfaceView* view) {
+  napi_value result;
+  napi_get_null(env, &result);
+  OrcaGhosttyScrollbarView* scrollbar = [OrcaGhosttyScrollbarView scrollbarOf:view create:NO];
+  NSScroller* scroller = scrollbar.verticalScroller;
+  if (scrollbar == nil || scroller == nil) return result;
+  napi_create_object(env, &result);
+  napi_set_named_property(env, result, "total", Number(env, scrollbar.total));
+  napi_set_named_property(env, result, "offset", Number(env, scrollbar.offset));
+  napi_set_named_property(env, result, "len", Number(env, scrollbar.len));
+  napi_set_named_property(env, result, "visible", Bool(env, !scrollbar.hiddenOrHasHiddenAncestor));
+  napi_set_named_property(env, result, "knobProportion", Number(env, scroller.knobProportion));
+  napi_set_named_property(env, result, "knobPosition", Number(env, scroller.doubleValue));
+  const NSRect strip = scrollbar.frame;
+  napi_set_named_property(env, result, "hitScroller",
+                          String(env, HitClassAt(view, NSMakePoint(NSMidX(strip), NSMidY(strip)))));
+  napi_set_named_property(env, result, "hitBeside",
+                          String(env, HitClassAt(view, NSMakePoint(NSMinX(strip) - 4, NSMidY(strip)))));
+  return result;
+}
+
+// debugState(id): { hidden, firstResponder, x, y, width, height, scrollbar } | null
 napi_value DebugState(napi_env env, napi_callback_info info) {
   size_t argc = 1;
   napi_value argv[1];
@@ -1261,6 +1524,7 @@ napi_value DebugState(napi_env env, napi_callback_info info) {
   napi_set_named_property(env, result, "layerClass",
                           String(env, view.layer ? object_getClassName(view.layer) : "none"));
   napi_set_named_property(env, result, "sublayers", Number(env, view.layer.sublayers.count));
+  napi_set_named_property(env, result, "scrollbar", ScrollbarDebugState(env, view));
   return result;
 }
 
@@ -1283,6 +1547,17 @@ napi_value DebugSnapshot(napi_env env, napi_callback_info info) {
   return result;
 }
 
+// debugScrollbarScroll(id, fraction): boolean — moves the scroller as a knob drag would.
+napi_value DebugScrollbarScroll(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value argv[2];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  if (argc < 2) return Bool(env, false);
+  OrcaGhosttyScrollbarView* scrollbar = [OrcaGhosttyScrollbarView scrollbarOf:ViewForId(GetInt(env, argv[0]))
+                                                                       create:NO];
+  return Bool(env, scrollbar != nil && [scrollbar debugScrollToFraction:GetDouble(env, argv[1])]);
+}
+
 napi_value ModuleInit(napi_env env, napi_value exports) {
   const napi_property_descriptor props[] = {
       {"init", nullptr, Init, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -1301,6 +1576,7 @@ napi_value ModuleInit(napi_env env, napi_value exports) {
       {"debugSnapshot", nullptr, DebugSnapshot, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugScreenText", nullptr, DebugScreenText, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugState", nullptr, DebugState, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugScrollbarScroll", nullptr, DebugScrollbarScroll, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"gridSizeOf", nullptr, GridSize, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   napi_define_properties(env, exports, sizeof(props) / sizeof(props[0]), props);
