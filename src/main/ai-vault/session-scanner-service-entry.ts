@@ -25,7 +25,8 @@ import {
   applySessionTreeChanges,
   applySessionTreeWatchState,
   forgetSessionTreePaths,
-  installSessionTreeWatchRequests
+  installSessionTreeWatchRequests,
+  refreshSessionTreeCache
 } from './session-tree-cache'
 
 if (!process.send) {
@@ -94,6 +95,9 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
         operation: 'firstPrompt',
         value: await readAiVaultFirstUserPrompt(request.request)
       }
+    }
+    if (request.options.freshDiscovery) {
+      refreshSessionTreeCache()
     }
     const startedAt = performance.now()
     const result = await scanAiVaultSessions({ ...request.options, signal: controller.signal })
@@ -187,7 +191,9 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
       sessionSearch.apply(raw.sessionSearch)
     }
     if (raw.sessionTreeWatch) {
-      installSessionTreeWatchRequests((root) => send({ type: 'sessionTreeWatch', root }))
+      installSessionTreeWatchRequests((root, restart) =>
+        send({ type: 'sessionTreeWatch', root, ...(restart ? { restart } : {}) })
+      )
     }
     send({ type: 'ready', protocol: AI_VAULT_SERVICE_PROTOCOL_VERSION, pid: process.pid })
     return
@@ -228,7 +234,7 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
     return
   }
   if (raw?.type === 'sessionTree') {
-    applySessionTreeWatchState(raw.root, raw.state)
+    applySessionTreeWatchState(raw.root, raw.state, raw.identity)
     return
   }
   if (raw?.type === 'sessionTreeChanges') {
