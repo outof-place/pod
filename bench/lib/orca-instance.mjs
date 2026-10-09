@@ -300,19 +300,20 @@ export async function waitForPrompts(profile, count, timeoutMs = 60_000) {
   }
 }
 
-/** Every process of the instance with per-process CPU and memory, classified by role. */
-export async function processSnapshot(instance) {
-  const { stdout } = await run(path.join(TOOLS_BIN, 'procstat'), [
-    '--root',
-    String(instance.pid),
-    '--argv',
-    instance.profile.ud
-  ])
+/** Every process under `rootPid` (plus any whose argv names `argvNeedle`), classified by role. */
+export async function snapshotProcesses(rootPid, argvNeedle = null) {
+  const args = ['--root', String(rootPid), ...(argvNeedle ? ['--argv', argvNeedle] : [])]
+  const { stdout } = await run(path.join(TOOLS_BIN, 'procstat'), args)
   const snapshot = JSON.parse(stdout)
   for (const proc of snapshot.procs) {
-    proc.role = roleOf(proc, instance.pid)
+    proc.role = roleOf(proc, rootPid)
   }
   return snapshot
+}
+
+/** Every process of the instance with per-process CPU and memory, classified by role. */
+export function processSnapshot(instance) {
+  return snapshotProcesses(instance.pid, instance.profile.ud)
 }
 
 const WORKLOAD_NAMES = new Set(['zsh', 'login', 'termload', 'seq', 'cat', 'sleep', 'bash', 'sh'])

@@ -1,25 +1,30 @@
-// Keystroke-to-pixels latency, measured the same way in every app by keylat: a CGEvent key posted
-// to the app's pid, and the display time of the first ScreenCaptureKit frame (at the display's
-// refresh rate) in which the echoed glyph changed the pixels of a small region at the prompt.
-// The shell is the same hermetic zsh everywhere; cursor blink is off everywhere.
+// Visible-window suite: keystroke-to-pixels latency in every app, and (with --throughput) the
+// throughput workloads in visible windows, including Ghostty and Terminal.app, which have no
+// windowless mode.
+//
+// Latency is measured the same way in every app by keylat:
+//   - a CGEvent key is posted to the app's pid;
+//   - ScreenCaptureKit captures a small region at the prompt at the display's refresh rate;
+//   - the sample is the display time of the first frame in which the echoed glyph changed pixels.
+// The shell is the same hermetic zsh everywhere, and cursor blink is off everywhere.
 //
 // This needs visible, focused windows, so it takes the desktop: run it only in a slot the user
 // agreed to. Without --confirm-visible it only checks permissions and the detector (dry run).
 //
-//   node bench/suites/latency.mjs [--confirm-visible] [--rounds 5] [--keys 40]
+//   node bench/suites/latency.mjs [--confirm-visible] [--throughput] [--rounds 5] [--keys 40]
 //        [--subjects orca,pod-native,pod-xterm,ghostty,terminal-app] [--display ID]
-import { execFile, spawn } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { parseArgs, promisify } from 'node:util'
 import {
   TOOLS_BIN,
+  appVersion,
   collectSamples,
   log,
   sleep,
   summarizeFields,
-  writeSuiteResult,
-  appVersion
+  writeSuiteResult
 } from '../lib/bench-session.mjs'
 import {
   SUBJECTS,
@@ -29,15 +34,19 @@ import {
   describeApp,
   launchInstance,
   openTerminal,
+  processSnapshot,
   removeProfile,
+  snapshotProcesses,
   waitForPrompts
 } from '../lib/orca-instance.mjs'
 import { summarize } from '../lib/sample-stats.mjs'
+import { ensureLogFile, measureWorkload, workloads } from '../lib/terminal-workloads.mjs'
 
 const run = promisify(execFile)
 const { values: options } = parseArgs({
   options: {
     'confirm-visible': { type: 'boolean', default: false },
+    throughput: { type: 'boolean', default: false },
     rounds: { type: 'string', default: '5' },
     keys: { type: 'string', default: '40' },
     subjects: { type: 'string', default: 'orca,pod-native,pod-xterm,ghostty,terminal-app' },
@@ -64,7 +73,13 @@ const display = options.display
 // Every window gets the same frame on the chosen display.
 const frame = { x: display.bounds[0] + 80, y: display.bounds[1] + 80, width: 1100, height: 700 }
 const GHOSTTY = '/Applications/Ghostty.app'
+const TERMINAL_APP = '/System/Applications/Utilities/Terminal.app'
+// The top-left of the terminal content: the prompt row after `clear`, and the row below.
 const PROMPT_REGION = { width: 360, height: 48 }
+// Title bar height of a standard macOS window, for apps whose content origin we cannot query.
+const TITLE_BAR = 28
+const logFile = options.throughput ? ensureLogFile() : null
+const allWorkloads = logFile ? workloads(logFile) : {}
 
 async function measureRegion(pid, rect) {
   const result = await keylatJSON([
@@ -88,6 +103,39 @@ async function measureRegion(pid, rect) {
   }
 }
 
+async function runWorkloads(start, snapshot, scratchDir) {
+  const results = {}
+  for (const [name, workload] of Object.entries(allWorkloads)) {
+    results[name] = await measureWorkload({
+      workload,
+      out: path.join(scratchDir, `result-${name}.json`),
+      start,
+      snapshot
+    })
+  }
+  return results
+}
+
+async function windowOf(pid) {
+  for (let i = 0; i < 100; i += 1) {
+    const { windows } = await keylatJSON(['--windows-of', String(pid)])
+    if (windows.length > 0) {
+      return windows[0].bounds
+    }
+    await sleep(100)
+  }
+  throw new Error(`no window for pid ${pid}`)
+}
+
+function regionBelowTitleBar(bounds) {
+  return [
+    bounds[0] - display.bounds[0] + 4,
+    bounds[1] - display.bounds[1] + TITLE_BAR + 2,
+    PROMPT_REGION.width,
+    PROMPT_REGION.height
+  ]
+}
+
 async function orcaSubject(name) {
   const subject = SUBJECTS[name]
   const profile = createProfile({
@@ -104,7 +152,9 @@ async function orcaSubject(name) {
     }, frame)
     const handle = await openTerminal(instance)
     await waitForPrompts(profile, 1)
-    await cli(instance, ['terminal', 'send', '--terminal', handle, '--text', 'clear', '--enter'])
+    const send = (text) =>
+      cli(instance, ['terminal', 'send', '--terminal', handle, '--text', text, '--enter'])
+    await send('clear')
     await keylatJSON(['--activate', String(instance.pid)])
     await sleep(1_500)
     const box = await instance.page.evaluate(() => {
@@ -120,27 +170,30 @@ async function orcaSubject(name) {
       PROMPT_REGION.width,
       PROMPT_REGION.height
     ]
-    return { ...(await measureRegion(instance.pid, rect)), rect }
+    const latency = { ...(await measureRegion(instance.pid, rect)), rect }
+    const throughput = options.throughput
+      ? await runWorkloads(send, () => processSnapshot(instance), profile.ud)
+      : null
+    return { ...latency, throughput }
   } finally {
     await closeInstance(instance)
   }
 }
 
-async function windowOf(pid) {
-  for (let i = 0; i < 100; i += 1) {
-    const { windows } = await keylatJSON(['--windows-of', String(pid)])
-    if (windows.length > 0) {
-      return windows[0].bounds
-    }
-    await sleep(100)
-  }
-  throw new Error(`no window for pid ${pid}`)
+// A command queue the harness feeds through a file: Ghostty has no way to type into its shell
+// from outside, so its throughput window runs this loop instead of an interactive prompt.
+function writeRunner(profile, queue) {
+  const script = path.join(profile.ud, 'runner.zsh')
+  writeFileSync(
+    script,
+    `while :; do\n  if [[ -f '${queue}' ]]; then c=$(<'${queue}'); rm -f '${queue}'; eval "$c"; fi\n  sleep 0.05\ndone\n`
+  )
+  return script
 }
 
-// Ghostty: a separate instance with no user config, the same font size as Orca's default (14).
-async function ghosttySubject() {
-  const profile = createProfile()
-  const config = path.join(profile.ud, 'ghostty.conf')
+// Ghostty: a separate instance (open -n) with no user config, Orca's default font size (14).
+async function launchGhostty(profile, command) {
+  const config = path.join(profile.ud, `ghostty-${Date.now()}.conf`)
   writeFileSync(
     config,
     [
@@ -151,28 +204,59 @@ async function ghosttySubject() {
       'quit-after-last-window-closed = true',
       `window-position-x = ${frame.x}`,
       `window-position-y = ${frame.y}`,
-      `command = /usr/bin/env ZDOTDIR=${profile.zdot} POD_BENCH_PROMPT_LOG=${profile.promptLog} /bin/zsh -i`
+      'window-width = 130',
+      'window-height = 40',
+      `command = ${command}`
     ].join('\n')
   )
-  const child = spawn(
-    `${GHOSTTY}/Contents/MacOS/ghostty`,
-    ['--config-default-files=false', `--config-file=${config}`],
-    { stdio: 'ignore' }
-  )
+  await run('/usr/bin/open', [
+    '-n',
+    '-a',
+    GHOSTTY,
+    '--args',
+    '--config-default-files=false',
+    `--config-file=${config}`
+  ])
+  for (let i = 0; i < 100; i += 1) {
+    const found = await run('/usr/bin/pgrep', ['-n', '-f', config]).catch(() => null)
+    if (found) {
+      return Number(found.stdout.trim())
+    }
+    await sleep(100)
+  }
+  throw new Error('Ghostty did not start')
+}
+
+async function ghosttySubject() {
+  const profile = createProfile()
+  const env = `/usr/bin/env ZDOTDIR=${profile.zdot} POD_BENCH_PROMPT_LOG=${profile.promptLog}`
+  // `clear` first: login(1) may print a "Last login" line above the prompt.
+  let pid = await launchGhostty(profile, `/bin/sh -c "clear; exec ${env} /bin/zsh -i"`)
   try {
     await waitForPrompts(profile, 1)
-    await keylatJSON(['--activate', String(child.pid)])
-    const bounds = await windowOf(child.pid)
+    await keylatJSON(['--activate', String(pid)])
+    const bounds = await windowOf(pid)
     await sleep(1_500)
-    const rect = [
-      bounds[0] - display.bounds[0] + 4,
-      bounds[1] - display.bounds[1] + 30,
-      PROMPT_REGION.width,
-      PROMPT_REGION.height
-    ]
-    return { ...(await measureRegion(child.pid, rect)), rect }
+    const rect = regionBelowTitleBar(bounds)
+    const latency = { ...(await measureRegion(pid, rect)), rect }
+    let throughput = null
+    if (options.throughput) {
+      process.kill(pid, 'SIGTERM')
+      const queue = path.join(profile.ud, 'queue')
+      pid = await launchGhostty(profile, `/bin/zsh -f ${writeRunner(profile, queue)}`)
+      await windowOf(pid)
+      const runner = pid
+      throughput = await runWorkloads(
+        async (command) => writeFileSync(queue, command),
+        () => snapshotProcesses(runner),
+        profile.ud
+      )
+    }
+    return { ...latency, throughput }
   } finally {
-    child.kill('SIGTERM')
+    try {
+      process.kill(pid, 'SIGTERM')
+    } catch {}
     await removeProfile(profile)
   }
 }
@@ -181,25 +265,32 @@ async function ghosttySubject() {
 async function terminalAppSubject() {
   const profile = createProfile()
   const command = `exec /usr/bin/env ZDOTDIR=${profile.zdot} POD_BENCH_PROMPT_LOG=${profile.promptLog} /bin/zsh -i`
-  const script = `tell application "Terminal"
-    set w to do script "${command}"
-    set bounds of front window to {${frame.x}, ${frame.y}, ${frame.x + frame.width}, ${frame.y + frame.height}}
-    activate
-  end tell`
-  await run('/usr/bin/osascript', ['-e', script])
+  const doScript = (text) =>
+    run('/usr/bin/osascript', [
+      '-e',
+      `tell application "Terminal" to do script ${JSON.stringify(text)} in front window`
+    ])
+  await run('/usr/bin/osascript', [
+    '-e',
+    `tell application "Terminal"
+      do script ${JSON.stringify(command)}
+      set bounds of front window to {${frame.x}, ${frame.y}, ${frame.x + frame.width}, ${frame.y + frame.height}}
+      activate
+    end tell`
+  ])
   try {
     await waitForPrompts(profile, 1)
+    await doScript('clear')
     const { stdout } = await run('/usr/bin/pgrep', ['-nx', 'Terminal'])
     const pid = Number(stdout.trim())
     const bounds = await windowOf(pid)
     await sleep(1_500)
-    const rect = [
-      bounds[0] - display.bounds[0] + 4,
-      bounds[1] - display.bounds[1] + 30,
-      PROMPT_REGION.width,
-      PROMPT_REGION.height
-    ]
-    return { ...(await measureRegion(pid, rect)), rect, pid }
+    const rect = regionBelowTitleBar(bounds)
+    const latency = { ...(await measureRegion(pid, rect)), rect, pid }
+    const throughput = options.throughput
+      ? await runWorkloads(doScript, () => snapshotProcesses(pid), profile.ud)
+      : null
+    return { ...latency, throughput }
   } finally {
     await run('/usr/bin/osascript', [
       '-e',
@@ -227,7 +318,7 @@ for (let round = 0; round < rounds; round += 1) {
   const order = names.map((_, i) => names[(i + round) % names.length])
   for (const name of order) {
     const [sample] = await collectSamples({
-      label: `latency ${name} round ${round + 1}`,
+      label: `visible ${name} round ${round + 1}`,
       count: 1,
       measure: () => measure(name)
     })
@@ -237,12 +328,13 @@ for (let round = 0; round < rounds; round += 1) {
 
 const versions = {
   ghostty: appVersion(GHOSTTY),
-  'terminal-app': appVersion('/System/Applications/Utilities/Terminal.app'),
+  'terminal-app': appVersion(TERMINAL_APP),
   ...Object.fromEntries(
     names.filter((name) => SUBJECTS[name]).map((name) => [name, describeApp(SUBJECTS[name].app)])
   )
 }
-const metrics = names.map((name) => ({
+const windowConditions = `visible focused window ${frame.width}x${frame.height} pt on display ${display.id} (${display.refreshHz} Hz)`
+const latencyMetrics = names.map((name) => ({
   id: `latency.${name}`,
   subject: labels[name],
   metric: 'keystroke to pixels on screen',
@@ -256,11 +348,51 @@ const metrics = names.map((name) => ({
     perRoundMedian: summarizeFields(samples[name], { keyToDisplayMs: 'ms' }).keyToDisplayMs,
     misses: samples[name].reduce((sum, sample) => sum + sample.misses, 0)
   },
-  conditions: `visible focused window ${frame.width}x${frame.height} pt on display ${display.id} (${display.refreshHz} Hz), ${options.keys} keys x ${rounds} rounds, zsh line editor echo, cursor blink off`
+  conditions: `${windowConditions}, ${options.keys} keys x ${rounds} rounds, zsh line editor echo, cursor blink off`
 }))
 writeSuiteResult('latency', {
   versions,
   config: { rounds, keys: Number(options.keys), frame, display, preflight },
-  metrics,
+  metrics: latencyMetrics,
   samples
 })
+
+if (options.throughput) {
+  const metrics = []
+  for (const name of names) {
+    for (const [workload, definition] of Object.entries(allWorkloads)) {
+      const rows = samples[name].map((sample) => sample.throughput[workload])
+      const stats = summarizeFields(rows, { totalMs: 'ms', settleMs: 'ms', cpuMs: 'ms' })
+      const conditions = `${windowConditions}, grid ${rows[0]?.cols}x${rows[0]?.rows}, cursor blink off`
+      metrics.push(
+        {
+          id: `throughput-visible.${workload}.wall.${name}`,
+          subject: labels[name],
+          metric: `${definition.label}: wall time (visible window)`,
+          unit: 'ms',
+          better: 'lower',
+          stats: stats.totalMs,
+          extra: { settleMs: stats.settleMs },
+          conditions
+        },
+        {
+          id: `throughput-visible.${workload}.cpu.${name}`,
+          subject: labels[name],
+          metric: `${definition.label}: app CPU time (visible window)`,
+          unit: 'ms',
+          better: 'lower',
+          stats: stats.cpuMs,
+          conditions
+        }
+      )
+    }
+  }
+  writeSuiteResult('throughput-visible', {
+    versions,
+    config: { rounds, frame, display, logFile },
+    metrics,
+    samples: Object.fromEntries(
+      names.map((name) => [name, samples[name].map((sample) => sample.throughput)])
+    )
+  })
+}
