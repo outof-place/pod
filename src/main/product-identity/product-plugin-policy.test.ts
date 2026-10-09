@@ -25,7 +25,11 @@ vi.mock('../plugins/plugin-install-lockfile-store', async (importOriginal) => ({
   })
 }))
 
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { checkoutPluginGitSource } from '../plugins/plugin-git-repository'
+import { PluginMarketplaceService } from '../plugins/plugin-marketplace-service'
 import { installStagedPluginTree } from '../plugins/plugin-install-staging'
 import {
   assertThirdPartyPluginsAllowed,
@@ -61,6 +65,18 @@ describe('third-party plugins in a product without Stably services', () => {
 
     bindThirdPartyPluginSettings(() => ({ thirdPartyPluginsEnabled: true }))
     await expect(withoutBlockedThirdPartyPlugins(INSTALLED, '/plugins')).resolves.toBe(INSTALLED)
+  })
+
+  it('never clones the official marketplace while only bundled plugins are allowed', async () => {
+    mocks.identity.current = podIdentityWithoutStablyServices()
+    const marketplace = new PluginMarketplaceService({
+      pluginsDataDir: mkdtempSync(join(tmpdir(), 'pod-marketplace-'))
+    })
+
+    const official = await marketplace.seedOfficialSource()
+
+    expect(mocks.gitExecFileAsync).not.toHaveBeenCalled()
+    expect(official.error).toContain('Third-party plugins are off in Pod.')
   })
 
   it('refuses marketplace fetches and every non-bundled install before any work', async () => {
