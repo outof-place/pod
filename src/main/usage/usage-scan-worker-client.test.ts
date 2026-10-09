@@ -60,6 +60,7 @@ function createClient(factory: () => FakeWorker): UsageScanWorkerClient {
 const SOURCE_CACHE: UsageSourceCacheRef = {
   path: '/tmp/orca-codex-usage-sources.json',
   schemaVersion: 6,
+  worktreeFingerprint: '[]',
   reuse: true
 }
 

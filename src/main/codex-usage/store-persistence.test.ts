@@ -46,6 +46,7 @@ describe('CodexUsageStore', () => {
     expect(scanCodexUsageFilesViaWorker).toHaveBeenCalledWith([], {
       path: join(storeEnv.tempUserData, 'orca-codex-usage-sources.json'),
       schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
+      worktreeFingerprint: '[]',
       reuse: false
     })
     expect(persistedJson).toBe(JSON.stringify(JSON.parse(persistedJson)))
@@ -117,6 +118,7 @@ describe('CodexUsageStore', () => {
     expect(scanMock).toHaveBeenLastCalledWith([], {
       path: sourceCachePath,
       schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
+      worktreeFingerprint: '[]',
       reuse: true
     })
 
@@ -126,6 +128,7 @@ describe('CodexUsageStore', () => {
     expect(scanMock).toHaveBeenLastCalledWith([], {
       path: sourceCachePath,
       schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
+      worktreeFingerprint: '[]',
       reuse: false
     })
   })
