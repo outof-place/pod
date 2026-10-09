@@ -10,13 +10,16 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp/client-user-data') },
-  clipboard: {
-    readImage: mocks.readImage,
-    availableFormats: () => ['image/png'],
-    readBuffer: () => Buffer.alloc(0)
-  },
+  clipboard: {},
   ipcMain: { removeHandler: vi.fn(), handle: mocks.handle },
   nativeImage: { createFromBuffer: vi.fn() }
+}))
+vi.mock('./clipboard-electron-io', () => ({
+  readClipboardImage: mocks.readImage,
+  readClipboardSnapshot: async () => ({
+    types: ['image/png'],
+    readBuffer: async () => Buffer.alloc(0)
+  })
 }))
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
