@@ -4,7 +4,8 @@ import {
   POD_FEATURE_PROMOS,
   isPodSettingsSectionEnabled,
   podFeatureDefines,
-  podFeatureFlags
+  podFeatureFlags,
+  podStubModules
 } from './features'
 
 describe('Pod build profile', () => {
@@ -24,5 +25,13 @@ describe('Pod build profile', () => {
     for (const id of POD_FEATURE_IDS) {
       expect(defines[`__POD_FEATURES__.${id}`]).toBe(String(podFeatureFlags('pod')[id]))
     }
+  })
+
+  it('stubs only the non-English catalogs', () => {
+    const stubs = podStubModules('pod')
+    const stubbed = (path: string): boolean => stubs.some((pattern) => pattern.test(path))
+    expect(stubbed('/repo/src/renderer/src/i18n/locales/fr.json')).toBe(true)
+    expect(stubbed('/repo/src/renderer/src/i18n/locales/en.json')).toBe(false)
+    expect(podStubModules('orca')).toEqual([])
   })
 })
