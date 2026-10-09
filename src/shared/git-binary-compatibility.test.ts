@@ -31,6 +31,7 @@ import { gitChangeListArgs, parseGitChangeList } from './git-change-list'
 import { encodeGitPathspecs } from './git-pathspec-stdin'
 import { endSubprocessStdin } from './subprocess-stdin-write'
 import { registerGitResolutionBinaryCompatibilityCases } from './git-resolution-binary-compatibility.test-cases'
+import { registerAdaptiveGitStatusBinaryCompatibilityCases } from './git-status-untracked-binary-compatibility.test-cases'
 
 const execFileAsync = promisify(execFile)
 const image = process.env.ORCA_GIT_COMPAT_IMAGE
@@ -874,4 +875,8 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   registerGitResolutionBinaryCompatibilityCases(runGit, (name) =>
     image ? `/repo/${name}.git` : join(repoPath, `${name}.git`)
   )
+  registerAdaptiveGitStatusBinaryCompatibilityCases(runGit, (name) => ({
+    hostPath: join(repoPath, name),
+    gitCwd: image ? `/repo/${name}` : join(repoPath, name)
+  }))
 })

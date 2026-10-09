@@ -54,11 +54,17 @@ vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) =>
   })
 )
 
-import { clearEffectiveUpstreamStatusCacheForTests, getStatus, stageFile } from './status'
+import {
+  clearEffectiveUpstreamStatusCacheForTests,
+  getStatus,
+  stageFile,
+  invalidateGitReadCaches
+} from './status'
 
 describe('getStatus', () => {
   beforeEach(() => {
     clearEffectiveUpstreamStatusCacheForTests()
+    invalidateGitReadCaches()
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncBufferMock.mockReset()
     gitStreamOptionsMock.mockReset()
