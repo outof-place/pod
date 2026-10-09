@@ -116,10 +116,14 @@ describe('getStatus untracked directory expansion', () => {
     expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args.includes('diff'))).toBe(false)
   })
 
-  it('keeps the collapsed row when the listing fails after status succeeded', async () => {
+  it('retries all-mode status when the listing fails and uses its branch metadata', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args.includes('status')) {
-        return { stdout: '? new/\n' }
+        return {
+          stdout: args.includes('--untracked-files=all')
+            ? '# branch.oid newer\n# branch.head feature\n? new/a.ts\n? new/b.ts\n'
+            : '# branch.oid older\n? new/\n'
+        }
       }
       if (args[0] === 'ls-files') {
         throw new Error('fatal: transient failure')
@@ -129,11 +133,16 @@ describe('getStatus untracked directory expansion', () => {
 
     const result = await getStatus('/repo', { includeLineStats: false })
 
-    expect(result.entries).toEqual([{ path: 'new/', status: 'untracked', area: 'untracked' }])
+    expect(result.entries.map((entry) => entry.path)).toEqual(['new/a.ts', 'new/b.ts'])
+    expect(result.head).toBe('newer')
+    expect(result.branch).toBe('refs/heads/feature')
+    expect(
+      gitExecFileAsyncMock.mock.calls.filter(([args]) => args.includes('status'))
+    ).toHaveLength(2)
   })
 
   it('keeps untracked=all when ignored paths are requested', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '? new/a.ts\n! new/x.log\n' })
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '? new/a.ts\n? nested/\n! new/x.log\n' })
 
     const result = await getStatus('/repo', { includeIgnored: true, includeLineStats: false })
 
