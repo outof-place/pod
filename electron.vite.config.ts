@@ -186,17 +186,19 @@ function createMainBootstrapPlugin() {
   return {
     name: 'orca-main-bootstrap',
     generateBundle(_options, bundle) {
-      const mainChunk = bundle['index.js']
-      if (!mainChunk || mainChunk.type !== 'chunk') {
-        return
-      }
+      for (const fileName of ['main-bootstrap.js', 'index.js']) {
+        const mainChunk = bundle[fileName]
+        if (!mainChunk || mainChunk.type !== 'chunk') {
+          continue
+        }
 
-      // Why: source guards and diagnostics run after Rollup's generated require
-      // prelude, too late to handle a missing bootstrap dependency.
-      mainChunk.code =
-        createBootstrapFatalExitBanner() +
-        createStartupDiagnosticsBanner(mainChunk.fileName) +
-        mainChunk.code
+        // Why: source guards and diagnostics run after Rollup's generated require
+        // prelude, too late to handle a missing bootstrap dependency.
+        mainChunk.code =
+          createBootstrapFatalExitBanner() +
+          createStartupDiagnosticsBanner(mainChunk.fileName) +
+          mainChunk.code
+      }
     }
   }
 }
@@ -231,6 +233,8 @@ export const electronViteConfig: UserConfig = {
         // while the unpacked daemon needs its pure-JS xterm graph bundled.
         external: isExternalMainModule,
         input: {
+          // Why: package.json main; it enables Node's compile cache before index.js compiles.
+          'main-bootstrap': resolve('src/main/main-bootstrap.ts'),
           index: resolve('src/main/index.ts'),
           // Why: sandboxed webview preloads cannot load Rollup helper chunks.
           'browser-window-close-preload': resolve('src/preload/browser-window-close.ts'),
