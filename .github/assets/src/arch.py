@@ -63,6 +63,7 @@ class Node:
     mono: str = ""
     pod: bool = False  # what Pod adds
     tag: str = ""
+    planned: bool = False  # not built yet: a dashed outline, no fill
 
 
 @dataclass
@@ -94,6 +95,7 @@ class Diagram:
     legend: tuple[str, str] = ("Orca, unchanged", "What Pod adds")
     notes: list[tuple[float, float, str]] = field(default_factory=list)
     k: float = 1.0
+    bands: list[tuple[float, float, float, float, str]] = field(default_factory=list)  # x, y, w, h, label
 
 
 def _anchor(nd: Node, side: str, frac: float = 0.5) -> tuple[float, float]:
@@ -171,7 +173,10 @@ def _ground(theme: Theme) -> Ink:
 def _node(doc: Doc, theme: Theme, nd: Node) -> None:
     r = 22
     d = squircle(nd.x, nd.y, nd.w, nd.h, r)
-    if nd.pod:
+    if nd.planned:
+        dash = f'stroke-dasharray="{5 * K:g} {5 * K:g}" stroke-linecap="round"'
+        doc.add(f'<path d="{squircle(nd.x + 0.75, nd.y + 0.75, nd.w - 1.5, nd.h - 1.5, r - 0.75)}" fill="none" {theme.pod_glyph.with_a(0.7).stroke()} stroke-width="{1.5 * K:g}" {dash}/>')
+    elif nd.pod:
         tint = Ink(
             oklch(0.3 if theme.dark else 0.97, 0.05 if theme.dark else 0.02, 205)
         )
@@ -331,13 +336,16 @@ def _edge(doc: Doc, theme: Theme, e: Edge, nodes: dict[str, Node], idx: int) -> 
 
 
 def _legend(
-    doc: Doc, theme: Theme, x: float, y: float, labels: tuple[str, str]
+    doc: Doc, theme: Theme, x: float, y: float, labels: tuple[str, str], planned: bool = False, max_x: float = 1e9
 ) -> None:
     t = Type("suisse", 15 * K)
-    items = [(False, labels[0]), (True, labels[1])]
+    x0 = x
+    items = [(False, labels[0]), (True, labels[1])] + ([("planned", "Planned")] if planned else [])
     for pod, label in items:
         d = squircle(x, y - 12 * K, 16 * K, 16 * K, 5 * K)
-        if pod:
+        if pod == "planned":
+            doc.add(f'<path d="{d}" fill="none" {theme.pod_glyph.with_a(0.7).stroke()} stroke-width="{1.5 * K:g}" stroke-dasharray="{3 * K:g} {3 * K:g}"/>')
+        elif pod:
             doc.add(
                 f'<path d="{d}" fill="{oklch(0.27 if theme.dark else 0.965, 0.05 if theme.dark else 0.018, 205)}"/>'
             )
@@ -356,6 +364,8 @@ def _legend(
             )
         x += 26 * K
         x += doc.text(x, y, label, t, theme.ink2) + 28 * K
+    if x + 16 * K + face(t.face).width("Data in flight", t.size) > max_x:
+        x, y = x0, y + 30 * K
     # The packet's key.
     doc.add(f'<circle cx="{n(x + 4 * K)}" cy="{n(y - 4 * K)}" r="{4 * K:g}" {theme.pod_glyph.fill()}/>')
     doc.text(x + 16 * K, y, "Data in flight", t, theme.ink2)
@@ -379,6 +389,12 @@ def render(dg: Diagram, theme: Theme) -> Doc:
                 HEAD,
                 theme.ink3,
             )
+    for bx, by, bw, bh, label in dg.bands:
+        # A layer that doesn't exist yet: a faint dashed field with its name on the edge.
+        band = squircle(bx, by, bw, bh, 26)
+        doc.add(f'<path d="{band}" {theme.fill.fill()}/>')
+        doc.add(f'<path d="{band}" fill="none" {theme.ink3.with_a(0.35).stroke()} stroke-width="{1.2 * K:g}" stroke-dasharray="{2 * K:g} {6 * K:g}" stroke-linecap="round"/>')
+        doc.text(bx + bw - 20 * K, by + 20 * K + EYEBROW.size * 0.78, label, EYEBROW, theme.pod_ink, anchor="end")
     for i, e in enumerate(dg.edges):
         _edge(doc, theme, e, nodes, i) if e.quiet else None
     for nd in dg.nodes:
@@ -389,7 +405,8 @@ def render(dg: Diagram, theme: Theme) -> Doc:
         for j, row in enumerate(s.split("\n")):
             doc.text(x, y + j * BODY.size * BODY.leading, row, BODY, theme.ink3)
     if dg.legend:
-        _legend(doc, theme, 40, dg.h - 30 * K, dg.legend)
+        two = any(nd.planned for nd in dg.nodes) and dg.k > 1
+        _legend(doc, theme, 40, dg.h - (60 if two else 30) * K, dg.legend, planned=any(nd.planned for nd in dg.nodes), max_x=dg.w - 40)
     return doc
 
 
@@ -404,6 +421,7 @@ def _phone(
     note: str,
     legend: tuple[str, str],
     loop: tuple[str, str] | None = None,
+    planned: list[tuple[str, dict]] | None = None,
 ) -> Diagram:
     """The phone layout: one node per row, the flow straight down, larger type; `loop` runs back up on the right."""
     use_scale(PHONE)
@@ -427,8 +445,18 @@ def _phone(
     rows = wrap(note, BODY, W - 2 * x0)
     first = y - gap + 44 + BODY.size
     last = first + (len(rows) - 1) * BODY.size * BODY.leading
+    bands = []
+    if planned:
+        band_y = last + 48 * PHONE
+        py = band_y + 58 * PHONE
+        for id_, sp in planned:
+            nd = fit(Node(id_, x0 + 16, py, W - 2 * x0 - 32, 0, **sp))
+            nodes.append(nd)
+            py += nd.h + 20
+        bands.append((24, band_y, W - 48, py - band_y + 4, "Planned, after the first release"))
+        last = py + 30 * PHONE
     H = last + 56 * PHONE + 30 * PHONE
-    return Diagram(name, title, W, H, nodes, edges, legend=legend, notes=[(x0, first, "\n".join(rows))], k=PHONE)
+    return Diagram(name, title, W, H, nodes, edges, legend=legend, notes=[(x0, first, "\n".join(rows))], k=PHONE, bands=bands)
 
 
 # ── 1. The native terminal ─────────────────────────────────────────────
@@ -682,32 +710,43 @@ def fit(nd: Node) -> Node:
 
 def acc(narrow: bool = False) -> Diagram:
     """
-    pod/acc: src/main/pod/acc/acc-lifecycle.ts, acc-menu-helper.ts, acc-supervisor.ts,
+    Today, from pod/acc: src/main/pod/acc/acc-lifecycle.ts, acc-menu-helper.ts, acc-supervisor.ts,
     config/claude-acc-payload.json, resources/plugins/distro/outof-place.pod-acc; claude-acc v1.28:
     setup.sh, app/Sources (Awake.swift, fanctl/Lid.swift, hook/main.swift), sched.py.
+    Planned, from the merge plan (scratchpad brand/acc-merge-plan.md, sections 1 and 7).
     """
-    title = "claude-acc inside Pod: Pod installs its bundled claude-acc, supervises it and shows its state in the window"
+    title = "claude-acc inside Pod: Pod installs its bundled claude-acc, supervises it and shows its state in the window; a planned layer moves the helpers into Pod.app"
     legend = ("claude-acc", "What Pod adds")
     spec = {
         "supervisor": dict(eyebrow="Pod main", title="acc supervisor", body="Runs the bundled setup when its version, owner or app path changes.", pod=True, tag="In progress"),
         "payload": dict(eyebrow="Inside Pod.app", title="claude-acc", mono="sha256-pinned release", body="setup.sh --owner pod installs it for the user."),
-        "agents": dict(eyebrow="LaunchAgents", title="Background jobs", body="Rotation, the memory guard, cleanup, perf. Next: codes.pod.app.acc labels."),
+        "agents": dict(eyebrow="LaunchAgents", title="Background jobs", mono="com.filip.claude-acc.*", body="Rotation, the memory guard, cleanup, perf."),
         "state": dict(eyebrow="~/.local/share/claude-acc", title="State files", body="What every job last did, as JSON."),
-        "helper": dict(eyebrow="Menu bar", title="Menu helper", body="Claude Acc.app today; Pod hides its own tray icon. Next: Pod Menu, inside Pod."),
-        "root": dict(eyebrow="Root, installed apart", title="Fans and lid", body="Daemons set up with Touch ID, never by Pod. Next: one pod-rootd over XPC."),
+        "helper": dict(eyebrow="Menu bar helper", title="Claude Acc.app", body="Stay awake and dictation. Pod hides its own tray icon while it runs."),
+        "root": dict(eyebrow="LaunchDaemons, root", title="Fans and lid", body="Installed apart with Touch ID, never by Pod's setup."),
         "hook": dict(eyebrow="Agents' commands", title="Hook and sched", body="Dev servers go to the memory guard, builds to the memory-aware scheduler."),
         "plugin": dict(eyebrow="Pod plugin", title="Status bar and panel", body="Account, memory and awake at the window's foot.", pod=True),
+    }
+    planned = {
+        "menu": dict(eyebrow="Login item in Pod.app", title="Pod Menu.app", body="Claude Acc.app moved inside Pod; same bundle id, so its grants carry over.", planned=True),
+        "rootd": dict(eyebrow="One root helper", title="pod-rootd", body="An SMAppService daemon over XPC, with fixed verbs, replacing the root daemons.", planned=True),
+        "pagents": dict(eyebrow="LaunchAgents in Pod.app", title="The same jobs", mono="codes.pod.app.acc.*", body="Registered by Pod, removed with it.", planned=True),
+        "python": dict(eyebrow="Contents/Resources", title="Embedded Python", body="A pinned 3.14 runs the jobs, not uv's or the system's.", planned=True),
     }
     if not narrow:
         use_scale(1.0)
         W = 1280
         nw = 224
         nh = max(fit(Node("", 0, 0, nw, 0, **sp)).h for sp in spec.values())
+        ph = max(fit(Node("", 0, 0, nw, 0, **sp)).h for sp in planned.values())
         gap = (W - 80 - 4 * nw) / 3
         xs = [40 + i * (nw + gap) for i in range(4)]
         y1, y2 = 48, 48 + nh + 116
+        band_y = y2 + nh + 64
+        y3 = band_y + 56
         place = {"supervisor": (0, y1), "payload": (1, y1), "agents": (2, y1), "state": (3, y1), "helper": (0, y2), "root": (1, y2), "hook": (2, y2), "plugin": (3, y2)}
         nodes = [Node(k, xs[c], y, nw, nh, **spec[k]) for k, (c, y) in place.items()]
+        nodes += [Node(k, xs[c], y3, nw, ph, **planned[k]) for c, k in enumerate(("menu", "rootd", "pagents", "python"))]
         edges = [
             Edge("supervisor", "payload", "setup.sh", fa=0.42, fb=0.42, packet=3.0, label_side="above"),
             Edge("payload", "agents", "launchctl\nbootstrap", fa=0.42, fb=0.42, packet=3.0, delay=0.6, label_side="above"),
@@ -717,12 +756,15 @@ def acc(narrow: bool = False) -> Diagram:
             Edge("payload", "helper", "installs, opens", sides="bt", fa=0.3, fb=0.86, packet=3.0, delay=0.9, label_side="above"),
             Edge("helper", "root", "awake.json", fa=0.5, fb=0.5, quiet=True, label_side="above"),
             Edge("hook", "agents", "admit", sides="tb", fa=0.5, fb=0.5, packet=3.0, delay=2.2, label_side="right"),
+            Edge("helper", "menu", "becomes", sides="bt", fa=0.5, fb=0.5, quiet=True, label_side="right", label_at=0.3),
+            Edge("root", "rootd", "replaced by", sides="bt", fa=0.5, fb=0.5, quiet=True, label_side="right", label_at=0.3),
         ]
-        return Diagram("arch-acc", title, W, y2 + nh + 96, nodes, edges, legend=legend)
+        bands = [(24, band_y, W - 48, y3 + ph + 24 - band_y, "Planned, after the first release")]
+        return Diagram("arch-acc", title, W, y3 + ph + 24 + 76, nodes, edges, legend=legend, bands=bands)
     specs = [(k_, spec[k_]) for k_ in ("supervisor", "payload", "agents", "state", "plugin")]
     flow = [("supervisor", "payload", "setup.sh"), ("payload", "agents", "launchctl bootstrap"), ("agents", "state", "writes"), ("state", "plugin", "polls")]
-    note = "Setup also installs the menu helper, Claude Acc.app (Pod Menu next). Fans and the lid run as root daemons, installed apart with Touch ID (one pod-rootd next)."
-    return _phone("arch-acc", title, specs, flow, note, legend)
+    note = "Setup also installs the menu helper, Claude Acc.app. Fans and the lid run as root daemons, installed apart with Touch ID."
+    return _phone("arch-acc", title, specs, flow, note, legend, planned=[(k_, planned[k_]) for k_ in ("menu", "rootd", "pagents", "python")])
 
 
 DIAGRAMS = {"terminal": terminal, "search": search, "acc": acc}
