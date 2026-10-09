@@ -99,3 +99,20 @@ cannot push commits that change `.github/workflows`, and every Orca release chan
 - Store it with `gh secret set POD_SYNC_TOKEN -R outof-place/pod`.
 
 Without it, the workflow keeps Orca's workflows disabled, then fails and says why.
+
+## Maintainers: the macOS build runner
+
+The sync workflow builds on the standard `macos-15` runner: 3 M1 cores, free for public
+repositories. If `pnpm build` runs out of memory there, set the `POD_MAC_RUNNER` repository variable:
+
+- `macos-15-xlarge`: 5 M2 cores and 14 GB of memory. Larger runners are billed per minute even on
+  public repositories, so this needs a payment method on the `outof-place` organization.
+- A self-hosted Mac: give it a label of its own, for example `pod-mac`, and set the variable to that
+  label. Self-hosted runners cost nothing on GitHub's side. This workflow runs only on schedule and
+  on demand, never on pull requests, so code from forks never reaches the machine.
+
+```sh
+gh variable set POD_MAC_RUNNER -R outof-place/pod -b macos-15-xlarge
+```
+
+Delete the variable to go back to `macos-15`.
