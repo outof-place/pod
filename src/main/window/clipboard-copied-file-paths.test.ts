@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
+import { rawClipboardFormat } from './clipboard-snapshot'
 
 function clipboardWith(formats: Record<string, Buffer | string>) {
   return {
-    readBuffer: (format: string): Buffer => {
-      const value = formats[format]
+    readBuffer: async (type: string): Promise<Buffer> => {
+      const value = formats[type]
       return typeof value === 'string' ? Buffer.from(value, 'utf8') : (value ?? Buffer.alloc(0))
     }
   }
@@ -16,50 +17,68 @@ function filenamesPlist(paths: string[]): string {
 }
 
 describe('readClipboardCopiedFilePaths', () => {
-  it('lists every file Finder copied, decoding XML entities', () => {
+  it('lists every file Finder copied from the uri-list Electron maps NSFilenamesPboardType to', async () => {
     const clipboard = clipboardWith({
-      NSFilenamesPboardType: filenamesPlist(['/Users/me/Q&amp;A shot.png', '/Users/me/b.pdf']),
-      'public.file-url': 'file:///Users/me/Q&A%20shot.png'
+      'text/uri-list': 'file:///Users/me/Q&A%20shot.png\r\nfile:///Users/me/b.pdf\r\n',
+      [rawClipboardFormat('NSFilenamesPboardType')]: filenamesPlist(['/Users/me/stale.png'])
     })
-    expect(readClipboardCopiedFilePaths(clipboard, 'darwin')).toEqual([
+    await expect(readClipboardCopiedFilePaths(clipboard, 'darwin')).resolves.toEqual([
       '/Users/me/Q&A shot.png',
       '/Users/me/b.pdf'
     ])
   })
 
-  it('falls back to the first file URL on macOS, but not a file-reference URL', () => {
-    expect(
-      readClipboardCopiedFilePaths(
-        clipboardWith({ 'public.file-url': 'file:///Users/me/my%20shot.png' }),
-        'darwin'
-      )
-    ).toEqual(['/Users/me/my shot.png'])
-    expect(
-      readClipboardCopiedFilePaths(
-        clipboardWith({ 'public.file-url': 'file:///.file/id=6571367.2773272' }),
-        'darwin'
-      )
-    ).toEqual([])
+  it('falls back to the raw Finder filenames plist, decoding XML entities', async () => {
+    const clipboard = clipboardWith({
+      [rawClipboardFormat('NSFilenamesPboardType')]: filenamesPlist([
+        '/Users/me/Q&amp;A shot.png',
+        '/Users/me/b.pdf'
+      ]),
+      [rawClipboardFormat('public.file-url')]: 'file:///Users/me/Q&A%20shot.png'
+    })
+    await expect(readClipboardCopiedFilePaths(clipboard, 'darwin')).resolves.toEqual([
+      '/Users/me/Q&A shot.png',
+      '/Users/me/b.pdf'
+    ])
   })
 
-  it('reads a Linux file manager uri-list and rejects non-file entries', () => {
-    expect(
+  it('falls back to the first file URL on macOS, but not a file-reference URL', async () => {
+    await expect(
+      readClipboardCopiedFilePaths(
+        clipboardWith({
+          [rawClipboardFormat('public.file-url')]: 'file:///Users/me/my%20shot.png'
+        }),
+        'darwin'
+      )
+    ).resolves.toEqual(['/Users/me/my shot.png'])
+    await expect(
+      readClipboardCopiedFilePaths(
+        clipboardWith({
+          [rawClipboardFormat('public.file-url')]: 'file:///.file/id=6571367.2773272'
+        }),
+        'darwin'
+      )
+    ).resolves.toEqual([])
+  })
+
+  it('reads a Linux file manager uri-list and rejects non-file entries', async () => {
+    await expect(
       readClipboardCopiedFilePaths(
         clipboardWith({
           'text/uri-list': '# copied\r\nfile:///home/me/a.png\r\nfile:///home/me/b%20c.txt\r\n'
         }),
         'linux'
       )
-    ).toEqual(['/home/me/a.png', '/home/me/b c.txt'])
-    expect(
+    ).resolves.toEqual(['/home/me/a.png', '/home/me/b c.txt'])
+    await expect(
       readClipboardCopiedFilePaths(
         clipboardWith({ 'text/uri-list': 'file:///home/me/a.png\nhttps://example.com/x' }),
         'linux'
       )
-    ).toEqual([])
+    ).resolves.toEqual([])
   })
 
-  it('reads the single file Explorer copied and nothing when it copied several', () => {
+  it('reads the single file Explorer copied and nothing when it copied several', async () => {
     const shellItems = (count: number): Buffer => {
       const cida = Buffer.alloc(4 + 4 * (count + 1))
       cida.writeUInt32LE(count)
@@ -67,24 +86,29 @@ describe('readClipboardCopiedFilePaths', () => {
     }
     const explorer = (count: number) =>
       clipboardWith({
-        FileNameW: Buffer.from('C:\\Users\\me\\shot.png\0', 'utf16le'),
-        'Shell IDList Array': shellItems(count)
+        [rawClipboardFormat('FileNameW')]: Buffer.from('C:\\Users\\me\\shot.png\0', 'utf16le'),
+        [rawClipboardFormat('Shell IDList Array')]: shellItems(count)
       })
-    expect(readClipboardCopiedFilePaths(explorer(1), 'win32')).toEqual(['C:\\Users\\me\\shot.png'])
-    expect(readClipboardCopiedFilePaths(explorer(2), 'win32')).toEqual([])
+    await expect(readClipboardCopiedFilePaths(explorer(1), 'win32')).resolves.toEqual([
+      'C:\\Users\\me\\shot.png'
+    ])
+    await expect(readClipboardCopiedFilePaths(explorer(2), 'win32')).resolves.toEqual([])
   })
 
-  it('returns nothing for plain text, oversized lists, or a failing clipboard', () => {
-    expect(readClipboardCopiedFilePaths(clipboardWith({}), 'darwin')).toEqual([])
+  it('returns nothing for plain text, oversized lists, or a failing clipboard', async () => {
+    await expect(readClipboardCopiedFilePaths(clipboardWith({}), 'darwin')).resolves.toEqual([])
     const huge = filenamesPlist(['/a'.padEnd(300 * 1024, 'a')])
-    expect(
-      readClipboardCopiedFilePaths(clipboardWith({ NSFilenamesPboardType: huge }), 'darwin')
-    ).toEqual([])
+    await expect(
+      readClipboardCopiedFilePaths(
+        clipboardWith({ [rawClipboardFormat('NSFilenamesPboardType')]: huge }),
+        'darwin'
+      )
+    ).resolves.toEqual([])
     const failing = {
-      readBuffer: (): Buffer => {
+      readBuffer: async (): Promise<Buffer> => {
         throw new Error('format unavailable')
       }
     }
-    expect(readClipboardCopiedFilePaths(failing, 'linux')).toEqual([])
+    await expect(readClipboardCopiedFilePaths(failing, 'linux')).resolves.toEqual([])
   })
 })
