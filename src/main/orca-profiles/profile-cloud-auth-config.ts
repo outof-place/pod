@@ -4,6 +4,10 @@ import {
   cleanCloudServiceOrigin as cleanOrigin
 } from '../../shared/cloud-service-url'
 import { resolvePushGatewayOrigin } from '../runtime/push/push-gateway-origin'
+import {
+  areStablyServicesEnabled,
+  stablyServiceUnavailableMessage
+} from '../product-identity/product-overlay'
 
 export type OrcaCloudAuthConfig = {
   apiBaseUrl: string
@@ -43,6 +47,10 @@ export function getOrcaCloudAuthConfig(
   env: NodeJS.ProcessEnv = process.env,
   packaged: boolean = isPackagedOrcaBuild()
 ): { configured: true; config: OrcaCloudAuthConfig } | { configured: false; setupMessage: string } {
+  // Why first: Orca Cloud gates sign-in, orgs, artifacts, skill publishing and the mobile relay.
+  if (!areStablyServicesEnabled()) {
+    return { configured: false, setupMessage: stablyServiceUnavailableMessage('Orca Cloud') }
+  }
   // Why: loopback HTTP endpoints are a local-development convenience only;
   // packaged builds must not accept plain-HTTP token endpoints via env vars.
   const allowLoopbackHttp = !packaged

@@ -8,6 +8,8 @@ import {
 import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-events'
 import { track } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
+import { areStablyServicesAvailable } from '@/lib/product-ui-identity'
+import { isStablyHostedUrl } from '../../../../shared/stably-hosted-url'
 
 export function PreviewMedia(props: {
   posterUrl: string | null
@@ -61,6 +63,8 @@ export function RelatedFeatures(props: {
   const items = workflow.relatedTileIds
     .map((id) => getFeatureWallMediaTile(id))
     .filter((tile): tile is NonNullable<typeof tile> => tile !== null)
+    // Fork-only (Pod): every related item opens Orca's docs on onorca.dev.
+    .filter((tile) => areStablyServicesAvailable() || !isStablyHostedUrl(tile.docsUrl))
   if (items.length === 0) {
     return null
   }

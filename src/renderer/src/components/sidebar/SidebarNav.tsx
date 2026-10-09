@@ -14,12 +14,14 @@ import { SidebarTaskNavButton } from './SidebarTaskNavButton'
 import { HideSidebarMenu } from './sidebar-nav-controls'
 import { translate } from '@/i18n/i18n'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { areStablyServicesAvailable } from '@/lib/product-ui-identity'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export function shouldShowMobileButton(
   settings: Partial<Pick<GlobalSettings, 'showMobileButton'>> | null | undefined
 ): boolean {
-  return settings?.showMobileButton !== false
+  // Fork-only (Pod): Orca Mobile and Artifacts run on Stably's hosted services.
+  return areStablyServicesAvailable() && settings?.showMobileButton !== false
 }
 
 export function shouldShowAutomationsButton(
@@ -31,7 +33,7 @@ export function shouldShowAutomationsButton(
 export function shouldShowArtifactsButton(
   settings: Partial<Pick<GlobalSettings, 'showArtifactsButton'>> | null | undefined
 ): boolean {
-  return settings?.showArtifactsButton === true
+  return areStablyServicesAvailable() && settings?.showArtifactsButton === true
 }
 
 export function shouldShowSkillsButton(
