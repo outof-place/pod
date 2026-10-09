@@ -37,8 +37,8 @@ brew install --cask outof-place/tap/pod
 ## Relationship to Orca
 
 Pod is a downstream macOS distribution of [Orca](https://github.com/stablyai/orca) by Stably AI,
-released under the MIT license. Orca does the heavy lifting. Pod is Orca at a tagged release
-plus a short, linear stack of patches that adds:
+released under the MIT license. Orca does the heavy lifting. Pod is the newest commit on Orca's
+`main` that passed Orca's own CI, plus a short, linear stack of patches that adds:
 
 - the native Ghostty terminal and other macOS-only work;
 - the Pod identity: name, icon, bundle id `codes.pod.app`, `pod://` links and the `podx` CLI;
@@ -63,7 +63,7 @@ All of them: [pull requests from outof-place on stablyai/orca](https://github.co
 ### Upstream first
 
 - A change that would help Orca users goes to Orca as a pull request before, or alongside, Pod.
-- Pod carries a patch only until Orca ships it, then drops it on the next rebase.
+- Pod carries a patch only until it lands on Orca's `main`, then drops it on the next rebase.
 - Only Pod's identity, packaging, update feed and product decisions stay fork-only.
 - Every commit on `main` says which kind it is, in a trailer:
   `Upstream: <Orca pull request URL>` or `Fork-only: <reason>`.
@@ -81,19 +81,21 @@ Pod is not affiliated with or endorsed by Stably AI or Lovecast Inc. Orca is the
 
 ## Versions
 
-- Every Pod build sits on exactly one Orca release. [`upstream.json`](../upstream.json) records its
-  tag and commit, and each Pod release names it in its notes.
-- A daily job rebases Pod onto each new stable Orca release. It runs the typecheck, the unit tests
-  and the macOS build, then opens a pull request, or one tracking issue when the rebase needs a hand.
-- We aim to ship Orca's security fixes in Pod within 48 hours of the Orca release.
+- Pod tracks Orca's `main`, not its releases. Every Pod build sits on one Orca `main` commit whose
+  GitHub Actions checks all passed.
+- [`upstream.json`](../upstream.json) records that commit, its date and the nearest Orca release
+  tag. Pod's release notes use the tag as the "Based on Orca vX" label.
+- A daily job moves Pod to the newest green Orca commit. It runs the typecheck, the unit tests and
+  the macOS build, then opens a pull request, or one tracking issue when the rebase needs a hand.
+- We aim to ship Orca's security fixes in Pod within 48 hours of the fix landing on Orca's `main`.
 
 | Branch | What it is |
 | --- | --- |
-| `main` (default) | The product: an Orca release tag plus the Pod stack. |
+| `main` (default) | The product: a green Orca `main` commit plus the Pod stack. |
 | `orca-main` | An untouched mirror of Orca's `main`, updated daily. |
 | `feat/*`, `fix/*`, `perf/*` and other Orca-style names | One branch per Orca pull request. |
 | `pod/*` | Pod-only work, one branch per change. |
-| `sync/orca-*` | Rebases prepared by the sync job, waiting for review. |
+| `sync/orca-main` | The next rebase, prepared by the sync job and waiting for review. |
 
 ## Build from source
 
