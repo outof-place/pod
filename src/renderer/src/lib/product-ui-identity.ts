@@ -24,6 +24,12 @@ export function getProductNameBranding(): ProductNameBranding | null {
   return product ? { displayName: product.displayName, cliName: product.cliName } : null
 }
 
+/** Brands hardcoded renderer copy that never passes through translate(). */
+export function brandProductCopy(text: string): string {
+  const branding = getProductNameBranding()
+  return branding ? brandProductName(text, branding) : text
+}
+
 /** The HTML <title> becomes the native window title once the page loads. */
 export function brandDocumentTitle(): void {
   const branding = getProductNameBranding()
