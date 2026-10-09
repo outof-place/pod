@@ -6,6 +6,15 @@
       "forkOnly": "Pod product docs, release base pin, upstream sync CI and this stack script"
     },
     {
+      "branch": "perf/main-compile-cache",
+      "upstream": "https://github.com/stablyai/orca/pull/13487",
+      "note": "Our own implementation of the change in nwparker's #13487; drop this entry once that PR is in the Orca release"
+    },
+    {
+      "branch": "fork/perf-experiments",
+      "forkOnly": "perf experiments: CADisplayLink pacing on by default on macOS, Skia Graphite env-only, Electron 43.7.8"
+    },
+    {
       "branch": "fork/no-official-updater",
       "forkOnly": "Pod must not install Orca's official updates; upstream opt-out PR planned"
     },
