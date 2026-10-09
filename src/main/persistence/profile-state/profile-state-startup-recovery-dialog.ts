@@ -7,7 +7,7 @@ export type ProfileStateStartupRecoveryDialogDeps = {
   message: string
   recoveryCommand?: string
   showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
-  copyToClipboard: (text: string) => void
+  copyToClipboard: (text: string) => Promise<void>
 }
 
 /** Present the only safe desktop recovery action without changing the failed authority. */
@@ -28,7 +28,7 @@ export async function presentProfileStateStartupRecoveryDialog(
     detail
   })
   if (response === 0 && deps.recoveryCommand) {
-    deps.copyToClipboard(deps.recoveryCommand)
+    await deps.copyToClipboard(deps.recoveryCommand)
   }
 }
 
