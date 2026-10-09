@@ -97,6 +97,15 @@ function trackWindow(window: BrowserWindow, webContents: WebContents): void {
   window.on('closed', destroyAll)
 }
 
+function isWebUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value)
+    return protocol === 'http:' || protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 function handleSurfaceEvent(surfaceId: number, kind: string, args: unknown[]): void {
   const owner = owners.get(surfaceId)
   if (!owner) {
@@ -151,9 +160,14 @@ function handleSurfaceEvent(surfaceId: number, kind: string, args: unknown[]): v
     case 'title':
       sendEvent(owner, { surfaceId, kind: 'title', title: String(args[0] ?? '') })
       return
-    case 'openUrl':
-      sendEvent(owner, { surfaceId, kind: 'openUrl', url: String(args[0] ?? '') })
+    case 'openUrl': {
+      const url = String(args[0] ?? '')
+      // Ghostty detects links in PTY output, so whatever runs in the terminal picks this URL.
+      if (isWebUrl(url)) {
+        sendEvent(owner, { surfaceId, kind: 'openUrl', url })
+      }
       return
+    }
     case 'bell':
       sendEvent(owner, { surfaceId, kind: 'bell' })
       break
