@@ -388,6 +388,23 @@ describe('macOS visibility', () => {
     setMacMenuBarIconVisible(false, options)
     expect(trayInstances[0].destroy).toHaveBeenCalledOnce()
   })
+
+  it('stays away while a product menu helper is running', async () => {
+    setPlatform('darwin')
+    const { setMacMenuBarIconVisible, setMacTrayYield } = await loadModule()
+    const options = createOptions()
+    let helperRunning = true
+    setMacTrayYield(() => helperRunning)
+
+    expect(setMacMenuBarIconVisible(true, options)).toBeNull()
+    expect(trayInstances).toHaveLength(0)
+    helperRunning = false
+    expect(setMacMenuBarIconVisible(true, options)).not.toBeNull()
+    helperRunning = true
+    expect(setMacMenuBarIconVisible(true, options)).toBeNull()
+    expect(trayInstances[0].destroy).toHaveBeenCalledOnce()
+    setMacTrayYield(null)
+  })
 })
 
 describe('setTrayAttention', () => {
