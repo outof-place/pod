@@ -152,7 +152,12 @@ module.exports = {
         ]
       : [{ target: 'dir', arch: [arch] }]
   },
-  dmg: { ...base.dmg, artifactName: `${identity.displayName}-\${version}-\${arch}.\${ext}` },
+  dmg: {
+    ...base.dmg,
+    // A signed DMG is what `spctl -a -t open --context context:primary-signature` accepts.
+    sign: isRelease,
+    artifactName: `${identity.displayName}-\${version}-\${arch}.\${ext}`
+  },
   forceCodeSigning: isRelease,
   // Generates app-update.yml in the app and latest-mac.yml next to the release artifacts.
   publish: identity.updateFeed
