@@ -1,47 +1,56 @@
 import { describe, expect, it, vi } from 'vitest'
 import { readClipboardImageSource } from './clipboard-image-source'
+import { rawClipboardFormat } from './clipboard-snapshot'
 
-function clipboardReader(filePath = '', itemCount = 1, formats: string[] = ['FileNameW']) {
+const FILE_NAME_W = rawClipboardFormat('FileNameW')
+const SHELL_ID_LIST_ARRAY = rawClipboardFormat('Shell IDList Array')
+
+function clipboardReader(filePath = '', itemCount = 1, types: string[] = [FILE_NAME_W]) {
   const shellItems = Buffer.alloc(4 + 4 * (itemCount + 1))
   shellItems.writeUInt32LE(itemCount)
   const buffers: Record<string, Buffer> = {
-    FileNameW: Buffer.from(`${filePath}\0`, 'utf16le'),
-    'Shell IDList Array': shellItems
+    [FILE_NAME_W]: Buffer.from(`${filePath}\0`, 'utf16le'),
+    [SHELL_ID_LIST_ARRAY]: shellItems
   }
   return {
-    availableFormats: vi.fn(() => formats),
-    readBuffer: vi.fn((format: string) => buffers[format] ?? Buffer.alloc(0))
+    types,
+    readBuffer: vi.fn(async (type: string) => buffers[type] ?? Buffer.alloc(0))
   }
 }
 
 describe('readClipboardImageSource', () => {
   it.each(['darwin', 'linux', 'win32'] as const)(
     'recognizes native image formats on %s without decoding',
-    (platform) => {
+    async (platform) => {
       const clipboard = clipboardReader('', 1, ['text/plain', 'image/png'])
-      expect(readClipboardImageSource(clipboard, platform)).toEqual({
+      await expect(readClipboardImageSource(clipboard, platform)).resolves.toEqual({
         kind: 'native',
         windowsFileFormats: null
       })
     }
   )
 
-  it.each(['darwin', 'linux', 'win32'] as const)('ignores ordinary text on %s', (platform) => {
-    expect(readClipboardImageSource(clipboardReader('', 1, ['text/plain']), platform)).toBeNull()
-  })
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'ignores ordinary text on %s',
+    async (platform) => {
+      await expect(
+        readClipboardImageSource(clipboardReader('', 1, ['text/plain']), platform)
+      ).resolves.toBeNull()
+    }
+  )
 
   it.each([
     'C:\\Users\\alice\\图片\\shot.PNG',
     '\\\\server\\share\\shot.jpeg',
     '\\\\?\\C:\\Users\\alice\\shot.jpg',
     '\\\\?\\UNC\\server\\share\\shot.png'
-  ])('recognizes a supported single Windows image file: %s', (filePath) => {
+  ])('recognizes a supported single Windows image file: %s', async (filePath) => {
     const clipboard = clipboardReader(filePath)
-    const source = readClipboardImageSource(clipboard, 'win32')
+    const source = await readClipboardImageSource(clipboard, 'win32')
     expect(source?.kind).toBe('windows-file')
     expect(source?.windowsFileFormats).toEqual({
-      fileNameW: clipboard.readBuffer('FileNameW'),
-      shellIdListArray: clipboard.readBuffer('Shell IDList Array')
+      fileNameW: await clipboard.readBuffer(FILE_NAME_W),
+      shellIdListArray: await clipboard.readBuffer(SHELL_ID_LIST_ARRAY)
     })
   })
 
@@ -53,20 +62,25 @@ describe('readClipboardImageSource', () => {
     ['C:shot.png', 1],
     ['\\\\server\\pipe\\shot.png', 1],
     ['C:\\one.png\0C:\\two.png', 1]
-  ])('rejects an unsupported file source: %s (%s items)', (filePath, itemCount) => {
-    expect(readClipboardImageSource(clipboardReader(filePath, itemCount), 'win32')).toBeNull()
+  ])('rejects an unsupported file source: %s (%s items)', async (filePath, itemCount) => {
+    await expect(
+      readClipboardImageSource(clipboardReader(filePath, itemCount), 'win32')
+    ).resolves.toBeNull()
   })
 
-  it.each(['darwin', 'linux'] as const)('never reads Windows file formats on %s', (platform) => {
-    const clipboard = clipboardReader('C:\\shot.png')
-    expect(readClipboardImageSource(clipboard, platform)).toBeNull()
-    expect(clipboard.readBuffer).not.toHaveBeenCalled()
-  })
+  it.each(['darwin', 'linux'] as const)(
+    'never reads Windows file formats on %s',
+    async (platform) => {
+      const clipboard = clipboardReader('C:\\shot.png')
+      await expect(readClipboardImageSource(clipboard, platform)).resolves.toBeNull()
+      expect(clipboard.readBuffer).not.toHaveBeenCalled()
+    }
+  )
 
-  it('keeps the copied-file fallback beside advertised native image data', () => {
-    const clipboard = clipboardReader('C:\\shot.png', 1, ['image/png', 'FileNameW'])
-    const source = readClipboardImageSource(clipboard, 'win32')
+  it('keeps the copied-file fallback beside advertised native image data', async () => {
+    const clipboard = clipboardReader('C:\\shot.png', 1, ['image/png', FILE_NAME_W])
+    const source = await readClipboardImageSource(clipboard, 'win32')
     expect(source?.kind).toBe('native')
-    expect(source?.windowsFileFormats?.fileNameW).toEqual(clipboard.readBuffer('FileNameW'))
+    expect(source?.windowsFileFormats?.fileNameW).toEqual(await clipboard.readBuffer(FILE_NAME_W))
   })
 })
