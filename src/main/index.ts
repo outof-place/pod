@@ -2,6 +2,7 @@ import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { productUrlSchemes } from './product-identity/product-identity'
 import { completeProductImportBeforeWindows } from './product-identity/product-first-run'
+import { installProductSettingDefaults } from './product-identity/product-setting-defaults'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch } from './window/foreground-activation-policy'
 import {
@@ -90,6 +91,8 @@ const handleMacAppActivation = createMacAppActivationHandler({
   requestActivation: requestDesktopActivation
 })
 
+// Why before preflight: profile-state recovery there may already build settings defaults.
+installProductSettingDefaults()
 const preflightReady = runMainProcessPreflight({
   focusExistingWindow,
   requestDesktopActivation
