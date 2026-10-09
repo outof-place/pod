@@ -184,6 +184,7 @@ export type FilesystemApi = {
       includeIgnored?: boolean
       followSymlinks?: boolean
     }) => Promise<boolean>
+    noteFileOpened: (args: { filePath: string }) => Promise<void>
     cancelSearch: (args: { requestToken: string }) => Promise<void>
     search: (
       args: SearchOptions & { connectionId?: string; requestToken?: string }
