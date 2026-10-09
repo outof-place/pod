@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type * as GitRunner from '../git/runner'
 import {
+  notifyExternalSearchFileActivity,
   setExternalWorkspaceSearchProvider,
   type ExternalWorkspaceSearchProvider
 } from './external-workspace-search-provider'
@@ -159,5 +160,16 @@ describe('external workspace search provider hooks', () => {
     expect(result.totalMatches).toBe(0)
     expect(wslAwareSpawnMock).toHaveBeenCalledOnce()
     expect(searchText).not.toHaveBeenCalled()
+  })
+
+  it('passes local editor activity to the index but never WSL files', () => {
+    const fileActivity = vi.fn()
+    setExternalWorkspaceSearchProvider(provider({ fileActivity }))
+    notifyExternalSearchFileActivity({ filePath: '/repo/src/a.ts', kind: 'open' })
+    notifyExternalSearchFileActivity({
+      filePath: '\\\\wsl.localhost\\Ubuntu\\repo\\a.ts',
+      kind: 'write'
+    })
+    expect(fileActivity.mock.calls).toEqual([[{ filePath: '/repo/src/a.ts', kind: 'open' }]])
   })
 })
