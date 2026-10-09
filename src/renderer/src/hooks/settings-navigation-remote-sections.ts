@@ -1,6 +1,7 @@
 import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced-search'
 import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
+import { withoutExperimentalNativeTerminalEntry } from '@/components/settings/pod-native-terminal-setting'
 import { getPluginsPaneSearchEntries } from '@/components/settings/plugins-search'
 import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
@@ -141,7 +142,7 @@ export function buildRemoteSettingsSections(
         'New features that are still taking shape. Give them a try.'
       ),
       icon: FlaskConical,
-      searchEntries: getExperimentalPaneSearchEntries(),
+      searchEntries: withoutExperimentalNativeTerminalEntry(getExperimentalPaneSearchEntries()),
       group: 'experimental'
     },
     ...(showDesktopOnlySettings
