@@ -96,6 +96,16 @@ describeDarwin('native/proc-info-darwin against ps', () => {
     }
   })
 
+  it('reads argv like ps -o command=, and the executable where argv is withheld', () => {
+    const rows = new Map(addon.listProcessesWithCommands().map((row) => [row.pid, row]))
+    const ps = execFileSync('ps', ['-o', 'command=', '-p', String(process.pid)], {
+      encoding: 'utf8'
+    }).trim()
+    expect(rows.get(process.pid)?.command).toBe(ps)
+    // launchd belongs to root: its argv is withheld, its executable path is not.
+    expect(rows.get(1)).toMatchObject({ command: null, path: '/sbin/launchd', name: 'launchd' })
+  })
+
   it('answers single-pid and cwd lookups without a table scan', () => {
     const row = addon.readProcess(process.pid)
     expect(row?.ppid).toBe(process.ppid)

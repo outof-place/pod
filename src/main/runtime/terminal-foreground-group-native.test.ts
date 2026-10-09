@@ -35,6 +35,7 @@ function installPane(rootPid: number, agentArgv: string | null): void {
   ]
   setNativeProcessInfoForTests({
     listProcesses: () => rows,
+    listProcessesWithCommands: () => [],
     readProcess: (pid): NativeProcessRow | null =>
       rows.find((candidate) => candidate.pid === pid) ?? null,
     listTerminalProcesses: (tty) => (tty === 'ttys003' ? rows : null),
