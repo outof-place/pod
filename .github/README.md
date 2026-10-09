@@ -14,7 +14,7 @@
 <p align="center">
   <a href="https://github.com/outof-place/pod/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-download-dark.svg"><img alt="Download for macOS (coming with the first release)" src="assets/button-download-light.svg" height="44"></picture></a>
   <a href="https://github.com/outof-place/homebrew-tap"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-brew-dark.svg"><img alt="Install with Homebrew (coming with the first release)" src="assets/button-brew-light.svg" height="44"></picture></a>
-  <a href="https://pod.codes"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-site-dark.svg"><img alt="pod.codes (coming)" src="assets/button-site-light.svg" height="44"></picture></a>
+  <a href="https://pod.codes"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-site-dark.svg"><img alt="pod.codes" src="assets/button-site-light.svg" height="44"></picture></a>
 </p>
 
 <p align="center">
@@ -62,8 +62,7 @@ brew install --cask outof-place/tap/pod
 - **Pod Workspace** (coming). A managed `~/pod` root for your repositories, with git tuned for many
   worktrees and the worktrees kept tidy.
 - **OrbStack VMs** (coming). A clean Linux machine for a task that should not touch your Mac.
-- **Zero telemetry** (0.1). Pod's builds carry no analytics key, and Stably's relay, push, share and
-  feedback services are switched off.
+- **Zero telemetry** (0.1). Pod sends no telemetry and makes no calls to Stably services.
 
 0.1 marks what the first release brings; coming, what follows it. Per-worktree setup through
 `orca.yaml` is inherited from Orca.
@@ -120,9 +119,10 @@ looked after while the agents work.
   Touch ID. Pod's setup doesn't install them.
 - **First release:** the supervisor, setup and the plugin, with claude-acc's own menu helper,
   LaunchAgents and root daemons as they ship today.
-- **Planned next:** the menu helper becomes Pod Menu, a login item inside Pod; the LaunchAgents move to
-  `codes.pod.app.acc.*` labels and an embedded Python; then one root helper, `pod-rootd`, reached over
-  XPC, replaces the separate root daemons.
+- **Planned, after the first release** (the dashed layer): Claude Acc.app moves inside Pod as
+  `Pod Menu.app`, a login item that keeps its bundle id so its permissions carry over; the jobs move to
+  LaunchAgents inside Pod.app (`codes.pod.app.acc.*`) on an embedded, pinned Python; and one root
+  helper, `pod-rootd`, reached over XPC with fixed verbs, replaces the separate root daemons.
 
 ## Benchmarks
 
@@ -188,7 +188,7 @@ Pod differs. Every cell links to its source. As of 2026-10-09.
 
 | | Integrated terminal | Parallel agents in worktrees | Agent CLIs | Usage telemetry |
 | --- | --- | --- | --- | --- |
-| **Pod** | [Ghostty on Metal, in a native view](https://github.com/stablyai/orca/pull/26914) (experimental), or Orca's xterm.js | [Yes, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L51) | [Any CLI agent, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L171-L210) | [None: builds carry no analytics key](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/src/main/telemetry/client.ts#L21-L36) |
+| **Pod** | [Ghostty on Metal, in a native view](https://github.com/stablyai/orca/pull/26914) (experimental), or Orca's xterm.js | [Yes, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L51) | [Any CLI agent, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L171-L210) | [None, and no calls to Stably services (0.1)](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/src/main/telemetry/client.ts#L21-L36) |
 | **Orca** | [xterm.js, WebGL renderer](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/package.json#L266-L274) | [Yes](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L51) | [Any CLI agent](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L171-L210) | [Anonymous usage events in official builds, opt-out](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/src/main/telemetry/client.ts#L21-L36) |
 | **Conductor** | [xterm.js, DOM renderer](https://www.conductor.build/changelog/0.49.0-conductor-allegro-gpt-5-5) | [Yes](https://www.conductor.build/docs/concepts/git-worktrees) | [Claude Code, Codex, Cursor, OpenCode](https://www.conductor.build/docs/reference/harnesses) | [PostHog analytics; default not documented](https://www.conductor.build/docs/account/privacy) |
 | **Claude Squad** | [Your own terminal, a tmux session per agent](https://github.com/smtg-ai/claude-squad/blob/main/README.md) | [Yes](https://github.com/smtg-ai/claude-squad/blob/main/README.md) | [Claude Code, Codex, Gemini, Aider and others](https://github.com/smtg-ai/claude-squad/blob/main/README.md) | [None found in its source](https://github.com/smtg-ai/claude-squad/blob/main/go.mod) |
@@ -223,7 +223,7 @@ released under the MIT license. Orca does the heavy lifting. Pod is the newest c
 
 - the native Ghostty terminal and other macOS-only work;
 - the Pod identity: name, icon, bundle id `codes.pod.app`, `pod://` links and the `podx` CLI;
-- Stably-hosted services switched off;
+- no telemetry, and no calls to Stably services;
 - claude-acc built in (in progress);
 - its own signed builds and update feed.
 
