@@ -34,6 +34,8 @@ import type { ServeReadiness } from '../server/serve-readiness'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
 import { ORCAD_STOP_REQUEST_FILENAME } from '../../shared/orcad-stop-request'
 import { orcadWindowsSlotOpCommand } from './orcad-remote-windows-node'
+import { stablyServicesLaunchEnv } from '../../shared/stably-services-env'
+import { areStablyServicesEnabled } from '../product-identity/product-overlay'
 import {
   ORCAD_E2E_IDLE_TIMEOUT_ENV,
   ORCAD_MANAGED_ACTIVATION_ROOT_ENV,
@@ -71,7 +73,9 @@ export function orcadManagedLaunchEnv(
     [ORCAD_MANAGED_ACTIVATION_ROOT_ENV, spec.activationRoot],
     ...(e2eTimeout === null
       ? []
-      : [[ORCAD_E2E_IDLE_TIMEOUT_ENV, String(e2eTimeout)] satisfies [string, string]])
+      : [[ORCAD_E2E_IDLE_TIMEOUT_ENV, String(e2eTimeout)] satisfies [string, string]]),
+    // Fork-only (Pod): the remote orcad cannot read the product identity, so it inherits the flag.
+    ...stablyServicesLaunchEnv(areStablyServicesEnabled())
   ]
 }
 
