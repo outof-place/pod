@@ -5,15 +5,23 @@ import {
   keybindingIsActiveInContext,
   parseKeybinding,
   platformModifiers,
+  resolveModifierToken,
   type KeybindingDefinition,
   type KeybindingOverrides,
   type KeybindingScope,
   type TerminalShortcutPolicy
 } from './keybindings'
-import { MAC_SPECIAL_KEYS, NS_CONTROL, NS_OPTION, NS_SHIFT } from './native-terminal-keys'
+import {
+  MAC_SPECIAL_KEYS,
+  NS_COMMAND,
+  NS_CONTROL,
+  NS_OPTION,
+  NS_SHIFT
+} from './native-terminal-keys'
 
 // A chord the native terminal hands to Orca instead of encoding it. Layout-dependent keys
-// (letters, digits, punctuation) match by their unmodified character; named keys by keyCode.
+// (letters, digits, punctuation) match by their unmodified character; named keys by keyCode;
+// a modifier key's own code marks a double-tap binding whose taps the native view reports.
 export type NativeTerminalForwardedChord = {
   keyCode: number
   character: string
@@ -59,13 +67,26 @@ function chordKeys(key: string): { keyCode: number; character: string }[] {
     .map(([keyCode]) => ({ keyCode: Number(keyCode), character: '' }))
 }
 
+// Left and right keys (Carbon kVK_*) of each modifier a double-tap binding can name.
+const DOUBLE_TAP_KEYS = {
+  shift: { keyCodes: [0x38, 0x3c], modifierFlags: NS_SHIFT },
+  control: { keyCodes: [0x3b, 0x3e], modifierFlags: NS_CONTROL },
+  alt: { keyCodes: [0x3a, 0x3d], modifierFlags: NS_OPTION },
+  meta: { keyCodes: [0x37, 0x36], modifierFlags: NS_COMMAND }
+} as const
+
 function bindingChords(
   definition: KeybindingDefinition,
   binding: string
 ): NativeTerminalForwardedChord[] {
   const parsed = parseKeybinding(binding)
-  if (!parsed || parsed.doubleTapModifier) {
+  if (!parsed) {
     return []
+  }
+  if (parsed.doubleTapModifier) {
+    const { keyCodes, modifierFlags } =
+      DOUBLE_TAP_KEYS[resolveModifierToken(parsed.doubleTapModifier, 'darwin')]
+    return keyCodes.map((keyCode) => ({ keyCode, character: '', modifierFlags }))
   }
   const modifiers = platformModifiers(parsed, 'darwin')
   // Command chords already go to Orca wholesale.

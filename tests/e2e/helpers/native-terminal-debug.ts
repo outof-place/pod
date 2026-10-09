@@ -19,6 +19,16 @@ export type NativeTerminalDebugOp =
   | 'modifiersChanged'
   | 'drop'
   | 'forwardedChords'
+  | 'action'
+  | 'flags'
+  | 'insertText'
+  | 'markedText'
+  | 'imeRect'
+  | 'services'
+  | 'accessibility'
+  | 'accessibilitySet'
+  | 'secureInput'
+  | 'textInputMenu'
 
 export const RETURN_KEY_CODE = 0x24
 

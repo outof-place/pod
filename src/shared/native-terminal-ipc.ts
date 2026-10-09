@@ -8,6 +8,8 @@ export type NativeTerminalEvent =
   | { surfaceId: number; kind: 'bell' }
   // The pointer entered the surface; the page cannot see it under the native view.
   | { surfaceId: number; kind: 'mouseEnter'; buttons: number; windowFocused: boolean }
+  // Text a Services menu item returned for the surface, to paste like Edit > Paste.
+  | { surfaceId: number; kind: 'pasteText'; text: string }
 
 // [x, y, width, height] in window points where a DOM overlay shows through the native view.
 export type NativeTerminalHole = [number, number, number, number]

@@ -14,7 +14,12 @@
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
 #include <IOKit/hidsystem/ev_keymap.h>
+#include <fcntl.h>
 #include <node_api.h>
+#include <sys/stat.h>
+#include <sys/sysctl.h>
+#include <termios.h>
+#include <unistd.h>
 
 #include <atomic>
 #include <cstring>
@@ -42,7 +47,21 @@ std::atomic<bool> g_tick_pending{false};
 std::atomic<int32_t> g_next_id{1};
 NSMutableDictionary<NSNumber*, id>* g_views = nil;
 
-enum class SurfaceEventKind { Input, Resize, Focus, Key, Title, Pwd, OpenUrl, Bell, MouseShape, ContextMenu, MouseEnter };
+enum class SurfaceEventKind {
+  Input,
+  Resize,
+  Focus,
+  Key,
+  Title,
+  Pwd,
+  OpenUrl,
+  Bell,
+  MouseShape,
+  ContextMenu,
+  MouseEnter,
+  DoubleTapInput,
+  ServicePaste
+};
 
 struct SurfaceEvent {
   SurfaceEventKind kind;
@@ -175,6 +194,30 @@ bool IsForwardedChord(NSEvent* event) {
   return false;
 }
 
+// True when some forwarded entry names a modifier key: a double-tap binding Orca detects.
+bool g_double_tap_watch = false;
+
+bool IsModifierKeyCode(uint16_t keyCode) {
+  return keyCode >= kVK_RightCommand && keyCode <= kVK_RightControl && keyCode != kVK_CapsLock;
+}
+
+bool IsDoubleTapWatched(uint16_t keyCode) {
+  if (!g_double_tap_watch) return false;
+  for (size_t i = 0; i < g_forwarded_chord_count; i++) {
+    if (g_forwarded_chords[i].keyCode == keyCode) return true;
+  }
+  return false;
+}
+
+NSEventModifierFlags ModifierFlagForKeyCode(uint16_t keyCode) {
+  switch (keyCode) {
+    case kVK_Shift: case kVK_RightShift: return NSEventModifierFlagShift;
+    case kVK_Control: case kVK_RightControl: return NSEventModifierFlagControl;
+    case kVK_Option: case kVK_RightOption: return NSEventModifierFlagOption;
+    default: return NSEventModifierFlagCommand;
+  }
+}
+
 // Left-hand key for a modifier flag, unless the flagsChanged event names its right-hand twin.
 uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
   switch (flag) {
@@ -184,6 +227,29 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
     default: return changedKeyCode == kVK_RightCommand ? kVK_RightCommand : kVK_Command;
   }
 }
+
+}  // namespace
+
+namespace {
+
+#pragma mark Surface text and secure input (declarations)
+
+// The whole viewport as text, read without touching the user's selection.
+NSString* ReadViewportText(ghostty_surface_t surface) {
+  if (surface == nullptr) return @"";
+  ghostty_selection_s viewport = {};
+  viewport.top_left = {GHOSTTY_POINT_VIEWPORT, GHOSTTY_POINT_COORD_TOP_LEFT, 0, 0};
+  viewport.bottom_right = {GHOSTTY_POINT_VIEWPORT, GHOSTTY_POINT_COORD_BOTTOM_RIGHT, 0, 0};
+  viewport.rectangle = false;
+  ghostty_text_s text = {};
+  if (!ghostty_surface_read_text(surface, viewport, &text)) return @"";
+  NSString* result = [[NSString alloc] initWithBytes:text.text length:text.text_len encoding:NSUTF8StringEncoding];
+  ghostty_surface_free_text(surface, &text);
+  return result ?: @"";
+}
+
+// Re-derives Secure Keyboard Entry from which surface holds the keyboard; defined below.
+void UpdateSecureInput();
 
 }  // namespace
 
@@ -218,7 +284,15 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
 }
 @end
 
+@interface OrcaGhosttySurfaceView () {
+  // VoiceOver reads the value many times per announcement; Ghostty caches it the same way.
+  NSString* _accessibilityText;
+  CFAbsoluteTime _accessibilityTextTime;
+}
+@end
+
 @interface OrcaGhosttySurfaceView (HostInput)
+- (void)reportDoubleTapInput:(NSEvent*)event;
 - (void)forwardChordToHost:(NSEvent*)event;
 - (BOOL)consumeHostKeyUp:(NSEvent*)event;
 - (void)hostModifiersChanged:(NSEvent*)event;
@@ -274,6 +348,7 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
   auto* event = new SurfaceEvent{SurfaceEventKind::Focus};
   event->a = focused ? 1 : 0;
   Emit(self.model, event);
+  UpdateSecureInput();
 }
 
 - (void)updateTrackingAreas {
@@ -570,6 +645,7 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
     [self interpretKeyEvents:@[ event ]];
     return;
   }
+  [self reportDoubleTapInput:event];
   if ([self forwardsToHost:event]) {
     [self forwardChordToHost:event];
     return;
@@ -650,6 +726,7 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
 }
 
 - (void)flagsChanged:(NSEvent*)event {
+  [self reportDoubleTapInput:event];
   uint32_t mod = 0;
   switch (event.keyCode) {
     case 0x39: mod = GHOSTTY_MODS_CAPS; break;
@@ -741,8 +818,18 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
   return @[];
 }
 
+// Like Ghostty: system callers (dictation, look-up) ask for odd ranges, so answer with the selection.
 - (NSAttributedString*)attributedSubstringForProposedRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
-  return nil;
+  if (!self.surface || range.length == 0) return nil;
+  ghostty_text_s text = {};
+  if (!ghostty_surface_read_selection(self.surface, &text)) return nil;
+  NSString* selection = [[NSString alloc] initWithBytes:text.text length:text.text_len encoding:NSUTF8StringEncoding];
+  ghostty_surface_free_text(self.surface, &text);
+  NSMutableDictionary<NSAttributedStringKey, id>* attributes = [NSMutableDictionary dictionary];
+  if (void* font = ghostty_surface_quicklook_font(self.surface)) {
+    attributes[NSFontAttributeName] = (__bridge_transfer NSFont*)font;
+  }
+  return selection ? [[NSAttributedString alloc] initWithString:selection attributes:attributes] : nil;
 }
 
 - (NSUInteger)characterIndexForPoint:(NSPoint)point {
@@ -753,8 +840,16 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
   if (!self.surface) return NSMakeRect(self.frame.origin.x, self.frame.origin.y, 0, 0);
   double x = 0, y = 0, width = 0, height = 0;
   ghostty_surface_ime_point(self.surface, &x, &y, &width, &height);
-  if (range.length == 0 && width > 0) width = 0;
-  NSRect viewRect = NSMakeRect(x, self.frame.size.height - y, width, height);
+  const ghostty_surface_size_s size = ghostty_surface_size(self.surface);
+  const CGFloat scale = self.window ? self.window.backingScaleFactor : 1;
+  const double cellWidth = size.cell_width_px / scale;
+  const double cellHeight = size.cell_height_px / scale;
+  if (range.length == 0 && width > 0) {
+    // Ghostty's fix for speech and dictation: a caret, advanced to the requested location.
+    width = 0;
+    if (range.location != NSNotFound) x += cellWidth * static_cast<double>(range.location);
+  }
+  NSRect viewRect = NSMakeRect(x, self.frame.size.height - y, width, MAX(height, cellHeight));
   NSRect windowRect = [self convertRect:viewRect toView:nil];
   return self.window ? [self.window convertRectToScreen:windowRect] : windowRect;
 }
@@ -1060,6 +1155,187 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
   Emit(self.model, entered);
 }
 
+// Orca's double-tap detectors watch DOM key events, which keys Ghostty takes never produce:
+// report watched modifier taps, and every other key that breaks a tap, for main to detect.
+- (void)reportDoubleTapInput:(NSEvent*)event {
+  if (!g_double_tap_watch) return;
+  const bool isModifier = event.type == NSEventTypeFlagsChanged;
+  if (isModifier && !IsDoubleTapWatched(event.keyCode)) return;
+  auto* input = new SurfaceEvent{SurfaceEventKind::DoubleTapInput};
+  input->a = event.keyCode;
+  input->b = static_cast<uint32_t>(event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask);
+  // 0 modifier press, 1 modifier release, 2 any other key going down.
+  input->c = !isModifier ? 2 : (event.modifierFlags & ModifierFlagForKeyCode(event.keyCode)) != 0 ? 0 : 1;
+  Emit(self.model, input);
+}
+
+@end
+
+@implementation OrcaGhosttySurfaceView (TextServices)
+
+#pragma mark Services menu
+
+- (id)validRequestorForSendType:(NSPasteboardType)sendType returnType:(NSPasteboardType)returnType {
+  const BOOL sendsText = sendType == nil || [sendType isEqualToString:NSPasteboardTypeString];
+  const BOOL takesText = returnType == nil || [returnType isEqualToString:NSPasteboardTypeString];
+  const BOOL hasSelection = self.surface && ghostty_surface_has_selection(self.surface);
+  if ((sendType != nil || returnType != nil) && sendsText && takesText && (sendType == nil || hasSelection)) {
+    return self;
+  }
+  return [super validRequestorForSendType:sendType returnType:returnType];
+}
+
+- (BOOL)writeSelectionToPasteboard:(NSPasteboard*)pboard types:(NSArray<NSPasteboardType>*)types {
+  if (!self.surface) return NO;
+  ghostty_text_s text = {};
+  if (!ghostty_surface_read_selection(self.surface, &text)) return NO;
+  NSString* selection = [[NSString alloc] initWithBytes:text.text length:text.text_len encoding:NSUTF8StringEncoding];
+  ghostty_surface_free_text(self.surface, &text);
+  if (selection == nil) return NO;
+  [pboard declareTypes:@[ NSPasteboardTypeString ] owner:nil];
+  return [pboard setString:selection forType:NSPasteboardTypeString];
+}
+
+// A service's result is pasted through Orca's terminal paste pipeline, like Edit > Paste.
+- (BOOL)readSelectionFromPasteboard:(NSPasteboard*)pboard {
+  NSString* text = [pboard stringForType:NSPasteboardTypeString];
+  if (text == nil) return NO;
+  if (text.length == 0) return YES;
+  auto* paste = new SurfaceEvent{SurfaceEventKind::ServicePaste};
+  paste->text = text.UTF8String ?: "";
+  Emit(self.model, paste);
+  return YES;
+}
+
+@end
+
+@implementation OrcaGhosttySurfaceView (Accessibility)
+
+#pragma mark Accessibility
+
+- (NSString*)accessibilityText {
+  const CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+  if (_accessibilityText == nil || now - _accessibilityTextTime > 0.5) {
+    _accessibilityText = ReadViewportText(self.surface);
+    _accessibilityTextTime = now;
+  }
+  return _accessibilityText;
+}
+
+- (BOOL)isAccessibilityElement {
+  return YES;
+}
+
+- (NSAccessibilityRole)accessibilityRole {
+  return NSAccessibilityTextAreaRole;
+}
+
+- (NSString*)accessibilityLabel {
+  return @"Terminal";
+}
+
+- (id)accessibilityValue {
+  return [self accessibilityText];
+}
+
+- (NSInteger)accessibilityNumberOfCharacters {
+  return static_cast<NSInteger>([self accessibilityText].length);
+}
+
+- (NSRange)accessibilityVisibleCharacterRange {
+  return NSMakeRange(0, [self accessibilityText].length);
+}
+
+- (NSString*)accessibilitySelectedText {
+  if (!self.surface) return nil;
+  ghostty_text_s text = {};
+  if (!ghostty_surface_read_selection(self.surface, &text)) return nil;
+  NSString* selection = [[NSString alloc] initWithBytes:text.text length:text.text_len encoding:NSUTF8StringEncoding];
+  ghostty_surface_free_text(self.surface, &text);
+  return selection.length > 0 ? selection : nil;
+}
+
+// No selection reads as a caret after the visible text, never NSNotFound.
+- (NSRange)accessibilitySelectedTextRange {
+  const NSRange range = [self selectedRange];
+  return range.location == NSNotFound ? NSMakeRange([self accessibilityText].length, 0) : range;
+}
+
+- (NSInteger)accessibilityLineForIndex:(NSInteger)index {
+  NSString* text = [self accessibilityText];
+  const NSUInteger end = MIN(static_cast<NSUInteger>(MAX(index, 0)), text.length);
+  NSInteger line = 0;
+  for (NSUInteger i = 0; i < end; i++) {
+    if ([text characterAtIndex:i] == '\n') line++;
+  }
+  return line;
+}
+
+- (NSRange)accessibilityRangeForLine:(NSInteger)line {
+  NSString* text = [self accessibilityText];
+  __block NSInteger current = 0;
+  __block NSRange found = NSMakeRange(NSNotFound, 0);
+  [text enumerateSubstringsInRange:NSMakeRange(0, text.length)
+                           options:NSStringEnumerationByLines
+                        usingBlock:^(NSString*, NSRange, NSRange enclosingRange, BOOL* stop) {
+                          if (current++ == line) {
+                            found = enclosingRange;
+                            *stop = YES;
+                          }
+                        }];
+  return found;
+}
+
+- (NSString*)accessibilityStringForRange:(NSRange)range {
+  NSString* text = [self accessibilityText];
+  if (range.location == NSNotFound || range.location > text.length) return nil;
+  return [text substringWithRange:NSMakeRange(range.location, MIN(range.length, text.length - range.location))];
+}
+
+// Assistive input (Voice Control, AX-driven dictation) types at the prompt like the keyboard.
+- (void)setAccessibilitySelectedText:(NSString*)text {
+  if ([text isKindOfClass:[NSString class]] && text.length > 0) {
+    [self committedTextAction:GHOSTTY_ACTION_PRESS text:text];
+  }
+}
+
+// A terminal cannot rewrite its screen; a new value that extends the old one types the rest.
+- (void)setAccessibilityValue:(id)value {
+  NSString* current = ReadViewportText(self.surface);
+  if (![value isKindOfClass:[NSString class]] || ![value hasPrefix:current]) return;
+  NSString* added = [value substringFromIndex:current.length];
+  if (added.length > 0) [self committedTextAction:GHOSTTY_ACTION_PRESS text:added];
+}
+
+- (BOOL)isAccessibilitySelectorAllowed:(SEL)selector {
+  if (selector == @selector(setAccessibilitySelectedText:) || selector == @selector(setAccessibilityValue:)) {
+    return YES;
+  }
+  return [super isAccessibilitySelectorAllowed:selector];
+}
+
+- (void)accessibilitySelectionChanged {
+  [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(postAccessibilitySelectionChanged) object:nil];
+  [self performSelector:@selector(postAccessibilitySelectionChanged) withObject:nil afterDelay:0.1];
+}
+
+- (void)postAccessibilitySelectionChanged {
+  _accessibilityText = nil;
+  NSAccessibilityPostNotification(self, NSAccessibilitySelectedTextChangedNotification);
+}
+
+@end
+
+#pragma mark Secure keyboard entry
+
+// Ghostty's lock, shown on the surface while Secure Keyboard Entry guards its password prompt.
+@interface OrcaGhosttySecureInputBadge : NSImageView
+@end
+
+@implementation OrcaGhosttySecureInputBadge
+- (NSView*)hitTest:(NSPoint)point {
+  return nil;
+}
 @end
 
 // A file drag for debugDrop, standing in for the session AppKit would hand a destination.
@@ -1118,6 +1394,132 @@ uint16_t ModifierKeyCode(NSEventModifierFlags flag, uint16_t changedKeyCode) {
 
 namespace {
 
+#pragma mark Secure keyboard entry (state)
+
+// The one EnableSecureEventInput this process may hold: a stuck one blinds every keyboard
+// monitor on the system, so a single owner, like Ghostty's, and every exit path drops it.
+bool g_secure_input_on = false;
+// Debug only: drive the state machine without touching the system-wide flag.
+bool g_secure_input_simulated = false;
+int32_t g_secure_input_owner = 0;
+dispatch_source_t g_termios_timer = nil;
+NSMutableDictionary<NSNumber*, NSString*>* g_tty_paths = nil;
+bool g_secure_input_observed = false;
+
+// Ghostty's heuristic: a canonical-mode read with echo off is a password prompt.
+bool TtyReadsPassword(NSString* path) {
+  const int fd = open(path.fileSystemRepresentation, O_RDONLY | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
+  if (fd < 0) return false;
+  struct termios mode = {};
+  const bool read = isatty(fd) && tcgetattr(fd, &mode) == 0;
+  close(fd);
+  return read && (mode.c_lflag & ICANON) != 0 && (mode.c_lflag & ECHO) == 0;
+}
+
+// The controlling terminal of a local process (the pane's root), as a device path. sysctl, not
+// proc_pidinfo: that root is often the setuid /usr/bin/login, which proc_pidinfo won't describe.
+NSString* TtyOfProcess(pid_t pid) {
+  struct kinfo_proc info = {};
+  size_t size = sizeof(info);
+  int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, pid};
+  if (pid <= 0 || sysctl(mib, 4, &info, &size, nullptr, 0) != 0 || size != sizeof(info)) return nil;
+  if (info.kp_eproc.e_tdev == NODEV) return nil;
+  const char* name = devname(info.kp_eproc.e_tdev, S_IFCHR);
+  return name ? [@"/dev/" stringByAppendingString:@(name)] : nil;
+}
+
+// The surface that takes typed keys right now: first responder of the key, active window.
+OrcaGhosttySurfaceView* KeyboardOwnerSurface() {
+  for (OrcaGhosttySurfaceView* view in g_views.allValues) {
+    NSWindow* window = view.window;
+    if (window == nil || view.hidden || window.firstResponder != view) continue;
+    if (g_secure_input_simulated || (window.isKeyWindow && NSApp.isActive)) return view;
+  }
+  return nil;
+}
+
+void SetSecureInput(bool on) {
+  if (on == g_secure_input_on) return;
+  if (g_secure_input_simulated) {
+    g_secure_input_on = on;
+    return;
+  }
+  if ((on ? EnableSecureEventInput() : DisableSecureEventInput()) == noErr) g_secure_input_on = on;
+}
+
+OrcaGhosttySecureInputBadge* SecureInputBadgeOf(NSView* view) {
+  for (NSView* subview in view.subviews) {
+    if ([subview isKindOfClass:[OrcaGhosttySecureInputBadge class]]) return (OrcaGhosttySecureInputBadge*)subview;
+  }
+  return nil;
+}
+
+void ShowSecureInputBadge(OrcaGhosttySurfaceView* view, bool shown) {
+  OrcaGhosttySecureInputBadge* badge = SecureInputBadgeOf(view);
+  if (!shown || badge != nil) {
+    if (!shown) [badge removeFromSuperview];
+    return;
+  }
+  // Top-right, clear of the overlay scroller.
+  const CGFloat size = 18;
+  const NSRect bounds = view.bounds;
+  badge = [[OrcaGhosttySecureInputBadge alloc]
+      initWithFrame:NSMakeRect(NSMaxX(bounds) - size - 20, NSMaxY(bounds) - size - 8, size, size)];
+  badge.autoresizingMask = NSViewMinXMargin | NSViewMinYMargin;
+  badge.image = [NSImage imageWithSystemSymbolName:@"lock.shield.fill"
+                          accessibilityDescription:@"Secure Keyboard Entry is on"];
+  badge.contentTintColor = NSColor.controlAccentColor;
+  [view addSubview:badge];
+}
+
+void StopTermiosPoll() {
+  if (g_termios_timer == nil) return;
+  dispatch_source_cancel(g_termios_timer);
+  g_termios_timer = nil;
+}
+
+void UpdateSecureInput() {
+  OrcaGhosttySurfaceView* owner = KeyboardOwnerSurface();
+  NSString* tty = owner.model ? g_tty_paths[@(owner.model->id)] : nil;
+  SetSecureInput(tty != nil && TtyReadsPassword(tty));
+  g_secure_input_owner = g_secure_input_on && owner.model ? owner.model->id : 0;
+  for (OrcaGhosttySurfaceView* view in g_views.allValues) {
+    ShowSecureInputBadge(view, view.model != nullptr && view.model->id == g_secure_input_owner);
+  }
+  // Like Ghostty: poll termios every 200 ms, only while a surface with a known tty has the keys.
+  if (tty == nil) {
+    StopTermiosPoll();
+    return;
+  }
+  if (g_termios_timer != nil) return;
+  g_termios_timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+  dispatch_source_set_timer(g_termios_timer, dispatch_time(DISPATCH_TIME_NOW, 200 * NSEC_PER_MSEC),
+                            200 * NSEC_PER_MSEC, 20 * NSEC_PER_MSEC);
+  dispatch_source_set_event_handler(g_termios_timer, ^{
+    UpdateSecureInput();
+  });
+  dispatch_resume(g_termios_timer);
+}
+
+void ObserveSecureInputFocus() {
+  if (g_secure_input_observed) return;
+  g_secure_input_observed = true;
+  // Synchronous (nil queue): deactivating the app must drop secure input before anything else runs.
+  for (NSNotificationName name in @[ NSApplicationDidResignActiveNotification, NSApplicationDidBecomeActiveNotification,
+                                     NSWindowDidResignKeyNotification, NSWindowDidBecomeKeyNotification ]) {
+    [NSNotificationCenter.defaultCenter addObserverForName:name
+                                                    object:nil
+                                                     queue:nil
+                                                usingBlock:^(NSNotification*) {
+                                                  UpdateSecureInput();
+                                                }];
+  }
+}
+
+}  // namespace
+
+namespace {
+
 #pragma mark Runtime callbacks
 
 OrcaGhosttySurfaceView* ViewForSurfaceUserdata(void* userdata) {
@@ -1157,6 +1559,11 @@ bool OnAction(ghostty_app_t, ghostty_target_s target, ghostty_action_s action) {
       auto* event = new SurfaceEvent{SurfaceEventKind::OpenUrl};
       event->text.assign(action.action.open_url.url, action.action.open_url.len);
       Emit(model, event);
+      return true;
+    }
+    case GHOSTTY_ACTION_SELECTION_CHANGED: {
+      if (!model) return false;
+      [ViewForSurfaceUserdata(model) accessibilitySelectionChanged];
       return true;
     }
     case GHOSTTY_ACTION_RING_BELL: {
@@ -1391,6 +1798,18 @@ void CallJs(napi_env env, napi_value callback, void*, void* data) {
         argv[2] = Bool(env, event->b != 0);
         argc = 3;
         break;
+      case SurfaceEventKind::DoubleTapInput:
+        argv[0] = String(env, "doubleTapInput");
+        argv[1] = Number(env, event->a);
+        argv[2] = Number(env, event->b);
+        argv[3] = Number(env, event->c);
+        argc = 4;
+        break;
+      case SurfaceEventKind::ServicePaste:
+        argv[0] = String(env, "servicePaste");
+        argv[1] = String(env, event->text);
+        argc = 2;
+        break;
     }
     napi_value global;
     napi_get_global(env, &global);
@@ -1474,6 +1893,10 @@ napi_value Init(napi_env env, napi_callback_info info) {
   g_app = ghostty_app_new(&runtime, g_config);
   if (g_app == nullptr) return Bool(env, false);
   g_views = [NSMutableDictionary dictionary];
+  g_tty_paths = [NSMutableDictionary dictionary];
+  ObserveSecureInputFocus();
+  // Services hand surfaces their selection and take text back (validRequestorForSendType).
+  [NSApp registerServicesMenuSendTypes:@[ NSPasteboardTypeString ] returnTypes:@[ NSPasteboardTypeString ]];
   ghostty_app_set_focus(g_app, NSApp.isActive);
   return Bool(env, true);
 }
@@ -1722,6 +2145,8 @@ napi_value DestroySurface(napi_env env, napi_callback_info info) {
   if (view.window.firstResponder == view) [view.window makeFirstResponder:nil];
   [view removeFromSuperview];
   [g_views removeObjectForKey:@(id)];
+  [g_tty_paths removeObjectForKey:@(id)];
+  UpdateSecureInput();
   if (model->surface) ghostty_surface_free(model->surface);
   model->surface = nullptr;
   if (model->config) ghostty_config_free(model->config);
@@ -1919,6 +2344,8 @@ napi_value SetForwardedChords(napi_env env, napi_callback_info info) {
   delete[] g_forwarded_chords;
   g_forwarded_chords = chords;
   g_forwarded_chord_count = count;
+  g_double_tap_watch = false;
+  for (uint32_t i = 0; i < count; i++) g_double_tap_watch = g_double_tap_watch || IsModifierKeyCode(chords[i].keyCode);
   return Undefined(env);
 }
 
@@ -2030,6 +2457,283 @@ napi_value DebugModifiersChanged(napi_env env, napi_callback_info info) {
   return Undefined(env);
 }
 
+#pragma mark Text input, secure input and accessibility exports
+
+bool IsString(napi_env env, napi_value value) {
+  napi_valuetype type = napi_undefined;
+  return napi_typeof(env, value, &type) == napi_ok && type == napi_string;
+}
+
+NSString* GetNSString(napi_env env, napi_value value) {
+  return [NSString stringWithUTF8String:GetString(env, value).c_str()] ?: @"";
+}
+
+napi_value Rect(napi_env env, NSRect rect) {
+  napi_value result;
+  napi_create_object(env, &result);
+  napi_set_named_property(env, result, "x", Number(env, rect.origin.x));
+  napi_set_named_property(env, result, "y", Number(env, rect.origin.y));
+  napi_set_named_property(env, result, "width", Number(env, rect.size.width));
+  napi_set_named_property(env, result, "height", Number(env, rect.size.height));
+  return result;
+}
+
+// setSurfaceShellPid(id, pid): string | null — the local shell whose tty's termios reveals a
+// password prompt (0 forgets it); returns that tty's path.
+napi_value SetSurfaceShellPid(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value argv[2];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  napi_value result;
+  napi_get_null(env, &result);
+  const int32_t id = GetInt(env, argv[0]);
+  if (ViewForId(id) == nil || g_tty_paths == nil || argc < 2) return result;
+  NSString* tty = TtyOfProcess(static_cast<pid_t>(GetInt(env, argv[1])));
+  if (tty) {
+    g_tty_paths[@(id)] = tty;
+    result = String(env, tty.UTF8String);
+  } else {
+    [g_tty_paths removeObjectForKey:@(id)];
+  }
+  UpdateSecureInput();
+  return result;
+}
+
+// Runs `block` while an app event is dispatched: AppKit text input (and Ghostty's insertText)
+// expects a current event, as dictation and the character palette have.
+void RunDuringAppEvent(void (^block)(void)) {
+  const NSInteger marker = 0x4f524341;
+  __block id monitor = nil;
+  monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskApplicationDefined
+                                                  handler:^NSEvent*(NSEvent* event) {
+                                                    if (event.data1 != marker || monitor == nil) return event;
+                                                    id finished = monitor;
+                                                    monitor = nil;
+                                                    block();
+                                                    dispatch_async(dispatch_get_main_queue(), ^{
+                                                      [NSEvent removeMonitor:finished];
+                                                    });
+                                                    return nil;
+                                                  }];
+  [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined
+                                      location:NSZeroPoint
+                                 modifierFlags:0
+                                     timestamp:NSProcessInfo.processInfo.systemUptime
+                                  windowNumber:0
+                                       context:nil
+                                       subtype:0
+                                         data1:marker
+                                         data2:0]
+           atStart:NO];
+}
+
+// debugInsertText(id, text): void — what dictation and Emoji & Symbols deliver (insertText:).
+napi_value DebugInsertText(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value argv[2];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  OrcaGhosttySurfaceView* view = ViewForId(GetInt(env, argv[0]));
+  if (view == nil || argc < 2) return Undefined(env);
+  NSString* text = GetNSString(env, argv[1]);
+  RunDuringAppEvent(^{
+    [view insertText:text replacementRange:NSMakeRange(NSNotFound, 0)];
+  });
+  return Undefined(env);
+}
+
+// debugMarkedText(id, text | null, caret): { hasMarkedText } — an IME preedit update or its end.
+napi_value DebugMarkedText(napi_env env, napi_callback_info info) {
+  size_t argc = 3;
+  napi_value argv[3];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  OrcaGhosttySurfaceView* view = ViewForId(GetInt(env, argv[0]));
+  napi_value result;
+  napi_get_null(env, &result);
+  if (view == nil) return result;
+  if (argc >= 2 && IsString(env, argv[1])) {
+    const NSUInteger caret = argc >= 3 ? static_cast<NSUInteger>(MAX(0, GetInt(env, argv[2]))) : 0;
+    [view setMarkedText:GetNSString(env, argv[1])
+          selectedRange:NSMakeRange(caret, 0)
+       replacementRange:NSMakeRange(NSNotFound, 0)];
+  } else {
+    [view unmarkText];
+  }
+  napi_create_object(env, &result);
+  napi_set_named_property(env, result, "hasMarkedText", Bool(env, [view hasMarkedText]));
+  return result;
+}
+
+// debugImeRect(id, location): { caret, view } — where the IME puts its candidate window (screen).
+napi_value DebugImeRect(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value argv[2];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  OrcaGhosttySurfaceView* view = ViewForId(GetInt(env, argv[0]));
+  napi_value result;
+  napi_get_null(env, &result);
+  if (view == nil || view.window == nil) return result;
+  const NSUInteger location = argc >= 2 ? static_cast<NSUInteger>(MAX(0, GetInt(env, argv[1]))) : 0;
+  napi_create_object(env, &result);
+  napi_set_named_property(env, result, "caret",
+                          Rect(env, [view firstRectForCharacterRange:NSMakeRange(location, 0) actualRange:nullptr]));
+  napi_set_named_property(env, result, "view",
+                          Rect(env, [view.window convertRectToScreen:[view convertRect:view.bounds toView:nil]]));
+  return result;
+}
+
+// debugFlags(id, keyCode, modifierFlags): void — a flagsChanged event straight to the view.
+napi_value DebugFlags(napi_env env, napi_callback_info info) {
+  size_t argc = 3;
+  napi_value argv[3];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  OrcaGhosttySurfaceView* view = ViewForId(GetInt(env, argv[0]));
+  if (view == nil || argc < 3) return Undefined(env);
+  NSEvent* event = [NSEvent keyEventWithType:NSEventTypeFlagsChanged
+                                    location:NSZeroPoint
+                               modifierFlags:static_cast<NSEventModifierFlags>(GetInt(env, argv[2]))
+                                   timestamp:NSProcessInfo.processInfo.systemUptime
+                                windowNumber:view.window.windowNumber
+                                     context:nil
+                                  characters:@""
+                 charactersIgnoringModifiers:@""
+                                   isARepeat:NO
+                                     keyCode:static_cast<unsigned short>(GetInt(env, argv[1]))];
+  if (event) [view flagsChanged:event];
+  return Undefined(env);
+}
+
+// debugServices(id, op, text?): 'validate' → { sends, takes }, 'write' → string | null,
+// 'read' → boolean: the Services menu's three calls into a requestor.
+napi_value DebugServices(napi_env env, napi_callback_info info) {
+  size_t argc = 3;
+  napi_value argv[3];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  OrcaGhosttySurfaceView* view = ViewForId(GetInt(env, argv[0]));
+  napi_value result;
+  napi_get_null(env, &result);
+  if (view == nil || argc < 2) return result;
+  const std::string op = GetString(env, argv[1]);
+  if (op == "validate") {
+    napi_create_object(env, &result);
+    napi_set_named_property(env, result, "sends",
+                            Bool(env, [view validRequestorForSendType:NSPasteboardTypeString returnType:nil] == view));
+    napi_set_named_property(env, result, "takes",
+                            Bool(env, [view validRequestorForSendType:nil returnType:NSPasteboardTypeString] == view));
+    return result;
+  }
+  NSPasteboard* pasteboard = [NSPasteboard pasteboardWithUniqueName];
+  if (op == "write") {
+    if ([view writeSelectionToPasteboard:pasteboard types:@[ NSPasteboardTypeString ]]) {
+      result = String(env, ([pasteboard stringForType:NSPasteboardTypeString] ?: @"").UTF8String);
+    }
+  } else if (op == "read" && argc >= 3) {
+    [pasteboard declareTypes:@[ NSPasteboardTypeString ] owner:nil];
+    [pasteboard setString:GetNSString(env, argv[2]) forType:NSPasteboardTypeString];
+    result = Bool(env, [view readSelectionFromPasteboard:pasteboard]);
+  }
+  [pasteboard releaseGlobally];
+  return result;
+}
+
+// debugAccessibility(id): what VoiceOver reads from the surface.
+napi_value DebugAccessibility(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argv[1];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  OrcaGhosttySurfaceView* view = ViewForId(GetInt(env, argv[0]));
+  napi_value result;
+  napi_get_null(env, &result);
+  if (view == nil) return result;
+  NSString* value = [view accessibilityValue];
+  const NSRange selected = [view accessibilitySelectedTextRange];
+  napi_create_object(env, &result);
+  napi_set_named_property(env, result, "isElement", Bool(env, [view isAccessibilityElement]));
+  napi_set_named_property(env, result, "role", String(env, [view accessibilityRole].UTF8String));
+  napi_set_named_property(env, result, "label", String(env, [view accessibilityLabel].UTF8String));
+  napi_set_named_property(env, result, "value", String(env, value.UTF8String ?: ""));
+  napi_set_named_property(env, result, "numberOfCharacters", Number(env, [view accessibilityNumberOfCharacters]));
+  napi_set_named_property(env, result, "selectedLocation", Number(env, selected.location));
+  napi_set_named_property(env, result, "selectedLength", Number(env, selected.length));
+  napi_set_named_property(env, result, "lastLine",
+                          Number(env, [view accessibilityLineForIndex:static_cast<NSInteger>(value.length)]));
+  napi_set_named_property(
+      env, result, "selectedTextSettable",
+      Bool(env, [view isAccessibilitySelectorAllowed:@selector(setAccessibilitySelectedText:)]));
+  return result;
+}
+
+// debugAccessibilitySet(id, 'selectedText' | 'value', text): void — an assistive app writing text.
+napi_value DebugAccessibilitySet(napi_env env, napi_callback_info info) {
+  size_t argc = 3;
+  napi_value argv[3];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  OrcaGhosttySurfaceView* view = ViewForId(GetInt(env, argv[0]));
+  if (view == nil || argc < 3) return Undefined(env);
+  NSString* text = GetNSString(env, argv[2]);
+  if (GetString(env, argv[1]) == "value") {
+    [view setAccessibilityValue:[ReadViewportText(view.model->surface) stringByAppendingString:text]];
+  } else {
+    [view setAccessibilitySelectedText:text];
+  }
+  return Undefined(env);
+}
+
+// debugSecureInput(id, simulate?): secure-input state; `simulate` swaps the system call for a flag.
+napi_value DebugSecureInput(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value argv[2];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  const int32_t id = GetInt(env, argv[0]);
+  OrcaGhosttySurfaceView* view = ViewForId(id);
+  napi_valuetype type = napi_undefined;
+  if (argc >= 2 && napi_typeof(env, argv[1], &type) == napi_ok && type == napi_boolean) {
+    const bool simulate = GetBool(env, argv[1]);
+    if (simulate != g_secure_input_simulated) {
+      SetSecureInput(false);
+      g_secure_input_simulated = simulate;
+    }
+    UpdateSecureInput();
+  }
+  NSString* tty = g_tty_paths[@(id)];
+  napi_value result;
+  napi_create_object(env, &result);
+  napi_set_named_property(env, result, "simulated", Bool(env, g_secure_input_simulated));
+  napi_set_named_property(env, result, "enabled", Bool(env, g_secure_input_on));
+  napi_set_named_property(env, result, "owner", Bool(env, g_secure_input_owner == id));
+  napi_set_named_property(env, result, "tty", String(env, tty ? tty.UTF8String : ""));
+  napi_set_named_property(env, result, "passwordInput", Bool(env, tty != nil && TtyReadsPassword(tty)));
+  napi_set_named_property(env, result, "badge", Bool(env, view != nil && SecureInputBadgeOf(view) != nil));
+  napi_set_named_property(env, result, "systemEnabled", Bool(env, IsSecureEventInputEnabled()));
+  return result;
+}
+
+void CollectTextInputMenuItems(NSMenu* menu, NSMutableArray<NSMenuItem*>* found) {
+  for (NSMenuItem* item in menu.itemArray) {
+    if (item.action == @selector(orderFrontCharacterPalette:) || item.action == @selector(startDictation:)) {
+      [found addObject:item];
+    }
+    if (item.submenu) CollectTextInputMenuItems(item.submenu, found);
+  }
+}
+
+// debugTextInputMenu(): the Emoji & Symbols and Start Dictation items AppKit put in the menu bar.
+napi_value DebugTextInputMenu(napi_env env, napi_callback_info info) {
+  NSMutableArray<NSMenuItem*>* found = [NSMutableArray array];
+  CollectTextInputMenuItems(NSApp.mainMenu, found);
+  napi_value result;
+  napi_create_array_with_length(env, found.count, &result);
+  for (NSUInteger i = 0; i < found.count; i++) {
+    NSMenuItem* item = found[i];
+    napi_value entry;
+    napi_create_object(env, &entry);
+    napi_set_named_property(env, entry, "action", String(env, NSStringFromSelector(item.action).UTF8String));
+    napi_set_named_property(env, entry, "keyEquivalent", String(env, item.keyEquivalent.UTF8String ?: ""));
+    napi_set_named_property(env, entry, "modifiers", Number(env, item.keyEquivalentModifierMask));
+    napi_set_element(env, result, static_cast<uint32_t>(i), entry);
+  }
+  return result;
+}
+
 napi_value ModuleInit(napi_env env, napi_value exports) {
   const napi_property_descriptor props[] = {
       {"init", nullptr, Init, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -2055,6 +2759,16 @@ napi_value ModuleInit(napi_env env, napi_value exports) {
       {"releaseKeyboard", nullptr, ReleaseKeyboard, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugDrop", nullptr, DebugDrop, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugModifiersChanged", nullptr, DebugModifiersChanged, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"setSurfaceShellPid", nullptr, SetSurfaceShellPid, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugInsertText", nullptr, DebugInsertText, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugMarkedText", nullptr, DebugMarkedText, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugImeRect", nullptr, DebugImeRect, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugFlags", nullptr, DebugFlags, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugServices", nullptr, DebugServices, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugAccessibility", nullptr, DebugAccessibility, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugAccessibilitySet", nullptr, DebugAccessibilitySet, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugSecureInput", nullptr, DebugSecureInput, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugTextInputMenu", nullptr, DebugTextInputMenu, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   napi_define_properties(env, exports, sizeof(props) / sizeof(props[0]), props);
   return exports;
