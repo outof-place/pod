@@ -12,6 +12,7 @@ import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchest
 import { getVoicePaneSearchEntries } from '@/components/settings/voice-pane-search'
 import { translate } from '@/i18n/i18n'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import { buildPodWorkspaceSettingsSections } from '@/pod/workspace/pod-workspace-settings-nav'
 import {
   Blocks,
   Bot,
@@ -124,7 +125,8 @@ export function buildCapabilitySettingsSections({
 
 export function buildSetupSettingsSections({
   isLocalWindowsHost,
-  isWebClient
+  isWebClient,
+  podWorkspaceEnabled
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   return [
@@ -187,6 +189,7 @@ export function buildSetupSettingsSections({
       searchEntries: getGeneralPaneSearchEntries({ includeProjectRuntime: isLocalWindowsHost }),
       group: 'setup'
     },
+    ...buildPodWorkspaceSettingsSections({ podWorkspaceEnabled }),
     {
       id: 'integrations',
       title: translate('auto.hooks.useSettingsNavigationMetadata.2b043783ef', 'Integrations'),
