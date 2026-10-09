@@ -11710,7 +11710,8 @@
             "eventsSubscribe": "Être notifié quand des worktrees sont créés ou supprimés et quand le statut d'un agent change",
             "settingsOwn": "Lire et modifier les paramètres propres au plugin",
             "statusBar": "Afficher de courts éléments de texte dans la barre d'état, libellés avec le nom du plugin",
-            "panelMessaging": "Échanger des messages en direct entre le worker du plugin et ses propres panneaux"
+            "panelMessaging": "Échanger des messages en direct entre le worker du plugin et ses propres panneaux",
+            "settingsPage": "Afficher la page de paramètres propre au plugin dans les paramètres d'Orca"
           },
           "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez."
         },
@@ -11871,7 +11872,11 @@
           "logsFailed": "Impossible de charger les logs du plugin.",
           "rollbackFailed": "Impossible de restaurer ce plugin. Une version immuable précédente n'est peut-être pas disponible."
         },
+        "PluginSettingsPageDialog": {
+          "description": "Fourni par le plugin {{value0}} et affiché dans un bac à sable."
+        },
         "PluginSettingsRow": {
+          "openSettingsPage": "Ouvrir {{value0}} pour {{value1}}",
           "blocked": "Bloquée",
           "needsReview": "En attente de relecture",
           "restarting": "Redémarrage",
