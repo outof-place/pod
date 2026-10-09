@@ -35,6 +35,16 @@ export const SUBJECTS = {
   'pod-native': { app: POD_APP, nativeTerminal: true, label: 'Pod (native Ghostty terminal)' }
 }
 
+function plistValue(file, key) {
+  try {
+    return execFileSync('/usr/bin/plutil', ['-extract', key, 'raw', '-o', '-', file], {
+      encoding: 'utf8'
+    }).trim()
+  } catch {
+    return null
+  }
+}
+
 function plist(appPath, key) {
   return execFileSync(
     '/usr/bin/plutil',
@@ -61,7 +71,14 @@ export function describeApp(appPath) {
     commit: build?.commit ?? null,
     teamId: codesign.match(/TeamIdentifier=(\S+)/)?.[1] ?? null,
     executable: `${real}/Contents/MacOS/${plist(real, 'CFBundleExecutable')}`,
-    cli: `${real}/Contents/Resources/bin/orca`
+    electron: plistValue(
+      `${real}/Contents/Frameworks/Electron Framework.framework/Resources/Info.plist`,
+      'CFBundleVersion'
+    ),
+    // Pod renames the CLI (product/identity.json cliName).
+    cli: ['orca', 'podx']
+      .map((name) => `${real}/Contents/Resources/bin/${name}`)
+      .find((candidate) => existsSync(candidate))
   }
 }
 
