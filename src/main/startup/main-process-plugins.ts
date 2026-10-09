@@ -17,6 +17,10 @@ import {
 import { projectPluginAgentStatusChangedPayload } from '../plugins/plugin-agent-status-event'
 import { setMainPluginLanguagePacks, setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
+import {
+  areThirdPartyPluginsAllowedInMain,
+  bindThirdPartyPluginSettings
+} from '../product-identity/product-plugin-policy'
 import { logStartupMilestone } from './startup-diagnostics'
 import { agentHookServer } from '../agent-hooks/server'
 import { emitPluginWorktreeLifecycle } from './main-process-pty-startup'
@@ -38,8 +42,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
     getKillListEntry: (pluginKey) => state.pluginKillListService?.find(pluginKey) ?? null
   })
+  bindThirdPartyPluginSettings(() => store.getSettings())
   const requestOfficialMarketplaceSeed = (): void => {
-    if (store.getSettings().pluginSystemEnabled !== true) {
+    if (store.getSettings().pluginSystemEnabled !== true || !areThirdPartyPluginsAllowedInMain()) {
       return
     }
     void state.pluginMarketplaceService
@@ -100,6 +105,15 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     if (updates.pluginSystemEnabled === true) {
       requestBundledPluginBootstrap()
       requestOfficialMarketplaceSeed()
+    }
+    // Fork-only (Pod): the opt-in changes which installed plugins are discovered.
+    if ('thirdPartyPluginsEnabled' in updates) {
+      requestOfficialMarketplaceSeed()
+      void state.pluginService
+        ?.refresh()
+        .catch((error) =>
+          console.warn('[plugins] failed to apply third-party plugin policy:', error)
+        )
     }
     if (app.isPackaged && updates.pluginSystemEnabled === true) {
       void state.pluginKillListService
