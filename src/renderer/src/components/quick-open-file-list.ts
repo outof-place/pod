@@ -207,9 +207,11 @@ export function useRuntimeFileListForWorktree({
         files,
         truncated: files.length >= QUICK_OPEN_LISTING_MAX_RESULTS
       }))
+    // Why: the debounce spares remote hosts a scan per keystroke; a local index answers in ms.
+    const queryDebounceMs = indexRanked ? 0 : 120
     const request =
       usesRuntimePathSearch && remoteQuery.length > 0
-        ? debounceRuntimeFileRequest(120, requestAbortController.signal, () =>
+        ? debounceRuntimeFileRequest(queryDebounceMs, requestAbortController.signal, () =>
             searchRuntimeFilePaths(requestContext, {
               includeIgnored,
               ...(includeIgnored === false ? { allowLegacyIncludeIgnored: true } : {}),
