@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { SKILLS_PAGE_COLUMN } from './skills-page-column'
+import { areStablyServicesAvailable } from '@/lib/product-ui-identity'
 
 const SKELETON_ROWS = [0, 1, 2, 3, 4, 5, 6, 7]
 
@@ -70,10 +71,12 @@ export function SkillsEmptyState({
         </p>
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={onInstallFromLink}>
-          <Download className="size-4" />
-          {translate('auto.components.skills.SkillsPage.aee7b99cc6', 'Install from link')}
-        </Button>
+        {areStablyServicesAvailable() ? (
+          <Button variant="outline" size="sm" onClick={onInstallFromLink}>
+            <Download className="size-4" />
+            {translate('auto.components.skills.SkillsPage.aee7b99cc6', 'Install from link')}
+          </Button>
+        ) : null}
         <Button variant="ghost" size="sm" onClick={onRefresh}>
           <RefreshCw className="size-4" />
           {translate('auto.components.skills.SkillsPage.cb142070b4', 'Refresh')}
