@@ -36,12 +36,34 @@ function isSurfaceId(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
 }
 
+// The renderer merges overlapping holes; more than this many means it should have hidden.
+const MAX_FRAME_HOLES = 16
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isHoleList(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length <= MAX_FRAME_HOLES &&
+    value.every(
+      (hole) =>
+        Array.isArray(hole) &&
+        hole.length === 4 &&
+        hole.every(isFiniteNumber) &&
+        hole[2] >= 0 &&
+        hole[3] >= 0
+    )
+  )
+}
+
 function isFrame(value: unknown): value is NativeTerminalFrame {
   return (
     Array.isArray(value) &&
-    value.length === 6 &&
+    (value.length === 6 || (value.length === 7 && isHoleList(value[6]))) &&
     isSurfaceId(value[0]) &&
-    value.slice(1, 5).every((n) => typeof n === 'number' && Number.isFinite(n)) &&
+    value.slice(1, 5).every(isFiniteNumber) &&
     typeof value[5] === 'boolean'
   )
 }

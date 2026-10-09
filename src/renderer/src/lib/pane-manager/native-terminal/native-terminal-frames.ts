@@ -1,9 +1,18 @@
-import type { NativeTerminalFrame } from '../../../../../shared/native-terminal-ipc'
+import type {
+  NativeTerminalFrame,
+  NativeTerminalHole
+} from '../../../../../shared/native-terminal-ipc'
 import { cssPxToWindowDip } from '../../ui-zoom'
+import {
+  describeOverlay,
+  overlayHoles,
+  type NativeTerminalOverlay
+} from './native-terminal-overlay-holes'
 
-// Places every native terminal surface of this window over its pane, and hides it whenever
-// DOM UI (dialogs, menus, popovers, in-pane search) overlaps the pane: the hidden xterm
-// underneath holds the same screen, so the overlay renders on top of identical content.
+// Places every native terminal surface of this window over its pane. DOM UI over a pane
+// either shows through holes in the native view (menus, tooltips, popovers) or hides it
+// (dialogs, in-pane search, large overlays): the xterm underneath holds the same screen,
+// so the overlay renders on top of identical content.
 export type NativeTerminalFrameEntry = {
   surfaceId: number
   element: HTMLElement
@@ -11,6 +20,8 @@ export type NativeTerminalFrameEntry = {
   onShownChange: (shown: boolean) => void
   // True while the xterm under the view may not show the current buffer yet.
   isDomViewStale?: () => boolean
+  // DOM overlays started or stopped showing through holes in the shown view.
+  onOverlaidChange?: (overlaid: boolean) => void
 }
 
 // Portaled Radix UI, ARIA popups, and anything else that opts in.
@@ -34,6 +45,7 @@ const SAFETY_POLL_MS = 500
 type Tracked = NativeTerminalFrameEntry & {
   lastFrame: NativeTerminalFrame | null
   lastShown: boolean
+  lastOverlaid: boolean
 }
 
 const tracked = new Map<number, Tracked>()
@@ -43,19 +55,27 @@ let resizeObserver: ResizeObserver | null = null
 let mutationObserver: MutationObserver | null = null
 let sendFrames: ((frames: NativeTerminalFrame[]) => void) | null = null
 
-function intersects(a: DOMRect, b: DOMRect): boolean {
-  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
-}
-
-function overlayRects(): DOMRect[] {
-  const rects: DOMRect[] = []
+function overlayRects(): NativeTerminalOverlay[] {
+  const overlays: NativeTerminalOverlay[] = []
   for (const element of document.querySelectorAll(OVERLAY_SELECTOR)) {
     const rect = element.getBoundingClientRect()
     if (rect.width > 0 && rect.height > 0) {
-      rects.push(rect)
+      overlays.push(describeOverlay(element, rect))
     }
   }
-  return rects
+  return overlays
+}
+
+// Rounded outward so the hole never leaves a sliver of native view over the overlay.
+function toWindowHole(rect: DOMRect): NativeTerminalHole {
+  const left = Math.floor(cssPxToWindowDip(rect.left))
+  const top = Math.floor(cssPxToWindowDip(rect.top))
+  return [
+    left,
+    top,
+    Math.ceil(cssPxToWindowDip(rect.right)) - left,
+    Math.ceil(cssPxToWindowDip(rect.bottom)) - top
+  ]
 }
 
 // Why the container's content box: xterm's own element is sized by its rows, and the
@@ -98,7 +118,7 @@ function topChromeRects(): DOMRect[] {
 }
 
 function framesEqual(a: NativeTerminalFrame | null, b: NativeTerminalFrame): boolean {
-  return a !== null && a.every((value, index) => value === b[index])
+  return a !== null && JSON.stringify(a) === JSON.stringify(b)
 }
 
 function flush(): void {
@@ -113,10 +133,11 @@ function flush(): void {
     const rect = belowTopChrome(contentBox(entry.element), chrome)
     const paneOnScreen =
       entry.isShown() && entry.element.isConnected && rect.width > 0 && rect.height > 0
-    const onScreen = paneOnScreen && !overlays.some((overlay) => intersects(rect, overlay))
+    const holes = paneOnScreen ? overlayHoles(rect, overlays) : null
+    const onScreen = holes !== null
     // Why: an overlay hide keeps the view up until the paused xterm underneath has repainted.
     const visible = onScreen || (paneOnScreen && entry.isDomViewStale?.() === true)
-    const frame: NativeTerminalFrame = [
+    const placement: [number, number, number, number, number, boolean] = [
       entry.surfaceId,
       cssPxToWindowDip(rect.left),
       cssPxToWindowDip(rect.top),
@@ -124,6 +145,8 @@ function flush(): void {
       cssPxToWindowDip(rect.height),
       visible
     ]
+    const frame: NativeTerminalFrame =
+      holes && holes.length > 0 ? [...placement, holes.map(toWindowHole)] : placement
     if (!framesEqual(entry.lastFrame, frame)) {
       entry.lastFrame = frame
       changed.push(frame)
@@ -131,6 +154,11 @@ function flush(): void {
     if (entry.lastShown !== onScreen) {
       entry.lastShown = onScreen
       entry.onShownChange(onScreen)
+    }
+    const overlaid = holes !== null && holes.length > 0
+    if (entry.lastOverlaid !== overlaid) {
+      entry.lastOverlaid = overlaid
+      entry.onOverlaidChange?.(overlaid)
     }
   }
   if (changed.length > 0) {
@@ -195,7 +223,7 @@ export function trackNativeTerminalFrame(
   if (tracked.size === 0) {
     start()
   }
-  tracked.set(entry.surfaceId, { ...entry, lastFrame: null, lastShown: false })
+  tracked.set(entry.surfaceId, { ...entry, lastFrame: null, lastShown: false, lastOverlaid: false })
   resizeObserver?.observe(entry.element)
   scheduleNativeTerminalFrames()
   return () => {

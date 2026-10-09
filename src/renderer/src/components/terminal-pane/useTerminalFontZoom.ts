@@ -3,7 +3,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { overridePendingPaneMetricOptions } from '@/lib/pane-manager/pane-metric-options-deferral'
-import { setNativeTerminalFontSize } from '@/lib/pane-manager/native-terminal/native-terminal-panes'
+import { setNativeTerminalFontSize } from '@/lib/pane-manager/native-terminal/native-terminal-surface-appearance'
 import { getPaneOwnedActiveHelperTextarea } from './regular-terminal-focus-ownership'
 
 type FontZoomDeps = {
