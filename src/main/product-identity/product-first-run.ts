@@ -4,6 +4,7 @@ import {
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION
 } from '../daemon/daemon-protocol-version'
+import { setAppBundleId } from '../../shared/app-identity'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import {
   pendingDeferredImport,
@@ -29,6 +30,8 @@ export function applyProductIdentityPreReady(
   identity: ProductIdentity,
   isServeMode: boolean
 ): boolean {
+  // Why first: TCC, defaults and notification settings must name the product, never Orca.
+  setAppBundleId(identity.appId)
   // Why explicit: a downstream product must never resolve to Orca's profile by app name.
   app.setPath('userData', join(app.getPath('appData'), identity.userDataName))
   // Why pre-ready: Electron names the safeStorage keychain item "<app name> Safe Storage" then.
