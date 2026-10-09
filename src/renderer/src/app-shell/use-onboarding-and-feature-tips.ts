@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { POD_FEATURE_PROMOS } from '../../../shared/product/features'
 import { useShallow } from 'zustand/react/shallow'
 import { onOnboardingReopened } from '../components/onboarding/show-onboarding-event'
 import { shouldShowOnboarding } from '../components/onboarding/should-show-onboarding'
@@ -141,7 +142,7 @@ export function useOnboardingAndFeatureTips() {
       return
     }
 
-    if (featureTipsDecision.kind !== 'open') {
+    if (!POD_FEATURE_PROMOS || featureTipsDecision.kind !== 'open') {
       return
     }
 
