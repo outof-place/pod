@@ -1,10 +1,34 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as ProductIdentityModule from '../main/product-identity/product-identity'
+import type { ProductIdentity } from '../main/product-identity/product-identity'
+
+const identity = vi.hoisted((): { current: ProductIdentity | null } => ({ current: null }))
+
+vi.mock('../main/product-identity/product-identity', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProductIdentityModule>()),
+  getProductIdentity: () => identity.current
+}))
+
 import { printHelp } from './help'
-import { _resetCliBrandingForTests } from './product-cli-branding'
 import { COMMAND_SPECS } from './specs'
+
+// Inline: the CLI project cannot compile main's test fixtures.
+const POD: ProductIdentity = {
+  displayName: 'Pod',
+  appId: 'codes.pod.app',
+  packageName: 'pod',
+  cliName: 'podx',
+  userDataName: 'Pod',
+  keychainName: 'Pod',
+  protocols: ['pod'],
+  homepage: null,
+  updateFeed: null,
+  copyright: 'Copyright © 2026 outofplace',
+  credits: 'Built on Orca',
+  stablyServices: false,
+  computerUseDisplayName: null,
+  legacyProfile: null
+}
 
 function capturedHelp(commandPath: string[]): string {
   const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
@@ -14,33 +38,17 @@ function capturedHelp(commandPath: string[]): string {
   return text
 }
 
-// The packaged launcher runs the CLI with Electron's process: resourcesPath + versions.electron.
-function launchFromResources(identity: object | null): void {
-  const resourcesPath = mkdtempSync(join(tmpdir(), 'pod-cli-resources-'))
-  if (identity) {
-    writeFileSync(join(resourcesPath, 'product-identity.json'), JSON.stringify(identity))
-  }
-  vi.stubGlobal('process', {
-    ...process,
-    resourcesPath,
-    versions: { ...process.versions, electron: '43.0.0' }
-  })
-  _resetCliBrandingForTests()
-}
-
 describe('CLI help in a product build', () => {
   afterEach(() => {
-    vi.unstubAllGlobals()
-    _resetCliBrandingForTests()
+    identity.current = null
   })
 
   it('names the upstream command when the app ships no identity', () => {
-    launchFromResources(null)
     expect(capturedHelp([])).toContain('Usage: orca <command>')
   })
 
   it('names the product command and keeps repository identifiers', () => {
-    launchFromResources({ formatVersion: 1, displayName: 'Pod', cliName: 'podx' })
+    identity.current = POD
     const root = capturedHelp([])
     expect(root).toContain('Usage: podx <command>')
     expect(root).not.toMatch(/(^|\s|`)orca\s/m)
