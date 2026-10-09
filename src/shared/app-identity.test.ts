@@ -1,7 +1,10 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
+  getAppBundleId,
+  getComputerUseBundleId,
+  setAppBundleId,
   ORCA_APP_BUNDLE_ID,
   ORCA_COMPUTER_USE_BUNDLE_ID,
   ORCA_DEV_APP_BUNDLE_ID,
@@ -37,5 +40,21 @@ describe('app identity', () => {
       .filter((path) => /['"`]com\.stablyai\.orca/.test(readFileSync(path, 'utf8')))
       .map((path) => relative(SRC_ROOT, path).replaceAll('\\', '/'))
     expect(offenders).toEqual(['shared/app-identity.ts'])
+  })
+})
+
+describe('runtime app bundle id', () => {
+  afterEach(() => setAppBundleId(null))
+
+  it("is Orca's unless a rebranded build sets its own", () => {
+    expect(getAppBundleId()).toBe(ORCA_APP_BUNDLE_ID)
+    expect(getComputerUseBundleId()).toBe(ORCA_COMPUTER_USE_BUNDLE_ID)
+
+    setAppBundleId('com.example.rebrand')
+    expect(getAppBundleId()).toBe('com.example.rebrand')
+    expect(getComputerUseBundleId()).toBe('com.example.rebrand.computer-use')
+
+    setAppBundleId(null)
+    expect(getAppBundleId()).toBe(ORCA_APP_BUNDLE_ID)
   })
 })
