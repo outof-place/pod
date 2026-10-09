@@ -7,6 +7,7 @@ import {
 } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { TerminalContrastSetting } from './TerminalContrastSetting'
+import { PodNativeTerminalSetting } from './PodNativeTerminalSetting'
 import { translate } from '@/i18n/i18n'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 
@@ -139,6 +140,8 @@ export function TerminalRenderingSection({
             }
           />
         </SearchableSetting>
+
+        <PodNativeTerminalSetting settings={settings} updateSettings={updateSettings} />
       </div>
     </section>
   )
