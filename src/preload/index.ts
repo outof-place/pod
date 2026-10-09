@@ -4,6 +4,7 @@ import { installBrowserFindListener } from './preload-runtime-support'
 import { appApi } from './api/app-bridge'
 import { orcaProfilesApi } from './api/orca-profiles-bridge'
 import { platformApi } from './api/platform-bridge'
+import { productApi } from './api/product-bridge'
 import { wslApi } from './api/wsl-bridge'
 import { pwshApi } from './api/pwsh-bridge'
 import { gitBashApi } from './api/git-bash-bridge'
@@ -100,6 +101,7 @@ const api = {
   app: appApi,
   orcaProfiles: orcaProfilesApi,
   platform: platformApi,
+  product: productApi,
   wsl: wslApi,
   pwsh: pwshApi,
   gitBash: gitBashApi,
