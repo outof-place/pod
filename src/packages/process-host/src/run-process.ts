@@ -341,7 +341,8 @@ export function runProcessSync(spec: ProcessSpec): ProcessResult {
   const resolved = resolveSpawn(spec, process.platform)
   const result = nodeSpawnSync(resolved.file, [...resolved.args], {
     ...resolved.options,
-    input: spec.input,
+    // Why a Buffer: with `encoding: 'buffer'` Node decodes a string input with that encoding and throws.
+    input: spec.input === undefined ? undefined : Buffer.from(spec.input, 'utf8'),
     timeout: spec.timeoutMs === null ? undefined : (spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS),
     maxBuffer: spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
     encoding: 'buffer'
