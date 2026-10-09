@@ -1,0 +1,222 @@
+{
+  "fixture": "FAKE DATA for testing bench.py. Not a measurement. Never publish charts built from this file.",
+  "generatedAt": "2000-01-01T00:00:00.000Z",
+  "resultsDir": "results/2000-01-01",
+  "hardware": "FAKE hardware, not a real machine",
+  "machine": null,
+  "maxLoad": null,
+  "aggregation": null,
+  "caveats": [
+    "FAKE caveat: the fixture's numbers are invented to exercise the chart layout."
+  ],
+  "suites": {
+    "latency": {
+      "file": "latency.json",
+      "writtenAt": "2000-01-01T00:00:00.000Z",
+      "versions": {
+        "orca": "0.0.0-fake",
+        "pod": "0.0.0-fake"
+      },
+      "config": {}
+    },
+    "throughput": {
+      "file": "throughput.json",
+      "writtenAt": "2000-01-01T00:00:00.000Z",
+      "versions": {
+        "orca": "0.0.0-fake",
+        "pod": "0.0.0-fake"
+      },
+      "config": {}
+    }
+  },
+  "metrics": [
+    {
+      "id": "latency.key.orca",
+      "suite": "latency",
+      "subject": "FAKE Orca",
+      "metric": "keystroke to pixels on screen",
+      "unit": "ms",
+      "better": "lower",
+      "n": 111,
+      "median": 11.1,
+      "p95": 22.2,
+      "min": 1.1,
+      "max": 33.3,
+      "extra": null,
+      "conditions": "FAKE conditions string",
+      "source": "latency.json"
+    },
+    {
+      "id": "latency.key.pod-native",
+      "suite": "latency",
+      "subject": "FAKE Pod, native view",
+      "metric": "keystroke to pixels on screen",
+      "unit": "ms",
+      "better": "lower",
+      "n": 111,
+      "median": 5.5,
+      "p95": 9.9,
+      "min": 1.1,
+      "max": 12.3,
+      "extra": null,
+      "conditions": "FAKE conditions string",
+      "source": "latency.json",
+      "caveats": [
+        "FAKE per-metric caveat"
+      ]
+    },
+    {
+      "id": "latency.key.pod-xterm",
+      "suite": "latency",
+      "subject": "FAKE Pod, xterm view",
+      "metric": "keystroke to pixels on screen",
+      "unit": "ms",
+      "better": "lower",
+      "n": 111,
+      "median": 10.1,
+      "p95": 20.2,
+      "min": 1.1,
+      "max": 30.3,
+      "extra": null,
+      "conditions": "FAKE conditions string",
+      "source": "latency.json"
+    },
+    {
+      "id": "latency.key.ghostty",
+      "suite": "latency",
+      "subject": "FAKE Ghostty",
+      "metric": "keystroke to pixels on screen",
+      "unit": "ms",
+      "better": "lower",
+      "n": 111,
+      "median": 4.4,
+      "p95": 8.8,
+      "min": 1.1,
+      "max": 9.9,
+      "extra": null,
+      "conditions": "FAKE conditions string",
+      "source": "latency.json"
+    },
+    {
+      "id": "throughput.seq.wall.orca",
+      "suite": "throughput",
+      "subject": "FAKE Orca",
+      "metric": "FAKE flood: wall time",
+      "unit": "ms",
+      "better": "lower",
+      "n": 5,
+      "median": 3333,
+      "p95": 4444,
+      "min": 3000,
+      "max": 4500,
+      "extra": null,
+      "conditions": "FAKE conditions string",
+      "source": "throughput.json"
+    },
+    {
+      "id": "throughput.seq.wall.pod-native",
+      "suite": "throughput",
+      "subject": "FAKE Pod, native view",
+      "metric": "FAKE flood: wall time",
+      "unit": "ms",
+      "better": "lower",
+      "n": 5,
+      "median": 1111,
+      "p95": 1222,
+      "min": 1000,
+      "max": 1300,
+      "extra": null,
+      "conditions": "FAKE conditions string",
+      "source": "throughput.json"
+    },
+    {
+      "id": "claude-acc.sched.wait.lock",
+      "suite": "claude-acc",
+      "subject": "FAKE one-at-a-time lock",
+      "metric": "FAKE build wait",
+      "unit": "s",
+      "better": "lower",
+      "n": 1,
+      "median": 444,
+      "p95": null,
+      "min": null,
+      "max": null,
+      "extra": null,
+      "conditions": "FAKE conditions string",
+      "provenance": {
+        "kind": "historical",
+        "date": "2000-01-02",
+        "source": "FAKE source",
+        "note": "FAKE note"
+      }
+    },
+    {
+      "id": "claude-acc.sched.wait.sched",
+      "suite": "claude-acc",
+      "subject": "FAKE Pod, sched",
+      "metric": "FAKE build wait",
+      "unit": "s",
+      "better": "lower",
+      "n": 7,
+      "median": 2.2,
+      "p95": 3.3,
+      "min": 1.1,
+      "max": 4.4,
+      "extra": null,
+      "conditions": "FAKE conditions string"
+    }
+  ],
+  "comparisons": [
+    {
+      "metric": "keystroke to pixels on screen",
+      "baseline": {
+        "id": "latency.key.orca",
+        "subject": "FAKE Orca",
+        "median": 11.1
+      },
+      "candidate": {
+        "id": "latency.key.pod-native",
+        "subject": "FAKE Pod, native view",
+        "median": 5.5
+      },
+      "unit": "ms",
+      "factor": 2.018,
+      "candidateAhead": true,
+      "label": null
+    },
+    {
+      "metric": "FAKE flood: wall time",
+      "baseline": {
+        "id": "throughput.seq.wall.orca",
+        "subject": "FAKE Orca",
+        "median": 3333
+      },
+      "candidate": {
+        "id": "throughput.seq.wall.pod-native",
+        "subject": "FAKE Pod, native view",
+        "median": 1111
+      },
+      "unit": "ms",
+      "factor": 3.0,
+      "candidateAhead": true,
+      "label": null
+    },
+    {
+      "metric": "FAKE build wait",
+      "baseline": {
+        "id": "claude-acc.sched.wait.lock",
+        "subject": "FAKE one-at-a-time lock",
+        "median": 444
+      },
+      "candidate": {
+        "id": "claude-acc.sched.wait.sched",
+        "subject": "FAKE Pod, sched",
+        "median": 2.2
+      },
+      "unit": "s",
+      "factor": 201.818,
+      "candidateAhead": true,
+      "label": null
+    }
+  ]
+}
