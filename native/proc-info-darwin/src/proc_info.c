@@ -4,7 +4,7 @@
 // Field formats deliberately match `ps` so rows from either source compare equal:
 //   stat      the run-state letter plus the job-control flags ps prints (s, +, <, N, X, E, V)
 //   tty       devname(3) of the controlling terminal ("ttys003"), or "??" without one
-//   startTime strftime "%c" in the environment's locale, as `ps -o lstart=`
+//   startTime strftime "%c" in the C locale, as `ps -o lstart=` under the pinned en_US.UTF-8
 //   command   argv joined with spaces, as `ps -o command=`
 #define NAPI_VERSION 8
 #include <node_api.h>
@@ -28,14 +28,12 @@
     }                                                                                              \
   } while (0)
 
-static locale_t environment_locale(void) {
+// Why C: Orca's lstart parsers expect `Sat Oct 10 00:04:51 2026`, and the `ps` fallback is run
+// under a pinned en_US.UTF-8 (#27004), whose `%c` is the same. The user's locale would reorder it.
+static locale_t start_time_locale(void) {
   static locale_t cached = NULL;
   if (cached == NULL) {
-    // Why "": ps calls setlocale(LC_ALL, ""), so lstart follows LANG/LC_ALL/LC_TIME.
-    cached = newlocale(LC_ALL_MASK, "", NULL);
-    if (cached == NULL) {
-      cached = newlocale(LC_ALL_MASK, "C", NULL);
-    }
+    cached = newlocale(LC_ALL_MASK, "C", NULL);
   }
   return cached;
 }
@@ -120,7 +118,7 @@ static void format_start(const struct kinfo_proc *proc, char *out, size_t size) 
   struct tm local;
   out[0] = '\0';
   if (localtime_r(&started, &local) != NULL) {
-    strftime_l(out, size, "%c", &local, environment_locale());
+    strftime_l(out, size, "%c", &local, start_time_locale());
   }
 }
 
