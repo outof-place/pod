@@ -5,6 +5,7 @@ import {
   OFFICIAL_PLUGIN_PUBLISHERS,
   type OfficialPluginPublisher
 } from './plugin-official-publishers'
+import { isDistroPluginIdentity } from '../distro/distro-plugin-policy'
 
 export const PLUGIN_MARKETPLACE_FILENAME = 'orca-marketplace.json'
 export const PLUGIN_MARKETPLACE_ENTRY_LIMIT = 2_048
@@ -181,6 +182,11 @@ const officialPluginPolicy = createOfficialPluginPolicy(OFFICIAL_PLUGIN_PUBLISHE
 // `.refine` and array helpers, which must never see a second argument.
 export function isReservedPluginIdentity(pluginKey: string): boolean {
   return officialPluginPolicy.isReservedPluginIdentity(pluginKey)
+}
+
+/** Identities a release may bundle: Orca's official ones plus a downstream product's own. */
+export function isBundledPluginIdentity(pluginKey: string): boolean {
+  return isOfficialPluginIdentity(pluginKey) || isDistroPluginIdentity(pluginKey)
 }
 
 export function isOfficialPluginIdentity(pluginKey: string): boolean {
