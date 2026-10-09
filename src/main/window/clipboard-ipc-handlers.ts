@@ -24,8 +24,7 @@ import {
 import {
   assertClipboardImageBase64LengthWithinLimit,
   assertClipboardImageByteLengthWithinLimit,
-  assertClipboardImageDimensionsWithinLimit,
-  type ClipboardImageThumbnail
+  assertClipboardImageDimensionsWithinLimit
 } from '../../shared/clipboard-image'
 import {
   writeFileToClipboard,
@@ -42,6 +41,13 @@ import { uploadPastedImageToAgentSessionAttachments } from '../ipc/agent-session
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
+import {
+  readClipboardImage,
+  readClipboardSnapshot,
+  writeClipboardBuffer,
+  writeClipboardImage
+} from './clipboard-electron-io'
+import { rawClipboardFormat } from './clipboard-snapshot'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
@@ -120,13 +126,15 @@ export function registerClipboardHandlers(store: Store): void {
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)
-    return assertClipboardTextWithinLimitWithYield(clipboard.readText(), options)
+    return assertClipboardTextWithinLimitWithYield(await clipboard.readText(), options)
   })
   ipcMain.handle(
     'clipboard:readSelectionText',
     async (event, options?: ReadClipboardTextOptions) => {
       assertTrustedClipboardSender(event)
-      return assertClipboardTextWithinLimitWithYield(clipboard.readText('selection'), options)
+      // Only Linux has a selection clipboard; the renderer asks for it nowhere else.
+      const text = clipboard.selection ? await clipboard.selection.readText() : ''
+      return assertClipboardTextWithinLimitWithYield(text, options)
     }
   )
   ipcMain.handle('clipboard:restoreNativeChatPastes', (event, paths: unknown) => {
@@ -135,18 +143,18 @@ export function registerClipboardHandlers(store: Store): void {
   })
   // Why: an unanswered paste reads as a dropped paste, so the composer probes
   // the clipboard in memory before the (slower) save lands.
-  ipcMain.handle('clipboard:readImageThumbnail', (event): ClipboardImageThumbnail | null => {
+  ipcMain.handle('clipboard:readImageThumbnail', async (event) => {
     assertTrustedClipboardSender(event)
-    return buildClipboardImageThumbnail(clipboard.readImage())
+    return buildClipboardImageThumbnail(await readClipboardImage())
   })
-  ipcMain.handle('clipboard:hasImage', (event): boolean => {
+  ipcMain.handle('clipboard:hasImage', async (event): Promise<boolean> => {
     assertTrustedClipboardSender(event)
-    return readClipboardImageSource(clipboard) !== null
+    return (await readClipboardImageSource(await readClipboardSnapshot())) !== null
   })
   // Why: a file-manager copy also carries the files' names as text, which a paste must not type.
-  ipcMain.handle('clipboard:readFilePaths', (event): string[] => {
+  ipcMain.handle('clipboard:readFilePaths', async (event): Promise<string[]> => {
     assertTrustedClipboardSender(event)
-    return readClipboardCopiedFilePaths(clipboard)
+    return readClipboardCopiedFilePaths(await readClipboardSnapshot())
   })
   // Why: terminals need to detect clipboard images to support tools like Claude
   // Code that accept image input via paste. Writes the clipboard image to a
@@ -155,11 +163,12 @@ export function registerClipboardHandlers(store: Store): void {
     'clipboard:saveImageAsTempFile',
     async (event, args?: SaveClipboardImageAsTempFileArgs) => {
       assertTrustedClipboardSender(event)
-      const source = readClipboardImageSource(clipboard)
+      const snapshot = await readClipboardSnapshot()
+      const source = await readClipboardImageSource(snapshot)
       if (!source) {
         return null
       }
-      const image = clipboard.readImage()
+      const image = await readClipboardImage(snapshot)
       if (image.isEmpty()) {
         if (!source.windowsFileFormats) {
           return null
@@ -210,7 +219,7 @@ export function registerClipboardHandlers(store: Store): void {
     assertTrustedClipboardTextSender(event)
     const safeText = await assertClipboardTextWriteWithinLimitWithYield(text)
     try {
-      clipboard.writeText(safeText)
+      await clipboard.writeText(safeText)
     } catch (error) {
       // Native failures can name paths or platform state, so they stay here; the renderer
       // only renders a vetted reason (describeClipboardWriteFailure).
@@ -224,10 +233,8 @@ export function registerClipboardHandlers(store: Store): void {
   })
   ipcMain.handle('clipboard:writeSelectionText', async (event, text: string) => {
     assertTrustedClipboardSender(event)
-    return clipboard.writeText(
-      await assertClipboardTextWriteWithinLimitWithYield(text),
-      'selection'
-    )
+    const safeText = await assertClipboardTextWriteWithinLimitWithYield(text)
+    await clipboard.selection?.writeText(safeText)
   })
   ipcMain.handle('clipboard:writeImage', (event, dataUrl: string) => {
     assertTrustedClipboardSender(event)
@@ -263,7 +270,7 @@ export function registerClipboardHandlers(store: Store): void {
     } catch {
       return
     }
-    clipboard.writeImage(image)
+    return writeClipboardImage(image)
   })
 }
 
@@ -292,7 +299,7 @@ function makeClipboardFileDeps(
     platform: process.platform,
     desktop: process.env.XDG_CURRENT_DESKTOP,
     resolveFilePath,
-    writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
+    writeBuffer: (format, buffer) => writeClipboardBuffer(rawClipboardFormat(format), buffer),
     runCommand
   }
 }
