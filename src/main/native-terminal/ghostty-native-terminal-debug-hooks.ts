@@ -1,6 +1,9 @@
 import { app } from 'electron'
 import type { NativeTerminalForwardedChord } from '../../shared/native-terminal-forwarded-chords'
-import type { GhosttyTerminalAddon } from './ghostty-native-terminal-addon'
+import {
+  loadGhosttyTerminalAddon,
+  type GhosttyTerminalAddon
+} from './ghostty-native-terminal-addon'
 import { nativeTerminalFeedDebug } from './ghostty-native-terminal-pty-feed'
 
 type DebugHookSources = {
@@ -48,6 +51,9 @@ export function installGhosttyDebugHooks(sources: DebugHookSources): void {
       secureInput: (surfaceId: number, simulate?: boolean) =>
         addon()?.debugSecureInput(surfaceId, simulate) ?? null,
       textInputMenu: () => addon()?.debugTextInputMenu() ?? [],
+      // Loads without initializing Ghostty, so xterm-only baselines can read it too.
+      processUsage: (pid: number) => loadGhosttyTerminalAddon()?.debugProcessUsage(pid) ?? null,
+      counters: () => addon()?.debugCounters() ?? null,
       forwardedChords: sources.forwardedChords,
       mainFeed: nativeTerminalFeedDebug
     }
