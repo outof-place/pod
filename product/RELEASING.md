@@ -2,85 +2,79 @@
 
 A release is an arm64 DMG and zip of `<displayName>.app`. Both are signed with a **Developer ID Application** certificate, notarized by Apple and stapled. They are published as a GitHub release in `identity.updateFeed`'s repo, together with `latest-mac.yml`, which the in-app updater reads.
 
-`product/release.sh` does the whole release. `.github/workflows/pod-release.yml` runs the same script when you push a `v<semver>` tag.
+For now, releases are cut **locally** with `product/release.sh` on the Mac that holds the signing key. `.github/workflows/pod-release.yml` runs the same script on a `v<semver>` tag, but needs its own certificate first (see [CI](#ci-later)).
 
-## One-time setup (the account holder does this by hand)
+## Signing setup (done)
 
-The keychain currently holds only an **Apple Development** identity (team `75Y2KR6P5W`). That identity signs local builds, but Apple will not notarize them.
+| What                    | Value                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------ |
+| Signing identity        | `Developer ID Application: OUTOFPLACE POLAND SP. Z O.O (75Y2KR6P5W)`, `release.sh`'s default     |
+| Certificate SHA-1       | `1DDF17FA620DE903DB70A05871EA26FD3F62C9EE`                                                       |
+| Private key             | Login keychain of the release Mac, **not exportable**                                            |
+| Notary credentials      | notarytool keychain profile `pod-notary`, `release.sh`'s default                                 |
+| Alternative credentials | App Store Connect API key `KX7Q6Y844C` (`~/.appstoreconnect/private_keys/AuthKey_KX7Q6Y844C.p8`) |
 
-1. **Apple Developer Program.** The team must be a paid member, and only the *Account Holder* can create Developer ID certificates. Check at <https://developer.apple.com/account> → Membership details.
-2. **Developer ID Application certificate.** Use one of these two routes:
-   - **Xcode:** Settings → Accounts → select the team → Manage Certificates → **+** → **Developer ID Application**.
-   - **Web:**
-     1. In Keychain Access, choose Certificate Assistant → Request a Certificate From a Certificate Authority, and save the CSR to disk.
-     2. At <https://developer.apple.com/account/resources/certificates/add>, pick **Developer ID Application** (G2 Sub-CA) and upload the CSR.
-     3. Download the `.cer` and double-click it to install.
+Check both before a release:
 
-   Verify:
+```sh
+security find-identity -v -p codesigning | grep "Developer ID Application"
+xcrun notarytool history --keychain-profile pod-notary
+```
 
-   ```sh
-   security find-identity -v -p codesigning
-   # → "Developer ID Application: OUTOFPLACE POLAND SP. Z O.O (75Y2KR6P5W)"
-   ```
+To recreate the notary profile, run `xcrun notarytool store-credentials pod-notary` with either `--apple-id <email> --team-id 75Y2KR6P5W --password <app-specific password>` or `--key <.p8> --key-id <KEYID> --issuer <issuer uuid>`.
 
-3. **Notary credentials for local releases.** Store a notarytool keychain profile. Either use an app-specific password, created at <https://account.apple.com> → Sign-In and Security → App-Specific Passwords:
-
-   ```sh
-   xcrun notarytool store-credentials pod-notary \
-     --apple-id "<apple id email>" --team-id 75Y2KR6P5W --password "<app-specific password>"
-   ```
-
-   Or use an App Store Connect API key. Create it at App Store Connect → Users and Access → Integrations → App Store Connect API → Team Keys, with the Developer role. The `.p8` downloads only once.
-
-   ```sh
-   xcrun notarytool store-credentials pod-notary \
-     --key ~/keys/AuthKey_<KEYID>.p8 --key-id <KEYID> --issuer <issuer uuid>
-   ```
-
-   Check the profile with `xcrun notarytool history --keychain-profile pod-notary`.
-4. **CI secrets.** These go in the repo that runs the workflow, under Settings → Secrets and variables → Actions.
-
-   | Secret | Value |
-   |---|---|
-   | `CSC_LINK` | In Keychain Access → My Certificates, export the Developer ID Application certificate *with its key* as a `.p12`. Then run `base64 -i cert.p12 \| pbcopy`. |
-   | `CSC_KEY_PASSWORD` | The password you set on that `.p12` |
-   | `POD_SIGN_IDENTITY` | The exact identity name from `security find-identity` |
-   | `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | API-key notarization (preferred): `base64 -i AuthKey_<KEYID>.p8` |
-   | or `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Apple-ID notarization |
-   | `POD_RELEASE_TOKEN` | Only if releases go to a repo other than the one running the workflow: a token with `contents: write` there |
-
-5. **Release repo.** Create `identity.updateFeed.owner/repo` (for example `outof-place/pod`). It must be public so electron-updater can read releases without a token.
+The first signature after a keychain change can raise a keychain prompt for the key. `release.sh` makes a test signature before it builds anything. If the test signature waits more than 60 s, the script stops and asks you to allow access (**Always Allow**), so a release never hangs halfway.
 
 ## Cutting a release
 
-Versions are plain semver, and every release must be higher than the last. A prerelease tag such as `v1.0.0-beta.1` is only offered to users who are already on a prerelease.
+Versions are Pod's own semver, starting at `0.1.0`, and every release must be higher than the last. The Orca base is recorded in `upstream.json` and shown in the About panel; it is not part of the version. A prerelease such as `0.2.0-beta.1` is only offered to users who are already on a prerelease.
 
-- **CI:**
+```sh
+product/release.sh 0.1.0             # build, sign, notarize, staple, verify; no upload
+product/release.sh 0.1.0 --publish   # the same, then the GitHub release v0.1.0
+```
 
-  ```sh
-  git tag v0.1.0 && git push origin v0.1.0
-  ```
-
-- **Local:**
-
-  ```sh
-  POD_SIGN_IDENTITY="Developer ID Application: OUTOFPLACE POLAND SP. Z O.O (75Y2KR6P5W)" \
-  NOTARY_PROFILE=pod-notary \
-    product/release.sh 0.1.0 --publish
-  ```
+Set `POD_SIGN_IDENTITY`, or `NOTARY_PROFILE` / `APPLE_API_KEY` (+`_ID`, `_ISSUER`) / `APPLE_ID` (+`APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`), only to override the defaults above.
 
 `release.sh` does the following:
 
-1. Builds the JS, mobile web bundle and native helpers. The helpers get the product's identifiers: `<appId>.computer-use` and the notification helper's `--bundle-id`.
-2. Runs electron-builder with `product/electron-builder.pod.cjs` (`POD_RELEASE=1`, `ORCA_MAC_RELEASE=1`). That signs with hardened runtime and notarizes and staples the app.
-3. Submits the DMG with `notarytool submit --wait` and staples it.
-4. Re-hashes `latest-mac.yml`, since stapling changed the DMG.
-5. Verifies with `codesign --verify --deep --strict`, `stapler validate` and `spctl --assess`.
-6. Uploads the DMG, zip, zip blockmap and `latest-mac.yml` with `gh release create`.
+1. Checks that the identity is a Developer ID in the keychain, then makes a test signature (keychain access and Apple's timestamp server).
+2. Builds the JS, mobile web bundle and native helpers. The helpers get the product's identifiers: `<appId>.computer-use` and the notification helper's `--bundle-id`.
+3. Fetches the claude-acc payload pinned in `config/claude-acc-payload.json` into `resources/claude-acc`, when the stack has that script. This also runs with `--skip-build`.
+4. Runs electron-builder with `product/electron-builder.pod.cjs` (`POD_RELEASE=1`, `ORCA_MAC_RELEASE=1`). That signs every nested binary with hardened runtime and a timestamp, then notarizes and staples the app.
+5. Submits the DMG with `notarytool submit --wait` and staples it.
+6. Re-hashes `latest-mac.yml`, since stapling changed the DMG.
+7. Gates on Gatekeeper:
+   - `codesign --verify --deep --strict` passes, and the team is `75Y2KR6P5W`;
+   - `stapler validate` passes for the app and the DMG;
+   - `spctl -a -vv` on the app reports `source=Notarized Developer ID`;
+   - `spctl -a -vv -t open` accepts the DMG.
+8. With `--publish` only: uploads the DMG, zip, zip blockmap and `latest-mac.yml` with `gh release create`.
+
+## CI (later)
+
+The Developer ID key cannot leave the release Mac, so the workflow needs a **second** Developer ID Application certificate, created for CI by the account holder:
+
+- **Xcode:** Settings → Accounts → team → Manage Certificates → **+** → Developer ID Application.
+- **Web:** at <https://developer.apple.com/account/resources/certificates/add>, upload a CSR.
+
+Export that certificate with its key as a `.p12`, then add these secrets under Settings → Secrets and variables → Actions:
+
+| Secret                                                            | Value                                                                                                       |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `CSC_LINK`                                                        | `base64 -i ci-cert.p12`                                                                                     |
+| `CSC_KEY_PASSWORD`                                                | The password set on that `.p12`                                                                             |
+| `POD_SIGN_IDENTITY`                                               | That certificate's identity name                                                                            |
+| `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | API-key notarization (preferred): `base64 -i AuthKey_<KEYID>.p8`                                            |
+| or `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`     | Apple-ID notarization                                                                                       |
+| `POD_RELEASE_TOKEN`                                               | Only if releases go to a repo other than the one running the workflow: a token with `contents: write` there |
+
+Both certificates belong to team `75Y2KR6P5W`. The updater's designated-requirement check pins the team, not the certificate, so CI and local releases update each other.
 
 ## Notes
 
-- **Updating from a local build:** installed copies update only from builds with the same signature. Squirrel.Mac checks the designated requirement. An Apple Development–signed local build therefore cannot auto-update to a Developer ID release; install the first release DMG by hand.
+- **Release repo:** `identity.updateFeed` (`outof-place/pod`) must stay public, so electron-updater can read releases without a token.
+- **Updating from a local build:** installed copies update only from builds that satisfy the running app's designated requirement. An Apple Development–signed local build therefore cannot auto-update to a Developer ID release; install the first release DMG by hand.
 - **Homebrew:** for the outof-place/homebrew-tap cask, take `sha256` from `shasum -a 256 dist/Pod-<version>-arm64.dmg`. `auto_updates true` keeps brew from fighting the in-app updater.
 
   ```ruby
@@ -90,10 +84,11 @@ Versions are plain semver, and every release must be higher than the last. A pre
     url "https://github.com/outof-place/pod/releases/download/v#{version}/Pod-#{version}-arm64.dmg"
     name "Pod"
     desc "Agent IDE by outofplace, built on Orca"
-    homepage "https://github.com/outof-place/pod"
+    homepage "https://pod.codes"
     auto_updates true
     depends_on arch: :arm64
     app "Pod.app"
-    zap trash: ["~/Library/Application Support/pod"]
+    binary "#{appdir}/Pod.app/Contents/Resources/bin/podx"
+    zap trash: ["~/Library/Application Support/Pod"]
   end
   ```
