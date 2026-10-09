@@ -6,7 +6,10 @@ import { PluginMarketplaceService } from '../plugins/plugin-marketplace-service'
 import { PluginMarketplaceInstaller } from '../plugins/plugin-marketplace-installer'
 import { PluginBundledBootstrapCoordinator } from '../plugins/plugin-bundled-bootstrap-coordinator'
 import { getPluginsDataDir } from '../plugins/plugin-discovery'
-import { resolveBundledPluginRoot } from '../plugins/plugin-bundled-bootstrap'
+import {
+  resolveBundledPluginRoot,
+  resolveDistroPluginRoot
+} from '../plugins/plugin-bundled-bootstrap'
 import { resolvePluginHostEntryPath } from '../plugins/plugin-host-entry-path'
 import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
 import { setPluginServiceForRpc } from '../runtime/rpc/methods/plugins'
@@ -22,6 +25,14 @@ import { agentHookServer } from '../agent-hooks/server'
 import { emitPluginWorktreeLifecycle } from './main-process-pty-startup'
 import { mainProcessState as state } from './main-process-state'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import {
+  DISTRO_PLUGIN_INDEX_FILENAME,
+  DISTRO_PLUGIN_ROOT_SEGMENTS,
+  getDistroPluginPolicy,
+  setDistroPluginPolicy
+} from '../../shared/distro/distro-plugin-policy'
+import { getPodDistroConfig } from '../pod/pod-distro-config'
+import { approveDistroBundledPlugins, enablePluginSystemOnce } from '../pod/pod-plugin-defaults'
 
 export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService): Promise<void> {
   const store = state.store
@@ -30,6 +41,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     throw new Error('Store and keybindings must be initialized before plugins')
   }
   const pluginSystemStartupStartedAt = performance.now()
+  // Pod (a downstream product) bundles its own plugins and turns the plugin system on once; no-op upstream
+  setDistroPluginPolicy(getPodDistroConfig().bundledPlugins)
+  enablePluginSystemOnce(store, app.getPath('userData'))
   state.pluginKillListService = new PluginKillListService({
     pluginsDataDir: getPluginsDataDir(app.getPath('userData'))
   })
@@ -77,7 +91,38 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     hostVersion: app.getVersion(),
     isEnabled: () => state.store?.getSettings().pluginSystemEnabled === true,
     blockedPluginReason: (pluginKey) => state.pluginKillListService?.reason(pluginKey) ?? null,
-    refreshPlugins: () => state.pluginService?.refresh() ?? Promise.resolve()
+    refreshPlugins: () => state.pluginService?.refresh() ?? Promise.resolve(),
+    distro: () =>
+      getDistroPluginPolicy()
+        ? {
+            root: resolveDistroPluginRoot({
+              isPackaged: app.isPackaged,
+              resourcesPath: process.resourcesPath,
+              appPath: app.getAppPath(),
+              segments: DISTRO_PLUGIN_ROOT_SEGMENTS
+            }),
+            indexFilename: DISTRO_PLUGIN_INDEX_FILENAME
+          }
+        : null,
+    onDistroPlugins: async (pluginKeys) => {
+      const service = state.pluginService
+      if (!service) {
+        return
+      }
+      await approveDistroBundledPlugins({
+        pluginKeys,
+        store,
+        findPlugin: (pluginKey) => service.findValidPlugin(pluginKey),
+        approve: (plugin) =>
+          applyPluginConsent({
+            store,
+            pluginService: service,
+            pluginKey: plugin.pluginKey,
+            reviewedFingerprint: plugin.consentFingerprint,
+            decision: 'approve'
+          })
+      })
+    }
   })
   const requestBundledPluginBootstrap = (): void => {
     void bundledPluginBootstrap

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { isAllowedPluginGitUrl } from './plugin-install-lockfile'
 import { isQualifiedPluginKey } from './plugin-manifest'
+import { isDistroPluginIdentity } from '../distro/distro-plugin-policy'
 
 export const PLUGIN_MARKETPLACE_FILENAME = 'orca-marketplace.json'
 export const PLUGIN_MARKETPLACE_ENTRY_LIMIT = 2_048
@@ -141,6 +142,11 @@ export function isReservedPluginIdentity(pluginKey: string): boolean {
     (identity.publisher === OFFICIAL_PLUGIN_PUBLISHER ||
       identity.id.startsWith(OFFICIAL_PLUGIN_ID_PREFIX))
   )
+}
+
+/** Identities a release may bundle: Orca's official ones plus a downstream product's own. */
+export function isBundledPluginIdentity(pluginKey: string): boolean {
+  return isOfficialPluginIdentity(pluginKey) || isDistroPluginIdentity(pluginKey)
 }
 
 export function isOfficialPluginIdentity(pluginKey: string): boolean {
