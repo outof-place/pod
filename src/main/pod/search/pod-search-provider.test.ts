@@ -9,7 +9,11 @@ import type { OgdMessage } from './ogd-connection'
 import { startOgdMockServer, type OgdMockReply, type OgdMockServer } from './ogd-mock-server'
 import {
   createPodSearchProvider,
+  OGD_FEATURE_FILES_EXCLUDE,
   OGD_FEATURE_FILES_IGNORED,
+  OGD_FEATURE_FUZZY_EXCLUDE,
+  OGD_FEATURE_SEARCH_FULL_LINES,
+  OGD_FEATURE_SEARCH_MAX_FILESIZE,
   OGD_FEATURE_SEARCH_NEGATED_GLOBS
 } from './pod-search-provider'
 
@@ -190,18 +194,17 @@ describe('Pod search provider: ranked paths', () => {
 
 describe('Pod search provider: text search', () => {
   const options = { query: 'useEffect', rootPath: '', caseSensitive: false, useRegex: false }
+  const exact = [OGD_FEATURE_SEARCH_FULL_LINES, OGD_FEATURE_SEARCH_MAX_FILESIZE]
+  const searchProvider = (handle: (request: OgdMessage) => OgdMockReply, features = exact) =>
+    provider(handle, { features })
+  const reply = (matches: unknown[]): OgdMockReply => ({ message: { matches, truncated: false } })
 
   it('maps byte ranges to UTF-16 columns and maps the case mode', async () => {
     const text = 'const ż = useEffect(() => {'
     const start = Buffer.byteLength('const ż = ')
-    const search = await provider(() => ({
-      message: {
-        matches: [
-          { path: 'src/a.tsx', line: 12, col: start + 1, text, ranges: [[start, start + 9]] }
-        ],
-        truncated: false
-      }
-    }))
+    const search = await searchProvider(() =>
+      reply([{ path: 'src/a.tsx', line: 12, col: start + 1, text, ranges: [[start, start + 9]] }])
+    )
     const result = await search.searchText({ options, rootPath: repo, resultRootPath: repo })
     expect(result).toEqual({
       files: [
@@ -221,47 +224,109 @@ describe('Pod search provider: text search', () => {
       fixed: true,
       case: 'insensitive',
       hidden: true,
-      max_filesize: 5 * 1024 * 1024
+      max_filesize: 5 * 1024 * 1024,
+      max_matches: 2000
     })
   })
 
-  it('keeps exclude globs on ripgrep unless the daemon supports negated globs', async () => {
-    const reply = (): OgdMockReply => ({ message: { matches: [], truncated: false } })
-    const search = await provider(reply)
-    const excluding = { ...options, excludePattern: 'dist/**' }
-    expect(
-      await search.searchText({ options: excluding, rootPath: repo, resultRootPath: repo })
-    ).toBeNull()
-    await mock?.close()
-    ogd?.close()
-    const negating = await provider(reply, { features: [OGD_FEATURE_SEARCH_NEGATED_GLOBS] })
-    expect(
-      await negating.searchText({ options: excluding, rootPath: repo, resultRootPath: repo })
-    ).toEqual({ files: [], totalMatches: 0, truncated: false })
-    expect(mock?.requests.at(-1)).toMatchObject({ globs: ['!dist/**'] })
-  })
-
-  it('falls back to ripgrep when ogd clipped or lossily decoded a matched line', async () => {
-    const long = `${'x'.repeat(1990)} useEffect`
-    for (const text of [long, 'useEffect \uFFFD']) {
-      const search = await provider(() => ({
-        message: { matches: [{ path: 'a.ts', line: 1, text, ranges: [[0, 9]] }], truncated: false }
-      }))
+  it('stays on ripgrep until the daemon matches with ripgrep semantics', async () => {
+    for (const features of [
+      [],
+      [OGD_FEATURE_SEARCH_FULL_LINES],
+      [OGD_FEATURE_SEARCH_MAX_FILESIZE]
+    ]) {
+      const search = await searchProvider(() => reply([]), features)
       expect(await search.searchText({ options, rootPath: repo, resultRootPath: repo })).toBeNull()
+      expect(mock?.requests.some((request) => request.op === 'search')).toBe(false)
       await mock?.close()
       ogd?.close()
     }
   })
 
+  it('keeps globs on ripgrep unless the daemon applies them as rg -g does', async () => {
+    for (const globbed of [{ excludePattern: 'dist/**' }, { includePattern: '*.ts' }]) {
+      const search = await searchProvider(() => reply([]))
+      const request = { options: { ...options, ...globbed }, rootPath: repo, resultRootPath: repo }
+      expect(await search.searchText(request)).toBeNull()
+      await mock?.close()
+      ogd?.close()
+    }
+    const negating = await searchProvider(
+      () => reply([]),
+      [...exact, OGD_FEATURE_SEARCH_NEGATED_GLOBS]
+    )
+    expect(
+      await negating.searchText({
+        options: { ...options, excludePattern: 'dist/**' },
+        rootPath: repo,
+        resultRootPath: repo
+      })
+    ).toEqual({ files: [], totalMatches: 0, truncated: false })
+    expect(mock?.requests.at(-1)).toMatchObject({ globs: ['!dist/**'] })
+  })
+
+  it('serves long and non-UTF-8 lines as ripgrep does, and falls back on a clipped one', async () => {
+    const long = `${'x'.repeat(20_000)} useEffect`
+    const raw = Buffer.concat([Buffer.from([0xff]), Buffer.from(' useEffect')])
+    const search = await searchProvider(() =>
+      reply([
+        { path: 'long.json', line: 1, text: long, ranges: [[20_001, 20_010]] },
+        { path: 'latin1.txt', line: 2, bytes: raw.toString('base64'), ranges: [[2, 11]] }
+      ])
+    )
+    const result = await search.searchText({ options, rootPath: repo, resultRootPath: repo })
+    expect(result?.totalMatches).toBe(2)
+    expect(result?.files.map((file) => [file.relativePath, file.matches[0].column])).toEqual([
+      ['long.json', 20_002],
+      ['latin1.txt', 3]
+    ])
+    await mock?.close()
+    ogd?.close()
+    const clipped = await searchProvider(() =>
+      reply([{ path: 'huge.js', line: 1, text: 'useEffect', clipped: true, ranges: [[0, 9]] }])
+    )
+    expect(await clipped.searchText({ options, rootPath: repo, resultRootPath: repo })).toBeNull()
+  })
+
   it('marks the result truncated when a range lies outside its line', async () => {
-    const search = await provider(() => ({
-      message: { matches: [{ path: 'a.ts', line: 1, text: 'abc', ranges: [[5000, 5009]] }] }
-    }))
+    const search = await searchProvider(() =>
+      reply([{ path: 'a.ts', line: 1, text: 'abc', ranges: [[5000, 5009]] }])
+    )
     expect(await search.searchText({ options, rootPath: repo, resultRootPath: repo })).toEqual({
       files: [],
       totalMatches: 0,
       truncated: true
     })
+  })
+})
+
+describe('Pod search provider: daemon-side exclusion', () => {
+  const quickOpenGlobs = expect.arrayContaining(['!**/node_modules', '!nested/wt', '!nested/wt/**'])
+
+  it('sends ripgrep quick-open globs to fuzzy and asks for one row past the page', async () => {
+    const search = await provider(() => ({ message: { results: [{ path: 'src/a.ts' }] } }), {
+      features: [OGD_FEATURE_FUZZY_EXCLUDE]
+    })
+    const result = await search.searchFilePaths({
+      rootPath: repo,
+      excludePathPrefixes: ['nested/wt'],
+      includeIgnored: false,
+      followSymlinks: false,
+      query: 'a',
+      limit: 10
+    })
+    expect(result).toEqual({ paths: ['src/a.ts'], totalCount: 1, truncated: false })
+    expect(mock?.requests.at(-1)).toMatchObject({ op: 'fuzzy', limit: 11, globs: quickOpenGlobs })
+  })
+
+  it('sends the same globs to the listing', async () => {
+    const search = await provider(() => ({ message: { count: 1 }, binary: Buffer.from('a.ts') }), {
+      features: [OGD_FEATURE_FILES_EXCLUDE]
+    })
+    expect(await search.listFiles(listRequest({ excludePathPrefixes: ['nested/wt'] }))).toEqual([
+      'a.ts'
+    ])
+    expect(mock?.requests.at(-1)).toMatchObject({ op: 'files', globs: quickOpenGlobs })
   })
 })
 
