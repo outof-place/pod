@@ -56,7 +56,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   initializeMainProcessAutomations()
   configureRuntimeServices(runtime)
   // Fork-only (Pod): workspace root IPC and listeners; no disk work at startup.
-  installPodWorkspace(store)
+  installPodWorkspace(store, runtime)
   await initializeMainProcessPlugins(runtime)
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()
