@@ -17,6 +17,7 @@ import { deferAfterStarNagWebHandoff } from './web-handoff'
 import { runStarNagDirectStarAttempt } from './direct-star-attempt'
 import { handleStarNagOnboardingCompleted } from './onboarding-completed'
 import { ensureStarNagBaseline, shouldShowStarNagThresholdPrompt } from './threshold-trigger'
+import { areStablyServicesEnabled } from '../product-identity/product-overlay'
 
 const STAR_NAG_COOLDOWN_DAYS = 3
 const STAR_NAG_COOLDOWN_MS = STAR_NAG_COOLDOWN_DAYS * 24 * 60 * 60 * 1000
@@ -63,6 +64,10 @@ export class StarNagService {
   }
 
   start(): void {
+    // Why: a downstream product credits Orca in About instead of prompting for upstream stars.
+    if (!areStablyServicesEnabled()) {
+      return
+    }
     ensureStarNagBaseline(this.store, this.stats)
     this.disposeStatsListener = this.stats.onAgentStarted((total) => {
       this.handleAgentSpawned(total)
@@ -175,7 +180,7 @@ export class StarNagService {
     surface: StarNagSurface = 'card'
   ): boolean {
     const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
-    if (!win) {
+    if (!win || !areStablyServicesEnabled()) {
       this.promptVisible = false
       this.promptSession = null
       return false
