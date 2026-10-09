@@ -1,9 +1,16 @@
 import { homedir } from 'node:os'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Repo } from '../../../shared/repo-types'
+import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { setDefaultCreateProjectParentOverride } from '../../ipc/repos/repo-creation-handlers'
 import { isPodWorkspaceEnabled } from './pod-workspace-flag'
 import { workspaceCreateProjectParent } from './workspace-clone-destination'
 import { registerWorkspaceIpc } from './workspace-ipc'
+import {
+  computeWorkspaceRoots,
+  primeWorkspaceRoots,
+  syncWorkspaceRoots
+} from './workspace-root-events'
 import { resolveWorkspaceRoot, workspaceRootSetting } from './workspace-root-path'
 import {
   isInsideICloudDrive,
@@ -13,15 +20,25 @@ import {
 import { createWorkspaceToolRunner } from './workspace-tool-runner'
 
 const FINDER_SYNC_CACHE_MS = 10 * 60 * 1000
+const ROOT_SETTING_KEYS = new Set<string>(['podWorkspaceRoot', 'experimentalPodWorkspace'])
 
 type PodWorkspaceStore = {
   getSettings(): GlobalSettings
+  getRepos(): Repo[]
+  onSettingsChanged(listener: (updates: Partial<GlobalSettings>) => void): () => void
+}
+
+type PodWorkspaceRuntime = {
+  onClientEvent(
+    listener: (event: RuntimeClientEvent) => void,
+    options?: { consumesTerminalSideEffects?: boolean }
+  ): () => void
 }
 
 let installed = false
 
-/** Idempotent. Registers IPC and seams only: nothing here touches disk or spawns at startup. */
-export function installPodWorkspace(store: PodWorkspaceStore): void {
+/** Idempotent. Registers listeners and IPC only: nothing here touches disk or spawns at startup. */
+export function installPodWorkspace(store: PodWorkspaceStore, runtime: PodWorkspaceRuntime): void {
   if (installed) {
     return
   }
@@ -57,5 +74,26 @@ export function installPodWorkspace(store: PodWorkspaceStore): void {
     const root = resolveWorkspaceRoot(store.getSettings(), home)
     // Synchronous seam: only the iCloud Drive refusal is cheap enough to check here.
     return isInsideICloudDrive(root, home) ? null : workspaceCreateProjectParent(root)
+  })
+
+  const currentRoots = (): Map<string, string> =>
+    computeWorkspaceRoots(
+      store.getRepos(),
+      resolveWorkspaceRoot(store.getSettings(), home),
+      isEnabled()
+    )
+  primeWorkspaceRoots(currentRoots())
+  runtime.onClientEvent(
+    (event) => {
+      if (event.type === 'reposChanged') {
+        syncWorkspaceRoots(currentRoots())
+      }
+    },
+    { consumesTerminalSideEffects: false }
+  )
+  store.onSettingsChanged((updates) => {
+    if (Object.keys(updates).some((key) => ROOT_SETTING_KEYS.has(key))) {
+      syncWorkspaceRoots(currentRoots())
+    }
   })
 }
