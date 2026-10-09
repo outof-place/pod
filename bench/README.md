@@ -116,8 +116,18 @@ Per workload:
   shell and the workload itself are excluded.
 
 The pane is at the instance's default window size (1728x1083 pt). The grid it got (`cols`x`rows`)
-is recorded, and a sample whose pane was not laid out yet does not count. Ghostty and
-Terminal.app need visible windows for this, so they run only in the visible slot.
+is recorded, and a sample whose pane was not laid out yet does not count.
+
+Ghostty and Terminal.app have no windowless mode. They run the same workloads in visible
+1100x700 pt windows, with `latency.mjs --confirm-visible --throughput`, in the visible slot. Orca
+and Pod run there too, so the visible numbers compare all five apps with painting included. Those
+results go to `throughput-visible.json`.
+
+How the command gets into each terminal:
+- Orca and Pod: `orca terminal send`;
+- Terminal.app: AppleScript `do script`;
+- Ghostty: a queue file that a loop in its window runs, because Ghostty cannot be typed into from
+  outside.
 
 ### 3. Startup to an interactive terminal (`suites/startup.mjs`)
 
@@ -206,7 +216,7 @@ Mac:
 ```sh
 bench/run.sh                                  # builds the tools, runs every headless suite, writes summary.json
 bench/run.sh throughput                       # one suite
-node bench/suites/latency.mjs --confirm-visible   # visible-window latency, in an agreed slot
+node bench/suites/latency.mjs --confirm-visible --throughput   # visible windows, in an agreed slot
 node bench/report.mjs bench/results/<date>/summary.json   # Markdown tables
 ```
 
