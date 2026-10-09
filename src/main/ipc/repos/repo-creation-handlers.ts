@@ -31,6 +31,15 @@ export async function probeLocalGitAvailability(): Promise<boolean> {
   })
 }
 
+let createProjectParentOverride: (() => string | null) | null = null
+
+/** Downstream seam (Pod): a parent for new projects; returning null keeps Orca's default. */
+export function setDefaultCreateProjectParentOverride(
+  override: (() => string | null) | null
+): void {
+  createProjectParentOverride = override
+}
+
 /**
  * Where the "Create new project" Location field starts. Settings -> Workspace
  * Directory owns this once the user has actually set it, including a per-host
@@ -42,6 +51,10 @@ export async function probeLocalGitAvailability(): Promise<boolean> {
  * where each project would then host its own worktrees inside its working tree.
  */
 function getDefaultCreateProjectParent(store: Store): string {
+  const override = createProjectParentOverride?.()
+  if (override) {
+    return override
+  }
   const home = homedir()
   const settings = store.getSettings()
   const configured = getEffectiveHostSetting(
