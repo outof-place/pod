@@ -1,5 +1,5 @@
 import { lstat, realpath } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { abortSignalReason } from '../../../shared/abort-signal-reason'
 import { fileListingCancellationError } from '../../../shared/file-listing-cancellation'
 import {
@@ -7,6 +7,7 @@ import {
   shouldIncludeQuickOpenPath
 } from '../../../shared/quick-open-filter'
 import type {
+  ExternalFileActivity,
   ExternalFileListRequest,
   ExternalFilePathSearchRequest,
   ExternalRankedPathSearchQuery,
@@ -40,8 +41,24 @@ export function createPodSearchProvider(
 ): ExternalWorkspaceSearchProvider {
   const roots = new Map<string, RootState>()
   const registering = new Map<string, Promise<boolean>>()
+  // The file last made active under each root; ogd ranks it below its peers in quick open.
+  const currentFiles = new Map<string, string>()
 
   const activeClient = (): OgdClient | null => (deps.isEnabled() ? deps.client() : null)
+
+  const registeredRootOf = (filePath: string): string | null => {
+    let found: string | null = null
+    for (const [root, state] of roots) {
+      if (
+        state === 'registered' &&
+        filePath.startsWith(root + sep) &&
+        (!found || root.length > found.length)
+      ) {
+        found = root
+      }
+    }
+    return found
+  }
 
   // Why the .git check: replies are relative to the worktree root, so a root inside a worktree
   // (or a plain folder workspace) would get paths for the wrong base.
@@ -173,6 +190,9 @@ export function createPodSearchProvider(
           query: request.query,
           limit: request.limit * FUZZY_OVERFETCH,
           hidden: true,
+          ...(currentFiles.has(request.rootPath)
+            ? { current: currentFiles.get(request.rootPath) }
+            : {}),
           ...(request.includeIgnored ? { ignored: true } : {}),
           ...(client.hasFeature(OGD_FEATURE_FUZZY_EXCLUDE)
             ? { exclude: request.excludePathPrefixes }
@@ -244,10 +264,24 @@ export function createPodSearchProvider(
 
     worktreeRemoved(worktreePath: string): void {
       roots.delete(worktreePath)
+      currentFiles.delete(worktreePath)
       const client = activeClient()
       if (client) {
         void client.request('forget', { root: worktreePath }).catch(() => undefined)
       }
+    },
+
+    fileActivity({ filePath, kind }: ExternalFileActivity): void {
+      const client = activeClient()
+      if (!client) {
+        return
+      }
+      const root = registeredRootOf(filePath)
+      if (kind === 'open' && root) {
+        currentFiles.set(root, relative(root, filePath).split(sep).join('/'))
+      }
+      // Opens feed ogd's frecency; writes mark the file changed before its file events land.
+      void client.request('touch', { paths: [filePath], kind, agent: false }).catch(() => undefined)
     }
   }
 }
