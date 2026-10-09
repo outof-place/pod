@@ -10,22 +10,21 @@ like upstream Orca.
 
 ## `identity.json`
 
-| Field                             | Used for                                                                                                                                                      |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `displayName`                     | `productName` (bundle and dock name, `Pod.app`), the app menu, the About panel                                                                                |
-| `appId`                           | `CFBundleIdentifier`; Electron's helpers get `<appId>.helper*`, the Computer Use helper `<appId>.computer-use`, the notification helper `--bundle-id <appId>` |
-| `packageName`                     | `package.json` `name` inside the app                                                                                                                          |
-| `cliName`                         | The shell command the app installs (`/usr/local/bin/<cliName>`, shipped as `Resources/bin/<cliName>`), never Orca's `orca`                                    |
-| `userDataName`                    | `~/Library/Application Support/<userDataName>` (the profile)                                                                                                  |
-| `keychainName`                    | Electron's safeStorage item `"<keychainName> Safe Storage"` / `"<keychainName> Key"`                                                                          |
-| `protocols`                       | URL schemes registered with macOS and accepted for deep links                                                                                                 |
-| `homepage`                        | `package.json` `homepage` (https only)                                                                                                                        |
-| `updateFeed`                      | `{ provider: "github", owner, repo }`: releases with `latest-mac.yml` for the in-app updater; `null` disables updates                                         |
-| `copyright`, `credits`            | About panel; credits must name Orca and its MIT license. The panel also names the Orca base (`upstream.json`)                                                 |
-| `stablyServices`                  | `false` turns off Stably-hosted services (owned by the overlay that reads it)                                                                                 |
-| `computerUseDisplayName`          | The Computer Use helper's name in Privacy & Security                                                                                                          |
-| `claudeManagedCredentialsService` | Keychain service for managed Claude accounts; Orca's item is copied on first read and never deleted                                                           |
-| `legacyProfile`                   | The Orca profile to import on first launch: its `userDataName`, `keychainName` and `claudeManagedCredentialsService` (`null` = start fresh)                   |
+| Field                    | Used for                                                                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `displayName`            | `productName` (bundle and dock name, `Pod.app`), the app menu, the About panel                                                                                |
+| `appId`                  | `CFBundleIdentifier`; Electron's helpers get `<appId>.helper*`, the Computer Use helper `<appId>.computer-use`, the notification helper `--bundle-id <appId>` |
+| `packageName`            | `package.json` `name` inside the app                                                                                                                          |
+| `cliName`                | The shell command the app installs (`/usr/local/bin/<cliName>`, shipped as `Resources/bin/<cliName>`), never Orca's `orca`                                    |
+| `userDataName`           | `~/Library/Application Support/<userDataName>` (the profile)                                                                                                  |
+| `keychainName`           | Electron's safeStorage item `"<keychainName> Safe Storage"` / `"<keychainName> Key"`                                                                          |
+| `protocols`              | URL schemes registered with macOS and accepted for deep links                                                                                                 |
+| `homepage`               | `package.json` `homepage` (https only)                                                                                                                        |
+| `updateFeed`             | `{ provider: "github", owner, repo }`: releases with `latest-mac.yml` for the in-app updater; `null` disables updates                                         |
+| `copyright`, `credits`   | About panel; credits must name Orca and its MIT license. The panel also names the Orca base (`upstream.json`)                                                 |
+| `stablyServices`         | `false` turns off Stably-hosted services (owned by the overlay that reads it)                                                                                 |
+| `computerUseDisplayName` | The Computer Use helper's name in Privacy & Security                                                                                                          |
+| `legacyProfile`          | The Orca profile to import on first launch: its `userDataName` and `keychainName` (`null` = start fresh)                                                      |
 
 Changing a name is a one-line edit here; nothing else in the repo hard-codes the product strings.
 
@@ -70,7 +69,7 @@ Changing a name is a one-line edit here; nothing else in the repo hard-codes the
    - So cookies, profile secrets and the `~/.orca/*.enc` token files, which both apps share, stay readable by both.
    - macOS asks once to let `security` read "orca Safe Storage" (Always Allow, with your login password). The product may ask once more for its own new item.
    - If either prompt is denied, the import still completes. Signed-in services just ask you to sign in again.
-   - Managed Claude accounts move to "Pod Claude Code Managed Credentials" one account at a time, on first use. Orca's items stay.
+   - Managed Claude accounts stay in "Orca Claude Code Managed Credentials", which both apps share. Their refresh tokens rotate, so a copy would go stale.
 5. **Re-grant permissions.** macOS privacy grants (TCC) are tied to each app's signature. A one-time notice lists them and opens Privacy & Security:
    - Accessibility
    - Screen Recording
