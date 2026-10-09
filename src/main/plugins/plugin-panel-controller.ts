@@ -4,6 +4,7 @@ import type {
   PluginPanelSurface
 } from '../../shared/plugins/plugin-panel-bridge'
 import {
+  PLUGIN_PANEL_SURFACES,
   panelActionCallSchema,
   panelLiveAttachCallSchema,
   panelLiveMessageCallSchema,
@@ -114,7 +115,8 @@ export class PluginPanelController {
   }
 
   async execute(ownerKey: string, call: unknown): Promise<PluginPanelActionOutcome> {
-    const admitted = this.admitSessionCall(ownerKey, call)
+    // Host actions serve both surfaces; the binding's surface picks the allowed methods.
+    const admitted = this.admitSessionCall(ownerKey, call, PLUGIN_PANEL_SURFACES)
     if (!admitted.ok) {
       return admitted.outcome
     }
@@ -143,8 +145,7 @@ export class PluginPanelController {
     if (!parsed.success) {
       return { ok: false, code: 'invalid_request', error: 'malformed panel message call' }
     }
-    // Why: the live channel is keyed by panel id; a settings page must not speak as a panel.
-    if (admitted.binding.surface !== 'panel' || !this.currentPlugin(admitted.binding)) {
+    if (!this.currentPlugin(admitted.binding)) {
       return { ok: false, code: 'unavailable', error: 'panel session is no longer available' }
     }
     const normalized = normalizePanelLiveMessage(parsed.data.message)
@@ -168,7 +169,7 @@ export class PluginPanelController {
     const binding = parsed.success
       ? this.sessions.resolve(ownerKey, parsed.data.sessionToken)
       : null
-    if (!parsed.success || binding?.surface !== 'panel' || !this.currentPlugin(binding)) {
+    if (!parsed.success || !binding || !this.currentPlugin(binding)) {
       return false
     }
     this.mounts.attach({ ownerKey, sessionToken: parsed.data.sessionToken, binding, deliver })
@@ -247,9 +248,14 @@ export class PluginPanelController {
     this.revokeAll()
   }
 
-  private admitSessionCall(ownerKey: string, call: unknown): SessionCallAdmission {
+  /** `surfaces` defaults to panels only (see PluginPanelSessions.resolve). */
+  private admitSessionCall(
+    ownerKey: string,
+    call: unknown,
+    surfaces?: readonly PluginPanelSurface[]
+  ): SessionCallAdmission {
     const sessionToken = this.extractSessionToken(call)
-    const binding = sessionToken ? this.sessions.resolve(ownerKey, sessionToken) : null
+    const binding = sessionToken ? this.sessions.resolve(ownerKey, sessionToken, surfaces) : null
     if (!binding) {
       return {
         ok: false,
