@@ -478,6 +478,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
   experimentalAgentDashboardPopout?: boolean
+  /** Experimental (Pod): answer local quick open and file search from the ogd index daemon. */
+  experimentalPodNativeSearch?: boolean
   /** Set after the one-time legacy Agents tab introduction has been acknowledged. */
   agentsSidebarIntroShown?: boolean
   /** True when the profile previously opted into the legacy Agents view. */
