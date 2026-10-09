@@ -2,12 +2,11 @@ import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-i
 import { useAppStore } from '@/store'
 import { PROCESS_BOUNDARY_GROUND } from '../../../../../shared/terminal-mode-reset-profiles'
 import { hasPtySerializer } from '../pty-buffer-serializer'
-import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 
 import { settleSpawnThatLeftPaneUnbound } from './unbound-pane-spawn-recovery'
 import { STARTUP_CWD_FALLBACK_NOTICE } from './startup-cwd-fallback-notice'
+import { writeTerminalSessionNotice } from './terminal-session-notice'
 import { pendingSpawnByPaneKey, pendingSpawnGenerationByPaneKey } from './pty-connect-limits'
-import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { toProcessExitStartup } from './process-exit-startup'
 import type {
   PendingStartupCommand,
@@ -191,9 +190,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
             typeof spawnedPtyId === 'object' &&
             spawnedPtyId.startupCwdFallback?.kind === 'worktree'
           ) {
-            writeTerminalOutput(session.pane.terminal, STARTUP_CWD_FALLBACK_NOTICE, {
-              foreground: shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
-            })
+            writeTerminalSessionNotice(session, STARTUP_CWD_FALLBACK_NOTICE)
           }
           if (
             spawnedPtyId &&
