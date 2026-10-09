@@ -97,6 +97,8 @@ export type GhosttyTerminalAddon = {
     height: number
     scrollbar: NativeSurfaceScrollbarState | null
     windowFirstResponder: string
+    ghosttyFocused: boolean
+    ghosttyVisible: boolean
     presentedFrames: number
   } | null
   debugScrollbarScroll: (surfaceId: number, fraction: number) => boolean
@@ -107,6 +109,7 @@ export type GhosttyTerminalAddon = {
     presentedFrames: number
     surfaces: number
   }
+  debugWindowOcclusion: (onScreen: boolean | null) => void
 }
 
 // proc_pid_rusage of one process: cumulative CPU, wakeups and instructions, current footprint.

@@ -54,6 +54,8 @@ export function installGhosttyDebugHooks(sources: DebugHookSources): void {
       // Loads without initializing Ghostty, so xterm-only baselines can read it too.
       processUsage: (pid: number) => loadGhosttyTerminalAddon()?.debugProcessUsage(pid) ?? null,
       counters: () => addon()?.debugCounters() ?? null,
+      windowOcclusion: (onScreen: boolean | null) => addon()?.debugWindowOcclusion(onScreen),
+      releaseKeyboard: (surfaceIds: number[]) => addon()?.releaseKeyboard(surfaceIds),
       forwardedChords: sources.forwardedChords,
       mainFeed: nativeTerminalFeedDebug
     }
