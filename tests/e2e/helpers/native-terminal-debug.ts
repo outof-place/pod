@@ -31,6 +31,7 @@ export type NativeTerminalDebugOp =
   | 'textInputMenu'
   | 'mainFeed'
   | 'counters'
+  | 'windowOcclusion'
 
 export const RETURN_KEY_CODE = 0x24
 

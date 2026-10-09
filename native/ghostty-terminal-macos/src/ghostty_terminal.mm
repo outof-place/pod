@@ -50,6 +50,10 @@ std::atomic<bool> g_tick_pending{false};
 std::atomic<uint64_t> g_tick_count{0};
 uint64_t g_set_frames_count = 0;
 uint64_t g_presented_frames = 0;
+// Windows seen on screen at least once; one never shown (a background launch) keeps drawing.
+NSHashTable<NSWindow*>* g_shown_windows = nil;
+// debugWindowOcclusion: -1 follows AppKit, 0 forces every window occluded, 1 on screen.
+int g_window_occlusion_override = -1;
 // KVO context for the layer contents Ghostty swaps on every presented frame.
 char g_presented_frames_context = 0;
 std::atomic<int32_t> g_next_id{1};
@@ -257,8 +261,20 @@ NSString* ReadViewportText(ghostty_surface_t surface) {
   return result ?: @"";
 }
 
-// Re-derives Secure Keyboard Entry from which surface holds the keyboard; defined below.
+// Re-derives Secure Keyboard Entry and Ghostty focus from which surface holds the keyboard;
+// defined below.
 void UpdateSecureInput();
+
+// Whether a window is on screen for its surfaces' purposes (minimized, hidden or covered is not).
+bool WindowOnScreen(NSWindow* window) {
+  if (window == nil) return false;
+  if (g_window_occlusion_override >= 0) return g_window_occlusion_override == 1;
+  if (window.occlusionState & NSWindowOcclusionStateVisible) {
+    [g_shown_windows addObject:window];
+    return true;
+  }
+  return ![g_shown_windows containsObject:window];
+}
 
 }  // namespace
 
@@ -279,9 +295,18 @@ void UpdateSecureInput();
 
 @interface OrcaGhosttySurfaceView : NSView <NSTextInputClient>
 @property(nonatomic, assign) SurfaceModel* model;
+// What Ghostty was last told: it blinks, reports focus and redraws only a focused surface, and
+// draws (holding its swap chain) only a visible one.
+@property(nonatomic, readonly) BOOL ghosttyFocused;
+@property(nonatomic, readonly) BOOL ghosttyVisible;
 @property(nonatomic, readonly) uint64_t presentedFrames;
+// Between becomeFirstResponder and resignFirstResponder; AppKit still reports a resigning view
+// as the window's first responder.
+@property(nonatomic, readonly) BOOL keyboardFocused;
 - (void)setOverlayHoles:(NSArray<NSValue*>*)holes;
 - (NSArray<NSValue*>*)overlayHoles;
+- (void)setGhosttyFocused:(BOOL)focused;
+- (void)syncGhosttyVisible;
 - (void)observePresentedFrames;
 - (void)stopObservingPresentedFrames;
 @end
@@ -327,8 +352,24 @@ void UpdateSecureInput();
   self = [super initWithFrame:frame];
   if (self) {
     _markedText = [[NSMutableAttributedString alloc] init];
+    // Ghostty's own starting state for a new surface.
+    _ghosttyFocused = YES;
+    _ghosttyVisible = YES;
   }
   return self;
+}
+
+- (void)setGhosttyFocused:(BOOL)focused {
+  if (_ghosttyFocused == focused || !self.surface) return;
+  _ghosttyFocused = focused;
+  ghostty_surface_set_focus(self.surface, focused);
+}
+
+- (void)syncGhosttyVisible {
+  const BOOL visible = !self.hidden && WindowOnScreen(self.window);
+  if (_ghosttyVisible == visible || !self.surface) return;
+  _ghosttyVisible = visible;
+  ghostty_surface_set_occlusion(self.surface, visible);
 }
 
 - (void)observePresentedFrames {
@@ -357,6 +398,10 @@ void UpdateSecureInput();
   return self.model ? self.model->surface : nullptr;
 }
 
+- (BOOL)keyboardFocused {
+  return _focused;
+}
+
 - (BOOL)acceptsFirstResponder {
   return YES;
 }
@@ -380,7 +425,6 @@ void UpdateSecureInput();
 - (void)focusDidChange:(BOOL)focused {
   if (_focused == focused) return;
   _focused = focused;
-  if (self.surface) ghostty_surface_set_focus(self.surface, focused);
   auto* event = new SurfaceEvent{SurfaceEventKind::Focus};
   event->a = focused ? 1 : 0;
   Emit(self.model, event);
@@ -1517,6 +1561,11 @@ void StopTermiosPoll() {
 
 void UpdateSecureInput() {
   OrcaGhosttySurfaceView* owner = KeyboardOwnerSurface();
+  // Like Ghostty's app: only the keyboard owner of the key window is focused, so other panes
+  // and a backgrounded Orca stop the cursor timer that redraws every 600 ms.
+  for (OrcaGhosttySurfaceView* view in g_views.allValues) {
+    [view setGhosttyFocused:view == owner && view.keyboardFocused];
+  }
   NSString* tty = owner.model ? g_tty_paths[@(owner.model->id)] : nil;
   SetSecureInput(tty != nil && TtyReadsPassword(tty));
   g_secure_input_owner = g_secure_input_on && owner.model ? owner.model->id : 0;
@@ -1538,7 +1587,7 @@ void UpdateSecureInput() {
   dispatch_resume(g_termios_timer);
 }
 
-void ObserveSecureInputFocus() {
+void ObserveWindowState() {
   if (g_secure_input_observed) return;
   g_secure_input_observed = true;
   // Synchronous (nil queue): deactivating the app must drop secure input before anything else runs.
@@ -1551,6 +1600,15 @@ void ObserveSecureInputFocus() {
                                                   UpdateSecureInput();
                                                 }];
   }
+  // Like Ghostty's app: an occluded window's surfaces stop drawing and release their swap chains.
+  [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidChangeOcclusionStateNotification
+                                                  object:nil
+                                                   queue:nil
+                                              usingBlock:^(NSNotification* note) {
+                                                for (OrcaGhosttySurfaceView* view in g_views.allValues) {
+                                                  if (view.window == note.object) [view syncGhosttyVisible];
+                                                }
+                                              }];
 }
 
 }  // namespace
@@ -1931,7 +1989,8 @@ napi_value Init(napi_env env, napi_callback_info info) {
   if (g_app == nullptr) return Bool(env, false);
   g_views = [NSMutableDictionary dictionary];
   g_tty_paths = [NSMutableDictionary dictionary];
-  ObserveSecureInputFocus();
+  g_shown_windows = [NSHashTable weakObjectsHashTable];
+  ObserveWindowState();
   // Services hand surfaces their selection and take text back (validRequestorForSendType).
   [NSApp registerServicesMenuSendTypes:@[ NSPasteboardTypeString ] returnTypes:@[ NSPasteboardTypeString ]];
   ghostty_app_set_focus(g_app, NSApp.isActive);
@@ -2018,6 +2077,7 @@ napi_value CreateSurface(napi_env env, napi_callback_info info) {
   }
   g_views[@(model->id)] = view;
   [view observePresentedFrames];
+  [view setGhosttyFocused:NO];
   [view viewDidChangeBackingProperties];
   ScheduleTick();
   return Number(env, model->id);
@@ -2085,7 +2145,7 @@ napi_value SetFrames(napi_env env, napi_callback_info info) {
       // Read first: hiding a first responder already hands the keyboard to the bare window.
       const bool hadKeyboard = view.window.firstResponder == view;
       view.hidden = !visible;
-      if (view.model->surface) ghostty_surface_set_occlusion(view.model->surface, visible);
+      [view syncGhosttyVisible];
       if (!visible && hadKeyboard) ReturnKeyboardToWebContents(view);
     }
     [view setOverlayHoles:visible ? HolesForFrame(env, entry, view) : nil];
@@ -2328,6 +2388,8 @@ napi_value DebugState(napi_env env, napi_callback_info info) {
                           String(env, responder ? object_getClassName(responder) : "none"));
   napi_set_named_property(env, result, "holes", OverlayHolesDebugState(env, view));
   napi_set_named_property(env, result, "masked", Bool(env, view.layer.mask != nil));
+  napi_set_named_property(env, result, "ghosttyFocused", Bool(env, view.ghosttyFocused));
+  napi_set_named_property(env, result, "ghosttyVisible", Bool(env, view.ghosttyVisible));
   napi_set_named_property(env, result, "presentedFrames", Number(env, view.presentedFrames));
   return result;
 }
@@ -2824,6 +2886,18 @@ napi_value DebugCounters(napi_env env, napi_callback_info) {
   return result;
 }
 
+// debugWindowOcclusion(onScreen: boolean | null): forces every window on or off screen; null follows AppKit.
+napi_value DebugWindowOcclusion(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argv[1];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  napi_valuetype type = napi_undefined;
+  if (argc > 0) napi_typeof(env, argv[0], &type);
+  g_window_occlusion_override = type == napi_boolean ? (GetBool(env, argv[0]) ? 1 : 0) : -1;
+  for (OrcaGhosttySurfaceView* view in g_views.allValues) [view syncGhosttyVisible];
+  return Undefined(env);
+}
+
 napi_value ModuleInit(napi_env env, napi_value exports) {
   const napi_property_descriptor props[] = {
       {"init", nullptr, Init, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -2863,6 +2937,7 @@ napi_value ModuleInit(napi_env env, napi_value exports) {
       {"debugTextInputMenu", nullptr, DebugTextInputMenu, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugProcessUsage", nullptr, DebugProcessUsage, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugCounters", nullptr, DebugCounters, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugWindowOcclusion", nullptr, DebugWindowOcclusion, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   napi_define_properties(env, exports, sizeof(props) / sizeof(props[0]), props);
   return exports;
