@@ -81,4 +81,17 @@ describe('star prompts without Stably services', () => {
 
     expect(window.webContents.send).not.toHaveBeenCalled()
   })
+
+  it('never asks gh for the upstream star state', async () => {
+    const { service } = createHarness()
+    service.registerIpcHandlers()
+
+    await getIpcHandler('star-nag:onboardingCompleted')()
+    await expect(getIpcHandler('star-nag:agentValueMoment')()).resolves.toEqual({
+      status: 'skipped'
+    })
+    await flushAsyncWork()
+
+    expect(mocks.checkOrcaStarredMock).not.toHaveBeenCalled()
+  })
 })
