@@ -1,9 +1,10 @@
 /**
  * Fork-only (Pod): a product build shipped with `"stablyServices": false` starts, opens a project,
  * runs a terminal command and touches every Stably-backed entry point without one request to a
- * Stably host. Node traffic is seen by a probe required before main's first line; Chromium
- * traffic (renderer, net.fetch, webviews) by a netlog. Both layers black-hole Stably's hosts, so a
- * broken gate fails here without reaching Stably.
+ * Stably host. Node traffic and spawned commands (git clones of Stably's plugin marketplace) are
+ * seen by a probe required before main's first line; Chromium traffic (renderer, net.fetch,
+ * webviews) by a netlog. Both network layers black-hole Stably's hosts, so a broken gate fails
+ * here without reaching Stably.
  */
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
@@ -131,6 +132,32 @@ test('a product without Stably services never contacts a Stably host', async ({
     expect(results.telemetry).toEqual({ effective: 'disabled', reason: 'orca_disabled' })
     expect(results.product).toMatchObject({ displayName: 'Pod', stablyServices: false })
 
+    // Native chrome the identity names: window title and the menu items main translates.
+    const chrome = await electronApp.evaluate(({ BrowserWindow, Menu }) => {
+      const labels: string[] = []
+      // Why skip top-level labels and role items: the app menu and About/Hide/Quit carry the dev
+      // instance name here; a packaged build names them after the product (pod/identity).
+      const walk = (items: Electron.MenuItem[], nested: boolean): void => {
+        for (const item of items) {
+          if (nested && item.visible && !item.role) {
+            labels.push(item.label)
+          }
+          walk(item.submenu?.items ?? [], true)
+        }
+      }
+      walk(Menu.getApplicationMenu()?.items ?? [], false)
+      return { title: BrowserWindow.getAllWindows()[0]?.getTitle(), labels }
+    })
+    expect(chrome.title).toBe('Pod')
+    expect(chrome.labels).toEqual(
+      expect.arrayContaining(['Explore Pod', 'Getting Started with Pod'])
+    )
+    expect(chrome.labels.filter((label) => /\bOrca\b/.test(label))).toEqual([])
+
+    // The plugin system on, as pod/acc turns it on for the bundled distro plugin: the official
+    // marketplace (github.com/stablyai/orca-plugins) must stay unfetched without the opt-in.
+    await orcaPage.evaluate(() => window.api.settings.set({ pluginSystemEnabled: true }))
+
     // Controls: both probes see ordinary traffic, so an empty Stably list is meaningful.
     await electronApp.evaluate(async ({ net }, url) => {
       await fetch(`${url}?layer=node`)
@@ -140,7 +167,7 @@ test('a product without Stably services never contacts a Stably host', async ({
       .poll(() => readNodeTargets().some((target) => target.includes('layer=node')))
       .toBe(true)
 
-    // Let startup timers (plugin safety list, push outbox, relay, telemetry flush) run, then
+    // Let startup timers (plugin safety list, marketplace seed, push outbox, relay, telemetry flush) run, then
     // wait for the netlog writer to flush through the control request.
     await orcaPage.waitForTimeout(5_000)
     await electronApp.evaluate(
@@ -155,6 +182,9 @@ test('a product without Stably services never contacts a Stably host', async ({
       ...new Set(netLogEvents.match(/[\w.-]*(?:onorca|orca)\.dev|[\w.-]*posthog\.com/gi))
     ]
     expect(stablyNodeTargets).toEqual([])
+    expect(readNodeTargets().filter((target) => target.includes('stablyai/orca-plugins'))).toEqual(
+      []
+    )
     expect(stablyNetLogHosts).toEqual([])
   } finally {
     control.server.close()
