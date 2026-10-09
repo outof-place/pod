@@ -48,6 +48,8 @@
       <dd id="resets">-</dd>
       <dt>Messages received</dt>
       <dd id="received">0</dd>
+      <dt>Snapshot</dt>
+      <dd id="snapshot">waiting</dd>
     </dl>
     <button id="reset" type="button">Reset from the panel</button>
     <script>
@@ -61,6 +63,7 @@
         document.getElementById('ticks').textContent = String(message.ticks)
         document.getElementById('resets').textContent = String(message.resets)
         document.getElementById('received').textContent = String(received)
+        if (message.snapshot) document.getElementById('snapshot').textContent = 'received'
       })
       document.getElementById('reset').addEventListener('click', function () {
         window.orcaPanel.postMessage({ type: 'reset' })
