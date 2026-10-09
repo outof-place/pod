@@ -157,6 +157,9 @@ export async function measureWorkload({ workload, out, start, snapshot }) {
   }
   const result = JSON.parse(readFileSync(out, 'utf8'))
   rmSync(out)
+  if (!result.synced) {
+    throw new Error(`${workload.label}: the terminal never answered the device-attributes query`)
+  }
   let previous = await snapshot()
   let settledAtMs = null
   const settleDeadline = Date.now() + SETTLE_TIMEOUT_MS
