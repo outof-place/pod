@@ -17,7 +17,7 @@ console.log('| Benchmark | Subject | Median | p95 | n | Unit |')
 console.log('|---|---|---:|---:|---:|---|')
 for (const row of summary.metrics) {
   console.log(
-    `| ${row.metric} | ${row.subject} | ${format(row.median)} | ${format(row.p95)} | ${row.n} | ${row.unit} |`
+    `| ${row.metric} | ${row.subject} | ${format(row.median)} | ${format(row.p95)} | ${row.n ?? '-'} | ${row.unit} |`
   )
 }
 console.log('\n| Comparison | Baseline | Candidate | Result |')

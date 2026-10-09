@@ -1,9 +1,12 @@
 # Pod benchmarks
 
 Reproducible measurements of where Pod (this fork of Orca) is faster than official Orca and other
-terminals, and where it is not. Every number in the Pod README comes from a file under
-`results/<date>/`, produced by the scripts in this directory. Nothing is estimated or extrapolated.
-A metric that has not been measured under the rules below is listed as pending, not guessed.
+terminals, and where it is not. The suite also covers claude-acc, which ships inside Pod.
+
+Every number in the Pod README comes from a file under `results/<date>/`, produced by the scripts
+in this directory, and committed on the `pod/bench` branch. Nothing is estimated or extrapolated.
+A metric not measured under the rules below is listed as pending, not guessed. A claude-acc number
+measured before this suite existed is labelled historical, with its date and source.
 
 ## Machine and conditions
 
@@ -35,13 +38,13 @@ Each suite records the exact versions it measured in `versions` (app bundle vers
 commit and signing team for Orca and Pod). It also records the tool versions (git, ripgrep,
 Playwright).
 
-| Subject                       | What it is                                                                                                     |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Orca                          | Official Orca, latest release (1.4.223 on 2026-10-09), `/Applications/Orca.app`, signed by Stably (6CX3WHS9HZ) |
-| Pod (native Ghostty terminal) | Pod build with `experimentalNativeTerminal` on                                                                 |
-| Pod (xterm.js)                | The same Pod build with the setting off: it separates the native terminal's effect from the rest of the build  |
-| Ghostty                       | Ghostty 1.3.1 (latest release), visible-window suites only                                                     |
-| Terminal.app                  | The macOS 27 Terminal, visible-window suites only                                                              |
+| Subject                       | What it is                                                                                                                                                                                                  |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Orca                          | Official Orca, latest release (1.4.223 on 2026-10-09), `/Applications/Orca.app`, signed by Stably (6CX3WHS9HZ)                                                                                              |
+| Pod (native Ghostty terminal) | The assembled Pod `main`, built and Developer ID signed by `product/release.sh` (bundle `codes.pod.app`, CLI `podx`), with `experimentalNativeTerminal` on. `run-final.sh --pod` names the build explicitly |
+| Pod (xterm.js)                | The same Pod build with the setting off: it separates the native terminal's effect from the rest of the build                                                                                               |
+| Ghostty                       | Ghostty 1.3.1 (latest release), visible-window suites only                                                                                                                                                  |
+| Terminal.app                  | The macOS 27 Terminal, visible-window suites only                                                                                                                                                           |
 
 VS Code, Cursor, Zed, Warp and iTerm2 are not installed on the benchmark Mac, so they are not
 compared. Neither are Conductor and Claude Squad.
@@ -66,7 +69,7 @@ Support/orca`). Every Orca or Pod instance gets:
 - a hermetic shell: the panes run `/bin/zsh` with a `ZDOTDIR` whose `.zshrc` only sets `PS1="%# "`
   and logs each prompt's time. Orca's zsh wrapper restores `ZDOTDIR`, so no pane reads the user's
   own shell config.
-- control through the instance's own `orca` CLI, pointed at its profile with
+- control through the instance's own CLI (`orca`, or `podx` in Pod), pointed at its profile with
   `ORCA_USER_DATA_PATH`: `repo add`, `terminal create --focus`, `terminal split` and
   `terminal send`.
 - cleanup afterwards: every process whose argv names the profile is killed (the terminal daemon
@@ -174,25 +177,63 @@ number of matching lines per query, and any disagreement is recorded. The engine
 This compares, with `GIT_OPTIONAL_LOCKS=0` as Orca polls:
 
 - Orca 1.4.223's poll: `git status --porcelain=v2 --branch --untracked-files=all`;
-- the fix on `perf/git-status-untracked-cache` (8706019): `--untracked-files=normal`, plus one
+- Pod's poll ([stablyai/orca#26979](https://github.com/stablyai/orca/pull/26979), branch
+  `perf/git-status-untracked-cache`): `--untracked-files=normal`, plus one
   `git ls-files --others --exclude-standard` scoped to the collapsed `? dir/` rows.
 
 Each sample checks that both return the same set of untracked paths. The repo's fsmonitor and
 untracked-cache settings are recorded.
 
+Git's untracked cache keeps the mode that last wrote it. So before each sample a plain
+`git status` (optional locks on) puts it in normal mode. That is the state terminals and agents
+keep it in, and one in which Orca's `all` poll cannot use the cache.
+
 ### 7. Process polling (`suites/polling.mjs`, `tools/ttyprobe.c`)
 
-These are the two reads behind Orca's "who holds this pane's terminal" check
-(`src/main/runtime/terminal-foreground-group.ts`). Each is done Orca 1.4.223's way, by forking
+These are the process reads Orca makes all the time. Each is done Orca 1.4.223's way, by forking
 `/bin/ps` (from C, and with `execFile` from Node as Orca does), and by reading the kernel's
 process table with sysctl:
 
-- the terminal lookup: `ps -o tty= -p PID` vs `KERN_PROC_PID` plus `devname`;
-- the terminal's process rows: `ps -o pid=,ppid=,pgid=,tpgid=,stat=,command= -t TTY` vs
+- the whole process table, which Orca's daemon reads about once a second (`PS_ARGS` in
+  `src/shared/process-table-snapshot.ts`):
+  - `ps -axo pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command=`;
+  - vs `KERN_PROC_ALL` plus `KERN_PROCARGS2` per process, with `devname` cached per device. The
+    `tty=` column is what makes `ps` slow: it runs `devname`, a scan of /dev, for every row.
+- the terminal lookup behind "who holds this pane's terminal"
+  (`src/main/runtime/terminal-foreground-group.ts`): `ps -o tty= -p PID` vs `KERN_PROC_PID` plus
+  `devname`;
+- that terminal's process rows: `ps -o pid=,ppid=,pgid=,tpgid=,stat=,command= -t TTY` vs
   `KERN_PROC_TTY` plus `KERN_PROCARGS2`.
 
-The target is a pty holding a shell with two children. When the work-in-progress Pod addon
-(`native/proc-info-darwin`) is built locally, it is measured too, and its sha256 is recorded.
+The C sysctl versions are a reference implementation in `tools/ttyprobe.c`. What Pod ships is its
+process-info addon ([stablyai/orca#26985](https://github.com/stablyai/orca/pull/26985)). The suite
+loads it from the Pod build under test (`Contents/Resources/native/orca-proc-info.node`) and
+measures `listProcesses`, `readProcess` and `listTerminalProcesses`, recording its sha256. The
+target is a pty holding a shell with two children.
+
+### 8. claude-acc (`suites/claude-acc.mjs`, `claude-acc/historical.json`)
+
+claude-acc ships inside Pod. Its numbers come in two kinds, and summary.json tells them apart with
+`provenance.kind`:
+
+- **historical**: measured before this suite existed, copied as written from claude-acc's README
+  or the project notes, with the date, the source and the commit that added it. A range in the
+  source stays a range: `min` and `max`, no median. `historical.json` also lists what was left out
+  and why: general Mac tuning, the user's own hooks, and items with no measured number.
+- **fresh**: re-measured in the final run with `--fresh`. Each one reproduces "before" without
+  touching the user's live settings:
+
+| Fresh measurement | Before                                                   | After                                                                                            |
+| ----------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `compile-cache`   | `require('typescript')`, NODE_COMPILE_CACHE unset        | the same with a temporary cache dir                                                              |
+| `rg-threads`      | `rg` with its default threads on Portivo                 | `rg --threads=4`                                                                                 |
+| `guard-hook`      | `devguard.py admit` on a PreToolUse payload for `ls -la` | `claude-acc-hook`, the native hook                                                               |
+| `launcher-python` | `/usr/bin/python3 -I -c pass`                            | claude-acc's uv Python                                                                           |
+| `git-speed`       | `git status` in a temporary clone of Portivo, caches off | the same clone with untrackedCache and fsmonitor                                                 |
+| `compress`        | copies of the user's transcripts in a temporary dir      | after `afsctool -c -T LZFSE`, as the janitor runs it                                             |
+| `devtools`        | a fresh Go binary's first exec, started by a launchd job | the same, started from the run's own app (in Developer Tools)                                    |
+| `sched`           | 7 Go builds behind a mkdir lock, as the old plock        | the same through `sched.py` in a temporary HOME                                                  |
+| `hook-wait`       | (none)                                                   | the hook wait per tool call in the last 24 h of transcripts, from `claude-acc perf bench agents` |
 
 ## Running without taking the desktop
 
@@ -202,8 +243,8 @@ Mac:
 - **Virtual display: works for visibility.** CoreGraphics' private `CGVirtualDisplay` API, the one
   DeskPad uses, is present on macOS 27: `.build/bin/vdisplay --probe`. `vdisplay --create` adds a
   120 Hz HiDPI virtual monitor that windows can be moved to, and ScreenCaptureKit can capture it.
-  Creating one reconfigures the display arrangement, which the user sees, so it has not been run
-  without the user's agreement.
+  Creating one reconfigures the display arrangement, which the user sees. So it runs only in the
+  final window, as a 20 s check that writes `vdisplay.json`.
 - **Keyboard input: does not work without focus.** `keylat --probe-post` posts a key with
   `CGEventPostToPid` to its own window in an inactive, Dock-less process. The window cannot become
   key, and the key never arrives. AppKit routes keys only to the key window of the active app.
@@ -214,10 +255,29 @@ Mac:
 
 ## Reproduce
 
+The final run is one command. It takes about 70 minutes on a quiet Mac, and its last 20 minutes
+take the desktop and keyboard focus:
+
 ```sh
-bench/run.sh                                  # builds the tools, runs every headless suite, writes summary.json
-bench/run.sh throughput                       # one suite
-node bench/suites/latency.mjs --confirm-visible --throughput   # visible windows, in an agreed slot
+bench/run-final.sh --pod /path/to/Pod.app     # preflight, every suite, claude-acc --fresh, vdisplay, visible run, summary
+```
+
+The steps, in order:
+
+1. `suites/preflight.mjs`: every subject launches and gives one synced terminal workload.
+2. polling, git-status, search, startup, panes and throughput.
+3. `claude-acc.mjs --fresh`.
+4. The virtual display check.
+5. `latency.mjs --confirm-visible --throughput`.
+6. `summarize.mjs` and the Markdown tables.
+
+`--no-visible` stops before the desktop is needed.
+
+Pieces on their own:
+
+```sh
+bench/run.sh throughput                       # builds the tools, runs one headless suite, writes summary.json
+node bench/suites/claude-acc.mjs              # only the historical claude-acc rows
 node bench/report.mjs bench/results/<date>/summary.json   # Markdown tables
 ```
 
@@ -239,11 +299,46 @@ Overrides:
 
 ## Result files
 
-- `results/<date>/<suite>.json`. Each file has:
-  - the machine;
-  - the versions and the config;
-  - every sample, with its load average and busy cores;
-  - the headline `metrics`.
-- `results/<date>/summary.json`: every metric's median, p95, min, max and n, with its conditions
-  and versions. It also holds the Pod-vs-Orca `comparisons`: `factor > 1` means the candidate is
-  ahead by that factor, and `factor < 1` means it is behind.
+`results/<date>/<suite>.json` (UTC date of the run). Each file has:
+
+- the machine;
+- the versions and the config;
+- every sample, with its load average and busy cores;
+- the headline `metrics`.
+
+They are committed on `pod/bench` together with `summary.json`.
+
+<a id="summaryjson"></a>
+
+### summary.json
+
+`summarize.mjs` writes it (`schemaVersion` 2). Top level:
+
+| Field                    | What it holds                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| `hardware`, `machine`    | model, chip, cores, memory, macOS build, power source                          |
+| `methodology`            | this file's path and URL                                                       |
+| `maxLoad`, `aggregation` | the load gate; median = average of the middle pair, p95 = nearest rank         |
+| `podStack`               | `origin/main:pod-stack.json` at summary time: which topic branches Pod carries |
+| `caveats`                | caveats that apply to every row                                                |
+| `groups`                 | `pod` (Pod vs Orca and other terminals) and `claude-acc`                       |
+| `suites.<name>`          | file, versions, config and suite-wide caveats                                  |
+
+Each `metrics[]` row has these fields:
+
+| Field                                 | What it holds                                                 |
+| ------------------------------------- | ------------------------------------------------------------- |
+| `id`, `suite`, `group`                | e.g. `throughput.cat.wall.pod-native`, `throughput`, `pod`    |
+| `subject`, `metric`, `unit`, `better` | `better` is `lower` or `higher`                               |
+| `n`, `median`, `p95`, `min`, `max`    | `n` and `median` are null when the source gave only a range   |
+| `extra`                               | secondary numbers (settle time, RSS, p90, notes)              |
+| `conditions`                          | how it was measured                                           |
+| `provenance`                          | `{ kind: "fresh" \| "historical", date, source, note }`       |
+| `branch`, `upstream`, `inPodStack`    | where a change comes from, and whether Pod's stack carries it |
+| `caveats`                             | strings to print with the number                              |
+
+`comparisons[]` rows have:
+
+- `baseline` and `candidate` (`{ id, subject, median }`);
+- `factor`: above 1, the candidate is ahead by that factor; below 1, it is behind;
+- `candidateAhead`, `label`, `provenance` and `caveats`.

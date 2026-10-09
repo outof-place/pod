@@ -128,6 +128,8 @@ for (const name of names) {
       {
         id: `memory.${panes}.${name}`,
         subject: SUBJECTS[name].label,
+        branch: SUBJECTS[name].branch,
+        upstream: SUBJECTS[name].upstream,
         metric: `memory (phys_footprint), ${panes} pane${panes > 1 ? 's' : ''}`,
         unit: 'MiB',
         better: 'lower',
@@ -138,6 +140,8 @@ for (const name of names) {
       {
         id: `idle-cpu.${panes}.${name}`,
         subject: SUBJECTS[name].label,
+        branch: SUBJECTS[name].branch,
+        upstream: SUBJECTS[name].upstream,
         metric: `idle CPU, ${panes} pane${panes > 1 ? 's' : ''}`,
         unit: 'ms CPU per s',
         better: 'lower',
@@ -149,6 +153,9 @@ for (const name of names) {
 }
 log('done')
 writeSuiteResult('panes', {
+  caveats: [
+    'Windowless instances with background throttling off; memory includes the GPU process, and a native view in a window that is never on screen may not draw.'
+  ],
   versions,
   config: { rounds, subjects: names, idleMs, settleMs },
   metrics,

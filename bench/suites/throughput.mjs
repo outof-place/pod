@@ -75,6 +75,10 @@ async function waitForGeometry(instance, handle) {
   }
 }
 
+const CAVEATS = [
+  'Windowless instances with background throttling off: xterm.js keeps painting, while a native view in a window that is never on screen may skip drawing. throughput-visible has the same workloads in visible windows.',
+  "In Pod's native mode xterm.js still answers the device-attributes query, so wall time ends when xterm.js has parsed the output; settle time and app CPU also cover the native view's work."
+]
 const samples = {}
 for (const name of names) {
   for (const workload of workloadNames) {
@@ -151,6 +155,8 @@ for (const name of names) {
       {
         id: `throughput.${workload}.wall.${name}`,
         subject: SUBJECTS[name].label,
+        branch: SUBJECTS[name].branch,
+        upstream: SUBJECTS[name].upstream,
         metric: `${allWorkloads[workload].label}: wall time`,
         unit: 'ms',
         better: 'lower',
@@ -161,6 +167,8 @@ for (const name of names) {
       {
         id: `throughput.${workload}.cpu.${name}`,
         subject: SUBJECTS[name].label,
+        branch: SUBJECTS[name].branch,
+        upstream: SUBJECTS[name].upstream,
         metric: `${allWorkloads[workload].label}: app CPU time`,
         unit: 'ms',
         better: 'lower',
@@ -172,6 +180,7 @@ for (const name of names) {
 }
 log('done')
 writeSuiteResult('throughput', {
+  caveats: CAVEATS,
   versions,
   config: {
     rounds,

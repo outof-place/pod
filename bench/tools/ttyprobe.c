@@ -1,12 +1,15 @@
 // ttyprobe: the two process reads behind Orca's per-pane foreground poll, done Orca's way (fork
 // /bin/ps) and the sysctl way, timed per call. Prints one JSON object on stdout.
 //
-//   ttyprobe --pid PID --mode ps-tty|ps-rows|sysctl-tty|sysctl-rows [--iterations N]
+//   ttyprobe --pid PID --mode ps-tty|ps-rows|sysctl-tty|sysctl-rows|ps-all|ps-cheap|sysctl-all [--iterations N]
 //
 // ps-tty      `ps -o tty= -p PID`                                   (terminalOf, uncached)
 // ps-rows     `ps -o pid=,ppid=,pgid=,tpgid=,stat=,command= -t TTY` (readTerminalProcessRows)
 // sysctl-tty  KERN_PROC_PID -> e_tdev -> devname
 // sysctl-rows KERN_PROC_TTY plus KERN_PROCARGS2 per process (the same columns as ps-rows)
+// ps-all     `ps -axo pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command=` (PS_ARGS, the whole table)
+// ps-cheap   `ps -axo pid=,ppid=,pgid=,tpgid=,stat=,lstart=` (CHEAP_PS_ARGS)
+// sysctl-all KERN_PROC_ALL plus KERN_PROCARGS2 per process and devname cached per device: PS_ARGS' columns
 #include <errno.h>
 #include <fcntl.h>
 #include <spawn.h>
@@ -117,6 +120,54 @@ static int sysctl_rows(dev_t tdev, char *out, size_t cap) {
   return n;
 }
 
+// devname() scans /dev on every call; ps pays that per row, a long-lived reader once per device.
+static const char *cached_devname(dev_t dev) {
+  static dev_t devs[1024];
+  static char names[1024][32];
+  static int n = 0;
+  for (int i = 0; i < n; i++) {
+    if (devs[i] == dev) return names[i];
+  }
+  const char *name = devname(dev, S_IFCHR);
+  if (n < 1024) {
+    devs[n] = dev;
+    snprintf(names[n], sizeof(names[n]), "%s", name ? name : "??");
+    return names[n++];
+  }
+  return name ? name : "??";
+}
+
+// Every process with PS_ARGS' columns (start time as epoch seconds); returns the row count.
+static int sysctl_all(char *out, size_t cap) {
+  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
+  size_t size = 0;
+  if (sysctl(mib, 3, NULL, &size, NULL, 0) != 0) return -1;
+  size += size / 4;
+  static struct kinfo_proc *procs = NULL;
+  static size_t procs_cap = 0;
+  if (size > procs_cap) {
+    free(procs);
+    procs = malloc(size);
+    procs_cap = size;
+  }
+  if (!procs || sysctl(mib, 3, procs, &size, NULL, 0) != 0) return -1;
+  int n = (int)(size / sizeof(struct kinfo_proc));
+  size_t used = 0;
+  static char command[1 << 16];
+  for (int i = 0; i < n; i++) {
+    struct kinfo_proc *kp = &procs[i];
+    dev_t tdev = kp->kp_eproc.e_tdev;
+    read_command(kp->kp_proc.p_pid, command, sizeof(command));
+    int w = snprintf(out + used, cap - used, "%d %d %d %d %d %s %ld %s\n", kp->kp_proc.p_pid,
+                     kp->kp_eproc.e_ppid, kp->kp_eproc.e_pgid, kp->kp_eproc.e_tpgid, kp->kp_proc.p_stat,
+                     tdev == NODEV ? "??" : cached_devname(tdev), (long)kp->kp_proc.p_starttime.tv_sec,
+                     command[0] ? command : kp->kp_proc.p_comm);
+    if (w < 0 || (size_t)w >= cap - used) break;
+    used += (size_t)w;
+  }
+  return n;
+}
+
 static int count_lines(const char *s) {
   int n = 0;
   for (; *s; s++) n += *s == '\n';
@@ -133,11 +184,13 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--iterations")) iterations = atoi(argv[i + 1]);
   }
   if (!pid || !mode || iterations < 1) {
-    fprintf(stderr, "usage: ttyprobe --pid PID --mode ps-tty|ps-rows|sysctl-tty|sysctl-rows [--iterations N]\n");
+    fprintf(stderr, "usage: ttyprobe --pid PID --mode ps-tty|ps-rows|sysctl-tty|sysctl-rows|ps-all|ps-cheap|sysctl-all [--iterations N]\n");
     return 2;
   }
-  char tty[64];
-  if (sysctl_tty(pid, tty, sizeof(tty)) != 0) {
+  char tty[64] = "";
+  // The whole-table modes read every process; only the per-terminal ones need a tty.
+  int whole_table = !strcmp(mode, "ps-all") || !strcmp(mode, "ps-cheap") || !strcmp(mode, "sysctl-all");
+  if (!whole_table && sysctl_tty(pid, tty, sizeof(tty)) != 0) {
     fprintf(stderr, "pid %d has no controlling terminal\n", pid);
     return 1;
   }
@@ -146,7 +199,7 @@ int main(int argc, char **argv) {
   char pidarg[16], ttyarg[80];
   snprintf(pidarg, sizeof(pidarg), "%d", pid);
   snprintf(ttyarg, sizeof(ttyarg), "%s", tty);
-  static char out[1 << 20];
+  static char out[1 << 23];
   double *us = calloc((size_t)iterations, sizeof(double));
   int rows = -1;
   for (int i = 0; i < iterations; i++) {
@@ -161,6 +214,16 @@ int main(int argc, char **argv) {
       if (ok >= 0) rows = count_lines(out);
     } else if (!strcmp(mode, "sysctl-tty")) {
       ok = sysctl_tty(pid, out, sizeof(out));
+    } else if (!strcmp(mode, "ps-all")) {
+      char *a[] = {"/bin/ps", "-axo", "pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command=", NULL};
+      ok = run_capture(a, out, sizeof(out));
+      if (ok >= 0) rows = count_lines(out);
+    } else if (!strcmp(mode, "ps-cheap")) {
+      char *a[] = {"/bin/ps", "-axo", "pid=,ppid=,pgid=,tpgid=,stat=,lstart=", NULL};
+      ok = run_capture(a, out, sizeof(out));
+      if (ok >= 0) rows = count_lines(out);
+    } else if (!strcmp(mode, "sysctl-all")) {
+      ok = rows = sysctl_all(out, sizeof(out));
     } else if (!strcmp(mode, "sysctl-rows")) {
       ok = rows = sysctl_rows(kp.kp_eproc.e_tdev, out, sizeof(out));
     } else {

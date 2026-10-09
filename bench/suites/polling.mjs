@@ -5,7 +5,7 @@
 //   node bench/suites/polling.mjs [--runs 7] [--calls 100]
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
@@ -18,6 +18,7 @@ import {
   sleep,
   writeSuiteResult
 } from '../lib/bench-session.mjs'
+import { POD_APP } from '../lib/orca-instance.mjs'
 import { summarize } from '../lib/sample-stats.mjs'
 
 const { values: options } = parseArgs({
@@ -76,15 +77,19 @@ async function nodePs(args) {
   return us
 }
 
-// Optional: the work-in-progress Pod addon (native/proc-info-darwin), when built locally.
+// Pod's process-info addon (native/proc-info-darwin): the one in the Pod build under test, else
+// a local development build of it.
+const podAddon = path.join(realpathSync(POD_APP), 'Contents/Resources/native/orca-proc-info.node')
+const devAddon = path.join(
+  os.homedir(),
+  'Documents/orca-native-wt/proc-info-darwin/native/proc-info-darwin/.build/release/orca-proc-info.node'
+)
 const addonPath =
-  process.env.POD_BENCH_PROC_INFO_ADDON ??
-  path.join(
-    os.homedir(),
-    'Documents/orca-native-wt/proc-info-darwin/native/proc-info-darwin/.build/release/orca-proc-info.node'
-  )
+  process.env.POD_BENCH_PROC_INFO_ADDON ?? [podAddon, devAddon].find((file) => existsSync(file))
+const addonSource =
+  addonPath === podAddon ? `the Pod build (${POD_APP})` : 'a local development build'
 let addon = null
-if (existsSync(addonPath)) {
+if (addonPath && existsSync(addonPath)) {
   try {
     const module = { exports: {} }
     process.dlopen(module, addonPath)
@@ -113,12 +118,20 @@ const methods = {
   'node-ps-rows': async () => ({
     us: await nodePs(['-o', 'pid=,ppid=,pgid=,tpgid=,stat=,command=', '-t', tty])
   }),
+  // The whole process table, as Orca's daemon reads it about once a second (PS_ARGS).
+  'c-ps-all': () => probe('ps-all'),
+  'c-ps-cheap': () => probe('ps-cheap'),
+  'c-sysctl-all': () => probe('sysctl-all'),
+  'node-ps-all': async () => ({
+    us: await nodePs(['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command='])
+  }),
   ...(addon
     ? {
         'addon-read-process': async () => ({ us: addonCalls(() => addon.readProcess(rootPid)) }),
         'addon-list-terminal': async () => ({
           us: addonCalls(() => addon.listTerminalProcesses(tty))
-        })
+        }),
+        'addon-list-processes': async () => ({ us: addonCalls(() => addon.listProcesses()) })
       }
     : {})
 }
@@ -162,10 +175,30 @@ const subjects = {
   ],
   'node-ps-tty': ['Orca 1.4.223 way from Node: execFile `ps -o tty= -p PID`', 'terminal lookup'],
   'node-ps-rows': ['Orca 1.4.223 way from Node: execFile `ps ... -t TTY`', 'terminal process rows'],
-  'addon-read-process': ['Pod proc-info addon (WIP) readProcess(pid) from Node', 'terminal lookup'],
+  'c-ps-all': [
+    'Orca 1.4.223 way: fork `ps -axo pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command=` (C posix_spawn)',
+    'whole process table (PS_ARGS)'
+  ],
+  'c-ps-cheap': [
+    'Orca 1.4.223 cheap tier: fork `ps -axo pid=,ppid=,pgid=,tpgid=,stat=,lstart=` (C posix_spawn)',
+    'whole process table, no tty or command'
+  ],
+  'c-sysctl-all': [
+    'sysctl KERN_PROC_ALL + KERN_PROCARGS2 per process + devname cached per device (C)',
+    'whole process table (PS_ARGS)'
+  ],
+  'node-ps-all': [
+    'Orca 1.4.223 way from Node: execFile `ps -axo ...` (PS_ARGS)',
+    'whole process table (PS_ARGS)'
+  ],
+  'addon-read-process': ['Pod proc-info addon: readProcess(pid) from Node', 'terminal lookup'],
   'addon-list-terminal': [
-    'Pod proc-info addon (WIP) listTerminalProcesses(tty) from Node',
+    'Pod proc-info addon: listTerminalProcesses(tty) from Node',
     'terminal process rows'
+  ],
+  'addon-list-processes': [
+    'Pod proc-info addon: listProcesses() from Node',
+    'whole process table (PS_ARGS)'
   ]
 }
 const metrics = Object.keys(methods).map((name) => ({
@@ -175,7 +208,20 @@ const metrics = Object.keys(methods).map((name) => ({
   unit: 'µs',
   better: 'lower',
   stats: summarize(perCall[name], 'µs'),
-  conditions: `${runs} runs x ${calls} calls, plain Node ${process.version}, pty with 3 processes`
+  conditions: `${runs} runs x ${calls} calls, plain Node ${process.version}, pty with 3 processes`,
+  ...(name.startsWith('addon-')
+    ? {
+        branch: 'perf/native-proc-info-darwin',
+        upstream: 'https://github.com/stablyai/orca/pull/26985'
+      }
+    : {}),
+  ...(name.startsWith('c-sysctl')
+    ? {
+        caveats: [
+          'A reference C implementation in bench/tools/ttyprobe.c, not code that ships in Pod.'
+        ]
+      }
+    : {})
 }))
 
 const comparisons = [
@@ -189,8 +235,18 @@ const comparisons = [
     candidate: 'polling.c-sysctl-rows',
     label: 'terminal process rows: fork ps vs sysctl (C)'
   },
+  {
+    baseline: 'polling.c-ps-all',
+    candidate: 'polling.c-sysctl-all',
+    label: 'whole process table: fork ps vs sysctl (C)'
+  },
   ...(addon
     ? [
+        {
+          baseline: 'polling.node-ps-all',
+          candidate: 'polling.addon-list-processes',
+          label: 'whole process table from Node: execFile ps vs Pod addon'
+        },
         {
           baseline: 'polling.node-ps-tty',
           candidate: 'polling.addon-read-process',
@@ -213,7 +269,7 @@ writeSuiteResult('polling', {
       ? {
           path: addonPath,
           sha256: createHash('sha256').update(readFileSync(addonPath)).digest('hex'),
-          note: 'uncommitted work in progress'
+          source: addonSource
         }
       : null,
     zsh: commandVersion('/bin/zsh', ['--version'])
