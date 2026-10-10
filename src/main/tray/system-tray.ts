@@ -1,6 +1,6 @@
 import { Menu, Tray, nativeImage, nativeTheme, type NativeImage } from 'electron'
-import menuBarIconPath from '../../../resources/tray/orca-menu-barTemplate.png?asset&asarUnpack'
-import menuBarIconRetinaPath from '../../../resources/tray/orca-menu-barTemplate@2x.png?asset&asarUnpack'
+import menuBarIconPath from '../../../resources/tray/pod-menu-barTemplate.png?asset&asarUnpack'
+import menuBarIconRetinaPath from '../../../resources/tray/pod-menu-barTemplate@2x.png?asset&asarUnpack'
 import { deferAppKitSceneMutation } from '../appkit-scene-mutation'
 import { createAppIconImage } from '../app-icon'
 import { translateMain } from '../i18n/main-i18n'
@@ -168,9 +168,8 @@ function createMacMenuBarImage(): NativeImage | null {
 
 // Why: dev builds reuse the production template glyph, so without a marker a
 // dev status item is indistinguishable from the installed app's. Stamping the
-// badge into the template (instead of tray.setTitle) keeps the status item at
-// the exact production width, and the attention tint path inherits it since it
-// reads these same pixels.
+// badge into the template (instead of tray.setTitle) keeps it a template image,
+// and the attention tint path inherits it since it reads these same pixels.
 function stampMacDevBadge(base: NativeImage): NativeImage {
   try {
     const stamped = stampTrayDevBadge(base)
