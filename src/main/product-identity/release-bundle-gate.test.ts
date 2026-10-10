@@ -14,7 +14,10 @@ const gate: {
   assertAppAsar(resourcesDir: string, listPackage?: (path: string) => string[]): void
   forbiddenAsarEntries(listing: string[]): string[]
 } = require(gatePath)
-const productConfig: unknown = require('../../../product/electron-builder.pod.cjs')
+const productConfig: {
+  files: string[]
+  mac: { signIgnore: string[] }
+} = require('../../../product/electron-builder.pod.cjs')
 
 let root: string | null = null
 
@@ -72,12 +75,8 @@ describe('release bundle gate', () => {
   })
 
   it('keeps the exclusions and sign skips in the product config', () => {
-    const files: unknown = Reflect.get(Object(productConfig), 'files')
-    expect(files).toEqual(expect.arrayContaining(gate.PRODUCT_FILE_EXCLUSIONS))
-    const mac: unknown = Reflect.get(Object(productConfig), 'mac')
-    expect(Reflect.get(Object(mac), 'signIgnore')).toEqual(
-      expect.arrayContaining(gate.PRODUCT_SIGN_IGNORE)
-    )
+    expect(productConfig.files).toEqual(expect.arrayContaining(gate.PRODUCT_FILE_EXCLUSIONS))
+    expect(productConfig.mac.signIgnore).toEqual(expect.arrayContaining(gate.PRODUCT_SIGN_IGNORE))
     const skip = new RegExp(gate.PRODUCT_SIGN_IGNORE[0])
     const unpacked = '/Pod.app/Contents/Resources/app.asar.unpacked/resources'
     expect(skip.test(`${unpacked}/brand/menu-barTemplate.svg`)).toBe(true)
