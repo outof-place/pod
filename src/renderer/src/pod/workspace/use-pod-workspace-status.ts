@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { PodWorkspaceStatus } from '../../../../shared/pod-workspace-types'
+import type { PodWorkspaceStatusReply } from '../../../../shared/pod-workspace-types'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { getPodWorkspaceApi } from './pod-workspace-api-access'
+import { podWorkspaceRpc } from './pod-workspace-rpc'
 
 export type PodWorkspaceStatusState = {
-  status: PodWorkspaceStatus | null
+  status: PodWorkspaceStatusReply | null
   loading: boolean
   error: string | null
   refresh: (force: boolean) => Promise<void>
@@ -12,7 +12,7 @@ export type PodWorkspaceStatusState = {
 
 /** Loads the health snapshot when the pane mounts or the root changes, never in the background. */
 export function usePodWorkspaceStatus(rootSetting: string | undefined): PodWorkspaceStatusState {
-  const [status, setStatus] = useState<PodWorkspaceStatus | null>(null)
+  const [status, setStatus] = useState<PodWorkspaceStatusReply | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Why: a slow snapshot for the previous root must not overwrite the newer one.
@@ -23,7 +23,7 @@ export function usePodWorkspaceStatus(rootSetting: string | undefined): PodWorks
     setLoading(true)
     setError(null)
     try {
-      const next = (await getPodWorkspaceApi()?.getStatus({ refresh: force })) ?? null
+      const next = await podWorkspaceRpc.getStatus(force)
       if (generation === generationRef.current) {
         setStatus(next)
       }
