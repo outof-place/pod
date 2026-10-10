@@ -62,7 +62,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // Fork-only (Pod): workspace root IPC and listeners; no disk work at startup.
   installPodWorkspace(store, runtime)
   // Fork-only (Pod): the one-app control socket; a no-op unless PodNative launched this runtime.
-  installPodUiHost()
+  installPodUiHost(runtime)
   await initializeMainProcessPlugins(runtime)
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()
