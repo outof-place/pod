@@ -131,6 +131,27 @@ describe('OrcaRuntimeRpcServer local stream transport', () => {
     }
   })
 
+  it('answers the upgrade like an older runtime when the kill switch is set', async () => {
+    vi.stubEnv('ORCA_LOCAL_STREAM_TRANSPORT', '0')
+    const { server, endpoint, authToken } = await startServer()
+    try {
+      const client = await openLocalStreamTestClient(endpoint, authToken)
+      expect(client.upgradeResponse).toMatchObject({
+        id: 'upgrade',
+        ok: false,
+        error: { code: 'method_not_found' }
+      })
+      client.close()
+      await client.closed
+      await expect(
+        sendRequest(endpoint, { id: 'unary', authToken, method: 'status.get' })
+      ).resolves.toMatchObject({ id: 'unary', ok: true })
+    } finally {
+      vi.unstubAllEnvs()
+      await server.stop()
+    }
+  })
+
   it('carries terminal.multiplex binary frames both ways and cleans up on disconnect', async () => {
     const writes: { terminal: string; text: string }[] = []
     const { runtime, server, endpoint, authToken } = await startServer(writes)
