@@ -9,9 +9,16 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
 import { ACC_STATE_DIR } from './acc-lifecycle'
-import { ACC_ROOTD_REQUEST, takeAccRootdRequest } from './acc-rootd'
+import {
+  ACC_ROOTD_REQUEST,
+  accRootdConfirmDialog,
+  answerAccRootdRequest,
+  readAccRootdStep,
+  takeAccRootdRequest
+} from './acc-rootd'
 
 const roots: string[] = []
 afterEach(() => {
@@ -78,5 +85,125 @@ describe('pod-rootd requests from the panel', () => {
 
   it('finds nothing when no one asked', () => {
     expect(takeAccRootdRequest(home(undefined).home, NOW)).toBeNull()
+  })
+})
+
+const PAYLOAD = '/Applications/Pod.app/Contents/Resources/claude-acc'
+
+/** pod-rootctl answering `service status --json` with `status`, every other command with `code`. */
+function rootctl(status: Partial<ProcessResult> | Error, code = 0) {
+  return vi.fn(async (spec: ProcessSpec): Promise<ProcessResult> => {
+    const done = { code, signal: null, stdout: '', stderr: '', timedOut: false }
+    if (spec.args?.join(' ') !== 'service status --json') {
+      return done
+    }
+    if (status instanceof Error) {
+      throw status
+    }
+    return { ...done, code: 0, ...status }
+  })
+}
+
+describe("pod-rootd's step from pod-rootctl", () => {
+  it.each(['install', 'approve', 'ready'] as const)('reads %s', async (step) => {
+    const run = rootctl({ stdout: `{"step": "${step}"}\n` })
+    await expect(readAccRootdStep(run, PAYLOAD)).resolves.toBe(step)
+    expect(run).toHaveBeenCalledWith({
+      program: `${PAYLOAD}/pod-rootctl`,
+      args: ['service', 'status', '--json'],
+      timeoutMs: 10_000
+    })
+  })
+
+  it.each([
+    ['an exit other than 0', { code: 69, stdout: '{"step": "ready"}' }],
+    ['no JSON', { stdout: 'ready\n' }],
+    ['a step it does not know', { stdout: '{"step": "upgrade"}' }],
+    ['no step', { stdout: '[]' }],
+    ['no pod-rootctl', new Error('ENOENT')]
+  ] as const)('says nothing for %s', async (_name, status) => {
+    await expect(readAccRootdStep(rootctl(status), PAYLOAD)).resolves.toBeNull()
+  })
+})
+
+describe('answering a pod-rootd request', () => {
+  it('does nothing once the helper is ready', async () => {
+    const confirm = vi.fn(async () => true)
+    const openPath = vi.fn(async () => '')
+    const run = rootctl({ stdout: '{"step": "ready"}' })
+    await expect(
+      answerAccRootdRequest({ run, payloadDir: PAYLOAD, confirm, openPath })
+    ).resolves.toEqual({
+      outcome: 'registered',
+      step: 'ready'
+    })
+    expect(confirm).not.toHaveBeenCalled()
+    expect(openPath).not.toHaveBeenCalled()
+    expect(run).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    [true, '', 'registered'],
+    [true, 'No application knows how to open it', 'unavailable'],
+    [false, '', 'declined']
+  ] as const)('install, Pod asks %s: Installer says "%s"', async (yes, opened, outcome) => {
+    const confirm = vi.fn(async () => yes)
+    const openPath = vi.fn(async () => opened)
+    const run = rootctl({ stdout: '{"step": "install"}' })
+    await expect(
+      answerAccRootdRequest({ run, payloadDir: PAYLOAD, confirm, openPath })
+    ).resolves.toEqual({
+      outcome,
+      step: 'install'
+    })
+    expect(confirm).toHaveBeenCalledExactlyOnceWith('install')
+    expect(openPath.mock.calls).toEqual(yes ? [[`${PAYLOAD}/pod-rootd.pkg`]] : [])
+    // Pod never installs or registers it itself
+    expect(run).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    [0, 'registered'],
+    [1, 'unavailable']
+  ] as const)('approve: Login Items through pod-rootctl, which exits %i', async (code, outcome) => {
+    const confirm = vi.fn(async () => true)
+    const openPath = vi.fn(async () => '')
+    const run = rootctl({ stdout: '{"step": "approve"}' }, code)
+    await expect(
+      answerAccRootdRequest({ run, payloadDir: PAYLOAD, confirm, openPath })
+    ).resolves.toEqual({
+      outcome,
+      step: 'approve'
+    })
+    expect(confirm).toHaveBeenCalledExactlyOnceWith('approve')
+    expect(run).toHaveBeenLastCalledWith({
+      program: `${PAYLOAD}/pod-rootctl`,
+      args: ['service', 'open-settings'],
+      timeoutMs: 10_000
+    })
+    expect(openPath).not.toHaveBeenCalled()
+  })
+
+  it('declines without a way to ask, and is unavailable when pod-rootctl says nothing', async () => {
+    const openPath = vi.fn(async () => '')
+    await expect(
+      answerAccRootdRequest({
+        run: rootctl({ stdout: '{"step": "install"}' }),
+        payloadDir: PAYLOAD,
+        openPath
+      })
+    ).resolves.toEqual({ outcome: 'declined', step: 'install' })
+    const confirm = vi.fn(async () => true)
+    await expect(
+      answerAccRootdRequest({ run: rootctl({ code: 69 }), payloadDir: PAYLOAD, confirm, openPath })
+    ).resolves.toEqual({ outcome: 'unavailable' })
+    expect(confirm).not.toHaveBeenCalled()
+    expect(openPath).not.toHaveBeenCalled()
+  })
+
+  it.each(['install', 'approve'] as const)('asks with Cancel as the default (%s)', (step) => {
+    const dialog = accRootdConfirmDialog(step)
+    expect(dialog.buttons?.[dialog.defaultId ?? -1]).toBe('Cancel')
+    expect(dialog.cancelId).toBe(dialog.defaultId)
   })
 })

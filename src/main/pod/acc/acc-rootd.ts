@@ -10,17 +10,53 @@ import {
 import { join } from 'node:path'
 import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
 import { ACC_STATE_DIR } from './acc-lifecycle'
+import type { AccServiceStatus } from './acc-services'
 
 /**
- * pod-rootd: claude-acc's one root helper (fans, lid-closed awake, sysctls), a daemonService of
- * Pod.app whose BundleProgram is the payload's pod-rootd. Only Pod's main process can register it
- * (SMAppService resolves the plist in the caller's bundle); pod-rootctl, next to it, drives it.
+ * pod-rootd: claude-acc's one root helper (fans, lid-closed awake, sysctls). The user installs it
+ * from the signed pod-rootd.pkg next to pod-rootctl in the payload: Installer checks the package and
+ * asks an administrator, and it lands in /Library as a launchd job Login Items lists under Pod. Pod
+ * registers nothing and sends it nothing (docs/pod-rootd.md in claude-acc): it asks pod-rootctl
+ * where the helper stands and opens the package or Login Items on the user's yes.
  */
 export const ACC_ROOTD_CTL = 'pod-rootctl'
+export const ACC_ROOTD_PACKAGE = 'pod-rootd.pkg'
 
-/** Contents/Library/LaunchDaemons/<appId>.rootd.plist, as the payload ships it. */
+/** /Library/LaunchDaemons/<appId>.rootd.plist, as the package installs it. */
 export function accRootdServiceName(appId: string): string {
   return `${appId}.rootd.plist`
+}
+
+/** What the user does next (`pod-rootctl service status`): install it, switch it on, or nothing. */
+export type AccRootdStep = 'install' | 'approve' | 'ready'
+const STEPS: readonly AccRootdStep[] = ['install', 'approve', 'ready']
+
+/** pod-services.json's daemons entry keeps SMAppService's words, which AccKit's panel reads. */
+export const ACC_ROOTD_STEP_STATUS = {
+  install: 'not-registered',
+  approve: 'requires-approval',
+  ready: 'enabled'
+} as const satisfies Record<AccRootdStep, AccServiceStatus>
+
+type Run = (spec: ProcessSpec) => Promise<ProcessResult>
+
+/** null when pod-rootctl can't say (missing, killed, an answer from a newer one). */
+export async function readAccRootdStep(run: Run, payloadDir: string): Promise<AccRootdStep | null> {
+  const result = await run({
+    program: join(payloadDir, ACC_ROOTD_CTL),
+    args: ['service', 'status', '--json'],
+    timeoutMs: 10_000
+  }).catch(() => null)
+  if (result?.code !== 0) {
+    return null
+  }
+  try {
+    const body: unknown = JSON.parse(result.stdout)
+    const step = typeof body === 'object' && body !== null && 'step' in body ? body.step : null
+    return STEPS.find((known) => known === step) ?? null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -90,33 +126,70 @@ export function takeAccRootdRequest(
   }
 }
 
-/** What the panel learns in pod-services.json: `at` echoes the request's own. */
+/**
+ * What the panel learns in pod-services.json: `at` echoes the request's own. `outcome` keeps the
+ * words AccKit 0.4 to 0.8 decode (an unknown one drops the whole answer): registered means Pod
+ * passed the yes on, to Installer or Login Items, or found the helper ready; `step` says which.
+ */
 export type AccRootdRequestOutcome = {
   at: number
   outcome: 'declined' | 'registered' | 'unavailable'
+  step?: AccRootdStep
 }
 
 /**
- * Pod's own question before it registers pod-rootd: a request in $STATE, forged or not, gets no
- * further than this dialog. Cancel is the default, so a reflexive Return enables nothing.
+ * Pod's own question before it opens Installer or Login Items: a request in $STATE, forged or not,
+ * gets no further than this dialog. Cancel is the default, so a reflexive Return opens nothing.
  */
-export const ACC_ROOTD_CONFIRM_DIALOG = {
-  type: 'question',
-  message: "Enable claude-acc's root helper?",
-  detail:
-    'It runs as root to control the fans, keep the Mac awake with the lid closed and apply the root tweaks. macOS then asks an admin to allow it in Login Items.',
-  buttons: ['Enable', 'Cancel'],
-  defaultId: 1,
-  cancelId: 1
-} satisfies Electron.MessageBoxOptions
+export function accRootdConfirmDialog(step: 'install' | 'approve'): Electron.MessageBoxOptions {
+  return {
+    type: 'question',
+    message: "Enable claude-acc's root helper?",
+    detail: `It runs as root to control the fans, keep the Mac awake with the lid closed and apply the root tweaks. ${
+      step === 'install'
+        ? 'Pod opens its signed installer package, and Installer asks an administrator.'
+        : 'It is installed but switched off: Pod opens Login Items in System Settings.'
+    }`,
+    buttons: [step === 'install' ? 'Open Installer' : 'Open Login Items', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1
+  }
+}
 
-/**
- * Puts back what pod-rootd changed as root (fans auto, sleep, sysctls, shaper, Spotlight list):
- * unregistering only stops the daemon, and a disabled sleep would outlive it.
- */
-export function restoreAccRootDefaults(
-  run: (spec: ProcessSpec) => Promise<ProcessResult>,
+export type AccRootdAnswerTools = {
+  run: Run
   payloadDir: string
-): Promise<ProcessResult> {
-  return run({ program: join(payloadDir, ACC_ROOTD_CTL), args: ['restore'], timeoutMs: 60_000 })
+  confirm?: (step: 'install' | 'approve') => Promise<boolean>
+  /** Electron's shell.openPath: '' once opened, else why not. */
+  openPath?: (path: string) => Promise<string>
+}
+
+/** Answers a taken request: nothing to do once ready, else Pod's dialog, then Installer or Login Items. */
+export async function answerAccRootdRequest(
+  tools: AccRootdAnswerTools
+): Promise<Omit<AccRootdRequestOutcome, 'at'>> {
+  const step = await readAccRootdStep(tools.run, tools.payloadDir)
+  if (step === null) {
+    return { outcome: 'unavailable' }
+  }
+  if (step === 'ready') {
+    return { outcome: 'registered', step }
+  }
+  if (!((await tools.confirm?.(step).catch(() => false)) ?? false)) {
+    return { outcome: 'declined', step }
+  }
+  if (step === 'approve') {
+    const opened = await tools
+      .run({
+        program: join(tools.payloadDir, ACC_ROOTD_CTL),
+        args: ['service', 'open-settings'],
+        timeoutMs: 10_000
+      })
+      .catch(() => null)
+    return { outcome: opened?.code === 0 ? 'registered' : 'unavailable', step }
+  }
+  const error = tools.openPath
+    ? await tools.openPath(join(tools.payloadDir, ACC_ROOTD_PACKAGE)).catch(String)
+    : 'no way to open it'
+  return { outcome: error === '' ? 'registered' : 'unavailable', step }
 }
