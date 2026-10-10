@@ -181,6 +181,18 @@ export type PodBrowserPaneServerMessage =
   | { type: 'browserCursor'; pageId: string; cursor: string }
   | { type: 'browserFound'; pageId: string; matches: number; active: number; final: boolean }
   | { type: 'browserAttachFailed'; pageId: string; reason: string }
+  // A download of a page in a pane, the whole record each time it changes.
+  | {
+      type: 'browserDownload'
+      pageId: string
+      downloadId: string
+      filename: string
+      state: 'downloading' | 'interrupted' | 'completed' | 'canceled' | 'failed'
+      receivedBytes: number
+      totalBytes: number | null
+      savePath: string
+      error: string | null
+    }
   // A <select> the user opened: PodNative shows its options natively, below the select's rect.
   | {
       type: 'browserPopupMenu'
