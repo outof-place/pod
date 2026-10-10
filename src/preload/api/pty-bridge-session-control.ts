@@ -208,6 +208,7 @@ export const ptySessionControlApi = {
     hiddenDeliveryDroppedChars: number
     hiddenDeliveryDroppedChunks: number
     daemonQueryResponderPtyCount: number
+    mainTerminalModelSeedFailureCount: number
     pendingDroppedChars: number
     diagnostics: PtyMainDeliveryDiagnostics
     rendererLifecycleResetCount: number
