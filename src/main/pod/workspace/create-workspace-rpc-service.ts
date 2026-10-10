@@ -28,9 +28,12 @@ export type WorkspaceRpcServiceDeps = {
   onBackgroundDone?: (repoId: string, message: string) => void
 }
 
-export function createPodWorkspaceRpcService(
-  deps: WorkspaceRpcServiceDeps
-): PodWorkspaceRpcService {
+export type PodWorkspaceServices = PodWorkspaceRpcService & {
+  /** A new clone into the root gets the default profile: Orca's and Pod's measured keys, no opt-ins. */
+  tuneNewClone(repoId: string): Promise<void>
+}
+
+export function createPodWorkspaceRpcService(deps: WorkspaceRpcServiceDeps): PodWorkspaceServices {
   const git = createWorkspaceGitExec()
   const processes = createNativeProcessCwdReader()
   const journal = createWorkspaceJournal(workspaceJournalPath(deps.userDataDir))
@@ -67,6 +70,12 @@ export function createPodWorkspaceRpcService(
     fingerprintOf([...missing].sort())
 
   return {
+    tuneNewClone: async (repoId) => {
+      const plan = await profile.plan(repoId)
+      if (plan.pending > 0) {
+        await profile.apply(plan.planId)
+      }
+    },
     isEnabled: deps.isEnabled,
     status: async (refresh) => {
       const status = await deps.status.getStatus({ refresh })
