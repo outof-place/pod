@@ -10,10 +10,22 @@ import {
 } from 'node:fs'
 import { copyFile, lstat, mkdir, readdir, readlink, symlink } from 'node:fs/promises'
 import { join } from 'node:path'
+import { MOBILE_PAIRING_USERDATA_FILES } from '../runtime/mobile-pairing-files'
 
 // Which parts of a legacy profile the product import clones, when, and how fast.
 // Why own walkers over fs.cp: on APFS a per-file clonefile is the whole cost, and fs.cp adds
 // several stat/utimes calls per file; measured 4x (sync) and 9x (parallel async) faster.
+
+/**
+ * Phones paired with the legacy app: their device tokens and the E2EE keypair would stay valid
+ * against the product, and a device registry makes the runtime listen beyond loopback. The relay
+ * region and notification dismissals belong to the same pairing, which the product leaves out.
+ */
+export const SKIPPED_PAIRING_FILES: readonly string[] = [
+  ...MOBILE_PAIRING_USERDATA_FILES,
+  'orca-relay-region-preference.json',
+  'mobile-notification-dismissals.json'
+]
 
 // Chromium process locks regenerate; the daemon dir is linked, not copied.
 const SKIPPED_TOP_LEVEL = new Set([
@@ -22,7 +34,8 @@ const SKIPPED_TOP_LEVEL = new Set([
   'SingletonCookie',
   'SingletonLock',
   'SingletonSocket',
-  'daemon'
+  'daemon',
+  ...SKIPPED_PAIRING_FILES
 ])
 // Chromium caches, in the default session and every browser partition.
 const SKIPPED_CHROMIUM_CACHES = new Set([
