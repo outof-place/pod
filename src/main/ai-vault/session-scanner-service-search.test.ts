@@ -15,11 +15,6 @@ import {
   type AiVaultServiceResultValue,
   type AiVaultSessionSearchInit
 } from './session-scanner-service-protocol'
-import {
-  applySessionTreeWatchState,
-  installSessionTreeWatchRequests,
-  resetSessionTreeCacheForTests
-} from './session-tree-cache'
 
 /**
  * The child, booted the way a spawn boots it: an init frame and messages, with
@@ -158,49 +153,6 @@ it('discovers a new root through the parent exchange on manual reconciliation', 
   expect(response.kind).toBe('results')
   if (response.kind === 'results') {
     expect(response.hits.map((hit) => hit.sessionId)).toEqual([id])
-  }
-})
-
-it('finds missed watcher changes through manual search reconciliation and forced scan', async () => {
-  const projectsRoot = harness.roots.claudeProjectsDir
-  if (!projectsRoot) {
-    throw new Error('fixture needs a Claude projects root')
-  }
-  installSessionTreeWatchRequests(() => undefined)
-  applySessionTreeWatchState(projectsRoot, 'live')
-  try {
-    await call({ type: 'request', operation: 'searchReconcile' })
-    const id = 'cccccccc-dddd-4eee-8fff-aaaaaaaaaaaa'
-    await writeClaudeTranscript(
-      join(harness.claudeProjectDir, `${id}.jsonl`),
-      ['missedwatcherchange'],
-      id
-    )
-    expect(await searchSessions('missedwatcherchange')).toMatchObject({ kind: 'results', hits: [] })
-    await call({ type: 'request', operation: 'searchReconcile' })
-    const response = await searchSessions('missedwatcherchange')
-    expect(response.kind).toBe('results')
-    if (response.kind === 'results') {
-      expect(response.hits.map((hit) => hit.sessionId)).toEqual([id])
-    }
-
-    const scanId = 'dddddddd-eeee-4fff-8aaa-bbbbbbbbbbbb'
-    await writeClaudeTranscript(
-      join(harness.claudeProjectDir, `${scanId}.jsonl`),
-      ['forcedscanchange'],
-      scanId
-    )
-    const scan = await call({
-      type: 'request',
-      operation: 'scan',
-      options: { ...harness.roots, freshDiscovery: true }
-    })
-    expect(scan.operation).toBe('scan')
-    if (scan.operation === 'scan') {
-      expect(scan.value.result.sessions.some((session) => session.sessionId === scanId)).toBe(true)
-    }
-  } finally {
-    resetSessionTreeCacheForTests()
   }
 })
 

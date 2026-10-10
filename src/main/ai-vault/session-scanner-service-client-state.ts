@@ -1,5 +1,4 @@
 import type { SessionSearchScanRoots } from '../ai-vault-search/session-search-scan-roots'
-import type { AiVaultServiceTreeWatch } from './session-scanner-service-tree-watch'
 import type { ChildProcess } from 'node:child_process'
 import { createAiVaultScanCancelledError } from './ai-vault-scan-cancellation'
 import {
@@ -23,8 +22,6 @@ export type AiVaultServiceClientOptions = {
   /** Resolved per spawn: a respawned child must see current consent, not the first frame's. */
   init: () => Omit<AiVaultServiceInit, 'type' | 'protocol'>
   resolveSessionSearchRoots?: () => Promise<SessionSearchScanRoots>
-  /** Relays file-watcher events for the roots each child asks about. */
-  treeWatch?: AiVaultServiceTreeWatch
   idleTimeoutMs?: number
   onStderr?: (text: string) => void
 }

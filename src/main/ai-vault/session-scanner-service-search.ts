@@ -12,7 +12,6 @@ import type {
   AiVaultServiceResultValue,
   AiVaultSessionSearchInit
 } from './session-scanner-service-protocol'
-import { refreshSessionTreeCache } from './session-tree-cache'
 
 type SearchOperation = Extract<
   AiVaultServiceRequest,
@@ -68,9 +67,6 @@ export class SessionScannerServiceSearch {
   }
 
   async execute(request: SearchOperation): Promise<AiVaultServiceResultValue> {
-    if (request.operation === 'searchReconcile' || request.operation === 'searchClear') {
-      refreshSessionTreeCache()
-    }
     const instance = this.instance
     if (request.operation === 'searchStatus') {
       return {
