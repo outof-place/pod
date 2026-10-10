@@ -12,6 +12,9 @@ const UPSTREAM_LINKS = {
   x: 'https://x.com/orca_build'
 }
 
+// Why: a Stably-hosted docs URL pod/decouple's docs-host rule leaves alone (it rewrites onorca.dev/docs).
+const STABLY_HOSTED_DOCS = 'https://docs.onorca.dev/terminal'
+
 function stampProduct(product: ProductUiIdentity | null): void {
   Object.assign(globalThis, { window: { api: { product: { get: () => product } } } })
   _resetProductUiIdentityForTests()
@@ -42,7 +45,7 @@ describe('renderer product identity', () => {
       repositoryUrl: 'https://github.com/outof-place/pod'
     })
     expect(areStablyServicesAvailable()).toBe(false)
-    expect(resolveProductHelpLinks(UPSTREAM_LINKS)).toEqual({
+    expect(resolveProductHelpLinks({ ...UPSTREAM_LINKS, docs: STABLY_HOSTED_DOCS })).toEqual({
       docs: null,
       changelog: 'https://github.com/outof-place/pod/releases',
       github: 'https://github.com/outof-place/pod',
@@ -54,5 +57,17 @@ describe('renderer product identity', () => {
       'general',
       'privacy'
     ])
+  })
+
+  it("keeps docs that the decouple codemod moved off Stably's hosts", () => {
+    stampProduct({
+      displayName: 'Pod',
+      cliName: 'podx',
+      stablyServices: false,
+      repositoryUrl: 'https://github.com/outof-place/pod'
+    })
+    expect(
+      resolveProductHelpLinks({ ...UPSTREAM_LINKS, docs: 'https://pod.codes/docs' }).docs
+    ).toBe('https://pod.codes/docs')
   })
 })
