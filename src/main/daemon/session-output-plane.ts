@@ -23,6 +23,8 @@ export type AttachedClient = {
   token: symbol
   onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
   onExit: (code: number, incarnationId: string, cause?: TerminalExitCause) => void
+  /** Pod: the direct lane's tap. Not a viewer for flow control; gets each chunk before the emulator parses it. */
+  podLane?: true
 }
 
 export type SessionOutputPlaneOptions = {
@@ -60,6 +62,7 @@ export class SessionOutputPlane {
   private answersQueries = false
   private readonly stopViewAttributes: () => void
   private disposed = false
+  private podLaneTap: AttachedClient | null = null
 
   constructor(opts: SessionOutputPlaneOptions) {
     const size = normalizePtySize(opts.cols, opts.rows)
@@ -115,11 +118,19 @@ export class SessionOutputPlane {
     // Why: a delegation outlives a quit main; the attaching one starts as responder and delegates again.
     this.answersQueries = false
     const token = Symbol('attach')
+    if (client.podLane) {
+      this.podLaneTap = { token, ...client }
+      return token
+    }
     this.attachedClients.push({ token, ...client })
     return token
   }
 
   detachClient(token: symbol): void {
+    if (this.podLaneTap?.token === token) {
+      this.podLaneTap = null
+      return
+    }
     const idx = this.attachedClients.findIndex((c) => c.token === token)
     if (idx !== -1) {
       this.attachedClients.splice(idx, 1)
@@ -142,6 +153,7 @@ export class SessionOutputPlane {
     for (const client of this.attachedClients) {
       client.onExit(code, incarnationId, resolved)
     }
+    this.podLaneTap?.onExit(code, incarnationId, resolved)
   }
 
   resize(cols: number, rows: number): void {
@@ -236,6 +248,7 @@ export class SessionOutputPlane {
       return
     }
     this.record({ kind: 'output', data: pending })
+    this.podLaneTap?.onData(pending)
     for (const client of this.attachedClients) {
       client.onData(pending, 0, true, this._outputSequence)
     }
@@ -247,9 +260,14 @@ export class SessionOutputPlane {
     // Why: absolute raw count (daemon stream thinning can drop bytes) lets a snapshot cover the gaps while the renderer dedups the tail.
     this._outputSequence += rawLength
     if (data.length > 0) {
+      const delivered = this.deviceAttributesQueryFilter?.accept(data) ?? data
+      // Pod: the direct lane gets the chunk before the emulator parses it.
+      if (delivered.length > 0) {
+        this.podLaneTap?.onData(delivered)
+      }
       // Why per write: a chunk the emulator parses after a take-back was still emitted under delegation.
       this.emulator.write(data, this.answersQueries ? FORWARD_QUERY_REPLIES : undefined)
-      data = this.deviceAttributesQueryFilter?.accept(data) ?? data
+      data = delivered
     }
     if (data.length > 0) {
       this.record({ kind: 'output', data })
