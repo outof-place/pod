@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
 import { beginTabStripPointerGesture } from './tab-strip-pointer-gesture'
+import { isNativeTerminalHoldingKeyboard } from '@/lib/pane-manager/native-terminal/native-terminal-keyboard'
 
 /**
  * Defer tab activation to pointer-up and suppress it when the press turns into a
@@ -59,7 +60,8 @@ export function useTabStripPointerActivation({
       // Why a press that starts under a guest forgives one window focus: an in-page <webview>
       // holding the keyboard leaves the embedder blurred, so this very press is what pulls focus
       // back and #7316's flush would eat the click that takes the reader out of a browser pane.
-      let pendingGuestFocusHandoff = isGuestHoldingKeyboard()
+      // A native terminal view (macOS) holding AppKit's keyboard blurs the page the same way.
+      let pendingGuestFocusHandoff = isGuestHoldingKeyboard() || isNativeTerminalHoldingKeyboard()
 
       const cleanup = (): void => {
         window.removeEventListener('pointerup', onPointerUp)
