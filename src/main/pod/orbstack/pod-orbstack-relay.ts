@@ -7,6 +7,7 @@ import { randomBytes } from 'node:crypto'
 import { connect, type Socket } from 'node:net'
 import type { Readable, Writable } from 'node:stream'
 import type { AnthropicRoute } from './pod-orbstack-anthropic-route'
+import type { PodOrbstackRelayRowInput } from './pod-orbstack-events'
 import {
   decodeRelayFrames,
   encodeRelayFrame,
@@ -65,6 +66,8 @@ type RelayDeps = {
   hostsFile?: string
   caPath?: string
   log?: (message: string) => void
+  /** One row per hook connection, for the relay log. */
+  onRow?: (row: PodOrbstackRelayRowInput) => void
 }
 
 function sameRoutes(a: SandboxRelayRoutes, b: SandboxRelayRoutes): boolean {
@@ -129,7 +132,14 @@ function startRelay(
       if (index === 0) {
         conns.set(
           conn,
-          hookConnection(conn, route, send, dial, () => conns.delete(conn))
+          hookConnection(
+            conn,
+            route,
+            send,
+            dial,
+            () => conns.delete(conn),
+            (entry) => deps.onRow?.({ machine, route: 'hook', ...entry })
+          )
         )
       } else if (index === 1 && anthropic) {
         const connection = streamConnection(conn, send, (resume) => drainWaiters.push(resume))
