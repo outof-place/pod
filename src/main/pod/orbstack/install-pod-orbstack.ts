@@ -12,6 +12,7 @@ import { loadPodOrbstackRecipe } from './pod-orbstack-recipe'
 import { PodOrbstackRegistry } from './pod-orbstack-registry'
 import { createPodOrbstackService, setPodOrbstackService } from './pod-orbstack-service'
 import { createSandboxRelays } from './pod-orbstack-relay'
+import { createSandboxHookTokens } from './pod-orbstack-sandbox-tokens'
 import { readPodOrbstackStatus } from './pod-orbstack-status'
 import {
   setPodOrbstackTerminalResolver,
@@ -54,6 +55,8 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
       }),
     log: (message) => console.warn(`[pod-orbstack] ${message}`)
   })
+  // Memory only: a restart mints fresh tokens on the next launch, and quitting revokes them all.
+  const hookTokens = createSandboxHookTokens()
   app.on('will-quit', () => relays.stopAll())
   const machines = createPodOrbstackMachines({
     paths,
@@ -61,7 +64,11 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     registry,
     home,
     loadRecipe: () => loadPodOrbstackRecipe(join(dataDir, 'recipe.json')),
-    onSandboxRemoved: (name) => relays.stop(name),
+    onSandboxCreated: (name) => void hookTokens.tokenFor(name),
+    onSandboxRemoved: (name) => {
+      relays.stop(name)
+      hookTokens.revokeMachine(name)
+    },
     prepareClaudeRelease: resolveOrbstackSkipAgentInstall()
       ? async () => null
       : async () => releases.prepare(await probeClaudeCliVersion(resolveClaudeCommand()))
@@ -84,9 +91,16 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   if (!enabled) {
     return
   }
-  setPodSandboxRelayStarter((machine, routes) => {
+  setPodSandboxRelayStarter((machine, hookServer) => {
     try {
-      return relays.ensure(machine, routes).nonce
+      const sandboxToken = hookTokens.tokenFor(machine)
+      const { nonce } = relays.ensure(machine, {
+        vmPort: hookServer.port,
+        hostPort: hookServer.port,
+        hookToken: hookServer.token,
+        authorize: (token) => hookTokens.authorizes(machine, token)
+      })
+      return { nonce, sandboxToken }
     } catch (error) {
       console.warn('[pod-orbstack] could not start the sandbox relay:', error)
       return null
@@ -97,7 +111,7 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     const machine = entry?.state === 'ready' ? entry.name : null
     const sandboxEntry = registry.findByWorktree(worktreeId, 'sandbox')
     const sandbox =
-      sandboxEntry?.state === 'ready'
+      sandboxEntry?.state === 'ready' && sandboxEntry.networkIsolated
         ? { machine: sandboxEntry.name, agentsByDefault: registry.isSandboxAgents(worktreeId) }
         : null
     const dockerPinned = registry.isDockerPinned(worktreeId)

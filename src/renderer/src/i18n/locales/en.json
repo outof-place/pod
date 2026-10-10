@@ -19698,7 +19698,8 @@
       "create": "Create agent sandbox",
       "agents": "Run Claude in the sandbox",
       "agentsLabel": "Run Claude launches of {{name}} in its OrbStack sandbox",
-      "boundary": "Agent sandboxes see only their worktree and reach this Mac only through Pod for agent status. They can still reach the internet, so code in the worktree can leave the Mac."
+      "legacy": "Not network-isolated. Delete and recreate it to use it.",
+      "boundary": "Agent sandboxes see only their worktree. With network isolation, which every new sandbox gets, they reach this Mac only to report agent status. They can still reach the internet, so code in the worktree can leave the Mac."
     },
     "worktrees": {
       "busy": "Working…",

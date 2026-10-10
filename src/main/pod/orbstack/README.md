@@ -13,14 +13,24 @@ Each sandbox is named `pod-<worktree>-<hash>-sbx`. Pod creates and deletes only 
 
 ## The sandbox relay
 
-The relay is the sandbox's only way to the Mac:
+The relay is the sandbox's only way to the Mac. It carries Claude hook posts and nothing else:
 
 1. When a Claude launch moves into a sandbox, Pod starts one `orb -m <sandbox> -u root python3 -I -c <relay>` process for that sandbox, or reuses it.
-2. Inside the VM, the relay listens on `127.0.0.1` for a fixed list of ports. It carries each connection over the `orb run` stdin/stdout as length-prefixed frames.
-3. On the Mac, Pod dials only the `127.0.0.1` ports it listed for those routes. Today that is only the hook server's port. The relay refuses any other route the VM names.
-4. The launch waits up to 15 s for `/run/pod-sandbox-relay/ready` to hold this relay's nonce, so the agent's first hook post gets through.
+2. Inside the VM, the relay listens on `127.0.0.1:<hook port>` only. It carries each connection over the `orb run` stdin/stdout as length-prefixed frames.
+3. On the Mac, Pod reads one HTTP request per connection and checks it before anything is dialed:
+   - it must be `POST /hook/claude` with a `Content-Length` body of at most 1 MiB;
+   - it must carry the sandbox's own hook token.
+     Anything else gets a 4xx answer from the relay itself.
+4. A request that passes goes to Pod's hook server on the Mac's `127.0.0.1`. The relay replaces the sandbox token with the hook server's token and adds `Connection: close`.
+5. The launch waits up to 15 s for `/run/pod-sandbox-relay/ready` to hold this relay's nonce, so the agent's first hook post gets through.
 
-The relay ends when the VM stops, when Pod quits, or when the sandbox is deleted.
+The sandbox token has 32 random bytes and lives only in Pod's memory. It is never written to the Mac's disk:
+
+- Pod mints it when the sandbox is created, or at the first launch after a Pod restart.
+- Deleting the sandbox revokes it, and quitting Pod discards it.
+- The VM gets it as `ORCA_AGENT_HOOK_TOKEN`. The hook server's own token never enters the VM.
+
+The relay process ends when the sandbox is deleted, when Pod quits, or when the VM stops. A Pod crash closes the relay's stdin, which ends it too. The real-OrbStack tests check that no `orb` process for the machine survives a delete.
 
 ## How Claude Code gets in
 
@@ -41,7 +51,10 @@ Releases older than 2.1.89 publish no signature, so Pod refuses them.
 
 Agents in the sandbox reach the internet directly. Code they can read in the worktree can therefore leave the Mac.
 
-The relay exposes Pod's hook server inside the VM. That server checks its hook token on every post, and each launch adds its own launch token.
+The localhost gap below closes only for sandboxes with network isolation:
+
+- Every sandbox Pod creates now gets `--isolate-network`.
+- A sandbox created before that still reaches the Mac's localhost. Pod no longer runs agents in it, and Settings asks you to delete and recreate it.
 
 Why `--isolate-network` and not a Mac firewall rule (pf):
 

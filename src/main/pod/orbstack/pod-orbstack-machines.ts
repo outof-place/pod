@@ -29,7 +29,9 @@ type MachineDeps = {
   prepareClaudeRelease?: () => Promise<SandboxClaudeRelease | null>
   provision?: typeof provisionSandbox
   resolveMounts?: typeof resolveSandboxMounts
-  /** Stops anything Pod runs against a sandbox (its relay) before the machine goes. */
+  /** Mints the sandbox's hook token once it is ready. */
+  onSandboxCreated?: (name: string) => void
+  /** Stops anything Pod runs against a sandbox (its relay, its token) before the machine goes. */
   onSandboxRemoved?: (name: string) => void
   now?: () => number
 }
@@ -148,7 +150,8 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
         worktreeId: target.worktreeId,
         worktreePath: target.worktreePath,
         createdAt: (deps.now ?? Date.now)(),
-        kind: 'sandbox' as const
+        kind: 'sandbox' as const,
+        networkIsolated: true
       }
       deps.registry.upsert({ ...entry, state: 'creating' })
       try {
@@ -163,6 +166,7 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
           state: 'ready',
           ...(agentVersion ? { agentVersion } : {})
         })
+        deps.onSandboxCreated?.(name)
         return { ok: true }
       } catch (error) {
         // This call created the machine (it did not exist above), so it may delete it.
