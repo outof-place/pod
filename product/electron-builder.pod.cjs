@@ -12,6 +12,7 @@ const { join } = require('node:path')
 const { Arch } = require('electron-builder')
 const { installAgentLauncher } = require('./agent-launcher/install-agent-launcher.cjs')
 const helperNames = require('./helper-names.cjs')
+const podNative = require('./pod-native-embed.cjs')
 // Why destructure: drop every non-mac platform and target section of the upstream config.
 const {
   win: _win,
@@ -177,6 +178,8 @@ module.exports = {
       join(resourcesDir, 'product-upstream.json'),
       `${JSON.stringify(readOrcaUpstream())}\n`
     )
+    // Before the naming check, which walks nested apps, and before electron-builder seals Pod.app.
+    podNative.embedPodNative(join(resourcesDir, '..'), { release: isRelease })
     helperNames.assertNoUpstreamNames(join(resourcesDir, '..', '..'))
   },
   mac: {

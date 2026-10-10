@@ -73,6 +73,16 @@ Export that certificate with its key as a `.p12`, then add these secrets under S
 
 Both certificates belong to team `75Y2KR6P5W`. The updater's designated-requirement check pins the team, not the certificate, so CI and local releases update each other.
 
+## PodNative
+
+PodNative, Pod's native UI, ships in `Contents/Helpers/PodNative.app`: Apple's "Placing content in a bundle" puts helper apps there, and `Resources/` holds no code.
+
+- `config/pod-native.json` pins a release of the private outof-place/pod-native: tag, asset, sha256 and the commit it was built from (`revision`, its Info.plist `PodNativeRevision`). Its `scripts/release-app.sh` prints that pin.
+- `release.sh` runs `config/scripts/fetch-pod-native.mjs` after the claude-acc fetch. It downloads the zip with `gh` (the repository is private), checks the sha256 and the revision, and unpacks it under `~/Library/Caches/codes.pod.release/pod-native/<sha256>`, outside the worktree. `POD_NATIVE_APP_SOURCE` points a local build at another copy.
+- `afterPack` checks the copy (`codes.pod.native`, the pinned revision, arm64 only, at most 80 MB, no build leftovers) and copies it in without xattrs (`product/pod-native-embed.cjs`). A release without it fails. electron-builder then signs it like every nested app, with the entitlements policy's rule for it: none.
+- After the Gatekeeper gate, `node product/pod-native-embed.cjs --check <app>` requires the pinned revision, the outer app's team, a Developer ID signature with hardened runtime and a timestamp, no entitlements, a strict deep seal and `spctl -a -t exec` notarized.
+- The packaged spec runs it by path (`--background --measure`) against the packaged runtime in the isolated profile.
+
 ## Installing a build by hand
 
 LaunchServices registers a bundle as soon as it appears, so a half-copied Pod.app (a Finder drag in progress, a running `cp`) gets registered and later opens as "damaged". Copy it whole under a temporary name first, then rename it into place:
