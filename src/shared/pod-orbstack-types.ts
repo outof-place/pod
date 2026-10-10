@@ -70,6 +70,8 @@ export type PodOrbstackWorktreeLink = {
   sandboxAgents: boolean
   /** Claude Code version installed in the sandbox. */
   sandboxAgentVersion: string | null
+  /** Created with `--isolate-network`; older sandboxes reach the Mac's localhost and are not used. */
+  sandboxNetworkIsolated?: boolean
 }
 
 export type PodOrbstackStatus = {
