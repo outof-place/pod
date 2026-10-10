@@ -95,14 +95,6 @@ describe('product entitlements', () => {
     expect(policy.productElectronEntitlements({ POD_BUILD_PROFILE: 'orca' })).toBeNull()
     expect(productConfig.mac.entitlements).toBe(pod)
     expect(productConfig.mac.entitlementsInherit).toBe(pod)
-    expect(Object.keys(gate.plistKeys(pod ?? '')).sort()).toEqual([
-      'com.apple.security.automation.apple-events',
-      'com.apple.security.cs.allow-jit',
-      'com.apple.security.cs.allow-unsigned-executable-memory',
-      'com.apple.security.device.audio-input',
-      'com.apple.security.device.camera',
-      'com.apple.security.device.usb'
-    ])
   })
 })
 
@@ -127,6 +119,18 @@ function fakeApp(paths: string[]): string {
 }
 
 describe.skipIf(process.platform !== 'darwin')('entitlements release gate', () => {
+  it("grants the Pod profile's app set exactly", () => {
+    const pod = policy.productElectronEntitlements({})
+    expect(Object.keys(gate.plistKeys(pod ?? '')).sort()).toEqual([
+      'com.apple.security.automation.apple-events',
+      'com.apple.security.cs.allow-jit',
+      'com.apple.security.cs.allow-unsigned-executable-memory',
+      'com.apple.security.device.audio-input',
+      'com.apple.security.device.camera',
+      'com.apple.security.device.usb'
+    ])
+  })
+
   it('names each executable whose entitlements step outside its rule', () => {
     const app = fakeApp([
       'Contents/MacOS/Pod',
