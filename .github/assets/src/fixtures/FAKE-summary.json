@@ -26,7 +26,8 @@
     "orca": "0.0.0-fake",
     "pod": "0.0.0-fake"
    },
-   "config": {}
+   "config": {},
+   "condition": "FAKE condition"
   }
  },
  "metrics": [
