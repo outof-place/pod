@@ -17,6 +17,7 @@ import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
 import { DaemonRouterRetirement } from './daemon-router-retirement'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -200,6 +201,24 @@ export class DaemonPtyRouter implements IPtyProvider {
     for (const adapter of this.allAdapters()) {
       adapter.setColorQueryReplyColors(colors)
     }
+  }
+
+  setTerminalViewAttributes(attributes: TerminalViewAttributes): void {
+    for (const adapter of this.allAdapters()) {
+      adapter.setTerminalViewAttributes(attributes)
+    }
+  }
+
+  canDelegateQueryResponder(id: string): boolean {
+    return this.adapterFor(id).canDelegateQueryResponder(id)
+  }
+
+  setSessionQueryResponder(
+    id: string,
+    responder: boolean,
+    opts?: { nativeWindowsConpty?: boolean }
+  ): boolean {
+    return this.adapterFor(id).setSessionQueryResponder(id, responder, opts)
   }
 
   acknowledgeDataEvent(id: string, charCount: number): void {
