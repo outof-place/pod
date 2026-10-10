@@ -167,6 +167,26 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     })
   }
 
+  /** Whether main's model answers this PTY's queries right now: the reply authority a remote view
+   *  takes over when it registers. */
+  modelAnswersTerminalQueries(ptyId: string): boolean {
+    return this.shouldAnswerQueriesForLiveChunk(ptyId)
+  }
+
+  /** Answers queries main's model already parsed without answering: output it took in after a
+   *  remote view registered that the view never saw live, because its snapshot covered it.
+   *  Queries leave the model's state as it was, so writing them again only produces the replies. */
+  answerTerminalQueriesFromModel(ptyId: string, queryData: string): void {
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state || queryData.length === 0) {
+      return
+    }
+    const completion = state.writeChain.then(() =>
+      state.emulator.write(queryData, { forwardQueryReplies: true })
+    )
+    state.writeChain = completion.catch(() => {})
+  }
+
   protected trackHeadlessTerminalData(
     ptyId: string,
     data: string,
