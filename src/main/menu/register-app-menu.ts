@@ -1,5 +1,5 @@
 import { BrowserWindow, Menu, app } from 'electron'
-import { POD_FEATURE_PROMOS } from '../../shared/product/features'
+import { POD_FEATURE_PROMOS, POD_TASKS } from '../../shared/product/features'
 import {
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
@@ -256,6 +256,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       {
         label: translateMain('menu.showTasksButton', 'Show Tasks Button'),
         type: 'checkbox',
+        visible: POD_TASKS,
         checked: appearance.showTasksButton,
         click: () => onToggleAppearance('showTasksButton')
       },
