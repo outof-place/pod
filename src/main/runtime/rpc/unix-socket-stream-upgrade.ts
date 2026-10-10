@@ -1,6 +1,11 @@
 import type { Socket } from 'node:net'
+import { z } from 'zod'
 import { RUNTIME_LOCAL_STREAM_UPGRADE_METHOD } from '../../../shared/runtime-local-stream-protocol'
 import { UnixSocketStreamConnection } from './unix-socket-stream-connection'
+
+const UnixSocketStreamUpgradeRequest = z.object({
+  method: z.literal(RUNTIME_LOCAL_STREAM_UPGRADE_METHOD)
+})
 
 // Why: the runtime layer owns auth, so it decides; the transport only switches framing once accepted.
 export type UnixSocketStreamUpgrade = {
@@ -16,12 +21,7 @@ export function isUnixSocketStreamUpgradeRequest(rawMessage: string): boolean {
     return false
   }
   try {
-    const parsed: unknown = JSON.parse(rawMessage)
-    return (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      Reflect.get(parsed, 'method') === RUNTIME_LOCAL_STREAM_UPGRADE_METHOD
-    )
+    return UnixSocketStreamUpgradeRequest.safeParse(JSON.parse(rawMessage)).success
   } catch {
     return false
   }
