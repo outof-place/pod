@@ -144,6 +144,65 @@ describe('workspace tidy (real git)', () => {
     await expect(fx.git(repo, 'rev-parse', '--verify', ref)).rejects.toThrow()
   })
 
+  it('still calls a restored merged branch merged', async () => {
+    const path = await addWorktree('shipped')
+    await fx.commit(path, 's.txt', 'shipped work')
+    await fx.git(path, 'push', '-q', 'origin', 'shipped:main')
+    await fx.git(repo, 'fetch', '-q', 'origin')
+    const actions = createWorkspaceTidyActions({
+      ...deps(),
+      getRepo: () => fx.repoRecord(repo),
+      removeWorktree: async () => {
+        await fx.git(repo, 'worktree', 'remove', path)
+        await fx.git(repo, 'branch', '-D', 'shipped')
+      },
+      trash: async () => {}
+    })
+    const archived = await actions.run({ kind: 'archive', worktreeId: `repo-1::${path}` })
+    await actions.run({ kind: 'restore', archiveId: archived.archive?.id ?? '' })
+    const { byName } = await scanOne()
+    expect(byName('shipped')?.reasons).toContain('merged')
+  })
+
+  it('removes with git alone a worktree the runtime does not list yet', async () => {
+    const path = await addWorktree('fresh-restore')
+    await fx.commit(path, 'r.txt', 'work')
+    const actions = createWorkspaceTidyActions({
+      ...deps(),
+      getRepo: () => fx.repoRecord(repo),
+      removeWorktree: async () => {
+        throw new Error('selector_not_found')
+      },
+      trash: async () => {}
+    })
+    const archived = await actions.run({ kind: 'archive', worktreeId: `repo-1::${path}` })
+    expect(existsSync(path)).toBe(false)
+    expect(archived.archive?.ref).toMatch(/^refs\/pod\/archive\//)
+    // The branch stays (only Orca's removal deletes it), so restore checks it out again.
+    await actions.run({ kind: 'restore', archiveId: archived.archive?.id ?? '' })
+    expect((await fx.git(path, 'branch', '--show-current')).trim()).toBe('fresh-restore')
+  })
+
+  it('keeps no archive when the runtime refuses the removal', async () => {
+    const path = await addWorktree('refused')
+    const actions = createWorkspaceTidyActions({
+      ...deps(),
+      getRepo: () => fx.repoRecord(repo),
+      removeWorktree: async () => {
+        throw new Error('worktree_busy')
+      },
+      trash: async () => {}
+    })
+    await expect(actions.run({ kind: 'archive', worktreeId: `repo-1::${path}` })).rejects.toThrow(
+      'worktree_busy'
+    )
+    expect(existsSync(path)).toBe(true)
+    expect(await fx.git(repo, 'for-each-ref', 'refs/pod/archive')).toBe('')
+    expect((await createWorkspaceJournal(join(fx.root, 'journal.json')).read()).archives).toEqual(
+      []
+    )
+  })
+
   it('refuses to archive a dirty worktree or one a process is in', async () => {
     const path = await addWorktree('wip')
     writeFileSync(join(path, 'note.txt'), 'unsaved\n')
