@@ -5,7 +5,12 @@
 // navigation. Every call is checked for its effect; a call that did not act is counted, not timed.
 //
 //   node bench/suites/browser.mjs [--rounds 20] [--passes 2] [--subjects orca,pod-native]
+//                                 [--trace FILE]
+// --trace appends every round's steps as JSON lines (goto times, click counters before and
+// after) for debugging; it adds an untimed counter read before each click.
+import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
+import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { collectSamples, log, sleep, writeSuiteResult } from '../lib/bench-session.mjs'
 import {
@@ -23,7 +28,8 @@ const { values: options } = parseArgs({
   options: {
     rounds: { type: 'string', default: '20' },
     passes: { type: 'string', default: '2' },
-    subjects: { type: 'string', default: 'orca,pod-native' }
+    subjects: { type: 'string', default: 'orca,pod-native' },
+    trace: { type: 'string' }
   }
 })
 const rounds = Number(options.rounds)
@@ -121,35 +127,76 @@ async function loadedAfter(meta, worktree, previousOrigin) {
 }
 
 // goto answers before the new document exists (it does not go through agent-browser).
-async function navigate(meta, worktree, between = async () => {}) {
+async function navigate(meta, worktree, between = async () => null) {
   const before = await documentState(meta, worktree)
-  await rpcOk(meta, 'browser.goto', { url, worktree }, 60_000)
-  await between()
+  const goto = await rpcOk(meta, 'browser.goto', { url, worktree }, 60_000)
+  const during = await between()
+  const waitStarted = Date.now()
   await loadedAfter(meta, worktree, before?.origin)
+  return { gotoMs: goto.ms, betweenMs: during?.ms ?? null, loadWaitMs: Date.now() - waitStarted }
 }
 
 // One round: every command on a freshly loaded page, then the first click after a navigation,
 // then whether a click sent the moment goto answers reaches the new page.
-async function round(meta, worktree, index) {
+async function round(meta, worktree, index, tracing) {
   const sample = {}
+  const steps = []
+  const counter = async () => (tracing ? (await pageState(meta, worktree)).clicks : null)
   const replies = {}
   for (const [key, row] of Object.entries(ROWS)) {
+    const before = key === 'click' ? await counter() : null
     replies[key] = await rpcOk(meta, row.method, { worktree, ...row.params(index) })
     sample[`${key}Ms`] = replies[key].ms
+    steps.push({ step: key, ms: replies[key].ms, ...(key === 'click' ? { before } : {}) })
   }
   const state = await pageState(meta, worktree)
   for (const [key, row] of Object.entries(ROWS)) {
     sample[`${key}Acted`] = row.acted({ reply: replies[key], state, round: index })
   }
-  await navigate(meta, worktree)
+  for (const step of steps) {
+    step.acted = sample[`${step.step}Acted`]
+  }
+  Object.assign(steps.find((step) => step.step === 'click'), { after: state.clicks })
+  steps.push({ step: 'goto', ...(await navigate(meta, worktree)) })
+  const before = await counter()
   const click = await rpcOk(meta, 'browser.click', { worktree, element: '#b' })
+  const after = (await pageState(meta, worktree)).clicks
   sample[`${AFTER_GOTO.key}Ms`] = click.ms
-  sample[`${AFTER_GOTO.key}Acted`] = (await pageState(meta, worktree)).clicks === 1
-  await navigate(meta, worktree, () => rpcOk(meta, 'browser.click', { worktree, element: '#b' }))
-  sample.immediateClickLanded = (await pageState(meta, worktree)).clicks === 1
+  sample[`${AFTER_GOTO.key}Acted`] = after === 1
+  steps.push({ step: AFTER_GOTO.key, ms: click.ms, before, after, acted: after === 1 })
+  const raced = await navigate(meta, worktree, () =>
+    rpcOk(meta, 'browser.click', { worktree, element: '#b' })
+  )
+  const racedAfter = (await pageState(meta, worktree)).clicks
+  sample.immediateClickLanded = racedAfter === 1
+  steps.push({
+    step: 'goto then immediate click',
+    ...raced,
+    after: racedAfter,
+    acted: racedAfter === 1
+  })
   // The next round starts from a fresh page, as this one did.
-  await navigate(meta, worktree)
-  return sample
+  steps.push({ step: 'goto (reset)', ...(await navigate(meta, worktree)) })
+  return { sample, steps }
+}
+
+// What the trace names the build by: the app's own record, plus the agent-browser it bundles.
+function buildOf(info) {
+  const candidates = [
+    path.join(info.realPath, 'node_modules/agent-browser/package.json'),
+    path.join(
+      info.realPath,
+      'Contents/Resources/app.asar.unpacked/node_modules/agent-browser/package.json'
+    )
+  ]
+  const agentBrowser = candidates.find((file) => existsSync(file))
+  return {
+    version: info.version,
+    commit: info.commit,
+    buildId: info.buildId,
+    electron: info.electron,
+    agentBrowser: agentBrowser ? JSON.parse(readFileSync(agentBrowser, 'utf8')).version : null
+  }
 }
 
 // One instance: a tab on the page, then the rounds; the first warms agent-browser up and is not kept.
@@ -167,11 +214,26 @@ async function measureInstance(name, count) {
     const worktree = `id:${tree.id}`
     await rpcOk(meta, 'browser.tabCreate', { url, worktree }, 90_000)
     await loadedAfter(meta, worktree, null)
+    const build = buildOf(instance.info)
     return await collectSamples({
       label: `browser ${name}`,
       count,
       warmup: 1,
-      measure: (index) => round(meta, worktree, index)
+      measure: async (index) => {
+        const { sample, steps } = await round(meta, worktree, index, Boolean(options.trace))
+        if (options.trace) {
+          const record = {
+            subject: name,
+            app: instance.info.realPath,
+            build,
+            round: index,
+            warmup: index < 1,
+            steps
+          }
+          appendFileSync(options.trace, `${JSON.stringify(record)}\n`)
+        }
+        return sample
+      }
     })
   } finally {
     await closeInstance(instance)
