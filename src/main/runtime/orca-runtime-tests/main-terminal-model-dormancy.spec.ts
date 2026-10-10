@@ -188,11 +188,12 @@ describe('main terminal model dormancy', () => {
     expect(runtime.isMainTerminalModelDormant('pty-1')).toBe(false)
   })
 
-  it('keeps main parsing for an agent identified by its title', async () => {
+  it('lets main rest for an agent known only by its title', async () => {
+    // Why: tui-idle holds a ready verdict while its screen is rebuilt, so no screen rule misreads.
     const { runtime, emit, goDormant } = createHarness()
     await emit('\x1b]0;Codex working\x07')
     await goDormant()
-    expect(runtime.isMainTerminalModelDormant('pty-1')).toBe(false)
+    expect(runtime.isMainTerminalModelDormant('pty-1')).toBe(true)
   })
 
   it('keeps main parsing once a rebuild fails, and marks the model partial', async () => {
