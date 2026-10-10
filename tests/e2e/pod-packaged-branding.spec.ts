@@ -3,6 +3,7 @@
  * The dev fixture launches out/main, which reads the identity from an E2E override; this proves
  * the packaged identity file brands the native chrome and keeps Chromium off Stably's hosts.
  */
+import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -159,6 +160,12 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
     throw new Error('keychain prompt: SecurityAgent started during the run; the app was killed')
   }
   expect(realLaunchAgentMtimes(isolation.realHome)).toEqual(launchAgentsBefore)
+  // Why after the run: anything the app writes into its own bundle (a Python __pycache__ under
+  // Resources/claude-acc did) breaks the seal, and Gatekeeper then calls the installed app damaged.
+  const seal = spawnSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', packagedApp], {
+    encoding: 'utf8'
+  })
+  expect(seal.status, `${seal.stdout}${seal.stderr}`).toBe(0)
   if (failure !== null) {
     throw failure
   }
