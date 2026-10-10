@@ -50,6 +50,32 @@ describe('daemon launch scope ownership', () => {
   })
 })
 
+describe('daemon launch under the app scheduling policy', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    Object.defineProperty(process, 'helperExecPath', { value: undefined, configurable: true })
+  })
+
+  it('spawns the same command line through taskpolicy -a, keeping the IPC channel', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    Object.defineProperty(process, 'helperExecPath', { value: '/Pod Helper', configurable: true })
+    spawnDaemonChildProcess(options, false)
+    expect(fork).not.toHaveBeenCalled()
+    const spec = spawn.mock.calls[0]?.[0]
+    expect(spec.program).toBe('/usr/sbin/taskpolicy')
+    expect(spec.args.slice(0, 5)).toEqual([
+      '-a',
+      '/Pod Helper',
+      '/app/daemon-entry.js',
+      '--socket',
+      '/tmp/orca/daemon.sock'
+    ])
+    expect(spec.stdio).toEqual(['ignore', 'ignore', 'pipe', 'ipc'])
+    expect(spec.detached).toBe(true)
+    expect(spec.env.ELECTRON_RUN_AS_NODE).toBe('1')
+  })
+})
+
 describe('daemon launch environment', () => {
   const originalBus = process.env.DBUS_SESSION_BUS_ADDRESS
   afterEach(() => {
