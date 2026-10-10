@@ -47,8 +47,8 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
-// A query's reply owner is fixed when main ingests the chunk: main's model while the view is
-// gated, the view otherwise. These pin that a visibility flip while the chunk is still queued
+// A query's reply owner is fixed when main ingests the chunk: the view when its delivery mode is
+// 'parse', main's model otherwise. These pin that a visibility flip while the chunk is still queued
 // never leaves the query unanswered or answered twice.
 describe('PTY query replies across a visibility flip', () => {
   const {
@@ -150,6 +150,23 @@ describe('PTY query replies across a visibility flip', () => {
         { id: pty.id, data: '\x1b[6n', droppedOutput: true, background: true },
         { id: pty.id, data: 'prompt\x1b[6n\x1b[c', sidecarOnly: true }
       ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops queued bytes main answered without handing their queries back when the sidecar leaves', async () => {
+    vi.useFakeTimers()
+    try {
+      const pty = await spawnPty()
+      pty.setHidden(true)
+      pty.setInterest(true)
+      pty.emitData('agent\x1b[6n')
+      // Still hidden: the mode moves from sidecars-only to drop, but main owns the replies either way.
+      pty.setInterest(false)
+      vi.advanceTimersByTime(50)
+
+      expect(dataSends()).toEqual([])
     } finally {
       vi.useRealTimers()
     }
