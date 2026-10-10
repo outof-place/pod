@@ -118,7 +118,7 @@ describe('sandbox OAuth credential', () => {
     const h = harness(item(TOKEN, 1_000_000 + 3_600_000))
     await h.source.authHeaders(scope)
     h.set(item('fake-oauth-after-401', 1_000_000 + 3_600_000))
-    h.source.rejected()
+    h.source.rejected(scope)
     expect(await h.source.authHeaders(scope)).toEqual({
       authorization: 'Bearer fake-oauth-after-401'
     })
