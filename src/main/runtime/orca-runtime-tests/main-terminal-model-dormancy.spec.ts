@@ -176,6 +176,22 @@ describe('main terminal model dormancy', () => {
     release()
   })
 
+  it('keeps the model live while an in-process model reader holds it', async () => {
+    const { runtime, snapshotReads, emit, goDormant } = createHarness()
+    await goDormant()
+    const release = runtime.acquireTerminalOutputReader('pty-1', { kind: 'model' })
+    expect(runtime.isMainTerminalModelDormant('pty-1')).toBe(false)
+    await runtime.serializeMainTerminalBuffer('pty-1')
+    now += MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS * 2
+    await emit('held\r\n')
+    expect(runtime.isMainTerminalModelDormant('pty-1')).toBe(false)
+    release()
+    now += MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS
+    await emit('released\r\n')
+    expect(runtime.isMainTerminalModelDormant('pty-1')).toBe(true)
+    expect(snapshotReads.count).toBe(1)
+  })
+
   it.each([
     ['the daemon cannot serve settled snapshots', { canProvideSettledBufferSnapshot: () => false }],
     ['no renderer pane parses the bytes', { hasRendererSerializer: () => false }]
