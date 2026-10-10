@@ -22,6 +22,9 @@ const PRODUCT_FILE_EXCLUSIONS = [
   '!resources/brand/native{,/**/*}',
   '!resources/brand/{generate,preview}.mjs'
 ]
+// osx-sign gives every binary-looking file its own signature and timestamp; the bundle seal already
+// covers code-free resources, and each skipped file is one Apple timestamp call fewer.
+const PRODUCT_SIGN_IGNORE = ['/Contents/Resources/app\\.asar\\.unpacked/resources/brand/']
 const FORBIDDEN_TOP_LEVEL = /^(dist|dist-.*|test-results|playwright-report)$/
 // Why dot folders too: caches are hidden folders, while the dot files upstream ships are configs.
 const HIDDEN = /^\..+/
@@ -87,6 +90,7 @@ module.exports = {
   MAX_ASAR_BYTES,
   MAX_DMG_BYTES,
   PRODUCT_FILE_EXCLUSIONS,
+  PRODUCT_SIGN_IGNORE,
   assertAppAsar,
   assertDmgSize,
   forbiddenAsarEntries
