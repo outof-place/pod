@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, type WebPreferences } from 'electron'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
@@ -31,6 +31,9 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     private readonly browserManager: BrowserManager,
     private readonly options: {
       getAgentBrowserBridge?: () => Pick<AgentBrowserBridge, 'onPageClosed'> | null
+      // Fork-only (Pod): one-app's native browser panes render these pages offscreen.
+      extraWebPreferences?: WebPreferences
+      onWindowCreated?: (browserPageId: string, win: BrowserWindow) => void
     } = {}
   ) {}
 
@@ -60,11 +63,13 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         partition,
         sandbox: true,
         contextIsolation: true,
-        nodeIntegration: false
+        nodeIntegration: false,
+        ...this.options.extraWebPreferences
       }
     })
 
     this.windowsByPageId.set(browserPageId, win)
+    this.options.onWindowCreated?.(browserPageId, win)
 
     // Why: register the guest and return immediately so the new tab appears
     // without waiting for the page to finish loading. Previously createTab
