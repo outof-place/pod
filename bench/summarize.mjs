@@ -199,6 +199,8 @@ const summary = {
         group: suite.group ?? 'pod',
         versions: suite.versions,
         config: suite.config,
+        // The machine state a suite stands for, where it says (polling: quiet or agent-heavy).
+        condition: suite.condition ?? null,
         caveats: suite.caveats ?? []
       }
     ])
