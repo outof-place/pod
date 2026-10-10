@@ -25,6 +25,7 @@ function fakeService(enabled: boolean): PodWorkspaceRpcService {
       strayFolders: [],
       prunable: [],
       archives: [],
+      adoptions: [],
       errors: []
     })),
     tidyApply: vi.fn(async (_action, remove) => {
