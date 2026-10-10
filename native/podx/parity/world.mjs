@@ -145,10 +145,125 @@ export function baseWorld({ worktree, nested }) {
     'browser.tabCreate': ok({ browserPageId: 'page-new' }),
     'browser.tabClose': ok({ closed: true }),
     'browser.openUrl': ok({ browserPageId: 'page-url' }),
+    ...computerWorld(),
     'browser.exec': ok({
       output: ['a', 1, null, { b: [true] }],
       empty: {},
       list: []
+    })
+  }
+}
+
+// computer-use responses: a snapshot with an exported-on-JSON screenshot, actions with metadata.
+export function computerWorld() {
+  const snapshot = {
+    id: 'snap-1',
+    app: { name: 'Safari', bundleId: 'com.apple.Safari', pid: 4242 },
+    window: {
+      id: 77,
+      index: 0,
+      title: 'Example — "Home"',
+      x: 10,
+      y: -20,
+      width: 1280,
+      height: 800
+    },
+    coordinateSpace: 'window',
+    treeText: '[0] window "Example"\n  [1] button "Go"',
+    elementCount: 2,
+    focusedElementId: 1
+  }
+  const screenshot = {
+    data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    format: 'png',
+    width: 2560,
+    height: 1600,
+    scale: 2
+  }
+  const state = {
+    snapshot,
+    screenshot,
+    screenshotStatus: { state: 'captured', metadata: { engine: 'screenCaptureKit' } }
+  }
+  const action = (extra) =>
+    ok({
+      ...state,
+      action: {
+        path: 'accessibility',
+        verification: { state: 'verified', property: 'value' },
+        ...extra
+      }
+    })
+  return {
+    'computer.getAppState': ok(state),
+    'computer.click': action({}),
+    'computer.scroll': action({ path: 'synthetic', verification: undefined }),
+    'computer.pressKey': action({
+      path: 'synthetic',
+      verification: { state: 'unverified', reason: 'synthetic_input' }
+    }),
+    'computer.hotkey': action({
+      verification: { state: 'unverified', reason: 'window_changed' },
+      targetWindowId: 91
+    }),
+    'computer.typeText': action({ path: 'clipboard' }),
+    'computer.pasteText': action({
+      path: 'clipboard',
+      verification: { state: 'unverified', reason: 'clipboard_paste' }
+    }),
+    'computer.setValue': action({}),
+    'computer.listApps': ok({
+      apps: [
+        {
+          name: 'Safari',
+          bundleId: 'com.apple.Safari',
+          pid: 4242,
+          isRunning: true,
+          lastUsedAt: null,
+          useCount: 3
+        },
+        {
+          name: 'Terminal',
+          bundleId: null,
+          pid: 7,
+          isRunning: true,
+          lastUsedAt: null,
+          useCount: null
+        }
+      ]
+    }),
+    'computer.listWindows': ok({
+      app: snapshot.app,
+      windows: [
+        { id: 77, index: 0, title: 'A', x: 0, y: 0, width: 10, height: 20, screenIndex: 1 },
+        {
+          id: null,
+          index: 1,
+          title: 'B',
+          width: 5,
+          height: 6,
+          isMinimized: true,
+          isOffscreen: true
+        }
+      ]
+    }),
+    'computer.capabilities': ok({
+      platform: 'darwin',
+      provider: 'orca-computer-use-macos',
+      providerVersion: '1',
+      protocolVersion: 3,
+      supports: {
+        apps: { list: true, bundleIds: true, pids: true },
+        windows: {
+          list: true,
+          targetById: true,
+          targetByIndex: false,
+          focus: true,
+          moveResize: false
+        },
+        observation: { screenshot: true, elementFrames: true, annotatedScreenshot: false },
+        actions: { click: true, typeText: true, drag: false, hotkey: true }
+      }
     })
   }
 }
