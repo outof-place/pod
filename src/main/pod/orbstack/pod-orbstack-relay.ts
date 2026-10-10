@@ -1,8 +1,10 @@
 // Fork-only (Pod): the only way a network-isolated sandbox reaches the Mac. One `orb run` per running
-// sandbox carries its connections over stdio; the Mac side dials nothing but the routes Pod listed.
+// sandbox carries its connections over stdio. It is no tunnel: the Mac side forwards Claude hook
+// posts to Pod's hook server, one per connection, and answers everything else itself.
 import { randomBytes } from 'node:crypto'
 import { connect, type Socket } from 'node:net'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { HOOK_CONTINUE, hookRejection, readHookRequest } from './pod-orbstack-hook-filter'
 import {
   RELAY_FRAME,
   RELAY_HEADER_BYTES,
@@ -10,8 +12,16 @@ import {
   SANDBOX_RELAY_AGENT_PY
 } from './pod-orbstack-relay-agent'
 
-/** A VM-side 127.0.0.1 port and the Mac 127.0.0.1 port it reaches. */
-export type SandboxRelayRoute = { vmPort: number; hostPort: number }
+/** Claude hook posts from the VM to Pod's hook server. */
+export type SandboxHookRoute = {
+  /** Port the hook script posts to inside the VM: the hook server's own, so the script is unchanged. */
+  vmPort: number
+  hostPort: number
+  /** The hook server's token. It never enters the VM. */
+  hookToken: string
+  /** Checks the sandbox's own token, which the VM sends in its place. */
+  authorize: (token: string) => boolean
+}
 
 export type SandboxRelayHandle = {
   /** Written to `<RELAY_STATE_DIR>/ready` once the VM side listens; a launch waits for it. */
@@ -57,23 +67,84 @@ export function decodeRelayFrames(
   return buffered.subarray(offset)
 }
 
-function sameRoutes(a: readonly SandboxRelayRoute[], b: readonly SandboxRelayRoute[]): boolean {
-  return (
-    a.length === b.length &&
-    a.every((route, i) => route.vmPort === b[i]?.vmPort && route.hostPort === b[i]?.hostPort)
-  )
+type Send = (kind: number, conn: number, payload?: Uint8Array) => boolean
+
+/** One VM connection: buffer one hook post, check it, then forward it or answer it here. */
+function hookConnection(
+  conn: number,
+  route: SandboxHookRoute,
+  send: Send,
+  dial: (port: number) => Socket,
+  done: () => void
+) {
+  let buffered = Buffer.alloc(0)
+  let continued = false
+  let state: 'reading' | 'forwarded' | 'rejected' = 'reading'
+  let upstream: Socket | null = null
+  const reject = (status: number): void => {
+    state = 'rejected'
+    buffered = Buffer.alloc(0)
+    send(RELAY_FRAME.data, conn, hookRejection(status))
+    send(RELAY_FRAME.end, conn)
+  }
+  return {
+    data(chunk: Buffer): void {
+      if (state !== 'reading') {
+        return
+      }
+      buffered = Buffer.concat([buffered, chunk])
+      const verdict = readHookRequest(buffered, route)
+      if (verdict.kind === 'reject') {
+        reject(verdict.status)
+      } else if (verdict.kind === 'incomplete') {
+        if (verdict.expectContinue && !continued) {
+          continued = true
+          send(RELAY_FRAME.data, conn, HOOK_CONTINUE)
+        }
+      } else {
+        state = 'forwarded'
+        buffered = Buffer.alloc(0)
+        const socket = dial(route.hostPort)
+        upstream = socket
+        socket.on('data', (reply: Buffer) => send(RELAY_FRAME.data, conn, reply))
+        socket.on('end', () => send(RELAY_FRAME.end, conn))
+        socket.on('error', () => socket.destroy())
+        socket.on('close', () => {
+          send(RELAY_FRAME.close, conn)
+          done()
+        })
+        socket.write(verdict.request)
+      }
+    },
+    end(): void {
+      if (state === 'reading') {
+        reject(400)
+      } else if (state === 'rejected') {
+        send(RELAY_FRAME.close, conn)
+        done()
+      }
+    },
+    close(): void {
+      upstream?.destroy()
+      done()
+    }
+  }
+}
+
+function sameRoute(a: SandboxHookRoute, b: SandboxHookRoute): boolean {
+  return a.vmPort === b.vmPort && a.hostPort === b.hostPort && a.hookToken === b.hookToken
 }
 
 type Relay = {
   child: ChildProcessWithoutNullStreams
-  routes: readonly SandboxRelayRoute[]
+  route: SandboxHookRoute
   handle: SandboxRelayHandle
   exited: boolean
 }
 
 function startRelay(
   machine: string,
-  routes: readonly SandboxRelayRoute[],
+  route: SandboxHookRoute,
   deps: RelayDeps,
   onExit: () => void
 ): Relay {
@@ -81,52 +152,17 @@ function startRelay(
   const spec = JSON.stringify({
     nonce,
     stateDir: deps.stateDir ?? RELAY_STATE_DIR,
-    routes: routes.map((route) => route.vmPort)
+    routes: [route.vmPort]
   })
   const child = deps.spawnAgent(machine, ['-I', '-c', SANDBOX_RELAY_AGENT_PY, spec])
-  const sockets = new Map<number, Socket>()
-  const paused = new Set<Socket>()
-  child.stdin.on('drain', () => {
-    for (const socket of paused) {
-      socket.resume()
-    }
-    paused.clear()
-  })
-  const send = (kind: number, conn: number, payload?: Uint8Array): boolean =>
+  const conns = new Map<number, ReturnType<typeof hookConnection>>()
+  const send: Send = (kind, conn, payload) =>
     !child.stdin.destroyed && child.stdin.write(encodeRelayFrame(kind, conn, payload))
+  const dial = deps.connectHost ?? ((port: number) => connect({ host: '127.0.0.1', port }))
   let markReady: (ready: boolean) => void = () => undefined
   const ready = new Promise<boolean>((resolve) => {
     markReady = resolve
   })
-
-  const open = (conn: number, routeIndex: number): void => {
-    const route = routes[routeIndex]
-    if (!route) {
-      // Only the listed Mac ports are ever dialed, whatever the VM asks for.
-      send(RELAY_FRAME.close, conn)
-      return
-    }
-    const socket = (deps.connectHost ?? ((port) => connect({ host: '127.0.0.1', port })))(
-      route.hostPort
-    )
-    socket.setNoDelay(true)
-    sockets.set(conn, socket)
-    socket.on('data', (chunk: Buffer) => {
-      if (!send(RELAY_FRAME.data, conn, chunk)) {
-        socket.pause()
-        paused.add(socket)
-      }
-    })
-    socket.on('end', () => send(RELAY_FRAME.end, conn))
-    socket.on('error', () => socket.destroy())
-    socket.on('close', () => {
-      paused.delete(socket)
-      if (sockets.get(conn) === socket) {
-        sockets.delete(conn)
-        send(RELAY_FRAME.close, conn)
-      }
-    })
-  }
 
   const onFrame = (kind: number, conn: number, payload: Buffer): void => {
     if (kind === RELAY_FRAME.ready) {
@@ -134,23 +170,23 @@ function startRelay(
       return
     }
     if (kind === RELAY_FRAME.open) {
-      open(conn, payload.readUInt8(0))
-      return
-    }
-    const socket = sockets.get(conn)
-    if (!socket) {
-      return
-    }
-    if (kind === RELAY_FRAME.data) {
-      if (!socket.write(payload)) {
-        child.stdout.pause()
-        socket.once('drain', () => child.stdout.resume())
+      if (payload.readUInt8(0) !== 0) {
+        send(RELAY_FRAME.close, conn)
+        return
       }
+      conns.set(
+        conn,
+        hookConnection(conn, route, send, dial, () => conns.delete(conn))
+      )
+      return
+    }
+    const connection = conns.get(conn)
+    if (kind === RELAY_FRAME.data) {
+      connection?.data(payload)
     } else if (kind === RELAY_FRAME.end) {
-      socket.end()
+      connection?.end()
     } else if (kind === RELAY_FRAME.close) {
-      sockets.delete(conn)
-      socket.destroy()
+      connection?.close()
     }
   }
 
@@ -163,14 +199,13 @@ function startRelay(
     stderr = `${stderr}${chunk.toString()}`.slice(-2000)
   })
   child.stdin.on('error', () => undefined)
-  const relay: Relay = { child, routes, handle: { nonce, ready }, exited: false }
+  const relay: Relay = { child, route, handle: { nonce, ready }, exited: false }
   child.on('exit', (code, signal) => {
     relay.exited = true
     markReady(false)
-    for (const socket of sockets.values()) {
-      socket.destroy()
+    for (const connection of conns.values()) {
+      connection.close()
     }
-    sockets.clear()
     const detail = stderr.trim().split('\n').slice(-3).join(' | ')
     deps.log?.(`relay for ${machine} exited (${code ?? signal})${detail ? `: ${detail}` : ''}`)
     onExit()
@@ -191,14 +226,14 @@ export function createSandboxRelays(deps: RelayDeps) {
     }
   }
 
-  /** Reuses the machine's live relay when its routes match; otherwise replaces it. */
-  const ensure = (machine: string, routes: readonly SandboxRelayRoute[]): SandboxRelayHandle => {
+  /** Reuses the machine's live relay when its route matches; otherwise replaces it. */
+  const ensure = (machine: string, route: SandboxHookRoute): SandboxRelayHandle => {
     const current = relays.get(machine)
-    if (current && !current.exited && sameRoutes(current.routes, routes)) {
+    if (current && !current.exited && sameRoute(current.route, route)) {
       return current.handle
     }
     stop(machine)
-    const relay = startRelay(machine, routes, deps, () => {
+    const relay = startRelay(machine, route, deps, () => {
       if (relays.get(machine) === relay) {
         relays.delete(machine)
       }
