@@ -10,7 +10,7 @@ const {
   podAccMacExtraFiles,
   podAccFileExclusions,
   podAccMacSignIgnore
-} = require('./pod-acc-extra-resources.cjs')
+} = require('../pod-acc-extra-resources.cjs')
 
 const roots = []
 afterEach(() => {
@@ -108,8 +108,8 @@ describe('Pod claude-acc extraResources', () => {
     // CPython's JIT maps W+X memory without MAP_JIT: under the hardened runtime, allow-jit alone
     // gets bin/python3.14 SIGKILLed. osx-sign gives it the inherit entitlements, so they must
     // keep allow-unsigned-executable-memory for as long as Contents/Resources/python ships.
-    const root = resolve(import.meta.dirname, '..')
-    const base = require('./electron-builder.config.cjs')
+    const root = resolve(import.meta.dirname, '..', '..')
+    const base = require('../electron-builder.config.cjs')
     const inherit = readFileSync(resolve(root, base.mac.entitlementsInherit), 'utf8')
     expect(inherit).toMatch(
       /<key>com\.apple\.security\.cs\.allow-unsigned-executable-memory<\/key>\s*<true\/>/
@@ -125,7 +125,7 @@ describe('Pod claude-acc extraResources', () => {
     // a second key in the same object literal silently replaces the first: product/ and
     // claude-acc each add entries, so both must live in one array
     const product = readFileSync(
-      resolve(import.meta.dirname, '..', 'product', 'electron-builder.pod.cjs'),
+      resolve(import.meta.dirname, '..', '..', 'product', 'electron-builder.pod.cjs'),
       'utf8'
     )
     expect(product.match(/^\s*signIgnore\s*:/gm)).toHaveLength(1)
@@ -138,12 +138,12 @@ describe('Pod claude-acc extraResources', () => {
 
   // the product config builds its extraResources at require time, which needs both fetched
   const fetched = ['resources/claude-acc/pod-acc-run', 'resources/python/bin/python3'].every(
-    (file) => existsSync(resolve(import.meta.dirname, '..', file))
+    (file) => existsSync(resolve(import.meta.dirname, '..', '..', file))
   )
 
   it.skipIf(!fetched)("puts claude-acc into Pod's packaged config next to upstream's", () => {
-    const base = require('./electron-builder.config.cjs')
-    const product = require('../product/electron-builder.pod.cjs')
+    const base = require('../electron-builder.config.cjs')
+    const product = require('../../product/electron-builder.pod.cjs')
     expect(product.mac.extraFiles).toEqual([...base.mac.extraFiles, ...podAccMacExtraFiles()])
     expect(product.mac.extraFiles.map((entry) => entry.to)).toEqual(
       expect.arrayContaining(['Library/LaunchAgents', 'Library/LoginItems/Pod Menu.app'])
@@ -151,7 +151,7 @@ describe('Pod claude-acc extraResources', () => {
     const {
       PRODUCT_FILE_EXCLUSIONS,
       PRODUCT_SIGN_IGNORE
-    } = require('../product/release-bundle-gate.cjs')
+    } = require('../../product/release-bundle-gate.cjs')
     expect(product.mac.signIgnore).toEqual([
       ...base.mac.signIgnore,
       ...PRODUCT_SIGN_IGNORE,
@@ -169,7 +169,7 @@ describe('Pod claude-acc extraResources', () => {
 
   it('fetches the Python for a release next to the payload', () => {
     const release = readFileSync(
-      resolve(import.meta.dirname, '..', 'product', 'release.sh'),
+      resolve(import.meta.dirname, '..', '..', 'product', 'release.sh'),
       'utf8'
     )
     const payload = release.indexOf('node config/scripts/fetch-claude-acc-payload.mjs')
