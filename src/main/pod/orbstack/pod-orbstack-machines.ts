@@ -14,11 +14,11 @@ import { provisionSandbox, resolveSandboxMounts } from './pod-orbstack-sandbox'
 import {
   cloneSandbox,
   cloneSharedMachine,
+  prewarmPodOrbstackTemplates,
   sandboxTemplate,
   sharedTemplate
 } from './pod-orbstack-template-machines'
 import type { PodOrbstackTemplates } from './pod-orbstack-templates'
-import { parseOrbctlStatus } from './pod-orbstack-inventory'
 import type { OrbstackToolPaths, OrbstackToolRunner } from './pod-orbstack-tools'
 
 const MACHINE_COMMAND_TIMEOUT_MS = 120_000
@@ -48,6 +48,8 @@ type MachineDeps = {
   /** Clone sources; without them every create builds its machine from the image. */
   templates?: PodOrbstackTemplates
   log?: (message: string) => void
+  /** Create steps, in words a user reads, for `orbstack.subscribe`. */
+  onProgress?: (worktreeId: string, kind: PodOrbstackMachineKind, step: string) => void
   now?: () => number
 }
 
@@ -57,6 +59,8 @@ function lastLines(text: string, count = 6): string {
 
 export function createPodOrbstackMachines(deps: MachineDeps) {
   const busy = new Set<string>()
+  // Machines with a start or stop in flight; a stats read must not touch them.
+  const moving = new Set<string>()
   const runRecipe = deps.runRecipe ?? runEphemeralVmRecipeStart
 
   const guardOwned = (name: string): string | null =>
@@ -127,16 +131,18 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
       // Recorded before create, so a crash still leaves Pod allowed to delete the machine.
       deps.registry.upsert({ ...entry, state: 'creating' })
       // A recipe.json override keeps its own lifecycle; only the built-in one has a template.
+      const onStep = (step: string) => deps.onProgress?.(target.worktreeId, 'shared', step)
       if (recipe === POD_ORBSTACK_BUILTIN_RECIPE && !(await machineExists(name))) {
         const cloned = await fromTemplate(name, async (templates) => {
-          const template = await sharedTemplate(deps.run, templates)
+          const template = await sharedTemplate(deps.run, templates, onStep)
           return template
             ? cloneSharedMachine({
                 run: deps.run,
                 templates,
                 template,
                 name,
-                worktreePath: target.worktreePath
+                worktreePath: target.worktreePath,
+                onStep
               })
             : null
         })
@@ -145,6 +151,7 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
           return { ok: true }
         }
       }
+      onStep('Running the recipe')
       const start = await runRecipe({
         recipe,
         repoPath: target.worktreePath,
@@ -186,8 +193,10 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
       if (mounts.some((path) => path.includes(':'))) {
         return { ok: false, error: 'OrbStack cannot share a folder whose path contains ":".' }
       }
+      const onStep = (step: string) => deps.onProgress?.(target.worktreeId, 'sandbox', step)
       // Downloaded before the machine exists, so a network failure leaves nothing to clean up.
       let release: SandboxClaudeRelease | null
+      onStep('Preparing Claude Code')
       try {
         release = (await deps.prepareClaudeRelease?.()) ?? null
       } catch (error) {
@@ -204,14 +213,20 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
       deps.registry.upsert({ ...entry, state: 'creating' })
       try {
         const cloned = await fromTemplate(name, async (templates) => {
-          const template = await sandboxTemplate(deps.run, templates, release)
+          const template = await sandboxTemplate(deps.run, templates, release, onStep)
           return template
-            ? cloneSandbox({ run: deps.run, templates, template, name, mounts })
+            ? cloneSandbox({ run: deps.run, templates, template, name, mounts, onStep })
             : null
         })
         const { agentVersion } =
           cloned ??
-          (await (deps.provision ?? provisionSandbox)({ run: deps.run, name, mounts, release }))
+          (await (deps.provision ?? provisionSandbox)({
+            run: deps.run,
+            name,
+            mounts,
+            release,
+            onStep
+          }))
         deps.registry.upsert({
           ...entry,
           state: 'ready',
@@ -263,39 +278,24 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
     if (refusal) {
       return { ok: false, error: refusal }
     }
-    const result = await deps.run('orb', [running ? 'start' : 'stop', name], {
-      timeoutMs: MACHINE_COMMAND_TIMEOUT_MS
-    })
+    moving.add(name)
+    const result = await deps
+      .run('orb', [running ? 'start' : 'stop', name], { timeoutMs: MACHINE_COMMAND_TIMEOUT_MS })
+      .finally(() => moving.delete(name))
     return result.code === 0
       ? { ok: true }
       : { ok: false, error: lastLines(result.stderr) || `Could not change ${name}.` }
   }
 
-  /**
-   * Builds the templates the next creates need, for kinds Pod already has machines of (after the
-   * Mac's Claude Code moved, say). Never starts OrbStack for it.
-   */
   const prewarm = async (): Promise<void> => {
-    const status = await deps.run('orbctl', ['status'])
-    if (!deps.templates || parseOrbctlStatus(status.code, status.stdout) !== 'running') {
-      return
-    }
-    const kinds = new Set(deps.registry.machines().map((entry) => entry.kind))
-    if (kinds.has('sandbox')) {
-      const release = await (deps.prepareClaudeRelease?.() ?? null)?.catch(() => undefined)
-      if (release !== undefined) {
-        await sandboxTemplate(deps.run, deps.templates, release)
-      }
-    }
-    const builtin = (() => {
-      try {
-        return deps.loadRecipe() === POD_ORBSTACK_BUILTIN_RECIPE
-      } catch {
-        return false
-      }
-    })()
-    if (kinds.has('shared') && builtin) {
-      await sharedTemplate(deps.run, deps.templates)
+    if (deps.templates) {
+      await prewarmPodOrbstackTemplates({
+        run: deps.run,
+        templates: deps.templates,
+        kinds: new Set(deps.registry.machines().map((entry) => entry.kind)),
+        prepareRelease: deps.prepareClaudeRelease,
+        loadRecipe: deps.loadRecipe
+      })
     }
   }
 
@@ -306,6 +306,14 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
     start: (name: string) => setRunning(name, true),
     stop: (name: string) => setRunning(name, false),
     busyWorktreeIds: (): string[] => [...busy],
+    /** Machines being started, stopped, created or deleted right now. */
+    busyMachines: (): string[] => [
+      ...moving,
+      ...deps.registry
+        .machines()
+        .filter((entry) => busy.has(entry.worktreeId))
+        .map((entry) => entry.name)
+    ],
     prewarm
   }
 }

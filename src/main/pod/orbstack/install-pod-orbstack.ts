@@ -19,6 +19,8 @@ import {
 import { setPodSandboxAnthropicCredentials } from './pod-orbstack-anthropic-route'
 import { createSandboxAccess } from './pod-orbstack-sandbox-access'
 import { createPodOrbstackTemplates } from './pod-orbstack-templates'
+import { createPodOrbstackEvents } from './pod-orbstack-events'
+import { createPodOrbstackDiskSizes, createPodOrbstackStats } from './pod-orbstack-stats'
 import { readPodOrbstackStatus } from './pod-orbstack-status'
 import {
   setPodOrbstackTerminalResolver,
@@ -46,7 +48,10 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   installed = true
   const enabled = isPodOrbstackEnabled()
   const dataDir = join(app.getPath('userData'), 'pod-orbstack')
-  const registry = new PodOrbstackRegistry(join(dataDir, 'registry.json'))
+  const events = createPodOrbstackEvents()
+  // Late-bound: registry and template saves drop the status cache and reach subscribers.
+  let changed = (): void => events.changed()
+  const registry = new PodOrbstackRegistry(join(dataDir, 'registry.json'), () => changed())
   // Re-resolved per use: OrbStack can be installed or moved while Pod runs.
   const paths = (): OrbstackToolPaths => resolveOrbstackToolPaths()
   const home = resolveOrbstackHomeOverride()
@@ -63,7 +68,8 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
         args: ['-m', machine, '-u', 'root', 'python3', ...args],
         ...(home ? { env: { ...process.env, HOME: home } } : {})
       }),
-    log: (message) => console.warn(`[pod-orbstack] ${message}`)
+    log: (message) => console.warn(`[pod-orbstack] ${message}`),
+    onRow: (row) => events.relay(row)
   })
   // Memory only: a restart mints fresh tokens and CAs on the next launch; quitting drops them all.
   const e2eAnthropic = resolveOrbstackE2eAnthropic()
@@ -79,11 +85,19 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   const access = createSandboxAccess({
     relays,
     upstream: e2eAnthropic?.upstream,
-    log: (message) => console.warn(`[pod-orbstack] ${message}`)
+    log: (message) => console.warn(`[pod-orbstack] ${message}`),
+    onRow: (row) => events.relay(row)
   })
   app.on('will-quit', () => relays.stopAll())
   const log = (message: string): void => console.warn(`[pod-orbstack] ${message}`)
-  const templates = createPodOrbstackTemplates({ run, file: join(dataDir, 'templates.json'), log })
+  const templates = createPodOrbstackTemplates({
+    run,
+    file: join(dataDir, 'templates.json'),
+    log,
+    onChange: () => changed()
+  })
+  const templatesAllowed = resolveOrbstackTemplatesEnabled()
+  const diskSizes = createPodOrbstackDiskSizes({ run })
   const machines = createPodOrbstackMachines({
     paths,
     run,
@@ -92,28 +106,42 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     loadRecipe: () => loadPodOrbstackRecipe(join(dataDir, 'recipe.json')),
     onSandboxCreated: (name) => access.created(name),
     onSandboxRemoved: (name) => access.forget(name),
-    ...(resolveOrbstackTemplatesEnabled() ? { templates } : {}),
+    ...(templatesAllowed ? { templates } : {}),
     log,
+    onProgress: (worktreeId, kind, step) => events.progress(worktreeId, kind, step),
     prepareClaudeRelease: resolveOrbstackSkipAgentInstall()
       ? async () => null
       : async () => releases.prepare(await probeClaudeCliVersion(resolveClaudeCommand()))
   })
-  setPodOrbstackService(
-    createPodOrbstackService({
-      enabled,
-      getRepos: () => store.getRepos(),
-      machines,
-      registry,
-      readStatus: () =>
-        readPodOrbstackStatus({
-          paths: paths(),
-          run,
-          registry,
-          templates: templates.list(),
-          busyWorktreeIds: machines.busyWorktreeIds()
-        })
-    })
-  )
+  const stats = createPodOrbstackStats({
+    run,
+    podMachines: () => registry.machines().map((entry) => entry.name),
+    busyMachines: () => machines.busyMachines(),
+    diskSizes
+  })
+  const service = createPodOrbstackService({
+    enabled,
+    getRepos: () => store.getRepos(),
+    machines,
+    registry,
+    readStatus: ({ containers }) =>
+      readPodOrbstackStatus({
+        paths: paths(),
+        run,
+        registry,
+        templates: templates.list(),
+        templatesEnabled: templatesAllowed && templates.enabled(),
+        diskSizes,
+        containers,
+        busyWorktreeIds: machines.busyWorktreeIds()
+      }),
+    readStats: (names) => stats.read(names),
+    ...(templatesAllowed ? { setTemplates: (on: boolean) => templates.setEnabled(on) } : {}),
+    onChanged: () => events.changed(),
+    subscribe: (emit) => events.subscribe(emit)
+  })
+  changed = () => service.invalidate()
+  setPodOrbstackService(service)
   if (!enabled) {
     return
   }

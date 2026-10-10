@@ -1,7 +1,13 @@
 // Fork-only (Pod): the relay's wire format and its two kinds of VM connection.
 import type { Socket } from 'node:net'
 import { Duplex } from 'node:stream'
-import { HOOK_CONTINUE, hookRejection, readHookRequest } from './pod-orbstack-hook-filter'
+import type { PodOrbstackRelayRowInput } from './pod-orbstack-events'
+import {
+  HOOK_CONTINUE,
+  SANDBOX_HOOK_PATH,
+  hookRejection,
+  readHookRequest
+} from './pod-orbstack-hook-filter'
 import { RELAY_FRAME, RELAY_HEADER_BYTES } from './pod-orbstack-relay-agent'
 
 /** Claude hook posts from the VM to Pod's hook server. */
@@ -47,22 +53,51 @@ export function decodeRelayFrames(
 
 export type Send = (kind: number, conn: number, payload?: Uint8Array) => boolean
 
+/** A finished connection for the relay log; the relay adds the machine and the route. */
+export type RelayConnectionRecord = Omit<PodOrbstackRelayRowInput, 'machine' | 'route'>
+
+const STATUS_LINE = /^HTTP\/1\.[01] (\d{3})/
+
 /** One VM connection: buffer one hook post, check it, then forward it or answer it here. */
 export function hookConnection(
   conn: number,
   route: SandboxHookRoute,
   send: Send,
   dial: (port: number) => Socket,
-  done: () => void
+  done: () => void,
+  record?: (entry: RelayConnectionRecord) => void
 ) {
   let buffered = Buffer.alloc(0)
   let continued = false
   let state: 'reading' | 'forwarded' | 'rejected' = 'reading'
   let upstream: Socket | null = null
-  const reject = (status: number): void => {
+  const started = performance.now()
+  const log: RelayConnectionRecord = {
+    method: '-',
+    path: '-',
+    status: 0,
+    bytesUp: 0,
+    bytesDown: 0,
+    ms: 0,
+    refused: null
+  }
+  let recorded = false
+  const finish = (): void => {
+    if (!recorded) {
+      recorded = true
+      record?.({ ...log, ms: Math.round(performance.now() - started) })
+    }
+    done()
+  }
+  const reply = (payload: Buffer): void => {
+    log.bytesDown += payload.length
+    send(RELAY_FRAME.data, conn, payload)
+  }
+  const reject = (verdict: Extract<ReturnType<typeof readHookRequest>, { kind: 'reject' }>) => {
     state = 'rejected'
     buffered = Buffer.alloc(0)
-    send(RELAY_FRAME.data, conn, hookRejection(status))
+    Object.assign(log, verdict.label, { status: verdict.status, refused: verdict.reason })
+    reply(hookRejection(verdict.status))
     send(RELAY_FRAME.end, conn)
   }
   return {
@@ -70,10 +105,11 @@ export function hookConnection(
       if (state !== 'reading') {
         return
       }
+      log.bytesUp += chunk.length
       buffered = Buffer.concat([buffered, chunk])
       const verdict = readHookRequest(buffered, route)
       if (verdict.kind === 'reject') {
-        reject(verdict.status)
+        reject(verdict)
       } else if (verdict.kind === 'incomplete') {
         if (verdict.expectContinue && !continued) {
           continued = true
@@ -82,29 +118,40 @@ export function hookConnection(
       } else {
         state = 'forwarded'
         buffered = Buffer.alloc(0)
+        Object.assign(log, { method: 'POST', path: SANDBOX_HOOK_PATH })
         const socket = dial(route.hostPort)
         upstream = socket
-        socket.on('data', (reply: Buffer) => send(RELAY_FRAME.data, conn, reply))
+        socket.on('data', (payload: Buffer) => {
+          if (log.status === 0) {
+            log.status = Number(STATUS_LINE.exec(payload.toString('latin1', 0, 16))?.[1] ?? 0)
+          }
+          reply(payload)
+        })
         socket.on('end', () => send(RELAY_FRAME.end, conn))
         socket.on('error', () => socket.destroy())
         socket.on('close', () => {
           send(RELAY_FRAME.close, conn)
-          done()
+          finish()
         })
         socket.write(verdict.request)
       }
     },
     end(): void {
       if (state === 'reading') {
-        reject(400)
+        reject({
+          kind: 'reject',
+          status: 400,
+          reason: 'malformed',
+          label: { method: '-', path: '-' }
+        })
       } else if (state === 'rejected') {
         send(RELAY_FRAME.close, conn)
-        done()
+        finish()
       }
     },
     close(): void {
       upstream?.destroy()
-      done()
+      finish()
     }
   }
 }

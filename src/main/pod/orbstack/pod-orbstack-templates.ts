@@ -28,7 +28,21 @@ const EntrySchema = z.object({
   agentVersion: z.string().nullable().default(null)
 })
 
-const FileSchema = z.object({ version: z.literal(1), templates: z.array(EntrySchema) })
+const FileSchema = z.object({
+  version: z.literal(1),
+  /** Settings › OrbStack switch; off deletes every template and creates build in full. */
+  enabled: z.boolean().default(true),
+  templates: z.array(EntrySchema)
+})
+
+/**
+ * Run as root in a template before it stops: nothing per machine may reach a clone. An empty
+ * machine-id makes each clone's first boot mint its own; host keys, if an image has any, go too.
+ */
+export const SEAL_TEMPLATE = `set -eu
+truncate -s 0 /etc/machine-id
+rm -f /etc/ssh/ssh_host_*
+`
 
 export type PodOrbstackTemplate = z.infer<typeof EntrySchema>
 
@@ -62,6 +76,8 @@ export function createPodOrbstackTemplates(deps: {
   file: string
   now?: () => number
   log?: (message: string) => void
+  /** The template set or the switch moved. */
+  onChange?: () => void
 }) {
   let data: z.infer<typeof FileSchema> | null = null
   const building = new Map<string, Promise<PodOrbstackTemplate | null>>()
@@ -75,13 +91,14 @@ export function createPodOrbstackTemplates(deps: {
         parsed = undefined
       }
       const result = FileSchema.safeParse(parsed)
-      data = result.success ? result.data : { version: 1, templates: [] }
+      data = result.success ? result.data : { version: 1, enabled: true, templates: [] }
     }
     return data
   }
   const save = (): void => {
     mkdirSync(dirname(deps.file), { recursive: true })
     writeFileAtomically(deps.file, `${JSON.stringify(load(), null, 2)}\n`)
+    deps.onChange?.()
   }
   const put = (entry: PodOrbstackTemplate): void => {
     const file = load()
@@ -112,6 +129,9 @@ export function createPodOrbstackTemplates(deps: {
 
   /** A ready template for `key` whose machine still exists; drops the record of a vanished one. */
   const find = async (key: string): Promise<PodOrbstackTemplate | null> => {
+    if (!load().enabled) {
+      return null
+    }
     const entry = load().templates.find((t) => t.key === key && t.state === 'ready')
     if (!entry) {
       return null
@@ -146,6 +166,19 @@ export function createPodOrbstackTemplates(deps: {
     put(entry)
     try {
       const { agentVersion } = await provision(name)
+      const sealed = await deps.run('orb', [
+        'run',
+        '-m',
+        name,
+        '-u',
+        'root',
+        'sh',
+        '-c',
+        SEAL_TEMPLATE
+      ])
+      if (sealed.code !== 0) {
+        throw new Error(`seal: ${detail(sealed)}`)
+      }
       const stopped = await deps.run('orb', ['stop', name], { timeoutMs: STEP_MS })
       if (stopped.code !== 0) {
         throw new Error(`orb stop: ${detail(stopped)}`)
@@ -172,6 +205,9 @@ export function createPodOrbstackTemplates(deps: {
     key: string,
     provision: PodOrbstackTemplateProvisioner
   ): Promise<PodOrbstackTemplate | null> => {
+    if (!load().enabled) {
+      return Promise.resolve(null)
+    }
     const pending =
       building.get(key) ??
       buildOnce(kind, key, provision).finally(() => {
@@ -220,18 +256,30 @@ export function createPodOrbstackTemplates(deps: {
     await step('orb start', 'orb', ['start', name])
   }
 
+  const deleteAll = async (): Promise<void> => {
+    for (const entry of load().templates) {
+      await remove(entry.name)
+    }
+  }
+
   return {
     find,
     build,
     clone,
+    enabled: (): boolean => load().enabled,
+    /** Off deletes every template (after builds in flight end); creates then build in full. */
+    setEnabled: async (enabled: boolean): Promise<void> => {
+      load().enabled = enabled
+      save()
+      if (!enabled) {
+        await Promise.allSettled(building.values())
+        await deleteAll()
+      }
+    },
     building: (key: string): boolean => building.has(key),
     list: (): readonly PodOrbstackTemplate[] => load().templates,
-    /** Every recorded template (tests, and a reset from Settings). */
-    deleteAll: async (): Promise<void> => {
-      for (const entry of load().templates) {
-        await remove(entry.name)
-      }
-    }
+    /** Every recorded template (tests, and the Settings switch). */
+    deleteAll
   }
 }
 

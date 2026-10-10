@@ -57,16 +57,26 @@ describe('readHookRequest', () => {
   })
 
   it.each([
-    ['another method', request(['GET /hook/claude HTTP/1.1']), 405],
-    ['another path', request(['POST /hook/codex HTTP/1.1']), 403],
-    ['a query string', request(['POST /hook/claude?x=1 HTTP/1.1']), 403],
-    ['the server token', hookPost().toString().replace('sandbox-token', 'server-token'), 403],
-    ['no token', request(['POST /hook/claude HTTP/1.1', 'Content-Length: 0']), 403],
-    ['two tokens', hookPost(['X-Orca-Agent-Hook-Token: sandbox-token']), 403],
-    ['chunked bodies', hookPost(['Transfer-Encoding: chunked']), 411],
-    ['two lengths', hookPost(['Content-Length: 7']), 400],
-    ['a malformed line', request(['POST /hook/claude HTTP/1.1', 'no colon here']), 400],
-    ['garbage', request(['\u0016\u0003\u0001 TLS']), 400],
+    ['another method', request(['GET /hook/claude HTTP/1.1']), 405, 'method'],
+    ['another path', request(['POST /hook/codex HTTP/1.1']), 403, 'path'],
+    ['a query string', request(['POST /hook/claude?x=1 HTTP/1.1']), 403, 'path'],
+    [
+      'the server token',
+      hookPost().toString().replace('sandbox-token', 'server-token'),
+      403,
+      'token'
+    ],
+    ['no token', request(['POST /hook/claude HTTP/1.1', 'Content-Length: 0']), 403, 'token'],
+    ['two tokens', hookPost(['X-Orca-Agent-Hook-Token: sandbox-token']), 403, 'token'],
+    ['chunked bodies', hookPost(['Transfer-Encoding: chunked']), 411, 'malformed'],
+    ['two lengths', hookPost(['Content-Length: 7']), 400, 'malformed'],
+    [
+      'a malformed line',
+      request(['POST /hook/claude HTTP/1.1', 'no colon here']),
+      400,
+      'malformed'
+    ],
+    ['garbage', request(['\u0016\u0003\u0001 TLS']), 400, 'malformed'],
     [
       'bodies over 1 MiB',
       request([
@@ -74,10 +84,20 @@ describe('readHookRequest', () => {
         'X-Orca-Agent-Hook-Token: sandbox-token',
         'Content-Length: 1048577'
       ]),
-      413
+      413,
+      'size'
     ],
-    ['heads over 16 KiB', Buffer.alloc(17 * 1024, 'a'), 431]
-  ])('refuses %s', (_name, bytes, status) => {
-    expect(readHookRequest(Buffer.from(bytes), auth)).toEqual({ kind: 'reject', status })
+    ['heads over 16 KiB', Buffer.alloc(17 * 1024, 'a'), 431, 'size']
+  ])('refuses %s', (_name, bytes, status, reason) => {
+    expect(readHookRequest(Buffer.from(bytes), auth)).toMatchObject({
+      kind: 'reject',
+      status,
+      reason
+    })
+  })
+
+  it('labels a refusal with Pod words only, never the path or method the VM sent', () => {
+    const verdict = readHookRequest(request(['PURGE /secret-in-path?key=abc HTTP/1.1']), auth)
+    expect(verdict).toMatchObject({ label: { method: 'OTHER', path: '-' } })
   })
 })

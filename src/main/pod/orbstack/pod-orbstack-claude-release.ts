@@ -121,6 +121,13 @@ export function createClaudeReleaseCache(deps: {
   now?: () => number
 }) {
   const inFlight = new Map<string, Promise<SandboxClaudeRelease>>()
+  // Why: hashing the ~240 MB binary costs ~130 ms per create. A file whose inode, size, mtime and
+  // ctime match the last full check is the file that passed it; any write changes its ctime.
+  const verified = new Map<string, string>()
+  const fileSeal = async (path: string): Promise<string> => {
+    const info = await stat(path)
+    return [info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs].join(':')
+  }
 
   const resolveVersion = async (hostVersion: string | null): Promise<string> => {
     const version =
@@ -142,7 +149,15 @@ export function createClaudeReleaseCache(deps: {
       const manifest = await readFile(join(dir, 'manifest.json'), 'utf8')
       const { checksum } = readManifestEntry(manifest, version, platform)
       await Promise.all(SANDBOX_RELEASE_FILES.map((file) => stat(join(dir, file))))
-      return (await sha256File(join(dir, 'claude'))) === checksum
+      const seal = `${checksum}|${await fileSeal(join(dir, 'claude'))}`
+      if (verified.get(dir) === seal) {
+        return true
+      }
+      const ok = (await sha256File(join(dir, 'claude'))) === checksum
+      if (ok) {
+        verified.set(dir, seal)
+      }
+      return ok
     } catch {
       return false
     }

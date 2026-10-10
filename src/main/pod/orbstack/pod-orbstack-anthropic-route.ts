@@ -2,13 +2,16 @@
 // own 127.0.0.1:443; the relay hands those bytes here, where TLS ends under the sandbox's CA and
 // each allowed request goes on to the real api.anthropic.com with Pod's credential in place of the VM's.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { pipeline, type Duplex } from 'node:stream'
+import { pipeline, Transform, type Duplex } from 'node:stream'
 import { createSecureContext, TLSSocket } from 'node:tls'
 import {
   createAnthropicUpstream,
   type AnthropicUpstreamClient,
   type AnthropicUpstreamResponse
 } from './pod-orbstack-anthropic-upstream'
+import type { PodOrbstackRelayRefusal } from '../../../shared/pod-orbstack-types'
+import type { RelayConnectionRecord } from './pod-orbstack-relay-connections'
+import { relayLogMethod } from './pod-orbstack-hook-filter'
 import { OPEN_PRIVACY, type SandboxPrivacy } from './pod-orbstack-privacy-env'
 import { ANTHROPIC_API_HOST, type SandboxCa } from './pod-orbstack-sandbox-ca'
 
@@ -59,31 +62,65 @@ export const ANTHROPIC_UPSTREAM: AnthropicUpstream = { host: ANTHROPIC_API_HOST,
 // What Claude Code calls on api.anthropic.com with an API key, observed from 2.1.287 against a stub;
 // forwarding all of it keeps the VM's Claude Code behaving as on the Mac. Everything else (the
 // admin API, files, OAuth endpoints) is refused here.
-// `off` names the Mac privacy switch that closes an entry for the sandbox too.
+// `off` names the Mac privacy switch that closes an entry for the sandbox too. `label` is what the
+// relay log shows: Pod's name for the endpoint, so no text from the VM's request line reaches it.
 const ALLOWED: readonly {
   method: string
   path: RegExp
+  label: string
   auth: boolean
   off?: keyof Pick<SandboxPrivacy, 'telemetryOff' | 'featureFlagsOff'>
 }[] = [
-  { method: 'POST', path: /^\/v1\/messages(\?.*)?$/, auth: true },
-  { method: 'POST', path: /^\/v1\/messages\/count_tokens(\?.*)?$/, auth: true },
-  { method: 'GET', path: /^\/v1\/models(\/[\w.-]+)?(\?.*)?$/, auth: true },
+  { method: 'POST', path: /^\/v1\/messages(\?.*)?$/, label: '/v1/messages', auth: true },
+  {
+    method: 'POST',
+    path: /^\/v1\/messages\/count_tokens(\?.*)?$/,
+    label: '/v1/messages/count_tokens',
+    auth: true
+  },
+  { method: 'GET', path: /^\/v1\/models(\/[\w.-]+)?(\?.*)?$/, label: '/v1/models', auth: true },
   // Server-managed settings, policy limits, feature flags, bootstrap config, telemetry.
-  { method: 'GET', path: /^\/api\/claude_code\/[\w/.-]+(\?.*)?$/, auth: true },
-  { method: 'GET', path: /^\/api\/claude_code_penguin_mode(\?.*)?$/, auth: true },
-  { method: 'GET', path: /^\/api\/claude_cli\/bootstrap(\?.*)?$/, auth: true },
-  { method: 'POST', path: /^\/api\/eval\/[\w-]+(\?.*)?$/, auth: true, off: 'featureFlagsOff' },
+  {
+    method: 'GET',
+    path: /^\/api\/claude_code\/[\w/.-]+(\?.*)?$/,
+    label: '/api/claude_code/…',
+    auth: true
+  },
+  {
+    method: 'GET',
+    path: /^\/api\/claude_code_penguin_mode(\?.*)?$/,
+    label: '/api/claude_code_penguin_mode',
+    auth: true
+  },
+  {
+    method: 'GET',
+    path: /^\/api\/claude_cli\/bootstrap(\?.*)?$/,
+    label: '/api/claude_cli/bootstrap',
+    auth: true
+  },
+  {
+    method: 'POST',
+    path: /^\/api\/eval\/[\w-]+(\?.*)?$/,
+    label: '/api/eval/…',
+    auth: true,
+    off: 'featureFlagsOff'
+  },
   {
     method: 'POST',
     path: /^\/api\/event_logging\/v2\/batch(\?.*)?$/,
+    label: '/api/event_logging/v2/batch',
     auth: true,
     off: 'telemetryOff'
   },
-  { method: 'GET', path: /^\/mcp-registry\/v0\/servers(\?.*)?$/, auth: false },
+  {
+    method: 'GET',
+    path: /^\/mcp-registry\/v0\/servers(\?.*)?$/,
+    label: '/mcp-registry/v0/servers',
+    auth: false
+  },
   // Unauthenticated connection warm-up.
-  { method: 'GET', path: /^\/api\/hello$/, auth: false },
-  { method: 'HEAD', path: /^\/api\/hello$/, auth: false }
+  { method: 'GET', path: /^\/api\/hello$/, label: '/api/hello', auth: false },
+  { method: 'HEAD', path: /^\/api\/hello$/, label: '/api/hello', auth: false }
 ]
 
 /** No dot segments, empty segments or escapes, so the API cannot resolve a path past the rules. */
@@ -132,13 +169,25 @@ function forwardableResponseHeaders(raw: string[]): string[] {
   return kept
 }
 
-function apiError(res: ServerResponse, status: number, type: string, message: string): void {
+/** Answers with an API-style error; returns the body's length for the relay log. */
+function apiError(res: ServerResponse, status: number, type: string, message: string): number {
   if (res.headersSent) {
     res.destroy()
-    return
+    return 0
   }
+  const body = JSON.stringify({ type: 'error', error: { type, message } })
   res.writeHead(status, { 'content-type': 'application/json', connection: 'close' })
-  res.end(JSON.stringify({ type: 'error', error: { type, message } }))
+  res.end(body)
+  return Buffer.byteLength(body)
+}
+
+function byteCounter(count: (bytes: number) => void): Transform {
+  return new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      count(chunk.length)
+      callback(null, chunk)
+    }
+  })
 }
 
 export function createAnthropicRoute(args: {
@@ -151,6 +200,8 @@ export function createAnthropicRoute(args: {
   /** The Mac's privacy switches, read per request; they close telemetry and flag fetches. */
   privacy?: () => SandboxPrivacy
   log?: (message: string) => void
+  /** One row per request, for the relay log. */
+  onRow?: (row: RelayConnectionRecord) => void
 }) {
   const upstream = args.upstream ?? ANTHROPIC_UPSTREAM
   const source = args.credentials ?? getPodSandboxAnthropicCredentials
@@ -168,19 +219,35 @@ export function createAnthropicRoute(args: {
             !(entry.off && privacy[entry.off])
         )
       : undefined
+    const started = performance.now()
+    const row = { bytesUp: 0, bytesDown: 0, refused: null as PodOrbstackRelayRefusal | null }
+    res.on('close', () =>
+      args.onRow?.({
+        method: relayLogMethod(req.method),
+        path: rule?.label ?? '-',
+        status: res.statusCode,
+        bytesUp: row.bytesUp,
+        bytesDown: row.bytesDown,
+        ms: Math.round(performance.now() - started),
+        refused: row.refused
+      })
+    )
+    const refuse = (reason: PodOrbstackRelayRefusal, ...error: [number, string, string]) => {
+      row.refused = reason
+      req.resume()
+      row.bytesDown += apiError(res, ...error)
+    }
     if (!rule) {
       args.log?.(`refused ${req.method} ${path.split('?')[0]}`)
-      req.resume()
-      apiError(res, 403, 'permission_error', 'Pod does not forward this request from a sandbox.')
+      refuse('path', 403, 'permission_error', 'Pod does not forward this request from a sandbox.')
       return
     }
     let auth: Record<string, string> | null
     try {
       auth = rule.auth ? await source().authHeaders({ machine: args.machine }) : {}
     } catch (error) {
-      req.resume()
-      apiError(
-        res,
+      refuse(
+        'credential',
         401,
         'authentication_error',
         error instanceof SandboxCredentialError
@@ -190,8 +257,7 @@ export function createAnthropicRoute(args: {
       return
     }
     if (!auth) {
-      req.resume()
-      apiError(res, 401, 'authentication_error', 'Pod has no credential for this sandbox.')
+      refuse('credential', 401, 'authentication_error', 'Pod has no credential for this sandbox.')
       return
     }
     const abort = new AbortController()
@@ -206,14 +272,15 @@ export function createAnthropicRoute(args: {
         method: req.method ?? 'GET',
         path,
         headers: { ...forwardableRequestHeaders(req.rawHeaders), ...auth },
-        body: req,
+        body: req.pipe(byteCounter((bytes) => (row.bytesUp += bytes))),
         signal: abort.signal
       })
     } catch (error) {
       args.log?.(
         `upstream ${req.method} ${path.split('?')[0]} failed: ${error instanceof Error ? error.message : String(error)}`
       )
-      apiError(res, 502, 'api_error', 'Pod could not reach api.anthropic.com.')
+      row.refused = 'upstream'
+      row.bytesDown += apiError(res, 502, 'api_error', 'Pod could not reach api.anthropic.com.')
       return
     }
     if (reply.status === 401 && rule.auth) {
@@ -221,7 +288,12 @@ export function createAnthropicRoute(args: {
     }
     res.writeHead(reply.status, forwardableResponseHeaders(reply.headers))
     // Why pipeline: an upstream error after the headers must end the VM's response, not hang it.
-    pipeline(reply.body, res, () => {})
+    pipeline(
+      reply.body,
+      byteCounter((bytes) => (row.bytesDown += bytes)),
+      res,
+      () => {}
+    )
   }
 
   const server = createServer((req, res) => {

@@ -78,20 +78,32 @@ A Pod machine is cloned from a stopped template machine (`orb clone`, which copi
 - **Shared template** `pod-vm-<hash>-tmpl`: a plain Ubuntu machine with git, for the built-in recipe only. A `recipe.json` override keeps its own lifecycle.
 - **Key and refresh:** the key is the image, the kind, the Claude Code version and a provisioning version. The first create builds the template, then clones it. A newer template replaces the older one of its kind; clones keep working, because they do not depend on their template. One minute after Pod starts, Pod refreshes the templates for the kinds that already have machines (for example after the Mac's Claude Code moved), and only while OrbStack runs.
 - **Records:** templates are recorded in `<userData>/pod-orbstack/templates.json`, not in `registry.json`, so an older Pod still reads its registry. Pod deletes only recorded templates with that name shape.
-- **Off:** `POD_ORBSTACK_TEMPLATES=0`. E2E profiles opt in with `POD_E2E_ORBSTACK_TEMPLATES=1`, because a template outlives its profile.
+- **Off:** Settings › OrbStack (`orbstack.setTemplates {enabled: false}`, stored in `templates.json`, default on) deletes every template; creates then build in full. `POD_ORBSTACK_TEMPLATES=0` turns templates off for the process. E2E profiles opt in with `POD_E2E_ORBSTACK_TEMPLATES=1`, because a template outlives its profile.
+- **Nothing per sandbox in a template:** before a template stops, Pod empties its `/etc/machine-id` (each clone's first boot mints its own) and deletes any SSH host keys (the per-worktree step regenerates them if an image runs sshd). A template never ran a launch, so it holds no `~/.claude*`, no `/etc/pod-sandbox`, no hosts pin and no trust entry. The hook token, the CA and the credential placeholder (`pod-sandbox-no-credential-<random>`) are minted per sandbox, in memory. The opt-in `pod-orbstack-clone-security-real.test.ts` checks a bare clone of the template holds none of these, and two sandboxes cloned from one template share no machine-id, CA, host key, token or placeholder.
 
 Measured on OrbStack 2.2.3 (Claude Code 2.1.296, load average 8–25, `POD_E2E_ORBSTACK_TIMING=1`, internal numbers):
 
-|                                         | full build                                                                 | from the template                 |
-| --------------------------------------- | -------------------------------------------------------------------------- | --------------------------------- |
-| sandbox create                          | p50 22.1 s (20.1–32.4: `orb create` ~10 s, apt git 6–14 s, push 2.6–7.8 s) | p50 0.55 s (0.50–0.57)            |
-| worktree machine create                 | p50 16.9 s (16.5–21.8)                                                     | p50 0.30 s (0.28–0.31)            |
-| first create, template built on the way |                                                                            | 21.7 s (sandbox), 19.2 s (shared) |
+|                                         | full build                                                                 | from the template                   |
+| --------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------- |
+| sandbox create                          | p50 22.1 s (20.1–32.4: `orb create` ~10 s, apt git 6–14 s, push 2.6–7.8 s) | p50 0.25 s (0.25–0.27)              |
+| worktree machine create                 | p50 16.9 s (16.5–21.8)                                                     | p50 0.26 s (0.25–0.29)              |
+| first create, template built on the way |                                                                            | 17–22 s (sandbox), 16–19 s (shared) |
 
 - **Agent start** in a sandbox, launch command to the first Claude Code screen in a pty that answers terminal queries: p50 ~200 ms with the relay starting alongside, ~140 ms with it already up; `claude --version` 30–40 ms. The relay is ready 30–40 ms after it starts. A finer relay-wait loop (10 ms steps) did not measurably change this, and nor would a pre-started relay outside the first launch per sandbox, so neither ships.
 - **Terminal queries:** `orb` on a terminal sends OSC 11 and a cursor position request and waits **5 s** for each unanswered one before it runs the command. Pod's terminals answer, but a client that renders without answering stalls every `orb -m` pane that long.
-- **Warm pool:** cloning a stopped template takes 50–70 ms, renaming a stopped spare 36 ms. A pool would save ~25 ms per create, so there is none.
+- **From 0.55 s to 0.25 s:** the per-worktree steps run as one `orb run` instead of five (−130 ms), and the release cache trusts a Claude Code binary whose inode, size, mtime and ctime match its last full SHA-256 check instead of hashing 240 MB on every create (−130 ms). What is left is `orb start` (~75 ms), the first exec in a fresh machine (~100 ms), `orb clone` (~33 ms) and two `orb info` calls.
+- **First prompt:** a worktree machine's shell prompt shows ~23 ms after `orb -m` starts, so create to first prompt is ~0.28 s.
+- **Warm pool:** cloning a stopped template takes 31–34 ms, renaming a stopped spare 36 ms, so a pool saves nothing. A running spare would skip `orb start` and the first exec, but mounts apply only at a (re)start, which takes ~330 ms. There is no pool.
 - **File sharing:** OrbStack exposes no cache settings for VirtioFS mounts. On a 35,769-file worktree, `git status` takes ~165 ms on the Mac, ~265 ms in the VM over the mount (2.9 s cold) and ~34 ms on the VM's own disk; `rg` takes ~0.4–0.5 s on the Mac, 1.3–1.8 s over the mount and ~45 ms on the VM's own disk. The mount stays: the agent edits the Mac's files in place.
+
+## Native clients
+
+The orbstack.* runtime methods serve Settings › OrbStack and PodNative alike:
+
+- `orbstack.status {containers?}`: `containers: false` skips `docker ps` and `docker stats`. Templates are listed apart from machines, with `diskBytes`, and `templatesEnabled` reports the switch.
+- `orbstack.stats {names?}`: per running Pod machine (templates excluded), `cpuUsageUsec` (cgroup `cpu.stat`, cumulative), `memoryBytes` (`memory.current` minus `inactive_file`), `memoryLimitBytes` (`memory.max`, null when unlimited) and `diskBytes` (`orb info`, cached 30 s). One tick runs at most every 2 s and callers inside it share its reads; each read is one `orb run` with a 3 s timeout. A machine Pod is starting, stopping, creating or deleting is skipped, because `orb run` would start a stopped one. Clients poll it only while their OrbStack panel is visible and the app is active.
+- `orbstack.subscribe` (stream) and `orbstack.unsubscribe {subscriptionId}`: `ready` (with the relay log so far, from a 256-row ring in memory), `changed` (any orbstack change: re-read the status), `progress` (create steps in plain words), `relay` (new log rows) and `end`. `changed` and `relay` reach each subscriber at most once per 250 ms.
+- A relay log row holds the machine, the route, the method, the path, the status, the bytes each way, the time and why it was refused (`token`, `path`, `size`, `method`, `malformed`, `credential`, `upstream`). Method and path are Pod's own words: a standard method or `OTHER`, and the allowlisted endpoint's name (`/hook/claude`, `/v1/messages`, `/api/claude_code/…`) or `-`. No header, body, query, token or key material reaches a row; `pod-orbstack-relay-log.test.ts` checks every event for them as text, base64 and hex.
 
 ## What still gets out
 

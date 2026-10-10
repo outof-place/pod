@@ -1,5 +1,7 @@
 // Fork-only (Pod): everything a sandbox may reach on the Mac, per machine and in memory only. The
 // hook token, the CA and the anthropic-api route are made on first use and die with the sandbox.
+import { randomBytes } from 'node:crypto'
+import type { PodOrbstackRelayRowInput } from './pod-orbstack-events'
 import {
   createAnthropicRoute,
   getPodSandboxAnthropicCredentials,
@@ -15,7 +17,8 @@ import { createSandboxHookTokens } from './pod-orbstack-sandbox-tokens'
 
 /**
  * What the VM's Claude Code gets instead of a credential. The relay drops it and adds the real one,
- * so the VM never holds anything that works against the API.
+ * so the VM never holds anything that works against the API. Each sandbox gets its own random
+ * suffix, in memory only, so no two sandboxes (or clones of one template) share it.
  */
 export const SANDBOX_CREDENTIAL_PLACEHOLDER = 'pod-sandbox-no-credential'
 
@@ -25,12 +28,24 @@ export function createSandboxAccess(deps: {
   /** The Mac's Claude Code privacy switches; re-read at every launch. */
   readPrivacy?: () => SandboxPrivacy
   log?: (message: string) => void
+  /** Relay log rows of the anthropic-api routes. */
+  onRow?: (row: PodOrbstackRelayRowInput) => void
 }) {
   const readPrivacy = deps.readPrivacy ?? (() => readMacClaudePrivacy())
   const privacy = new Map<string, SandboxPrivacy>()
   const hookTokens = createSandboxHookTokens()
   const cas = createSandboxCas()
   const routes = new Map<string, AnthropicRoute>()
+  const placeholders = new Map<string, string>()
+  const placeholderFor = (machine: string): string => {
+    const live = placeholders.get(machine)
+    if (live) {
+      return live
+    }
+    const minted = `${SANDBOX_CREDENTIAL_PLACEHOLDER}-${randomBytes(16).toString('hex')}`
+    placeholders.set(machine, minted)
+    return minted
+  }
   // One HTTP/2 session to the API for every sandbox; it opens on the first request.
   const client = createAnthropicUpstream({
     target: deps.upstream,
@@ -55,7 +70,8 @@ export function createSandboxAccess(deps: {
       upstream: deps.upstream,
       client,
       privacy: () => privacy.get(machine) ?? readPrivacy(),
-      log: (message) => deps.log?.(`${machine}: ${message}`)
+      log: (message) => deps.log?.(`${machine}: ${message}`),
+      onRow: (row) => deps.onRow?.({ machine, route: 'anthropic-api', ...row })
     })
     routes.set(machine, route)
     return route
@@ -106,7 +122,7 @@ export function createSandboxAccess(deps: {
                 NODE_EXTRA_CA_CERTS: SANDBOX_CA_PATH,
                 // The placeholder's kind picks the auth Claude Code uses, matching the credential.
                 [mode === 'oauth' ? 'CLAUDE_CODE_OAUTH_TOKEN' : 'ANTHROPIC_API_KEY']:
-                  SANDBOX_CREDENTIAL_PLACEHOLDER
+                  placeholderFor(machine)
               }
             : {})
         }
@@ -118,6 +134,7 @@ export function createSandboxAccess(deps: {
       deps.relays.stop(machine)
       hookTokens.revokeMachine(machine)
       privacy.delete(machine)
+      placeholders.delete(machine)
       dropRoute(machine)
     }
   }

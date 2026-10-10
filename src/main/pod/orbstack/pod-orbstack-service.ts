@@ -1,6 +1,9 @@
 import type {
   PodOrbstackActionResult,
+  PodOrbstackEvent,
   PodOrbstackMachineKind,
+  PodOrbstackRelayRow,
+  PodOrbstackStats,
   PodOrbstackStatus
 } from '../../../shared/pod-orbstack-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -11,7 +14,9 @@ import { resolveLocalWorktreeTarget } from './pod-orbstack-worktree-target'
 /** The one OrbStack API: runtime RPC methods wrap it for the renderer, the CLI and the native shell. */
 export type PodOrbstackService = {
   isEnabled(): boolean
-  snapshot(): Promise<PodOrbstackStatus>
+  /** `containers: false` skips docker ps/stats. */
+  snapshot(options?: { containers?: boolean }): Promise<PodOrbstackStatus>
+  stats(names?: readonly string[]): Promise<PodOrbstackStats>
   create(args: {
     worktreeId: string
     displayName?: string
@@ -23,6 +28,14 @@ export type PodOrbstackService = {
   setDockerPin(worktreeId: string, pinned: boolean): PodOrbstackActionResult
   setAgentSandbox(worktreeId: string, enabled: boolean): PodOrbstackActionResult
   setSandboxClaudeLogin(enabled: boolean): PodOrbstackActionResult
+  setTemplates(enabled: boolean): Promise<PodOrbstackActionResult>
+  /** Drops the cached status and tells subscribers something moved. */
+  invalidate(): void
+  /** Starts an event stream: the relay log so far, then every event. */
+  subscribe(emit: (event: PodOrbstackEvent) => void): {
+    seed: PodOrbstackRelayRow[]
+    stop: () => void
+  }
 }
 
 // Why: status, machines and containers are separate methods; one read serves a burst of them.
@@ -33,13 +46,22 @@ export function createPodOrbstackService(deps: {
   getRepos: () => Repo[]
   machines: PodOrbstackMachines
   registry: PodOrbstackRegistry
-  readStatus: () => Promise<PodOrbstackStatus>
+  readStatus: (options: { containers: boolean }) => Promise<PodOrbstackStatus>
+  readStats?: (names?: readonly string[]) => Promise<PodOrbstackStats>
+  setTemplates?: (enabled: boolean) => Promise<void>
+  /** Every mutation and registry or template change: `orbstack.subscribe` sends `changed`. */
+  onChanged?: () => void
+  subscribe?: PodOrbstackService['subscribe']
   now?: () => number
 }): PodOrbstackService {
   const now = deps.now ?? Date.now
-  let cached: { at: number; value: Promise<PodOrbstackStatus> } | null = null
+  const cached = new Map<boolean, { at: number; value: Promise<PodOrbstackStatus> }>()
+  const changed = (): void => {
+    cached.clear()
+    deps.onChanged?.()
+  }
   const invalidate = <T>(result: T): T => {
-    cached = null
+    changed()
     return result
   }
   const target = (worktreeId: string, displayName?: string) =>
@@ -47,19 +69,25 @@ export function createPodOrbstackService(deps: {
 
   return {
     isEnabled: () => deps.enabled,
-    snapshot: () => {
-      if (!cached || now() - cached.at > SNAPSHOT_TTL_MS) {
-        const value = deps.readStatus()
-        cached = { at: now(), value }
-        // A failed read must not be served from the cache.
-        value.catch(() => {
-          if (cached?.value === value) {
-            cached = null
-          }
-        })
+    snapshot: (options) => {
+      const containers = options?.containers !== false
+      const hit = cached.get(containers)
+      if (hit && now() - hit.at <= SNAPSHOT_TTL_MS) {
+        return hit.value
       }
-      return cached.value
+      const value = deps.readStatus({ containers })
+      cached.set(containers, { at: now(), value })
+      // A failed read must not be served from the cache.
+      value.catch(() => {
+        if (cached.get(containers)?.value === value) {
+          cached.delete(containers)
+        }
+      })
+      return value
     },
+    stats: (names) =>
+      deps.readStats?.(names) ??
+      Promise.resolve({ tick: 0, sampledAt: now(), machines: [], errors: ['no stats here'] }),
     create: async ({ worktreeId, displayName, kind }) => {
       const resolved = target(worktreeId, displayName)
       if (typeof resolved === 'string') {
@@ -92,7 +120,16 @@ export function createPodOrbstackService(deps: {
     setSandboxClaudeLogin: (enabled) => {
       deps.registry.setSandboxClaudeLogin(enabled)
       return invalidate({ ok: true })
-    }
+    },
+    setTemplates: async (enabled) => {
+      if (!deps.setTemplates) {
+        return { ok: false, error: 'Templates are off in this build.' }
+      }
+      await deps.setTemplates(enabled)
+      return invalidate({ ok: true })
+    },
+    invalidate: changed,
+    subscribe: (emit) => deps.subscribe?.(emit) ?? { seed: [], stop: () => undefined }
   }
 }
 

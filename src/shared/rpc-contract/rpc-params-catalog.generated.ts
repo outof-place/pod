@@ -436,6 +436,10 @@ import {
   PodOrbstackDockerPinParams,
   PodOrbstackMachineParams,
   PodOrbstackSandboxClaudeLoginParams,
+  PodOrbstackStatsParams,
+  PodOrbstackStatusParams,
+  PodOrbstackTemplatesParams,
+  PodOrbstackUnsubscribeParams,
   PodOrbstackWorktreeParams
 } from './pod-orbstack-params'
 import {
@@ -1055,9 +1059,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'orbstack.pinDocker': PodOrbstackDockerPinParams,
   'orbstack.setAgentSandbox': PodOrbstackAgentSandboxParams,
   'orbstack.setSandboxClaudeLogin': PodOrbstackSandboxClaudeLoginParams,
+  'orbstack.setTemplates': PodOrbstackTemplatesParams,
   'orbstack.start': PodOrbstackMachineParams,
-  'orbstack.status': null,
+  'orbstack.stats': PodOrbstackStatsParams,
+  'orbstack.status': PodOrbstackStatusParams,
   'orbstack.stop': PodOrbstackMachineParams,
+  'orbstack.subscribe': null,
+  'orbstack.unsubscribe': PodOrbstackUnsubscribeParams,
   'orcad.migration.abortCatalog': OrcadMigrationCatalogParams,
   'orcad.migration.catalogState': OrcadMigrationCatalogParams,
   'orcad.migration.commitCatalog': OrcadMigrationCatalogParams,

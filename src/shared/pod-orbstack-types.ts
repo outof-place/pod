@@ -81,6 +81,8 @@ export type PodOrbstackTemplateInfo = {
   state: 'creating' | 'ready' | 'missing'
   /** Claude Code version a sandbox template holds. */
   agentVersion: string | null
+  /** OrbStack's `disk_size`; null while unknown. */
+  diskBytes: number | null
 }
 
 export type PodOrbstackStatus = {
@@ -90,6 +92,8 @@ export type PodOrbstackStatus = {
   machines: PodOrbstackMachine[]
   /** Optional: runtimes before templates do not send it. */
   templates?: PodOrbstackTemplateInfo[]
+  /** Creates clone templates (Settings switch, default on); optional like `templates`. */
+  templatesEnabled?: boolean
   containers: PodOrbstackContainer[]
   links: PodOrbstackWorktreeLink[]
   /** Sandboxed agents may use this Mac's Claude Code login (opt-in). */
@@ -100,6 +104,60 @@ export type PodOrbstackStatus = {
   errors: string[]
   checkedAt: number
 }
+
+/** One machine's usage at a stats tick; cpu is cumulative, so a client rates it between ticks. */
+export type PodOrbstackMachineStats = {
+  name: string
+  cpuUsageUsec: number
+  /** memory.current minus inactive_file, as `docker stats` counts it. */
+  memoryBytes: number
+  /** memory.max; null when unlimited. */
+  memoryLimitBytes: number | null
+  diskBytes: number | null
+}
+
+export type PodOrbstackStats = {
+  tick: number
+  /** Epoch ms when the tick's reads started. */
+  sampledAt: number
+  machines: PodOrbstackMachineStats[]
+  errors: string[]
+}
+
+/** Why a relay connection was refused; a fixed vocabulary, never text from the VM. */
+export type PodOrbstackRelayRefusal =
+  | 'token'
+  | 'path'
+  | 'size'
+  | 'method'
+  | 'malformed'
+  | 'credential'
+  | 'upstream'
+
+/**
+ * One relay connection, for the relay log. Method and path come from fixed vocabularies (Pod's own
+ * route names), so no header, body, query or token from the VM can reach a row.
+ */
+export type PodOrbstackRelayRow = {
+  seq: number
+  at: number
+  machine: string
+  route: 'hook' | 'anthropic-api'
+  method: string
+  path: string
+  status: number
+  bytesUp: number
+  bytesDown: number
+  ms: number
+  refused: PodOrbstackRelayRefusal | null
+}
+
+export type PodOrbstackEvent =
+  | { type: 'ready'; subscriptionId: string; relay: PodOrbstackRelayRow[] }
+  | { type: 'changed' }
+  | { type: 'progress'; worktreeId: string; kind: PodOrbstackMachineKind; step: string }
+  | { type: 'relay'; rows: PodOrbstackRelayRow[] }
+  | { type: 'end' }
 
 export type PodOrbstackActionResult = { ok: true } | { ok: false; error: string }
 
@@ -115,5 +173,9 @@ export const POD_ORBSTACK_RPC = {
   delete: 'orbstack.delete',
   pinDocker: 'orbstack.pinDocker',
   setAgentSandbox: 'orbstack.setAgentSandbox',
-  setSandboxClaudeLogin: 'orbstack.setSandboxClaudeLogin'
+  setSandboxClaudeLogin: 'orbstack.setSandboxClaudeLogin',
+  setTemplates: 'orbstack.setTemplates',
+  stats: 'orbstack.stats',
+  subscribe: 'orbstack.subscribe',
+  unsubscribe: 'orbstack.unsubscribe'
 } as const
