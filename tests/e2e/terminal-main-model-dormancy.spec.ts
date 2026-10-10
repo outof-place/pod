@@ -63,6 +63,42 @@ setTimeout(() => {
 `
 }
 
+const QUERY_ROUNDS = 60
+const QUERY_ROUND_INTERVAL_MS = 40
+
+// Why rounds of CPR, DA1 and DSR 5n straddling the hide and the reveal: a moment with no
+// responder or two shows up as a missing or extra reply, and the fixed cursor makes a stale
+// responder's CPR detectable.
+function queryRoundsScript(runId: string, floodLinesPerRound: number): string {
+  return `
+const filler = 'F'.repeat(100) + '\\r\\n'
+let input = ''
+process.stdin.setRawMode(true)
+process.stdin.on('data', (chunk) => {
+  input += chunk.toString('latin1')
+})
+setTimeout(() => {
+  process.stdout.write('QR_START_${runId}\\r\\n')
+  let round = 0
+  const timer = setInterval(() => {
+    process.stdout.write(filler.repeat(${floodLinesPerRound}) + '\\x1b[3;5H\\x1b[6n\\x1b[c\\x1b[5n')
+    round += 1
+    if (round < ${QUERY_ROUNDS}) return
+    clearInterval(timer)
+    setTimeout(() => {
+      process.stdin.setRawMode(false)
+      const cpr = [...input.matchAll(/\\x1b\\[(\\d+);(\\d+)R/g)]
+      const bad = cpr.filter((match) => match[1] !== '3' || match[2] !== '5').length
+      const da = (input.match(/\\x1b\\[\\?[\\d;]*c/g) ?? []).length
+      const dsr = (input.match(/\\x1b\\[0n/g) ?? []).length
+      process.stdout.write('\\x1b[999;1H\\r\\nQR_${runId}_CPR' + cpr.length + '_BAD' + bad + '_DA' + da + '_DSR' + dsr + '_END\\r\\n')
+      process.exit(0)
+    }, 1500)
+  }, ${QUERY_ROUND_INTERVAL_MS})
+}, 1000)
+`
+}
+
 async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((targetTabId) => {
     const store = window.__store
@@ -138,4 +174,50 @@ test.describe('Main terminal model dormancy', () => {
     const hiddenLines = content.match(new RegExp(`HIDDEN_LINE_${runId}_\\d+`, 'g')) ?? []
     expect(hiddenLines).toHaveLength(HIDDEN_LINES)
   })
+
+  for (const [name, floodLinesPerRound] of [
+    ['quiet', 0],
+    ['with output in flight', 200]
+  ] as const) {
+    test(`a dormant pane hidden and revealed mid-query answers each query exactly once (${name})`, async ({
+      orcaPage
+    }) => {
+      test.setTimeout(180_000)
+      await waitForSessionReady(orcaPage)
+      await waitForActiveWorktree(orcaPage)
+      await ensureTerminalVisible(orcaPage)
+      await waitForActiveTerminalManager(orcaPage, 30_000)
+      await waitForPaneIdentitySnapshot(orcaPage, 1)
+      const worktreeId = (await getActiveWorktreeId(orcaPage))!
+      const tabId = (await getActiveTabId(orcaPage))!
+      const ptyId = await waitForActivePanePtyId(orcaPage)
+      const runId = randomUUID().slice(0, 8)
+
+      // Why the wait: main drops its model only after a quiet grace period, so the hide
+      // below opens the handoff.
+      await orcaPage.waitForTimeout(MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS + 1_000)
+      const script = await runNodeScriptInTerminal(
+        orcaPage,
+        ptyId,
+        queryRoundsScript(runId, floodLinesPerRound)
+      )
+      await waitForTerminalOutput(orcaPage, `QR_START_${runId}`, 30_000, CONTENT_CHAR_LIMIT)
+      await orcaPage.waitForTimeout(QUERY_ROUND_INTERVAL_MS * 8)
+      await createActiveTerminalTab(orcaPage, worktreeId)
+      await orcaPage.waitForTimeout(QUERY_ROUND_INTERVAL_MS * 25)
+      await activateTerminalTab(orcaPage, tabId)
+
+      await waitForTerminalOutput(orcaPage, `QR_${runId}_CPR`, 30_000, CONTENT_CHAR_LIMIT)
+      script.cleanup()
+      const content = await orcaPage.evaluate(
+        ({ id, limit }) => {
+          const pane = window.__paneManagers?.get(id)?.getActivePane?.()
+          return pane?.serializeAddon?.serialize?.()?.slice(-limit) ?? ''
+        },
+        { id: tabId, limit: CONTENT_CHAR_LIMIT }
+      )
+      const n = QUERY_ROUNDS
+      expect(content).toContain(`QR_${runId}_CPR${n}_BAD0_DA${n}_DSR${n}_END`)
+    })
+  }
 })
