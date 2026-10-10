@@ -283,12 +283,20 @@ export function clearHiddenRendererPtyDeliveryState(id: string): void {
   daemonResponderConfirmedPtys.delete(id)
 }
 
+let mainTerminalModelSeedFailures = 0
+
+/** A dormant model's rebuild gave up, so tui-idle stopped waiting for that pane's screen. */
+export function recordMainTerminalModelSeedFailure(): void {
+  mainTerminalModelSeedFailures += 1
+}
+
 export type HiddenRendererPtyDeliveryDebug = {
   hiddenDeliveryGatedPtyCount: number
   deliveryInterestPtyCount: number
   hiddenDeliveryDroppedChars: number
   hiddenDeliveryDroppedChunks: number
   daemonQueryResponderPtyCount: number
+  mainTerminalModelSeedFailureCount: number
 }
 
 export function getHiddenRendererPtyDeliveryDebug(): HiddenRendererPtyDeliveryDebug {
@@ -297,13 +305,15 @@ export function getHiddenRendererPtyDeliveryDebug(): HiddenRendererPtyDeliveryDe
     deliveryInterestPtyCount: deliveryInterestRendererPtys.size,
     hiddenDeliveryDroppedChars: droppedHiddenDeliveryChars,
     hiddenDeliveryDroppedChunks: droppedHiddenDeliveryChunks,
-    daemonQueryResponderPtyCount: daemonResponderConfirmedPtys.size
+    daemonQueryResponderPtyCount: daemonResponderConfirmedPtys.size,
+    mainTerminalModelSeedFailureCount: mainTerminalModelSeedFailures
   }
 }
 
 export function resetHiddenRendererPtyDeliveryDebugCounters(): void {
   droppedHiddenDeliveryChars = 0
   droppedHiddenDeliveryChunks = 0
+  mainTerminalModelSeedFailures = 0
 }
 
 /** Test seam: reset all module state between tests. */
