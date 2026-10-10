@@ -7,6 +7,9 @@ export type PendingPtyData = {
   rawLength?: number
   transformed?: true
   containsBackgroundOutput?: boolean
+  /** Ingested while the renderer view was gated, so its queries were answered outside the
+   *  view (main's model, a remote view, or nobody); the view must never parse these bytes. */
+  viewGatedAtIngestion?: true
   droppedOutput?: true
   droppedMode2031Data?: string
   droppedMode2031ScanState?: Mode2031ReplyScanState
