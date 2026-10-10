@@ -16,7 +16,7 @@ import {
   HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS,
   HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX
 } from './hidden-output-restore-limits'
-import { shouldWritePtyOutputForeground } from './foreground-output-scan'
+import { xtermShowsLiveOutput } from './foreground-output-scan'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { bindHiddenOutputRestoreSnapshot } from './hidden-output-restore-snapshot'
@@ -30,7 +30,7 @@ export function bindHiddenRestoreStateAndSshProbe(session: ConnectPanePtySession
     if (
       session.disposed ||
       session.hiddenOutputRestoreDeferredRetryTimer !== null ||
-      !shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
+      !xtermShowsLiveOutput(session)
     ) {
       return
     }

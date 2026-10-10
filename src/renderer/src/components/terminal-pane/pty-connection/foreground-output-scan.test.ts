@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   scanSynchronizedForegroundOutput,
+  xtermShowsLiveOutput,
   SYNCHRONIZED_OUTPUT_START_SEQUENCE as start,
   SYNCHRONIZED_OUTPUT_END_SEQUENCE as end
 } from './foreground-output-scan'
@@ -76,5 +77,14 @@ describe('foreground synchronized output scan', () => {
         markerTail: data.slice(-7)
       })
     }
+  })
+})
+
+describe('xtermShowsLiveOutput', () => {
+  it('is false for a visible pane whose xterm is detached under a main-fed native view', () => {
+    const visible = { deps: { isVisibleRef: { current: true } } }
+    expect(xtermShowsLiveOutput(visible)).toBe(true)
+    expect(xtermShowsLiveOutput({ ...visible, xtermDetachedForNativeView: true })).toBe(false)
+    expect(xtermShowsLiveOutput({ deps: { isVisibleRef: { current: false } } })).toBe(false)
   })
 })
