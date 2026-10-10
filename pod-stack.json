@@ -99,6 +99,13 @@
       "note": "keeps Pod and other Orca builds from rewriting each other’s ~/.orca/agent-hooks scripts"
     },
     {
+      "branch": "stack/agent-browser-warm-cli",
+      "upstream": "https://github.com/stablyai/orca/pull/27192",
+      "base": "e74f2f6c308046a2ee2eafbae94a3124d63952d2",
+      "source": "perf/agent-browser-warm-cli",
+      "note": "#27192 replayed onto the stack: package.json resolved key by key next to pod/electron-45’s @xterm pins; refresh when perf/agent-browser-warm-cli changes"
+    },
+    {
       "branch": "app-identity-constant",
       "upstream": "https://github.com/stablyai/orca/pull/26973"
     },
@@ -192,8 +199,14 @@
     {
       "branch": "pod/brand",
       "forkOnly": "Pod brand",
-      "base": "d745b3a705",
-      "note": "pod-site; 3 commits on pod/identity d745b3a705: brand sources, Orca’s alternate icons and picker removed, icon/tray/logo wiring (release.sh needs actool 26+)"
+      "base": "bfdff6755673d8ef91f87d3c545d7a5b29490334",
+      "note": "pod-site; 3 commits on pod/identity bfdff67556: brand sources, Orca’s alternate icons and picker removed, icon/tray/logo wiring (release.sh needs actool 26+)"
+    },
+    {
+      "branch": "stack/pod-brand-baseline",
+      "forkOnly": "Pod brand",
+      "base": "cf9af65bbe4866c6efac2fe6a2b023719e64e5fa",
+      "note": "pod-site; one commit on main v5.2: drops src/main/app-icon.ts from config/process-host-direct-import-baseline.txt, which only exists where Orca #26963 meets pod/brand"
     },
     {
       "branch": "stack/pod-workspace",
