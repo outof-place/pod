@@ -28,6 +28,7 @@ import { planCodexNoDaemonLaunch } from '../../../pty/codex-no-daemon-launch-com
 import type { PtyIpcSpawnState } from './spawn-state'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-workspace-trust-spawn'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
+import { applyPodOrbstackTerminalOverride } from '../../../pod/orbstack/pod-orbstack-terminal-override'
 
 /** Carries deletions to provider-owned environments, including persistent older daemons. */
 export async function buildPtyIpcSpawnOptions(
@@ -156,6 +157,8 @@ export async function buildPtyIpcSpawnOptions(
     launchCommand: ctx.launchCommand,
     settings: ctx.deps.getSettings?.()
   })
+  // Fork-only (Pod): a worktree's OrbStack machine becomes its shell; no-op unless Pod linked one.
+  applyPodOrbstackTerminalOverride(ctx.spawnOptions, args, ctx.launchCommand)
   ctx.hadSessionSizeBeforeAttach =
     ctx.effectiveSessionAppId !== undefined ? ptySizes.has(ctx.effectiveSessionAppId) : false
   ctx.sessionSizeBeforeAttach =

@@ -1,0 +1,95 @@
+import { mkdirSync, readFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { z } from 'zod'
+import { writeFileAtomically } from '../../codex-accounts/fs-utils'
+import { POD_ORBSTACK_MACHINE_PREFIX } from '../../../shared/pod-orbstack-types'
+
+const MachineEntrySchema = z.object({
+  name: z.string().startsWith(POD_ORBSTACK_MACHINE_PREFIX),
+  worktreeId: z.string().min(1),
+  worktreePath: z.string().min(1),
+  createdAt: z.number(),
+  // Why keep creating: a crash mid-create must still let Pod delete what it started.
+  state: z.enum(['creating', 'ready'])
+})
+
+const RegistrySchema = z.object({
+  version: z.literal(1),
+  machines: z.array(MachineEntrySchema),
+  dockerPins: z.array(z.string())
+})
+
+export type PodOrbstackMachineEntry = z.infer<typeof MachineEntrySchema>
+type RegistryData = z.infer<typeof RegistrySchema>
+
+/** The only record of machines Pod created; anything not listed here is read-only to Pod. */
+export class PodOrbstackRegistry {
+  private data: RegistryData | null = null
+
+  constructor(private readonly filePath: string) {}
+
+  private load(): RegistryData {
+    if (this.data) {
+      return this.data
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(readFileSync(this.filePath, 'utf8'))
+    } catch {
+      parsed = undefined
+    }
+    const result = RegistrySchema.safeParse(parsed)
+    this.data = result.success ? result.data : { version: 1, machines: [], dockerPins: [] }
+    return this.data
+  }
+
+  private save(): void {
+    mkdirSync(dirname(this.filePath), { recursive: true })
+    writeFileAtomically(this.filePath, `${JSON.stringify(this.load(), null, 2)}\n`)
+  }
+
+  machines(): readonly PodOrbstackMachineEntry[] {
+    return this.load().machines
+  }
+
+  dockerPins(): readonly string[] {
+    return this.load().dockerPins
+  }
+
+  findByName(name: string): PodOrbstackMachineEntry | null {
+    return this.load().machines.find((entry) => entry.name === name) ?? null
+  }
+
+  findByWorktree(worktreeId: string): PodOrbstackMachineEntry | null {
+    return this.load().machines.find((entry) => entry.worktreeId === worktreeId) ?? null
+  }
+
+  /** Pod may change a machine only if both the prefix and this registry say it is Pod's. */
+  isPodOwned(name: string): boolean {
+    return name.startsWith(POD_ORBSTACK_MACHINE_PREFIX) && this.findByName(name) !== null
+  }
+
+  upsert(entry: PodOrbstackMachineEntry): void {
+    const parsed = MachineEntrySchema.parse(entry)
+    const data = this.load()
+    data.machines = [...data.machines.filter((existing) => existing.name !== parsed.name), parsed]
+    this.save()
+  }
+
+  remove(name: string): void {
+    const data = this.load()
+    data.machines = data.machines.filter((entry) => entry.name !== name)
+    this.save()
+  }
+
+  isDockerPinned(worktreeId: string): boolean {
+    return this.load().dockerPins.includes(worktreeId)
+  }
+
+  setDockerPin(worktreeId: string, pinned: boolean): void {
+    const data = this.load()
+    const others = data.dockerPins.filter((id) => id !== worktreeId)
+    data.dockerPins = pinned ? [...others, worktreeId] : others
+    this.save()
+  }
+}

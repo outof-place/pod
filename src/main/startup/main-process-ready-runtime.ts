@@ -32,6 +32,7 @@ import {
 } from './main-process-runtime-service'
 import { initializeMainProcessAutomations } from './main-process-automations'
 import { initializeMainProcessPlugins } from './main-process-plugins'
+import { installPodOrbstack } from '../pod/orbstack/install-pod-orbstack'
 import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from '../worktree-trash'
 import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-load'
 import { runAfterFirstWindowShown } from './first-window-deferral'
@@ -58,6 +59,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()
   state.starNag.registerIpcHandlers()
+  // Fork-only (Pod): OrbStack IPC and the terminal resolver; nothing runs until Settings asks.
+  installPodOrbstack(store)
   state.agentBrowserBridge = new AgentBrowserBridge(browserManager, {
     onTabsChanged: (worktreeId) => runtime.notifyMobileSessionTabsChanged(worktreeId)
   })

@@ -36,6 +36,7 @@ import type { RuntimePtySpawnState } from './spawn-state'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-workspace-trust-spawn'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
+import { applyPodOrbstackTerminalOverride } from '../../../pod/orbstack/pod-orbstack-terminal-override'
 
 /** Headless spawns need the same host-side environment isolation as desktop spawns. */
 export async function buildRuntimePtySpawnOptions(
@@ -205,6 +206,8 @@ export async function buildRuntimePtySpawnOptions(
       launchCommand: ctx.launchCommand,
       settings: ctx.deps.getSettings?.()
     })
+    // Fork-only (Pod): a worktree's OrbStack machine becomes its shell; no-op unless Pod linked one.
+    applyPodOrbstackTerminalOverride(ctx.spawnOptions, args, ctx.launchCommand)
     ctx.spawnOptions.terminalWindowsWslDistro = ctx.expectedWslDistro
     ctx.spawnOptions.terminalWindowsPowerShellImplementation = ctx.deps.getSettings
       ? (ctx.deps.getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
