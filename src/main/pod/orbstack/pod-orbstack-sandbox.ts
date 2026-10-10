@@ -131,8 +131,11 @@ export async function provisionSandbox(args: {
   mounts: readonly string[]
   /** The cached release to install; null skips Claude (E2E stand-in agents). */
   release: SandboxClaudeRelease | null
+  /** Progress, in words a user reads. */
+  onStep?: (step: string) => void
 }): Promise<{ agentVersion: string | null }> {
   const { agentVersion } = await provisionSandboxBase(args)
+  args.onStep?.('Setting up the worktree')
   await provisionSandboxWorktree({ ...args, agentVersion })
   return { agentVersion }
 }
@@ -146,10 +149,12 @@ export async function provisionSandboxBase(args: {
   name: string
   mounts: readonly string[]
   release: SandboxClaudeRelease | null
+  onStep?: (step: string) => void
 }): Promise<{ agentVersion: string | null }> {
   const { run, name } = args
   const mountArgs = args.mounts.flatMap((path) => ['--mount', `${path}:${path}`])
   const step = stepRunner(run)
+  args.onStep?.('Creating the machine')
   // Why --isolate-network: the Mac, its LAN and other machines become unreachable (the internet stays);
   // the sandbox relay is then its only way to the Mac.
   await step('orb create', [
@@ -160,6 +165,7 @@ export async function provisionSandboxBase(args: {
     'ubuntu:24.04',
     name
   ])
+  args.onStep?.('Installing git')
   await step('install git', [
     'run',
     '-m',
@@ -173,6 +179,7 @@ export async function provisionSandboxBase(args: {
   let agentVersion: string | null = null
   const { release } = args
   if (release) {
+    args.onStep?.('Installing Claude Code')
     await step('copy Claude Code', [
       'push',
       '-m',
@@ -220,51 +227,42 @@ export async function provisionSandboxBase(args: {
   return { agentVersion }
 }
 
-/** The per-worktree part: mounts checked, Pod's hooks, the trusted worktree, managed settings. */
+/**
+ * The per-worktree part in one exec (each `orb run` costs 20-140 ms): mounts checked, Pod's hook
+ * script, the trusted worktree, managed settings, and fresh host keys if the image has sshd.
+ * Arguments: hook file name, then the three files base64-encoded, then the mounts.
+ */
+export const SETUP_WORKTREE = `set -eu
+hook="$1" script="$2" trust="$3" managed="$4"; shift 4
+for path in "$@"; do test -d "$path" || { echo "mount $path: not visible in the sandbox" >&2; exit 1; }; done
+mkdir -p "$HOME/.orca/agent-hooks"
+printf '%s' "$script" | base64 -d > "$HOME/.orca/agent-hooks/$hook"
+chmod 755 "$HOME/.orca/agent-hooks/$hook"
+[ -n "$trust" ] && { [ -e "$HOME/.claude.json" ] || printf '%s' "$trust" | base64 -d > "$HOME/.claude.json"; }
+printf '%s' "$managed" | base64 -d | sudo -n sh -c 'mkdir -p /etc/claude-code && cat > ${MANAGED_SETTINGS_PATH}'
+if [ -e /etc/ssh/sshd_config ] && ! ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1; then sudo -n ssh-keygen -A >/dev/null; fi
+`
+
 export async function provisionSandboxWorktree(args: {
   run: OrbstackToolRunner
   name: string
   mounts: readonly string[]
   agentVersion: string | null
 }): Promise<void> {
-  const { name } = args
-  const step = stepRunner(args.run)
-  for (const path of args.mounts) {
-    await step(`mount ${path}`, ['run', '-m', name, 'test', '-d', path])
-  }
-  await step(
-    'write hook script',
-    [
-      'run',
-      '-m',
-      name,
-      'sh',
-      '-c',
-      'mkdir -p "$HOME/.orca/agent-hooks" && cat > "$HOME/.orca/agent-hooks/$0" && chmod 755 "$HOME/.orca/agent-hooks/$0"',
-      getPosixManagedScriptFileName()
-    ],
-    buildSandboxHookScript()
-  )
+  const base64 = (text: string): string => Buffer.from(text).toString('base64')
   const [worktreePath] = args.mounts
-  if (worktreePath) {
-    await step(
-      'trust the worktree',
-      ['run', '-m', name, 'sh', '-c', '[ -e "$HOME/.claude.json" ] || cat > "$HOME/.claude.json"'],
-      buildSandboxClaudeConfig(worktreePath)
-    )
-  }
-  await step(
-    'write managed settings',
-    [
-      'run',
-      '-m',
-      name,
-      '-u',
-      'root',
-      'sh',
-      '-c',
-      `mkdir -p /etc/claude-code && cat > ${MANAGED_SETTINGS_PATH}`
-    ],
-    buildSandboxManagedSettings(args.agentVersion)
-  )
+  await stepRunner(args.run)('set up the worktree', [
+    'run',
+    '-m',
+    args.name,
+    'sh',
+    '-c',
+    SETUP_WORKTREE,
+    'pod-setup',
+    getPosixManagedScriptFileName(),
+    base64(buildSandboxHookScript()),
+    worktreePath ? base64(buildSandboxClaudeConfig(worktreePath)) : '',
+    base64(buildSandboxManagedSettings(args.agentVersion)),
+    ...args.mounts
+  ])
 }
