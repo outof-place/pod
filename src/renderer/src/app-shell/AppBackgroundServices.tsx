@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { POD_DASHBOARD_POPOUT } from '../../../shared/product/features'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AgentHibernationGate } from '../components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from '../components/AiVaultTabTitleSyncGate'
@@ -19,7 +20,7 @@ const DashboardPopoutBridge = lazy(() => import('../components/dashboard/Dashboa
 export function AppBackgroundServices(): React.JSX.Element {
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const dashboardPopoutEnabled = useAppStore(
-    (s) => s.settings?.experimentalAgentDashboardPopout === true
+    (s) => POD_DASHBOARD_POPOUT && s.settings?.experimentalAgentDashboardPopout === true
   )
 
   return (
