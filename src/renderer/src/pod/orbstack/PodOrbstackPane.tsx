@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { SettingsBadge, SettingsSubsectionHeader } from '@/components/settings/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { getPodOrbstackApi } from './pod-orbstack-api-access'
+import { podOrbstackRpc } from './pod-orbstack-rpc'
 import { runPodOrbstackAction } from './pod-orbstack-actions'
 import { buildPodOrbstackWorktreeRows } from './pod-orbstack-worktree-rows'
 import { PodOrbstackContainerTable } from './PodOrbstackContainerTable'
@@ -79,10 +79,9 @@ export function PodOrbstackPane(): React.JSX.Element {
       ),
     [rows]
   )
-  const api = getPodOrbstackApi()
   const runForWorktree = (
     worktreeId: string,
-    action: () => Promise<PodOrbstackActionResult> | undefined
+    action: () => Promise<PodOrbstackActionResult>
   ): void => {
     setPendingWorktrees((current) => new Set([...current, worktreeId]))
     void runPodOrbstackAction(action, refresh).finally(() =>
@@ -131,17 +130,15 @@ export function PodOrbstackPane(): React.JSX.Element {
             canCreate={status.install.orbPath !== null}
             onCreate={(row) =>
               runForWorktree(row.worktreeId, () =>
-                api?.createMachine({ worktreeId: row.worktreeId, displayName: row.displayName })
+                podOrbstackRpc.createMachine(row.worktreeId, row.displayName)
               )
             }
             onRemove={(row) =>
-              runForWorktree(row.worktreeId, () =>
-                api?.removeMachine({ worktreeId: row.worktreeId })
-              )
+              runForWorktree(row.worktreeId, () => podOrbstackRpc.deleteMachine(row.worktreeId))
             }
             onDockerPin={(row, pinned) =>
               void runPodOrbstackAction(
-                () => api?.setDockerPin({ worktreeId: row.worktreeId, pinned }),
+                () => podOrbstackRpc.pinDocker(row.worktreeId, pinned),
                 refresh
               )
             }
@@ -152,7 +149,8 @@ export function PodOrbstackPane(): React.JSX.Element {
             onSetRunning={(name, running) => {
               setPendingMachine(name)
               void runPodOrbstackAction(
-                () => (running ? api?.startMachine({ name }) : api?.stopMachine({ name })),
+                () =>
+                  running ? podOrbstackRpc.startMachine(name) : podOrbstackRpc.stopMachine(name),
                 refresh
               ).finally(() => setPendingMachine(null))
             }}
