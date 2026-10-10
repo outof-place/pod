@@ -28,7 +28,8 @@ it('reports a root from ogd status by realpath, and null for roots ogd does not 
     handle: () => ({
       message: {
         worktrees: [
-          { root: join(base, 'building'), state: 'building', unsettled: 'fsevents' },
+          // Still building, with no pending events yet: not settled.
+          { root: join(base, 'building'), state: 'building', unsettled: null },
           {
             root: join(base, 'repo'),
             state: 'ready',
