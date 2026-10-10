@@ -56,8 +56,11 @@ if [ -n "$og_sha" ]; then
   git -C "$og_dir" checkout -q --detach "$og_sha"
   features=()
   [ -z "$og_features" ] || features=(--features "$og_features")
-  scheduled "$og_dir" "cargo build --release --locked -p ogd -p ogctl"
-  scheduled "$og_dir/third_party/ripgrep" "cargo build --release --locked ${features[*]}"
+  # Registry crates are fetched once (a no-op when ~/.cargo is warm); the builds then stay offline.
+  (cd "$og_dir" && cargo fetch --locked)
+  (cd "$og_dir/third_party/ripgrep" && cargo fetch --locked)
+  scheduled "$og_dir" "cargo build --release --offline --locked -p ogd -p ogctl"
+  scheduled "$og_dir/third_party/ripgrep" "cargo build --release --offline --locked ${features[*]}"
   # Copied out of target/release: claude-acc's scheduler holds commands that run from there.
   # Never cp over a binary in place: macOS kills new launches of an inode that was overwritten
   # while it ran (a leftover ogd), so each copy goes to a temp name and is renamed into place.
