@@ -151,6 +151,10 @@ if [ "$skip_build" -eq 0 ]; then
       log "no $script in this checkout"
     fi
   done
+  # The one-app control socket's peer check (pod/one-app), once that branch is in the stack.
+  if [ -f config/scripts/build-pod-peer-identity-macos.mjs ]; then
+    node config/scripts/build-pod-peer-identity-macos.mjs
+  fi
   pnpm run ensure:electron-runtime
 fi
 
