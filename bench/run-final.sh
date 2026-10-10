@@ -132,6 +132,7 @@ fi
 run_suite startup
 run_suite panes
 run_suite throughput
+run_suite browser
 echo "==> claude-acc (historical + fresh)"
 node "$here/suites/claude-acc.mjs" --fresh
 acc_check

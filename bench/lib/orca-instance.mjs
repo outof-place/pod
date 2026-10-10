@@ -67,7 +67,39 @@ function plist(appPath, key) {
   ).trim()
 }
 
+// An unpackaged checkout with an electron-vite build: launched as tests/e2e/helpers does, through
+// its package.json, with the checkout's own Electron and its built CLI.
+function describeDevCheckout(dir) {
+  const real = realpathSync(dir)
+  const version = (file) => JSON.parse(readFileSync(path.join(real, file), 'utf8')).version
+  let commit = null
+  try {
+    commit = execFileSync('git', ['-C', real, 'rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).trim()
+  } catch {}
+  return {
+    path: dir,
+    realPath: real,
+    dev: true,
+    bundleId: null,
+    version: version('package.json'),
+    buildId: null,
+    commit,
+    teamId: null,
+    executable: path.join(real, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'),
+    appArgs: [real],
+    electron: version('node_modules/electron/package.json'),
+    cli: process.execPath,
+    cliArgs: [path.join(real, 'out/cli/index.js')]
+  }
+}
+
 export function describeApp(appPath) {
+  if (existsSync(path.join(appPath, 'out/main/index.js'))) {
+    return describeDevCheckout(appPath)
+  }
   const real = realpathSync(appPath)
   let build = null
   try {
@@ -247,7 +279,8 @@ export function spawnInstance(appPath, profile) {
   const env = launchEnv(profile)
   assertAccOff(env)
   const spawnedAt = Date.now()
-  const child = spawn(info.executable, [...CHROMIUM_ARGS, '-ApplePersistenceIgnoreState', 'YES'], {
+  const args = [...CHROMIUM_ARGS, ...(info.appArgs ?? []), '-ApplePersistenceIgnoreState', 'YES']
+  const child = spawn(info.executable, args, {
     env,
     stdio: 'ignore',
     detached: false
@@ -266,7 +299,7 @@ export async function launchInstance(appPath, profile, { visible = false } = {})
   const spawnedAt = Date.now()
   const app = await playwright._electron.launch({
     executablePath: info.executable,
-    args: [...CHROMIUM_ARGS, '-ApplePersistenceIgnoreState', 'YES'],
+    args: [...CHROMIUM_ARGS, ...(info.appArgs ?? []), '-ApplePersistenceIgnoreState', 'YES'],
     env,
     timeout: 180_000
   })
@@ -290,18 +323,22 @@ export async function cli(instance, args, timeoutMs = 120_000) {
   assertIsolated(instance.profile)
   let stdout
   try {
-    ;({ stdout } = await run(instance.info.cli, [...args, '--json'], {
-      env: {
-        PATH: '/usr/bin:/bin',
-        HOME: instance.profile.home,
-        // Orca's CLI reads ORCA_USER_DATA_PATH; Pod's reads POD_USER_DATA_PATH since pod/decouple.
-        ORCA_USER_DATA_PATH: instance.profile.ud,
-        POD_USER_DATA_PATH: instance.profile.ud,
-        ...ACC_OFF_ENV
-      },
-      timeout: timeoutMs,
-      maxBuffer: 64 * 1024 * 1024
-    }))
+    ;({ stdout } = await run(
+      instance.info.cli,
+      [...(instance.info.cliArgs ?? []), ...args, '--json'],
+      {
+        env: {
+          PATH: '/usr/bin:/bin',
+          HOME: instance.profile.home,
+          // Orca's CLI reads ORCA_USER_DATA_PATH; Pod's reads POD_USER_DATA_PATH since pod/decouple.
+          ORCA_USER_DATA_PATH: instance.profile.ud,
+          POD_USER_DATA_PATH: instance.profile.ud,
+          ...ACC_OFF_ENV
+        },
+        timeout: timeoutMs,
+        maxBuffer: 64 * 1024 * 1024
+      }
+    ))
   } catch (error) {
     // A failing --json call prints its reason on stdout; keep it in the error.
     const output = `${error.stdout ?? ''}${error.stderr ?? ''}`.trim().slice(0, 600)
@@ -463,7 +500,7 @@ export async function closeInstance(instance, { keepProfile = false } = {}) {
   await killProfileProcesses(instance.profile)
   releaseInstance(instance.pid)
   checkAcc(`after closing ${instance.info.realPath}`)
-  if (!instance.info.realPath.startsWith('/Applications/')) {
+  if (!instance.info.dev && !instance.info.realPath.startsWith('/Applications/')) {
     try {
       execFileSync(
         '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister',
