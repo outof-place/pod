@@ -2,6 +2,7 @@ import { ActiveSettingsSectionProvider } from './SettingsSection'
 import { SettingsSidebar } from './SettingsSidebar'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { renderPodOrbstackSettingsSection } from '@/pod/orbstack/render-pod-orbstack-settings-section'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
 import type { SettingsRenderContext } from './settings-render-context'
 import {
@@ -145,6 +146,7 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
                 {renderStatsSettingsSection(context)}
                 {renderServersSettingsSection(context)}
                 {renderSshSettingsSection(context)}
+                {renderPodOrbstackSettingsSection(context)}
                 {renderDeveloperPermissionsSettingsSection(context)}
                 {renderPrivacySettingsSection(context)}
                 {renderAdvancedSettingsSection(context)}

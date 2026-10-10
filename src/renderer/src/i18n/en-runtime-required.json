@@ -3152,6 +3152,16 @@
   "menu": {
     "quitApp": "Quit {{appName}}"
   },
+  "podOrbstack": {
+    "search": {
+      "containers": "containers",
+      "context": "docker context",
+      "docker": "Docker",
+      "machines": "Linux machines",
+      "orbstack": "OrbStack",
+      "vm": "virtual machine"
+    }
+  },
   "runtimeRpc": {
     "startupFailure": {
       "guidance": {

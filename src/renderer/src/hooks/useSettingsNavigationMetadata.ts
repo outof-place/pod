@@ -32,6 +32,7 @@ import { buildInterfaceSettingsSections } from './settings-navigation-interface-
 import { buildRemoteSettingsSections } from './settings-navigation-remote-sections'
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
 import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabilityOwnerKey'
+import { usePodOrbstackEnabled } from '@/pod/orbstack/use-pod-orbstack-enabled'
 
 export { isWebClientLocation } from '@/lib/web-client-location'
 
@@ -47,7 +48,8 @@ export function buildSettingsNavigationMetadata({
   isDev = import.meta.env.DEV,
   isLinearConnected = false,
   repos,
-  projectGrouping
+  projectGrouping,
+  podOrbstackEnabled = false
 }: {
   isMac: boolean
   isWindows: boolean
@@ -61,6 +63,7 @@ export function buildSettingsNavigationMetadata({
   isLinearConnected?: boolean
   repos: readonly Repo[]
   projectGrouping?: ProjectGroupingModel
+  podOrbstackEnabled?: boolean
 }): SettingsNavSection[] {
   const terminalPaneSearchEntries = getTerminalPaneSearchEntries({
     isWindows,
@@ -88,7 +91,8 @@ export function buildSettingsNavigationMetadata({
     isDev,
     isLinearConnected,
     repos,
-    projectGrouping
+    projectGrouping,
+    podOrbstackEnabled
   }
 
   // Why: this array's order must mirror SETTINGS_NAV_GROUPS so the Settings
@@ -127,6 +131,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
   const isLinearConnected = useLinearProviderConnected()
+  const podOrbstackEnabled = usePodOrbstackEnabled()
   const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
@@ -174,7 +179,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         projectGrouping: {
           projects: projectHostSetupProjection.projects,
           projectHostSetups: projectHostSetupProjection.setups
-        }
+        },
+        podOrbstackEnabled
       }),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- activeLocale is read implicitly by the translate() calls inside buildSettingsNavigationMetadata; without it the memo keeps the previous language's sections.
     [
@@ -189,7 +195,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       isLinearConnected,
       repos,
       projectHostSetupProjection,
-      activeLocale
+      activeLocale,
+      podOrbstackEnabled
     ]
   )
 }

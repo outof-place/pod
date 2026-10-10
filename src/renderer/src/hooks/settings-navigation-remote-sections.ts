@@ -22,6 +22,7 @@ import {
   Wrench
 } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
+import { buildPodOrbstackSettingsSections } from '@/pod/orbstack/pod-orbstack-settings-nav'
 
 export function buildRemoteSettingsSections(
   {
@@ -30,7 +31,8 @@ export function buildRemoteSettingsSections(
     isWebClient,
     isDev,
     repos,
-    projectGrouping
+    projectGrouping,
+    podOrbstackEnabled
   }: SettingsNavigationBuildOptions,
   runtimeEnvironmentsSearchEntry: SettingsNavSection['searchEntries'][number],
   reposById: ReadonlyMap<string, Repo>
@@ -52,6 +54,7 @@ export function buildRemoteSettingsSections(
           }
         ]
       : []),
+    ...buildPodOrbstackSettingsSections({ podOrbstackEnabled }),
     {
       id: 'servers',
       title: translate(

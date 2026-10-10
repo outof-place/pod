@@ -14,4 +14,6 @@ export type SettingsNavigationBuildOptions = {
   isLinearConnected: boolean
   repos: readonly Repo[]
   projectGrouping?: ProjectGroupingModel
+  /** Fork-only (Pod): the OrbStack section. */
+  podOrbstackEnabled?: boolean
 }

@@ -19659,5 +19659,62 @@
     "browser": "Browser",
     "editor": "Editor",
     "terminal": "Terminal"
+  },
+  "podOrbstack": {
+    "containers": {
+      "title": "Docker containers",
+      "description": "Read from the orbstack Docker context. CPU and memory are shown for running containers.",
+      "empty": "No containers."
+    },
+    "machines": {
+      "title": "Linux machines",
+      "description": "Pod starts and stops only the machines it created. Your other machines are shown read-only.",
+      "empty": "No Linux machines.",
+      "noImage": "Image unknown",
+      "pod": "Pod",
+      "stop": "Stop",
+      "start": "Start"
+    },
+    "service": {
+      "missing": "Not installed",
+      "running": "Running",
+      "stopped": "Stopped",
+      "unknown": "Unknown"
+    },
+    "summary": {
+      "service": "OrbStack: {{state}}",
+      "context": "Docker context: {{name}}",
+      "noDocker": "Docker CLI not found",
+      "contextHint": "Docker talks to another engine. Turn on \"Use OrbStack for Docker\" for a worktree to pin it there."
+    },
+    "status": {
+      "title": "Status",
+      "description": "Pod only reads OrbStack, except for the machines it creates for worktrees.",
+      "refresh": "Refresh"
+    },
+    "worktrees": {
+      "busy": "Working…",
+      "create": "Create machine",
+      "remove": "Delete machine",
+      "title": "Worktree machines",
+      "description": "New terminals of a worktree with a machine open inside it, in the same folder. Agents keep running on this Mac.",
+      "empty": "No local worktrees.",
+      "containers": "Containers: {{count}}",
+      "noContainers": "No compose containers",
+      "dockerPin": "Use OrbStack for Docker",
+      "dockerPinLabel": "Set DOCKER_CONTEXT=orbstack in new terminals of {{name}}"
+    },
+    "section": {
+      "title": "OrbStack",
+      "description": "Linux machines and Docker containers from OrbStack, and a machine per worktree."
+    },
+    "search": {
+      "orbstack": "OrbStack",
+      "docker": "Docker",
+      "containers": "containers",
+      "machines": "Linux machines",
+      "vm": "virtual machine",
+      "context": "docker context"
+    }
   }
 }
