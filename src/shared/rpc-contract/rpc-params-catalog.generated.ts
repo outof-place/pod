@@ -433,6 +433,14 @@ import {
   PluginsPanelActionParams
 } from './plugins-params'
 import {
+  PodWorkspaceAdoptParams,
+  PodWorkspaceCloneDestinationParams,
+  PodWorkspaceGitProfileParams,
+  PodWorkspaceStatusParams,
+  PodWorkspaceTidyApplyParams,
+  PodWorkspaceTidyScanParams
+} from './pod-workspace-params'
+import {
   PreflightAgentDetection,
   PreflightCheck,
   PreflightDetectRemoteAgents,
@@ -1110,6 +1118,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.panelAction': PluginsPanelActionParams,
   'plugins.readPanelEntry': PluginReadPanelEntryParams,
   'plugins.setEnabled': PluginSetEnabledParams,
+  'podWorkspace.adopt': PodWorkspaceAdoptParams,
+  'podWorkspace.cloneDestination': PodWorkspaceCloneDestinationParams,
+  'podWorkspace.enabled': null,
+  'podWorkspace.gitProfile': PodWorkspaceGitProfileParams,
+  'podWorkspace.status': PodWorkspaceStatusParams,
+  'podWorkspace.tidyApply': PodWorkspaceTidyApplyParams,
+  'podWorkspace.tidyScan': PodWorkspaceTidyScanParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,

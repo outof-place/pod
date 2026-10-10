@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { app, shell } from 'electron'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
@@ -7,7 +8,8 @@ import { setDefaultCreateProjectParentOverride } from '../../ipc/repos/repo-crea
 import { isPodNativeSearchEnabled } from '../search/pod-native-search-flag'
 import { isPodWorkspaceEnabled } from './pod-workspace-flag'
 import { workspaceCreateProjectParent } from './workspace-clone-destination'
-import { registerWorkspaceIpc } from './workspace-ipc'
+import { createPodWorkspaceRpcService } from './create-workspace-rpc-service'
+import { registerWorkspaceIpc, resolveWorkspaceCloneDestination } from './workspace-ipc'
 import {
   notifyPodWorkspaceWorktreeLifecycle,
   setPodWorkspaceWorktreeLifecycleHandler,
@@ -31,6 +33,7 @@ import {
   readDesktopDocumentsSync,
   type DesktopDocumentsSync
 } from './workspace-root-validation'
+import { setPodWorkspaceRpcService } from './workspace-rpc-service'
 import { wireWorkspaceToPodSearch } from './workspace-search-wiring'
 import { createWorkspaceStatusService } from './workspace-status'
 import { createWorkspaceToolRunner } from './workspace-tool-runner'
@@ -81,16 +84,28 @@ export function installPodWorkspace(store: PodWorkspaceStore, runtime: PodWorksp
     home,
     validation
   })
-  // Other platforms still answer the renderer's gate query (false), and do nothing else.
-  registerWorkspaceIpc({
+  const ipcDeps = {
     isEnabled,
     getRootSetting: () => workspaceRootSetting(store.getSettings()),
     validation,
     status
-  })
+  }
+  // Other platforms still answer the renderer's gate query (false), and do nothing else.
+  registerWorkspaceIpc(ipcDeps)
   if (process.platform !== 'darwin') {
     return
   }
+  setPodWorkspaceRpcService(
+    createPodWorkspaceRpcService({
+      store,
+      isEnabled,
+      status,
+      home,
+      userDataDir: app.getPath('userData'),
+      cloneDestination: (url) => resolveWorkspaceCloneDestination(ipcDeps, url),
+      trash: (path) => shell.trashItem(path)
+    })
+  )
 
   setDefaultCreateProjectParentOverride(() => {
     if (!isEnabled()) {
