@@ -40,8 +40,8 @@ Set `POD_SIGN_IDENTITY`, or `NOTARY_PROFILE` / `APPLE_API_KEY` (+`_ID`, `_ISSUER
 
 1. Checks that the identity is a Developer ID in the keychain, then makes a test signature (keychain access and Apple's timestamp server).
 2. Builds the JS, mobile web bundle and native helpers. The helpers get the product's identifiers: `<appId>.computer-use` and the notification helper's `--bundle-id`.
-3. Fetches the claude-acc payload pinned in `config/claude-acc-payload.json` into `resources/claude-acc`, when the stack has that script. This also runs with `--skip-build`.
-4. Runs electron-builder with `product/electron-builder.pod.cjs` (`POD_RELEASE=1`, `ORCA_MAC_RELEASE=1`). Before any signing, `afterPack` fails the build when app.asar is over 400 MB or packs a `dist`, `dist-*`, `test-results`, `playwright-report` or hidden folder (`product/release-bundle-gate.cjs`). Then it signs every nested binary with hardened runtime and a timestamp, notarizes and staples the app. When Apple's timestamp service fails mid-signing, the step reruns: at most 3 attempts, 3 min apart, and only for that failure.
+3. Fetches the claude-acc payload pinned in `config/claude-acc-payload.json` into `resources/claude-acc`, when the stack has that script. This also runs with `--skip-build`. PodNative, Pod's native UI, comes the same way: `config/scripts/fetch-pod-native.mjs` downloads the zip of the unsigned app pinned in `config/pod-native.json` with `gh` (outof-place/pod-native is private), checks its sha256 and unpacks it into `resources/pod-native`.
+4. Runs electron-builder with `product/electron-builder.pod.cjs` (`POD_RELEASE=1`, `ORCA_MAC_RELEASE=1`). Before any signing, `afterPack` fails the build when app.asar is over 400 MB or packs a `dist`, `dist-*`, `test-results`, `playwright-report` or hidden folder (`product/release-bundle-gate.cjs`). `afterPack` also copies PodNative to `Contents/Helpers/PodNative.app` (Apple's location for a helper app) and signs it inside out with its own `product/pod-native.entitlements` (`product/pod-native-embed.cjs`). A release without it fails, and so does one where it is not arm64 only, not `codes.pod.native`, over 80 MB or carrying build leftovers. Then electron-builder signs every other nested binary with hardened runtime and a timestamp, notarizes and staples the app. `signIgnore` keeps it away from PodNative, which would otherwise get Electron's inherited entitlements (JIT, camera, microphone). When Apple's timestamp service fails mid-signing, the step reruns: at most 3 attempts, 3 min apart, and only for that failure.
 5. Fails when the DMG is over 350 MB, then submits it with `notarytool submit --wait` and staples it.
 6. Re-hashes `latest-mac.yml`, since stapling changed the DMG.
 7. Gates on Gatekeeper:
@@ -51,6 +51,7 @@ Set `POD_SIGN_IDENTITY`, or `NOTARY_PROFILE` / `APPLE_API_KEY` (+`_ID`, `_ISSUER
    - `spctl -a -vv -t open` accepts the DMG.
    - Info.plist declares `ClaudeAccHost` (userData, cli), and claude-acc's `orcahost.py` resolves the app as Pod when the payload is bundled (`product/scripts/verify-claude-acc-host.mjs`).
    - Nothing the app runs writes into its own bundle: on a temporary copy, the claude-acc layer's script probes (`podAccSealProbes`) run, then no new `__pycache__`/`.pyc` may exist and `codesign --verify --deep --strict` must pass (`product/scripts/verify-bundle-seal.mjs`).
+   - PodNative is signed by the team's Developer ID with hardened runtime, a timestamp and exactly its own entitlements, and `spctl -a -t exec` reports it notarized (`node product/pod-native-embed.cjs --check`).
 8. With `--publish` only: uploads the DMG, zip, zip blockmap and `latest-mac.yml` with `gh release create`.
 
 ## CI (later)

@@ -16,6 +16,11 @@ import {
 } from './helpers/electron-home-isolation'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
 import {
+  bundledPodNative,
+  realPodNativePreferencesMtime,
+  runBundledPodNative
+} from './helpers/packaged-pod-native'
+import {
   formatListenerCensus,
   listenerCensus,
   runningBundleProcesses,
@@ -80,6 +85,7 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
     throw new Error('Refusing to launch a packaged app whose claude-acc lifecycle is on')
   }
   const launchAgentsBefore = realLaunchAgentMtimes(isolation.realHome)
+  const podNativePreferencesBefore = realPodNativePreferencesMtime(isolation.realHome)
   const args = packagedLaunchArgs(netLogPath)
   const baseline = runningSecurityAgentPids()
   if (baseline.length > 0) {
@@ -147,6 +153,29 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
     const census = listenerCensus(pid, packagedApp)
     console.log(`[pod-packaged] listener census:\n${formatListenerCensus(census)}`)
     expect(wideListeners(census)).toEqual([])
+    const podNative = bundledPodNative(packagedApp)
+    if (podNative) {
+      const runtime: unknown = JSON.parse(
+        readFileSync(path.join(userDataDir, 'orca-runtime.json'), 'utf8')
+      )
+      const runtimePid =
+        typeof runtime === 'object' && runtime !== null && 'pid' in runtime ? runtime.pid : null
+      const report = await runBundledPodNative(podNative, {
+        profileDir: userDataDir,
+        home: isolation.isolatedHome,
+        reportPath: path.join(root, 'pod-native-report.json'),
+        whileRunning: () => {
+          const withNative = listenerCensus(pid, packagedApp)
+          console.log(`[pod-packaged] with PodNative:\n${formatListenerCensus(withNative)}`)
+          expect(withNative.map((row) => row.path)).toContain(podNative)
+          expect(wideListeners(withNative)).toEqual([])
+        }
+      })
+      // This Pod's runtime from the isolated profile, over the local stream transport.
+      expect(report.connections).toBeGreaterThanOrEqual(1)
+      expect(report.marks?.catalogLoaded).toBeDefined()
+      expect(report.status).toMatch(new RegExp(`^Pod runtime ${String(runtimePid)} · stream · `))
+    }
   } catch (error) {
     failure = error
   } finally {
@@ -161,6 +190,7 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
     throw new Error('keychain prompt: SecurityAgent started during the run; the app was killed')
   }
   expect(realLaunchAgentMtimes(isolation.realHome)).toEqual(launchAgentsBefore)
+  expect(realPodNativePreferencesMtime(isolation.realHome)).toBe(podNativePreferencesBefore)
   // Why after the run: anything the app writes into its own bundle (a Python __pycache__ under
   // Resources/claude-acc did) breaks the seal, and Gatekeeper then calls the installed app damaged.
   const seal = spawnSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', packagedApp], {

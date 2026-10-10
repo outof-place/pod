@@ -1,0 +1,7 @@
+{
+  "//": "PodNative, which Pod ships in Contents/Helpers/PodNative.app: a zip of the unsigned app, attached to a release of the private outof-place/pod-native. Bump tag, asset and sha256 together; config/scripts/fetch-pod-native.mjs refuses a download that does not match, and refuses to download at all while sha256 is null.",
+  "repository": "outof-place/pod-native",
+  "tag": null,
+  "asset": null,
+  "sha256": null
+}

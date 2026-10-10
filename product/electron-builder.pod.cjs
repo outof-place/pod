@@ -12,6 +12,7 @@ const { join } = require('node:path')
 const { Arch } = require('electron-builder')
 const { installAgentLauncher } = require('./agent-launcher/install-agent-launcher.cjs')
 const helperNames = require('./helper-names.cjs')
+const podNative = require('./pod-native-embed.cjs')
 // Why destructure: drop every non-mac platform and target section of the upstream config.
 const {
   win: _win,
@@ -143,6 +144,7 @@ module.exports = {
   files: [
     ...base.files,
     ...PRODUCT_FILE_EXCLUSIONS,
+    ...podNative.POD_NATIVE_FILE_EXCLUSIONS,
     ...(podAcc ? podAcc.podAccFileExclusions : [])
   ],
   protocols: [{ name: identity.displayName, schemes: identity.protocols }],
@@ -177,11 +179,17 @@ module.exports = {
       join(resourcesDir, 'product-upstream.json'),
       `${JSON.stringify(readOrcaUpstream())}\n`
     )
+    // Before the naming check, which walks nested apps, and before electron-builder seals Pod.app.
+    podNative.embedPodNative(join(resourcesDir, '..'), { release: isRelease })
     helperNames.assertNoUpstreamNames(join(resourcesDir, '..', '..'))
   },
   mac: {
     ...base.mac,
-    signIgnore: [...(base.mac.signIgnore ?? []), ...PRODUCT_SIGN_IGNORE],
+    signIgnore: [
+      ...(base.mac.signIgnore ?? []),
+      ...PRODUCT_SIGN_IGNORE,
+      ...podNative.POD_NATIVE_SIGN_IGNORE
+    ],
     // The Icon Composer document: electron-builder compiles it into Assets.car (CFBundleIconName),
     // so macOS renders Liquid Glass and the dark, clear and tinted appearances. Needs actool 26+.
     icon: 'resources/icon-source/icon.icon',
