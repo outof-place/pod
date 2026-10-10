@@ -13,7 +13,8 @@ export const nativeTerminalApi = {
   write: (surfaceId, data) => ipcRenderer.send('nativeTerminal:write', surfaceId, data),
   writeLocal: (surfaceId, data) => ipcRenderer.send('nativeTerminal:writeLocal', surfaceId, data),
   setFrames: (frames) => ipcRenderer.send('nativeTerminal:setFrames', frames),
-  focus: (surfaceId) => ipcRenderer.send('nativeTerminal:focus', surfaceId),
+  focus: (surfaceId, options) =>
+    ipcRenderer.send('nativeTerminal:focus', surfaceId, options?.unlessMousePressed === true),
   readSelection: (surfaceId) => ipcRenderer.invoke('nativeTerminal:readSelection', surfaceId),
   setAppearance: (appearance, zoomFactor) =>
     ipcRenderer.send('nativeTerminal:setAppearance', appearance, zoomFactor),
