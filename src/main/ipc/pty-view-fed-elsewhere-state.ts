@@ -6,6 +6,15 @@ const requestedPtys = new Set<string>()
 const fedElsewherePtys = new Set<string>()
 // Resolves a renderer's pending request once the change took effect (or the PTY's state cleared).
 const appliedWaiters = new Map<string, () => void>()
+// Whether delivery still queues bytes for the PTY; installed by the delivery session.
+let hasQueuedBytes: (id: string) => boolean = () => false
+let reportedFlipWhileQueued = false
+
+/** Queued bytes keep the reply owner the set gave them at ingestion, so the set must never
+ *  flip while any wait; the delivery session tells the state when that is. */
+export function setRendererPtyViewFedElsewhereQueueProbe(probe: (id: string) => boolean): void {
+  hasQueuedBytes = probe
+}
 
 export function isRendererPtyViewFedElsewhere(id: string): boolean {
   return fedElsewherePtys.has(id)
@@ -22,8 +31,7 @@ export function requestRendererPtyViewFedElsewhere(
   } else {
     requestedPtys.delete(id)
   }
-  if (atBatchBoundary) {
-    applyRendererPtyViewFedElsewhere(id)
+  if (atBatchBoundary && applyRendererPtyViewFedElsewhere(id)) {
     return Promise.resolve()
   }
   return new Promise((resolve) => {
@@ -35,14 +43,24 @@ export function requestRendererPtyViewFedElsewhere(
   })
 }
 
-/** At a delivery-batch boundary (nothing pending for the PTY): the request takes effect. */
-export function applyRendererPtyViewFedElsewhere(id: string): void {
-  if (requestedPtys.has(id)) {
+/** At a delivery-batch boundary (nothing pending for the PTY): the request takes effect.
+ *  Returns false, leaving the request pending, if a caller tries it with bytes still queued. */
+export function applyRendererPtyViewFedElsewhere(id: string): boolean {
+  const fedElsewhere = requestedPtys.has(id)
+  if (fedElsewhere !== fedElsewherePtys.has(id) && hasQueuedBytes(id)) {
+    if (!reportedFlipWhileQueued) {
+      reportedFlipWhileQueued = true
+      console.error('[pty] parse-once state flip refused while bytes are queued for the PTY')
+    }
+    return false
+  }
+  if (fedElsewhere) {
     fedElsewherePtys.add(id)
   } else {
     fedElsewherePtys.delete(id)
   }
   settleWaiter(id)
+  return true
 }
 
 export function clearRendererPtyViewFedElsewhere(id: string): void {
@@ -52,6 +70,7 @@ export function clearRendererPtyViewFedElsewhere(id: string): void {
 }
 
 export function clearAllRendererPtyViewFedElsewhere(): void {
+  reportedFlipWhileQueued = false
   requestedPtys.clear()
   fedElsewherePtys.clear()
   for (const id of appliedWaiters.keys()) {

@@ -1,4 +1,7 @@
-import { requestRendererPtyViewFedElsewhere } from '../../pty-view-fed-elsewhere-state'
+import {
+  requestRendererPtyViewFedElsewhere,
+  setRendererPtyViewFedElsewhereQueueProbe
+} from '../../pty-view-fed-elsewhere-state'
 import { getPtyIpc } from '../../pty-host-bindings'
 import type { PtyIpcSession } from '../session'
 
@@ -7,6 +10,7 @@ import type { PtyIpcSession } from '../session'
 // replies then, after the last chunk it flagged by the old state.
 export function installRendererPtyViewFedElsewhereIpc(session: PtyIpcSession): void {
   const ipcMain = getPtyIpc()
+  setRendererPtyViewFedElsewhereQueueProbe((id) => session.pendingData.get(id) !== undefined)
   ipcMain.removeHandler('pty:setRendererPtyViewFedElsewhere')
   ipcMain.handle(
     'pty:setRendererPtyViewFedElsewhere',

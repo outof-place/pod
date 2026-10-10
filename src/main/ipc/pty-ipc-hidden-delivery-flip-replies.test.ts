@@ -64,6 +64,7 @@ describe('PTY query replies across a visibility flip', () => {
     emitData: (data: string) => void
     setHidden: (hidden: boolean) => void
     setInterest: (interested: boolean) => void
+    setFedElsewhere: (fedElsewhere: boolean) => Promise<void>
   }> {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
@@ -84,6 +85,9 @@ describe('PTY query replies across a visibility flip', () => {
     return {
       id,
       emitData: mockProc.emitData,
+      setFedElsewhere: async (fedElsewhere) => {
+        await handlers.get('pty:setRendererPtyViewFedElsewhere')!(null, { id, fedElsewhere })
+      },
       setHidden: (hidden) => setHidden(null, { id, hidden }),
       setInterest: (interested) => setInterest(null, { id, interested })
     }
@@ -211,5 +215,53 @@ describe('PTY query replies across a visibility flip', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe('while a native view main feeds covers the pane', () => {
+    it('flags its bytes so the observers run and xterm skips them', async () => {
+      vi.useFakeTimers()
+      try {
+        const pty = await spawnPty()
+        await pty.setFedElsewhere(true)
+        pty.emitData('agent\x1b[6n')
+        vi.advanceTimersByTime(50)
+
+        expect(dataSends()).toEqual([{ id: pty.id, data: 'agent\x1b[6n', viewFedElsewhere: true }])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('drops queued bytes main answered without handing their queries back on a hide', async () => {
+      vi.useFakeTimers()
+      try {
+        const pty = await spawnPty()
+        await pty.setFedElsewhere(true)
+        pty.emitData('agent\x1b[6n')
+        pty.setHidden(true)
+        vi.advanceTimersByTime(50)
+
+        expect(dataSends()).toEqual([])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('keeps bytes main answered while hidden away from xterm when the covered pane is revealed', async () => {
+      vi.useFakeTimers()
+      try {
+        const pty = await spawnPty()
+        await pty.setFedElsewhere(true)
+        pty.setInterest(true)
+        pty.setHidden(true)
+        pty.emitData('agent\x1b[6n')
+        pty.setHidden(false)
+        vi.advanceTimersByTime(50)
+
+        expect(dataSends()).toEqual([{ id: pty.id, data: 'agent\x1b[6n', sidecarOnly: true }])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 })
