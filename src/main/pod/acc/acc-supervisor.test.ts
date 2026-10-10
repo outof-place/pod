@@ -219,6 +219,50 @@ describe('claude-acc supervisor', () => {
     supervisor.stop()
   })
 
+  it('registers its services again after Pod.app moved, unregistering first', async () => {
+    // one-app: the registrar now runs from Contents/Helpers/Pod Runtime.app; launchd's jobs still
+    // read enabled, with the old bundle's paths
+    for (const moved of [true, false]) {
+      const pod = installedPod()
+      const events: string[] = []
+      const loginItems = statefulLoginItems({ 'codes.pod.app.acc.tick.plist': 'enabled' }, events)
+      const before = moved ? '/Applications/Pod.app' : appBundlePath(pod.execPath)
+      writeFileSync(
+        join(pod.home, ACC_STATE_DIR, ACC_SERVICES_REPORT),
+        JSON.stringify({
+          version: 1,
+          app: before,
+          services: [{ kind: 'agent', name: 'codes.pod.app.acc.tick.plist', status: 'enabled' }]
+        })
+      )
+      const log = vi.fn()
+      const supervisor = startPodAccSupervisor({
+        config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
+        ...pod,
+        platform: 'darwin',
+        env: {},
+        run: vi.fn(async () => result(1)),
+        loginItems: loginItems.api,
+        appId: 'codes.pod.app',
+        setTrayYield: () => {},
+        syncTray: () => {},
+        log
+      })
+      await supervisor.services
+      supervisor.stop()
+      expect(events).toEqual(
+        moved
+          ? ['unregister codes.pod.app.acc.tick.plist', 'register codes.pod.app.acc.tick.plist']
+          : []
+      )
+      const report = JSON.parse(
+        readFileSync(join(pod.home, ACC_STATE_DIR, ACC_SERVICES_REPORT), 'utf8')
+      )
+      expect(report.app).toBe(appBundlePath(pod.execPath))
+      expect(log.mock.calls.some(([line]) => String(line).includes('Pod moved from'))).toBe(moved)
+    }
+  })
+
   it('unregisters every Pod service once claude-acc was handed back', async () => {
     const loginItems = fakeLoginItems()
     const pod = installedPod('brew')

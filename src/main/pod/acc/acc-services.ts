@@ -1,5 +1,12 @@
-import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync
+} from 'node:fs'
+import { join, resolve } from 'node:path'
 import { ACC_MENU_HELPER_APP, ACC_STATE_DIR } from './acc-lifecycle'
 
 /**
@@ -104,6 +111,31 @@ export function removeAccServices(api: LoginItemApi, services: AccService[]): Ac
 
 /** $STATE/pod-services.json: what Pod registered, read by every native acc surface through AccKit. */
 export const ACC_SERVICES_REPORT = 'pod-services.json'
+
+/**
+ * The bundle Pod last registered its services from, when that was another one than `appPath`:
+ * Pod.app moved, or the one-app layout put the registrar in Contents/Helpers/Pod Runtime.app.
+ * launchd's jobs still name the old bundle's BundleProgram, and their status may read enabled,
+ * so ensureAccServices alone would leave them pointing at files that are gone.
+ */
+export function accServicesMovedFrom(home: string, appPath: string): string | null {
+  try {
+    const report: unknown = JSON.parse(
+      readFileSync(join(home, ACC_STATE_DIR, ACC_SERVICES_REPORT), 'utf8')
+    )
+    if (typeof report !== 'object' || report === null) {
+      return null
+    }
+    const app = Reflect.get(report, 'app')
+    const services = Reflect.get(report, 'services')
+    const registered =
+      Array.isArray(services) &&
+      services.some((entry) => Reflect.get(Object(entry), 'status') === 'enabled')
+    return typeof app === 'string' && registered && resolve(app) !== resolve(appPath) ? app : null
+  } catch {
+    return null
+  }
+}
 
 function entry({ service, status }: AccServiceReport) {
   return { kind: service.kind, name: service.serviceName, status }

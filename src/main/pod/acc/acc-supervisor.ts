@@ -12,6 +12,7 @@ import {
 } from './acc-lifecycle'
 import { writeAccLifecycleRecord } from './acc-lifecycle-record'
 import {
+  accServicesMovedFrom,
   bundledAccServices,
   ensureAccServices,
   readAccServiceStatus,
@@ -169,7 +170,14 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     }
     servicesOwned = true
     payloadVersion = payload
-    return publishReport(ensureAccServices(loginItems, bundledAccServices(appPath, appId)))
+    const bundled = bundledAccServices(appPath, appId)
+    const movedFrom = accServicesMovedFrom(options.home, appPath)
+    if (movedFrom) {
+      // unregister first: a register over an enabled job would keep the old bundle's paths
+      options.log(`claude-acc: Pod moved from ${movedFrom}, registering its services again`)
+      removeAccServices(loginItems, bundled)
+    }
+    return publishReport(ensureAccServices(loginItems, bundled))
   }
   const removeServices = async (): Promise<AccServiceReport[]> => {
     const { loginItems, appId } = options
