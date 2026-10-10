@@ -197,6 +197,40 @@ orca_tags=$(git for-each-ref --format='%(refname)' 'refs/pod-stack/orca-tags/')
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+# The shared repository is a blob:none partial clone. Git fetches a missing blob the moment it
+# reads one, one pack per request, and the diffs and merges of a run once added 50-90 packs a
+# minute. Lazy fetching is off for the whole run; each step fetches the blobs it reads in one
+# batch first (prefetch_replay), and a blob that is still missing fails the run loudly.
+export GIT_NO_LAZY_FETCH=1
+promisor=$(git config --get-regexp '^remote\..*\.promisor$' 2>/dev/null \
+  | awk '$2 == "true" { sub(/^remote\./, "", $1); sub(/\.promisor$/, "", $1); print $1; exit }' || true)
+
+# Reads object ids on stdin and fetches the missing ones from the promisor remote in one request.
+ensure_blobs() {
+  local missing
+  missing=$(grep -v '^0*$' | sort -u | git cat-file --batch-check='%(objectname) %(objecttype)' | awk '$2 == "missing" { print $1 }' || true)
+  [ -n "$missing" ] || return 0
+  [ -n "$promisor" ] || die "$(printf '%s\n' "$missing" | wc -l | tr -d ' ') blob(s) missing and no promisor remote to fetch them from"
+  printf '    (fetching %d blob(s) from %s)\n' "$(printf '%s\n' "$missing" | wc -l | tr -d ' ')" "$promisor" >&2
+  printf '%s\n' "$missing" | git -c fetch.negotiationAlgorithm=noop fetch --quiet --no-tags --no-write-fetch-head \
+    --recurse-submodules=no --filter=blob:none --stdin "$promisor"
+}
+
+# Fetches, in one request, the blobs read by diffing each "<from> <to>" pair on stdin, plus the
+# blobs of the same paths in <onto> (the stack a replay merges into); pass - for no <onto>.
+prefetch_replay() {
+  local onto=$1 raw
+  raw=$(while read -r from to; do git diff-tree -r --no-commit-id --raw --no-abbrev --no-renames "$from" "$to"; done)
+  [ -n "$raw" ] || return 0
+  {
+    printf '%s\n' "$raw" | awk -F'\t' '{ split($1, m, " "); if (m[1] != ":160000") print m[3]; if (m[2] != "160000") print m[4] }'
+    if [ "$onto" != - ]; then
+      git ls-tree -r --full-tree "$onto" | awk -F'\t' 'NR == FNR { want[$0] = 1; next } ($2 in want) { split($1, m, " "); if (m[2] == "blob") print m[3] }' \
+        <(printf '%s\n' "$raw" | cut -f2- | sort -u) -
+    fi
+  } | ensure_blobs
+}
+
 pin_blob=$(bash "$base_script" pin "$base_sha" refs/pod-stack/orca-tags/ "refs/remotes/$upstream_remote/main" | git hash-object -w --stdin)
 
 # Replace upstream.json in a tree with the pin for the base commit.
@@ -296,6 +330,7 @@ while IFS=$'\t' read -r -u 3 topic key value base pin squash src src_since hold;
     squash_base=$(git merge-base "$ref_sha" "$upstream_main")
     git merge-base --is-ancestor "$squash_base" "$base_sha" \
       || printf '    ! %s has merged Orca main past %s; its net change may rely on newer Orca code\n' "$topic" "$(short "$base_sha")"
+    printf '%s %s\n' "$squash_base" "$ref_sha" | prefetch_replay "$tip"
     set +e
     merge_out=$(git merge-tree --write-tree --name-only --no-messages --merge-base="$squash_base" "$tip" "$ref_sha")
     merge_status=$?
@@ -349,7 +384,9 @@ while IFS=$'\t' read -r -u 3 topic key value base pin squash src src_since hold;
   fi
 
   picked=0
-  for commit in $(git rev-list --stdin --reverse --topo-order --no-merges <<<"$revs"); do
+  entry_commits=$(git rev-list --stdin --reverse --topo-order --no-merges <<<"$revs")
+  [ -z "$entry_commits" ] || printf '%s\n' "$entry_commits" | sed 's/.*/&^ &/' | prefetch_replay "$tip"
+  for commit in $entry_commits; do
     subject=$(git log -1 --format=%s "$commit")
     case $seen in *" $commit "*)
       printf '    = %s %s (already stacked by an earlier entry)\n' "$(short "$commit")" "$subject"
@@ -390,6 +427,12 @@ while IFS=$'\t' read -r -u 3 topic key value base pin squash src src_since hold;
     set +e
     merge_out=$(git merge-tree --write-tree --name-only --no-messages --merge-base="$parent" "$tip" "$commit")
     merge_status=$?
+    if [ "$merge_status" -gt 1 ]; then
+      # A blob the entry's prefetch missed (the stack's side of a file an earlier commit merged).
+      printf '%s %s\n' "$parent" "$commit" | prefetch_replay "$tip"
+      merge_out=$(git merge-tree --write-tree --name-only --no-messages --merge-base="$parent" "$tip" "$commit")
+      merge_status=$?
+    fi
     set -e
     # upstream.json is rewritten with the pin below, so a conflict confined to it is no conflict.
     if [ "$merge_status" -eq 1 ] && [ "$(printf '%s\n' "$merge_out" | tail -n +2 | grep -v '^$')" = upstream.json ]; then
@@ -475,7 +518,9 @@ while IFS=$'\t' read -r c_index c_topic c_ref c_pin c_src c_since c_hold; do
   fi
   src_revs=$(printf '%s\n' "$src_sha" "^$upstream_main" "^$base_sha"; [ "$c_since" = - ] || printf '^%s\n' "$(git rev-parse --verify "$c_since^{commit}")"; [ -z "$orca_tags" ] || printf '%s\n' "$orca_tags" | sed 's/^/^/')
   missing=0
-  for commit in $(git rev-list --stdin --no-merges <<<"$src_revs"); do
+  src_commits=$(git rev-list --stdin --no-merges <<<"$src_revs")
+  [ -z "$src_commits" ] || printf '%s\n' "$src_commits" | sed 's/.*/&^ &/' | prefetch_replay -
+  for commit in $src_commits; do
     case $seen in *" $commit "*) continue ;; esac
     k=$(git log -1 --format='%ae%n%aI%n%s' "$commit" | git hash-object --stdin)
     grep -q "^$k " "$tmp/commit-keys" && continue
@@ -517,12 +562,14 @@ printf '\nResult: %s, %d commit(s) on Orca %s (%s)\n' "$(short "$tip")" "$picked
 old=$(git rev-parse --verify --quiet "refs/remotes/origin/$branch^{commit}" || git rev-parse --verify --quiet "refs/heads/$branch^{commit}" || true)
 dropped=''
 if [ -n "$old" ]; then
+  git rev-parse --verify --quiet "$old:upstream.json" | ensure_blobs || true
   old_base=$(git show "$old:upstream.json" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s);process.stdout.write(p.ref||p.sha||"")}catch{}})' || true)
   if [ -z "$old_base" ]; then
     printf 'Current %s: %s has no upstream.json, so it is not a Pod build.\n' "$branch" "$(short "$old")"
     dropped="everything on the current $branch (applying replaces it)"$'\n'
   else
     git merge-base --is-ancestor "$old_base" "$old" || old_base=$(git merge-base "$old" "$base_sha")
+    git rev-list --no-merges "$old_base..$old" "$old_base..$tip" | sed 's/.*/&^ &/' | prefetch_replay -
     # A commit that only re-pins upstream.json is replaced by the new pin, not lost.
     while read -r mark commit; do
       [ "$mark" = + ] || continue
