@@ -15,6 +15,9 @@ const MACOS_HELPERS = ['orca-notification-status', 'orca-keyboard-layout']
 const VISIBLE_PLIST_KEY =
   /^(CFBundleName|CFBundleDisplayName|CFBundleExecutable|NS\w+UsageDescription)$/
 const ORCA_NAME = /orca/i
+// Bundles macOS names a process or a login item after: nested apps (Pod Menu, PodNative), XPC
+// services (Activity Monitor) and app extensions.
+const VISIBLE_BUNDLE = /\.(app|xpc|appex)$/
 // Folders that hold no bundle a user sees: packed JS and Electron's framework internals.
 const SKIPPED_FOLDER = /^(node_modules|app\.asar\.unpacked|.+\.framework|.+\.lproj)$/
 
@@ -102,16 +105,16 @@ function readPlistStrings(plist) {
   )
 }
 
-function appBundles(dir, found = []) {
+function visibleBundles(dir, found = []) {
   for (const name of readdirSync(dir).sort()) {
     const path = join(dir, name)
     if (SKIPPED_FOLDER.test(name) || !statSync(path).isDirectory()) {
       continue
     }
-    if (name.endsWith('.app')) {
+    if (VISIBLE_BUNDLE.test(name)) {
       found.push(path)
     }
-    appBundles(path, found)
+    visibleBundles(path, found)
   }
   return found
 }
@@ -119,7 +122,7 @@ function appBundles(dir, found = []) {
 /** Every Orca name a packaged product shows as an app, process or permission prompt. */
 function upstreamNameLeaks(appPath) {
   const leaks = []
-  for (const bundle of [appPath, ...appBundles(join(appPath, 'Contents'))]) {
+  for (const bundle of [appPath, ...visibleBundles(join(appPath, 'Contents'))]) {
     const where = bundle === appPath ? basename(appPath) : bundle.slice(appPath.length + 1)
     if (bundle !== appPath && ORCA_NAME.test(basename(bundle))) {
       leaks.push(`${where}: bundle name`)
