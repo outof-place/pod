@@ -13,7 +13,7 @@ export function hidePodUiHostWindowOnClose(window: BrowserWindow, quitting: bool
   if (!BrowserWindow.getAllWindows().some((other) => other.isVisible())) {
     app.hide()
   }
-  sendToPodUi({ type: 'hidden' })
+  sendToPodUi({ type: 'surfaceHidden' })
   return true
 }
 
@@ -23,5 +23,5 @@ export function forwardPodUiHostNotificationClick(target: {
   tabId?: string
   leafId?: string
 }): boolean {
-  return isPodUiHostLaunch() && sendToPodUi({ type: 'focus', ...target })
+  return isPodUiHostLaunch() && sendToPodUi({ type: 'activate', ...target })
 }
