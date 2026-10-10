@@ -405,7 +405,56 @@ describe('claude-acc supervisor', () => {
     supervisor.stop()
   })
 
-  it("registers pod-rootd when the panel's Enable root helper… leaves a request", async () => {
+  it.each([
+    ['registers', true],
+    ['leaves', false]
+  ] as const)(
+    "%s pod-rootd when the panel's Enable root helper… asks and Pod's dialog answers %s",
+    async (_verb, confirmed) => {
+      const pod = installedPod('pod', '1.31.0', { rootd: true })
+      const loginItems = statefulLoginItems({})
+      const log = vi.fn()
+      const confirmRootd = vi.fn(async () => confirmed)
+      const supervisor = startPodAccSupervisor({
+        config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
+        ...pod,
+        platform: 'darwin',
+        env: {},
+        run: vi.fn(async () => result(1)),
+        loginItems: loginItems.api,
+        appId: 'codes.pod.app',
+        setTrayYield: () => {},
+        syncTray: () => {},
+        log,
+        probeMs: 10,
+        confirmRootd
+      })
+      await supervisor.services
+      const at = Date.now() / 1000
+      const request = join(pod.home, ACC_STATE_DIR, 'pod-rootd-request.json')
+      writeFileSync(request, JSON.stringify({ action: 'enable', at }), { mode: 0o600 })
+      const report = () =>
+        JSON.parse(readFileSync(join(pod.home, ACC_STATE_DIR, ACC_SERVICES_REPORT), 'utf8'))
+      await vi.waitFor(() => expect(report().rootdRequest?.at).toBe(at))
+      expect(confirmRootd).toHaveBeenCalledOnce()
+      expect(existsSync(request)).toBe(false)
+      expect(report().rootdRequest.outcome).toBe(confirmed ? 'registered' : 'declined')
+      expect(
+        loginItems.set.mock.calls.some(([settings]) => settings.type === 'daemonService')
+      ).toBe(confirmed)
+      expect(log).toHaveBeenCalledWith(
+        'claude-acc: pod-rootd requested in the panel, asking to confirm'
+      )
+      expect(log).toHaveBeenCalledWith(
+        confirmed
+          ? 'claude-acc: pod-rootd request registered (enabled)'
+          : 'claude-acc: pod-rootd request declined'
+      )
+      supervisor.stop()
+    }
+  )
+
+  it('declines a pod-rootd request when Pod has no way to ask', async () => {
     const pod = installedPod('pod', '1.31.0', { rootd: true })
     const loginItems = statefulLoginItems({})
     const log = vi.fn()
@@ -428,14 +477,12 @@ describe('claude-acc supervisor', () => {
       mode: 0o600
     })
     await vi.waitFor(() =>
-      expect(loginItems.set).toHaveBeenCalledWith({
-        openAtLogin: true,
-        type: 'daemonService',
-        serviceName: ROOTD
-      })
+      expect(log).toHaveBeenCalledWith('claude-acc: pod-rootd request declined')
     )
     expect(existsSync(request)).toBe(false)
-    expect(log).toHaveBeenCalledWith('claude-acc: pod-rootd asked for in the panel: enabled')
+    expect(loginItems.set.mock.calls.some(([settings]) => settings.type === 'daemonService')).toBe(
+      false
+    )
     supervisor.stop()
   })
 

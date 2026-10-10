@@ -127,7 +127,13 @@ function entry({ service, status }: AccServiceReport) {
 
 export function writeAccServicesReport(
   home: string,
-  report: { app: string; payload: string | null; services: AccServiceReport[]; at: Date }
+  report: {
+    app: string
+    payload: string | null
+    services: AccServiceReport[]
+    at: Date
+    rootdRequest?: { at: number; outcome: string } | null
+  }
 ): void {
   const dir = join(home, ACC_STATE_DIR)
   mkdirSync(dir, { recursive: true })
@@ -138,7 +144,9 @@ export function writeAccServicesReport(
     payload: report.payload,
     services: report.services.filter(({ service }) => service.kind !== 'daemon').map(entry),
     // a key of its own: AccKit before 0.4.0 fails on an unknown kind in services
-    daemons: report.services.filter(({ service }) => service.kind === 'daemon').map(entry)
+    daemons: report.services.filter(({ service }) => service.kind === 'daemon').map(entry),
+    // the last root helper request from the panel, so it stops waiting (acc-rootd.ts)
+    ...(report.rootdRequest ? { rootdRequest: report.rootdRequest } : {})
   }
   const path = join(dir, ACC_SERVICES_REPORT)
   // readers poll this file: never let one see half of it

@@ -38,10 +38,11 @@ function home(body: unknown, mode = 0o600): { home: string; request: string } {
 
 describe('pod-rootd requests from the panel', () => {
   it('takes a fresh enable request of this account', () => {
-    const { home: h, request } = home({ action: 'enable', at: NOW.getTime() / 1000 - 30 })
-    expect(takeAccRootdRequest(h, NOW)).toBe(true)
+    const at = NOW.getTime() / 1000 - 30
+    const { home: h, request } = home({ action: 'enable', at })
+    expect(takeAccRootdRequest(h, NOW)).toEqual({ ok: true, at })
     expect(existsSync(request)).toBe(false)
-    expect(takeAccRootdRequest(h, NOW)).toBe(false)
+    expect(takeAccRootdRequest(h, NOW)).toBeNull()
   })
 
   it.each([
@@ -52,13 +53,16 @@ describe('pod-rootd requests from the panel', () => {
     ['one others can write', { action: 'enable', at: NOW.getTime() / 1000 }, 0o620]
   ])('refuses and removes %s', (_name, body, mode) => {
     const { home: h, request } = home(body, mode)
-    expect(takeAccRootdRequest(h, NOW)).toBe(false)
+    expect(takeAccRootdRequest(h, NOW)).toMatchObject({ ok: false })
     expect(existsSync(request)).toBe(false)
   })
 
   it("refuses a request another account's process could have left", () => {
     const { home: h } = home({ action: 'enable', at: NOW.getTime() / 1000 })
-    expect(takeAccRootdRequest(h, NOW, (process.getuid?.() ?? 0) + 1)).toBe(false)
+    expect(takeAccRootdRequest(h, NOW, (process.getuid?.() ?? 0) + 1)).toEqual({
+      ok: false,
+      reason: "not a regular file of this account's"
+    })
   })
 
   it('never follows a symlink, and leaves its target alone', () => {
@@ -68,11 +72,11 @@ describe('pod-rootd requests from the panel', () => {
       mode: 0o600
     })
     symlinkSync(target, request)
-    expect(takeAccRootdRequest(h, NOW)).toBe(false)
+    expect(takeAccRootdRequest(h, NOW)).toEqual({ ok: false, reason: 'not a regular file' })
     expect(existsSync(target)).toBe(true)
   })
 
   it('finds nothing when no one asked', () => {
-    expect(takeAccRootdRequest(home(undefined).home, NOW)).toBe(false)
+    expect(takeAccRootdRequest(home(undefined).home, NOW)).toBeNull()
   })
 })

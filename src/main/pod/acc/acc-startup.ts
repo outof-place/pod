@@ -1,12 +1,14 @@
 import { userInfo } from 'node:os'
 import { join } from 'node:path'
-import { app } from 'electron'
+import { app, dialog } from 'electron'
 import { runProcess } from '../../../shared/child-process/run-process'
 import { getProductIdentity } from '../../product-identity/product-identity'
 import { setMacTrayYield } from '../../tray/system-tray'
 import { syncMacMenuBarIcon } from '../../startup/main-window-actions'
 import { mainProcessState as state } from '../../startup/main-process-state'
+import { isBackgroundLaunch } from '../../window/foreground-activation-policy'
 import { getPodDistroConfig } from '../pod-distro-config'
+import { ACC_ROOTD_CONFIRM_DIALOG } from './acc-rootd'
 import { startPodAccSupervisor } from './acc-supervisor'
 
 let started = false
@@ -18,6 +20,17 @@ function accountHome(): string | null {
   } catch {
     return null
   }
+}
+
+/** Asks before pod-rootd is registered, in front: the request came from Pod Menu, another app. */
+async function confirmRootd(): Promise<boolean> {
+  // an automated run never shows a window, and has no user to answer
+  if (isBackgroundLaunch()) {
+    return false
+  }
+  app.focus({ steal: true })
+  const { response } = await dialog.showMessageBox(ACC_ROOTD_CONFIRM_DIALOG)
+  return response === 0
 }
 
 /** Electron wiring for the supervisor; a no-op in builds whose identity has no claude-acc section. */
@@ -50,7 +63,8 @@ export function startPodAccFromStartup(): void {
         syncMacMenuBarIcon(state.store.getSettings().showMenuBarIcon !== false)
       }
     },
-    log: (message) => console.log(`[pod] ${message}`)
+    log: (message) => console.log(`[pod] ${message}`),
+    confirmRootd
   })
   app.once('will-quit', () => supervisor.stop())
 }
