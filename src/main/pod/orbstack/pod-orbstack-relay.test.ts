@@ -2,7 +2,8 @@ import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_pr
 import { EventEmitter } from 'node:events'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer as createHttpServer, request, type IncomingHttpHeaders } from 'node:http'
-import { createServer as createHttpsServer, request as httpsRequest } from 'node:https'
+import { createSecureServer } from 'node:http2'
+import { request as httpsRequest } from 'node:https'
 import { connect, createServer, type AddressInfo, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -250,8 +251,8 @@ describe.skipIf(process.platform === 'win32' || !hasPython())('relay agent over 
     const { relays, route, hostsFile, caPath } = await setup()
     const upstreamCa = createSandboxCa('stub-upstream')
     const keys: (string | string[] | undefined)[] = []
-    const upstream = createHttpsServer(
-      { key: upstreamCa.leafKeyPem, cert: upstreamCa.leafCertPem },
+    const upstream = createSecureServer(
+      { allowHTTP1: true, key: upstreamCa.leafKeyPem, cert: upstreamCa.leafCertPem },
       (req, res) => {
         keys.push(req.headers['x-api-key'])
         req.resume()
