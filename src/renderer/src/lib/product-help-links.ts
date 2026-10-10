@@ -1,5 +1,6 @@
 // Fork-only (Pod): help-menu destinations. A product without Stably's services drops Orca's docs,
 // community and feedback endpoints and points at its own repository instead.
+import { isStablyHostedUrl } from '../../../shared/stably-hosted-url'
 import { getProductUiIdentity } from './product-ui-identity'
 
 export type ProductHelpLinks = {
@@ -21,7 +22,8 @@ export function resolveProductHelpLinks(
   }
   const repository = product.repositoryUrl
   return {
-    docs: null,
+    // Why: pod/decouple rewrites docs to the product's site; a bare branch still points at Stably's.
+    docs: upstream.docs && !isStablyHostedUrl(upstream.docs) ? upstream.docs : null,
     changelog: repository ? `${repository}/releases` : null,
     github: repository,
     discord: null,
