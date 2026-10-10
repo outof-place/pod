@@ -56,6 +56,7 @@ export function installGhosttyDebugHooks(sources: DebugHookSources): void {
       processUsage: (pid: number) => loadGhosttyTerminalAddon()?.debugProcessUsage(pid) ?? null,
       counters: () => addon()?.debugCounters() ?? null,
       windowOcclusion: (onScreen: boolean | null) => addon()?.debugWindowOcclusion(onScreen),
+      mousePressed: (pressed: boolean | null) => addon()?.debugMousePressed(pressed),
       releaseKeyboard: (surfaceIds: number[]) => addon()?.releaseKeyboard(surfaceIds),
       forwardedChords: sources.forwardedChords,
       mainFeed: nativeTerminalFeedDebug
