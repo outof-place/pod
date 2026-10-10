@@ -22,6 +22,7 @@ import {
   applyForwardedChords,
   routeNativeInputEvent
 } from './ghostty-native-terminal-input'
+import { registerProductTerminalFonts } from '../product-identity/product-terminal-fonts'
 
 type SurfaceOwner = {
   webContents: WebContents
@@ -48,6 +49,7 @@ function ensureInitialized(
   if (!addon) {
     return null
   }
+  registerProductTerminalFonts(addon)
   const path = writeGhosttyConfig(appearance, zoomFactor) ?? ghosttyConfigPath()
   if (!addon.init(path)) {
     console.error('[native-terminal] Ghostty failed to initialize')

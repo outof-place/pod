@@ -9,6 +9,7 @@
 
 #import <AppKit/AppKit.h>
 #import <Carbon/Carbon.h>
+#import <CoreText/CoreText.h>
 #import <CoreImage/CoreImage.h>
 #import <IOSurface/IOSurface.h>
 #import <QuartzCore/QuartzCore.h>
@@ -2747,9 +2748,36 @@ napi_value DebugTextInputMenu(napi_env env, napi_callback_info info) {
   return result;
 }
 
+// Makes font files that are not installed visible to Ghostty's CoreText discovery in this
+// process only; never touches the user's font library. Returns how many are now registered.
+napi_value RegisterProcessFonts(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argv[1];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  uint32_t count = 0;
+  if (argc < 1 || napi_get_array_length(env, argv[0], &count) != napi_ok) return Number(env, 0);
+  int registered = 0;
+  for (uint32_t i = 0; i < count; i++) {
+    napi_value item;
+    if (napi_get_element(env, argv[0], i, &item) != napi_ok) continue;
+    std::string path = GetString(env, item);
+    if (path.empty()) continue;
+    NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path.c_str()]];
+    CFErrorRef error = nullptr;
+    if (CTFontManagerRegisterFontsForURL((__bridge CFURLRef)url, kCTFontManagerScopeProcess, &error)) {
+      registered++;
+    } else if (error != nullptr) {
+      if (CFErrorGetCode(error) == kCTFontManagerErrorAlreadyRegistered) registered++;
+      CFRelease(error);
+    }
+  }
+  return Number(env, registered);
+}
+
 napi_value ModuleInit(napi_env env, napi_value exports) {
   const napi_property_descriptor props[] = {
       {"init", nullptr, Init, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"registerProcessFonts", nullptr, RegisterProcessFonts, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"updateConfig", nullptr, UpdateConfig, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"updateSurfaceConfig", nullptr, UpdateSurfaceConfig, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"createSurface", nullptr, CreateSurface, nullptr, nullptr, nullptr, napi_default, nullptr},

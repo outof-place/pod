@@ -35,6 +35,8 @@ export type NativeSurfaceScrollbarState = {
 
 export type GhosttyTerminalAddon = {
   init: (configPath: string) => boolean
+  // Fork-only (Pod): process-scope CoreText registration; older addon builds lack it.
+  registerProcessFonts?: (paths: string[]) => number
   updateConfig: (configPath: string) => void
   // Gives one surface a config of its own; app-wide updateConfig then leaves it alone.
   updateSurfaceConfig: (surfaceId: number, configPath: string) => void
