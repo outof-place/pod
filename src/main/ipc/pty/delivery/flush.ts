@@ -24,7 +24,11 @@ import {
   sendPtyDataToRenderer,
   sendSkippedViewQueries
 } from './payload'
-import { dropViewGatedPendingPtyData } from './pending-view-gate-stamp'
+import {
+  dropOwnedOutsideViewPendingPtyData,
+  pendingIngestedDelivery,
+  viewOwesPendingReplies
+} from './pending-delivery-stamp'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
 import type { PtyIpcSession } from '../session'
 
@@ -118,7 +122,7 @@ export function flushPendingData(session: PtyIpcSession): void {
       // Why drop, never re-queue: the model already ingested hidden-gated bytes; reveal restores from the snapshot+seq machinery.
       if (shouldDropHiddenRendererPtyData(id, settings)) {
         session.pendingData.remove(selection)
-        if (pending.viewGatedAtIngestion !== true) {
+        if (viewOwesPendingReplies(pending)) {
           // Queued while the view parsed, so its queries are still the view's to answer.
           sendSkippedViewQueries(session, id, pending.data)
         }
@@ -146,11 +150,11 @@ export function flushPendingData(session: PtyIpcSession): void {
         session.pendingData.block(selection)
         continue
       }
-      if (pending.droppedOutput === true && pending.viewGatedAtIngestion === true) {
+      if (pending.droppedOutput === true && !viewOwesPendingReplies(pending)) {
         session.pendingData.remove(selection)
         session.updateProducerFlowControl(id)
         // Nothing for the view: its replies came from outside it, and it restores from main.
-        dropViewGatedPendingPtyData(session, id, pending)
+        dropOwnedOutsideViewPendingPtyData(session, id, pending)
         continue
       }
       if (pending.droppedOutput === true) {
@@ -205,8 +209,8 @@ export function flushPendingData(session: PtyIpcSession): void {
         if (pending.projectionAdmissionsTransferred) {
           nextPending.projectionAdmissionsTransferred = true
         }
-        if (pending.viewGatedAtIngestion === true) {
-          nextPending.viewGatedAtIngestion = true
+        if (pending.ingestedDelivery) {
+          nextPending.ingestedDelivery = pending.ingestedDelivery
         }
         session.pendingData.replaceWithRemainder(selection, nextPending)
       } else {
@@ -226,7 +230,7 @@ export function flushPendingData(session: PtyIpcSession): void {
           pending.transformed
         ),
         pending.projectionAdmissionIds,
-        pending.viewGatedAtIngestion === true
+        pendingIngestedDelivery(pending)
       )
       if (nextPending) {
         updatePendingProjectionAdmissions(

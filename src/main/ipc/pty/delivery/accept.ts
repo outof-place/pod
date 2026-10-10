@@ -16,9 +16,10 @@ import {
 } from './pending'
 import { sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
 import {
-  isRendererPtyViewGatedForIngestion,
-  settlePendingViewGateStamp
-} from './pending-view-gate-stamp'
+  pendingIngestedDelivery,
+  rendererPtyViewDeliveryForIngestion,
+  settlePendingDeliveryStamp
+} from './pending-delivery-stamp'
 import { shouldSendInteractiveOutputNow } from './interactive'
 import { requestDeliveryResyncForGatedPty } from './accounting'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
@@ -90,11 +91,11 @@ export function acceptPtyDataForRenderer(
   if (projection?.desktopSpan) {
     session.sourceCreditPendingPtys.add(payload.id)
   }
-  const viewGatedAtIngestion = isRendererPtyViewGatedForIngestion(session, payload.id)
+  const ingestedDelivery = rendererPtyViewDeliveryForIngestion(session, payload.id)
   const pending = appendPendingPtyData(
     session,
     payload.id,
-    settlePendingViewGateStamp(session, payload.id, viewGatedAtIngestion),
+    settlePendingDeliveryStamp(session, payload.id, ingestedDelivery),
     payload.data,
     startSeq,
     preservesSeq,
@@ -102,7 +103,7 @@ export function acceptPtyDataForRenderer(
     rawLength,
     payload.transformed === true,
     projectionId,
-    viewGatedAtIngestion
+    ingestedDelivery
   )
   const shouldEmitPendingCapRestoreMarker =
     pending.droppedOutput === true &&
@@ -154,7 +155,7 @@ export function acceptPtyDataForRenderer(
           ...(pending.droppedOutput === true ? { droppedOutput: true } : {})
         },
         pending.projectionAdmissionIds,
-        pending.viewGatedAtIngestion === true
+        pendingIngestedDelivery(pending)
       )
     } finally {
       session.updateProducerFlowControl(payload.id)

@@ -11,7 +11,10 @@ import {
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 import { recordCrashBreadcrumb } from '../../../crash-reporting/crash-breadcrumb-store'
 import { terminalOutputBacklogCapChars } from '../../../../shared/terminal-scrollback-policy'
-import { isHiddenPtyDeliveryGateEnabled } from '../../pty-hidden-delivery-gate'
+import {
+  isHiddenPtyDeliveryGateEnabled,
+  type RendererPtyViewDelivery
+} from '../../pty-hidden-delivery-gate'
 import {
   appendPendingProjectionAdmission,
   compactPendingProjectionAdmissions,
@@ -133,12 +136,12 @@ export function dropOversizedPendingPtyData(
     INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE
   )
   // Why no trimmed content tail: a mid-stream gap would corrupt the pane; the droppedOutput sentinel repaints from the snapshot and realigns by sequence (only query bytes ride along).
-  // Bytes ingested while the view was gated had their queries answered outside it.
+  // Bytes the view did not own at ingestion had their queries answered outside it.
   return {
-    data: pending.viewGatedAtIngestion
+    data: pending.ingestedDelivery
       ? ''
       : extractDroppedPtyQueryBytes(pending.data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS),
-    ...(pending.viewGatedAtIngestion ? { viewGatedAtIngestion: true } : {}),
+    ...(pending.ingestedDelivery ? { ingestedDelivery: pending.ingestedDelivery } : {}),
     droppedOutput: true,
     droppedMode2031Data: mode2031.data,
     droppedMode2031ScanState: mode2031.state,
@@ -157,7 +160,7 @@ export function appendPendingPtyData(
   rawLength = data.length,
   transformed = false,
   projectionSemanticsId?: string,
-  viewGatedAtIngestion = false
+  ingestedDelivery: RendererPtyViewDelivery = 'parse'
 ): PendingPtyData {
   // Why stay dropped at O(1): once over the cap the restore sentinel supersedes interim bytes; queries still get carved out (bounded) so replies survive the whole episode.
   if (existing?.droppedOutput === true) {
@@ -176,7 +179,7 @@ export function appendPendingPtyData(
       0,
       DROPPED_QUERY_SALVAGE_MAX_CHARS - existing.data.length
     )
-    const salvaged = existing.viewGatedAtIngestion
+    const salvaged = existing.ingestedDelivery
       ? ''
       : extractDroppedPtyQueryBytes(data).slice(0, remainingQueryCapacity)
     return {
@@ -201,7 +204,7 @@ export function appendPendingPtyData(
       ...(rawLength !== data.length ? { rawLength } : {}),
       ...(transformed ? { transformed: true } : {}),
       ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {}),
-      ...(viewGatedAtIngestion ? { viewGatedAtIngestion: true } : {})
+      ...(ingestedDelivery !== 'parse' ? { ingestedDelivery } : {})
     }
     updatePendingProjectionAdmissions(pending, projectionState)
     return dropOversizedPendingPtyData(session, id, pending)
@@ -213,8 +216,8 @@ export function appendPendingPtyData(
       ? { rawLength: existingRawLength + rawLength, transformed: true as const }
       : {}),
     ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {}),
-    // Callers settle a stamp change first (settlePendingViewGateStamp), so both sides agree.
-    ...(existing.viewGatedAtIngestion ? { viewGatedAtIngestion: true } : {})
+    // Callers settle an owner change first (settlePendingDeliveryStamp), so both sides agree.
+    ...(existing.ingestedDelivery ? { ingestedDelivery: existing.ingestedDelivery } : {})
   }
   updatePendingProjectionAdmissions(next, projectionState)
   if (typeof existing.startSeq === 'number') {

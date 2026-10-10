@@ -6,7 +6,8 @@ import { DROPPED_QUERY_SALVAGE_MAX_CHARS } from './constants'
 import { extractDroppedPtyQueryBytes } from './pending'
 import {
   recordHiddenRendererPtyDataDrop,
-  shouldDeliverHiddenRendererPtyDataToSidecarsOnly
+  rendererPtyViewDelivery,
+  type RendererPtyViewDelivery
 } from '../../pty-hidden-delivery-gate'
 import type { PtyDataPayload, PtyIpcSession } from '../session'
 
@@ -75,7 +76,7 @@ export function sendPtyDataToRenderer(
   id: string,
   payload: PtyDataPayload,
   projectionAdmissionIds?: readonly string[],
-  viewGatedAtIngestion = false
+  ingestedDelivery: RendererPtyViewDelivery = 'parse'
 ): { sent: boolean; projectionsTransferred: boolean } {
   if (!session.mainWindow) {
     if (projectionAdmissionIds) {
@@ -85,12 +86,13 @@ export function sendPtyDataToRenderer(
   }
   const charCount = getPtyPayloadCharCount(payload)
   // Why the ingestion stamp wins: main fixed who answers these bytes' queries when it ingested
-  // them, so bytes gated then never reach the view's parser, even after a reveal.
+  // them, so bytes the view did not own then never reach its parser, even after a reveal.
+  const viewOwesReplies = ingestedDelivery === 'parse'
   const sidecarOnly =
-    viewGatedAtIngestion ||
+    !viewOwesReplies ||
     (payload.droppedOutput !== true &&
-      shouldDeliverHiddenRendererPtyDataToSidecarsOnly(id, session.getSettings?.()))
-  if (sidecarOnly && !viewGatedAtIngestion) {
+      rendererPtyViewDelivery(id, session.getSettings?.()) === 'sidecarsOnly')
+  if (sidecarOnly && viewOwesReplies) {
     sendSkippedViewQueries(session, id, payload.data)
   }
   if (sidecarOnly) {
