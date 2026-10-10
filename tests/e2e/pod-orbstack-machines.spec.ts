@@ -30,7 +30,7 @@ test.skip(
 test.use({
   // The isolated E2E HOME is too long for orb's socket path; OrbStack lives under the real one.
   orcaAppExtraEnv: {
-    ORCA_POD_ORBSTACK: '1',
+    POD_ORBSTACK: '1',
     POD_ACC_LIFECYCLE: 'off',
     POD_E2E_ORBSTACK_HOME: os.homedir()
   },
