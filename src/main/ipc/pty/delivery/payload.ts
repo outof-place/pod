@@ -9,6 +9,7 @@ import {
   rendererPtyViewDelivery,
   type RendererPtyViewDelivery
 } from '../../pty-hidden-delivery-gate'
+import { applyRendererPtyViewFedElsewhere } from '../../pty-view-fed-elsewhere-state'
 import type { PtyDataPayload, PtyIpcSession } from '../session'
 
 export function makePtyDataPayload(
@@ -71,6 +72,25 @@ export function sendSkippedViewQueries(session: PtyIpcSession, id: string, data:
   }
 }
 
+/** Which flag keeps these bytes from xterm's parser, if any. Main fixed who answers their queries
+ *  at ingestion: bytes the view did not own then never reach its parser, even after a flip. */
+function rendererPtyDataFlag(
+  ingested: RendererPtyViewDelivery,
+  current: RendererPtyViewDelivery,
+  droppedOutput: boolean
+): 'sidecarOnly' | 'viewFedElsewhere' | null {
+  const gatedNow = current === 'sidecarsOnly' || current === 'drop'
+  if (ingested === 'parse') {
+    // A query-only sentinel the view owes always reaches the view, which salvages it.
+    if (droppedOutput || current === 'parse' || current === 'drop') {
+      return null
+    }
+    return current === 'skipXterm' ? 'viewFedElsewhere' : 'sidecarOnly'
+  }
+  // A native view main feeds still wants the pane's observers to run on its bytes.
+  return ingested === 'skipXterm' && !gatedNow ? 'viewFedElsewhere' : 'sidecarOnly'
+}
+
 export function sendPtyDataToRenderer(
   session: PtyIpcSession,
   id: string,
@@ -85,17 +105,16 @@ export function sendPtyDataToRenderer(
     return { sent: false, projectionsTransferred: projectionAdmissionIds !== undefined }
   }
   const charCount = getPtyPayloadCharCount(payload)
-  // Why the ingestion stamp wins: main fixed who answers these bytes' queries when it ingested
-  // them, so bytes the view did not own then never reach its parser, even after a reveal.
   const viewOwesReplies = ingestedDelivery === 'parse'
-  const sidecarOnly =
-    !viewOwesReplies ||
-    (payload.droppedOutput !== true &&
-      rendererPtyViewDelivery(id, session.getSettings?.()) === 'sidecarsOnly')
-  if (sidecarOnly && viewOwesReplies) {
+  const flag = rendererPtyDataFlag(
+    ingestedDelivery,
+    rendererPtyViewDelivery(id, session.getSettings?.()),
+    payload.droppedOutput === true
+  )
+  if (flag !== null && viewOwesReplies) {
     sendSkippedViewQueries(session, id, payload.data)
   }
-  if (sidecarOnly) {
+  if (flag === 'sidecarOnly') {
     if (recordHiddenRendererPtyDataDrop(id, charCount).shouldEmitRestoreMarker) {
       sendModelRestoreNeededMarker(
         session,
@@ -123,7 +142,11 @@ export function sendPtyDataToRenderer(
   try {
     session.mainWindow.webContents.send(
       'pty:data',
-      sidecarOnly ? { ...payload, sidecarOnly } : payload
+      flag === 'sidecarOnly'
+        ? { ...payload, sidecarOnly: true }
+        : flag === 'viewFedElsewhere'
+          ? { ...payload, viewFedElsewhere: true }
+          : payload
     )
   } catch (error) {
     const current = session.rendererDeliveryAccountingByPty.get(id)
@@ -150,6 +173,10 @@ export function sendPtyDataToRenderer(
     })
     console.error('[pty] renderer data send failed; payload will not be retried', error)
     return { sent: false, projectionsTransferred: projectionAdmissionIds !== undefined }
+  }
+  // A parse-once change the renderer asked for waits for this batch boundary.
+  if (session.pendingData.get(id) === undefined) {
+    applyRendererPtyViewFedElsewhere(id)
   }
   let projectionsTransferred = false
   if (projectionAdmissionIds) {
