@@ -15,6 +15,7 @@ import { watchMovedDaemons, type DaemonLoss } from './legacy-daemon-loss-watch'
 import { migrateLegacyProfile, type SafeStorageKeychainPort } from './legacy-profile-migration'
 import { createMacSafeStorageKeychain } from './macos-safe-storage-keychain'
 import { getProductIdentity, type ProductIdentity } from './product-identity'
+import { installProductCopyBoundaries } from './product-copy-boundaries'
 
 const PRIVACY_SETTINGS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy'
 
@@ -35,6 +36,8 @@ export function applyProductIdentityPreReady(
   app.setPath('userData', join(app.getPath('appData'), identity.userDataName))
   // Why pre-ready: Electron names the safeStorage keychain item "<app name> Safe Storage" then.
   app.setName(identity.keychainName)
+  // Why pre-ready: IPC handlers register after ready, each through the branded registrar.
+  installProductCopyBoundaries()
   // Why before the instance lock: Chromium writes its lock files into userData.
   return isServeMode || runProductFirstRun(identity)
 }
