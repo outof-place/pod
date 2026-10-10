@@ -206,6 +206,11 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.POD_SYNC_TOKEN }}
 
+      # Generated layers (scripts/pod-generated.sh) run codemods that need Node 22+.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
       - name: Fetch Orca main and its release tags
         run: |
           set -euo pipefail
@@ -259,6 +264,10 @@ jobs:
             exit 0
           }
 
+          # Generated layers are rebuilt on the rebased stack below, never rebased themselves.
+          while [ -n "$(git log -1 --format='%(trailers:key=Pod-Generated,valueonly)' HEAD)" ]; do
+            git reset --quiet --hard HEAD^
+          done
           git rebase --onto "$NEW_SHA" "$OLD_SHA" || record_conflict "rebase --onto ${NEW_SHA:0:10}"
 
           # Fold the new pin into the commit that owns upstream.json, so the stack stays one commit per change.
@@ -277,6 +286,20 @@ jobs:
             git commit --quiet -m "build(pod): pin the Orca base commit in upstream.json" \
               -m "Fork-only: Orca base pin read by CI and the release notes"
           fi
+
+          if ! regenerated=$(bash scripts/pod-generated.sh HEAD 2> "$RUNNER_TEMP/sync/generated.log"); then
+            {
+              echo "**Stage:** generated layers (scripts/pod-generated.sh)"
+              echo
+              echo '```'
+              cat "$RUNNER_TEMP/sync/generated.log"
+              echo '```'
+            } > "$report"
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cat "$RUNNER_TEMP/sync/generated.log"
+          git reset --quiet --hard "$regenerated"
 
           git range-diff --no-color "$OLD_SHA..$POD_SHA" "$NEW_SHA..HEAD" > "$RUNNER_TEMP/sync/range-diff.txt" || true
           echo "result=clean" >> "$GITHUB_OUTPUT"
