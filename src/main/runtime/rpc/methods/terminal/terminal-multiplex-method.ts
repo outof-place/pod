@@ -10,6 +10,7 @@ import { installMultiplexFlowControl } from './terminal-multiplex-flow-control'
 import { installMultiplexCleanup } from './terminal-multiplex-cleanup'
 import { installMultiplexSlotFrames } from './terminal-multiplex-slot-frames'
 import { installMultiplexSubscribeFrame } from './terminal-multiplex-subscribe-frame'
+import { registerPodLaneConnection } from '../../../pod-lane/pod-terminal-lanes'
 
 export const TERMINAL_MULTIPLEX_METHODS = [
   defineStreamingMethod({
@@ -67,8 +68,10 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         state.closeMultiplex,
         connectionId
       )
+      const unregisterPodLane = registerPodLaneConnection(state)
       emit({ type: 'ready' })
       await multiplexClosed
+      unregisterPodLane()
     }
   })
 ]

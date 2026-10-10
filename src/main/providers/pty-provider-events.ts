@@ -29,3 +29,6 @@ export type PtyBackgroundStreamEvent =
   /** The daemon answers this PTY's queries in every byte after this event iff `responder`. */
   | { id: string; kind: 'queryResponderMarker'; responder: boolean }
   | { id: string; kind: 'transientFact'; fact: PtyTransientFact }
+  // Pod: the direct terminal lane's switch markers and the input it wrote (pod-terminal-lanes.ts).
+  | { id: string; kind: 'podLane'; laneId: string; phase: 'attached' | 'detached'; reason?: string }
+  | { id: string; kind: 'podLaneInput'; data: string; at: number }
