@@ -13,7 +13,13 @@
   "credits": "Built on Orca by Stably AI, MIT. Not affiliated.",
   "stablyServices": false,
   "computerUseDisplayName": "Pod Computer Use",
-  "legacyProfile": { "userDataName": "orca", "keychainName": "orca" },
+  "homeDirName": ".pod",
+  "envPrefix": "POD_",
+  "legacyProfile": {
+    "userDataName": "orca",
+    "keychainName": "orca",
+    "homeDirName": ".orca"
+  },
   "bundledPlugins": {
     "publishers": ["outof-place"],
     "idPrefix": "pod-",
