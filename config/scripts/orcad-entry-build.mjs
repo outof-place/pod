@@ -15,7 +15,6 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts',
   foreignSqliteReader: 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts',
   portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',
-  nativeProcessSnapshotWorker: 'src/main/native-process-snapshot-worker-entry.ts',
   sessionScanner: 'src/main/ai-vault/session-scanner-service-entry.ts'
 }
 
