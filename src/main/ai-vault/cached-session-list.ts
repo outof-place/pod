@@ -123,6 +123,7 @@ export async function listAiVaultSessions(
           limit: args?.limit,
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths,
+          ...(args?.force === true ? { freshDiscovery: true } : {}),
           ...(await localAiVaultScanRoots())
         },
         scanSignal

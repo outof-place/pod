@@ -21,6 +21,13 @@ import {
 import { readAiVaultSessionTitlesFromFiles } from './session-title-file-reader'
 import { resolveHostReadableAiVaultTitleRequests } from './session-title-request-paths'
 import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
+import {
+  applySessionTreeChanges,
+  applySessionTreeWatchState,
+  forgetSessionTreePaths,
+  installSessionTreeWatchRequests,
+  refreshSessionTreeCache
+} from './session-tree-cache'
 
 if (!process.send) {
   throw new Error('AI Vault service requires a parent IPC channel.')
@@ -88,6 +95,9 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
         operation: 'firstPrompt',
         value: await readAiVaultFirstUserPrompt(request.request)
       }
+    }
+    if (request.options.freshDiscovery) {
+      refreshSessionTreeCache()
     }
     const startedAt = performance.now()
     const result = await scanAiVaultSessions({ ...request.options, signal: controller.signal })
@@ -180,6 +190,11 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
     if (raw.sessionSearch) {
       sessionSearch.apply(raw.sessionSearch)
     }
+    if (raw.sessionTreeWatch) {
+      installSessionTreeWatchRequests((root, restart) =>
+        send({ type: 'sessionTreeWatch', root, ...(restart ? { restart } : {}) })
+      )
+    }
     send({ type: 'ready', protocol: AI_VAULT_SERVICE_PROTOCOL_VERSION, pid: process.pid })
     return
   }
@@ -195,6 +210,9 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
     return
   }
   if (raw?.type === 'invalidate') {
+    // Why: the watcher's own delete event can trail this ack, and the scan that
+    // follows a delete must not list the file from a cached directory.
+    forgetSessionTreePaths(raw.paths)
     for (const path of raw.paths) {
       invalidatedPaths.delete(path)
       invalidatedPaths.add(path)
@@ -213,6 +231,14 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
   }
   if (raw?.type === 'sessionSearch') {
     sessionSearch.apply(raw.init)
+    return
+  }
+  if (raw?.type === 'sessionTree') {
+    applySessionTreeWatchState(raw.root, raw.state, raw.identity)
+    return
+  }
+  if (raw?.type === 'sessionTreeChanges') {
+    applySessionTreeChanges(raw.root, raw.changes)
     return
   }
   if (raw?.type === 'shutdown') {
