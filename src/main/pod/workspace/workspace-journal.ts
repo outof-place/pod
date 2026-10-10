@@ -1,19 +1,31 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { PodAdoptRecord, PodTidyArchive } from '../../../shared/pod-workspace-tidy-types'
+import { z } from 'zod'
+import type {
+  PodAdoptRecord,
+  PodTidyArchive,
+  PodTidyTrashed,
+  PodTuneRecord
+} from '../../../shared/pod-workspace-tidy-types'
 
 /** What Pod changed in the workspace, kept so each change can be undone. */
-export type WorkspaceJournalData = { archives: PodTidyArchive[]; adoptions: PodAdoptRecord[] }
+export type WorkspaceJournalData = {
+  archives: PodTidyArchive[]
+  trashed: PodTidyTrashed[]
+  adoptions: PodAdoptRecord[]
+  tunes: PodTuneRecord[]
+}
 
-const EMPTY: WorkspaceJournalData = { archives: [], adoptions: [] }
+// Pod alone writes this file; a list an older Pod lacks, or one that doesn't parse, starts empty.
+const JournalFile = z.object({
+  archives: z.array(z.custom<PodTidyArchive>()).catch([]),
+  trashed: z.array(z.custom<PodTidyTrashed>()).catch([]),
+  adoptions: z.array(z.custom<PodAdoptRecord>()).catch([]),
+  tunes: z.array(z.custom<PodTuneRecord>()).catch([])
+})
 
-function isJournal(value: unknown): value is WorkspaceJournalData {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Array.isArray(Reflect.get(value, 'archives')) &&
-    Array.isArray(Reflect.get(value, 'adoptions'))
-  )
+function normalize(value: unknown): WorkspaceJournalData {
+  return JournalFile.catch({ archives: [], trashed: [], adoptions: [], tunes: [] }).parse(value)
 }
 
 export function createWorkspaceJournal(path: string) {
@@ -21,10 +33,9 @@ export function createWorkspaceJournal(path: string) {
 
   const read = async (): Promise<WorkspaceJournalData> => {
     try {
-      const parsed: unknown = JSON.parse(await readFile(path, 'utf8'))
-      return isJournal(parsed) ? parsed : { ...EMPTY }
+      return normalize(JSON.parse(await readFile(path, 'utf8')))
     } catch {
-      return { archives: [], adoptions: [] }
+      return normalize(null)
     }
   }
 
@@ -48,6 +59,7 @@ export function createWorkspaceJournal(path: string) {
 
 export type WorkspaceJournal = ReturnType<typeof createWorkspaceJournal>
 
+/** The workspace state dir: the journal lives in the runtime profile, beside its other state. */
 export function workspaceJournalPath(userDataDir: string): string {
   return join(userDataDir, 'pod-workspace', 'journal.json')
 }
