@@ -19,6 +19,7 @@ export type PodOrbstackWorktreeRow = {
   sandboxReady: boolean
   sandboxAgents: boolean
   sandboxAgentVersion: string | null
+  sandboxNetworkIsolated: boolean
   containers: PodOrbstackContainer[]
   busy: boolean
 }
@@ -82,6 +83,7 @@ export function buildPodOrbstackWorktreeRows(
       sandboxReady: link?.sandboxReady === true,
       sandboxAgents: link?.sandboxAgents === true,
       sandboxAgentVersion: link?.sandboxAgentVersion ?? null,
+      sandboxNetworkIsolated: link?.sandboxNetworkIsolated === true,
       containers: containersByPath.get(worktree.path) ?? [],
       busy: status.busyWorktreeIds.includes(worktree.id)
     }
