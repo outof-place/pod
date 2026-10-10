@@ -211,6 +211,7 @@ describe('connectPanePty', () => {
           cols: number
           rows: number
           seq: number
+          pendingEscapeTailAnsi?: string
         }) => void
       }> {
         enableMainAuthority()
@@ -228,6 +229,7 @@ describe('connectPanePty', () => {
           cols: number
           rows: number
           seq: number
+          pendingEscapeTailAnsi?: string
         }>()
         getMainBufferSnapshot
           .mockReturnValueOnce(firstSnapshot.promise)
@@ -355,6 +357,57 @@ describe('connectPanePty', () => {
         // oxlint-disable-next-line no-control-regex -- the ESC byte IS the payload: this matches the CPR reply
         expect(replies.filter((reply) => /^\u001b\[\d+;\d+R$/.test(reply))).toHaveLength(1)
         expect(replies.filter((reply) => reply === DEFAULT_DA1_RESPONSE)).toHaveLength(1)
+      })
+
+      // Why: a PTY read can end inside a query, and each discarded chunk used to be scanned alone.
+      it('answers a query split across two queued chunks the snapshot covers', async () => {
+        const { transport, dataCallback, resolveFirstSnapshot } = await startInFlightRestore()
+
+        dataCallback('one\x1b[6', { seq: 50, rawLength: 6 })
+        dataCallback('ntwo', { seq: 54, rawLength: 4 })
+        resolveFirstSnapshot({ data: 'restored\r\n', cols: 100, rows: 30, seq: 63 })
+        await flushAsyncTicks(20)
+
+        const replies = transport.sendInputImmediate.mock.calls.map((call) => String(call[0]))
+        // oxlint-disable-next-line no-control-regex -- the ESC byte IS the payload: this matches the CPR reply
+        expect(replies.filter((reply) => /^\u001b\[\d+;\d+R$/.test(reply))).toHaveLength(1)
+      })
+
+      it('does not join query halves across a seq gap', async () => {
+        const { transport, dataCallback, resolveFirstSnapshot } = await startInFlightRestore()
+
+        dataCallback('one\x1b[6', { seq: 50, rawLength: 6 })
+        // Starts at 52, not 50: the bytes between were never delivered, so this is no continuation.
+        dataCallback('ntwo', { seq: 56, rawLength: 4 })
+        resolveFirstSnapshot({ data: 'restored\r\n', cols: 100, rows: 30, seq: 63 })
+        await flushAsyncTicks(20)
+
+        const replies = transport.sendInputImmediate.mock.calls.map((call) => String(call[0]))
+        // oxlint-disable-next-line no-control-regex -- the ESC byte IS the payload: this matches the CPR reply
+        expect(replies.filter((reply) => /^\u001b\[\d+;\d+R$/.test(reply))).toHaveLength(0)
+      })
+
+      // Why: the snapshot was taken mid-query, so its escape tail re-arms xterm's parser and the
+      // written rest completes the query there; a salvage reply as well would answer it twice.
+      it('leaves a query split at the snapshot seq to xterm', async () => {
+        const { pane, transport, dataCallback, resolveFirstSnapshot } = await startInFlightRestore()
+
+        // Bytes 60–70; the snapshot at 66 ends inside the CPR.
+        dataCallback('one\x1b[6ntwo', { seq: 70, rawLength: 10 })
+        resolveFirstSnapshot({
+          data: 'restored\r\n',
+          cols: 100,
+          rows: 30,
+          seq: 66,
+          pendingEscapeTailAnsi: '\x1b[6'
+        })
+        await flushAsyncTicks(20)
+
+        const replies = transport.sendInputImmediate.mock.calls.map((call) => String(call[0]))
+        // oxlint-disable-next-line no-control-regex -- the ESC byte IS the payload: this matches the CPR reply
+        expect(replies.filter((reply) => /^\u001b\[\d+;\d+R$/.test(reply))).toHaveLength(0)
+        const written = writtenFloodData(pane)
+        expect(written.indexOf('ntwo')).toBeGreaterThan(written.lastIndexOf('\x1b[6'))
       })
 
       it('sends salvaged queries immediately from an overflowing restore queue', async () => {
@@ -546,6 +599,66 @@ describe('connectPanePty', () => {
         const written = writtenData(pane)
         expect(written).not.toContain('OLD')
         expect(written).toContain('NEW')
+      })
+
+      it('answers a query split across two backlog chunks the snapshot covers', async () => {
+        const { transport, dataCallback } = await restoreVisiblePaneToBaseline()
+
+        dataCallback('OLD\x1b[6', { seq: 58, rawLength: 6 })
+        dataCallback('nX', { seq: 60, rawLength: 2 })
+        await flushAsyncTicks(8)
+
+        const replies = transport.sendInputImmediate.mock.calls.map((call) => String(call[0]))
+        // oxlint-disable-next-line no-control-regex -- the ESC byte IS the payload: this matches the CPR reply
+        expect(replies.filter((reply) => /^\u001b\[\d+;\d+R$/.test(reply))).toHaveLength(1)
+      })
+
+      // Why: those writes are older than the snapshot, so the cursor they leave is the snapshot's,
+      // not the one xterm had before it.
+      it('answers CPR in writes a snapshot apply discards from the snapshot cursor', async () => {
+        enableMainAuthority()
+        const { pane, transport } = await connectHiddenPane(
+          createDeps({ isVisibleRef: { current: true } })
+        )
+        const transportOptions = createdTransportOptions.at(-1) as {
+          onPtySpawn?: (ptyId: string) => void
+        }
+        transportOptions.onPtySpawn?.('pty-id')
+        pane.terminal.write.mockImplementation((data: string, callback?: () => void) => {
+          if (String(data).includes('restored snapshot')) {
+            pane.terminal.buffer.active.cursorY = 5
+            pane.terminal.buffer.active.cursorX = 7
+          }
+          callback?.()
+        })
+        const { writeTerminalOutput } =
+          await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+        // A held synchronized-output frame: still queued, unparsed, when the snapshot applies.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock pane terminal provides the write/buffer surface the scheduler uses, as in requestTerminalBacklogRecovery above.
+        writeTerminalOutput(pane.terminal as never, 'held\x1b[6n', {
+          foreground: true,
+          holdForeground: true
+        })
+        const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+          typeof vi.fn
+        >
+        getMainBufferSnapshot.mockResolvedValue({
+          data: 'restored snapshot\r\n',
+          cols: 100,
+          rows: 30,
+          seq: 64
+        })
+        const { _dispatchPtyModelRestoreNeededForTest } =
+          await import('./pty-model-restore-channel')
+        _dispatchPtyModelRestoreNeededForTest({
+          id: 'pty-id',
+          reason: 'pending-cap',
+          markerSeq: 64
+        })
+        await flushAsyncTicks(20)
+
+        const replies = transport.sendInputImmediate.mock.calls.map((call) => String(call[0]))
+        expect(replies).toEqual(['\x1b[6;8R'])
       })
 
       it('forces a fresh snapshot for an overlap whose offsets cannot be mapped', async () => {

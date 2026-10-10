@@ -3,6 +3,7 @@ import type { PtyDataMeta } from '../pty-dispatcher'
 import { HIDDEN_OUTPUT_RESTORE_PENDING_CHARS } from './hidden-output-restore-limits'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { discardedSeqRange } from './hidden-startup-renderer-query-write'
 import type { PendingHiddenOutputRestoreChunk } from './pending-hidden-output-restore-chunk'
 
 export function bindHiddenOutputRestoreChunk(session: ConnectPanePtySession): void {
@@ -21,7 +22,7 @@ export function bindHiddenOutputRestoreChunk(session: ConnectPanePtySession): vo
     session.hiddenOutputRestoreNeeded = true
     if (session.hiddenOutputRestorePendingOverflow) {
       // Why: the overflow latch discards everything queued at the next drain, so queueing more only grows the discard; salvage queries, drop content.
-      session.salvageRendererQueriesFromDiscardedRestoreData(data)
+      session.salvageRendererQueriesFromDiscardedRestoreData(data, discardedSeqRange(data, meta))
       session.armHiddenOutputRestoreForegroundDeadline()
       return
     }
@@ -34,9 +35,12 @@ export function bindHiddenOutputRestoreChunk(session: ConnectPanePtySession): vo
       session.hiddenOutputRestorePendingChars = 0
       session.hiddenOutputRestorePendingOverflow = true
       for (const chunk of discardedChunks) {
-        session.salvageRendererQueriesFromDiscardedRestoreData(chunk.data)
+        session.salvageRendererQueriesFromDiscardedRestoreData(
+          chunk.data,
+          discardedSeqRange(chunk.data, chunk)
+        )
       }
-      session.salvageRendererQueriesFromDiscardedRestoreData(data)
+      session.salvageRendererQueriesFromDiscardedRestoreData(data, discardedSeqRange(data, meta))
       session.armHiddenOutputRestoreForegroundDeadline()
       return
     }

@@ -16,6 +16,22 @@ import { recordHiddenRendererSkip } from './e2e-terminal-pty-harness'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
+/** Raw seq span of discarded bytes: `startSeq` is the seq before their first byte. */
+export type DiscardedSeqRange = { startSeq: number; endSeq: number }
+
+export function discardedSeqRange(
+  data: string,
+  meta: { seq?: number; rawLength?: number } | undefined
+): DiscardedSeqRange | undefined {
+  if (typeof meta?.seq !== 'number') {
+    return undefined
+  }
+  return { startSeq: meta.seq - (meta.rawLength ?? data.length), endSeq: meta.seq }
+}
+
+/** The unfinished query a discard ended in, kept for the discard that continues it. */
+type DiscardedQueryCarry = { ptyId: string | null; endSeq: number; pending: string }
+
 /** Hidden-pane startup renderer query extraction, output skipping, and salvage from discarded restore data. */
 export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySession): void {
   session.takeHiddenStartupRendererQueryPendingForForeground = function (data: string): {
@@ -110,33 +126,64 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
   }
 
   // Why: discarding flood bytes must not swallow terminal queries (a lost DSR/CPR hangs the program); the snapshot repaint owns the content, so synthesize replies via the immediate input path, not xterm replay.
-  session.salvageRendererQueriesFromDiscardedRestoreData = function (data: string): void {
-    if (!data || !data.includes('\x1b')) {
+  // `range` is the bytes' raw seq span; with it, a query split across seq-adjacent discards is still answered.
+  // `cursorAfter` holds the direct replies until a snapshot that covers the bytes has parsed, so CPR reads its cursor.
+  session.salvageRendererQueriesFromDiscardedRestoreData = function (
+    data: string,
+    range?: DiscardedSeqRange,
+    cursorAfter?: Promise<void>
+  ): void {
+    const ptyId = session.transport.getPtyId()
+    const carry: DiscardedQueryCarry | null = session.discardedQueryCarry
+    const carried =
+      range && carry?.ptyId === ptyId && carry.endSeq === range.startSeq ? carry.pending : ''
+    session.discardedQueryCarry = null
+    if (!data || (!carried && !data.includes('\x1b'))) {
       return
     }
-    const extracted = extractHiddenStartupRendererQueryData(data, '')
-    if (extracted.oscColorQueryData && session.shouldAnswerPaneOscColorQueries()) {
-      sendTerminalOscColorQueryReplies(
-        extracted.oscColorQueryData,
-        session.pane.terminal,
-        session.sendDesktopQueryReplyImmediate
-      )
+    const extracted = extractHiddenStartupRendererQueryData(data, carried)
+    if (range && extracted.pending) {
+      session.discardedQueryCarry = {
+        ptyId,
+        endSeq: range.endSeq,
+        pending: extracted.pending.slice(0, HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS)
+      }
     }
+    const directQueries: string[] = []
     let unansweredQueryData = ''
     for (const sequence of splitCsiSequences(
       extracted.statefulQueryData + extracted.statelessQueryData
     )) {
-      if (sequence === '\x1b[6n') {
-        // CPR from the live buffer; may be mid-repaint stale, but in a drop scenario liveness (unblock the reader) is the contract, not accuracy.
-        const buffer = session.pane.terminal.buffer.active
-        const row = Math.min(buffer.cursorY + 1, session.pane.terminal.rows)
-        const col = Math.min(buffer.cursorX + 1, session.pane.terminal.cols)
-        session.sendDesktopQueryReplyImmediate(`\x1b[${row};${col}R`)
-      } else if (sequence === '\x1b[c' || sequence === '\x1b[0c') {
-        session.sendDesktopQueryReplyImmediate(DEFAULT_DA1_RESPONSE)
+      if (sequence === '\x1b[6n' || sequence === '\x1b[c' || sequence === '\x1b[0c') {
+        directQueries.push(sequence)
       } else {
         unansweredQueryData += sequence
       }
+    }
+    const sendDirectReplies = (): void => {
+      if (extracted.oscColorQueryData && session.shouldAnswerPaneOscColorQueries()) {
+        sendTerminalOscColorQueryReplies(
+          extracted.oscColorQueryData,
+          session.pane.terminal,
+          session.sendDesktopQueryReplyImmediate
+        )
+      }
+      for (const sequence of directQueries) {
+        if (sequence === '\x1b[6n') {
+          // CPR from the live buffer; without cursorAfter it may be stale, but in a drop scenario liveness (unblock the reader) is the contract, not accuracy.
+          const buffer = session.pane.terminal.buffer.active
+          const row = Math.min(buffer.cursorY + 1, session.pane.terminal.rows)
+          const col = Math.min(buffer.cursorX + 1, session.pane.terminal.cols)
+          session.sendDesktopQueryReplyImmediate(`\x1b[${row};${col}R`)
+        } else {
+          session.sendDesktopQueryReplyImmediate(DEFAULT_DA1_RESPONSE)
+        }
+      }
+    }
+    if (cursorAfter) {
+      void cursorAfter.then(sendDirectReplies)
+    } else {
+      sendDirectReplies()
     }
     if (unansweredQueryData) {
       // Best-effort for rarer queries (DECRQM, DA2, XTVERSION): replay into xterm so its handlers answer when no replay is active.
