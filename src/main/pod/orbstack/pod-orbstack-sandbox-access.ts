@@ -6,6 +6,7 @@ import {
   type AnthropicRoute,
   type AnthropicUpstream
 } from './pod-orbstack-anthropic-route'
+import { createAnthropicUpstream } from './pod-orbstack-anthropic-upstream'
 import { readMacClaudePrivacy, type SandboxPrivacy } from './pod-orbstack-privacy-env'
 import type { SandboxRelays } from './pod-orbstack-relay'
 import { SANDBOX_CA_PATH } from './pod-orbstack-relay-agent'
@@ -30,6 +31,11 @@ export function createSandboxAccess(deps: {
   const hookTokens = createSandboxHookTokens()
   const cas = createSandboxCas()
   const routes = new Map<string, AnthropicRoute>()
+  // One HTTP/2 session to the API for every sandbox; it opens on the first request.
+  const client = createAnthropicUpstream({
+    target: deps.upstream,
+    log: (message) => deps.log?.(message)
+  })
 
   const dropRoute = (machine: string): void => {
     routes.get(machine)?.close()
@@ -46,6 +52,7 @@ export function createSandboxAccess(deps: {
       machine,
       ca: cas.forMachine(machine),
       upstream: deps.upstream,
+      client,
       privacy: () => privacy.get(machine) ?? readPrivacy(),
       log: (message) => deps.log?.(`${machine}: ${message}`)
     })
