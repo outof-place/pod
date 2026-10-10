@@ -11,7 +11,6 @@ const LARGE: PodGitProfileFacts = {
   trackedFiles: 35_108,
   packCount: 4_345,
   partialClone: true,
-  fsmonitorSupported: true,
   geometricMaintenance: true
 }
 
@@ -20,65 +19,58 @@ function byKey(rows: ReturnType<typeof planPodGitProfile>) {
 }
 
 describe('planPodGitProfile', () => {
-  it('sets every key on a large blobless clone that has none', () => {
+  it('sets the measured keys on a large blobless clone and offers the rest', () => {
     expect(byKey(planPodGitProfile(LARGE, {}))).toEqual({
-      'core.untrackedCache': 'set:always',
-      'core.fsmonitor': 'set:large-repo',
-      'index.version': 'set:large-repo',
-      'checkout.workers': 'set:always',
-      'checkout.thresholdForParallelism': 'set:always',
-      'fetch.writeCommitGraph': 'set:always',
-      'maintenance.strategy': 'set:always',
-      'maintenance.prefetch.enabled': 'set:always',
-      'maintenance.geometric-repack.schedule': 'set:pack-churn'
+      'checkout.thresholdForParallelism': 'set:measured',
+      'maintenance.strategy': 'set:measured',
+      'maintenance.prefetch.enabled': 'set:measured',
+      'maintenance.geometric-repack.schedule': 'set:pack-churn',
+      'feature.manyFiles': 'opt-in:many-files',
+      'repack.writeBitmaps': 'opt-in:bitmaps'
     })
+    expect(planPodGitProfile(LARGE, {}).every((row) => row.source === 'pod')).toBe(true)
   })
 
-  it('keeps small repos off the file watcher and index v4, and repacks them daily', () => {
+  it('repacks a full clone with few packs daily', () => {
     const rows = byKey(
       planPodGitProfile({ ...LARGE, trackedFiles: 400, packCount: 3, partialClone: false }, {})
     )
-    expect(rows['core.fsmonitor']).toBe('skip:small-repo')
-    expect(rows['index.version']).toBe('skip:small-repo')
     expect(rows['maintenance.geometric-repack.schedule']).toBe('skip:few-packs')
-    expect(rows['core.untrackedCache']).toBe('set:always')
+    expect(rows['maintenance.strategy']).toBe('set:measured')
   })
 
   it('never overrides a value the user set, in any scope', () => {
     const current: PodGitProfileCurrent = {
-      'core.fsmonitor': { local: 'false', other: false, recorded: null },
-      'checkout.workers': { local: null, other: true, recorded: null },
-      'core.untrackedcache': { local: 'true', other: false, recorded: null }
+      'checkout.thresholdforparallelism': { local: '100', other: false, recorded: null },
+      'maintenance.strategy': { local: null, other: true, recorded: null },
+      'feature.manyfiles': { local: 'false', other: false, recorded: null },
+      'maintenance.prefetch.enabled': { local: 'false', other: false, recorded: null }
     }
     const rows = byKey(planPodGitProfile(LARGE, current))
-    expect(rows['core.fsmonitor']).toBe('user:user-value')
-    expect(rows['checkout.workers']).toBe('user:user-value')
+    expect(rows['checkout.thresholdForParallelism']).toBe('user:user-value')
+    expect(rows['maintenance.strategy']).toBe('user:user-value')
+    expect(rows['feature.manyFiles']).toBe('user:user-value')
     // The same value the profile wants is kept, but still counts as the user's.
-    expect(rows['core.untrackedCache']).toBe('keep:user-value')
+    expect(rows['maintenance.prefetch.enabled']).toBe('keep:user-value')
   })
 
   it('reports its own earlier writes as already set', () => {
     const current: PodGitProfileCurrent = {
-      'core.untrackedcache': { local: 'true', other: false, recorded: 'true' }
+      'maintenance.strategy': { local: 'geometric', other: false, recorded: 'geometric' },
+      'repack.writebitmaps': { local: 'true', other: false, recorded: 'true' }
     }
-    expect(byKey(planPodGitProfile(LARGE, current))['core.untrackedCache']).toBe('keep:already-set')
+    const rows = byKey(planPodGitProfile(LARGE, current))
+    expect(rows['maintenance.strategy']).toBe('keep:already-set')
+    expect(rows['repack.writeBitmaps']).toBe('keep:bitmaps')
   })
 
-  it('degrades with an old git or a folder the watcher refuses', () => {
+  it('degrades with an old git', () => {
     const rows = byKey(
-      planPodGitProfile(
-        {
-          ...LARGE,
-          gitVersion: [2, 30, 1],
-          fsmonitorSupported: false,
-          geometricMaintenance: false
-        },
-        {}
-      )
+      planPodGitProfile({ ...LARGE, gitVersion: [2, 30, 1], geometricMaintenance: false }, {})
     )
-    expect(rows['core.fsmonitor']).toBe('skip:fsmonitor-unsupported')
-    expect(rows['checkout.workers']).toBe('skip:git-too-old')
+    expect(rows['checkout.thresholdForParallelism']).toBe('skip:git-too-old')
     expect(rows['maintenance.strategy']).toBe('skip:no-geometric-maintenance')
+    expect(rows['maintenance.geometric-repack.schedule']).toBe('skip:no-geometric-maintenance')
   })
 })
 
