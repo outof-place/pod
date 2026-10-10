@@ -21,7 +21,6 @@ import {
   type AiVaultServiceReadyWaiter
 } from './session-scanner-service-client-state'
 import { AiVaultServiceRestartPolicy } from './session-scanner-service-restart-policy'
-import { answerAiVaultServiceRootRequest } from './session-scanner-service-root-response'
 import {
   aiVaultServiceLane,
   isAiVaultServiceChildMessage,
@@ -205,7 +204,6 @@ export class AiVaultScannerServiceClient {
       return Promise.reject(error instanceof Error ? error : new Error(String(error)))
     }
     this.child = child
-    this.options.treeWatch?.attach(child)
     const waiter = createAiVaultServiceReadyWaiter(AI_VAULT_SERVICE_READY_TIMEOUT_MS, () =>
       this.onFault(new Error('AI Vault service did not become ready.'))
     )
@@ -224,11 +222,16 @@ export class AiVaultScannerServiceClient {
       return
     }
     if (message.type === 'sessionSearchRoots') {
-      answerAiVaultServiceRootRequest(this.child, message.id, this.options, () => this.child)
-      return
-    }
-    if (message.type === 'sessionTreeWatch') {
-      this.options.treeWatch?.watch(this.child, message.root, message.restart)
+      const child = this.child
+      const resolve = this.options.resolveSessionSearchRoots
+      void Promise.resolve()
+        .then(() => (resolve ? resolve() : (this.options.init().sessionSearch?.roots ?? null)))
+        .catch(() => null)
+        .then((roots) => {
+          if (child && this.child === child && child.connected) {
+            child.send({ type: 'sessionSearchRoots', id: message.id, roots }, () => undefined)
+          }
+        })
       return
     }
     if (message.type === 'ready') {
@@ -279,7 +282,6 @@ export class AiVaultScannerServiceClient {
       return
     }
     this.child = null
-    this.options.treeWatch?.detach()
     child.removeAllListeners()
     child.kill()
     if (this.readyWaiter) {
@@ -314,7 +316,6 @@ export class AiVaultScannerServiceClient {
     this.idleRetirement.clear()
     const child = this.child
     this.child = null
-    this.options.treeWatch?.detach()
     if (!child) {
       return
     }

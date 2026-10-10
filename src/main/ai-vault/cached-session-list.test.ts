@@ -100,15 +100,6 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
     expect(listRunningWslHomeDirsAsync).toHaveBeenCalledTimes(1)
   })
 
-  it('requests fresh discovery for an explicit refresh', async () => {
-    scanAiVaultSessionsInService.mockResolvedValue(scanResult('scan'))
-    await listAiVaultSessions()
-    await listAiVaultSessions({ force: true })
-
-    expect(scanAiVaultSessionsInService.mock.calls[0][0]).not.toHaveProperty('freshDiscovery')
-    expect(scanAiVaultSessionsInService.mock.calls[1][0]).toHaveProperty('freshDiscovery', true)
-  })
-
   it('skips running-distro discovery once a probe has reported no installed WSL distro', async () => {
     hasCachedWslDistros.mockReturnValue(true)
     getCachedWslDistros.mockReturnValue([])
