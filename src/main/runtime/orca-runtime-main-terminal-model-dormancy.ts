@@ -1,10 +1,19 @@
 import { OrcaRuntimeWithSerializeHeadlessTerminalBuffer } from './orca-runtime-serialize-headless-terminal-buffer'
 import { MainTerminalModelDormancy } from './main-terminal-model-dormancy'
+import { DaemonQueryResponderDelegation } from './daemon-query-responder-delegation'
 import {
+  isDaemonQueryResponderConfirmed,
+  isHiddenRendererPty,
   isHiddenRendererPtyViewGated,
   registerHiddenRendererPtyMarkListener,
+  registerHiddenRendererPtyUnmarkListener,
+  setHiddenDeliveryDaemonHandoff,
   setHiddenDeliveryModelHandoff
 } from '../ipc/pty-hidden-delivery-gate'
+import {
+  isNativeWindowsConptyPty,
+  isTerminalModelQueryAuthorityEnabled
+} from './terminal-model-query-authority'
 import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import type { RuntimeHeadlessTerminal } from './runtime-terminal-state-records'
@@ -20,13 +29,25 @@ const DORMANT_MODEL_SEED_TIMEOUT_MS = 2_000
 export type TerminalOutputReader = { kind: 'model' }
 
 export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSerializeHeadlessTerminalBuffer {
+  protected readonly daemonQueryResponderDelegation = this.createDaemonQueryResponderDelegation()
   protected readonly mainTerminalModelDormancy = this.createMainTerminalModelDormancy()
   // Why: only the alt-screen tracker dormancy installed is retired when the model returns.
   private readonly dormantModeTrackers = new WeakSet<TerminalKittyKeyboardModeTracker>()
 
   /** Per chunk in onPtyData, before reply ownership is captured; true when main skips its model. */
   protected syncMainTerminalModelDemand(ptyId: string, chunkStartSeq: number): boolean {
+    this.daemonQueryResponderDelegation.sync(ptyId)
     return this.mainTerminalModelDormancy.onChunk(ptyId, chunkStartSeq)
+  }
+
+  /** The daemon's in-order responder marker; the delivery gate has already applied it. */
+  noteDaemonQueryResponderMarker(ptyId: string, responder: boolean): void {
+    this.daemonQueryResponderDelegation.noteMarker(ptyId, responder)
+  }
+
+  /** Remote view presence changed: an attached remote view answers, so the daemon must stop. */
+  protected syncDaemonQueryResponder(ptyId: string): void {
+    this.daemonQueryResponderDelegation.sync(ptyId)
   }
 
   protected noteMainTerminalModelDemand(ptyId: string): void {
@@ -36,8 +57,12 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
   /** Registers a reader of this PTY's output; call the returned release when it stops reading. */
   acquireTerminalOutputReader(ptyId: string, reader: TerminalOutputReader): () => void {
     switch (reader.kind) {
-      case 'model':
-        return this.mainTerminalModelDormancy.pin(ptyId)
+      case 'model': {
+        const release = this.mainTerminalModelDormancy.pin(ptyId)
+        // Why: the reader may rely on main answering, so the daemon gives that role back now.
+        this.daemonQueryResponderDelegation.sync(ptyId)
+        return release
+      }
     }
   }
 
@@ -69,16 +94,73 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
       materializeModel: (ptyId) => this.materializeDormantMainTerminalModel(ptyId),
       setHandoffPending: setHiddenDeliveryModelHandoff
     })
-    // Why: the hide mark is the moment main may become the query responder.
-    registerHiddenRendererPtyMarkListener((ptyId) => dormancy.noteDemand(ptyId))
+    // Why: the hide mark is the moment main may become the query responder, unless the
+    // daemon takes that role.
+    registerHiddenRendererPtyMarkListener((ptyId) => {
+      this.daemonQueryResponderDelegation.sync(ptyId)
+      if (!this.daemonQueryResponderDelegation.isRequested(ptyId)) {
+        dormancy.noteDemand(ptyId)
+      }
+    })
+    registerHiddenRendererPtyUnmarkListener((ptyId) =>
+      this.daemonQueryResponderDelegation.sync(ptyId)
+    )
     return dormancy
+  }
+
+  private createDaemonQueryResponderDelegation(): DaemonQueryResponderDelegation {
+    return new DaemonQueryResponderDelegation({
+      lifecycleGeneration: (ptyId) => this.getPtyLifecycleGeneration(ptyId),
+      isHidden: isHiddenRendererPty,
+      shouldDelegate: (ptyId) => this.shouldDelegateDaemonQueryResponder(ptyId),
+      send: (ptyId, responder) =>
+        this.ptyController?.setDaemonQueryResponder?.(ptyId, responder, {
+          nativeWindowsConpty: isNativeWindowsConptyPty(ptyId)
+        }) === true,
+      // Why dormant only: a live model answers until the daemon confirms, so the view stays gated.
+      setHandoffPending: (ptyId, pending) =>
+        setHiddenDeliveryDaemonHandoff(
+          ptyId,
+          pending && this.mainTerminalModelDormancy.isDormant(ptyId)
+        ),
+      reclaim: (ptyId) => this.mainTerminalModelDormancy.noteDemand(ptyId)
+    })
+  }
+
+  // Why the dormancy rules: delegating only pays off when main's model may then rest.
+  private shouldDelegateDaemonQueryResponder(ptyId: string): boolean {
+    const settings = this.store?.getSettings()
+    return (
+      settings?.terminalDaemonQueryAuthority !== false &&
+      isTerminalModelQueryAuthorityEnabled(settings) &&
+      isHiddenRendererPty(ptyId) &&
+      !this.hasRemoteTerminalViewSubscriber(ptyId) &&
+      !this.mainTerminalModelDormancy.hasReaders(ptyId) &&
+      this.canMainTerminalModelRest(ptyId) &&
+      this.ptyController?.canDelegateDaemonQueryResponder?.(ptyId) === true
+    )
   }
 
   private isMainTerminalModelIdle(ptyId: string, ingestedSeq: number): boolean {
     const settings = this.store?.getSettings()
+    // Why each: main answers a view-gated PTY's queries (sidecar-only ones included) unless the
+    // daemon confirmed it does, and a model being rebuilt must finish first.
+    if (
+      !this.canMainTerminalModelRest(ptyId) ||
+      (isHiddenRendererPtyViewGated(ptyId, settings) && !isDaemonQueryResponderConfirmed(ptyId)) ||
+      this.providerSnapshotPreferredPtys.has(ptyId) ||
+      this.headlessHydrationState.get(ptyId) === 'pending'
+    ) {
+      return false
+    }
+    const state = this.headlessTerminals.get(ptyId)
+    return !state || state.outputSequence === ingestedSeq
+  }
+
+  private canMainTerminalModelRest(ptyId: string): boolean {
     const pty = this.ptysById.get(ptyId)
     if (
-      settings?.terminalMainModelDormancy === false ||
+      this.store?.getSettings()?.terminalMainModelDormancy === false ||
       !pty ||
       pty.connectionId ||
       pty.launchAgent ||
@@ -87,22 +169,14 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
     ) {
       return false
     }
-    // Why each: main answers a view-gated PTY's queries (sidecar-only ones included), a
-    // viewer or an agent's screen rules read main's model, and only a mounted renderer
-    // parses the bytes for display.
-    if (
-      isHiddenRendererPtyViewGated(ptyId, settings) ||
+    // Why each: a viewer or an agent's screen rules read main's model, and only a mounted
+    // renderer parses the bytes for display.
+    return !(
       this.terminalViewSubscribers.hasRaw(ptyId) ||
-      this.providerSnapshotPreferredPtys.has(ptyId) ||
-      this.headlessHydrationState.get(ptyId) === 'pending' ||
       this.leavesByPtyId.get(ptyId)?.some((leaf) => leaf.lastAgentStatus != null) ||
       this.ptyController?.hasRendererSerializer?.(ptyId) !== true ||
       this.ptyController.canProvideSettledBufferSnapshot?.(ptyId) !== true
-    ) {
-      return false
-    }
-    const state = this.headlessTerminals.get(ptyId)
-    return !state || state.outputSequence === ingestedSeq
+    )
   }
 
   private dropMainTerminalModel(ptyId: string): void {
