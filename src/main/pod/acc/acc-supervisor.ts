@@ -1,8 +1,10 @@
+import { watch, type FSWatcher } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
 import type { PodClaudeAccConfig } from '../pod-distro-config'
 import {
   ACC_MENU_HELPER_APP,
+  ACC_STATE_DIR,
   automatedLaunchEnv,
   readOwnerRecord,
   runAccLifecycle,
@@ -19,7 +21,12 @@ import {
   type LoginItemApi
 } from './acc-services'
 import { isAccMenuHelperRunning, restartAccMenuHelper } from './acc-menu-helper'
-import { accRootdServiceName, restoreAccRootDefaults } from './acc-rootd'
+import {
+  ACC_ROOTD_REQUEST,
+  accRootdServiceName,
+  restoreAccRootDefaults,
+  takeAccRootdRequest
+} from './acc-rootd'
 
 // The helper starts and quits on its own (login item, setup restarting it): look again this often.
 const HELPER_PROBE_MS = 30_000
@@ -47,6 +54,7 @@ export type PodAccSupervisorOptions = {
   log: (message: string) => void
   /** How often to look at the menu helper and owner.json; tests shorten it. */
   probeMs?: number
+  now?: () => Date
 }
 
 /** `/Applications/Pod.app/Contents/MacOS/Pod` → `/Applications/Pod.app`. */
@@ -177,29 +185,7 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     }
     return reports
   })
-  let helperRunning = false
   let stopped = false
-  options.setTrayYield(() => helperRunning)
-  const probe = async (): Promise<void> => {
-    const running = await isAccMenuHelperRunning(options.run)
-    if (!stopped && running !== helperRunning) {
-      helperRunning = running
-      options.syncTray()
-    }
-    const owner = servicesOwned ? readOwnerRecord(options.home) : null
-    if (!stopped && owner && owner.owner !== 'pod') {
-      options.log(`claude-acc: handed to ${owner.owner}, removing Pod's services`)
-      await removeServices()
-    }
-  }
-  void probe()
-  const timer =
-    options.platform === 'darwin'
-      ? setInterval(() => void probe(), options.probeMs ?? HELPER_PROBE_MS)
-      : null
-  timer?.unref?.()
-  // after setup restarted the helper, look at once instead of waiting a whole probe interval
-  void lifecycle.then(() => probe())
   const registerRootd = async (): Promise<AccServiceReport | null> => {
     await services
     const { loginItems, appId } = options
@@ -215,12 +201,73 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     publishReport(readAccServiceStatus(loginItems, bundledAccServices(appPath, appId)))
     return registered
   }
+  // AccServicesView's "Enable root helper…" leaves a request in $STATE: the only way to it
+  let requestWatcher: FSWatcher | null = null
+  let requestBusy = false
+  const takeRootdRequest = async (): Promise<void> => {
+    if (requestBusy || !servicesOwned) {
+      return
+    }
+    requestBusy = true
+    try {
+      if (takeAccRootdRequest(options.home, options.now?.() ?? new Date())) {
+        const registered = await registerRootd()
+        options.log(
+          `claude-acc: pod-rootd asked for in the panel: ${registered?.status ?? 'not shipped'}`
+        )
+      }
+    } finally {
+      requestBusy = false
+    }
+  }
+  void services.then(() => {
+    if (stopped || !servicesOwned || options.platform !== 'darwin') {
+      return
+    }
+    try {
+      requestWatcher = watch(join(options.home, ACC_STATE_DIR), (_event, name) => {
+        if (name === ACC_ROOTD_REQUEST) {
+          void takeRootdRequest()
+        }
+      })
+      requestWatcher.on('error', () => requestWatcher?.close())
+    } catch {
+      // the probe still looks every interval
+    }
+    void takeRootdRequest()
+  })
+  let helperRunning = false
+  options.setTrayYield(() => helperRunning)
+  const probe = async (): Promise<void> => {
+    const running = await isAccMenuHelperRunning(options.run)
+    if (!stopped && running !== helperRunning) {
+      helperRunning = running
+      options.syncTray()
+    }
+    const owner = servicesOwned ? readOwnerRecord(options.home) : null
+    if (!stopped && owner && owner.owner !== 'pod') {
+      options.log(`claude-acc: handed to ${owner.owner}, removing Pod's services`)
+      await removeServices()
+    }
+    if (!stopped) {
+      await takeRootdRequest()
+    }
+  }
+  void probe()
+  const timer =
+    options.platform === 'darwin'
+      ? setInterval(() => void probe(), options.probeMs ?? HELPER_PROBE_MS)
+      : null
+  timer?.unref?.()
+  // after setup restarted the helper, look at once instead of waiting a whole probe interval
+  void lifecycle.then(() => probe())
   return {
     lifecycle,
     services,
     registerRootd,
     stop: () => {
       stopped = true
+      requestWatcher?.close()
       if (timer) {
         clearInterval(timer)
       }
