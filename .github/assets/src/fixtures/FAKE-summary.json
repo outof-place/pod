@@ -1,222 +1,518 @@
 {
-  "fixture": "FAKE DATA for testing bench.py. Not a measurement. Never publish charts built from this file.",
-  "generatedAt": "2000-01-01T00:00:00.000Z",
-  "resultsDir": "results/2000-01-01",
-  "hardware": "FAKE hardware, not a real machine",
-  "machine": null,
-  "maxLoad": null,
-  "aggregation": null,
-  "caveats": [
-    "FAKE caveat: the fixture's numbers are invented to exercise the chart layout."
-  ],
-  "suites": {
-    "latency": {
-      "file": "latency.json",
-      "writtenAt": "2000-01-01T00:00:00.000Z",
-      "versions": {
-        "orca": "0.0.0-fake",
-        "pod": "0.0.0-fake"
-      },
-      "config": {}
-    },
-    "throughput": {
-      "file": "throughput.json",
-      "writtenAt": "2000-01-01T00:00:00.000Z",
-      "versions": {
-        "orca": "0.0.0-fake",
-        "pod": "0.0.0-fake"
-      },
-      "config": {}
-    }
+ "fixture": "FAKE DATA for testing bench.py. Not a measurement. Never publish charts built from this file.",
+ "generatedAt": "2000-01-01T00:00:00.000Z",
+ "resultsDir": "results/2000-01-01",
+ "hardware": "FAKE hardware, not a real machine",
+ "machine": null,
+ "maxLoad": null,
+ "aggregation": null,
+ "caveats": [
+  "FAKE caveat: the fixture's numbers are invented to exercise the chart layout."
+ ],
+ "suites": {
+  "latency": {
+   "file": "latency.json",
+   "writtenAt": "2000-01-01T00:00:00.000Z",
+   "versions": {
+    "orca": "0.0.0-fake",
+    "pod": "0.0.0-fake"
+   },
+   "config": {}
   },
-  "metrics": [
-    {
-      "id": "latency.key.orca",
-      "suite": "latency",
-      "subject": "FAKE Orca",
-      "metric": "keystroke to pixels on screen",
-      "unit": "ms",
-      "better": "lower",
-      "n": 111,
-      "median": 11.1,
-      "p95": 22.2,
-      "min": 1.1,
-      "max": 33.3,
-      "extra": null,
-      "conditions": "FAKE conditions string",
-      "source": "latency.json"
-    },
-    {
-      "id": "latency.key.pod-native",
-      "suite": "latency",
-      "subject": "FAKE Pod, native view",
-      "metric": "keystroke to pixels on screen",
-      "unit": "ms",
-      "better": "lower",
-      "n": 111,
-      "median": 5.5,
-      "p95": 9.9,
-      "min": 1.1,
-      "max": 12.3,
-      "extra": null,
-      "conditions": "FAKE conditions string",
-      "source": "latency.json",
-      "caveats": [
-        "FAKE per-metric caveat"
-      ]
-    },
-    {
-      "id": "latency.key.pod-xterm",
-      "suite": "latency",
-      "subject": "FAKE Pod, xterm view",
-      "metric": "keystroke to pixels on screen",
-      "unit": "ms",
-      "better": "lower",
-      "n": 111,
-      "median": 10.1,
-      "p95": 20.2,
-      "min": 1.1,
-      "max": 30.3,
-      "extra": null,
-      "conditions": "FAKE conditions string",
-      "source": "latency.json"
-    },
-    {
-      "id": "latency.key.ghostty",
-      "suite": "latency",
-      "subject": "FAKE Ghostty",
-      "metric": "keystroke to pixels on screen",
-      "unit": "ms",
-      "better": "lower",
-      "n": 111,
-      "median": 4.4,
-      "p95": 8.8,
-      "min": 1.1,
-      "max": 9.9,
-      "extra": null,
-      "conditions": "FAKE conditions string",
-      "source": "latency.json"
-    },
-    {
-      "id": "throughput.seq.wall.orca",
-      "suite": "throughput",
-      "subject": "FAKE Orca",
-      "metric": "FAKE flood: wall time",
-      "unit": "ms",
-      "better": "lower",
-      "n": 5,
-      "median": 3333,
-      "p95": 4444,
-      "min": 3000,
-      "max": 4500,
-      "extra": null,
-      "conditions": "FAKE conditions string",
-      "source": "throughput.json"
-    },
-    {
-      "id": "throughput.seq.wall.pod-native",
-      "suite": "throughput",
-      "subject": "FAKE Pod, native view",
-      "metric": "FAKE flood: wall time",
-      "unit": "ms",
-      "better": "lower",
-      "n": 5,
-      "median": 1111,
-      "p95": 1222,
-      "min": 1000,
-      "max": 1300,
-      "extra": null,
-      "conditions": "FAKE conditions string",
-      "source": "throughput.json"
-    },
-    {
-      "id": "claude-acc.sched.wait.lock",
-      "suite": "claude-acc",
-      "subject": "FAKE one-at-a-time lock",
-      "metric": "FAKE build wait",
-      "unit": "s",
-      "better": "lower",
-      "n": 1,
-      "median": 444,
-      "p95": null,
-      "min": null,
-      "max": null,
-      "extra": null,
-      "conditions": "FAKE conditions string",
-      "provenance": {
-        "kind": "historical",
-        "date": "2000-01-02",
-        "source": "FAKE source",
-        "note": "FAKE note"
-      }
-    },
-    {
-      "id": "claude-acc.sched.wait.sched",
-      "suite": "claude-acc",
-      "subject": "FAKE Pod, sched",
-      "metric": "FAKE build wait",
-      "unit": "s",
-      "better": "lower",
-      "n": 7,
-      "median": 2.2,
-      "p95": 3.3,
-      "min": 1.1,
-      "max": 4.4,
-      "extra": null,
-      "conditions": "FAKE conditions string"
-    }
-  ],
-  "comparisons": [
-    {
-      "metric": "keystroke to pixels on screen",
-      "baseline": {
-        "id": "latency.key.orca",
-        "subject": "FAKE Orca",
-        "median": 11.1
-      },
-      "candidate": {
-        "id": "latency.key.pod-native",
-        "subject": "FAKE Pod, native view",
-        "median": 5.5
-      },
-      "unit": "ms",
-      "factor": 2.018,
-      "candidateAhead": true,
-      "label": null
-    },
-    {
-      "metric": "FAKE flood: wall time",
-      "baseline": {
-        "id": "throughput.seq.wall.orca",
-        "subject": "FAKE Orca",
-        "median": 3333
-      },
-      "candidate": {
-        "id": "throughput.seq.wall.pod-native",
-        "subject": "FAKE Pod, native view",
-        "median": 1111
-      },
-      "unit": "ms",
-      "factor": 3.0,
-      "candidateAhead": true,
-      "label": null
-    },
-    {
-      "metric": "FAKE build wait",
-      "baseline": {
-        "id": "claude-acc.sched.wait.lock",
-        "subject": "FAKE one-at-a-time lock",
-        "median": 444
-      },
-      "candidate": {
-        "id": "claude-acc.sched.wait.sched",
-        "subject": "FAKE Pod, sched",
-        "median": 2.2
-      },
-      "unit": "s",
-      "factor": 201.818,
-      "candidateAhead": true,
-      "label": null
-    }
-  ]
+  "throughput": {
+   "file": "throughput.json",
+   "writtenAt": "2000-01-01T00:00:00.000Z",
+   "versions": {
+    "orca": "0.0.0-fake",
+    "pod": "0.0.0-fake"
+   },
+   "config": {}
+  }
+ },
+ "metrics": [
+  {
+   "id": "latency.key.orca",
+   "suite": "latency",
+   "subject": "FAKE Orca",
+   "metric": "keystroke to pixels on screen",
+   "unit": "ms",
+   "better": "lower",
+   "n": 111,
+   "median": 11.1,
+   "p95": 22.2,
+   "min": 1.1,
+   "max": 33.3,
+   "extra": null,
+   "conditions": "FAKE conditions string",
+   "source": "latency.json"
+  },
+  {
+   "id": "latency.key.pod-native",
+   "suite": "latency",
+   "subject": "FAKE Pod, native view",
+   "metric": "keystroke to pixels on screen",
+   "unit": "ms",
+   "better": "lower",
+   "n": 111,
+   "median": 5.5,
+   "p95": 9.9,
+   "min": 1.1,
+   "max": 12.3,
+   "extra": null,
+   "conditions": "FAKE conditions string",
+   "source": "latency.json",
+   "caveats": [
+    "FAKE per-metric caveat"
+   ]
+  },
+  {
+   "id": "latency.key.pod-xterm",
+   "suite": "latency",
+   "subject": "FAKE Pod, xterm view",
+   "metric": "keystroke to pixels on screen",
+   "unit": "ms",
+   "better": "lower",
+   "n": 111,
+   "median": 10.1,
+   "p95": 20.2,
+   "min": 1.1,
+   "max": 30.3,
+   "extra": null,
+   "conditions": "FAKE conditions string",
+   "source": "latency.json"
+  },
+  {
+   "id": "latency.key.ghostty",
+   "suite": "latency",
+   "subject": "FAKE Ghostty",
+   "metric": "keystroke to pixels on screen",
+   "unit": "ms",
+   "better": "lower",
+   "n": 111,
+   "median": 4.4,
+   "p95": 8.8,
+   "min": 1.1,
+   "max": 9.9,
+   "extra": null,
+   "conditions": "FAKE conditions string",
+   "source": "latency.json"
+  },
+  {
+   "id": "throughput.seq.wall.orca",
+   "suite": "throughput",
+   "subject": "FAKE Orca",
+   "metric": "FAKE flood: wall time",
+   "unit": "ms",
+   "better": "lower",
+   "n": 5,
+   "median": 3333,
+   "p95": 4444,
+   "min": 3000,
+   "max": 4500,
+   "extra": null,
+   "conditions": "FAKE conditions string",
+   "source": "throughput.json"
+  },
+  {
+   "id": "throughput.seq.wall.pod-native",
+   "suite": "throughput",
+   "subject": "FAKE Pod, native view",
+   "metric": "FAKE flood: wall time",
+   "unit": "ms",
+   "better": "lower",
+   "n": 5,
+   "median": 1111,
+   "p95": 1222,
+   "min": 1000,
+   "max": 1300,
+   "extra": null,
+   "conditions": "FAKE conditions string",
+   "source": "throughput.json"
+  },
+  {
+   "id": "claude-acc.sched.wait.before",
+   "suite": "claude-acc",
+   "group": "claude-acc",
+   "subject": "FAKE one-at-a-time lock",
+   "metric": "FAKE area: FAKE build wait of overlapping commands",
+   "unit": "s",
+   "better": "lower",
+   "n": 9,
+   "median": 400,
+   "p95": null,
+   "min": 380,
+   "max": 420,
+   "extra": {
+    "note": null,
+    "role": null
+   },
+   "conditions": "",
+   "provenance": {
+    "kind": "fresh",
+    "date": "2000-01-03",
+    "source": "results/FAKE/claude-acc.json",
+    "note": null
+   },
+   "branch": null,
+   "upstream": null,
+   "inPodStack": null,
+   "caveats": [
+    "FAKE claude-acc suite caveat"
+   ],
+   "source": "claude-acc.json"
+  },
+  {
+   "id": "claude-acc.sched.wait.after",
+   "suite": "claude-acc",
+   "group": "claude-acc",
+   "subject": "FAKE memory-aware scheduler",
+   "metric": "FAKE area: FAKE build wait of overlapping commands",
+   "unit": "s",
+   "better": "lower",
+   "n": 9,
+   "median": 3.3,
+   "p95": null,
+   "min": 2.9,
+   "max": 4.1,
+   "extra": {
+    "note": null,
+    "role": null
+   },
+   "conditions": "",
+   "provenance": {
+    "kind": "fresh",
+    "date": "2000-01-03",
+    "source": "results/FAKE/claude-acc.json",
+    "note": null
+   },
+   "branch": null,
+   "upstream": null,
+   "inPodStack": null,
+   "caveats": [
+    "FAKE claude-acc suite caveat"
+   ],
+   "source": "claude-acc.json"
+  },
+  {
+   "id": "claude-acc.sched.wait.historical.before",
+   "suite": "claude-acc",
+   "group": "claude-acc",
+   "subject": "FAKE one-at-a-time lock",
+   "metric": "FAKE area: FAKE build wait of overlapping commands",
+   "unit": "s",
+   "better": "lower",
+   "n": null,
+   "median": 444,
+   "p95": null,
+   "min": 444,
+   "max": 444,
+   "extra": {
+    "note": "FAKE p50",
+    "role": null
+   },
+   "conditions": "",
+   "provenance": {
+    "kind": "historical",
+    "date": "2000-01-02",
+    "source": "FAKE source",
+    "note": "FAKE note"
+   },
+   "branch": null,
+   "upstream": null,
+   "inPodStack": null,
+   "caveats": [
+    "FAKE claude-acc suite caveat"
+   ],
+   "source": "claude-acc.json"
+  },
+  {
+   "id": "claude-acc.sched.wait.historical.after",
+   "suite": "claude-acc",
+   "group": "claude-acc",
+   "subject": "FAKE memory-aware scheduler",
+   "metric": "FAKE area: FAKE build wait of overlapping commands",
+   "unit": "s",
+   "better": "lower",
+   "n": null,
+   "median": 2.2,
+   "p95": null,
+   "min": 2.2,
+   "max": 2.2,
+   "extra": {
+    "note": null,
+    "role": null
+   },
+   "conditions": "",
+   "provenance": {
+    "kind": "historical",
+    "date": "2000-01-02",
+    "source": "FAKE source",
+    "note": "FAKE note"
+   },
+   "branch": null,
+   "upstream": null,
+   "inPodStack": null,
+   "caveats": [
+    "FAKE claude-acc suite caveat"
+   ],
+   "source": "claude-acc.json"
+  },
+  {
+   "id": "claude-acc.hook.native.historical.before",
+   "suite": "claude-acc",
+   "group": "claude-acc",
+   "subject": "FAKE script hook",
+   "metric": "FAKE area: FAKE hook before every command",
+   "unit": "ms",
+   "better": "lower",
+   "n": null,
+   "median": null,
+   "p95": null,
+   "min": 25,
+   "max": 57,
+   "extra": {
+    "note": null,
+    "role": null
+   },
+   "conditions": "",
+   "provenance": {
+    "kind": "historical",
+    "date": "2000-01-02",
+    "source": "FAKE source",
+    "note": "FAKE note"
+   },
+   "branch": null,
+   "upstream": null,
+   "inPodStack": null,
+   "caveats": [
+    "FAKE claude-acc suite caveat"
+   ],
+   "source": "claude-acc.json"
+  },
+  {
+   "id": "claude-acc.hook.native.historical.after",
+   "suite": "claude-acc",
+   "group": "claude-acc",
+   "subject": "FAKE native hook",
+   "metric": "FAKE area: FAKE hook before every command",
+   "unit": "ms",
+   "better": "lower",
+   "n": null,
+   "median": null,
+   "p95": null,
+   "min": 5,
+   "max": 8,
+   "extra": {
+    "note": null,
+    "role": null
+   },
+   "conditions": "",
+   "provenance": {
+    "kind": "historical",
+    "date": "2000-01-02",
+    "source": "FAKE source",
+    "note": "FAKE note"
+   },
+   "branch": null,
+   "upstream": null,
+   "inPodStack": null,
+   "caveats": [
+    "FAKE claude-acc suite caveat"
+   ],
+   "source": "claude-acc.json"
+  },
+  {
+   "id": "claude-acc.mem.context.historical.before",
+   "suite": "claude-acc",
+   "group": "claude-acc",
+   "subject": "FAKE setting auto",
+   "metric": "FAKE other area: FAKE memory after 30 edits (why it restarts)",
+   "unit": "GB",
+   "better": "lower",
+   "n": null,
+   "median": 5.5,
+   "p95": null,
+   "min": 5.5,
+   "max": 5.5,
+   "extra": {
+    "note": null,
+    "role": "context"
+   },
+   "conditions": "",
+   "provenance": {
+    "kind": "historical",
+    "date": "2000-01-02",
+    "source": "FAKE source",
+    "note": "FAKE note"
+   },
+   "branch": null,
+   "upstream": null,
+   "inPodStack": null,
+   "caveats": [
+    "FAKE claude-acc suite caveat"
+   ],
+   "source": "claude-acc.json"
+  },
+  {
+   "id": "claude-acc.mem.context.historical.after",
+   "suite": "claude-acc",
+   "group": "claude-acc",
+   "subject": "FAKE setting full",
+   "metric": "FAKE other area: FAKE memory after 30 edits (why it restarts)",
+   "unit": "GB",
+   "better": "lower",
+   "n": null,
+   "median": 5.6,
+   "p95": null,
+   "min": 5.6,
+   "max": 5.6,
+   "extra": {
+    "note": null,
+    "role": "context"
+   },
+   "conditions": "",
+   "provenance": {
+    "kind": "historical",
+    "date": "2000-01-02",
+    "source": "FAKE source",
+    "note": "FAKE note"
+   },
+   "branch": null,
+   "upstream": null,
+   "inPodStack": null,
+   "caveats": [
+    "FAKE claude-acc suite caveat"
+   ],
+   "source": "claude-acc.json"
+  },
+  {
+   "id": "claude-acc.disk.saved.historical.after",
+   "suite": "claude-acc",
+   "group": "claude-acc",
+   "subject": "FAKE compression",
+   "metric": "FAKE other area: FAKE space saved by compression",
+   "unit": "%",
+   "better": "higher",
+   "n": null,
+   "median": 66,
+   "p95": null,
+   "min": 66,
+   "max": 66,
+   "extra": {
+    "note": null,
+    "role": null
+   },
+   "conditions": "",
+   "provenance": {
+    "kind": "historical",
+    "date": "2000-01-02",
+    "source": "FAKE source",
+    "note": "FAKE note"
+   },
+   "branch": null,
+   "upstream": null,
+   "inPodStack": null,
+   "caveats": [
+    "FAKE claude-acc suite caveat"
+   ],
+   "source": "claude-acc.json"
+  }
+ ],
+ "comparisons": [
+  {
+   "metric": "keystroke to pixels on screen",
+   "baseline": {
+    "id": "latency.key.orca",
+    "subject": "FAKE Orca",
+    "median": 11.1
+   },
+   "candidate": {
+    "id": "latency.key.pod-native",
+    "subject": "FAKE Pod, native view",
+    "median": 5.5
+   },
+   "unit": "ms",
+   "factor": 2.018,
+   "candidateAhead": true,
+   "label": null
+  },
+  {
+   "metric": "FAKE flood: wall time",
+   "baseline": {
+    "id": "throughput.seq.wall.orca",
+    "subject": "FAKE Orca",
+    "median": 3333
+   },
+   "candidate": {
+    "id": "throughput.seq.wall.pod-native",
+    "subject": "FAKE Pod, native view",
+    "median": 1111
+   },
+   "unit": "ms",
+   "factor": 3.0,
+   "candidateAhead": true,
+   "label": null
+  },
+  {
+   "group": "claude-acc",
+   "suite": "claude-acc",
+   "metric": "FAKE area: FAKE build wait of overlapping commands",
+   "label": null,
+   "baseline": {
+    "id": "claude-acc.sched.wait.before",
+    "subject": "FAKE one-at-a-time lock",
+    "median": 400
+   },
+   "candidate": {
+    "id": "claude-acc.sched.wait.after",
+    "subject": "FAKE memory-aware scheduler",
+    "median": 3.3
+   },
+   "unit": "s",
+   "factor": 121.212,
+   "candidateAhead": true,
+   "provenance": {
+    "kind": "fresh",
+    "date": "2000-01-03",
+    "source": "FAKE",
+    "note": null
+   },
+   "caveats": [
+    "FAKE claude-acc suite caveat"
+   ]
+  },
+  {
+   "group": "claude-acc",
+   "suite": "claude-acc",
+   "metric": "FAKE area: FAKE build wait of overlapping commands",
+   "label": null,
+   "baseline": {
+    "id": "claude-acc.sched.wait.historical.before",
+    "subject": "FAKE one-at-a-time lock",
+    "median": 444
+   },
+   "candidate": {
+    "id": "claude-acc.sched.wait.historical.after",
+    "subject": "FAKE memory-aware scheduler",
+    "median": 2.2
+   },
+   "unit": "s",
+   "factor": 201.818,
+   "candidateAhead": true,
+   "provenance": {
+    "kind": "historical",
+    "date": "2000-01-02",
+    "source": "FAKE source",
+    "note": "FAKE note"
+   },
+   "caveats": [
+    "FAKE claude-acc suite caveat"
+   ]
+  }
+ ],
+ "schemaVersion": 2,
+ "methodology": {
+  "path": "bench/README.md",
+  "url": "https://example.invalid/FAKE-methodology"
+ }
 }
