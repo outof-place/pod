@@ -1,5 +1,4 @@
 import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
-import { brandProductCopy } from '../product-identity/product-overlay'
 
 type NotificationStatusTranslator = (key: string, fallback: string) => string
 
@@ -43,8 +42,8 @@ export function buildNotificationOptions(
 
   if (args.source === 'test') {
     return {
-      title: brandProductCopy('Orca notifications are on'),
-      body: brandProductCopy('This is a test notification from Orca.')
+      title: 'Orca notifications are on',
+      body: 'This is a test notification from Orca.'
     }
   }
 
