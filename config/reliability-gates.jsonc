@@ -89,19 +89,28 @@
           "date": "2026-10-09",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/native-process-info.test.ts src/main/pty/posix-pty-foreground-group.test.ts config/scripts/proc-info-macos-resources.test.mjs config/scripts/electron-builder-config.test.mjs",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/native-process-info.test.ts src/main/pty/posix-pty-foreground-group.test.ts config/scripts/proc-info-macos-resources.test.mjs config/scripts/electron-builder-config.test.mjs config/scripts/macos-foreground-fixture-bundle.test.mjs",
           "result": "passed",
-          "durationSeconds": 4.05,
-          "summary": "81 tests in four files passed on arm64, including real native PTY parity and group targeting/refusal semantics."
+          "durationSeconds": 2.14,
+          "summary": "91 tests in five files passed on arm64, including real native PTY parity, targeting/refusal semantics, and copied signing/source-preservation boundaries."
+        },
+        {
+          "date": "2026-10-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 node config/scripts/smoke-macos-foreground-addon.mjs",
+          "result": "passed",
+          "durationSeconds": 7.52,
+          "summary": "Ad-hoc sealed Electron 43.7.5 Node-mode arm64 fixture delivered five owned-PTY SIGWINCH acknowledgments through valid, disabled, missing, incompatible and trusted dev paths. A separate real same-PTY host refused group signaling. All 602 copied entries stayed contained, and source fingerprints remained unchanged through cleanup."
         }
       ],
       "runtimeBudget": {
         "p95Seconds": 30,
-        "scope": "Focused native/provider command; signed fixture runtime and cross-platform soak are not established."
+        "scope": "Focused native/provider command; one signed arm64 fixture took 7.52 seconds. Cross-architecture runtime and long-term percentiles are not established."
       },
       "flakeHistory": {
         "status": "not-started",
-        "evidence": "Focused local pass only; no long-term soak or promotion claim."
+        "evidence": "Focused local pass and one signed fixture pass only; no long-term soak or promotion claim."
       },
       "redGreenEvidence": {
         "status": "partial",
