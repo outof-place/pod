@@ -11,6 +11,7 @@ on:
       - 'config/scripts/*proc-info*'
       - 'config/scripts/*native-process-info*'
       - 'config/scripts/*macos-foreground-addon*'
+      - 'config/scripts/*macos-foreground-fixture*'
       - 'config/scripts/electron-builder-config.test.mjs'
       - 'config/electron-builder.config.cjs'
       - '.github/workflows/macos-foreground-process.yml'
@@ -26,6 +27,7 @@ on:
       - 'config/scripts/*proc-info*'
       - 'config/scripts/*native-process-info*'
       - 'config/scripts/*macos-foreground-addon*'
+      - 'config/scripts/*macos-foreground-fixture*'
       - 'config/scripts/electron-builder-config.test.mjs'
       - 'config/electron-builder.config.cjs'
       - '.github/workflows/macos-foreground-process.yml'
@@ -69,5 +71,6 @@ jobs:
           src/main/pty/posix-pty-foreground-group.test.ts
           config/scripts/proc-info-macos-resources.test.mjs
           config/scripts/electron-builder-config.test.mjs
+          config/scripts/macos-foreground-fixture-bundle.test.mjs
       - name: Verify signed Electron resources and real resize signals
         run: node config/scripts/smoke-macos-foreground-addon.mjs

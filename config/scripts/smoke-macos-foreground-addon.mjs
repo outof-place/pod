@@ -1,23 +1,21 @@
 import assert from 'node:assert/strict'
-import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { execFileSync, spawn } from 'node:child_process'
 import { once, EventEmitter } from 'node:events'
 import {
   cpSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
-  readFileSync,
-  readlinkSync,
   realpathSync,
   rmSync
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { createPackage } from '@electron/asar'
 import { build } from 'esbuild'
+import { createForegroundFixtureBundle } from './macos-foreground-fixture-bundle.mjs'
 
 assert.equal(process.platform, 'darwin', 'this fixture requires macOS')
 const require = createRequire(import.meta.url)
@@ -45,117 +43,47 @@ const env = {
 let terminal
 let ownedPid = 0
 let ownedGroup = 0
-let validatedFixtureEntries = 0
-let originalApp
-let originalState
+let fixtureBundle
+let ownedTty
 
 function command(program, args) {
   return execFileSync(program, args, { encoding: 'utf8', timeout: 120_000, env })
 }
 
 function acknowledgment(event) {
-  return new Promise((resolveAck, reject) => {
+  const pending = new Promise((resolveAck, reject) => {
     const timer = setTimeout(() => {
-      fixtureEvents.removeListener(event, onAck)
-      reject(new Error(`Timed out waiting for PTY ${event}`))
+      onFailure(new Error(`Timed out waiting for PTY ${event}`))
     }, 5_000)
-    const onAck = (value) => {
+    timer.unref()
+    const clear = () => {
       clearTimeout(timer)
+      fixtureEvents.removeListener(event, onAck)
+      fixtureEvents.removeListener('failure', onFailure)
+    }
+    const onAck = (value) => {
+      clear()
       resolveAck(value)
     }
+    const onFailure = (error) => {
+      clear()
+      reject(error)
+    }
     fixtureEvents.once(event, onAck)
+    fixtureEvents.once('failure', onFailure)
   })
-}
-
-function visitAppEntries(appPath, visit) {
-  const fixtureRoot = realpathSync(appPath)
-  const directories = [appPath]
-  let entries = 0
-  while (directories.length) {
-    for (const entry of readdirSync(directories.pop(), { withFileTypes: true })) {
-      assert(++entries < 10_000, 'unexpected fixture size')
-      const path = join(entry.parentPath, entry.name)
-      const resolved = relative(fixtureRoot, realpathSync(path))
-      assert(!isAbsolute(resolved) && resolved !== '..' && !resolved.startsWith('../'), path)
-      visit(path, entry)
-      if (entry.isDirectory()) {
-        directories.push(path)
-      }
-    }
-  }
-  return entries
-}
-
-function assertScratchOwned() {
-  const current = lstatSync(scratch)
-  assert(
-    current.isDirectory() &&
-      current.dev === scratchIdentity.dev &&
-      current.ino === scratchIdentity.ino
-  )
-  assert.equal(realpathSync(scratch), scratchRealpath)
-}
-
-function validateFixture() {
-  assertScratchOwned()
-  assert(lstatSync(app).isDirectory())
-  assert.equal(realpathSync(app), join(scratchRealpath, 'Foreground Fixture.app'))
-  validatedFixtureEntries = visitAppEntries(app, (path, entry) => {
-    if (entry.isFile()) {
-      assert.equal(lstatSync(path).nlink, 1, `fixture file is hard-linked: ${path}`)
-    }
-  })
-}
-
-function fileState(path) {
-  const stat = lstatSync(path)
-  return {
-    size: stat.size,
-    mtime: stat.mtimeMs,
-    ctime: stat.ctimeMs,
-    digest: createHash('sha256').update(readFileSync(path)).digest('hex')
-  }
-}
-
-function sourceState() {
-  const files = {}
-  visitAppEntries(originalApp, (path, entry) => {
-    const name = relative(originalApp, path)
-    files[name] = entry.isFile()
-      ? fileState(path)
-      : { mtime: lstatSync(path).mtimeMs, link: entry.isSymbolicLink() ? readlinkSync(path) : null }
-  })
-  const signature = spawnSync('codesign', ['--display', '--verbose=2', originalApp], {
-    encoding: 'utf8'
-  })
-  return {
-    files,
-    addon: fileState(sourceAddon),
-    signature: {
-      status: signature.status,
-      digest: createHash('sha256')
-        .update(signature.stdout + signature.stderr)
-        .digest('hex')
-    }
-  }
-}
-
-function sealFixture() {
-  validateFixture()
-  command('codesign', ['--force', '--deep', '--sign', '-', app])
-  command('codesign', ['--verify', '--deep', '--strict', app])
+  pending.catch(() => {})
+  return pending
 }
 
 async function main() {
   command(process.execPath, ['config/scripts/build-proc-info-macos.mjs'])
-  const originalExecutable = require('electron')
-  originalApp = dirname(dirname(dirname(originalExecutable)))
-  originalState = sourceState()
-  cpSync(originalApp, app, {
-    recursive: true,
-    verbatimSymlinks: true
+  fixtureBundle = createForegroundFixtureBundle({
+    sourceApp: dirname(dirname(dirname(require('electron')))),
+    sourceAddon,
+    app,
+    scratch
   })
-  validateFixture()
   mkdirSync(dirname(addon), { recursive: true })
   mkdirSync(dirname(devAddon), { recursive: true })
   cpSync(sourceAddon, addon)
@@ -168,9 +96,9 @@ async function main() {
     format: 'cjs'
   })
   await createPackage(source, join(resources, 'app.asar'))
-  validateFixture()
+  fixtureBundle.validate()
   command('codesign', ['--force', '--sign', '-', addon])
-  sealFixture()
+  fixtureBundle.seal()
 
   const ready = acknowledgment('ready')
   terminal = spawn(
@@ -197,14 +125,28 @@ async function main() {
       fixtureEvents.emit('resize')
     }
   })
-  terminal.once('error', (error) => fixtureEvents.emit('error', error))
+  let terminalErrors = ''
+  terminal.stderr.on('data', (data) => {
+    terminalErrors = (terminalErrors + data).slice(-4096)
+  })
+  terminal.once('error', (error) => fixtureEvents.emit('failure', error))
+  terminal.once('exit', (code, signal) => {
+    fixtureEvents.emit('failure', new Error(`PTY exited ${code ?? signal}: ${terminalErrors}`))
+  })
   await ready
-  const [pid, group, tty] = command('ps', ['-p', String(ownedPid), '-o', 'pid=,tpgid=,tty='])
+  const [pid, parent, group, tty] = command('ps', [
+    '-p',
+    String(ownedPid),
+    '-o',
+    'pid=,ppid=,tpgid=,tty='
+  ])
     .trim()
     .split(/\s+/)
   assert.equal(Number(pid), ownedPid)
+  assert.equal(Number(parent), terminal.pid)
   assert(Number(group) > 1 && tty && tty !== '??', 'PTY fixture has no foreground group')
   ownedGroup = Number(group)
+  ownedTty = tty
   const results = []
   async function run(mode, program = executable, entry = archiveEntry, overrides = {}) {
     const resized = acknowledgment('resize')
@@ -218,9 +160,17 @@ async function main() {
     results.push(JSON.parse(result.trim()))
   }
   await run('valid')
+  const ownHostOutput = execFileSync(
+    'script',
+    ['-q', '/dev/null', executable, archiveEntry, 'own-host'],
+    { encoding: 'utf8', timeout: 30_000, env, stdio: ['ignore', 'pipe', 'pipe'] }
+  )
+  const ownHostMatch = ownHostOutput.match(/\{"mode":"own-host"[^\r\n]+\}/)
+  assert(ownHostMatch, 'packaged own-terminal guard produced no result')
+  const ownHostGuard = JSON.parse(ownHostMatch[0])
   await run('disabled', executable, archiveEntry, { ORCA_DISABLE_NATIVE_PROCESS_INFO: '1' })
   rmSync(addon)
-  sealFixture()
+  fixtureBundle.seal()
   await run('missing')
   command('lipo', [
     sourceAddon,
@@ -229,9 +179,9 @@ async function main() {
     '-output',
     addon
   ])
-  validateFixture()
+  fixtureBundle.validate()
   command('codesign', ['--force', '--sign', '-', addon])
-  sealFixture()
+  fixtureBundle.seal()
   await run('incompatible')
   const nodeEnv = { ...env }
   delete nodeEnv.ELECTRON_RUN_AS_NODE
@@ -247,11 +197,12 @@ async function main() {
     )
   )
   await resized
-  assert.deepEqual(sourceState(), originalState, 'fixture altered original Electron or addon files')
+  fixtureBundle.assertSourcesPreserved()
   console.log(
     JSON.stringify({
       signing: 'ad-hoc sealed fixture; no Developer ID, hardened-runtime or notarization claim',
-      validatedFixtureEntries,
+      validatedFixtureEntries: fixtureBundle.validatedEntries,
+      ownHostGuard,
       sourcePreserved: true,
       realPtyResizeAcknowledgments: results.length,
       results
@@ -262,11 +213,16 @@ async function main() {
 try {
   await main()
 } finally {
-  if (ownedGroup || ownedPid) {
+  if (ownedGroup && ownedTty) {
     try {
-      process.kill(ownedGroup ? -ownedGroup : ownedPid, 'SIGTERM')
+      const current = command('ps', ['-p', String(ownedPid), '-o', 'pid=,ppid=,tpgid=,tty='])
+        .trim()
+        .split(/\s+/)
+      if (current.join(' ') === [ownedPid, terminal.pid, ownedGroup, ownedTty].join(' ')) {
+        process.kill(-ownedGroup, 'SIGTERM')
+      }
     } catch (error) {
-      if (error.code !== 'ESRCH') {
+      if (error.code !== 'ESRCH' && error.status !== 1) {
         console.error(error)
         process.exitCode = 1
       }
@@ -277,13 +233,16 @@ try {
     terminal.kill('SIGKILL')
     await exited
   }
-  assertScratchOwned()
-  rmSync(scratch, { recursive: true, force: true })
-  if (originalState) {
-    assert.deepEqual(
-      sourceState(),
-      originalState,
-      'fixture altered original Electron or addon files'
+  if (fixtureBundle) {
+    fixtureBundle.cleanup()
+  } else if (existsSync(scratch)) {
+    const current = lstatSync(scratch)
+    assert(
+      current.isDirectory() &&
+        current.dev === scratchIdentity.dev &&
+        current.ino === scratchIdentity.ino
     )
+    assert.equal(realpathSync(scratch), scratchRealpath)
+    rmSync(scratch, { recursive: true, force: true })
   }
 }

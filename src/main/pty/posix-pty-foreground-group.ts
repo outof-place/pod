@@ -42,10 +42,7 @@ function runPs(pid: number): string {
   }
 }
 
-/**
- * The same `pid tpgid tty` row from one sysctl, so a SIGWINCH no longer blocks this thread on a
- * `ps` child (#24889). Null when the addon cannot answer; '' when the pid is gone, as `ps` finds.
- */
+/** Null requests ps; an empty row means the PID exited. */
 function readNativeProcessRow(pid: number, ptsName: string): string | null {
   try {
     const native = getNativeProcessInfo()

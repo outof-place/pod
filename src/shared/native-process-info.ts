@@ -31,23 +31,24 @@ function isNativeProcessInfo(value: unknown): value is NativeProcessInfo {
   )
 }
 
-function candidatePaths(): string[] {
-  // Why the probe: Electron adds resourcesPath; the CLI's plain-Node types do not declare it.
+function candidatePath(): { path: string | null; definitive: boolean } {
   const resourcesPath =
     'resourcesPath' in process && typeof process.resourcesPath === 'string'
       ? process.resourcesPath
       : null
-  // Why app.asar decides: the terminal daemon runs as plain Node with no app environment, and a
-  // packaged app must never load a native module from whatever checkout it was launched in.
+  // Packaged Electron Node-mode daemons expose resourcesPath before an app environment exists.
   if (resourcesPath && existsSync(join(resourcesPath, 'app.asar'))) {
-    return [join(resourcesPath, NATIVE_PROCESS_INFO_RESOURCE_PATH)]
+    return { path: join(resourcesPath, NATIVE_PROCESS_INFO_RESOURCE_PATH), definitive: true }
   }
-  // Why only an Electron dev checkout: a plain-Node host (relay, orcad, a dev daemon) must not load
-  // a native module from its working directory; those keep forking `ps`.
+  // Development uses an explicit app root; hosts without one retain ps.
   const environment = hasAppEnvironment() ? getAppEnvironment() : null
-  return environment && !environment.isPackaged()
-    ? [join(environment.getAppPath(), NATIVE_PROCESS_INFO_BUILD_PATH)]
-    : []
+  return {
+    path:
+      environment && !environment.isPackaged()
+        ? join(environment.getAppPath(), NATIVE_PROCESS_INFO_BUILD_PATH)
+        : null,
+    definitive: environment !== null
+  }
 }
 
 /** Load the addon at `path`; null when it is missing or not the expected module. */
@@ -71,12 +72,13 @@ export function getNativeProcessInfo(): NativeProcessInfo | null {
   if (cached === undefined) {
     const enabled =
       process.platform === 'darwin' && process.env[DISABLE_NATIVE_PROCESS_INFO_ENV] !== '1'
-    const path = enabled ? candidatePaths().find(existsSync) : undefined
-    const addon = path ? loadNativeProcessInfoFrom(path) : null
-    if (addon) {
+    const candidate = enabled ? candidatePath() : { path: null, definitive: true }
+    const addon =
+      candidate.path && existsSync(candidate.path)
+        ? loadNativeProcessInfoFrom(candidate.path)
+        : null
+    if (addon || candidate.definitive) {
       cached = addon
-    } else if (!enabled || hasAppEnvironment()) {
-      cached = null
     }
   }
   return cached ?? null

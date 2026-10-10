@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { setAppEnvironment } from '../../src/shared/app-environment'
 import { getNativeProcessInfo } from '../../src/shared/native-process-info'
@@ -7,13 +8,34 @@ import { signalPosixPtyForegroundGroup } from '../../src/main/pty/posix-pty-fore
 const [mode, pidText, tty, groupText, devRoot] = process.argv.slice(2)
 const pid = Number(pidText)
 const group = Number(groupText)
-assert(mode && tty && devRoot && pid > 1 && group > 1, 'missing fixture identity')
 const loadedPaths: string[] = []
 const originalDlopen = process.dlopen
 process.dlopen = (module, path, flags) => {
   loadedPaths.push(path)
   return originalDlopen(module, path, flags)
 }
+
+if (mode === 'own-host') {
+  const ownTty = execFileSync('ps', ['-p', String(process.pid), '-o', 'tty='], {
+    encoding: 'utf8'
+  }).trim()
+  assert(ownTty && ownTty !== '??')
+  assert(getNativeProcessInfo(), 'packaged PTY host did not load the trusted addon')
+  let signaledGroup = false
+  let fellBackToRoot = false
+  process.kill = () => {
+    signaledGroup = true
+    return true
+  }
+  signalPosixPtyForegroundGroup(process.pid, ownTty, 'SIGWINCH', () => {
+    fellBackToRoot = true
+  })
+  assert(fellBackToRoot && !signaledGroup, 'host sharing the PTY authorized a group signal')
+  console.log(JSON.stringify({ mode, arch: process.arch, refusedOwnTerminal: true }))
+  process.exit(0)
+}
+
+assert(mode && tty && devRoot && pid > 1 && group > 1, 'missing fixture identity')
 
 function installDevEnvironment(): void {
   setAppEnvironment({
@@ -33,7 +55,7 @@ if (mode === 'dev') {
   installDevEnvironment()
 } else {
   assert('resourcesPath' in process && typeof process.resourcesPath === 'string')
-  if (mode !== 'valid') {
+  if (mode !== 'valid' && mode !== 'incompatible') {
     installDevEnvironment()
   }
 }
@@ -66,6 +88,13 @@ signalPosixPtyForegroundGroup(pid, `/dev/${tty}`, 'SIGWINCH', () => {
   fellBackToRoot = true
 })
 assert.equal(fellBackToRoot, false, 'verified foreground group was not signaled')
+if (mode === 'valid' || mode === 'dev' || mode === 'incompatible') {
+  assert.deepEqual(
+    loadedPaths,
+    [expectedAddon],
+    'addon loading was repeated after a definitive result'
+  )
+}
 console.log(
   JSON.stringify({ mode, arch: process.arch, electron: process.versions.electron, loadedPaths })
 )
