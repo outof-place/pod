@@ -63,6 +63,7 @@ async function setupMultiplexStream(): Promise<{
     getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
     getLayout: vi.fn().mockReturnValue({ seq: 1 }),
     registerRemoteTerminalViewSubscriber: vi.fn(() => () => {}),
+    modelAnswersTerminalQueries: vi.fn().mockReturnValue(false),
     subscribeToTerminalData: vi.fn(
       (_ptyId: string, cb: (data: string, meta?: OutputMeta) => void) => {
         emitOutput = cb
