@@ -16,9 +16,11 @@ import {
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+// Pod: Lakr233's upstream.35a81a980bb9 plus patch 0019 (the cursor timer redraws only while
+// the cursor blinks, and only on a focused surface), macOS slice only.
 const LIBGHOSTTY_URL =
-  'https://github.com/Lakr233/libghostty-spm/releases/download/upstream.35a81a980bb9/GhosttyKit.xcframework.zip'
-const LIBGHOSTTY_SHA256 = '80e9bbfc89f5bd23ee028cff03024e3a788509f87812ab0bc9d697bf22a9472b'
+  'https://github.com/outof-place/libghostty-spm/releases/download/upstream.35a81a980bb9%2Bpod.1/GhosttyKit-macos.xcframework.zip'
+const LIBGHOSTTY_SHA256 = '06aa7aab18a909f8d59a7405a2fcfce131518a84956fb6b3d925d12dd2ce7833'
 
 if (process.platform !== 'darwin') {
   process.exit(0)
