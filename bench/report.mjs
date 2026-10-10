@@ -1,4 +1,5 @@
-// Prints summary.json as Markdown tables: every metric, then every Pod-vs-Orca comparison.
+// Prints summary.json as Markdown tables: every metric, then every Pod-vs-Orca comparison, then the
+// rows still coming.
 //
 //   node bench/report.mjs results/<date>/summary.json
 import { readFileSync } from 'node:fs'
@@ -28,4 +29,11 @@ for (const row of summary.comparisons) {
   console.log(
     `| ${row.label ?? row.metric} | ${row.baseline.subject}: ${format(row.baseline.median)} ${row.unit} | ${row.candidate.subject}: ${format(row.candidate.median)} ${row.unit} | ${verdict} |`
   )
+}
+if (summary.coming?.length > 0) {
+  console.log('\n| Coming | Suite | Why no number yet |')
+  console.log('|---|---|---|')
+  for (const row of summary.coming) {
+    console.log(`| ${row.subject} | ${row.suite} | ${row.reason} |`)
+  }
 }

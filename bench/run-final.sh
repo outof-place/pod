@@ -8,8 +8,11 @@
 #                      [--no-visible] [--vdisplay]
 #
 # --pod-commit is the main commit the Pod build came from (read from the bundle when it records
-# one); every Pod row and the stack check use it. --vdisplay adds a virtual display for 20 s,
-# which moves the user's display layout, so it is off unless asked for.
+# one); every Pod row and the stack check use it. --og-sha is the pod-search commit confirmed as
+# bench-ready: its ogd must advertise search.full_lines and search.max_filesize, checked before
+# anything is measured. Without it the og and ogd rows are listed as "coming", with no numbers.
+# --vdisplay adds a virtual display for 20 s, which moves the user's display layout, so it is off
+# unless asked for.
 #
 # Every sample still waits for a 1-minute load average <= POD_BENCH_MAX_LOAD (default 8).
 set -euo pipefail
@@ -32,13 +35,19 @@ while [ $# -gt 0 ]; do
     --search-client-sha) client_sha="${2:?}"; shift 2 ;;
     --no-visible) visible=0; shift ;;
     --vdisplay) vdisplay=1; shift ;;
-    -h | --help) sed -n '2,15p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,17p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 # Never benchmark a stale build by accident: the Pod app is always named explicitly.
 [ -n "$pod" ] && [ -d "$pod/Contents" ] || { echo "pass --pod <Pod.app> (the build under test)" >&2; exit 2; }
 [ -d "$orca/Contents" ] || { echo "no Orca at $orca" >&2; exit 2; }
+# A commit, not a ref: the og rows name the pod-search build that was confirmed, not whatever a
+# branch or HEAD points at on the day.
+[ -z "$og_sha" ] || [[ "$og_sha" =~ ^[0-9a-f]{7,40}$ ]] || {
+  echo "--og-sha takes a commit SHA, not a ref: $og_sha" >&2
+  exit 2
+}
 export POD_BENCH_POD_APP="$pod" POD_BENCH_ORCA_APP="$orca"
 export POD_BENCH_OUT="${POD_BENCH_OUT:-$here/results/$(date -u +%F)}"
 mkdir -p "$POD_BENCH_OUT"
@@ -60,11 +69,34 @@ prepare=(--out "$inputs")
 [ -z "$og_sha" ] || prepare+=(--og-sha "$og_sha" --og-features "$og_features")
 [ -z "$client_sha" ] || prepare+=(--search-client-sha "$client_sha")
 "$here/search/prepare.sh" "${prepare[@]}"
-search_repo="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).searchRepo' "$inputs")"
+field() { node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[process.argv[2]]' "$inputs" "$1"; }
+search_repo="$(field searchRepo)"
+if [ -n "$og_sha" ]; then
+  # The ogd rows measure full-line results within --max-filesize; a build without them would
+  # publish numbers for a different search.
+  for feature in search.full_lines search.max_filesize; do
+    grep -a -q -F "$feature" "$(field ogd)" || {
+      echo "ogd at pod-search $og_sha does not advertise $feature: not the bench-ready build" >&2
+      exit 2
+    }
+  done
+fi
+# Search rows this run cannot measure are listed as coming, with no numbers.
+coming=""
+if [ -z "$og_sha" ]; then
+  coming="og,ogd"
+elif [ -z "$client_sha" ]; then
+  coming="ogd"
+fi
 node -e '
-  const fs = require("fs"), [out, podApp, podCommit, orcaApp, inputs] = process.argv.slice(1)
-  fs.writeFileSync(out, JSON.stringify({ podApp, podCommit, orcaApp, startedAt: new Date().toISOString(), search: JSON.parse(fs.readFileSync(inputs, "utf8")) }, null, 2) + "\n")
-' "$POD_BENCH_OUT/run.json" "$pod" "$pod_commit" "$orca" "$inputs"
+  const fs = require("fs"), [out, podApp, podCommit, orcaApp, inputs, comingList] = process.argv.slice(1)
+  const reasons = {
+    og: { suite: "search", subject: "og (pod-search)", reason: "no bench-ready pod-search build was confirmed for this run" },
+    ogd: { suite: "ogd", subject: "Pod search on ogd", reason: "needs a bench-ready pod-search build and a pinned pod/search-client" }
+  }
+  const coming = comingList ? comingList.split(",").map((id) => ({ id, status: "coming", ...reasons[id] })) : []
+  fs.writeFileSync(out, JSON.stringify({ podApp, podCommit, orcaApp, startedAt: new Date().toISOString(), search: JSON.parse(fs.readFileSync(inputs, "utf8")), coming }, null, 2) + "\n")
+' "$POD_BENCH_OUT/run.json" "$pod" "$pod_commit" "$orca" "$inputs" "$coming"
 
 node "$here/suites/preflight.mjs"
 run_suite() {
@@ -76,7 +108,6 @@ run_suite polling
 run_suite polling --extra-ptys 80
 run_suite git-status
 if [ -n "$og_sha" ]; then
-  field() { node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[process.argv[2]]' "$inputs" "$1"; }
   run_suite search --repo "$search_repo" --engines rg,og --og "$(field og)" --ogd "$(field ogd)" \
     --ogctl "$(field ogctl)" --og-sha "$(field ogSha)"
 else
