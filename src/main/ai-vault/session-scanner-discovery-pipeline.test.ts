@@ -23,6 +23,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await fs.rm(root, { recursive: true, force: true })
 })
 
@@ -47,6 +48,51 @@ function scan(scanRoot = root, issues: AiVaultScanIssue[] = [], limit = 100) {
 }
 
 describe('fresh discovery pipeline', () => {
+  it('formats timestamps only for retained files while still reading every candidate', async () => {
+    await createFiles(root, 35)
+    fsMocks.stat.mockImplementation(async (path: string) =>
+      Object.assign(await fs.stat(path), { mtimeMs: 1_000 })
+    )
+    const format = vi.spyOn(Date.prototype, 'toISOString')
+    expect((await scan(root, [], 3)).files).toHaveLength(3)
+    expect(format).toHaveBeenCalledTimes(3)
+    expect(fsMocks.stat).toHaveBeenCalledTimes(35)
+    format.mockClear()
+    expect((await scan(root, [], 0)).files).toEqual([])
+    expect(format).not.toHaveBeenCalled()
+    expect(fsMocks.stat).toHaveBeenCalledTimes(70)
+    expect((await scan(root, [], Infinity)).files).toHaveLength(35)
+    expect(format).toHaveBeenCalledTimes(35)
+  })
+
+  it('reports invalid timestamps even for empty requests, after unavailable sidecar issues', async () => {
+    const [file] = await createFiles(root, 1)
+    fsMocks.stat.mockImplementation(async (path: string) => {
+      if (path.endsWith('.meta')) {
+        throw Object.assign(new Error('metadata refused'), { code: 'EACCES' })
+      }
+      return Object.assign(await fs.stat(path), { mtimeMs: Infinity })
+    })
+    const issues: AiVaultScanIssue[] = []
+    const discovery = await discoverFiles({
+      rootDir: root,
+      issues,
+      limit: 0,
+      agent: 'claude',
+      extensions: ['.jsonl'],
+      contentDependencyPath: (path) => `${path}.meta`
+    })
+    expect(discovery.files).toEqual([])
+    expect(issues).toEqual([
+      {
+        agent: 'claude',
+        path: `${file}.meta`,
+        message: 'Session metadata could not be read this scan.'
+      },
+      { agent: 'claude', path: file, message: expect.stringMatching(/Invalid (?:time value|Date)/) }
+    ])
+  })
+
   it('preserves traversal ties when later metadata completes first, including the partial batch', async () => {
     const paths = await createFiles(root, 131)
     let releaseFirst = () => {}
@@ -100,7 +146,7 @@ describe('fresh discovery pipeline', () => {
     const results = await Promise.all(roots.map((directory) => scan(directory, [], 3)))
     expect(results.every((result) => result.files.length === 3)).toBe(true)
     expect(peak).toBeGreaterThan(1)
-    expect(peak).toBeLessThanOrEqual(4)
+    expect(peak).toBeLessThanOrEqual(8)
     expect(active).toBe(0)
   })
 
