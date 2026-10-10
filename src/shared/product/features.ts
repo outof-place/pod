@@ -12,6 +12,7 @@ export const POD_FEATURE_IDS = [
   'featurePromos',
   'uiLocales',
   'mobileWebClient',
+  'runtimeWebSocket',
   'dictation',
   'windowsSshHosts',
   'usagePolling',
@@ -85,6 +86,11 @@ export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
       skipMobileWebBundleAssert: true
     },
     settingsSections: ['mobile']
+  },
+  runtimeWebSocket: {
+    pod: false,
+    reason:
+      'The desktop app opens no runtime WebSocket listener: no phone, browser or other desktop pairs into Pod, and the CLI uses the unix socket. Explicit `serve` keeps it'
   },
   dictation: {
     pod: false,
@@ -162,6 +168,8 @@ export const POD_FEATURE_PROMOS: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.featurePromos
 export const POD_UI_LOCALES: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.uiLocales
+export const POD_RUNTIME_WEBSOCKET: boolean =
+  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.runtimeWebSocket
 export const POD_DICTATION: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.dictation
 export const POD_WINDOWS_SSH_HOSTS: boolean =
@@ -189,6 +197,7 @@ export function podFeatureFlags(profile: PodBuildProfile): PodFeatureFlags {
     featurePromos: on('featurePromos'),
     uiLocales: on('uiLocales'),
     mobileWebClient: on('mobileWebClient'),
+    runtimeWebSocket: on('runtimeWebSocket'),
     dictation: on('dictation'),
     windowsSshHosts: on('windowsSshHosts'),
     usagePolling: on('usagePolling'),
