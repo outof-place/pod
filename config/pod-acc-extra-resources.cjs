@@ -98,10 +98,11 @@ const podAccFileExclusions = [
 ]
 
 // For mac signIgnore: the stdlib's .py/.pyc are data, and osx-sign would give each of its ~1000
-// "binary-looking" files an xattr signature. Its Mach-Os (bin/python3.14, lib-dynload/*.so) are
-// still signed, with the inherit entitlements, whose allow-unsigned-executable-memory CPython's
-// JIT (PYTHON_JIT=1) needs under the hardened runtime.
-const podAccMacSignIgnore = ['/Resources/python/lib/python3\\.14/(?!lib-dynload/)']
+// "binary-looking" files an xattr signature. Its Mach-Os (bin/python3.14, every .so and .dylib,
+// lib-dynload's or a package's) are still signed, with the inherit entitlements, whose
+// allow-unsigned-executable-memory CPython's JIT (PYTHON_JIT=1) needs under the hardened runtime;
+// notarization rejects an unsigned one.
+const podAccMacSignIgnore = ['/Resources/python/lib/python3\\.14/(?!.*\\.(?:so|dylib)$)']
 
 // product/scripts/verify-bundle-seal.mjs runs these against a copy of the signed app
 const { podAccSealProbes } = require('./pod-acc-seal-probes.cjs')
