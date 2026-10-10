@@ -205,13 +205,35 @@ if (!servesIgnoredPaths) {
     'ogd did not advertise fuzzy.ignored and files.ignored, so quick open with gitignored files shown ran on rg and has no ogd row.'
   )
 }
+// In-app text search sends the parity test's `{"query":"<q>"}` options (with a result cap), so
+// the parity report of this run, on the same clone, says whether ogd clipped a line for <q>. If it
+// did, Pod's client answered from rg and the "ogd" timing is rg's: that row is left out too.
+const parityKeys = new Set(parityOk.flatMap((sample) => Object.keys(sample.timings ?? {})))
+const appFallbacks = []
+const appUnchecked = []
+const servedWhole = (rest) => {
+  const query = rest.match(/^ search "(.*)"$/)?.[1]
+  if (query === undefined) {
+    return true
+  }
+  const key = JSON.stringify({ query })
+  if (!parityKeys.has(`search ${key}`)) {
+    appUnchecked.push(query)
+    return true
+  }
+  if (fallbackLines(`search ${key}`) > 0) {
+    appFallbacks.push(query)
+    return false
+  }
+  return true
+}
 // Keys look like `<mode> quick open "<q>"` or `<mode> search "<q>"`, mode rg|ogd (+ gitignored shown).
 for (const label of appLabels.filter((key) => key.startsWith('rg'))) {
   const rest = label.replace(/^rg/, '')
   const ogdLabel = `ogd${rest}`
   const id = `ogd.app.${slug(rest)}`
   // Without the feature the "ogd" timing is the rg fallback: keep the rg row, drop the ogd one.
-  const measured = ogdMeasures(ogdLabel)
+  const measured = ogdMeasures(ogdLabel) && servedWhole(rest)
   for (const [engine, key] of measured
     ? [
         ['rg', label],
@@ -240,6 +262,16 @@ for (const label of appLabels.filter((key) => key.startsWith('rg'))) {
   }
 }
 
+if (appFallbacks.length > 0) {
+  suiteCaveats.push(
+    `In app, ogd clipped a line over 1 MiB for ${[...new Set(appFallbacks)].map((q) => JSON.stringify(q)).join(', ')}, so Pod answered from rg; those queries have no in-app ogd row.`
+  )
+}
+if (appUnchecked.length > 0) {
+  suiteCaveats.push(
+    `These in-app queries are not in the parity test, so nothing checked them for clipped lines: ${[...new Set(appUnchecked)].map((q) => JSON.stringify(q)).join(', ')}.`
+  )
+}
 log(`ogd: ${metrics.length} rows`)
 writeSuiteResult('ogd', {
   caveats: [
