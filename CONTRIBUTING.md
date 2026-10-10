@@ -88,6 +88,14 @@ Fork-only: Pod identity: name, bundle id, icon
 - An upstream pull request branch that maintainers update by merging Orca `main` into it gets
   `"squash": true`: it is stacked as one commit, its net change since the Orca commit it last
   merged, because a commit-by-commit replay would lose the merges' conflict resolutions.
+- Before it changes any ref, `pod-stack.sh` checks coverage. A pinned `ref` must contain its branch
+  tip, unless the entry says why in `"hold"`. A `stack/*` copy names its `"source"` branch, and every
+  commit of that branch must be in the result. A miss exits with code 4.
+- Codemods over the whole stack are listed under `"generated"` in `pod-stack.json` and run by
+  `scripts/pod-generated.sh`: one commit per layer on top of the stack, trailed `Pod-Generated:`.
+  Every assembly and every upstream sync drops the old layer and runs the codemod again, so the
+  layer never conflicts. A codemod that fails, or whose `check` command finds work left, stops
+  the run with nothing committed.
 - A pull request that Orca has merged leaves the manifest. Squash merges are not caught by the
   patch-id dedupe, so check that the merged commit matches the branch, then drop the entry.
 - The [upstream sync](.github/workflows/upstream-sync.yml) workflow runs daily. It fast-forwards
