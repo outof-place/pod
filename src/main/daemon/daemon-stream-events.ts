@@ -95,6 +95,22 @@ export type TransientFactEvent = {
   payload: DaemonTransientFact
 }
 
+/** Pod: the direct lane switches at exactly this byte; main stops (or resumes) the viewer's output here. */
+export type PodLaneEvent = {
+  type: 'event'
+  event: 'podLane'
+  sessionId: string
+  payload: { laneId: string; phase: 'attached' | 'detached'; reason?: string }
+}
+
+/** Pod: input the lane wrote, queued before the write so main's records precede any exit. */
+export type PodLaneInputEvent = {
+  type: 'event'
+  event: 'podLaneInput'
+  sessionId: string
+  payload: { data: string; truncated?: true; at: number }
+}
+
 export type DaemonEvent =
   | DataEvent
   | ExitEvent
@@ -103,3 +119,5 @@ export type DaemonEvent =
   | DataGapEvent
   | SessionQueryResponderMarkerEvent
   | TransientFactEvent
+  | PodLaneEvent
+  | PodLaneInputEvent
