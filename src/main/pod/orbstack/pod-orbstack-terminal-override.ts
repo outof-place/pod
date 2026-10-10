@@ -15,31 +15,21 @@ export type PodOrbstackTerminalTarget = {
 
 type TerminalTargetResolver = (worktreeId: string) => PodOrbstackTerminalTarget | null
 
-/** Extra env (and so ORBENV keys) for a sandboxed agent, e.g. a credential proxy's settings. */
-type SandboxAgentEnvProvider = (context: {
-  worktreeId: string
-  machine: string
-}) => Record<string, string> | null
-
 /**
- * Starts (or reuses) the sandbox's hook relay to this hook server. Returns the nonce a launch waits
- * for and the sandbox's own hook token, which stands in for the server's inside the VM.
+ * Starts (or reuses) the sandbox's relay to this hook server. Returns the nonce a launch waits for
+ * and env for the agent inside the VM (its own hook token, and the CA path plus a credential
+ * placeholder while the anthropic-api route is on), keyed by the names the VM sees.
  */
 type SandboxRelayStarter = (
   machine: string,
   hookServer: { port: number; token: string }
-) => { nonce: string; sandboxToken: string } | null
+) => { nonce: string; vmEnv: Record<string, string> } | null
 
 let resolveTarget: TerminalTargetResolver | null = null
-let sandboxAgentEnv: SandboxAgentEnvProvider | null = null
 let startSandboxRelay: SandboxRelayStarter | null = null
 
 export function setPodOrbstackTerminalResolver(resolver: TerminalTargetResolver | null): void {
   resolveTarget = resolver
-}
-
-export function setPodSandboxAgentEnvProvider(provider: SandboxAgentEnvProvider | null): void {
-  sandboxAgentEnv = provider
 }
 
 export function setPodSandboxRelayStarter(starter: SandboxRelayStarter | null): void {
@@ -48,8 +38,11 @@ export function setPodSandboxRelayStarter(starter: SandboxRelayStarter | null): 
 
 /** Per-launch override: `1` runs this Claude launch in the sandbox, `0` keeps it on the Mac. */
 export const POD_ORBSTACK_SANDBOX_LAUNCH_ENV = 'POD_ORBSTACK_SANDBOX'
-/** Carries the sandbox's hook token into the VM, where it becomes ORCA_AGENT_HOOK_TOKEN. */
-export const POD_SANDBOX_HOOK_TOKEN_ENV = 'POD_SANDBOX_HOOK_TOKEN'
+/**
+ * Why a prefix: the pane's Mac shell keeps its own ORCA_AGENT_HOOK_TOKEN and no ANTHROPIC_API_KEY;
+ * `POD_SANDBOX_VM_<NAME>` reaches the VM through ORBENV and becomes `<NAME>` only there.
+ */
+export const POD_SANDBOX_VM_ENV_PREFIX = 'POD_SANDBOX_VM_'
 
 // Why: orb passes only ORBENV-listed variables into Linux; these route hook posts to this pane.
 export const SANDBOX_FORWARDED_ENV = [
@@ -76,12 +69,18 @@ export function buildSandboxAgentCommand(args: {
   orbHome?: string | null
   /** The relay nonce to wait for before the agent starts, so its first hook post gets through. */
   relayNonce?: string | null
+  /** Names the VM's agent gets from `POD_SANDBOX_VM_<NAME>`. */
+  vmEnvNames?: readonly string[]
 }): string {
+  const wait = args.relayNonce ? `${buildRelayWait(args.relayNonce)} ` : ''
+  const vmEnv = (args.vmEnvNames ?? [])
+    .map(
+      (name) =>
+        `export ${name}="$${POD_SANDBOX_VM_ENV_PREFIX}${name}"; unset ${POD_SANDBOX_VM_ENV_PREFIX}${name}; `
+    )
+    .join('')
   // Why exec: the agent replaces the login shell, so its exit ends orb and the Mac sees it exit.
-  const relay = args.relayNonce
-    ? `${buildRelayWait(args.relayNonce)} export ORCA_AGENT_HOOK_TOKEN="$${POD_SANDBOX_HOOK_TOKEN_ENV}"; unset ${POD_SANDBOX_HOOK_TOKEN_ENV}; `
-    : ''
-  const inner = `${relay}export DISABLE_AUTOUPDATER=1; exec ${args.command}`
+  const inner = `${wait}${vmEnv}export DISABLE_AUTOUPDATER=1; exec ${args.command}`
   const argv = [args.orbPath, '-m', args.machine, '-w', args.cwd, 'bash', '-lc', inner]
   const home = args.orbHome ? `HOME=${buildShellCommandFromArgv([args.orbHome], 'posix')} ` : ''
   return `ORBENV=${args.forwardEnv.join(':')} ${home}${buildShellCommandFromArgv(argv, 'posix')}`
@@ -136,9 +135,7 @@ export function applyPodOrbstackTerminalOverride(
       spawnOptions.cwd &&
       wantsSandbox(spawnOptions.env, sandbox.agentsByDefault)
     ) {
-      const extra = sandboxAgentEnv?.({ worktreeId: request.worktreeId, machine: sandbox.machine })
       const env = spawnOptions.env ?? {}
-      Object.assign(env, extra ?? {})
       const hookPort = Number(env.ORCA_AGENT_HOOK_PORT)
       const hookToken = env.ORCA_AGENT_HOOK_TOKEN
       const relay =
@@ -146,8 +143,9 @@ export function applyPodOrbstackTerminalOverride(
           ? (startSandboxRelay?.(sandbox.machine, { port: hookPort, token: hookToken }) ?? null)
           : null
       // The server's token stays on the Mac; the VM gets the sandbox's, which the relay swaps back.
-      if (relay) {
-        env[POD_SANDBOX_HOOK_TOKEN_ENV] = relay.sandboxToken
+      const vmEnvNames = Object.keys(relay?.vmEnv ?? {})
+      for (const name of vmEnvNames) {
+        env[`${POD_SANDBOX_VM_ENV_PREFIX}${name}`] = relay?.vmEnv[name] ?? ''
       }
       spawnOptions.command = buildSandboxAgentCommand({
         orbPath: target.orbPath,
@@ -156,11 +154,11 @@ export function applyPodOrbstackTerminalOverride(
         command: spawnOptions.command,
         forwardEnv: [
           ...SANDBOX_FORWARDED_ENV,
-          ...(relay ? [POD_SANDBOX_HOOK_TOKEN_ENV] : []),
-          ...Object.keys(extra ?? {})
+          ...vmEnvNames.map((name) => `${POD_SANDBOX_VM_ENV_PREFIX}${name}`)
         ],
         orbHome: target.orbHome,
-        relayNonce: relay?.nonce ?? null
+        relayNonce: relay?.nonce ?? null,
+        vmEnvNames
       })
     }
     return
