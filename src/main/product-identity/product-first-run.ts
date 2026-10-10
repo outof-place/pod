@@ -1,9 +1,6 @@
 import { join } from 'node:path'
 import { app, dialog, shell } from 'electron'
-import {
-  PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
-  PROTOCOL_VERSION
-} from '../daemon/daemon-protocol-version'
+import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS } from '../daemon/daemon-protocol-version'
 import { setAppBundleId } from '../../shared/app-identity'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import {
@@ -13,7 +10,8 @@ import {
   updateMigrationMarker
 } from './deferred-profile-import'
 import { openImportProgressWindow } from './import-progress-window'
-import { migrateLegacyProfile } from './legacy-profile-migration'
+import { offerLegacyDaemonHandover } from './legacy-daemon-handover-prompt'
+import { migrateLegacyProfile, type SafeStorageKeychainPort } from './legacy-profile-migration'
 import { createMacSafeStorageKeychain } from './macos-safe-storage-keychain'
 import { getProductIdentity, type ProductIdentity } from './product-identity'
 
@@ -41,22 +39,31 @@ export function applyProductIdentityPreReady(
 }
 
 /**
- * The synchronous half of the first-launch import (state, daemons, keychain). Returns false when
- * startup must stop: the legacy app is still running, so its databases cannot be copied consistently.
+ * The synchronous half of the first-launch import (state, keychain). Returns false when startup
+ * must stop: the legacy app is still running, so its databases cannot be copied consistently.
+ * `scratch` points an E2E run at a disposable legacy profile and keeps it off the login keychain.
  */
-export function runProductFirstRun(identity: ProductIdentity): boolean {
+export function runProductFirstRun(
+  identity: ProductIdentity,
+  scratch: { legacyUserData: string; keychain: SafeStorageKeychainPort | null } | null = null
+): boolean {
   if (!identity.legacyProfile) {
     return true
   }
   const started = performance.now()
   const result = migrateLegacyProfile({
-    legacyUserData: join(app.getPath('appData'), identity.legacyProfile.userDataName),
+    legacyUserData:
+      scratch?.legacyUserData ?? join(app.getPath('appData'), identity.legacyProfile.userDataName),
     productUserData: app.getPath('userData'),
     legacyKeychainName: identity.legacyProfile.keychainName,
     productKeychainName: identity.keychainName,
     trustedAppPath: appBundlePathFromExecPath(process.execPath),
-    keychain: process.platform === 'darwin' ? createMacSafeStorageKeychain() : null,
-    attachableDaemonProtocols: [...PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION],
+    keychain: scratch
+      ? scratch.keychain
+      : process.platform === 'darwin'
+        ? createMacSafeStorageKeychain()
+        : null,
+    attachableDaemonProtocols: PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
     appVersion: app.getVersion()
   })
   console.log(
@@ -66,7 +73,7 @@ export function runProductFirstRun(identity: ProductIdentity): boolean {
     dialog.showErrorBox(
       `${identity.displayName} can't import your Orca profile yet`,
       result.reason === 'legacy-app-running'
-        ? `Orca is running (pid ${result.pid}). Quit Orca, then open ${identity.displayName} again.\n\n${identity.displayName} copies your Orca workspaces, settings and running terminals on its first launch. Orca itself is left unchanged.`
+        ? `Orca is running (pid ${result.pid}). Quit Orca, then open ${identity.displayName} again.\n\n${identity.displayName} copies your Orca workspaces and settings on its first launch. Orca itself is left unchanged, and you can open it again right after.`
         : `Another ${identity.displayName} process (pid ${result.pid}) is importing the Orca profile. Wait for it to finish, then try again.`
     )
     app.exit(0)
@@ -104,6 +111,12 @@ export async function completeProductImportBeforeWindows(): Promise<void> {
       progressWindow?.close()
     }
   }
+  try {
+    await offerLegacyDaemonHandover(identity, userData)
+  } catch (error) {
+    // Why continue: a failed handover leaves the daemons with Orca, which is the safe default.
+    console.error('[product-migration] daemon handover failed', error)
+  }
   const marker = readMigrationMarker(userData)
   // Why from the marker: a background launch defers the notice to the next interactive one.
   if (marker?.permissionsNoticeShown === false && !isBackgroundLaunch()) {
@@ -115,12 +128,12 @@ async function showImportNotice(
   identity: ProductIdentity,
   marker: Record<string, unknown>
 ): Promise<void> {
-  const daemons = Array.isArray(marker.linkedDaemons) ? marker.linkedDaemons.map(String) : []
+  const handover: unknown = Reflect.get(Object(marker.daemonHandover), 'decision')
   const lines = [
     `${identity.displayName} imported your Orca profile. Orca's own copy was not changed.`,
-    daemons.length > 0
-      ? `Running terminals were handed over (daemon protocol ${daemons.join(', ')}).`
-      : 'No running terminals needed a hand-over.',
+    handover === 'moved'
+      ? `Running terminals moved from Orca to ${identity.displayName}.`
+      : `Running terminals stayed with Orca; ${identity.displayName} starts its own.`,
     marker.safeStorage === 'unavailable'
       ? 'Saved sign-ins could not be carried over because keychain access was denied. Sign in again where asked.'
       : 'Saved sign-ins were carried over.',
