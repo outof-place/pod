@@ -129,6 +129,16 @@ const Focus = z
 
 const DevTools = z.object({ type: z.literal('browserDevTools'), pageId: PageId }).strict()
 
+// PodNative's pick from a <select> menu the runtime reported (browserPopupMenu); -1 closes it.
+const PopupChoose = z
+  .object({
+    type: z.literal('browserPopupChoose'),
+    pageId: PageId,
+    menuId: z.number().int().min(1).max(2_147_483_647),
+    index: z.number().int().min(-1).max(10_000)
+  })
+  .strict()
+
 /** Every browser verb, for the socket's discriminated union of client messages. */
 export const POD_BROWSER_PANE_CLIENT_MESSAGES = [
   Rendezvous,
@@ -140,7 +150,8 @@ export const POD_BROWSER_PANE_CLIENT_MESSAGES = [
   Find,
   FindStop,
   Focus,
-  DevTools
+  DevTools,
+  PopupChoose
 ] as const
 
 export type PodBrowserPaneClientMessage =
@@ -154,6 +165,7 @@ export type PodBrowserPaneClientMessage =
   | z.infer<typeof FindStop>
   | z.infer<typeof Focus>
   | z.infer<typeof DevTools>
+  | z.infer<typeof PopupChoose>
 
 export type PodBrowserPaneServerMessage =
   | {
@@ -169,6 +181,17 @@ export type PodBrowserPaneServerMessage =
   | { type: 'browserCursor'; pageId: string; cursor: string }
   | { type: 'browserFound'; pageId: string; matches: number; active: number; final: boolean }
   | { type: 'browserAttachFailed'; pageId: string; reason: string }
+  // A <select> the user opened: PodNative shows its options natively, below the select's rect.
+  | {
+      type: 'browserPopupMenu'
+      pageId: string
+      menuId: number
+      x: number
+      y: number
+      width: number
+      height: number
+      items: { label: string; enabled: boolean; selected: boolean; group: string }[]
+    }
 
 export function isPodBrowserPaneMessage(message: {
   type: string
