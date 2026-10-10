@@ -2,6 +2,7 @@ import { dirname, join } from 'node:path'
 import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
 import type { PodClaudeAccConfig } from '../pod-distro-config'
 import { automatedLaunchEnv, runAccLifecycle, type AccLifecycleOutcome } from './acc-lifecycle'
+import { writeAccLifecycleRecord } from './acc-lifecycle-record'
 import { isAccMenuHelperRunning } from './acc-menu-helper'
 
 // The helper starts and quits on its own (login item, setup restarting it): look again this often.
@@ -56,6 +57,7 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
   stop: () => void
   lifecycle: Promise<AccLifecycleOutcome>
 } {
+  const appPath = appBundlePath(options.execPath)
   const lifecycle = runAccLifecycle(
     {
       platform: options.platform,
@@ -64,13 +66,22 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
       userDataPath: options.userDataPath,
       defaultUserDataPath: options.defaultUserDataPath,
       payloadDir: join(options.resourcesPath, options.config.payload),
-      appPath: appBundlePath(options.execPath),
+      appPath,
       mode: options.env.POD_ACC_LIFECYCLE,
       automatedBy: automatedLaunchEnv(options.env)
     },
     options.run
   ).then((outcome) => {
     options.log(describe(outcome))
+    try {
+      writeAccLifecycleRecord(options.home, outcome, {
+        app: appPath,
+        at: new Date(),
+        pid: process.pid
+      })
+    } catch (error) {
+      options.log(`claude-acc: pod-lifecycle.json not written: ${String(error)}`)
+    }
     return outcome
   })
   let helperRunning = false
