@@ -79,6 +79,12 @@ Fork-only: Pod identity: name, bundle id, icon
   `--apply` or `--push`. It stops on the first conflict with a report. It refuses to drop commits
   that are on `main` but in no listed branch, and to replace a `main` that is not a Pod build.
   Run `scripts/pod-stack.sh --help` for the options.
+- Commits are deduplicated by patch id against everything stacked so far. A topic branch built on
+  an older copy of an earlier entry replays only its own commits, so it needs no rebase when that
+  entry is rewritten. If the older copy differs in content (same author, date and subject, other
+  change), the run stops and names the files. Rebase the branch, or give its entry a `base` that
+  excludes the old copy. An entry's `base` may be one ref or a list, and `ref` pins an entry to a
+  commit for a snapshot run.
 - The [upstream sync](.github/workflows/upstream-sync.yml) workflow runs daily. It fast-forwards
   `orca-main`. When Orca's `main` has a newer green commit, it rebases `main` into
   `sync/orca-main`, runs the typecheck, unit tests, the daemon protocol crossing check and the
