@@ -19,6 +19,7 @@ const conflict = require('./shared/automation-owner-conflict.js')
 const conflictRecovery = require('./cli/automation-owner-conflict-recovery.js')
 const selectorRecovery = require('./cli/worktree-selector-recovery.js')
 const evidence = require('./shared/orchestration-compatibility-evidence.js')
+const computerRecovery = require('./shared/computer-use-error-recovery.js')
 
 const lit = (s) => JSON.stringify(s)
 const arr = (xs) => `[${xs.map(lit).join(', ')}]`
@@ -94,6 +95,8 @@ ${recoveryRows.join('\n')}
 ]
 
 public let WORKTREE_SELECTOR_FORMS: [String] = ${arr([...selectorRecovery.WORKTREE_SELECTOR_FORMS])}
+
+public let COMPUTER_INVALID_ARGUMENT_NEXT_STEPS: [String] = ${arr(computerRecovery.computerUseErrorRecoveryData('invalid_argument')?.nextSteps ?? [])}
 
 public let COMMAND_SPECS: [CommandSpec] = [
 ${specRows.join('\n')}
