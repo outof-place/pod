@@ -1,5 +1,5 @@
 import { open, readFile, realpath } from 'node:fs/promises'
-import { runProcess } from './child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 /**
  * Host-side filesystem facts for repository Git tuning. Runs where Git runs

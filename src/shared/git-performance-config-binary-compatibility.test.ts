@@ -7,7 +7,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runProcess } from './child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { GitCapabilityCache } from './git-capability-cache'
 import { readGitIndexEntryCount } from './git-performance-config-filesystem'
 import {
