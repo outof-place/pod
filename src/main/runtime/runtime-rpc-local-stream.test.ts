@@ -2,6 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { OrcaRuntimeService } from './orca-runtime'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
@@ -33,15 +34,10 @@ vi.mock('../git/worktree', () => {
   }
 })
 
+const TerminalCreateResult = z.object({ terminal: z.object({ handle: z.string() }) })
+
 function readTerminalHandle(result: unknown): string {
-  const terminal =
-    typeof result === 'object' && result !== null ? Reflect.get(result, 'terminal') : null
-  const handle =
-    typeof terminal === 'object' && terminal !== null ? Reflect.get(terminal, 'handle') : null
-  if (typeof handle !== 'string') {
-    throw new Error('terminal.create returned no handle')
-  }
-  return handle
+  return TerminalCreateResult.parse(result).terminal.handle
 }
 
 async function startServer(writes: { terminal: string; text: string }[] = []) {
