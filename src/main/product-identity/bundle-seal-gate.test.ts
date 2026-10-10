@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const gatePath = join(__dirname, '..', '..', '..', 'product', 'scripts', 'verify-bundle-seal.mjs')
@@ -72,10 +72,15 @@ describe('bundle seal gate', () => {
         encoding: 'utf8'
       })
       expect(sign.status, sign.stderr).toBe(0)
-      const run = spawnSync(process.execPath, [gatePath, app], { encoding: 'utf8' })
-      expect(run.status).toBe(1)
-      expect(run.stderr).toMatch(/^bundle seal: /)
-      expect(run.stdout).not.toMatch(/intact/)
+      // Why a symlink too: the entry check once compared argv to the realpath and skipped main().
+      const link = join(dirname(app), 'verify-bundle-seal.mjs')
+      symlinkSync(gatePath, link)
+      for (const script of [gatePath, link]) {
+        const run = spawnSync(process.execPath, [script, app], { encoding: 'utf8' })
+        expect(run.status, script).toBe(1)
+        expect(run.stderr).toMatch(/^bundle seal: /)
+        expect(run.stdout).not.toMatch(/intact/)
+      }
     }
   )
 })
