@@ -23,6 +23,7 @@ type Listener = (event: WorkspaceRootEvent) => void
 const listeners = new Set<Listener>()
 let tracked = new Map<string, string>()
 let indexStatusProvider: WorkspaceIndexStatusProvider | null = null
+let indexStatusAvailable: () => boolean = () => true
 
 /** Subscribe to repo roots entering, leaving or moving within the workspace root. */
 export function onWorkspaceRootsChanged(listener: Listener): () => void {
@@ -96,24 +97,29 @@ export function syncWorkspaceRoots(next: ReadonlyMap<string, string>): Workspace
   return events
 }
 
-/** The index (pod-search) reports per-root status here; the dashboard reads it on demand. */
+/** The index (pod-search) reports per-root status here; the dashboard reads it on demand.
+ *  `isAvailable` lets an index that is installed but switched off read as not connected. */
 export function registerWorkspaceIndexStatusProvider(
-  provider: WorkspaceIndexStatusProvider
+  provider: WorkspaceIndexStatusProvider,
+  isAvailable: () => boolean = () => true
 ): () => void {
   indexStatusProvider = provider
+  indexStatusAvailable = isAvailable
   return () => {
     if (indexStatusProvider === provider) {
       indexStatusProvider = null
+      indexStatusAvailable = () => true
     }
   }
 }
 
 export function getWorkspaceIndexStatusProvider(): WorkspaceIndexStatusProvider | null {
-  return indexStatusProvider
+  return indexStatusProvider && indexStatusAvailable() ? indexStatusProvider : null
 }
 
 export function resetWorkspaceRootEventsForTests(): void {
   listeners.clear()
   tracked = new Map()
   indexStatusProvider = null
+  indexStatusAvailable = () => true
 }
