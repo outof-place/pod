@@ -15,6 +15,7 @@ import type { StatsCollector } from '../stats/collector'
 import { RuntimeRemoteFetchController } from './runtime-remote-fetch-controller'
 import { RuntimeWorktreeBaseReconciliation } from './runtime-worktree-base-reconciliation'
 import { RuntimeWorktreeRemovalInFlight } from './runtime-worktree-removal-in-flight'
+import { podBrowserPanesHostBrowserTabs } from '../pod/browser-pane/pod-browser-pane-hooks'
 
 export class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitOverrideListeners {
   // Why: per-PTY driver state. The "driver" is whoever currently owns the
@@ -45,7 +46,9 @@ export class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitOverrideLi
       resolveBrowserNetworkExecutionHost: (worktree) =>
         this.resolveBrowserNetworkExecutionHostForWorktree(worktree),
       getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
-      getAvailableAuthoritativeWindow: () => this.getAvailableAuthoritativeWindow(),
+      // Fork-only (Pod): one-app's native panes host browser pages offscreen, not the hidden window.
+      getAvailableAuthoritativeWindow: () =>
+        podBrowserPanesHostBrowserTabs() ? null : this.getAvailableAuthoritativeWindow(),
       getOffscreenBrowserBackend: () => this.offscreenBrowserBackend,
       markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this),
       notifyHeadlessBrowserSessionTabsChanged: (worktreeId) =>
