@@ -16,7 +16,6 @@ src/main/agent-hooks/wsl-hook-relay-sentinel.ts
 src/main/ai-vault/session-scanner-service-client-state.ts
 src/main/ai-vault/session-scanner-service-client.ts
 src/main/ai-vault/session-scanner-service-spawn.ts
-src/main/app-icon.ts
 src/main/automations/precheck-runner.ts
 src/main/browser/agent-browser-bridge-execution.ts
 src/main/browser/agent-browser-bridge-raw-process.ts
