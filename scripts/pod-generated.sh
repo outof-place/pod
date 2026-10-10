@@ -85,7 +85,8 @@ while IFS=$'\t' read -r -u 3 name requires subject fork_only run_b64 check_b64; 
   wt=$(mktemp -d "${TMPDIR:-/tmp}/pod-generated.XXXXXX")
   rmdir "$wt"
   # Hooks off: the repository's post-checkout hook would install packages.
-  git -c core.hooksPath=/dev/null worktree add --quiet --detach "$wt" "$tip"
+  # Lazy fetch back on for the checkout only: it fetches every missing blob in one batch.
+  GIT_NO_LAZY_FETCH=0 git -c core.hooksPath=/dev/null worktree add --quiet --detach "$wt" "$tip"
   run=()
   while IFS= read -r -d '' a; do run+=("$a"); done < <(argv_of "$run_b64")
   check=()
