@@ -2,18 +2,32 @@
 // own 127.0.0.1:443; the relay hands those bytes here, where TLS ends under the sandbox's CA and
 // each allowed request goes on to the real api.anthropic.com with Pod's credential in place of the VM's.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { Agent, request as httpsRequest } from 'node:https'
-import type { Duplex } from 'node:stream'
+import { pipeline, type Duplex } from 'node:stream'
 import { createSecureContext, TLSSocket } from 'node:tls'
+import {
+  createAnthropicUpstream,
+  type AnthropicUpstreamClient,
+  type AnthropicUpstreamResponse
+} from './pod-orbstack-anthropic-upstream'
 import { OPEN_PRIVACY, type SandboxPrivacy } from './pod-orbstack-privacy-env'
 import { ANTHROPIC_API_HOST, type SandboxCa } from './pod-orbstack-sandbox-ca'
+
+/** A refusal whose message is safe to show the sandbox: it never carries a credential. */
+export class SandboxCredentialError extends Error {
+  override name = 'SandboxCredentialError'
+}
 
 /** Where the credential comes from. Pod ships the stub; the user picks the real source. */
 export type SandboxAnthropicCredentials = {
   /** 'off' keeps the route closed and the VM unpinned. */
   mode(): 'off' | 'api-key' | 'oauth'
-  /** Auth headers for one upstream request, e.g. `x-api-key`; null refuses the request. */
+  /**
+   * Auth headers for one upstream request, e.g. `x-api-key`; null refuses the request. A
+   * SandboxCredentialError refuses it with its message.
+   */
   authHeaders(scope: { machine: string }): Promise<Record<string, string> | null>
+  /** The API answered 401 to this source's headers. */
+  rejected?(scope: { machine: string }): void
 }
 
 export const STUB_SANDBOX_ANTHROPIC_CREDENTIALS: SandboxAnthropicCredentials = {
@@ -128,13 +142,15 @@ export function createAnthropicRoute(args: {
   ca: SandboxCa
   credentials?: () => SandboxAnthropicCredentials
   upstream?: AnthropicUpstream
+  /** Shared by every sandbox's route; without one the route opens its own. */
+  client?: AnthropicUpstreamClient
   /** The Mac's privacy switches, read per request; they close telemetry and flag fetches. */
   privacy?: () => SandboxPrivacy
   log?: (message: string) => void
 }) {
   const upstream = args.upstream ?? ANTHROPIC_UPSTREAM
   const source = args.credentials ?? getPodSandboxAnthropicCredentials
-  const agent = new Agent({ keepAlive: true, maxSockets: 16 })
+  const client = args.client ?? createAnthropicUpstream({ target: upstream, log: args.log })
   const secureContext = createSecureContext({ key: args.ca.leafKeyPem, cert: args.ca.leafCertPem })
 
   const proxy = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -154,38 +170,54 @@ export function createAnthropicRoute(args: {
       apiError(res, 403, 'permission_error', 'Pod does not forward this request from a sandbox.')
       return
     }
-    const auth = rule.auth ? await source().authHeaders({ machine: args.machine }) : {}
+    let auth: Record<string, string> | null
+    try {
+      auth = rule.auth ? await source().authHeaders({ machine: args.machine }) : {}
+    } catch (error) {
+      req.resume()
+      apiError(
+        res,
+        401,
+        'authentication_error',
+        error instanceof SandboxCredentialError
+          ? error.message
+          : 'Pod has no credential for this sandbox.'
+      )
+      return
+    }
     if (!auth) {
       req.resume()
       apiError(res, 401, 'authentication_error', 'Pod has no credential for this sandbox.')
       return
     }
-    const upstreamRequest = httpsRequest(
-      {
-        host: upstream.host,
-        port: upstream.port,
-        servername: ANTHROPIC_API_HOST,
-        ...(upstream.ca ? { ca: upstream.ca } : {}),
-        method: req.method,
-        path,
-        agent,
-        headers: { ...forwardableRequestHeaders(req.rawHeaders), ...auth, host: ANTHROPIC_API_HOST }
-      },
-      (reply) => {
-        res.writeHead(reply.statusCode ?? 502, forwardableResponseHeaders(reply.rawHeaders))
-        reply.pipe(res)
-      }
-    )
-    upstreamRequest.on('error', (error) => {
-      args.log?.(`upstream ${req.method} ${path.split('?')[0]} failed: ${error.message}`)
-      apiError(res, 502, 'api_error', 'Pod could not reach api.anthropic.com.')
-    })
+    const abort = new AbortController()
     res.on('close', () => {
       if (!res.writableFinished) {
-        upstreamRequest.destroy()
+        abort.abort()
       }
     })
-    req.pipe(upstreamRequest)
+    let reply: AnthropicUpstreamResponse
+    try {
+      reply = await client.request({
+        method: req.method ?? 'GET',
+        path,
+        headers: { ...forwardableRequestHeaders(req.rawHeaders), ...auth },
+        body: req,
+        signal: abort.signal
+      })
+    } catch (error) {
+      args.log?.(
+        `upstream ${req.method} ${path.split('?')[0]} failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+      apiError(res, 502, 'api_error', 'Pod could not reach api.anthropic.com.')
+      return
+    }
+    if (reply.status === 401 && rule.auth) {
+      source().rejected?.({ machine: args.machine })
+    }
+    res.writeHead(reply.status, forwardableResponseHeaders(reply.headers))
+    // Why pipeline: an upstream error after the headers must end the VM's response, not hang it.
+    pipeline(reply.body, res, () => {})
   }
 
   const server = createServer((req, res) => {
@@ -216,7 +248,9 @@ export function createAnthropicRoute(args: {
     },
     close(): void {
       server.close()
-      agent.destroy()
+      if (!args.client) {
+        client.close()
+      }
     }
   }
 }
