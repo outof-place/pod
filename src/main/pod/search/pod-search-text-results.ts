@@ -13,6 +13,8 @@ import { isOgdMessage, type OgdMessage } from './ogd-connection'
 
 // Mirrors buildRgArgs' `--max-filesize 5M`.
 const SEARCH_MAX_FILE_SIZE = 5 * 1024 * 1024
+// rg returns whole lines of any length; above this ogd sets `clipped` and the client falls back.
+const SEARCH_MAX_LINE_BYTES = 8 * 1024 * 1024
 
 export function textSearchLimit(options: SearchOptions): number {
   return Math.max(
@@ -41,6 +43,7 @@ export function buildOgdSearchRequest(options: SearchOptions, root: string): Ogd
     globs: ['!.git', ...includes, ...excludes],
     hidden: true,
     max_filesize: SEARCH_MAX_FILE_SIZE,
+    max_line_bytes: SEARCH_MAX_LINE_BYTES,
     // Counts submatches as maxResults does; `limit` (lines) is left out so only this applies.
     max_matches: textSearchLimit(options),
     barrier: true
@@ -123,6 +126,10 @@ export function ogdSearchReplyToResult(
     }
   }
   if (reply.truncated === true) {
+    // Short of max_matches, ogd stopped on its reply budget, where rg would have gone on.
+    if (acc.totalMatches < maxResults) {
+      return null
+    }
     acc.truncated = true
   }
   return finalize(acc)
