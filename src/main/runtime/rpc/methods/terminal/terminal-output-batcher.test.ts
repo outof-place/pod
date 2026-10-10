@@ -52,6 +52,7 @@ it('keeps delivered ranges frozen and isolated from reentrant flushes and dispos
 describe('leading-edge flush', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    vi.stubEnv('ORCA_TERMINAL_OUTPUT_LEADING_EDGE', '1')
   })
   afterEach(() => {
     vi.useRealTimers()
