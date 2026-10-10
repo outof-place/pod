@@ -5,6 +5,7 @@ import { redactEphemeralVmRecipeDiagnosticText } from '../../../shared/ephemeral
 import { runEphemeralVmRecipeStart } from '../../../shared/ephemeral-vm-recipe-runner'
 import { isValidPodOrbstackMachineName, podOrbstackMachineName } from './pod-orbstack-recipe'
 import type { PodOrbstackMachineKind, PodOrbstackRegistry } from './pod-orbstack-registry'
+import type { SandboxClaudeRelease } from './pod-orbstack-claude-release'
 import { provisionSandbox, resolveSandboxMounts } from './pod-orbstack-sandbox'
 import type { OrbstackToolPaths, OrbstackToolRunner } from './pod-orbstack-tools'
 
@@ -24,12 +25,10 @@ type MachineDeps = {
   runRecipe?: typeof runEphemeralVmRecipeStart
   /** HOME for the recipe's orb calls; null keeps the inherited one. */
   home?: string | null
-  /** The Mac's Claude Code version, which a new sandbox installs. */
-  hostClaudeVersion?: () => Promise<string | null>
+  /** The release of the Mac's Claude Code version a new sandbox installs; null skips Claude (E2E). */
+  prepareClaudeRelease?: () => Promise<SandboxClaudeRelease | null>
   provision?: typeof provisionSandbox
   resolveMounts?: typeof resolveSandboxMounts
-  /** E2E only: skip the Claude Code download. */
-  skipAgentInstall?: boolean
   now?: () => number
 }
 
@@ -135,6 +134,13 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
       if (mounts.some((path) => path.includes(':'))) {
         return { ok: false, error: 'OrbStack cannot share a folder whose path contains ":".' }
       }
+      // Downloaded before the machine exists, so a network failure leaves nothing to clean up.
+      let release: SandboxClaudeRelease | null
+      try {
+        release = (await deps.prepareClaudeRelease?.()) ?? null
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
       const entry = {
         name,
         worktreeId: target.worktreeId,
@@ -148,8 +154,7 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
           run: deps.run,
           name,
           mounts,
-          claudeVersion: (await deps.hostClaudeVersion?.()) ?? null,
-          skipAgentInstall: deps.skipAgentInstall
+          release
         })
         deps.registry.upsert({
           ...entry,
