@@ -1,4 +1,5 @@
 import { rmSync } from 'node:fs'
+import { computerUseAppNotFound } from '../product-identity/product-helper-names'
 import type net from 'node:net'
 import type {
   ComputerActionResult,
@@ -98,7 +99,7 @@ export class MacOSNativeProviderClient {
     const id = this.nextId++
     const helperExecutablePath = resolveMacOSComputerUseExecutablePath()
     if (!helperExecutablePath) {
-      throw new RuntimeClientError('accessibility_error', 'Orca Computer Use.app was not found')
+      throw new RuntimeClientError('accessibility_error', computerUseAppNotFound())
     }
     const transport = await this.ensureSocketStarted(helperExecutablePath)
     const token = this.socketToken
