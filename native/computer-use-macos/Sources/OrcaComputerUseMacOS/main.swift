@@ -10,6 +10,14 @@ import ScreenCaptureKit
 private let providerName = "orca-computer-use-macos"
 private let providerVersion = "1.0.0"
 private let providerProtocolVersion = 1
+// Fork-only (Pod): a product build renames this helper in its Info.plist
+// (product/helper-names.cjs) and the copy below follows. Upstream's plist has no host keys.
+private let helperDisplayName =
+    Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Orca Computer Use"
+private let hostDisplayName =
+    Bundle.main.object(forInfoDictionaryKey: "ProductHostDisplayName") as? String ?? "Orca"
+private let hostCliName =
+    Bundle.main.object(forInfoDictionaryKey: "ProductHostCLIName") as? String ?? "orca"
 
 struct Request: Decodable {
     let id: Int
@@ -606,7 +614,7 @@ final class Provider {
             // should open macOS privacy prompts/settings; runtime calls stay quiet.
             throw ProviderError.coded(
                 "permission_denied",
-                "Accessibility permission is required for Orca Computer Use. Run `orca computer permissions` or open Settings > Computer Use, grant Accessibility to Orca Computer Use, then retry."
+                "Accessibility permission is required for \(helperDisplayName). Run `\(hostCliName) computer permissions` or open Settings > Computer Use, grant Accessibility to \(helperDisplayName), then retry."
             )
         }
         let appElement = AXUIElementCreateApplication(app.pid)
@@ -643,7 +651,7 @@ final class Provider {
         let screenshotStatus: ScreenshotStatus = if screenshot != nil {
             .captured
         } else if includeScreenshot && !canCaptureScreenshot {
-            .failed("Screen Recording permission is required for Orca Computer Use; grant permission or pass --no-screenshot to inspect accessibility state only.")
+            .failed("Screen Recording permission is required for \(helperDisplayName); grant permission or pass --no-screenshot to inspect accessibility state only.")
         } else if includeScreenshot {
             .failed("window screenshot capture returned no image; retry with --no-screenshot if accessibility state is sufficient.")
         } else {
@@ -1123,7 +1131,7 @@ private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, visibleW
         if let window = settledWindow, outcome.settled {
             return window
         }
-        throw ProviderError.coded("permission_denied", "app '\(app.name)' has visible windows but no accessibility window (AX reads stayed blocked for \(outcome.waitedMs)ms after retries). macOS Accessibility may need Orca Computer Use toggled off and on again in System Settings.")
+        throw ProviderError.coded("permission_denied", "app '\(app.name)' has visible windows but no accessibility window (AX reads stayed blocked for \(outcome.waitedMs)ms after retries). macOS Accessibility may need \(helperDisplayName) toggled off and on again in System Settings.")
     }
     throw ProviderError.coded("window_not_found", "app '\(app.name)' has no accessibility window; make sure the app has a visible window, then retry with --restore-window.")
 }
@@ -2993,7 +3001,7 @@ private final class PermissionWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "Enable Orca Computer Use"
+        window.title = "Enable \(helperDisplayName)"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.backgroundColor = PermissionPalette.background
@@ -3119,9 +3127,9 @@ private enum PermissionKind: CaseIterable {
     var dragInstruction: String {
         switch self {
         case .accessibility:
-            "Drag Orca Computer Use into the list above to allow Accessibility."
+            "Drag \(helperDisplayName) into the list above to allow Accessibility."
         case .screenshots:
-            "Drag Orca Computer Use into the list above to allow Screenshots."
+            "Drag \(helperDisplayName) into the list above to allow Screenshots."
         }
     }
 
@@ -3223,14 +3231,14 @@ private final class PermissionView: NSView {
 
         let titleText = checking
             ? "Checking Computer Use"
-            : (ready ? "Computer Use is Ready" : "Enable Orca Computer Use")
+            : (ready ? "Computer Use is Ready" : "Enable \(helperDisplayName)")
         let title = label(titleText, size: 22, weight: .bold)
         let subtitle = label(
             checking
                 ? "Checking Accessibility and Screenshots."
                 : (ready
-                    ? "Orca can use local apps when you ask."
-                    : "Grant permissions so Orca can use apps when you ask."),
+                    ? "\(hostDisplayName) can use local apps when you ask."
+                    : "Grant permissions so \(hostDisplayName) can use apps when you ask."),
             size: 12,
             weight: .regular
         )
@@ -3402,7 +3410,7 @@ private final class PermissionDragAssistantController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "Drag Orca Computer Use"
+        window.title = "Drag \(helperDisplayName)"
         window.backgroundColor = .clear
         window.isOpaque = false
         window.isReleasedWhenClosed = false
@@ -3814,7 +3822,7 @@ private final class DraggableAppTile: NSView, NSDraggingSource {
         icon.imageScaling = .scaleProportionallyUpOrDown
         icon.translatesAutoresizingMaskIntoConstraints = false
 
-        let title = NSTextField(labelWithString: "Orca Computer Use")
+        let title = NSTextField(labelWithString: helperDisplayName)
         title.font = NSFont.systemFont(ofSize: 15, weight: .semibold)
         title.textColor = PermissionPalette.primaryText
         title.translatesAutoresizingMaskIntoConstraints = false
@@ -4195,7 +4203,7 @@ private func writePermissionStatus(to path: String) {
 }
 
 private func runStdio() {
-    fputs("Orca Computer Use provider must be launched by Orca in app-agent mode.\n", stderr)
+    fputs("\(helperDisplayName) provider must be launched by \(hostDisplayName) in app-agent mode.\n", stderr)
     exit(13)
 }
 
