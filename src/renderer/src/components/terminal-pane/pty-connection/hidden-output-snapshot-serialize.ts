@@ -2,7 +2,7 @@ import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-i
 import { isHostAnsweredSnapshotRetryCause } from '@/runtime/remote-runtime-terminal-multiplexer'
 import { onTerminalScrollIntentFollowOutput } from '@/lib/pane-manager/terminal-scroll-intent'
 
-import { shouldWritePtyOutputForeground } from './foreground-output-scan'
+import { shouldWritePtyOutputForeground, xtermShowsLiveOutput } from './foreground-output-scan'
 import { readE2eHiddenSnapshotOverride } from './e2e-terminal-pty-harness'
 
 import type { PtyBufferSnapshot } from '../pty-transport'
@@ -114,7 +114,7 @@ export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession
   // re-arm restores — that is the rc.7.perf feedback loop.
   session.isForegroundRestoreBackpressureContext = function (): boolean {
     return (
-      shouldWritePtyOutputForeground(session.deps.isVisibleRef.current) &&
+      xtermShowsLiveOutput(session) &&
       (session.hiddenOutputRestoreInFlight !== null || isHiddenOutputRestoreFloodSuppressed())
     )
   }

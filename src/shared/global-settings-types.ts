@@ -492,6 +492,10 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   experimentalTerminalAttention: boolean
   /** macOS: draw terminals with a native Ghostty (Metal) view over each pane. */
   experimentalNativeTerminal?: boolean
+  /** With the native terminal: while a native view covers its pane, the pane's xterm stops
+   *  parsing PTY output (main feeds the view and answers queries) and catches up from main's
+   *  model before it shows again. Upstream-optional; off by default. */
+  experimentalNativeTerminalParseOnce?: boolean
   /** Experimental: automatically sleep completed, resumable background agent terminals. */
   experimentalAgentHibernation?: boolean
   /** Milliseconds a completed agent must stay idle before hibernation can be considered. */

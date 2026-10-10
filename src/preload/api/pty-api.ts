@@ -123,6 +123,9 @@ export type PtyApi = {
   /** Hidden-delivery gate (Phase 4): hidden=true lets main drop renderer
    *  byte delivery after model ingestion; reveal restores from snapshots. */
   setHiddenRendererPty: (id: string, hidden: boolean) => void
+  /** Parse once: the pane's xterm leaves (or rejoins) this PTY's byte stream; main feeds its
+   *  native view. Resolves once main delivers by the new state. */
+  setRendererPtyViewFedElsewhere: (id: string, fedElsewhere: boolean) => Promise<void>
   /** Ref-counted-on-the-renderer delivery-interest signal that suppresses
    *  the hidden-delivery gate while any raw-byte consumer is registered. */
   setPtyDeliveryInterest: (id: string, interested: boolean) => void
@@ -223,6 +226,7 @@ export type PtyApi = {
       background?: boolean
       droppedOutput?: boolean
       sidecarOnly?: boolean
+      viewFedElsewhere?: boolean
     }) => void
   ) => () => void
   onReplay: (callback: (data: { id: string; data: string }) => void) => () => void

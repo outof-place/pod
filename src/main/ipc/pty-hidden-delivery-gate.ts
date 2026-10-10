@@ -32,6 +32,14 @@ const droppedSinceHiddenPtys = new Set<string>()
 // renderer unmarks it (visible mount) or the PTY is torn down.
 const runtimeOwnedHiddenRendererPtys = new Set<string>()
 
+// Parse once: PTYs whose pane xterm left the byte stream under a native view main feeds. The
+// renderer asks; the change takes effect only between delivery batches, so a chunk's reply owner
+// (decided at ingestion) and its delivery (decided at send) always agree.
+const viewFedElsewhereRequestedPtys = new Set<string>()
+const viewFedElsewherePtys = new Set<string>()
+// Resolves a renderer's pending request once the change took effect (or the PTY's state cleared).
+const viewFedElsewhereAppliedWaiters = new Map<string, () => void>()
+
 let droppedHiddenDeliveryChars = 0
 let droppedHiddenDeliveryChunks = 0
 
@@ -101,20 +109,33 @@ export function isHiddenRendererPtyViewGated(
   return isHiddenPtyDeliveryGateEnabled(settings) && hiddenRendererPtys.has(id)
 }
 
-/** How main delivers a PTY's bytes to the renderer; the one owner of that decision:
+/** How main delivers a PTY chunk to the renderer; the one owner of that decision:
  *  - 'drop': hidden view, no sidecar wants the bytes; the view restores from the model on reveal.
  *  - 'sidecarsOnly': hidden view, sidecars still get the bytes; the view skips them.
- *  - 'parse': the view parses the bytes.
- *  Main's model owns a chunk's query replies unless its delivery is 'parse'. Delivery stamps
- *  each chunk with the mode it had at ingestion, so a later flip cannot move that ownership. */
-export type RendererPtyViewDelivery = 'parse' | 'sidecarsOnly' | 'drop'
+ *  - 'skipXterm': parse once; the view runs its observers, its xterm skips the bytes.
+ *  - 'parse': the view's xterm parses the bytes.
+ *  Main's model answers a chunk's queries unless its delivery is 'parse'. Delivery stamps
+ *  queued bytes with the gated mode they had at ingestion; the fed-elsewhere set only flips
+ *  while nothing is queued, so it is a per-entry stamp too. */
+export type RendererPtyViewDelivery = 'parse' | 'skipXterm' | 'sidecarsOnly' | 'drop'
 
 export function rendererPtyViewDelivery(
   id: string,
-  settings: HiddenPtyDeliveryGateSettings | null | undefined
+  settings:
+    | (HiddenPtyDeliveryGateSettings & Partial<Pick<GlobalSettings, 'terminalModelQueryAuthority'>>)
+    | null
+    | undefined
 ): RendererPtyViewDelivery {
   if (isHiddenRendererPtyViewGated(id, settings)) {
     return deliveryInterestRendererPtys.has(id) ? 'sidecarsOnly' : 'drop'
+  }
+  // Why the authority switch: main's model must be the responder for bytes xterm never parses.
+  if (
+    viewFedElsewherePtys.has(id) &&
+    isHiddenPtyDeliveryGateEnabled(settings) &&
+    settings?.terminalModelQueryAuthority !== false
+  ) {
+    return 'skipXterm'
   }
   return 'parse'
 }
@@ -133,6 +154,54 @@ export function shouldDeliverHiddenRendererPtyDataToSidecarsOnly(
   settings: HiddenPtyDeliveryGateSettings | null | undefined
 ): boolean {
   return rendererPtyViewDelivery(id, settings) === 'sidecarsOnly'
+}
+
+/** Resolves once main delivers by the new state: every chunk flagged before it was sent first. */
+export function requestRendererPtyViewFedElsewhere(
+  id: string,
+  fedElsewhere: boolean,
+  atBatchBoundary: boolean
+): Promise<void> {
+  if (fedElsewhere) {
+    viewFedElsewhereRequestedPtys.add(id)
+  } else {
+    viewFedElsewhereRequestedPtys.delete(id)
+  }
+  if (atBatchBoundary) {
+    applyRendererPtyViewFedElsewhere(id)
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    const previous = viewFedElsewhereAppliedWaiters.get(id)
+    viewFedElsewhereAppliedWaiters.set(id, () => {
+      previous?.()
+      resolve()
+    })
+  })
+}
+
+/** At a delivery-batch boundary (nothing pending for the PTY): the request takes effect. */
+export function applyRendererPtyViewFedElsewhere(id: string): void {
+  if (viewFedElsewhereRequestedPtys.has(id)) {
+    viewFedElsewherePtys.add(id)
+  } else {
+    viewFedElsewherePtys.delete(id)
+  }
+  settleViewFedElsewhereWaiter(id)
+}
+
+function settleViewFedElsewhereWaiter(id: string): void {
+  const waiter = viewFedElsewhereAppliedWaiters.get(id)
+  viewFedElsewhereAppliedWaiters.delete(id)
+  waiter?.()
+}
+
+function clearViewFedElsewhereState(): void {
+  viewFedElsewhereRequestedPtys.clear()
+  viewFedElsewherePtys.clear()
+  for (const id of viewFedElsewhereAppliedWaiters.keys()) {
+    settleViewFedElsewhereWaiter(id)
+  }
 }
 
 /** Record one gated drop. Returns whether the caller should emit the one-shot
@@ -160,6 +229,7 @@ export function recordHiddenRendererPtyDataDrop(
 export function resetRendererScopedHiddenPtyDeliveryState(): void {
   hiddenRendererPtys.clear()
   deliveryInterestRendererPtys.clear()
+  clearViewFedElsewhereState()
   for (const id of runtimeOwnedHiddenRendererPtys) {
     hiddenRendererPtys.add(id)
   }
@@ -172,6 +242,9 @@ export function clearHiddenRendererPtyDeliveryState(id: string): void {
   runtimeOwnedHiddenRendererPtys.delete(id)
   deliveryInterestRendererPtys.delete(id)
   droppedSinceHiddenPtys.delete(id)
+  viewFedElsewhereRequestedPtys.delete(id)
+  viewFedElsewherePtys.delete(id)
+  settleViewFedElsewhereWaiter(id)
 }
 
 export type HiddenRendererPtyDeliveryDebug = {
@@ -201,5 +274,6 @@ export function _resetHiddenRendererPtyDeliveryGateForTest(): void {
   runtimeOwnedHiddenRendererPtys.clear()
   deliveryInterestRendererPtys.clear()
   droppedSinceHiddenPtys.clear()
+  clearViewFedElsewhereState()
   resetHiddenRendererPtyDeliveryDebugCounters()
 }

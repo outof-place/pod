@@ -721,5 +721,55 @@ describe('registerPtyHandlers', () => {
         vi.useRealTimers()
       }
     })
+
+    it('flags chunks for a view fed elsewhere from the next batch boundary, replying after it', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const { id } = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        const request = handlers.get('pty:setRendererPtyViewFedElsewhere')!
+        const events: string[] = []
+        mainWindow.webContents.send.mockImplementation((channel: string, payload: unknown) => {
+          events.push(`${channel}:${JSON.stringify(payload)}`)
+        })
+
+        // Pending when asked: the queued bytes go out as before, then main replies.
+        mockProc.emitData('queued')
+        const detached = Promise.resolve(request(null, { id, fedElsewhere: true })).then(() =>
+          events.push('applied:true')
+        )
+        await vi.advanceTimersByTimeAsync(2)
+        await detached
+        mockProc.emitData('covered')
+        await vi.advanceTimersByTimeAsync(2)
+        mockProc.emitData('in flight')
+        const rejoined = Promise.resolve(request(null, { id, fedElsewhere: false })).then(() =>
+          events.push('applied:false')
+        )
+        await vi.advanceTimersByTimeAsync(2)
+        await rejoined
+        mockProc.emitData('parsed')
+        await vi.advanceTimersByTimeAsync(2)
+
+        expect(events).toEqual([
+          `pty:data:${JSON.stringify({ id, data: 'queued' })}`,
+          'applied:true',
+          `pty:data:${JSON.stringify({ id, data: 'covered', viewFedElsewhere: true })}`,
+          `pty:data:${JSON.stringify({ id, data: 'in flight', viewFedElsewhere: true })}`,
+          'applied:false',
+          `pty:data:${JSON.stringify({ id, data: 'parsed' })}`
+        ])
+      } finally {
+        mainWindow.webContents.send.mockReset()
+        vi.useRealTimers()
+      }
+    })
   })
 })
