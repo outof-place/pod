@@ -8,6 +8,7 @@ const {
 } = require('./scripts/verify-packaged-daemon-entry.cjs')
 const {
   assertPackagedNativeVariantsInstalled,
+  assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
@@ -348,6 +349,7 @@ module.exports = {
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
     assertProcInfoAddonBuilt(context.electronPlatformName, context.arch)
     assertBundledRipgrepInstalled()
+    assertProcessHostOutputBuilt()
     assertOrcadTemplateBuilt()
     assertMobileWebBundleBuilt(mobileWebBundleDir)
   },

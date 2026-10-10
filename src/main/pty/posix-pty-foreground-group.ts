@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { notifySpawnObserver } from '../../shared/child-process/spawn-observer'
+import { notifySpawnObserver } from '@orca/process-host/spawn-observer'
 import { getNativeProcessInfo } from '../../shared/native-process-info'
 
 const PROCESS_TABLE_LOOKUP_TIMEOUT_MS = 250
