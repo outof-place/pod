@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -83,6 +84,23 @@ describe.skipIf(process.platform !== 'darwin')('native podx', () => {
     )
     expect(run(join(binDir, 'podx'), ['tab', 'list']).stdout).toBe('node-launcher tab list')
   })
+
+  it('does not bring back orca in a tree that ships only the product CLI', () => {
+    const resources = join(root, 'Decoupled.app', 'Contents', 'Resources')
+    const bin = join(resources, 'bin')
+    mkdirSync(bin, { recursive: true })
+    writeFileSync(join(bin, 'podx'), '#!/bin/sh\necho launcher\n')
+    chmodSync(join(bin, 'podx'), 0o755)
+    const out = join(resources, 'app.asar.unpacked', 'out')
+    mkdirSync(out, { recursive: true })
+    writeFileSync(join(out, 'package.json'), '{"version":"9.9.9-test"}\n')
+    if (typeof installNativeCli !== 'function') {
+      throw new Error('install-native-cli.cjs exports no installNativeCli')
+    }
+    installNativeCli(resources, process.arch, identity)
+    expect(existsSync(join(bin, 'orca'))).toBe(false)
+    expect(existsSync(join(bin, 'podx-node'))).toBe(true)
+  }, 600_000)
 
   it('goes straight to the launcher with POD_NATIVE_CLI=0', () => {
     expect(run(join(binDir, 'podx'), ['--version'], { POD_NATIVE_CLI: '0' }).stdout).toBe(
