@@ -56,7 +56,9 @@
       "branch": "perf/native-proc-info-darwin",
       "upstream": "https://github.com/stablyai/orca/pull/26985",
       "note": "Adds a macOS native addon plus a beforePack guard; squashed: maintainers merge Orca main into this PR branch",
-      "squash": true
+      "squash": true,
+      "ref": "e528cd95638da408d4029920a9a705b588c46ef5",
+      "hold": "maintainer head c7cb1c9589 conflicts with pod/proc-kernel-snapshot in native-process-info.test.ts; held until orca-hotpaths restacks the layer"
     },
     {
       "branch": "pod/proc-kernel-snapshot",
@@ -68,7 +70,8 @@
       "branch": "stack/ps-locale",
       "upstream": "https://github.com/stablyai/orca/pull/27005",
       "base": "9771e7d9489bc80fd022fd4c092934a674b768a5",
-      "note": "fix/ps-locale-independent-start-time replayed onto pod/proc-kernel-snapshot 9771e7d948 by orca-hotpaths (runProcess from @orca/process-host, nativeProcessTables, plus psLocaleEnvironment); refresh when either changes"
+      "note": "fix/ps-locale-independent-start-time replayed onto pod/proc-kernel-snapshot 9771e7d948 by orca-hotpaths (runProcess from @orca/process-host, nativeProcessTables, plus psLocaleEnvironment); refresh when either changes",
+      "source": "fix/ps-locale-independent-start-time"
     },
     {
       "branch": "perf/pty-background-ack",
@@ -108,7 +111,9 @@
       "branch": "stack/native-terminal-on-proc-info",
       "upstream": "https://github.com/stablyai/orca/pull/26914",
       "base": "4834f3cbc5",
-      "note": "feat/native-ghostty-terminal 7d77474138 squashed onto the stack after #26985 and #27086: package.json build chains carry both native helpers; maybe-hydrate and fresh-spawn-start take pod/native-model-consumer 8f92006a9c’s resolution. The 5 non-English locales keep Orca’s sessionNotRestored line, not the native branch’s restored copy. Refresh when either changes"
+      "note": "feat/native-ghostty-terminal 7d77474138 squashed onto the stack after #26985 and #27086 (package.json build chains carry both native helpers; maybe-hydrate and fresh-spawn-start take pod/native-model-consumer 8f92006a9c’s resolution; one sessionNotRestored line per locale), then its later commits replayed one by one",
+      "source": "feat/native-ghostty-terminal",
+      "sourceSince": "7d77474138"
     },
     {
       "branch": "pod/native-model-consumer",
@@ -129,7 +134,8 @@
       "branch": "stack/pod-overlay",
       "forkOnly": "Pod overlay: Stably-hosted services off, product name in UI copy",
       "base": "37eebe3860",
-      "note": "pod/overlay 0bcad4d75e replayed onto the stack; its bundled-plugins-only commit merged with #26975 (plugin-discovery host argument, locale keys). Refresh when pod/overlay changes, or rebase pod/overlay onto stack/plugins"
+      "note": "pod/overlay replayed onto the stack; its bundled-plugins-only commit merged with #26975 (plugin-discovery host argument, locale keys). Refresh when pod/overlay changes, or rebase pod/overlay onto stack/plugins",
+      "source": "pod/overlay"
     },
     {
       "branch": "i18n/renderer-first-run",
@@ -153,7 +159,8 @@
       "branch": "stack/pod-acc",
       "forkOnly": "claude-acc built into Pod: bundled plugin, payload and tray",
       "base": "10849bc8b8",
-      "note": "pod/acc 1e73d86784 minus its status-bar copies of stack/plugins, replayed onto the stack (plugin-marketplace imports merged). Refresh when pod/acc changes, or rebase pod/acc onto stack/plugins"
+      "note": "pod/acc minus its status-bar copies of stack/plugins, replayed onto the stack (plugin-marketplace imports merged). Refresh when pod/acc changes, or rebase pod/acc onto stack/plugins",
+      "source": "pod/acc"
     },
     {
       "branch": "pod/search-client",
@@ -165,16 +172,29 @@
       "forkOnly": "Pod slim profile: compile-time feature cuts (src/shared/product/features.ts) and macOS packaging cuts (product/electron-builder.slim.cjs)"
     },
     {
+      "branch": "pod/brand",
+      "forkOnly": "Pod brand",
+      "base": "d745b3a705",
+      "note": "pod-site; 3 commits on pod/identity d745b3a705: brand sources, Orca’s alternate icons and picker removed, icon/tray/logo wiring (release.sh needs actool 26+)"
+    },
+    {
       "branch": "stack/pod-workspace",
       "forkOnly": "Pod workspace: ~/pod workspace root and clone default <root>/<owner>/<repo>, Time Machine/Spotlight/volume hygiene, Settings > Workspace health dashboard, workspace roots registered with Pod native search",
       "base": "d1f423519a",
-      "note": "pod/workspace ec516fb8df plus the stack-only wiring commit afde803a0b, replayed onto the stack. Needs pod/search-client earlier in the stack. Keep afde803a0b when refreshing from pod/workspace"
+      "note": "pod/workspace ec516fb8df plus the stack-only wiring commit afde803a0b, replayed onto the stack. Needs pod/search-client earlier in the stack. Keep afde803a0b when refreshing from pod/workspace",
+      "source": "pod/workspace"
+    },
+    {
+      "branch": "pod/agent-turbo",
+      "forkOnly": "agent CLIs at app priority",
+      "base": "6edfc6c8e1",
+      "note": "r-hw-perf; one commit on main 6edfc6c8e1: the Swift pod-agent-launcher installed into Contents/Resources/bin with claude/codex symlinks; kill switch POD_AGENT_TURBO=0"
     },
     {
       "branch": "pod/process-host-imports",
       "forkOnly": "Pod code on Orca’s @orca/process-host (#26963) until the Pod branches are rebased",
-      "base": "6edfc6c8e1",
-      "note": "pod-repo; one commit rewriting the old src/shared/child-process/run-process imports in pod/acc, pod/search-client, pod/workspace and pod/identity code. Drop once those branches import @orca/process-host themselves"
+      "base": "f9f25e5bf1",
+      "note": "pod-repo; one commit rewriting the old src/shared/child-process/run-process imports in Pod code, regenerated on the stack below it. Drop once those branches import @orca/process-host themselves"
     }
   ]
 }
