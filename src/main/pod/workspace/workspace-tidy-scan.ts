@@ -65,8 +65,10 @@ async function isMerged(
     return false
   }
   // A branch created and never committed to also sits behind its base; its reflog says so.
-  const reflog = await git(['reflog', 'show', '-n', '2', '--format=%H', entry.branch], repo.path)
-  return reflog.stdout.split('\n').filter(Boolean).length > 1
+  // One restored from a Pod archive was committed to before, so it still counts.
+  const reflog = await git(['reflog', 'show', '-n', '2', '--format=%gs', entry.branch], repo.path)
+  const lines = reflog.stdout.split('\n').filter(Boolean)
+  return lines.length > 1 || (lines.length === 1 && lines[0].includes('refs/pod/archive/'))
 }
 
 async function scanWorktree(
@@ -239,9 +241,9 @@ export async function scanWorkspaceTidy(
       blockers: processes.length > 0 ? [...entry.blockers, 'process-inside'] : entry.blockers
     }
   })
-  const archives = (await deps.journal.read()).archives.filter((archive) =>
-    repos.some((repo) => repo.id === archive.repoId)
-  )
+  const journal = await deps.journal.read()
+  const inScope = (entry: { repoId: string }): boolean =>
+    repos.some((repo) => repo.id === entry.repoId)
   return {
     scannedAt: now,
     worktrees,
@@ -249,7 +251,8 @@ export async function scanWorkspaceTidy(
     prunable: perRepo
       .filter((entry) => entry.prunable.length > 0)
       .map((entry) => ({ repoId: entry.repo.id, names: entry.prunable })),
-    archives,
+    archives: journal.archives.filter(inScope),
+    adoptions: journal.adoptions.filter(inScope),
     errors
   }
 }
