@@ -1,4 +1,5 @@
 import { computerUseErrorRecoveryData } from '../shared/computer-use-error-recovery'
+import { brandCliHelp } from './product-cli-branding'
 import {
   matchAutomationOwnerConflict,
   stripAutomationOwnerConflictCode
@@ -127,7 +128,7 @@ export function reportCliError(error: unknown, json: boolean, context: CliErrorC
       console.log(JSON.stringify(response, null, 2))
     }
   } else {
-    console.error(formatCliError(error, context))
+    console.error(brandCliHelp(formatCliError(error, context)))
   }
 }
 
