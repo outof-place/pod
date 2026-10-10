@@ -95,7 +95,7 @@ export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
   runtimeWebSocket: {
     pod: false,
     reason:
-      'The desktop app opens no runtime WebSocket listener: no phone, browser or other desktop pairs into Pod, and the CLI uses the unix socket. Explicit `serve` keeps it'
+      'The desktop app opens no runtime WebSocket listener: no phone, browser or other desktop pairs into Pod, and the CLI uses the unix socket. Explicit `serve` keeps it, pinned to loopback, and the headless host has none'
   },
   dictation: {
     pod: false,
