@@ -31,6 +31,8 @@ export type PtyDataPayload = {
   droppedOutput?: boolean
   /** Hidden-view bytes for raw-byte sidecars only; the view restores from the model. */
   sidecarOnly?: boolean
+  /** Parse once: the view runs its observers on this chunk but its xterm skips it. */
+  viewFedElsewhere?: boolean
 }
 
 export type RendererPtyDeliveryAccounting = {
