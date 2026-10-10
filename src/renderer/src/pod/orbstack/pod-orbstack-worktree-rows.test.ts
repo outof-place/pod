@@ -81,11 +81,22 @@ describe('buildPodOrbstackWorktreeRows', () => {
             distroVersion: 'noble',
             arch: 'arm64',
             podOwned: true,
+            kind: 'shared',
             worktreeId: 'web::/Users/me/web',
             missing: false
           }
         ],
-        links: [{ worktreeId: 'web::/Users/me/web', machine: 'pod-web-1', dockerPinned: true }],
+        links: [
+          {
+            worktreeId: 'web::/Users/me/web',
+            machine: 'pod-web-1',
+            dockerPinned: true,
+            sandbox: null,
+            sandboxReady: false,
+            sandboxAgents: false,
+            sandboxAgentVersion: null
+          }
+        ],
         containers: [
           container('a', '/Users/me/web'),
           container('b', '/Users/me/web/.worktrees/feature/app'),

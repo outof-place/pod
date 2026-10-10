@@ -35,9 +35,11 @@ function mergeMachines(
 ): PodOrbstackMachine[] {
   const rows: PodOrbstackMachine[] = (listed ?? []).map((machine) => {
     const entry = registry.findByName(machine.name)
+    const podOwned = registry.isPodOwned(machine.name)
     return {
       ...machine,
-      podOwned: registry.isPodOwned(machine.name),
+      podOwned,
+      kind: podOwned ? (entry?.kind ?? 'shared') : null,
       worktreeId: entry?.worktreeId ?? null,
       missing: false
     }
@@ -51,6 +53,7 @@ function mergeMachines(
         distroVersion: null,
         arch: null,
         podOwned: true,
+        kind: entry.kind,
         worktreeId: entry.worktreeId,
         // Only a real `orb list` can say a machine is gone.
         missing: listed !== null && entry.state === 'ready'
@@ -63,13 +66,21 @@ function mergeMachines(
 function buildLinks(registry: PodOrbstackRegistry): PodOrbstackWorktreeLink[] {
   const ids = new Set([
     ...registry.machines().map((entry) => entry.worktreeId),
-    ...registry.dockerPins()
+    ...registry.dockerPins(),
+    ...registry.sandboxAgents()
   ])
-  return [...ids].map((worktreeId) => ({
-    worktreeId,
-    machine: registry.findByWorktree(worktreeId)?.name ?? null,
-    dockerPinned: registry.isDockerPinned(worktreeId)
-  }))
+  return [...ids].map((worktreeId) => {
+    const sandbox = registry.findByWorktree(worktreeId, 'sandbox')
+    return {
+      worktreeId,
+      machine: registry.findByWorktree(worktreeId)?.name ?? null,
+      dockerPinned: registry.isDockerPinned(worktreeId),
+      sandbox: sandbox?.name ?? null,
+      sandboxReady: sandbox?.state === 'ready',
+      sandboxAgents: registry.isSandboxAgents(worktreeId),
+      sandboxAgentVersion: sandbox?.agentVersion ?? null
+    }
+  })
 }
 
 /** Read-only: list and inspect commands only, and none at all while OrbStack is not running. */
