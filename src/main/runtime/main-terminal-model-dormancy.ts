@@ -41,6 +41,8 @@ type DormancyEntry = {
 
 export class MainTerminalModelDormancy {
   private readonly entries = new Map<string, DormancyEntry>()
+  // Why outside the entries: a reader outlives a PTY generation and must hold across a respawn.
+  private readonly pins = new Map<string, number>()
 
   constructor(private readonly host: MainTerminalModelDormancyHost) {}
 
@@ -51,7 +53,7 @@ export class MainTerminalModelDormancy {
     if (handoff?.seedSeq != null && chunkStartSeq >= handoff.seedSeq) {
       this.finishHandoff(ptyId, entry)
     }
-    const idle = this.host.isModelIdle(ptyId, chunkStartSeq)
+    const idle = !this.pins.has(ptyId) && this.host.isModelIdle(ptyId, chunkStartSeq)
     const now = this.host.now()
     if (entry.dormant) {
       if (idle) {
@@ -82,6 +84,26 @@ export class MainTerminalModelDormancy {
     entry.lastDemandAt = this.host.now()
     if (entry.dormant) {
       this.wake(ptyId, entry)
+    }
+  }
+
+  /** Keeps main's model live until the returned release runs; releasing restarts the grace period. */
+  pin(ptyId: string): () => void {
+    this.pins.set(ptyId, (this.pins.get(ptyId) ?? 0) + 1)
+    this.noteDemand(ptyId)
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      const remaining = (this.pins.get(ptyId) ?? 1) - 1
+      if (remaining > 0) {
+        this.pins.set(ptyId, remaining)
+      } else {
+        this.pins.delete(ptyId)
+      }
+      this.noteDemand(ptyId)
     }
   }
 
