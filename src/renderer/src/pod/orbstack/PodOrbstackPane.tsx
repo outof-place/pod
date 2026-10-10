@@ -136,6 +136,20 @@ export function PodOrbstackPane(): React.JSX.Element {
             onRemove={(row) =>
               runForWorktree(row.worktreeId, () => podOrbstackRpc.deleteMachine(row.worktreeId))
             }
+            onCreateSandbox={(row) =>
+              runForWorktree(row.worktreeId, () =>
+                podOrbstackRpc.createSandbox(row.worktreeId, row.displayName)
+              )
+            }
+            onDeleteSandbox={(row) =>
+              runForWorktree(row.worktreeId, () => podOrbstackRpc.deleteSandbox(row.worktreeId))
+            }
+            onAgentSandbox={(row, enabled) =>
+              void runPodOrbstackAction(
+                () => podOrbstackRpc.setAgentSandbox(row.worktreeId, enabled),
+                refresh
+              )
+            }
             onDockerPin={(row, pinned) =>
               void runPodOrbstackAction(
                 () => podOrbstackRpc.pinDocker(row.worktreeId, pinned),
