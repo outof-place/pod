@@ -32,6 +32,12 @@ const droppedSinceHiddenPtys = new Set<string>()
 // renderer unmarks it (visible mount) or the PTY is torn down.
 const runtimeOwnedHiddenRendererPtys = new Set<string>()
 
+// Why: a PTY whose main model is being rebuilt from the daemon snapshot keeps feeding its
+// renderer, which answers its queries, until the model has caught up with the stream.
+const modelHandoffPtys = new Set<string>()
+const hiddenMarkListeners = new Set<(id: string) => void>()
+let modelHandoffChangeListener: ((id: string) => void) | null = null
+
 let droppedHiddenDeliveryChars = 0
 let droppedHiddenDeliveryChunks = 0
 
@@ -52,6 +58,7 @@ export function isHiddenPtyDeliveryGateEnabled(
  *  restore. Unmark is the only consumer of the latch. */
 export function markHiddenRendererPty(id: string): void {
   hiddenRendererPtys.add(id)
+  notifyHiddenMark(id)
 }
 
 /** Clears the hidden bit. Returns whether bytes were dropped while hidden so
@@ -71,6 +78,39 @@ export function isHiddenRendererPty(id: string): boolean {
 export function markRuntimeOwnedHiddenRendererPty(id: string): void {
   hiddenRendererPtys.add(id)
   runtimeOwnedHiddenRendererPtys.add(id)
+  notifyHiddenMark(id)
+}
+
+/** Runs synchronously inside every hidden mark, before the caller reads droppability, so a
+ *  listener that opens a model handoff keeps the PTY's bytes flowing from the first one. */
+export function registerHiddenRendererPtyMarkListener(listener: (id: string) => void): void {
+  hiddenMarkListeners.add(listener)
+}
+
+function notifyHiddenMark(id: string): void {
+  for (const listener of hiddenMarkListeners) {
+    listener(id)
+  }
+}
+
+/** Suppresses the gate for `id` while main's model catches up with the stream. */
+export function setHiddenDeliveryModelHandoff(id: string, pending: boolean): void {
+  const changed = pending ? !modelHandoffPtys.has(id) : modelHandoffPtys.has(id)
+  if (pending) {
+    modelHandoffPtys.add(id)
+  } else {
+    modelHandoffPtys.delete(id)
+  }
+  if (changed) {
+    modelHandoffChangeListener?.(id)
+  }
+}
+
+/** Delivery re-evaluates queued bytes when a handoff ends and the gate starts dropping. */
+export function setHiddenDeliveryModelHandoffChangeListener(
+  listener: ((id: string) => void) | null
+): void {
+  modelHandoffChangeListener = listener
 }
 
 export function isRuntimeOwnedHiddenRendererPty(id: string): boolean {
@@ -98,7 +138,11 @@ export function isHiddenRendererPtyViewGated(
   id: string,
   settings: HiddenPtyDeliveryGateSettings | null | undefined
 ): boolean {
-  return isHiddenPtyDeliveryGateEnabled(settings) && hiddenRendererPtys.has(id)
+  return (
+    isHiddenPtyDeliveryGateEnabled(settings) &&
+    hiddenRendererPtys.has(id) &&
+    !modelHandoffPtys.has(id)
+  )
 }
 
 /** How main delivers a PTY's bytes to the renderer; the one owner of that decision:
@@ -172,6 +216,7 @@ export function clearHiddenRendererPtyDeliveryState(id: string): void {
   runtimeOwnedHiddenRendererPtys.delete(id)
   deliveryInterestRendererPtys.delete(id)
   droppedSinceHiddenPtys.delete(id)
+  modelHandoffPtys.delete(id)
 }
 
 export type HiddenRendererPtyDeliveryDebug = {
@@ -201,5 +246,8 @@ export function _resetHiddenRendererPtyDeliveryGateForTest(): void {
   runtimeOwnedHiddenRendererPtys.clear()
   deliveryInterestRendererPtys.clear()
   droppedSinceHiddenPtys.clear()
+  modelHandoffPtys.clear()
+  hiddenMarkListeners.clear()
+  modelHandoffChangeListener = null
   resetHiddenRendererPtyDeliveryDebugCounters()
 }
