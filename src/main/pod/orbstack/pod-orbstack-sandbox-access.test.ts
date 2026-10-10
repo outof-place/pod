@@ -52,6 +52,22 @@ describe('createSandboxAccess', () => {
     expect(ensured[1]?.routes.anthropic?.route.caCertPem).toBe(caCert)
   })
 
+  it('binds the credential source to each launch and releases it with the sandbox', () => {
+    const { relays } = fakeRelays()
+    const access = createSandboxAccess({ relays, readPrivacy: () => OPEN_PRIVACY })
+    const events: string[] = []
+    setPodSandboxAnthropicCredentials({
+      mode: () => 'oauth',
+      authHeaders: async () => ({}),
+      launched: ({ machine }) => events.push(`launched ${machine}`),
+      released: ({ machine }) => events.push(`released ${machine}`)
+    })
+    access.start('pod-a-sbx', hookServer)
+    access.start('pod-a-sbx', hookServer)
+    access.forget('pod-a-sbx')
+    expect(events).toEqual(['launched pod-a-sbx', 'launched pod-a-sbx', 'released pod-a-sbx'])
+  })
+
   it('mirrors the Mac privacy switches into the VM env', () => {
     const { relays } = fakeRelays()
     const access = createSandboxAccess({
