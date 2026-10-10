@@ -113,6 +113,12 @@ describe('anthropic-api route', () => {
               firstAt ||= Date.now()
               chunks.push(chunk)
             })
+            // Why: a response cut mid-stream emits no 'end' and, from Node 24, no request error.
+            res.on('close', () => {
+              if (!res.complete) {
+                reject(new Error('response aborted'))
+              }
+            })
             res.on('end', () =>
               resolve({
                 status: res.statusCode ?? 0,
@@ -242,11 +248,8 @@ describe('anthropic-api route', () => {
       res.write('event: message_start\ndata: {}\n\n')
       setTimeout(() => res.stream.close(constants.NGHTTP2_INTERNAL_ERROR), 20)
     })
-    // Settles (either way) instead of hanging the VM's connection.
-    await call({}).then(
-      () => undefined,
-      () => undefined
-    )
+    // Cut, not ended cleanly: a clean end would hide the truncation from the VM's client.
+    await expect(call({})).rejects.toThrow('response aborted')
   })
 
   it('refuses a TLS handshake for any other name', async () => {
