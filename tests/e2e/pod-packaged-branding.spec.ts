@@ -3,6 +3,7 @@
  * The dev fixture launches out/main, which reads the identity from an E2E override; this proves
  * the packaged identity file brands the native chrome and keeps Chromium off Stably's hosts.
  */
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -50,6 +51,40 @@ function realLaunchAgentMtimes(realHome: string): Record<string, number> {
   return Object.fromEntries(
     readdirSync(dir).map((name) => [name, statSync(path.join(dir, name)).mtimeMs])
   )
+}
+
+/** TCP listeners of the app's process tree that bind beyond loopback (`host:port` from lsof). */
+function wideTcpListeners(rootPid: number): string[] {
+  const rows = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8' })
+    .trim()
+    .split('\n')
+    .map((row) => row.trim().split(/\s+/).map(Number))
+  const pids = [rootPid]
+  for (let index = 0; index < pids.length; index += 1) {
+    for (const [pid, ppid] of rows) {
+      if (ppid === pids[index] && !pids.includes(pid)) {
+        pids.push(pid)
+      }
+    }
+  }
+  let output = ''
+  try {
+    output = execFileSync(
+      'lsof',
+      ['-nP', '-a', '-p', pids.join(','), '-iTCP', '-sTCP:LISTEN', '-Fn'],
+      { encoding: 'utf8' }
+    )
+  } catch (error) {
+    // Why: lsof exits 1 when nothing listens.
+    if (!(error instanceof Error && 'status' in error && error.status === 1)) {
+      throw error
+    }
+  }
+  return output
+    .split('\n')
+    .filter((line) => line.startsWith('n'))
+    .map((line) => line.slice(1))
+    .filter((address) => !address.startsWith('127.') && !address.startsWith('[::1]:'))
 }
 
 test('a packaged Pod names itself Pod in its window and menus', async () => {
@@ -128,6 +163,10 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
     )
     expect(promoLabels.filter((label) => !/\bPod\b/.test(label))).toEqual([])
     expect(chrome.labels.filter((label) => /\bOrca\b/.test(label))).toEqual([])
+    // The slim profile cuts the runtime WebSocket: nothing may listen beyond loopback (*:6768).
+    const pid = await app.evaluate(() => process.pid)
+    await new Promise((resolve) => setTimeout(resolve, 5_000))
+    expect(wideTcpListeners(pid)).toEqual([])
   } catch (error) {
     failure = error
   } finally {
