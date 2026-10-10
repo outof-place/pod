@@ -14,10 +14,10 @@ import { errorMessage } from './session-scanner-values'
 
 const NATIVE_DISCOVERY_CONCURRENCY = 4
 const NATIVE_DISCOVERY_BATCH_SIZE = 16
-const nativeDiscoverySlots = new PrioritySemaphore(NATIVE_DISCOVERY_CONCURRENCY)
+const nativeDiscoverySlots = new PrioritySemaphore(8)
 
 type SessionFileObservation =
-  | { file: FileWithMtime; sidecarPath?: string }
+  | { file: Omit<FileWithMtime, 'modifiedAt'>; sidecarPath?: string }
   | { issue: { path: string; message: string } }
 
 async function withNativeDiscoverySlot<T>(read: () => Promise<T>): Promise<T> {
@@ -59,7 +59,18 @@ export async function discoverFiles(args: {
           message: 'Session metadata could not be read this scan.'
         })
       }
-      files.add(observation.file)
+      try {
+        const modifiedAt = new Date(observation.file.mtimeMs)
+        if (Number.isNaN(modifiedAt.getTime()) || files.wouldRetain(observation.file.mtimeMs)) {
+          files.add({ ...observation.file, modifiedAt: modifiedAt.toISOString() })
+        }
+      } catch (err) {
+        recordSessionScanIssue(args.issues, {
+          agent: args.agent,
+          path: observation.file.path,
+          message: errorMessage(err)
+        })
+      }
     }
   }
 
@@ -68,6 +79,17 @@ export async function discoverFiles(args: {
       consume(await pending)
       pending = null
     }
+  }
+
+  function queueNativeFile(path: string): void | Promise<void> {
+    paths.push(path)
+    if (paths.length < NATIVE_DISCOVERY_BATCH_SIZE) {
+      return
+    }
+    return finishPending().then(() => {
+      pending = readBatch(paths)
+      paths = []
+    })
   }
 
   async function readBatch(batch: readonly string[]): Promise<SessionFileObservation[]> {
@@ -101,18 +123,9 @@ export async function discoverFiles(args: {
               }
             : {})
         },
-        async (path) => {
-          if (!native) {
-            consume([await observeSessionFile(path, args.contentDependencyPath)])
-            return
-          }
-          paths.push(path)
-          if (paths.length >= NATIVE_DISCOVERY_BATCH_SIZE) {
-            await finishPending()
-            pending = readBatch(paths)
-            paths = []
-          }
-        }
+        native
+          ? queueNativeFile
+          : async (path) => consume([await observeSessionFile(path, args.contentDependencyPath)])
       )
     } finally {
       // One read batch overlaps directory traversal; commit in traversal order.
@@ -144,13 +157,12 @@ async function observeSessionFile(
 ): Promise<SessionFileObservation> {
   try {
     const fileStat = await wslGatedStat(path, 'scan')
-    const sidecarPath = await contentDependencyPath?.(path)
-    const sidecar = await observeSessionSidecar(sidecarPath)
+    const sidecarPath = contentDependencyPath ? await contentDependencyPath(path) : undefined
+    const sidecar = sidecarPath ? await observeSessionSidecar(sidecarPath) : 'none'
     return {
       file: {
         path,
         mtimeMs: fileStat.mtimeMs,
-        modifiedAt: new Date(fileStat.mtimeMs).toISOString(),
         sizeBytes: fileStat.size,
         sidecar,
         dev: fileStat.dev,
@@ -226,7 +238,7 @@ export async function forEachSessionFile(
   agent: AiVaultAgent,
   issues: AiVaultScanIssue[],
   options: SessionFileWalkOptions,
-  onFile: (path: string) => Promise<void>,
+  onFile: (path: string) => void | Promise<void>,
   depth = 0
 ): Promise<void> {
   options.signal?.throwIfAborted()
@@ -261,7 +273,10 @@ export async function forEachSessionFile(
       options.extensions.has(extname(entry.name).toLowerCase()) &&
       (options.filePredicate?.(fullPath) ?? true)
     ) {
-      await onFile(fullPath)
+      const observation = onFile(fullPath)
+      if (observation) {
+        await observation
+      }
     }
   }
 }
