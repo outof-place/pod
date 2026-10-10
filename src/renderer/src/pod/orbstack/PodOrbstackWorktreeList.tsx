@@ -127,7 +127,7 @@ export function PodOrbstackWorktreeList(props: WorktreeListProps): React.JSX.Ele
       <p data-testid="pod-orbstack-sandbox-boundary" className="text-xs text-muted-foreground">
         {translate(
           'podOrbstack.sandbox.boundary',
-          'Agent sandboxes see only their worktree and reach this Mac only through Pod for agent status. They can still reach the internet, so code in the worktree can leave the Mac.'
+          'Agent sandboxes see only their worktree. With network isolation, which every new sandbox gets, they reach this Mac only to report agent status. They can still reach the internet, so code in the worktree can leave the Mac.'
         )}
       </p>
     </section>

@@ -1,10 +1,11 @@
 import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { EventEmitter } from 'node:events'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { createServer, connect, type AddressInfo, type Server } from 'node:net'
+import { createServer as createHttpServer, request, type IncomingHttpHeaders } from 'node:http'
+import { connect, createServer, type AddressInfo, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
-import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '../../../shared/child-process/run-process'
 import { RELAY_FRAME } from './pod-orbstack-relay-agent'
@@ -13,7 +14,7 @@ import {
   createSandboxRelays,
   decodeRelayFrames,
   encodeRelayFrame,
-  type SandboxRelays
+  type SandboxHookRoute
 } from './pod-orbstack-relay'
 
 function hasPython(): boolean {
@@ -25,7 +26,7 @@ function hasPython(): boolean {
   }
 }
 
-async function listen(server: Server): Promise<number> {
+async function listen(server: Pick<Server, 'listen' | 'address'>): Promise<number> {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address: AddressInfo | string | null = server.address()
   return typeof address === 'object' && address ? address.port : 0
@@ -38,14 +39,42 @@ async function freePort(): Promise<number> {
   return port
 }
 
-function roundTrip(port: number, payload: Buffer): Promise<Buffer> {
+type Reply = { status: number; body: string }
+
+function post(
+  port: number,
+  options: { method?: string; path?: string; token?: string; body?: Buffer; expect?: boolean }
+): Promise<Reply> {
   return new Promise((resolve, reject) => {
-    const socket = connect({ host: '127.0.0.1', port })
-    const chunks: Buffer[] = []
-    socket.on('data', (chunk: Buffer) => chunks.push(chunk))
-    socket.on('end', () => resolve(Buffer.concat(chunks)))
-    socket.on('error', reject)
-    socket.end(payload)
+    const body = options.body ?? Buffer.from('{"hook_event_name":"Stop"}')
+    const req = request(
+      {
+        host: '127.0.0.1',
+        port,
+        method: options.method ?? 'POST',
+        path: options.path ?? '/hook/claude',
+        agent: false,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': body.length,
+          'X-Orca-Agent-Hook-Token': options.token ?? 'sandbox-token',
+          ...(options.expect ? { Expect: '100-continue' } : {})
+        }
+      },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (chunk: Buffer) => chunks.push(chunk))
+        res.on('end', () =>
+          resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString() })
+        )
+      }
+    )
+    req.on('error', reject)
+    if (options.expect) {
+      req.on('continue', () => req.end(body))
+    } else {
+      req.end(body)
+    }
   })
 }
 
@@ -80,7 +109,7 @@ describe('relay frames', () => {
 })
 
 describe('host side', () => {
-  it('dials only the listed routes, whatever the VM asks for', async () => {
+  it('opens nothing for a route the VM invents', async () => {
     const stdin = new PassThrough()
     const stdout = new PassThrough()
     const fake = Object.assign(new EventEmitter(), {
@@ -98,7 +127,12 @@ describe('host side', () => {
         return connect({ host: '127.0.0.1', port })
       }
     })
-    relays.ensure('pod-x-sbx', [{ vmPort: 1, hostPort: 1 }])
+    relays.ensure('pod-x-sbx', {
+      vmPort: 1,
+      hostPort: 1,
+      hookToken: 'server-token',
+      authorize: () => true
+    })
     const replies: number[][] = []
     stdin.on('data', (chunk: Buffer) => {
       decodeRelayFrames(chunk, (kind, conn) => replies.push([kind, conn]))
@@ -120,51 +154,82 @@ describe.skipIf(process.platform === 'win32' || !hasPython())('relay agent over 
 
   async function setup() {
     const stateDir = mkdtempSync(join(tmpdir(), 'pod-relay-'))
-    const echo = createServer({ allowHalfOpen: true }, (socket) => socket.pipe(socket))
-    const hostPort = await listen(echo)
+    const seen: { method?: string; url?: string; headers: IncomingHttpHeaders; body: string }[] = []
+    const hookServer = createHttpServer((req, res) => {
+      const chunks: Buffer[] = []
+      req.on('data', (chunk: Buffer) => chunks.push(chunk))
+      req.on('end', () => {
+        seen.push({
+          method: req.method,
+          url: req.url,
+          headers: req.headers,
+          body: Buffer.concat(chunks).toString()
+        })
+        res.end('ok')
+      })
+    })
+    const hostPort = await listen(hookServer)
     const vmPort = await freePort()
-    const relays: SandboxRelays = createSandboxRelays({
+    const route: SandboxHookRoute = {
+      vmPort,
+      hostPort,
+      hookToken: 'server-token',
+      authorize: (token) => token === 'sandbox-token'
+    }
+    const relays = createSandboxRelays({
       stateDir,
       spawnAgent: (_machine, args) => spawnProcess({ program: 'python3', args })
     })
     cleanups.push(() => {
       relays.stopAll()
-      echo.close()
+      hookServer.close()
       rmSync(stateDir, { recursive: true, force: true })
     })
-    return { relays, vmPort, hostPort, stateDir }
+    return { relays, route, vmPort, stateDir, seen }
   }
 
-  it('carries concurrent connections both ways, including half-close and large bodies', async () => {
-    const { relays, vmPort, hostPort, stateDir } = await setup()
-    const handle = relays.ensure('pod-x-sbx', [{ vmPort, hostPort }])
+  it('forwards hook posts with the server token swapped in', async () => {
+    const { relays, route, vmPort, stateDir, seen } = await setup()
+    const handle = relays.ensure('pod-x-sbx', route)
     expect(await handle.ready).toBe(true)
     expect(readFileSync(join(stateDir, 'ready'), 'utf8')).toBe(handle.nonce)
 
-    const big = Buffer.alloc(3 * 1024 * 1024, 7)
-    const results = await Promise.all([
-      roundTrip(vmPort, Buffer.from('hook post')),
-      roundTrip(vmPort, big),
-      roundTrip(vmPort, Buffer.from('second'))
+    const replies = await Promise.all([
+      post(vmPort, {}),
+      post(vmPort, { body: Buffer.from(`{"big":"${'x'.repeat(200_000)}"}`) }),
+      post(vmPort, { expect: true })
     ])
-    expect(results[0]?.toString()).toBe('hook post')
-    expect(results[1]?.equals(big)).toBe(true)
-    expect(results[2]?.toString()).toBe('second')
+    expect(replies.map((reply) => reply.status)).toEqual([200, 200, 200])
+    expect(seen).toHaveLength(3)
+    for (const request of seen) {
+      expect(request).toMatchObject({ method: 'POST', url: '/hook/claude' })
+      expect(request.headers['x-orca-agent-hook-token']).toBe('server-token')
+      expect(request.headers.connection).toBe('close')
+      expect(request.headers.expect).toBeUndefined()
+    }
+    expect(seen.map((request) => request.body.length).sort((a, b) => a - b)[2]).toBe(200_010)
   })
 
-  it('reuses a live relay with the same routes and replaces it when they change', async () => {
-    const { relays, vmPort, hostPort } = await setup()
-    const first = relays.ensure('pod-x-sbx', [{ vmPort, hostPort }])
-    expect(await first.ready).toBe(true)
-    expect(relays.ensure('pod-x-sbx', [{ vmPort, hostPort }])).toBe(first)
+  it('answers everything but a token-bearing hook post itself', async () => {
+    const { relays, route, vmPort, seen } = await setup()
+    expect(await relays.ensure('pod-x-sbx', route).ready).toBe(true)
+    expect((await post(vmPort, { token: 'server-token' })).status).toBe(403)
+    expect((await post(vmPort, { path: '/hook/codex' })).status).toBe(403)
+    expect((await post(vmPort, { path: '/' })).status).toBe(403)
+    expect((await post(vmPort, { method: 'PUT' })).status).toBe(405)
+    expect((await post(vmPort, { body: Buffer.alloc(1024 * 1024 + 1, 1) })).status).toBe(413)
+    expect(seen).toEqual([])
+  })
 
-    const otherPort = await freePort()
-    const second = relays.ensure('pod-x-sbx', [
-      { vmPort, hostPort },
-      { vmPort: otherPort, hostPort }
-    ])
+  it('reuses a live relay for the same hook server and replaces it for another', async () => {
+    const { relays, route, vmPort } = await setup()
+    const first = relays.ensure('pod-x-sbx', route)
+    expect(await first.ready).toBe(true)
+    expect(relays.ensure('pod-x-sbx', { ...route, authorize: () => false })).toBe(first)
+
+    const second = relays.ensure('pod-x-sbx', { ...route, hookToken: 'rotated' })
     expect(second.nonce).not.toBe(first.nonce)
     expect(await second.ready).toBe(true)
-    expect((await roundTrip(otherPort, Buffer.from('again'))).toString()).toBe('again')
+    expect((await post(vmPort, {})).status).toBe(200)
   })
 })
