@@ -17,6 +17,7 @@ import { makeRequest, stubRuntime } from './terminal-multiplex-test-harness'
 describe('terminal multiplex RPC', () => {
   it('multiplexes terminal streams and routes desktop resize to the source PTY', async () => {
     vi.useFakeTimers()
+    vi.stubEnv('ORCA_TERMINAL_OUTPUT_LEADING_EDGE', '1')
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
@@ -418,6 +419,7 @@ describe('terminal multiplex RPC', () => {
       ])
     } finally {
       vi.useRealTimers()
+      vi.unstubAllEnvs()
     }
   })
 
