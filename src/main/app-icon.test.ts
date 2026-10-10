@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
+  appMock,
   browserWindowGetAllWindowsMock,
   createFromPathMock,
   dockSetIconMock,
   isMock,
   windowSetIconMock
 } = vi.hoisted(() => ({
+  appMock: { dock: { setIcon: vi.fn() }, isPackaged: false },
   browserWindowGetAllWindowsMock: vi.fn(),
   createFromPathMock: vi.fn(),
   dockSetIconMock: vi.fn(),
@@ -15,7 +17,7 @@ const {
 }))
 
 vi.mock('electron', () => ({
-  app: { dock: { setIcon: dockSetIconMock } },
+  app: appMock,
   BrowserWindow: { getAllWindows: browserWindowGetAllWindowsMock },
   nativeImage: { createFromPath: createFromPathMock }
 }))
@@ -40,6 +42,8 @@ describe('app icon', () => {
     createFromPathMock.mockReset()
     dockSetIconMock.mockReset()
     windowSetIconMock.mockReset()
+    appMock.dock.setIcon = dockSetIconMock
+    appMock.isPackaged = false
   })
 
   it("resolves Orca's retired alternates and invalid ids to Pod's icon", () => {
@@ -49,7 +53,7 @@ describe('app icon', () => {
     expect(getAppIconPath('missing')).toBe('classic-icon')
   })
 
-  it('applies the icon to the dock and live windows', () => {
+  it('applies the icon to the dock and live windows in unpackaged builds', () => {
     const image = { isEmpty: () => false }
     createFromPathMock.mockReturnValue(image)
     browserWindowGetAllWindowsMock.mockReturnValue([
@@ -65,6 +69,20 @@ describe('app icon', () => {
     } else {
       expect(dockSetIconMock).not.toHaveBeenCalled()
     }
+    expect(windowSetIconMock).toHaveBeenCalledWith(image)
+  })
+
+  it("leaves a packaged app's Dock tile to the bundle icon", () => {
+    const image = { isEmpty: () => false }
+    createFromPathMock.mockReturnValue(image)
+    browserWindowGetAllWindowsMock.mockReturnValue([
+      { isDestroyed: () => false, setIcon: windowSetIconMock }
+    ])
+    appMock.isPackaged = true
+
+    applyAppIcon('classic')
+
+    expect(dockSetIconMock).not.toHaveBeenCalled()
     expect(windowSetIconMock).toHaveBeenCalledWith(image)
   })
 
