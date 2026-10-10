@@ -405,6 +405,40 @@ describe('claude-acc supervisor', () => {
     supervisor.stop()
   })
 
+  it("registers pod-rootd when the panel's Enable root helper… leaves a request", async () => {
+    const pod = installedPod('pod', '1.31.0', { rootd: true })
+    const loginItems = statefulLoginItems({})
+    const log = vi.fn()
+    const supervisor = startPodAccSupervisor({
+      config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
+      ...pod,
+      platform: 'darwin',
+      env: {},
+      run: vi.fn(async () => result(1)),
+      loginItems: loginItems.api,
+      appId: 'codes.pod.app',
+      setTrayYield: () => {},
+      syncTray: () => {},
+      log,
+      probeMs: 10
+    })
+    await supervisor.services
+    const request = join(pod.home, ACC_STATE_DIR, 'pod-rootd-request.json')
+    writeFileSync(request, JSON.stringify({ action: 'enable', at: Date.now() / 1000 }), {
+      mode: 0o600
+    })
+    await vi.waitFor(() =>
+      expect(loginItems.set).toHaveBeenCalledWith({
+        openAtLogin: true,
+        type: 'daemonService',
+        serviceName: ROOTD
+      })
+    )
+    expect(existsSync(request)).toBe(false)
+    expect(log).toHaveBeenCalledWith('claude-acc: pod-rootd asked for in the panel: enabled')
+    supervisor.stop()
+  })
+
   it('offers no pod-rootd opt-in once claude-acc was handed back', async () => {
     const pod = installedPod('brew', '1.31.0', { rootd: true })
     const loginItems = statefulLoginItems({})
@@ -420,8 +454,14 @@ describe('claude-acc supervisor', () => {
       syncTray: () => {},
       log: () => {}
     })
+    const request = join(pod.home, ACC_STATE_DIR, 'pod-rootd-request.json')
+    writeFileSync(request, JSON.stringify({ action: 'enable', at: Date.now() / 1000 }), {
+      mode: 0o600
+    })
     await expect(supervisor.registerRootd()).resolves.toBeNull()
     expect(loginItems.set).not.toHaveBeenCalledWith(expect.objectContaining({ openAtLogin: true }))
+    // not Pod's install any more: the request is not Pod's to take
+    expect(existsSync(request)).toBe(true)
     supervisor.stop()
   })
 
