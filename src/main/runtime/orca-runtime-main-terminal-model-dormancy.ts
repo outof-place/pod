@@ -16,7 +16,11 @@ import {
 } from './terminal-model-query-authority'
 import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
-import type { RuntimeHeadlessTerminal } from './runtime-terminal-state-records'
+import type {
+  RuntimeHeadlessTerminal,
+  RuntimePtyWorktreeRecord
+} from './runtime-terminal-state-records'
+import { canAgentMainTerminalModelRest } from './main-terminal-model-agent-rest'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
 
 // Why the mobile depth: no reader of main's model asks for more; full-depth restores of a PTY
@@ -70,6 +74,11 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
 
   isMainTerminalModelDormant(ptyId: string): boolean {
     return this.mainTerminalModelDormancy.isDormant(ptyId)
+  }
+
+  /** Whether main's model is dormant or still being rebuilt, so it does not show the screen yet. */
+  isMainTerminalModelCatchingUp(ptyId: string): boolean {
+    return !this.mainTerminalModelDormancy.isCaughtUp(ptyId)
   }
 
   /** A model rebuilt after dormancy holds only a bounded seed, so full-depth hidden-output
@@ -171,19 +180,31 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
       this.store?.getSettings()?.terminalMainModelDormancy === false ||
       !pty ||
       pty.connectionId ||
-      pty.launchAgent ||
-      pty.foregroundAgent ||
-      pty.lastExplicitAgentStatus
+      !this.canAgentPaneMainTerminalModelRest(ptyId, pty)
     ) {
       return false
     }
-    // Why each: a viewer or an agent's screen rules read main's model, and only a mounted
-    // renderer parses the bytes for display.
+    // Why each: a viewer reads main's model, and only a mounted renderer parses the bytes for
+    // display.
     return !(
       this.terminalViewSubscribers.hasRaw(ptyId) ||
-      this.leavesByPtyId.get(ptyId)?.some((leaf) => leaf.lastAgentStatus != null) ||
       this.ptyController?.hasRendererSerializer?.(ptyId) !== true ||
       this.ptyController.canProvideSettledBufferSnapshot?.(ptyId) !== true
+    )
+  }
+
+  // Why: agent signals without an identified agent fall to the unknown-pane rules, which read
+  // the screen.
+  private canAgentPaneMainTerminalModelRest(ptyId: string, pty: RuntimePtyWorktreeRecord): boolean {
+    const agent = this.getPaneAgentForTuiIdle(ptyId)
+    if (agent) {
+      return canAgentMainTerminalModelRest(agent)
+    }
+    return !(
+      pty.launchAgent ||
+      pty.foregroundAgent ||
+      pty.lastExplicitAgentStatus ||
+      this.leavesByPtyId.get(ptyId)?.some((leaf) => leaf.lastAgentStatus != null)
     )
   }
 
