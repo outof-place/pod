@@ -8,11 +8,13 @@ import {
   writeFileSync
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
+import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { runProcess } from '../../src/shared/child-process/run-process'
 import { podOrbstackMachineName } from '../../src/main/pod/orbstack/pod-orbstack-recipe'
+import { createSandboxCa } from '../../src/main/pod/orbstack/pod-orbstack-sandbox-ca'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
@@ -27,6 +29,13 @@ const fakeAgentPath = path.join(repoPath, 'fake-claude.sh')
 const visibilityPath = path.join(repoPath, 'visibility.txt')
 const screenshotDir = process.env.POD_E2E_SCREENSHOT_DIR
 const createdMachines = new Set<string>()
+// A stand-in for api.anthropic.com on the Mac, with its own CA: the anthropic-api route goes there
+// under a fake key, so the spec never touches the real API or a real credential.
+const stubApiCa = createSandboxCa('stub-upstream')
+const stubApiCaPath = path.join(baseDir, 'stub-api-ca.pem')
+const stubApiPort = 41_000 + (process.pid % 2_000)
+const stubApiRequests: { method?: string; url?: string; apiKey?: string }[] = []
+let stubApi: HttpsServer | null = null
 
 test.skip(
   process.platform !== 'darwin' || process.env.POD_E2E_ORBSTACK !== '1',
@@ -39,7 +48,9 @@ test.use({
     POD_ACC_LIFECYCLE: 'off',
     POD_E2E_ORBSTACK_HOME: os.homedir(),
     // The stand-in agent needs only Pod's hook script, not a Claude download.
-    POD_E2E_ORBSTACK_SKIP_AGENT_INSTALL: '1'
+    POD_E2E_ORBSTACK_SKIP_AGENT_INSTALL: '1',
+    POD_E2E_ANTHROPIC_UPSTREAM: `127.0.0.1:${stubApiPort}`,
+    POD_E2E_ANTHROPIC_UPSTREAM_CA: stubApiCaPath
   },
   minimumSeededWorktreeCount: 1
 })
@@ -51,7 +62,10 @@ hook="$HOME/.orca/agent-hooks/claude-hook.sh"
 emit() {
   printf '{"hook_event_name":"%s","session_id":"pod-e2e-sandbox","cwd":"%s","prompt":"hello from the sandbox"}' "$1" "$PWD" | /bin/sh "$hook" >/dev/null 2>>"${repoPath}/hook.log"
 }
-env | grep -e ^ORCA_ -e ^HOME= | sed 's/TOKEN=.*/TOKEN=<set>/' > "${repoPath}/agent-env.txt"
+env | grep -e ^ORCA_ -e ^HOME= -e ^ANTHROPIC_ -e ^NODE_EXTRA_CA_CERTS= -e ^POD_SANDBOX | sed 's/TOKEN=.*/TOKEN=<set>/' > "${repoPath}/agent-env.txt"
+# The VM's api.anthropic.com is the relay; it trusts only the sandbox CA and swaps the placeholder key.
+curl -sS -m 10 --cacert "$NODE_EXTRA_CA_CERTS" -H "x-api-key: $ANTHROPIC_API_KEY" -H 'content-type: application/json' \
+  -o /dev/null -w '%{http_code}' -d '{"model":"stub"}' https://api.anthropic.com/v1/messages > "${repoPath}/api-status.txt" 2>>"${repoPath}/hook.log"
 { [ -e "${os.homedir()}/Documents" ] && echo "home: visible" || echo "home: hidden"; } > "${visibilityPath}"
 emit SessionStart
 emit UserPromptSubmit
@@ -109,9 +123,25 @@ test.beforeAll(async () => {
   )
   writeFileSync(fakeAgentPath, FAKE_AGENT)
   chmodSync(fakeAgentPath, 0o755)
+  writeFileSync(stubApiCaPath, stubApiCa.caCertPem)
+  const server = createHttpsServer(
+    { key: stubApiCa.leafKeyPem, cert: stubApiCa.leafCertPem },
+    (req, res) => {
+      stubApiRequests.push({
+        method: req.method,
+        url: req.url,
+        apiKey: req.headers['x-api-key']?.toString()
+      })
+      req.resume()
+      req.on('end', () => res.end('{"type":"message"}'))
+    }
+  )
+  await new Promise<void>((resolve) => server.listen(stubApiPort, '127.0.0.1', resolve))
+  stubApi = server
 })
 
 test.afterAll(async () => {
+  stubApi?.close()
   // Pod has quit by now, and a relay never outlives it.
   for (const name of createdMachines) {
     expect(await orbProcessesFor(name, 'relay')).toEqual([])
@@ -193,7 +223,7 @@ test('a Claude launch runs in the worktree sandbox and its hook status reaches P
       return status ? { state: status.state, prompt: status.prompt ?? null } : null
     }, paneKey)
   const diagnostics = (): string =>
-    ['agent-env.txt', 'hook.log', 'visibility.txt']
+    ['agent-env.txt', 'hook.log', 'visibility.txt', 'api-status.txt']
       .map((file) => {
         const full = path.join(repoPath, file)
         return `--- ${file}\n${existsSync(full) ? readFileSync(full, 'utf8').slice(-3000) : '(missing)'}`
@@ -213,6 +243,15 @@ test('a Claude launch runs in the worktree sandbox and its hook status reaches P
   // The stand-in ran inside the sandbox, which shares only the worktree.
   await expect.poll(() => existsSync(visibilityPath), { timeout: 10_000 }).toBe(true)
   expect(readFileSync(visibilityPath, 'utf8').trim()).toBe('home: hidden')
+  // The anthropic-api route: pinned, trusted only through the sandbox CA, key swapped on the Mac.
+  const agentEnv = readFileSync(path.join(repoPath, 'agent-env.txt'), 'utf8')
+  expect(agentEnv).toContain('ANTHROPIC_API_KEY=pod-sandbox-no-credential')
+  expect(agentEnv).toContain('NODE_EXTRA_CA_CERTS=/etc/pod-sandbox/anthropic-ca.pem')
+  expect(agentEnv).not.toContain('POD_SANDBOX_VM_')
+  expect(readFileSync(path.join(repoPath, 'api-status.txt'), 'utf8')).toBe('200')
+  expect(stubApiRequests).toEqual([
+    { method: 'POST', url: '/v1/messages', apiKey: 'pod-e2e-stub-key' }
+  ])
 
   await row.getByRole('button', { name: 'Delete agent sandbox' }).click()
   await expect(row.getByRole('button', { name: 'Create agent sandbox' })).toBeVisible({
