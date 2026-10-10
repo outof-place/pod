@@ -118,6 +118,14 @@ preflight_sign() {
 log "$display_name $version ($app_id, $arch), signed by $sign_identity"
 log "test signature (keychain access, timestamp server)"
 preflight_sign
+# mac.icon is an Icon Composer document, which electron-builder compiles with actool 26+. A runner
+# whose default Xcode is older (macos-15 ships 16.4) names an Xcode 26 in POD_ICON_DEVELOPER_DIR,
+# for packaging only: the Swift helpers keep the default toolchain.
+icon_developer_dir=${POD_ICON_DEVELOPER_DIR:-$(xcode-select -p)}
+actool_version=$(DEVELOPER_DIR="$icon_developer_dir" xcrun actool --version |
+  sed -n '/short-bundle-version/{n;s/.*<string>\([0-9]*\).*/\1/p;}')
+[ "${actool_version:-0}" -ge 26 ] ||
+  die "actool ${actool_version:-?} in $icon_developer_dir; the app icon needs Xcode 26+ (set POD_ICON_DEVELOPER_DIR)"
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
 # Upstream's strict release signing for helpers and the bundle (hardened runtime, timestamps).
 export ORCA_MAC_RELEASE=1
@@ -154,7 +162,7 @@ fi
 
 log "package, sign and notarize the app (electron-builder staples it)"
 rm -rf dist
-POD_RELEASE=1 POD_VERSION="$version" POD_ARCH="$arch" with_timestamp_retry \
+DEVELOPER_DIR="$icon_developer_dir" POD_RELEASE=1 POD_VERSION="$version" POD_ARCH="$arch" with_timestamp_retry \
   pnpm exec electron-builder --config product/electron-builder.pod.cjs --mac "--$arch" --publish never
 
 app="dist/mac-$arch/$display_name.app"
