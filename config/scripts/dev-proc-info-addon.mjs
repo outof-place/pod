@@ -18,9 +18,13 @@ export function prepareDevProcInfoAddon(repoRoot) {
     return
   }
   const sourceMtime = Math.max(
-    ...['proc_info.c', 'proc_api_arguments.c', 'proc_api_arguments.h'].map((name) =>
-      mtimeMs(path.join(addonDir, 'src', name))
-    )
+    ...[
+      'proc_info.c',
+      'proc_tty_names.c',
+      'proc_tty_names.h',
+      'proc_api_arguments.c',
+      'proc_api_arguments.h'
+    ].map((name) => mtimeMs(path.join(addonDir, 'src', name)))
   )
   if (mtimeMs(addon) >= sourceMtime) {
     return
@@ -32,9 +36,9 @@ export function prepareDevProcInfoAddon(repoRoot) {
       { stdio: 'inherit' }
     )
   } catch (error) {
-    // Without clang, resize targeting keeps its existing ps fallback.
+    // Why non-fatal: without clang the app keeps forking `ps`/`lsof`, which is only slower.
     console.warn(
-      `[orca-dev] process-info addon build failed (ps stays in use): ${error?.message ?? error}`
+      `[orca-dev] process-info addon build failed (ps/lsof stay in use): ${error?.message ?? error}`
     )
   }
 }
