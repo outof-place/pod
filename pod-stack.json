@@ -27,25 +27,28 @@
       "upstream": "https://github.com/stablyai/orca/pull/26979"
     },
     {
-      "branch": "perf/daemon-binary-pty-frames",
-      "upstream": "https://github.com/stablyai/orca/pull/27006",
-      "note": "nt-perf main-feed builds on its DaemonEvent path"
+      "branch": "perf/session-scanner-incremental",
+      "upstream": "https://github.com/stablyai/orca/pull/27009"
     },
     {
-      "branch": "feat/native-ghostty-terminal",
-      "upstream": "https://github.com/stablyai/orca/pull/26914"
+      "branch": "perf/usage-store-offmain",
+      "upstream": "https://github.com/stablyai/orca/pull/26980"
     },
     {
-      "branch": "stack/proc-info",
+      "branch": "perf/native-proc-info-darwin",
       "upstream": "https://github.com/stablyai/orca/pull/26985",
-      "base": "origin/feat/native-ghostty-terminal",
-      "note": "perf/native-proc-info-darwin replayed onto feat/native-ghostty-terminal (package.json build steps merged); refresh when #26985 changes"
+      "note": "Adds a macOS native addon plus a beforePack guard"
     },
     {
       "branch": "stack/ps-locale",
       "upstream": "https://github.com/stablyai/orca/pull/27005",
-      "base": "origin/stack/proc-info",
-      "note": "fix/ps-locale-independent-start-time replayed onto stack/proc-info (imports merged); refresh when #27005 changes"
+      "base": "origin/perf/native-proc-info-darwin",
+      "note": "fix/ps-locale-independent-start-time replayed onto perf/native-proc-info-darwin (imports merged); refresh when either changes"
+    },
+    {
+      "branch": "perf/daemon-binary-pty-frames",
+      "upstream": "https://github.com/stablyai/orca/pull/27006",
+      "note": "nt-perf main-feed builds on its DaemonEvent path"
     },
     {
       "branch": "fix/xterm-empty-write-barrier",
@@ -53,7 +56,9 @@
     },
     {
       "branch": "app-identity-constant",
-      "upstream": "https://github.com/stablyai/orca/pull/26973"
+      "upstream": "https://github.com/stablyai/orca/pull/26973",
+      "ref": "8f22a731c8",
+      "note": "Pinned to 8f22a731c8, the commit pod/identity is built on; unpin once pod/identity is rebased onto #26973 71bec057fd"
     },
     {
       "branch": "stack/plugins",
@@ -61,14 +66,30 @@
       "note": "#26953, #26975 and #26991 stacked by b1-plugins-ui; each commit carries its own Upstream trailer"
     },
     {
-      "branch": "stack/pod-identity",
+      "branch": "pod/identity",
       "forkOnly": "Pod identity: name, bundle id, icon, URL scheme and CLI name",
-      "base": "origin/app-identity-constant",
-      "note": "pod/identity replayed onto app-identity-constant (#26973); refresh when pod/identity changes, or rebase pod/identity itself"
+      "base": "8f22a731c8"
     },
     {
-      "branch": "pod/overlay",
-      "forkOnly": "Pod overlay: Stably-hosted services off, product name in UI copy"
+      "branch": "stack/native-terminal-on-proc-info",
+      "upstream": "https://github.com/stablyai/orca/pull/26914",
+      "base": "origin/perf/native-proc-info-darwin",
+      "note": "feat/native-ghostty-terminal replayed onto perf/native-proc-info-darwin (package.json build steps merged); refresh when either changes"
+    },
+    {
+      "branch": "stack/pod-overlay",
+      "forkOnly": "Pod overlay: Stably-hosted services off, product name in UI copy",
+      "base": "d920a0436ff044fc17450c8786e3c58ece45e2cb",
+      "note": "pod/overlay replayed onto the stack; its bundled-plugins-only commit merged with #26975 (plugin-discovery host argument, locale keys). Refresh when pod/overlay changes, or rebase pod/overlay onto stack/plugins"
+    },
+    {
+      "branch": "pod/native-default",
+      "forkOnly": "Pod turns the native Ghostty terminal on by default and lists its switch under Terminal settings",
+      "base": [
+        "7aaa9e27fa",
+        "origin/feat/native-ghostty-terminal"
+      ],
+      "note": "Built on pod/overlay 7aaa9e27fa with a merge of feat/native-ghostty-terminal; base excludes both"
     },
     {
       "branch": "pod/readme",
@@ -77,8 +98,18 @@
     {
       "branch": "stack/pod-acc",
       "forkOnly": "claude-acc built into Pod: bundled plugin, payload and tray",
-      "base": "80cb9c0f659400021a432b052e29c23f680d2fca",
-      "note": "pod/acc minus its own status-bar copies, replayed onto the stack (plugin-marketplace imports merged); refresh when pod/acc changes, or rebase pod/acc onto stack/plugins and stack/pod-identity"
+      "base": "b5e1a04150179a629edb01224c9f75f5d30bb0aa",
+      "note": "pod/acc minus its own status-bar copies, replayed onto the stack (plugin-marketplace imports merged). Refresh when pod/acc changes, or rebase pod/acc onto stack/plugins"
+    },
+    {
+      "branch": "pod/search-client",
+      "forkOnly": "Pod native search: quick open and text search served by the ogd index"
+    },
+    {
+      "branch": "stack/pod-slim",
+      "forkOnly": "Pod build profile: compile out cut features, English-only build",
+      "base": "72fd1e468772660d8962aecce6362e53ce761d4f",
+      "note": "pod/slim replayed onto the stack (onboarding-tips imports merged). Refresh when pod/slim changes, or rebase pod/slim onto the current main"
     }
   ]
 }
