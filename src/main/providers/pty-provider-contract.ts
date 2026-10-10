@@ -16,6 +16,7 @@ import type { PtyProcessInfo } from './pty-process-info'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import type { PodLaneRequest } from '../daemon/pod-lane/pod-lane-requests'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -250,6 +251,12 @@ export type IPtyProvider = {
     responder: boolean,
     opts?: { nativeWindowsConpty?: boolean }
   ) => boolean
+  /** Pod: the direct terminal lane's control requests; only the current local daemon has it. */
+  podLaneControl?: (
+    id: string,
+    type: PodLaneRequest['type'],
+    payload: PodLaneRequest['payload']
+  ) => Promise<unknown>
   acknowledgeDataEvent(id: string, charCount: number): void
   hasChildProcesses(id: string): Promise<boolean>
   getForegroundProcess(id: string): Promise<string | null>
