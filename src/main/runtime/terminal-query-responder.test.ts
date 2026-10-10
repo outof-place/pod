@@ -255,6 +255,25 @@ describe('reply ownership matrix', () => {
     expect(runtime.hasRemoteTerminalViewSubscriber('pty-m')).toBe(false)
   })
 
+  it('answers, once, the queries a remote view took over but never saw live', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-c')
+    expect(runtime.modelAnswersTerminalQueries('pty-c')).toBe(true)
+    const release = runtime.registerRemoteTerminalViewSubscriber('pty-c')
+    expect(runtime.modelAnswersTerminalQueries('pty-c')).toBe(false)
+
+    // Taken in while the view holds reply authority: the model parses it and stays silent.
+    runtime.onPtyData('pty-c', `prompt ${DA1}\x1b[6n`, Date.now())
+    await settle(runtime, 'pty-c')
+    expect(replies).toEqual([])
+
+    // The view's initial snapshot covered that output, so main answers it after all.
+    runtime.answerTerminalQueriesFromModel('pty-c', `${DA1}\x1b[6n`)
+    await settle(runtime, 'pty-c')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c', '\x1b[1;8R'])
+    release()
+  })
+
   it('keeps raw preview presence separate from terminal query authority', async () => {
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-preview')
