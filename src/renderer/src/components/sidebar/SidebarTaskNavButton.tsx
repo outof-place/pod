@@ -1,4 +1,5 @@
 import React from 'react'
+import { POD_TASKS } from '../../../../shared/product/features'
 import { EyeOff, Github, Gitlab, List } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
@@ -60,7 +61,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
   const activeView = useAppStore((s) => s.activeView)
   const repos = useAppStore((s) => s.repos)
   const repoMap = useRepoMap()
-  const showTasksButton = useAppStore((s) => s.settings?.showTasksButton !== false)
+  const showTasksButton = useAppStore((s) => POD_TASKS && s.settings?.showTasksButton !== false)
   const rawVisibleTaskProviders = useAppStore((s) => s.settings?.visibleTaskProviders)
   const defaultTaskSource = useAppStore((s) => s.settings?.defaultTaskSource ?? 'github')
   const preflightStatus = useAppStore((s) => s.preflightStatus)
