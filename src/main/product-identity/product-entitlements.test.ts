@@ -16,11 +16,13 @@ const policy: {
     mainExecutable: string
   ): (filePath: string) => SignOptions
   signWithProductEntitlements: unknown
+  productElectronEntitlements(env: Record<string, string>): string | null
 } = require('../../../product/entitlements-policy.cjs')
 const productConfig: {
-  mac: { sign: unknown }
+  mac: { sign: unknown; entitlements?: string; entitlementsInherit?: string }
 } = require('../../../product/electron-builder.pod.cjs')
 const gate: {
+  plistKeys(path: string): Record<string, unknown>
   entitlementViolations(
     app: string,
     options?: { read?: (path: string) => Record<string, unknown> }
@@ -58,16 +60,14 @@ describe('product entitlements', () => {
     ).toBe('camera')
     expect(ruleOf('Contents/Resources/python/bin/python3.14')).toBe('python-jit')
     expect(ruleOf('Contents/Resources/bin/pod-agent-launcher')).toBe('exec-shim')
-    expect(
-      ruleOf('Contents/Resources/node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper')
-    ).toBe('exec-shim')
     for (const path of [
       'Contents/MacOS/pod-notification-status',
       'Contents/Resources/Pod Computer Use.app/Contents/MacOS/pod-computer-use-macos',
       'Contents/Resources/ripgrep/darwin-arm64/rg',
       'Contents/Resources/claude-acc/fanctl',
       'Contents/Frameworks/Squirrel.framework/Versions/A/Resources/ShipIt',
-      'Contents/Helpers/PodNative.app'
+      'Contents/Helpers/PodNative.app',
+      'Contents/Resources/node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper'
     ]) {
       expect(ruleOf(path), path).toBe('none')
     }
@@ -88,6 +88,21 @@ describe('product entitlements', () => {
     expect(rg.hardenedRuntime).toBe(true)
     expect(basename(rg.entitlements ?? '')).toBe('none.plist')
     expect(productConfig.mac.sign).toBe(policy.signWithProductEntitlements)
+  })
+  it('trims the app and Electron helpers in the Pod profile and keeps upstream in the orca one', () => {
+    const pod = policy.productElectronEntitlements({})
+    expect(basename(pod ?? '')).toBe('electron-pod.plist')
+    expect(policy.productElectronEntitlements({ POD_BUILD_PROFILE: 'orca' })).toBeNull()
+    expect(productConfig.mac.entitlements).toBe(pod)
+    expect(productConfig.mac.entitlementsInherit).toBe(pod)
+    expect(Object.keys(gate.plistKeys(pod ?? '')).sort()).toEqual([
+      'com.apple.security.automation.apple-events',
+      'com.apple.security.cs.allow-jit',
+      'com.apple.security.cs.allow-unsigned-executable-memory',
+      'com.apple.security.device.audio-input',
+      'com.apple.security.device.camera',
+      'com.apple.security.device.usb'
+    ])
   })
 })
 
@@ -120,6 +135,10 @@ describe.skipIf(process.platform !== 'darwin')('entitlements release gate', () =
     ])
     const granted: Record<string, Record<string, unknown>> = {
       'Pod.app': { 'com.apple.security.cs.allow-jit': true },
+      Pod: {
+        'com.apple.security.cs.allow-jit': true,
+        'com.apple.security.personal-information.location': true
+      },
       'pod-notification-status': { 'com.apple.security.device.camera': true },
       'Pod Menu.app': { 'com.apple.security.device.audio-input': true },
       ClaudeAcc: {
@@ -132,6 +151,7 @@ describe.skipIf(process.platform !== 'darwin')('entitlements release gate', () =
     })
     expect(result.checked).toBe(5)
     expect(result.violations).toEqual([
+      'Contents/MacOS/Pod (the app): personal-information.location',
       'Contents/MacOS/pod-notification-status (everything else): device.camera',
       'Contents/Resources/claude-acc/Pod Menu.app/Contents/MacOS/ClaudeAcc (Pod Menu): cs.allow-jit'
     ])

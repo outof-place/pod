@@ -25,7 +25,10 @@ const {
   PRODUCT_FILE_EXCLUSIONS,
   PRODUCT_SIGN_IGNORE
 } = require('./release-bundle-gate.cjs')
-const { signWithProductEntitlements } = require('./entitlements-policy.cjs')
+const {
+  productElectronEntitlements,
+  signWithProductEntitlements
+} = require('./entitlements-policy.cjs')
 
 const repoRoot = join(__dirname, '..')
 // claude-acc payload and distro plugins (identity.claudeAcc); the file arrives with the pod/acc branch.
@@ -183,6 +186,12 @@ module.exports = {
     hardenedRuntime: true,
     // Least-privilege entitlements per nested executable instead of Electron's set for all of them.
     sign: signWithProductEntitlements,
+    ...(productElectronEntitlements()
+      ? {
+          entitlements: productElectronEntitlements(),
+          entitlementsInherit: productElectronEntitlements()
+        }
+      : {}),
     notarize: isRelease,
     extraResources: [
       ...base.mac.extraResources,
