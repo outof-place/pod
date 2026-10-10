@@ -108,7 +108,7 @@
       "branch": "stack/native-terminal-on-proc-info",
       "upstream": "https://github.com/stablyai/orca/pull/26914",
       "base": "4834f3cbc5",
-      "note": "feat/native-ghostty-terminal 7d77474138 squashed onto the stack after #26985 and #27086: package.json build chains carry both native helpers; maybe-hydrate and fresh-spawn-start take pod/native-model-consumer 8f92006a9c’s resolution. Refresh when either changes"
+      "note": "feat/native-ghostty-terminal 7d77474138 squashed onto the stack after #26985 and #27086: package.json build chains carry both native helpers; maybe-hydrate and fresh-spawn-start take pod/native-model-consumer 8f92006a9c’s resolution. The 5 non-English locales keep Orca’s sessionNotRestored line, not the native branch’s restored copy. Refresh when either changes"
     },
     {
       "branch": "pod/native-model-consumer",
@@ -130,15 +130,6 @@
       "forkOnly": "Pod overlay: Stably-hosted services off, product name in UI copy",
       "base": "37eebe3860",
       "note": "pod/overlay 0bcad4d75e replayed onto the stack; its bundled-plugins-only commit merged with #26975 (plugin-discovery host argument, locale keys). Refresh when pod/overlay changes, or rebase pod/overlay onto stack/plugins"
-    },
-    {
-      "branch": "i18n/main-process-dialogs",
-      "upstream": "https://github.com/stablyai/orca/pull/27065"
-    },
-    {
-      "branch": "i18n/native-notifications",
-      "upstream": "https://github.com/stablyai/orca/pull/27069",
-      "note": "stacked on #27065 (its first commit is fa6d779eb7)"
     },
     {
       "branch": "i18n/renderer-first-run",
@@ -176,8 +167,14 @@
     {
       "branch": "stack/pod-workspace",
       "forkOnly": "Pod workspace: ~/pod workspace root and clone default <root>/<owner>/<repo>, Time Machine/Spotlight/volume hygiene, Settings > Workspace health dashboard, workspace roots registered with Pod native search",
-      "base": "82c74be7f6",
-      "note": "pod/workspace ec516fb8df plus the stack-only wiring commit afde803a0b, replayed onto the stack (its en.json keys appended after the i18n PRs’). Needs pod/search-client earlier in the stack. Keep afde803a0b when refreshing from pod/workspace"
+      "base": "d1f423519a",
+      "note": "pod/workspace ec516fb8df plus the stack-only wiring commit afde803a0b, replayed onto the stack. Needs pod/search-client earlier in the stack. Keep afde803a0b when refreshing from pod/workspace"
+    },
+    {
+      "branch": "pod/process-host-imports",
+      "forkOnly": "Pod code on Orca’s @orca/process-host (#26963) until the Pod branches are rebased",
+      "base": "6edfc6c8e1",
+      "note": "pod-repo; one commit rewriting the old src/shared/child-process/run-process imports in pod/acc, pod/search-client, pod/workspace and pod/identity code. Drop once those branches import @orca/process-host themselves"
     }
   ]
 }
