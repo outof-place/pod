@@ -3,8 +3,9 @@
  * authority.
  *
  * The delivery decision is the reply decision: main answers a query iff the
- * hidden-delivery gate kept the chunk from the view (dropped it, or sent it to
- * raw-byte sidecars only). This module owns the responder kill-switch
+ * hidden-delivery gate kept the chunk from the view's xterm (dropped it, sent it
+ * to raw-byte sidecars only, or flagged it for a native view main feeds; see
+ * rendererPtyViewDelivery). This module owns the responder kill-switch
  * predicate and the main-side mirror of the renderer's native-Windows-ConPTY
  * determination, recorded per PTY at spawn so the runtime emulator can
  * register the DA1 override before byte zero.
