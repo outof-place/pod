@@ -71,3 +71,19 @@ export async function readNativeShellForegroundRows(): Promise<ProcessTableRow[]
     })) ?? null
   )
 }
+
+/** Kernel-first reads for the snapshot readers; ps runs only when a read defers. */
+export const nativeProcessTables = {
+  // The kernel rows need no lenient/strict split.
+  async fullCapture(): Promise<{
+    lenient: () => ProcessTableRow[]
+    strict: () => ProcessTableRow[]
+  } | null> {
+    const rows = await readNativeFullProcessTable()
+    return rows ? { lenient: () => rows, strict: () => rows } : null
+  },
+  shellForegroundRows: readNativeShellForegroundRows,
+  preferNative<T>(readNative: () => Promise<T | null>, readPs: () => Promise<T>) {
+    return async (): Promise<T> => (await readNative()) ?? (await readPs())
+  }
+}
