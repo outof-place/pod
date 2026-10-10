@@ -26,6 +26,9 @@ vi.mock('electron', () => {
     on(): this {
       return this
     }
+    once(): this {
+      return this
+    }
     removeListener(): this {
       return this
     }
