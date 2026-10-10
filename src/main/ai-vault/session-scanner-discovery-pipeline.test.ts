@@ -61,7 +61,7 @@ describe('fresh discovery pipeline', () => {
       if (path === paths[0]) {
         await firstBlocked
       }
-      if (path === paths[63]) {
+      if (path === paths[15]) {
         reachedLater()
       }
       return Object.assign(await fs.stat(path), { mtimeMs: 1_000 })
@@ -148,8 +148,12 @@ describe('fresh discovery pipeline', () => {
       reachedLater = resolve
     })
     fsMocks.stat.mockImplementation(async (path: string) => {
-      if (path === paths[0]) await blocked
-      if (path === paths[63]) reachedLater()
+      if (path === paths[0]) {
+        await blocked
+      }
+      if (path === paths[15]) {
+        reachedLater()
+      }
       throw new Error(`unreadable ${path}`)
     })
     const issues: AiVaultScanIssue[] = Array.from({ length: 498 }, (_, index) => ({
@@ -207,7 +211,9 @@ describe('fresh discovery pipeline', () => {
       const alias = join(root, 'alias')
       await fs.symlink(join(root, 'a'), alias, 'dir')
       expect((await scan(alias)).files[0]?.sizeBytes).toBe(3)
-      if (!a || !b) throw new Error('missing fixture')
+      if (!a || !b) {
+        throw new Error('missing fixture')
+      }
       await fs.writeFile(b, '{"target":"b"}\n')
       await fs.unlink(alias)
       await fs.symlink(join(root, 'b'), alias, 'dir')

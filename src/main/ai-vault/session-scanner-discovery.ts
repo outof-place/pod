@@ -13,7 +13,7 @@ import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-type
 import { errorMessage } from './session-scanner-values'
 
 const NATIVE_DISCOVERY_CONCURRENCY = 4
-const NATIVE_DISCOVERY_BATCH_SIZE = 64
+const NATIVE_DISCOVERY_BATCH_SIZE = 16
 const nativeDiscoverySlots = new PrioritySemaphore(NATIVE_DISCOVERY_CONCURRENCY)
 
 type SessionFileObservation =
@@ -70,10 +70,18 @@ export async function discoverFiles(args: {
     }
   }
 
-  function readBatch(batch: readonly string[]): Promise<SessionFileObservation[]> {
-    return mapWithConcurrency(batch, NATIVE_DISCOVERY_CONCURRENCY, (path) =>
-      withNativeDiscoverySlot(() => observeSessionFile(path, args.contentDependencyPath))
+  async function readBatch(batch: readonly string[]): Promise<SessionFileObservation[]> {
+    const groups: string[][] = []
+    const groupSize = Math.ceil(batch.length / NATIVE_DISCOVERY_CONCURRENCY)
+    for (let index = 0; index < batch.length; index += groupSize) {
+      groups.push(batch.slice(index, index + groupSize))
+    }
+    const observations = await mapWithConcurrency(groups, NATIVE_DISCOVERY_CONCURRENCY, (group) =>
+      withNativeDiscoverySlot(() =>
+        mapWithConcurrency(group, 1, (path) => observeSessionFile(path, args.contentDependencyPath))
+      )
     )
+    return observations.flat()
   }
 
   try {
