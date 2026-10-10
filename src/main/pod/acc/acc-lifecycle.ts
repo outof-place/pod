@@ -15,16 +15,26 @@ const OWNER = 'pod'
 const LOCK = 'pod-setup.lock'
 // setup.sh builds bytecode, rewrites hooks and restarts launchd jobs: a minute is normal, five is stuck
 const SETUP_TIMEOUT_MS = 5 * 60_000
+// setup.sh refusing before it touches anything: another owner holds claude-acc (owner.py), or HOME
+// is not the account's home. Final for this launch, never a failed install to retry.
+const SETUP_REFUSALS: Record<number, string> = {
+  3: 'claude-acc belongs to another owner',
+  4: 'HOME is not the account home'
+}
 const STALE_LOCK_MS = 10 * 60_000
 
 export type AccOwnerRecord = { owner: string; version: string | null; app: string | null }
 
 // Harness launches (E2E, bench, background) run with a throwaway HOME or profile, and setup.sh
 // re-points the account's real launchd jobs (gui/<uid>) at whatever HOME it gets.
+// Both prefixes: Pod's decouple codemod renames ORCA_* to POD_* in its own runtime and harness.
 export const AUTOMATED_LAUNCH_ENV = [
   'ORCA_E2E_USER_DATA_DIR',
   'ORCA_E2E_HEADLESS',
-  'ORCA_BACKGROUND_LAUNCH'
+  'ORCA_BACKGROUND_LAUNCH',
+  'POD_E2E_USER_DATA_DIR',
+  'POD_E2E_HEADLESS',
+  'POD_BACKGROUND_LAUNCH'
 ] as const
 
 /** The first harness variable set in `env`, or null for a launch by the user. */
@@ -255,6 +265,14 @@ export async function runAccLifecycle(
   }
   try {
     const result = await run(spec)
+    const refused = result.code === null ? undefined : SETUP_REFUSALS[result.code]
+    if (refused) {
+      return {
+        status: 'refused',
+        decision,
+        message: `setup.sh exit ${result.code}: ${refused} (${lastLine(`${result.stdout}\n${result.stderr}`)})`
+      }
+    }
     const after = readOwnerRecord(input.home)
     const ok =
       result.code === 0 &&
