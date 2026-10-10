@@ -52,3 +52,4 @@ func run(_ args: [String]) -> Never {
 
 let NATIVE_HANDLERS: [String: Handler] = BROWSER_HANDLERS.merging(TERMINAL_HANDLERS) { a, _ in a }
   .merging(WORKSPACE_HANDLERS) { a, _ in a }
+  .merging(STATUS_HANDLERS) { a, _ in a }

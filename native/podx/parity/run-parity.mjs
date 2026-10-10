@@ -53,6 +53,7 @@ if (argvFile) {
 }
 
 const UUID = /"id": "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"/g
+const UUID_VALUE = /"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"/g
 const normalize = (text) => text.replace(UUID, '"id": "<uuid>"')
 
 function sortKeys(value) {
@@ -69,6 +70,21 @@ function sortKeys(value) {
   return value
 }
 
+// A case's own profile dir; __SOCK__ and __PID__ name the scripted runtime's socket and pid.
+function writeUserData(testCase) {
+  const target = path.join(dir, `ud-${testCase.name.replaceAll(/[^a-z0-9]+/gi, '-')}`)
+  mkdirSync(target, { recursive: true })
+  for (const [name, content] of Object.entries(testCase.userData)) {
+    writeFileSync(
+      path.join(target, name),
+      content
+        .replaceAll('__SOCK__', path.join(dir, 'o-parity.sock'))
+        .replaceAll('__PID__', String(server.pid))
+    )
+  }
+  return target
+}
+
 async function runOne(kind, testCase) {
   writeFileSync(
     path.join(dir, 'scenario.json'),
@@ -77,10 +93,11 @@ async function runOne(kind, testCase) {
   writeFileSync(path.join(dir, 'requests.jsonl'), '')
   writeFileSync(fallbackLog, '')
   await reset()
+  const userData = testCase.userData ? writeUserData(testCase) : dir
   const env = {
     PATH: process.env.PATH,
     HOME: process.env.HOME,
-    ORCA_USER_DATA_PATH: dir,
+    ORCA_USER_DATA_PATH: userData,
     POD_NATIVE_CLI_NODE: nodeWrapper,
     POD_NATIVE_CLI_NODE_ENTRY: cli,
     ...testCase.env
@@ -97,7 +114,7 @@ async function runOne(kind, testCase) {
   const requests = readFileSync(path.join(dir, 'requests.jsonl'), 'utf8')
     .split('\n')
     .filter(Boolean)
-    .map((l) => sortKeys(JSON.parse(l)))
+    .map((l) => sortKeys(JSON.parse(l.replaceAll(UUID_VALUE, '"<uuid>"'))))
   return {
     stdout: normalize(r.stdout.toString('utf8')),
     stdoutBytes: r.stdout,
