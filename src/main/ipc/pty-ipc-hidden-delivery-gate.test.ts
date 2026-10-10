@@ -729,11 +729,12 @@ describe('registerPtyHandlers', () => {
 
       try {
         registerPtyHandlers(mainWindow as never)
-        const { id } = (await handlers.get('pty:spawn')!(null, {
+        const spawned: unknown = await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '/tmp'
-        })) as { id: string }
+        })
+        const id = String(typeof spawned === 'object' && spawned ? Reflect.get(spawned, 'id') : '')
         const request = handlers.get('pty:setRendererPtyViewFedElsewhere')!
         const events: string[] = []
         mainWindow.webContents.send.mockImplementation((channel: string, payload: unknown) => {
