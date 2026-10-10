@@ -3,6 +3,7 @@ import { parseSkillShareId } from '../shared/skill-share-link'
 import { productUrlSchemes } from './product-identity/product-identity'
 import { completeProductImportBeforeWindows } from './product-identity/product-first-run'
 import { installProductSettingDefaults } from './product-identity/product-setting-defaults'
+import { brandProductCopy } from './product-identity/product-overlay'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch } from './window/foreground-activation-policy'
 import {
@@ -166,9 +167,9 @@ if (preflightReady) {
             return
           }
           await presentProfileStateStartupRecoveryDialog({
-            message,
+            message: brandProductCopy(message),
             ...(failureClass === 'recovery-required' || failureClass === 'ambiguous-authority'
-              ? { recoveryCommand: 'orca profile state exports' }
+              ? { recoveryCommand: brandProductCopy('orca profile state exports') }
               : {}),
             showMessageBox: (options) => dialog.showMessageBox(options),
             copyToClipboard: (text) => clipboard.writeText(text),
