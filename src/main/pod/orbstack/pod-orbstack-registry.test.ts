@@ -33,14 +33,16 @@ describe('PodOrbstackRegistry', () => {
     first.setDockerPin(entry.worktreeId, true)
 
     const second = new PodOrbstackRegistry(path)
-    expect(second.findByWorktree(entry.worktreeId)).toEqual(entry)
+    expect(second.findByWorktree(entry.worktreeId)).toEqual({ ...entry, kind: 'shared' })
+    expect(second.findByWorktree(entry.worktreeId, 'sandbox')).toBeNull()
     expect(second.isDockerPinned(entry.worktreeId)).toBe(true)
     second.setDockerPin(entry.worktreeId, false)
     second.remove(entry.name)
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
       version: 1,
       machines: [],
-      dockerPins: []
+      dockerPins: [],
+      sandboxAgents: []
     })
   })
 
