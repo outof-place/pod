@@ -55,6 +55,7 @@ METHODOLOGY = "../bench/README.md"
 SUITE_NAMES = {
     "latency": "Latency",
     "throughput": "Terminal throughput",
+    "throughput-visible": "Terminal throughput, visible windows",
     "search": "Code search",
     "startup": "Startup",
     "panes": "Many panes",
@@ -64,6 +65,14 @@ SUITE_NAMES = {
     "idle-cpu": "Idle CPU",
     "claude-acc": "claude-acc",
 }
+
+
+def suite_label(summary: dict, suite: str) -> str:
+    """The suite's name (polling-ptys80 is polling under another condition), plus the condition pod-bench labels it with."""
+    key = suite if suite in SUITE_NAMES else max((k for k in SUITE_NAMES if suite.startswith(k)), key=len, default=suite)
+    name = SUITE_NAMES.get(key, suite)
+    condition = (summary.get("suites", {}).get(suite) or {}).get("condition")
+    return f"{name} · {condition}" if condition else name
 
 
 def fmt(v: float | None) -> str:
@@ -197,7 +206,7 @@ def chart(g: dict, summary: dict, theme: Theme, narrow: bool = False) -> Doc:
         + len(foot_lines) * foot_t.size * foot_t.leading
         + pad
     )
-    title = f"{SUITE_NAMES.get(g['suite'], g['suite'])}: {g['metric']}" + (
+    title = f"{suite_label(summary, g['suite'])}: {g['metric']}" + (
         " (FAKE fixture data)" if fixture else ""
     )
     doc = Doc(W, H, title)
@@ -207,7 +216,7 @@ def chart(g: dict, summary: dict, theme: Theme, narrow: bool = False) -> Doc:
 
     # Head
     y = pad + eyebrow_t.size * 0.8
-    doc.text(pad, y, SUITE_NAMES.get(g["suite"], g["suite"]), eyebrow_t, theme.pod_ink)
+    doc.text(pad, y, suite_label(summary, g["suite"]), eyebrow_t, theme.pod_ink)
     y += 14 + title_t.size
     doc.text(pad, y, g["metric"][:1].upper() + g["metric"][1:], title_t, theme.ink)
     y += sub_t.size * 1.6
@@ -259,7 +268,7 @@ def chart(g: dict, summary: dict, theme: Theme, narrow: bool = False) -> Doc:
     for i, r in enumerate(rows):
         cy = plot_top + i * row_h + row_h / 2
         hist = provenance(r)
-        meta_line = f"n = {r['n']:,}" + (f" · historical, {hist.get('date', 'earlier')}" if hist else "")
+        meta_line = (f"n = {r['n']:,}" if r.get("n") else "n not recorded") + (f" · historical, {hist.get('date', 'earlier')}" if hist else "")
         if narrow:
             lw = doc.text(pad, cy - bar_h / 2 - 12 * k, r["subject"], label_t, theme.ink)
             doc.text(pad + lw + 10, cy - bar_h / 2 - 12 * k, meta_line, n_t, theme.ink3)
@@ -768,7 +777,7 @@ def readme_block(
         )
     out = []
     for name, g in charts:
-        alt = f"{SUITE_NAMES.get(g['suite'], g['suite'])}: {g['metric']}. " + "; ".join(
+        alt = f"{suite_label(summary, g['suite'])}: {g['metric']}. " + "; ".join(
             f"{r['subject']} median {fmt(r['median'])} {g['unit']}, p95 {fmt(r['p95'])}, n {r['n']}"
             for r in g["rows"]
         )
@@ -789,7 +798,7 @@ def readme_block(
             p = provenance(r)
             when = "this run" if not p else f"historical, {p.get('date', 'earlier')}" + (f" ({p['source']})" if p.get("source") else "")
             rows.append(
-                f"| {g['metric']} | {r['subject']} | {r['median']} {g['unit']} | {r['p95']} | {r['n']} | {r.get('min')} | {r.get('max')} | {when} |"
+                f"| {suite_label(summary, g['suite'])}: {g['metric']} | {r['subject']} | {r['median']} {g['unit']} | {r['p95']} | {r['n']} | {r.get('min')} | {r.get('max')} | {when} |"
             )
     date = (
         summary.get("resultsDir", "").split("/")[-1]
