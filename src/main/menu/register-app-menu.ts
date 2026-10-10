@@ -10,7 +10,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
 import { createAppMenuQuitItem } from './app-menu-quit-item'
 import { createAppWindowMenu } from './app-menu-window'
-import { areStablyServicesEnabled } from '../product-identity/product-overlay'
+import { stablyServicesMenuItem } from '../product-identity/product-overlay'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -140,12 +140,11 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     click: (_menuItem, window) => onOpenSetupGuide(window)
   }
 
-  const crashReportItem: Electron.MenuItemConstructorOptions = {
+  // Fork-only (Pod): crash reports post to Stably's feedback endpoint.
+  const crashReportItem: Electron.MenuItemConstructorOptions = stablyServicesMenuItem({
     label: translateMain('menu.reportCrash', 'Report Crash...'),
-    // Fork-only (Pod): crash reports post to Stably's feedback endpoint.
-    visible: areStablyServicesEnabled(),
     click: (_menuItem, window) => onOpenCrashReport(window)
-  }
+  })
 
   // Why: the macOS app-menu (named after the app) is mandatory on darwin and
   // owns hide/hideOthers/unhide/services/quit roles that only make sense in
@@ -264,14 +263,13 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         checked: appearance.showAutomationsButton,
         click: () => onToggleAppearance('showAutomationsButton')
       },
-      {
+      // Fork-only (Pod): Orca Mobile is Stably's app and pairs through Stably's relay.
+      stablyServicesMenuItem({
         label: translateMain('menu.showMobileButton', 'Show Orca Mobile Button'),
         type: 'checkbox',
-        // Fork-only (Pod): Orca Mobile is Stably's app and pairs through Stably's relay.
-        visible: areStablyServicesEnabled(),
         checked: appearance.showMobileButton,
         click: () => onToggleAppearance('showMobileButton')
-      },
+      }),
       {
         label: translateMain('menu.showTitlebarAppName', 'Show Titlebar App Name'),
         type: 'checkbox',
