@@ -23,6 +23,7 @@ import {
   type RendererRecoveryPromptFailure
 } from '../window/renderer-recovery-prompt'
 import { probeRendererLaunchCapacity } from '../window/renderer-launch-failure-probe'
+import { isPodUiHostLaunch } from '../pod/ui-host/pod-ui-host-launch'
 
 // The window module injects this callback to avoid a cycle between actions and lifecycle code.
 let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
@@ -119,7 +120,8 @@ export function getSystemTrayOptions(): SystemTrayOptions | null {
 }
 
 export function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
-  if (process.platform !== 'darwin' || state.isServeMode) {
+  // Fork-only (Pod): a one-app runtime has no menu bar icon; PodNative and Pod Menu own the bar.
+  if (process.platform !== 'darwin' || state.isServeMode || isPodUiHostLaunch()) {
     return null
   }
   const options = getSystemTrayOptions()
