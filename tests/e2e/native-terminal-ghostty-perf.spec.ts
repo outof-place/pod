@@ -7,13 +7,18 @@ import {
   findNativeSurfaceForPane,
   isNativeSurfaceHidden,
   nativeTerminalDebug,
-  splitNativeTerminalPane,
   xtermScreenTransform
 } from './helpers/native-terminal-debug'
 import {
+  addTerminalPane,
+  cpuMsBetween,
+  openTerminalTab,
+  usageSnapshot,
+  type CpuMsByKind
+} from './helpers/native-terminal-process-usage'
+import {
   focusActiveTerminalInput,
   sendToTerminal,
-  splitActiveTerminalPane,
   waitForActivePanePtyId,
   waitForActiveTerminalManager,
   waitForTerminalOutput
@@ -61,9 +66,6 @@ test.use({
 test.skip(process.platform !== 'darwin', 'the native Ghostty terminal is macOS only')
 test.skip(!enabled, 'Opt-in benchmark: set ORCA_NATIVE_TERMINAL_BENCH=1')
 
-type CpuSnapshot = { at: number; seconds: Record<string, { type: string; seconds: number }> }
-type CpuByType = { main: number; renderer: number; gpu: number; total: number }
-
 type XtermWatch = {
   keyAt: number | null
   parsedAt: number | null
@@ -74,7 +76,7 @@ type XtermWatch = {
 
 type FloodSample = {
   wallMs: number
-  cpuMs: CpuByType
+  cpuMs: CpuMsByKind
   xtermRenders: number
   frames: number
   // Renderer-to-main 'nativeTerminal:write' messages; PTY chunks main's feed took, and the
@@ -87,48 +89,13 @@ type KeySample = { keyToScreenMs: number; keyToParsedMs: number | null; keyToPty
 type ModeSamples = {
   flood: FloodSample[]
   keys: KeySample[]
-  idleCpuMsPerS: CpuByType[]
+  idleCpuMsPerS: CpuMsByKind[]
   webgl: boolean[]
   keyMirrorWrites: number[]
 }
 
 function now(): number {
   return performance.timeOrigin + performance.now()
-}
-
-function cpuSnapshot(app: ElectronApplication): Promise<CpuSnapshot> {
-  return app.evaluate(({ app: electronApp }) => {
-    const seconds: Record<string, { type: string; seconds: number }> = {}
-    for (const metric of electronApp.getAppMetrics()) {
-      seconds[String(metric.pid)] = {
-        type: metric.type,
-        seconds: metric.cpu.cumulativeCPUUsage ?? 0
-      }
-    }
-    return { at: performance.timeOrigin + performance.now(), seconds }
-  })
-}
-
-// CPU milliseconds per process type between two snapshots (processes alive in both).
-// Ghostty draws on threads of the main (Browser) process, so main counts as much as GPU.
-function cpuBetween(before: CpuSnapshot, after: CpuSnapshot): CpuByType {
-  const byType: CpuByType = { main: 0, renderer: 0, gpu: 0, total: 0 }
-  for (const [pid, row] of Object.entries(after.seconds)) {
-    const previous = before.seconds[pid]
-    if (!previous) {
-      continue
-    }
-    const ms = (row.seconds - previous.seconds) * 1000
-    byType.total += ms
-    if (row.type === 'Browser') {
-      byType.main += ms
-    } else if (row.type === 'Tab') {
-      byType.renderer += ms
-    } else if (row.type === 'GPU') {
-      byType.gpu += ms
-    }
-  }
-  return byType
 }
 
 // Counts renderer-to-main mirror writes; main's own feed sends none.
@@ -162,7 +129,7 @@ function emptySamples(): ModeSamples {
   return { flood: [], keys: [], idleCpuMsPerS: [], webgl: [], keyMirrorWrites: [] }
 }
 
-function scaleCpu(cpu: CpuByType, factor: number): CpuByType {
+function scaleCpu(cpu: CpuMsByKind, factor: number): CpuMsByKind {
   return {
     main: cpu.main * factor,
     renderer: cpu.renderer * factor,
@@ -341,25 +308,6 @@ function nativeKeystroke(
   )
 }
 
-async function openTerminalTab(page: Page): Promise<string> {
-  const tabId = await page.evaluate(() => {
-    const state = window.__store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    if (!state || !worktreeId) {
-      throw new Error('no active worktree for a benchmark tab')
-    }
-    const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
-    state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal', worktreeId)
-    return tab.id
-  })
-  await expect
-    .poll(async () => page.evaluate(() => window.__store?.getState().activeTabId))
-    .toBe(tabId)
-  await waitForActiveTerminalManager(page, 30_000)
-  return tabId
-}
-
 function closeTab(page: Page, tabId: string): Promise<void> {
   return page.evaluate((id) => window.__store?.getState().closeTab(id), tabId)
 }
@@ -406,7 +354,7 @@ async function measureFlood(
   const watch = await armXtermWatch(page, ptyId, marker, surfaceId === null, FLOOD_TIMEOUT_MS)
   const writesBefore = await mirrorWrites(app)
   const feedBefore = await mainFeedStats(app)
-  const before = await cpuSnapshot(app)
+  const before = await usageSnapshot(app)
   const startedAt = now()
   const native =
     surfaceId === null
@@ -415,14 +363,14 @@ async function measureFlood(
   await sendToTerminal(page, ptyId, `seq 1 ${floodLines}; printf 'FLOOD-%s\\n' ${id}\r`)
   const xterm = await readXtermWatch(page, watch)
   const shownAt = native ? await native : xterm.paintedAt
-  const after = await cpuSnapshot(app)
+  const after = await usageSnapshot(app)
   if (shownAt === null) {
     throw new Error(`flood did not reach the ${surfaceId === null ? 'xterm' : 'native'} screen`)
   }
   const feedAfter = await mainFeedStats(app)
   return {
     wallMs: shownAt - startedAt,
-    cpuMs: cpuBetween(before, after),
+    cpuMs: cpuMsBetween(before, after),
     xtermRenders: xterm.renders,
     frames: xterm.frames,
     mirrorWrites: (await mirrorWrites(app)) - writesBefore,
@@ -497,29 +445,24 @@ async function measureKeystrokes(
   return { keys, mirrorWrites: keyWrites }
 }
 
-async function measureIdle(page: Page, app: ElectronApplication, mode: Mode): Promise<CpuByType> {
+async function measureIdle(page: Page, app: ElectronApplication, mode: Mode): Promise<CpuMsByKind> {
   for (let pane = 1; pane < IDLE_PANES; pane += 1) {
-    if (mode !== 'xterm') {
-      await splitNativeTerminalPane(page, app)
-    } else {
-      const previous = await waitForActivePanePtyId(page)
-      await splitActiveTerminalPane(page, 'vertical')
-      await expect.poll(async () => waitForActivePanePtyId(page)).not.toBe(previous)
-      await waitForPtyShellEcho(page, await waitForActivePanePtyId(page), 30_000)
-    }
+    await addTerminalPane(page, app, mode === 'xterm' ? 'xterm' : 'native', pane)
   }
   await page.waitForTimeout(SETTLE_MS)
-  const before = await cpuSnapshot(app)
+  const before = await usageSnapshot(app)
   await page.waitForTimeout(idleMs)
-  const after = await cpuSnapshot(app)
-  return scaleCpu(cpuBetween(before, after), 1000 / (after.at - before.at))
+  const after = await usageSnapshot(app)
+  return scaleCpu(cpuMsBetween(before, after), 1000 / (after.at - before.at))
 }
 
 function summarize(values: number[]): ReturnType<typeof summarizeBenchmarkSamples> | null {
   return values.length > 0 ? summarizeBenchmarkSamples(values) : null
 }
 
-function summarizeCpu(samples: CpuByType[]): Record<keyof CpuByType, ReturnType<typeof summarize>> {
+function summarizeCpu(
+  samples: CpuMsByKind[]
+): Record<keyof CpuMsByKind, ReturnType<typeof summarize>> {
   return {
     main: summarize(samples.map((sample) => sample.main)),
     renderer: summarize(samples.map((sample) => sample.renderer)),

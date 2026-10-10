@@ -23,16 +23,19 @@ import {
   memoryReport,
   metalWorkingPoolMb,
   nativeCounters,
+  openTerminalTab,
   setTerminalMode,
   usageSnapshot,
   type IdleSample,
-  type TerminalMode
-} from './helpers/native-terminal-idle-usage'
+  type TerminalMode,
+  type UsageSnapshot
+} from './helpers/native-terminal-process-usage'
 
 // Idle cost of terminal panes: CPU time, instructions, timer wakeups and footprint per
 // process, xterm.js vs native Ghostty, at 1/4/8 panes. Opt-in:
 //   ORCA_NATIVE_TERMINAL_IDLE_BENCH=1 SKIP_BUILD=1 pnpm run test:e2e tests/e2e/native-terminal-ghostty-idle.spec.ts
-// ORCA_NATIVE_TERMINAL_IDLE_CURSOR_BLINK=0 measures with cursor blink off.
+// ORCA_NATIVE_TERMINAL_IDLE_CURSOR_BLINK=0 measures with cursor blink off. The same flag runs the
+// memory and wakeup budgets, which a loaded machine skews; the always-on gate counts only events.
 
 const enabled = process.env.ORCA_NATIVE_TERMINAL_IDLE_BENCH === '1'
 const rounds = Number(process.env.ORCA_NATIVE_TERMINAL_IDLE_ROUNDS ?? 3)
@@ -67,7 +70,9 @@ async function focusActiveNativeSurface(page: Page, app: ElectronApplication): P
   }
   await nativeTerminalDebug(app, 'secureInput', [surfaceId, true])
   await nativeTerminalDebug(app, 'focus', [surfaceId])
-  await expect.poll(async () => nativeSurfaceField(app, surfaceId, 'ghosttyFocused')).toBe(true)
+  await expect
+    .poll(async () => nativeSurfaceField(app, surfaceId, 'ghosttyFocused'), { timeout: 15_000 })
+    .toBe(true)
 }
 
 // A fresh tab after the mode switch, so its first pane attaches in that mode.
@@ -98,19 +103,7 @@ async function openFirstPane(
     }, cursorBlink === '1')
   }
   const firstTabId = await orcaPage.evaluate(() => window.__store?.getState().activeTabId)
-  await orcaPage.evaluate(() => {
-    const state = window.__store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    if (!state || !worktreeId) {
-      throw new Error('no active worktree for an idle benchmark tab')
-    }
-    const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
-    state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal', worktreeId)
-  })
-  await expect
-    .poll(async () => orcaPage.evaluate(() => window.__store?.getState().activeTabId))
-    .not.toBe(firstTabId)
+  await openTerminalTab(orcaPage)
   if (firstTabId) {
     await orcaPage.evaluate((id) => window.__store?.getState().closeTab(id), firstTabId)
   }
@@ -175,40 +168,29 @@ for (const variant of ['xterm', 'native', 'native-focused'] as const) {
 }
 
 // Native panes left alone must cost nothing per frame: no frame reports, no app ticks, and no
-// Ghostty redraws except the keyboard owner's cursor timer, whose window must be key.
+// Ghostty redraws except the keyboard owner's cursor timer, whose window must be key. Only event
+// counts are asserted, so a loaded machine slows this test down but cannot fail it.
 test('idle native panes stay quiet and release what they do not draw', async ({
   orcaPage,
   electronApp
 }) => {
   test.setTimeout(5 * 60_000)
   await openFirstPane(orcaPage, electronApp, 'native')
-  await orcaPage.waitForTimeout(SETTLE_MS)
-  const onePane = await mainProcessUsage(electronApp)
   for (let panes = 1; panes < GATE_PANES; panes += 1) {
     await addTerminalPane(orcaPage, electronApp, 'native', panes)
   }
   const surfaceIds = await nativeSurfaceIds(electronApp)
   expect(surfaceIds).toHaveLength(GATE_PANES)
-  await orcaPage.waitForTimeout(SETTLE_MS)
-  // Why: under load a shell may still be drawing its first prompt; idle starts once none draws.
-  await waitForNoPresentedFrames(electronApp).catch(async (error: unknown) => {
-    for (const surfaceId of surfaceIds) {
-      const fields = ['presentedFrames', 'ghosttyFocused', 'ghosttyVisible', 'strayCursorTimers']
-      const state = await Promise.all(
-        fields.map(async (field) => nativeSurfaceField(electronApp, surfaceId, field))
-      )
-      console.log(
-        `surface ${surfaceId} still drawing? ${fields.map((f, i) => `${f}=${String(state[i])}`).join(' ')}`
-      )
-    }
-    throw error
-  })
+  await waitForQuietSurfaces(electronApp, surfaceIds)
 
   const framesBefore = await presentedFramesBySurface(electronApp, surfaceIds)
-  const idle = await measureIdleWindow(electronApp, orcaPage, GATE_PANES, GATE_IDLE_MS)
+  const countersBefore = await nativeCounters(electronApp)
+  await orcaPage.waitForTimeout(GATE_IDLE_MS)
+  const countersIdle = await nativeCounters(electronApp)
   const framesIdle = await presentedFramesBySurface(electronApp, surfaceIds)
-  expect(idle.counters?.ticksPerS).toBe(0)
-  expect(idle.counters?.setFramesPerS).toBe(0)
+  expect(countersBefore).not.toBeNull()
+  expect((countersIdle?.ticks ?? -1) - (countersBefore?.ticks ?? 0), 'app ticks').toBe(0)
+  expect((countersIdle?.setFrames ?? -1) - (countersBefore?.setFrames ?? 0), 'setFrames').toBe(0)
   for (const surfaceId of surfaceIds) {
     // A hidden test app is never active, so no surface is Ghostty-focused or blinks.
     const focused = await nativeSurfaceField(electronApp, surfaceId, 'ghosttyFocused')
@@ -216,19 +198,14 @@ test('idle native panes stay quiet and release what they do not draw', async ({
     const drawn = (framesIdle.get(surfaceId) ?? 0) - (framesBefore.get(surfaceId) ?? 0)
     expect(drawn, `surface ${surfaceId} idle frames`).toBe(0)
   }
-  const fourPanes = await mainProcessUsage(electronApp)
-  const growthMbPerPane =
-    (fourPanes.usage.footprint - onePane.usage.footprint) / (1024 * 1024) / (GATE_PANES - 1)
-  expect(growthMbPerPane).toBeLessThan(GATE_MAIN_MB_PER_PANE)
-  // Why: Metal keeps a ~225 MB working pool resident while anything drew within ~1 s.
-  expect(metalWorkingPoolMb(fourPanes.pid)).toBeLessThan(GATE_METAL_POOL_MB)
-  expect(idle.byKind.main.wakeupsPerS / GATE_PANES).toBeLessThan(GATE_MAIN_WAKEUPS_PER_PANE)
 
   // The keyboard owner of a key window blinks (redraws) on Ghostty's cursor timer; no other does.
   const owner = surfaceIds.at(-1) ?? 0
   await nativeTerminalDebug(electronApp, 'secureInput', [owner, true])
   await nativeTerminalDebug(electronApp, 'focus', [owner])
-  await expect.poll(async () => nativeSurfaceField(electronApp, owner, 'ghosttyFocused')).toBe(true)
+  await expect
+    .poll(async () => nativeSurfaceField(electronApp, owner, 'ghosttyFocused'), { timeout: 15_000 })
+    .toBe(true)
   const framesFocused = await presentedFramesBySurface(electronApp, surfaceIds)
   await orcaPage.waitForTimeout(3_000)
   const framesBlinking = await presentedFramesBySurface(electronApp, surfaceIds)
@@ -265,31 +242,77 @@ test('idle native panes stay quiet and release what they do not draw', async ({
   await nativeTerminalDebug(electronApp, 'windowOcclusion', [null])
   await expect.poll(async () => nativeSurfaceField(electronApp, id, 'ghosttyVisible')).toBe(true)
   await expect
-    .poll(async () => Number(await nativeSurfaceField(electronApp, id, 'presentedFrames')))
+    .poll(async () => Number(await nativeSurfaceField(electronApp, id, 'presentedFrames')), {
+      timeout: 15_000
+    })
     .toBeGreaterThan(occludedFrames)
-  await expect.poll(async () => nativeScreenText(electronApp, id)).toContain('ORCA_OCCLUDED_42')
+  await expect
+    .poll(async () => nativeScreenText(electronApp, id), { timeout: 15_000 })
+    .toContain('ORCA_OCCLUDED_42')
 })
 
-async function waitForNoPresentedFrames(app: ElectronApplication): Promise<void> {
-  const quiet = { frames: -1, since: 0 }
+// Budgets for what idle native panes keep: main footprint per added pane, Metal's working pool
+// and timer wakeups. A loaded machine skews all three, so they run only with the benchmark.
+test('idle native panes stay within memory and wakeup budgets', async ({
+  orcaPage,
+  electronApp
+}) => {
+  test.skip(!enabled, 'Opt-in budgets: set ORCA_NATIVE_TERMINAL_IDLE_BENCH=1')
+  test.setTimeout(5 * 60_000)
+  await openFirstPane(orcaPage, electronApp, 'native')
+  await waitForQuietSurfaces(electronApp, await nativeSurfaceIds(electronApp))
+  const onePane = await mainProcessUsage(electronApp)
+  for (let panes = 1; panes < GATE_PANES; panes += 1) {
+    await addTerminalPane(orcaPage, electronApp, 'native', panes)
+  }
+  await waitForQuietSurfaces(electronApp, await nativeSurfaceIds(electronApp))
+  const idle = await measureIdleWindow(electronApp, orcaPage, GATE_PANES, GATE_IDLE_MS)
+  const fourPanes = await mainProcessUsage(electronApp)
+  const growthMbPerPane =
+    (fourPanes.usage.footprint - onePane.usage.footprint) / (1024 * 1024) / (GATE_PANES - 1)
+  expect(growthMbPerPane).toBeLessThan(GATE_MAIN_MB_PER_PANE)
+  // Why: Metal keeps a ~225 MB working pool resident while anything drew within ~1 s.
+  expect(metalWorkingPoolMb(fourPanes.pid)).toBeLessThan(GATE_METAL_POOL_MB)
+  expect(idle.byKind.main.wakeupsPerS / GATE_PANES).toBeLessThan(GATE_MAIN_WAKEUPS_PER_PANE)
+})
+
+// Why: under load a shell may still be drawing its first prompt or a layout may still be
+// settling; idle starts once no frame, tick or setFrames call has come for 2 s.
+async function waitForQuietSurfaces(app: ElectronApplication, surfaceIds: number[]): Promise<void> {
+  const quiet = { key: '', since: 0 }
   await expect
     .poll(
       async () => {
-        const frames = (await nativeCounters(app))?.presentedFrames ?? -1
-        if (frames !== quiet.frames) {
-          quiet.frames = frames
+        const counters = await nativeCounters(app)
+        const key = counters
+          ? `${counters.presentedFrames}/${counters.ticks}/${counters.setFrames}`
+          : ''
+        if (key !== quiet.key) {
+          quiet.key = key
           quiet.since = Date.now()
         }
-        return Date.now() - quiet.since
+        return key === '' ? 0 : Date.now() - quiet.since
       },
-      { timeout: 30_000, intervals: [250] }
+      { timeout: 90_000, intervals: [250] }
     )
     .toBeGreaterThan(2_000)
+    .catch(async (error: unknown) => {
+      for (const surfaceId of surfaceIds) {
+        const fields = ['presentedFrames', 'ghosttyFocused', 'ghosttyVisible', 'strayCursorTimers']
+        const state = await Promise.all(
+          fields.map(async (field) => nativeSurfaceField(app, surfaceId, field))
+        )
+        console.log(
+          `surface ${surfaceId} still drawing? ${fields.map((f, i) => `${f}=${String(state[i])}`).join(' ')}`
+        )
+      }
+      throw error
+    })
 }
 
 async function mainProcessUsage(
   app: ElectronApplication
-): Promise<Awaited<ReturnType<typeof usageSnapshot>>['processes'][number]> {
+): Promise<UsageSnapshot['processes'][number]> {
   const main = (await usageSnapshot(app)).processes.find((process) => process.kind === 'main')
   if (!main) {
     throw new Error('no main process usage')
@@ -335,8 +358,10 @@ test('a native view follows its pane through a transition that only moves it', a
   }, ptyId)
   expect(shift).toBeGreaterThan(40)
   await expect
-    .poll(async () =>
-      Math.abs(Number(await nativeSurfaceField(electronApp, surfaceId, 'x')) - startX - shift)
+    .poll(
+      async () =>
+        Math.abs(Number(await nativeSurfaceField(electronApp, surfaceId, 'x')) - startX - shift),
+      { timeout: 15_000 }
     )
     .toBeLessThanOrEqual(1)
 })

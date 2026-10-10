@@ -13,9 +13,10 @@ import {
   waitForActiveTerminalManager
 } from './terminal'
 
-// Idle cost of terminal panes per Electron process, from proc_pid_rusage: CPU time and
-// instructions (not wall time, so a loaded machine skews them little), timer wakeups and
-// footprint. Ghostty runs on threads of the main (Browser) process.
+// Shared by the native terminal benchmarks: per-process usage from proc_pid_rusage (CPU time
+// and instructions rather than wall time, so a loaded machine skews them little; timer
+// wakeups; footprint), the addon's idle counters, and the tabs and panes they measure.
+// Ghostty runs on threads of the main (Browser) process.
 
 export type TerminalMode = 'xterm' | 'native'
 export type ProcessKind = 'main' | 'renderer' | 'gpu' | 'other'
@@ -30,10 +31,12 @@ type ProcessUsage = {
   footprint: number
 }
 
-type UsageSnapshot = {
+export type UsageSnapshot = {
   at: number
   processes: { pid: number; kind: ProcessKind; usage: ProcessUsage }[]
 }
+
+export type CpuMsByKind = { main: number; renderer: number; gpu: number; total: number }
 
 export type IdleRates = {
   cpuMsPerS: number
@@ -108,8 +111,29 @@ export async function nativeCounters(
   }
 }
 
+function cpuMs(usage: ProcessUsage): number {
+  return (usage.userNs + usage.systemNs) / 1e6
+}
+
 function emptyRates(): IdleRates & { footprintMb: number } {
   return { cpuMsPerS: 0, wakeupsPerS: 0, instructionsPerS: 0, footprintMb: 0 }
+}
+
+// CPU milliseconds per process kind between two snapshots, for processes alive in both.
+export function cpuMsBetween(before: UsageSnapshot, after: UsageSnapshot): CpuMsByKind {
+  const byKind: CpuMsByKind = { main: 0, renderer: 0, gpu: 0, total: 0 }
+  for (const process of after.processes) {
+    const previous = before.processes.find((candidate) => candidate.pid === process.pid)
+    if (!previous) {
+      continue
+    }
+    const ms = cpuMs(process.usage) - cpuMs(previous.usage)
+    byKind.total += ms
+    if (process.kind !== 'other') {
+      byKind[process.kind] += ms
+    }
+  }
+  return byKind
 }
 
 // Rates between two snapshots for processes alive in both; footprint is the later reading.
@@ -131,10 +155,7 @@ export function idleRatesBetween(
     }
     const rates = byKind[process.kind]
     const { usage } = process
-    rates.cpuMsPerS +=
-      (usage.userNs + usage.systemNs - previous.usage.userNs - previous.usage.systemNs) /
-      1e6 /
-      seconds
+    rates.cpuMsPerS += (cpuMs(usage) - cpuMs(previous.usage)) / seconds
     rates.wakeupsPerS += (usage.interruptWakeups - previous.usage.interruptWakeups) / seconds
     rates.instructionsPerS += (usage.instructions - previous.usage.instructions) / seconds
     rates.footprintMb += usage.footprint / (1024 * 1024)
@@ -168,6 +189,26 @@ export async function measureIdleWindow(
           }
         : null
   }
+}
+
+// A new terminal tab in the active worktree, made active.
+export async function openTerminalTab(page: Page): Promise<string> {
+  const tabId = await page.evaluate(() => {
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    if (!state || !worktreeId) {
+      throw new Error('no active worktree for a benchmark tab')
+    }
+    const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
+    state.setActiveTab(tab.id)
+    state.setActiveTabType('terminal', worktreeId)
+    return tab.id
+  })
+  await expect
+    .poll(async () => page.evaluate(() => window.__store?.getState().activeTabId))
+    .toBe(tabId)
+  await waitForActiveTerminalManager(page, 30_000)
+  return tabId
 }
 
 // Adds one pane by splitting the active one, alternating directions toward a grid.
