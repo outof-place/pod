@@ -1,5 +1,6 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import { resolveTerminalLigaturesEnabled } from '../../../../../shared/terminal-ligatures'
 import type {
   NativeTerminalAppearance,
   NativeTerminalTheme
@@ -56,6 +57,12 @@ export function buildNativeTerminalAppearance(
   return {
     fontFamily: options.fontFamily ?? 'monospace',
     fontSize: options.fontSize ?? 13,
+    ...(options.fontWeight === undefined ? {} : { fontWeight: options.fontWeight }),
+    ...(options.fontWeightBold === undefined ? {} : { fontWeightBold: options.fontWeightBold }),
+    ligatures: resolveTerminalLigaturesEnabled(
+      settings?.terminalLigatures,
+      settings?.terminalFontFamily
+    ),
     lineHeight: options.lineHeight ?? 1,
     letterSpacing: options.letterSpacing ?? 0,
     cursorStyle: options.cursorStyle ?? 'block',
