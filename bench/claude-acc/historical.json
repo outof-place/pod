@@ -1,13 +1,7 @@
 {
-  "about": "claude-acc numbers measured before this benchmark suite existed, each with the date and the source it was measured and published in. They are not re-measured by a normal run; suites/claude-acc.mjs emits them as provenance.kind \"historical\". Every value is copied from its source as written; a range in the source stays a range (min and max, no median).",
+  "about": "claude-acc numbers measured before this benchmark suite existed, each with the date, the public source it was published in (claude-acc's README at a commit) and that commit. They are not re-measured by a normal run; suites/claude-acc.mjs emits them as provenance.kind \"historical\". Every value is copied from its source as written; a range in the source stays a range (min and max, no median).",
   "sources": {
     "readme": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10)",
-    "memory-ultra": "Claude Code project memory claude-acc-ultra.md (2026-10-04, updated 2026-10-06)",
-    "memory-sched": "Claude Code project memory claude-acc-sched.md (2026-10-05)",
-    "memory-devguard": "Claude Code project memory claude-acc-devguard.md (2026-10-04)",
-    "memory-janitor": "Claude Code project memory claude-acc-janitor.md (2026-10-08 and 2026-10-09)",
-    "memory-hotspot": "Claude Code project memory hotspot-turbo.md (2026-10-08)",
-    "memory-mcp": "Claude Code project memory mcp-shared.md (2026-10-09)",
     "perf-py": "outof-place/claude-acc perf.py, DEVTOOLS_BEFORE_MS (origin/main c5e9367)"
   },
   "items": [
@@ -42,7 +36,7 @@
         "subject": "Orca's status hook, synchronous",
         "min": 36,
         "max": 39,
-        "note": "p50 per call, range across hook events; the project memory gives 39-48 ms"
+        "note": "p50 per call, range across hook events"
       },
       "after": {
         "subject": "the same hook with \"async\": true",
@@ -149,7 +143,6 @@
       "date": "2026-10-04",
       "source": "readme",
       "commit": "e90c92f",
-      "note": "The project memory gives 93 -> 28 ms for portivo's main checkout the same day.",
       "remeasured": "claude-acc.ultra.git-speed"
     },
     {
@@ -169,24 +162,6 @@
       "date": "2026-10-09",
       "source": "readme",
       "commit": "f57082c"
-    },
-    {
-      "id": "claude-acc.ultra.fast-npx-hooks",
-      "area": "Ultra",
-      "metric": "format hook per .ts edit in the pnpm monorepo",
-      "unit": "s",
-      "better": "lower",
-      "before": {
-        "subject": "`npx --no-install` in the hook",
-        "median": 6.6
-      },
-      "after": {
-        "subject": "npx-fast-wrap.sh",
-        "median": 0.08,
-        "note": "per .json edit 3.3 s -> 0.04 s"
-      },
-      "date": "2026-10-04",
-      "source": "memory-ultra"
     },
     {
       "id": "claude-acc.ultra.rg-threads",
@@ -247,26 +222,6 @@
       "remeasured": "claude-acc.ultra.launcher-python"
     },
     {
-      "id": "claude-acc.perf-root.devtools",
-      "area": "perf-root",
-      "metric": "first exec of a freshly built Go binary from an Orca terminal",
-      "unit": "ms",
-      "better": "lower",
-      "before": {
-        "subject": "Orca not in Developer Tools",
-        "median": 196.2
-      },
-      "after": {
-        "subject": "Orca in Developer Tools",
-        "min": 4.1,
-        "max": 4.4
-      },
-      "date": "2026-10-04",
-      "source": "memory-ultra",
-      "note": "Measured with `claude-acc perf bench gatekeeper`; the before value is perf.py's DEVTOOLS_BEFORE_MS.",
-      "remeasured": "claude-acc.perf-root.devtools"
-    },
-    {
       "id": "claude-acc.perf-root.vnodes",
       "area": "perf-root",
       "metric": "second `lstat` pass over a pnpm store (358,000 entries)",
@@ -301,25 +256,6 @@
       "date": "2026-10-09",
       "source": "readme",
       "commit": "f57082c"
-    },
-    {
-      "id": "claude-acc.devguard.restart",
-      "area": "Dev server guard",
-      "metric": "memory of one Turbopack dev server",
-      "unit": "GB",
-      "better": "lower",
-      "before": {
-        "subject": "after agent edits",
-        "median": 7.8,
-        "note": "7-9 GB per server"
-      },
-      "after": {
-        "subject": "right after the guard's restart",
-        "median": 2.3,
-        "note": "it grew back to 7.8 GB within 10 minutes of edits, so the guard restarts again"
-      },
-      "date": "2026-10-04",
-      "source": "memory-devguard"
     },
     {
       "id": "claude-acc.devguard.eviction",
@@ -361,73 +297,6 @@
       "commit": "89c546c"
     },
     {
-      "id": "claude-acc.sched.overlap",
-      "area": "Build scheduler",
-      "metric": "total wait of 7 overlapping Go commands",
-      "unit": "s",
-      "better": "lower",
-      "before": {
-        "subject": "one-at-a-time lock (plock)",
-        "median": 454
-      },
-      "after": {
-        "subject": "memory-aware scheduler (sched.py 1.3.4)",
-        "median": 2.8
-      },
-      "date": "2026-10-05",
-      "source": "memory-sched",
-      "remeasured": "claude-acc.sched.overlap"
-    },
-    {
-      "id": "claude-acc.sched.depot",
-      "area": "Build scheduler",
-      "metric": "a heavy Go test with Postgres",
-      "unit": "s",
-      "better": "lower",
-      "before": {
-        "subject": "local run",
-        "median": 53
-      },
-      "after": {
-        "subject": "routed to Depot (--with pg)",
-        "median": 3.4
-      },
-      "date": "2026-10-05",
-      "source": "memory-sched"
-    },
-    {
-      "id": "claude-acc.janitor.compress-apps",
-      "area": "Janitor",
-      "metric": "disk used by /Applications (user-owned apps) after one compress pass",
-      "unit": "MB",
-      "better": "lower",
-      "before": {
-        "subject": "uncompressed",
-        "median": 724
-      },
-      "after": {
-        "subject": "APFS LZFSE (janitor compress)",
-        "median": 360
-      },
-      "date": "2026-10-09",
-      "source": "memory-janitor"
-    },
-    {
-      "id": "claude-acc.janitor.compress-transcripts",
-      "area": "Janitor",
-      "metric": "space saved on Claude Code transcripts by APFS compression",
-      "unit": "%",
-      "better": "higher",
-      "after": {
-        "subject": "APFS LZFSE (janitor compress)",
-        "median": 75,
-        "note": "Word.app 39%"
-      },
-      "date": "2026-10-08",
-      "source": "memory-janitor",
-      "remeasured": "claude-acc.janitor.compress-transcripts"
-    },
-    {
       "id": "claude-acc.mcp-share.cavemem-memory",
       "area": "Shared MCP servers",
       "metric": "memory of cavemem across nine sessions",
@@ -444,7 +313,7 @@
       "date": "2026-10-09",
       "source": "readme",
       "commit": "3813249",
-      "note": "torbaczov the same day: 321 -> 131 MB; together about -520 MB idle, and a new session adds nothing."
+      "note": "A new session adds nothing."
     },
     {
       "id": "claude-acc.mcp-share.connect",
@@ -462,8 +331,7 @@
       },
       "date": "2026-10-09",
       "source": "readme",
-      "commit": "3813249",
-      "note": "torbaczov: 26 -> 7 ms."
+      "commit": "3813249"
     },
     {
       "id": "claude-acc.hotspot.ping-p90",
@@ -507,15 +375,15 @@
   "excluded": [
     {
       "item": "zsh startup 794 -> 170 ms",
-      "why": "a manual .zshrc change (lazy nvm), not a claude-acc feature"
+      "why": "a manual shell config change (lazy nvm), not a claude-acc feature"
     },
     {
       "item": "jev-memory-router warm connection 671 -> 502 ms",
-      "why": "the user's own hook and daemon in ~/.claude/hooks, not in the claude-acc repo"
+      "why": "the user's own hook and daemon, not in the claude-acc repo"
     },
     {
       "item": "fasthooks hook ports",
-      "why": "the user's own Go hooks in ~/.claude/hooks/fasthooks, not in the claude-acc repo"
+      "why": "the user's own Go hooks, not in the claude-acc repo"
     },
     {
       "item": "CLAUDE_CODE_GZIP_REQUEST_BODIES 77 -> 26 KB",
@@ -523,11 +391,11 @@
     },
     {
       "item": "Spotlight privacy, reduce motion, High Power mode",
-      "why": "general Mac tuning (mac-perf-tuning.md)"
+      "why": "general Mac tuning"
     },
     {
       "item": "account rotation without rate-limit stalls",
-      "why": "no measured number exists in the README, the tests or the memory notes"
+      "why": "no published measured number"
     },
     {
       "item": "Docker VM capped at 6 GB",
@@ -536,6 +404,10 @@
     {
       "item": "fan speeds and the 115 °C sensor reading",
       "why": "hardware control, not a speed or memory metric"
+    },
+    {
+      "item": "fast-npx-hooks, the dev server guard's restart, Depot routing, /Applications compression, the scheduler overlap, transcript compression and the Developer Tools first exec",
+      "why": "their earlier numbers were never published; the scheduler, compression and Developer Tools are re-measured by --fresh instead"
     }
   ]
 }
