@@ -1,11 +1,15 @@
 import { skillShareIdFromArguments } from '../../shared/skill-share-link'
 import { productUrlSchemes } from '../product-identity/product-identity'
+import { areStablyServicesEnabled } from '../product-identity/product-overlay'
 
 export class SkillShareDeepLinkState {
   private pendingShareId: string | null = null
 
   capture(argv: readonly string[], publish?: (shareId: string) => void): boolean {
-    const shareId = skillShareIdFromArguments(argv, productUrlSchemes())
+    // Fork-only (Pod): shared skills are served by Stably's app.orca.dev.
+    const shareId = areStablyServicesEnabled()
+      ? skillShareIdFromArguments(argv, productUrlSchemes())
+      : null
     if (!shareId) {
       return false
     }
