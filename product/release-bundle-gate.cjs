@@ -17,7 +17,10 @@ const PRODUCT_FILE_EXCLUSIONS = [
   '!dist-*{,/**/*}',
   '!test-results{,/**/*}',
   '!playwright-report{,/**/*}',
-  '!.ruff_cache{,/**/*}'
+  '!.ruff_cache{,/**/*}',
+  // PodNative's asset catalog and the brand authoring scripts: no Electron code reads them.
+  '!resources/brand/native{,/**/*}',
+  '!resources/brand/{generate,preview}.mjs'
 ]
 const FORBIDDEN_TOP_LEVEL = /^(dist|dist-.*|test-results|playwright-report)$/
 // Why dot folders too: caches are hidden folders, while the dot files upstream ships are configs.
