@@ -95,16 +95,22 @@ export function createClaudeOAuthSandboxCredentials(
     read?: (target: ClaudeLoginTarget) => Promise<string | null>
     now?: () => number
   } = {}
-): SandboxAnthropicCredentials & { rejected(): void } {
+): Required<Pick<SandboxAnthropicCredentials, 'launched' | 'released' | 'rejected'>> &
+  SandboxAnthropicCredentials {
   const targetOf = deps.target ?? (() => resolveMacClaudeLoginTarget())
   const read = deps.read ?? readClaudeLoginItem
   const now = deps.now ?? Date.now
-  let cached: { key: string; login: ClaudeLogin | null; readAt: number } | null = null
-  let reading: { key: string; done: Promise<ClaudeLogin | null> } | null = null
+  // Each launched sandbox keeps the login its launch resolved, as a Mac pane keeps the account it
+  // was spawned with; a refusal (a routed account whose folder is gone) is kept the same way.
+  const pins = new Map<string, ClaudeLoginTarget | SandboxCredentialError>()
+  const cached = new Map<string, { login: ClaudeLogin | null; readAt: number }>()
+  const reading = new Map<string, Promise<ClaudeLogin | null>>()
+  const keyOf = (target: ClaudeLoginTarget) => `${target.account}:${target.configDir ?? ''}`
 
   const reread = (target: ClaudeLoginTarget, key: string): Promise<ClaudeLogin | null> => {
-    if (reading?.key === key) {
-      return reading.done
+    const running = reading.get(key)
+    if (running) {
+      return running
     }
     const done = (async () => {
       let login: ClaudeLogin | null
@@ -113,16 +119,12 @@ export function createClaudeOAuthSandboxCredentials(
         login = raw ? parseClaudeLogin(raw) : null
       } catch {
         // Keychain unavailable: keep a still-valid token for this login and retry after the interval.
-        login = cached?.key === key ? cached.login : null
+        login = cached.get(key)?.login ?? null
       }
-      cached = { key, login, readAt: now() }
+      cached.set(key, { login, readAt: now() })
       return login
-    })().finally(() => {
-      if (reading?.done === done) {
-        reading = null
-      }
-    })
-    reading = { key, done }
+    })().finally(() => reading.delete(key))
+    reading.set(key, done)
     return done
   }
 
@@ -131,14 +133,38 @@ export function createClaudeOAuthSandboxCredentials(
 
   return {
     mode: () => 'oauth',
-    async authHeaders() {
-      const target = targetOf()
-      const key = `${target.account}:${target.configDir ?? ''}`
-      if (cached?.key === key && fresh(cached.login)) {
-        if (now() - cached.readAt >= RECHECK_MS) {
+    launched({ machine }) {
+      try {
+        pins.set(machine, targetOf())
+      } catch (error) {
+        pins.set(
+          machine,
+          error instanceof SandboxCredentialError
+            ? error
+            : new SandboxCredentialError('The selected Claude account is unavailable.')
+        )
+      }
+    },
+    /** The sandbox is gone; with none left, no token stays in memory. */
+    released({ machine }) {
+      pins.delete(machine)
+      if (pins.size === 0) {
+        cached.clear()
+      }
+    },
+    async authHeaders({ machine }) {
+      const pinned = pins.get(machine)
+      if (pinned instanceof SandboxCredentialError) {
+        throw pinned
+      }
+      const target = pinned ?? targetOf()
+      const key = keyOf(target)
+      const entry = cached.get(key)
+      if (entry && fresh(entry.login)) {
+        if (now() - entry.readAt >= RECHECK_MS) {
           void reread(target, key)
         }
-        return { authorization: `Bearer ${cached.login.accessToken}` }
+        return { authorization: `Bearer ${entry.login.accessToken}` }
       }
       const login = await reread(target, key)
       if (fresh(login)) {
@@ -152,7 +178,7 @@ export function createClaudeOAuthSandboxCredentials(
     },
     /** The API refused the token (401): the next request waits for a fresh read of the item. */
     rejected() {
-      cached = null
+      cached.clear()
     }
   }
 }
