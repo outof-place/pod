@@ -124,10 +124,10 @@ export function PodOrbstackWorktreeList(props: WorktreeListProps): React.JSX.Ele
           ))}
         </ul>
       )}
-      <p data-testid="pod-orbstack-sandbox-limitation" className="text-xs text-muted-foreground">
+      <p data-testid="pod-orbstack-sandbox-boundary" className="text-xs text-muted-foreground">
         {translate(
-          'podOrbstack.sandbox.limitation',
-          'Agent sandboxes see only their worktree, but they can still reach every service on this Mac that listens on localhost. Do not count on them to shield local servers or databases.'
+          'podOrbstack.sandbox.boundary',
+          'Agent sandboxes see only their worktree and reach this Mac only through Pod for agent status. They can still reach the internet, so code in the worktree can leave the Mac.'
         )}
       </p>
     </section>
