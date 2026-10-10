@@ -1,0 +1,73 @@
+name: macOS foreground process
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'native/proc-info-darwin/**'
+      - 'src/shared/native-process-info*'
+      - 'src/main/pty/posix-pty-foreground-group*'
+      - 'config/proc-info-macos-resources.cjs'
+      - 'config/scripts/*proc-info*'
+      - 'config/scripts/*native-process-info*'
+      - 'config/scripts/*macos-foreground-addon*'
+      - 'config/scripts/electron-builder-config.test.mjs'
+      - 'config/electron-builder.config.cjs'
+      - '.github/workflows/macos-foreground-process.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  push:
+    branches: [main]
+    paths:
+      - 'native/proc-info-darwin/**'
+      - 'src/shared/native-process-info*'
+      - 'src/main/pty/posix-pty-foreground-group*'
+      - 'config/proc-info-macos-resources.cjs'
+      - 'config/scripts/*proc-info*'
+      - 'config/scripts/*native-process-info*'
+      - 'config/scripts/*macos-foreground-addon*'
+      - 'config/scripts/electron-builder-config.test.mjs'
+      - 'config/electron-builder.config.cjs'
+      - '.github/workflows/macos-foreground-process.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-foreground-process-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  foreground-process:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          cache-electron-package: 'true'
+      - name: Build both macOS architectures
+        run: node config/scripts/build-proc-info-macos.mjs
+      - name: Verify the universal addon
+        run: lipo -verify_arch arm64 x86_64 native/proc-info-darwin/.build/release/orca-proc-info.node
+      - name: Verify kernel lookup, resize routing, and package resources
+        run: >-
+          pnpm test src/shared/native-process-info.test.ts
+          src/main/pty/posix-pty-foreground-group.test.ts
+          config/scripts/proc-info-macos-resources.test.mjs
+          config/scripts/electron-builder-config.test.mjs
+      - name: Verify signed Electron resources and real resize signals
+        run: node config/scripts/smoke-macos-foreground-addon.mjs
