@@ -102,6 +102,28 @@ describe('leading-edge flush', () => {
     batcher.dispose()
   })
 
+  it('never holds a steady trickle longer than the 5 ms timer from its first pending byte', () => {
+    const pushedAt = new Map<string, number>()
+    const waits: number[] = []
+    const batcher = createTerminalOutputBatcher((data) => {
+      for (const id of data.match(/#\d+;/g) ?? []) {
+        waits.push(performance.now() - pushedAt.get(id)!)
+      }
+    })
+    // 100 B every 1 ms never counts as quiet, so only the first chunk takes the leading edge.
+    for (let i = 0; i < 200; i += 1) {
+      const id = `#${i};`
+      pushedAt.set(id, performance.now())
+      batcher.push(id.padEnd(100, '.'))
+      vi.advanceTimersByTime(1)
+    }
+    vi.advanceTimersByTime(5)
+    expect(waits).toHaveLength(200)
+    expect(waits[0]).toBe(0)
+    expect(Math.max(...waits)).toBeLessThanOrEqual(5)
+    batcher.dispose()
+  })
+
   it('keeps batching chunks larger than the leading-edge limit', () => {
     const { batcher, delivered } = collect()
     batcher.push('x'.repeat(TERMINAL_OUTPUT_LEADING_EDGE_MAX_BYTES + 1))
