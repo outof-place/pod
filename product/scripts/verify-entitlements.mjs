@@ -16,7 +16,7 @@ import {
   realpathSync
 } from 'node:fs'
 import { createRequire } from 'node:module'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 const require = createRequire(import.meta.url)
 const policy = require('../entitlements-policy.cjs')
@@ -79,19 +79,21 @@ export function signedCode(app) {
   return found
 }
 
+export function plistKeys(file) {
+  return plistJson(readFileSync(resolve(ROOT, file), 'utf8'))
+}
+
 /** Keys the electron-builder config grants the app and Electron's helpers. */
 export function electronEntitlementKeys(
   config = require(join(ROOT, 'product', 'electron-builder.pod.cjs'))
 ) {
   const files = [config.mac.entitlements, config.mac.entitlementsInherit].filter(Boolean)
-  return new Set(
-    files.flatMap((file) => Object.keys(plistJson(readFileSync(join(ROOT, file), 'utf8'))))
-  )
+  return new Set(files.flatMap((file) => Object.keys(plistKeys(file))))
 }
 
 export function allowedKeys(rule, electronKeys) {
   const file = policy.entitlementsFile(rule)
-  return file ? new Set(Object.keys(plistJson(readFileSync(file, 'utf8')))) : electronKeys
+  return file ? new Set(Object.keys(plistKeys(file))) : electronKeys
 }
 
 /** Each code path whose entitlements step outside its rule, with the keys that do. */
