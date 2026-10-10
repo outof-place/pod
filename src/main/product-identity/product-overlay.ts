@@ -13,6 +13,13 @@ export function areStablyServicesEnabled(): boolean {
   return getProductIdentity()?.stablyServices !== false && !isStablyServicesOffByEnv(process.env)
 }
 
+/** Hides a menu item that only works against Stably's services; returns it untouched otherwise. */
+export function stablyServicesMenuItem(
+  item: Electron.MenuItemConstructorOptions
+): Electron.MenuItemConstructorOptions {
+  return areStablyServicesEnabled() ? item : { ...item, visible: false }
+}
+
 export function productDisplayName(): string {
   return getProductIdentity()?.displayName ?? 'Orca'
 }
