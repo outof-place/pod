@@ -62,6 +62,22 @@ describe('sandbox OAuth account selection', () => {
     })
   })
 
+  it('reads the routed folder under either name the router has had', () => {
+    expect(
+      resolveMacClaudeLoginTarget({ router: { routedHome: () => profileHome }, env: {} })
+    ).toEqual({ account: 'profile', configDir: profileHome })
+    expect(() =>
+      resolveMacClaudeLoginTarget({
+        router: {
+          routedHome: () => {
+            throw new Error("The selected Claude account's folder is missing.")
+          }
+        },
+        env: {}
+      })
+    ).toThrow(SandboxCredentialError)
+  })
+
   it("uses the System default when no account is routed, honoring the user's own CLAUDE_CONFIG_DIR", () => {
     expect(resolveMacClaudeLoginTarget({ router: null, env: {} })).toEqual({
       account: 'system',
