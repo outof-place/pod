@@ -3,6 +3,8 @@
 // (LOCAL_PEERTOKEN) and checks its code signature against a requirement (Security framework).
 //
 //   checkPeer(fd: number, requirement: string) -> { ok: boolean, pid: number, error?: string }
+#include "browser_frames.h"
+
 #include <CoreFoundation/CoreFoundation.h>
 #include <Security/Security.h>
 #include <bsm/libbsm.h>
@@ -98,5 +100,7 @@ NAPI_MODULE_INIT() {
   napi_value fn;
   napi_create_function(env, "checkPeer", NAPI_AUTO_LENGTH, check_peer, NULL, &fn);
   napi_set_named_property(env, exports, "checkPeer", fn);
+  // The browser pane's frame sender rides in the same addon: one native module to package.
+  pod_browser_frames_register(env, exports);
   return exports;
 }
