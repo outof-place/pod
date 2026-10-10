@@ -3,15 +3,19 @@ import {
   _resetHiddenRendererPtyDeliveryGateForTest,
   clearHiddenRendererPtyDeliveryState,
   getHiddenRendererPtyDeliveryDebug,
+  isDaemonQueryResponderConfirmed,
   isHiddenPtyDeliveryGateEnabled,
   isHiddenRendererPtyViewGated,
   markHiddenRendererPty,
   markRuntimeOwnedHiddenRendererPty,
   recordHiddenRendererPtyDataDrop,
   registerHiddenRendererPtyMarkListener,
+  registerHiddenRendererPtyUnmarkListener,
   resetRendererScopedHiddenPtyDeliveryState,
+  setDaemonQueryResponderConfirmed,
+  setHiddenDeliveryDaemonHandoff,
   setHiddenDeliveryModelHandoff,
-  setHiddenDeliveryModelHandoffChangeListener,
+  setHiddenDeliveryViewGateChangeListener,
   setRendererPtyDeliveryInterest,
   shouldDeliverHiddenRendererPtyDataToSidecarsOnly,
   shouldDropHiddenRendererPtyData,
@@ -144,7 +148,8 @@ describe('pty hidden delivery gate', () => {
       hiddenDeliveryGatedPtyCount: 1,
       deliveryInterestPtyCount: 1,
       hiddenDeliveryDroppedChars: 12,
-      hiddenDeliveryDroppedChunks: 2
+      hiddenDeliveryDroppedChunks: 2,
+      daemonQueryResponderPtyCount: 0
     })
 
     clearHiddenRendererPtyDeliveryState(PTY_ID)
@@ -158,7 +163,7 @@ describe('pty hidden delivery gate', () => {
 
   it('keeps feeding a hidden PTY while its main model hands off, opened from the mark itself', () => {
     const changes: string[] = []
-    setHiddenDeliveryModelHandoffChangeListener((id) => changes.push(id))
+    setHiddenDeliveryViewGateChangeListener((id) => changes.push(id))
     registerHiddenRendererPtyMarkListener((id) => setHiddenDeliveryModelHandoff(id, true))
 
     markHiddenRendererPty(PTY_ID)
@@ -188,5 +193,58 @@ describe('pty hidden delivery gate', () => {
     setHiddenDeliveryModelHandoff(PTY_ID, false)
     expect(isHiddenRendererPtyViewGated(PTY_ID, {})).toBe(true)
     expect(shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {})).toBe(true)
+  })
+
+  it('keeps the view answering a hidden PTY until the daemon confirms it answers', () => {
+    const changes: string[] = []
+    setHiddenDeliveryViewGateChangeListener((id) => changes.push(id))
+    registerHiddenRendererPtyMarkListener((id) => setHiddenDeliveryDaemonHandoff(id, true))
+    markHiddenRendererPty(PTY_ID)
+    expect(isHiddenRendererPtyViewGated(PTY_ID, {})).toBe(false)
+
+    setDaemonQueryResponderConfirmed(PTY_ID, true)
+    expect(isDaemonQueryResponderConfirmed(PTY_ID)).toBe(true)
+    expect(isHiddenRendererPtyViewGated(PTY_ID, {})).toBe(true)
+    expect(changes).toEqual([PTY_ID, PTY_ID])
+  })
+
+  it('gates a revealed view until the daemon lets go, then asks for the deferred restore', () => {
+    const unmarked: string[] = []
+    registerHiddenRendererPtyUnmarkListener((id) => {
+      unmarked.push(id)
+      setHiddenDeliveryDaemonHandoff(id, false)
+    })
+    markHiddenRendererPty(PTY_ID)
+    setHiddenDeliveryDaemonHandoff(PTY_ID, true)
+    setDaemonQueryResponderConfirmed(PTY_ID, true)
+    expect(recordHiddenRendererPtyDataDrop(PTY_ID, 4).shouldEmitRestoreMarker).toBe(true)
+
+    expect(unmarkHiddenRendererPty(PTY_ID)).toEqual({ droppedWhileHidden: false })
+    expect(unmarked).toEqual([PTY_ID])
+    // Why: the daemon still answers these bytes, so the view must not parse them.
+    expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(true)
+    expect(recordHiddenRendererPtyDataDrop(PTY_ID, 4).shouldEmitRestoreMarker).toBe(false)
+
+    expect(setDaemonQueryResponderConfirmed(PTY_ID, false)).toEqual({ droppedWhileHidden: true })
+    expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(false)
+    expect(setDaemonQueryResponderConfirmed(PTY_ID, false)).toEqual({ droppedWhileHidden: false })
+  })
+
+  it('defers a first drop after reveal to the take-back marker', () => {
+    markHiddenRendererPty(PTY_ID)
+    setDaemonQueryResponderConfirmed(PTY_ID, true)
+    unmarkHiddenRendererPty(PTY_ID)
+
+    expect(recordHiddenRendererPtyDataDrop(PTY_ID, 4).shouldEmitRestoreMarker).toBe(false)
+    expect(setDaemonQueryResponderConfirmed(PTY_ID, false)).toEqual({ droppedWhileHidden: true })
+  })
+
+  it('gates on a daemon confirmation even with the gate switched off, and clears on teardown', () => {
+    setDaemonQueryResponderConfirmed(PTY_ID, true)
+    expect(isHiddenRendererPtyViewGated(PTY_ID, { terminalHiddenDeliveryGate: false })).toBe(true)
+
+    clearHiddenRendererPtyDeliveryState(PTY_ID)
+    expect(isDaemonQueryResponderConfirmed(PTY_ID)).toBe(false)
+    expect(isHiddenRendererPtyViewGated(PTY_ID, {})).toBe(false)
   })
 })

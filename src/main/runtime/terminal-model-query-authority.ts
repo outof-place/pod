@@ -12,6 +12,7 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import {
+  isDaemonQueryResponderConfirmed,
   isHiddenPtyDeliveryGateEnabled,
   rendererPtyViewDelivery
 } from '../ipc/pty-hidden-delivery-gate'
@@ -29,22 +30,37 @@ export function isTerminalModelQueryAuthorityEnabled(
   return isHiddenPtyDeliveryGateEnabled(settings) && settings?.terminalModelQueryAuthority !== false
 }
 
-/** Per-chunk reply-ownership predicate, evaluated once at ingestion in
- *  OrcaRuntimeService.onPtyData — the same module state and tick as the
- *  hidden-gate drop and sidecar-only sites, so "view skips the chunk" and
- *  "main answers" cannot diverge for live chunks. Remote view subscribers
- *  (mobile/web/remote desktop xterms on the multiplexed stream) keep view
- *  authority, so main yields while one is attached. */
-export function shouldModelAnswerHiddenPtyQueries(opts: {
+/** Who answers a live chunk's queries: a view that parses it, main's model, or the PTY's
+ *  daemon after its in-order delegation marker. */
+export type TerminalQueryResponder = 'view' | 'main' | 'daemon'
+
+type TerminalQueryResponderOptions = {
   ptyId: string
   settings: TerminalModelQueryAuthoritySettings | null | undefined
   hasRemoteViewSubscriber: boolean
-}): boolean {
-  return (
-    isTerminalModelQueryAuthorityEnabled(opts.settings) &&
+}
+
+/** Per-chunk reply ownership, evaluated once at ingestion in
+ *  OrcaRuntimeService.onPtyData — the same module state and tick as the
+ *  hidden-gate drop and sidecar-only sites, so "view skips the chunk" and
+ *  "someone else answers" cannot diverge for live chunks. Remote view
+ *  subscribers (mobile/web/remote desktop xterms on the multiplexed stream)
+ *  keep view authority, so main yields while one is attached. */
+export function resolveTerminalQueryResponder(
+  opts: TerminalQueryResponderOptions
+): TerminalQueryResponder {
+  if (isDaemonQueryResponderConfirmed(opts.ptyId)) {
+    return 'daemon'
+  }
+  return isTerminalModelQueryAuthorityEnabled(opts.settings) &&
     !opts.hasRemoteViewSubscriber &&
     rendererPtyViewDelivery(opts.ptyId, opts.settings) !== 'parse'
-  )
+    ? 'main'
+    : 'view'
+}
+
+export function shouldModelAnswerHiddenPtyQueries(opts: TerminalQueryResponderOptions): boolean {
+  return resolveTerminalQueryResponder(opts) === 'main'
 }
 
 /** Main-side mirror of the renderer's isLocalNativeWindowsPty

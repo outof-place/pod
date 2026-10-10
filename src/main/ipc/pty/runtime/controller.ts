@@ -88,6 +88,10 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       serializeProviderBufferFromRuntimeController(ptyId, opts),
     canProvideSettledBufferSnapshot: (ptyId) =>
       tryGetProviderForPty(ptyId)?.canProvideSettledBufferSnapshot?.(ptyId) === true,
+    canDelegateDaemonQueryResponder: (ptyId) =>
+      tryGetProviderForPty(ptyId)?.canDelegateQueryResponder?.(ptyId) === true,
+    setDaemonQueryResponder: (ptyId, responder, opts) =>
+      tryGetProviderForPty(ptyId)?.setSessionQueryResponder?.(ptyId, responder, opts) === true,
     hasRendererSerializer: (ptyId) => hasRendererSerializerFromRuntimeController(ptyId),
     getRendererSerializerGeneration: (ptyId) =>
       getRendererSerializerGenerationFromRuntimeController(ptyId),
