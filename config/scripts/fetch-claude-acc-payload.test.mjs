@@ -76,7 +76,12 @@ describe('claude-acc payload bytecode', () => {
 
 /** What electron-builder copies of `payloadDir` into Contents/Resources/claude-acc. */
 async function packaged(payloadDir) {
-  const [entry] = podAccMacExtraResources({ payloadDir, distroPlugins: temp() })
+  const pythonDir = temp()
+  for (const file of ['bin/python3', 'lib/python3.14/os.py']) {
+    mkdirSync(dirname(join(pythonDir, file)), { recursive: true })
+    writeFileSync(join(pythonDir, file), '')
+  }
+  const [entry] = podAccMacExtraResources({ payloadDir, pythonDir, distroPlugins: temp() })
   const out = join(temp(), 'Resources', entry.to)
   await copyFiles([new FileMatcher(entry.from, out, (s) => s, entry.filter)], null, false)
   return out

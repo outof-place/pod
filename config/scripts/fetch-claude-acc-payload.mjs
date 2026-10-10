@@ -35,9 +35,10 @@ export function readPin(path = PIN) {
  * (pod-acc-run) the menu helper is Pod Menu.app and the launchd plists ship for SMAppService.
  */
 export function assertPayload(dir) {
+  // a 1.31 payload without pod-acc-run ships its helper as Pod Menu.app too (acc-lifecycle.ts)
   const helper = existsSync(join(dir, 'pod-acc-run'))
     ? ['pod-acc-run', 'Pod Menu.app', 'LaunchAgents']
-    : ['Claude Acc.app']
+    : [existsSync(join(dir, 'Pod Menu.app')) ? 'Pod Menu.app' : 'Claude Acc.app']
   for (const name of ['VERSION', 'setup.sh', 'owner.py', 'claude-acc-hook', ...helper]) {
     if (!existsSync(join(dir, name))) {
       throw new Error(`claude-acc payload ${dir} has no ${name}`)
