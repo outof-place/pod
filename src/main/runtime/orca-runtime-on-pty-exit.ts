@@ -139,6 +139,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       this.providerSnapshotPreferredPtys.delete(ptyId)
       this.providerModeTrackersByPtyId.delete(ptyId)
       this.mainTerminalModelDormancy.forget(ptyId)
+      this.daemonQueryResponderDelegation.forget(ptyId)
       this.providerModeSnapshotScansByPtyId.delete(ptyId)
       this.providerBufferAcquisitionsByPtyId.delete(ptyId)
       this.providerVisibleStateByPtyId.delete(ptyId)
