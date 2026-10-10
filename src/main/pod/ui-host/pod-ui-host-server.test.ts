@@ -1,4 +1,12 @@
-import { chmodSync, mkdirSync, mkdtempSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { createConnection, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,6 +17,7 @@ import { PodUiHostServer, type PodUiHostServerOptions } from './pod-ui-host-serv
 const TOKEN = 'runtime-token'
 const servers: PodUiHostServer[] = []
 const sockets: Socket[] = []
+const scratchDirectories: string[] = []
 
 afterEach(() => {
   for (const socket of sockets.splice(0)) {
@@ -17,11 +26,18 @@ afterEach(() => {
   for (const server of servers.splice(0)) {
     server.close()
   }
+  for (const directory of scratchDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
 
 // Why /tmp: sun_path is 104 bytes and macOS's per-user tmpdir is long.
 function scratch(): string {
-  return mkdtempSync(join(process.platform === 'darwin' ? '/tmp' : tmpdir(), 'pod-ui-host-'))
+  const directory = mkdtempSync(
+    join(process.platform === 'darwin' ? '/tmp' : tmpdir(), 'pod-ui-host-')
+  )
+  scratchDirectories.push(directory)
+  return directory
 }
 
 async function startServer(overrides: Partial<PodUiHostServerOptions> = {}) {
