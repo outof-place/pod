@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import type { WorktreeBasePollEvent } from './worktree-base-directory-poller'
 import type { GitCommonEntrySnapshot } from './worktree-git-common-entry-snapshot'
+import { diffEntryReftableSignature } from './worktree-git-common-reftable-stack'
 
 const LINKED_WORKTREE_INDEX_FILE = 'index'
 const LINKED_WORKTREE_HEAD_LOG_FILE = join('logs', 'HEAD')
@@ -100,6 +101,7 @@ export function diffGitCommon(
     if (headLogDiff) {
       events.push({ type: headLogDiff, path: join(entryPath, LINKED_WORKTREE_HEAD_LOG_FILE) })
     }
+    events.push(...diffEntryReftableSignature(entryPath, prevEntry, entry))
   }
   for (const entryPath of prev.entries.keys()) {
     if (!next.entries.has(entryPath)) {
