@@ -56,6 +56,8 @@ uint64_t g_presented_frames = 0;
 NSHashTable<NSWindow*>* g_shown_windows = nil;
 // debugWindowOcclusion: -1 follows AppKit, 0 forces every window occluded, 1 on screen.
 int g_window_occlusion_override = -1;
+// debugMousePressed: -1 follows the hardware buttons, which synthesized E2E clicks never press.
+int g_mouse_pressed_override = -1;
 // KVO context for the layer contents Ghostty swaps on every presented frame.
 char g_presented_frames_context = 0;
 std::atomic<int32_t> g_next_id{1};
@@ -2206,12 +2208,20 @@ napi_value SetFrames(napi_env env, napi_callback_info info) {
   return Undefined(env);
 }
 
-// focus(id): void
+// focus(id, unlessMousePressed?): void
 napi_value Focus(napi_env env, napi_callback_info info) {
-  size_t argc = 1;
-  napi_value argv[1];
+  size_t argc = 2;
+  napi_value argv[2];
   napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
   OrcaGhosttySurfaceView* view = ViewForId(GetInt(env, argv[0]));
+  // A press is still on its way to whatever it landed on; taking the keyboard now would blur
+  // the page mid-click and cancel it (tab strip clicks, drags).
+  napi_valuetype type = napi_undefined;
+  const bool unlessMousePressed = argc >= 2 && napi_typeof(env, argv[1], &type) == napi_ok &&
+                                  type == napi_boolean && GetBool(env, argv[1]);
+  const bool mousePressed = g_mouse_pressed_override >= 0 ? g_mouse_pressed_override == 1
+                                                           : NSEvent.pressedMouseButtons != 0;
+  if (unlessMousePressed && mousePressed) return Undefined(env);
   if (view != nil && !view.hidden && view.window.firstResponder != view) [view.window makeFirstResponder:view];
   return Undefined(env);
 }
@@ -2980,6 +2990,17 @@ napi_value DebugWindowOcclusion(napi_env env, napi_callback_info info) {
   return Undefined(env);
 }
 
+// debugMousePressed(pressed: boolean | null): what focus's unlessMousePressed sees; null follows NSEvent.
+napi_value DebugMousePressed(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argv[1];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  napi_valuetype type = napi_undefined;
+  if (argc > 0) napi_typeof(env, argv[0], &type);
+  g_mouse_pressed_override = type == napi_boolean ? (GetBool(env, argv[0]) ? 1 : 0) : -1;
+  return Undefined(env);
+}
+
 napi_value ModuleInit(napi_env env, napi_value exports) {
   const napi_property_descriptor props[] = {
       {"init", nullptr, Init, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -3005,6 +3026,7 @@ napi_value ModuleInit(napi_env env, napi_value exports) {
       {"releaseKeyboard", nullptr, ReleaseKeyboard, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugDrop", nullptr, DebugDrop, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugDropOutcome", nullptr, DebugDropOutcome, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugMousePressed", nullptr, DebugMousePressed, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugModifiersChanged", nullptr, DebugModifiersChanged, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"setSurfaceShellPid", nullptr, SetSurfaceShellPid, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"setSurfaceAccessibilityLabel", nullptr, SetSurfaceAccessibilityLabel, nullptr, nullptr, nullptr, napi_default,

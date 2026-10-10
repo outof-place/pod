@@ -33,6 +33,8 @@ export type NativeTerminalDebugOp =
   | 'mainFeed'
   | 'counters'
   | 'windowOcclusion'
+  | 'mousePressed'
+  | 'releaseKeyboard'
 
 export const RETURN_KEY_CODE = 0x24
 
