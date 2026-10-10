@@ -84,7 +84,8 @@ function install(dir, into) {
 
 /**
  * Removes every __pycache__ folder and .pyc file under `dir` (a --from checkout that ran its
- * tests has them): nothing Python cached may ship inside Pod.app. Returns how many it removed.
+ * tests has them): nothing Python cached may ship inside Pod.app. A plain file named __pycache__
+ * stays: from 1.31.5 it is the payload's guard against the folder. Returns how many it removed.
  */
 export function dropBytecode(dir) {
   let removed = 0
@@ -130,6 +131,8 @@ export async function fetchPayload({
   }
   const stamp = join(into, STAMP)
   if (existsSync(stamp) && JSON.parse(readFileSync(stamp, 'utf8')).sha256 === pin.sha256) {
+    // a run from resources/claude-acc since the download may have left a cache
+    dropBytecode(into)
     return { version: assertPayload(into), source: 'cached' }
   }
   const url = `https://github.com/${pin.repository}/releases/download/${pin.tag}/${pin.asset}`
