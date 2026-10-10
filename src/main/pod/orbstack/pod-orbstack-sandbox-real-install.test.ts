@@ -262,6 +262,7 @@ describe.skipIf(!enabled)('real OrbStack sandbox', () => {
 
           // OAuth, as Pod ships it: the real source over a fake login, Claude Code on the OAuth placeholder.
           const oauth = createClaudeOAuthSandboxCredentials({
+            allowed: () => true,
             target: () => ({ account: 'system', configDir: null }),
             read: async () =>
               JSON.stringify({
