@@ -177,6 +177,12 @@ describe('Pod claude-acc extraResources', () => {
     expect(ignored(`${app}/lib/python3.14/__pycache__/os.cpython-314.pyc`)).toBe(true)
     expect(ignored(`${app}/lib/python3.14/json/decoder.py`)).toBe(true)
     expect(ignored(`${app}/lib/python3.14/lib-dynload/_dbm.cpython-314-darwin.so`)).toBe(false)
+    // a compiled package outside lib-dynload is a Mach-O too: notarization wants it signed
+    expect(ignored(`${app}/lib/python3.14/site-packages/pkg/_speedups.cpython-314-darwin.so`)).toBe(
+      false
+    )
+    expect(ignored(`${app}/lib/python3.14/site-packages/pkg/libpkg.dylib`)).toBe(false)
+    expect(ignored(`${app}/lib/python3.14/ensurepip/_bundled/pip-25.0-py3-none-any.whl`)).toBe(true)
     expect(ignored(`${app}/bin/python3.14`)).toBe(false)
     expect(ignored('/dist/mac-arm64/Pod.app/Contents/Resources/claude-acc/fanctl')).toBe(false)
   })
