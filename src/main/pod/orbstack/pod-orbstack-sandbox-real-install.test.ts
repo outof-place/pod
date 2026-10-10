@@ -8,7 +8,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcess, spawnProcess } from '../../../shared/child-process/run-process'
-import { createAnthropicRoute } from './pod-orbstack-anthropic-route'
+import { createClaudeOAuthSandboxCredentials } from './pod-orbstack-anthropic-oauth'
+import {
+  createAnthropicRoute,
+  type SandboxAnthropicCredentials
+} from './pod-orbstack-anthropic-route'
 import { createClaudeReleaseCache, sandboxClaudePlatform } from './pod-orbstack-claude-release'
 import { createSandboxRelays } from './pod-orbstack-relay'
 import { podOrbstackMachineName } from './pod-orbstack-recipe'
@@ -34,6 +38,7 @@ async function listen(server: Pick<Server, 'listen' | 'address'>): Promise<numbe
 }
 
 const STUB_TEXT = 'Hello from the Pod stub API'
+const FAKE_OAUTH_TOKEN = 'pod-e2e-fake-oauth-token'
 
 /** A stand-in for api.anthropic.com with its own CA: no real API, no real credential. */
 async function stubAnthropicApi() {
@@ -186,13 +191,15 @@ describe.skipIf(!enabled)('real OrbStack sandbox', () => {
         // anthropic-api route: real Claude Code in the VM against a stub API on the Mac.
         const api = await stubAnthropicApi()
         const refused: string[] = []
+        // The OAuth leg below swaps the source on this same route, relay and CA.
+        let credentials: SandboxAnthropicCredentials = {
+          mode: () => 'api-key',
+          authHeaders: async () => ({ 'x-api-key': 'pod-e2e-stub-key' })
+        }
         const anthropic = createAnthropicRoute({
           machine: name,
           ca: createSandboxCa(name),
-          credentials: () => ({
-            mode: () => 'api-key',
-            authHeaders: async () => ({ 'x-api-key': 'pod-e2e-stub-key' })
-          }),
+          credentials: () => credentials,
           upstream: { host: '127.0.0.1', port: api.port, ca: api.ca.caCertPem },
           log: (line) => refused.push(line)
         })
@@ -215,7 +222,10 @@ describe.skipIf(!enabled)('real OrbStack sandbox', () => {
               .filter(Boolean)
           )
           expect([...addresses].sort()).toEqual(['127.0.0.1', '::1'])
-          const claude = (extraEnv: string) =>
+          const claude = (
+            extraEnv: string,
+            credentialEnv = `ANTHROPIC_API_KEY=${SANDBOX_CREDENTIAL_PLACEHOLDER}`
+          ) =>
             run(
               'orb',
               [
@@ -224,7 +234,7 @@ describe.skipIf(!enabled)('real OrbStack sandbox', () => {
                 name,
                 'bash',
                 '-c',
-                `cd "$0" && ${extraEnv} ANTHROPIC_API_KEY=${SANDBOX_CREDENTIAL_PLACEHOLDER} DISABLE_AUTOUPDATER=1 timeout 40 "$HOME/.local/bin/claude" -p 'say hi' 2>&1`,
+                `cd "$0" && ${extraEnv} ${credentialEnv} DISABLE_AUTOUPDATER=1 timeout 40 "$HOME/.local/bin/claude" -p 'say hi' 2>&1`,
                 worktree
               ],
               { timeoutMs: 90_000 }
@@ -249,6 +259,43 @@ describe.skipIf(!enabled)('real OrbStack sandbox', () => {
           console.info(
             `anthropic-api route: ${api.seen.map((r) => `${r.method} ${r.path?.split('?')[0]}`).join(', ')}; refused: ${refused.join(', ') || 'none'}`
           )
+
+          // OAuth, as Pod ships it: the real source over a fake login, Claude Code on the OAuth placeholder.
+          const oauth = createClaudeOAuthSandboxCredentials({
+            target: () => ({ account: 'system', configDir: null }),
+            read: async () =>
+              JSON.stringify({
+                claudeAiOauth: { accessToken: FAKE_OAUTH_TOKEN, expiresAt: Date.now() + 3_600_000 }
+              })
+          })
+          oauth.launched({ machine: name })
+          credentials = oauth
+          api.seen.length = 0
+          refused.length = 0
+          try {
+            const viaOauth = await claude(
+              `NODE_EXTRA_CA_CERTS=${SANDBOX_CA_PATH}`,
+              `CLAUDE_CODE_OAUTH_TOKEN=${SANDBOX_CREDENTIAL_PLACEHOLDER}`
+            )
+            expect({
+              code: viaOauth.code,
+              out: viaOauth.stdout.slice(-400),
+              refused
+            }).toMatchObject({ code: 0 })
+            expect(viaOauth.stdout).toContain(STUB_TEXT)
+            expect(api.seen.some((r) => r.path?.startsWith('/v1/messages'))).toBe(true)
+            for (const request of api.seen) {
+              expect(request.apiKey).toBeUndefined()
+              if (request.authorization !== undefined) {
+                expect(request.authorization).toBe(`Bearer ${FAKE_OAUTH_TOKEN}`)
+              }
+            }
+            console.info(
+              `anthropic-api route (oauth): ${api.seen.map((r) => `${r.method} ${r.path?.split('?')[0]}`).join(', ')}; refused: ${refused.join(', ') || 'none'}`
+            )
+          } finally {
+            oauth.released({ machine: name })
+          }
         } finally {
           anthropic.close()
           api.close()
