@@ -323,6 +323,33 @@ claude-acc ships inside Pod. Its numbers come in two kinds, and summary.json tel
 | `sched`           | 7 Go builds behind a mkdir lock, as the old plock                | the same through `sched.py` in a temporary HOME                                                  |
 | `hook-wait`       | (none)                                                           | the hook wait per tool call in the last 24 h of transcripts, from `claude-acc perf bench agents` |
 
+### 9. Browser commands for agents (`suites/browser.mjs`)
+
+These are the commands an agent sends through `orca browser …` or `podx browser …`: snapshot,
+click, fill, get title and screenshot. There is also a row for the first click after a navigation.
+
+- **What is timed.** Each command is the runtime RPC request the CLI sends (`lib/runtime-rpc.mjs`),
+  one connection per call, timed from connect to reply. The app answers it through agent-browser
+  on a local page in the worktree's browser tab. The page has 200 rows of buttons and links. The
+  CLI's own process start is not part of the time.
+- **Effect checks.** Every call is checked for its effect:
+  - a click has to be counted by the page;
+  - a fill has to leave its value in the input;
+  - a snapshot has to reach the last row;
+  - the title has to match;
+  - a screenshot has to be over 4 KiB.
+
+  A call that did not act is not timed. It is counted in `extra.acted`, and a caveat names the
+  command.
+
+- **Navigation.** `goto` answers before the new document exists, because it does not go through
+  agent-browser. So the "first click after a navigation" row waits until a new document has
+  loaded. The row's `extra.immediateClickLanded` counts how often a click sent the moment `goto`
+  answers still reached the new page.
+- **Runs.** The default is 20 rounds over 2 launches per app, in alternating order. The first round
+  of each launch warms agent-browser up and is not kept. Both apps are windowless, with background
+  throttling off.
+
 ## Running without taking the desktop
 
 Two questions decide whether the visible-window latency run can happen while someone uses the
@@ -363,7 +390,7 @@ The steps, in order:
 1. `search/prepare.sh` pins and builds the search inputs. These builds are not measured.
    `run.json` records the Pod build, its commit and those inputs.
 1. `suites/preflight.mjs`: every subject launches and gives one synced terminal workload.
-1. polling (also with 80 extra ptys), git-status, search, ogd, startup, panes and throughput.
+1. polling (also with 80 extra ptys), git-status, search, ogd, startup, panes, throughput and browser.
 1. `claude-acc.mjs --fresh`.
 1. The virtual display check, only with `--vdisplay`.
 1. `latency.mjs --confirm-visible --throughput`.
