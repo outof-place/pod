@@ -18,9 +18,9 @@ const PRODUCT_FILE_EXCLUSIONS = [
   '!test-results{,/**/*}',
   '!playwright-report{,/**/*}',
   '!.ruff_cache{,/**/*}',
-  // PodNative's asset catalog and the brand authoring scripts: no Electron code reads them.
-  '!resources/brand/native{,/**/*}',
-  '!resources/brand/{generate,preview}.mjs'
+  // Brand generator sources (PodNative's catalog, SVG masters, scripts): Electron reads only their
+  // outputs, which live outside resources/brand (tray, icon, logo, build).
+  '!resources/brand{,/**/*}'
 ]
 // osx-sign gives every binary-looking file its own signature and timestamp; the bundle seal already
 // covers code-free resources, and each skipped file is one Apple timestamp call fewer.
