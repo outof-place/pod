@@ -60,10 +60,11 @@ Changing a name is a one-line edit here; nothing else in the repo hard-codes the
    - **After `ready`, before the first window:** the deferred entries. These are browser partitions, the session-search index, speech models, account stores and logs. They are cloned by 64 parallel workers, behind a small window that shows a progress bar and an "N of M files" count, and in the dock icon. Files the app already created are kept. The marker lists what is pending, so an interrupted import resumes on the next launch.
    - Measured on a 22k-file profile on a heavily loaded Mac (load average 50 to 110): the half before the first frame went from 7.3 s to 1.0 s, and the deferred half cloned 19k files in 20 s.
    - Caches (also inside partitions), `Crashpad`, Chromium's `Singleton*` files, live sockets and `daemon/` are skipped.
-3. **Hand over the terminals.**
-   - For each live daemon whose protocol this build can attach (v1 to current), `daemon/daemon-v<N>.{sock,token,pid}` are symlinked into the new profile.
-   - The product then adopts them like any older daemon after an upgrade: running sessions keep going.
-   - New terminals run in the product's own daemon.
+3. **Running terminals stay with Orca unless you move them.** Daemons live in `<userData>/daemon/daemon-v<N>.{sock,token,pid}`, so by default the two apps never touch each other's terminals. The import only lists Orca's live daemons of an older protocol in the marker (`adoptableDaemons`).
+   - **Opt-in move:** on the first interactive launch with Orca quit, the product asks "Move running terminals from Orca?" (default: keep them). `POD_ADOPT_ORCA_TERMINALS=1` moves them without asking.
+   - A move links each endpoint file into the product's `daemon/` and then unlinks it from Orca's, so nothing is overwritten. It stays on the same volume, and dead or unattachable daemons are never touched. The marker records it under `daemonHandover`.
+   - The product reattaches the moved sessions like any older daemon after an upgrade. Orca's next launch finds no endpoint at its own path and starts fresh terminals, so the two apps never share a PTY.
+   - A moved daemon notices within about 60 s that its old name is gone. From then on it refuses new terminals but keeps serving its existing ones, and it exits once they end.
 4. **Keep saved secrets.**
    - The product creates its own keychain item ("Pod Safe Storage") holding the same secret as "orca Safe Storage". It does not re-encrypt anything.
    - So cookies, profile secrets and the `~/.orca/*.enc` token files, which both apps share, stay readable by both.
@@ -80,9 +81,17 @@ Changing a name is a one-line edit here; nothing else in the repo hard-codes the
 
 ### Going back, or redoing the import
 
-- **Back to Orca:** quit the product and open Orca. Its profile, keychain item and daemons are untouched.
+- **Back to Orca:** quit the product and open Orca. Its profile and keychain item are untouched.
   - Terminals you opened in the product live in the product's own daemon, which Orca cannot see.
   - Changes made in the product (new workspaces, settings) stay in the product's profile.
+  - If you moved Orca's running terminals, move them back first, with the product quit:
+
+    ```sh
+    ELECTRON_RUN_AS_NODE=1 /Applications/Pod.app/Contents/MacOS/Pod \
+      /Applications/Pod.app/Contents/Resources/restore-orca-terminals.mjs
+    ```
+
+    It refuses while the product runs. It skips any daemon whose name Orca has already reused, rather than overwriting it.
 - **Redo the import:** quit both apps, then run:
 
   ```sh
