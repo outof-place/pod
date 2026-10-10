@@ -1,4 +1,4 @@
-import type { NativeChatGlobalSettings } from './native-chat-appearance-settings'
+import type { GlobalSettingsBase } from './pod-global-settings-types'
 import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/project-types'
@@ -48,7 +48,7 @@ export type { WorktreeVisibilityDefaults } from './repo-types'
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
 
-export type GlobalSettings = NativeChatGlobalSettings & {
+export type GlobalSettings = GlobalSettingsBase & {
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
@@ -57,10 +57,6 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
-  /** Pod (macOS): turns the workspace root on outside Pod builds. */
-  experimentalPodWorkspace?: boolean
-  /** Pod (macOS): where repositories live, as `<root>/<owner>/<repo>`; absent means `~/pod`. */
-  podWorkspaceRoot?: string
   refreshLocalBaseRefOnWorktreeCreate: boolean
   /** Opt-in repo-local Git performance config; unset means 'off'. */
   gitTuning?: GitTuningMode
@@ -366,8 +362,6 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   pluginConsents: Record<string, string>
   /** Local directories loaded as dev-mode plugins (manifest hot-reload). */
   devPluginPaths: string[]
-  /** Fork-only (Pod): marketplace and Git plugins in a product without Stably's kill list. */
-  thirdPartyPluginsEnabled?: boolean
   /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
   /** Why: worktree deletion is destructive (rm -rf of the working dir), so confirm by default. */
@@ -491,8 +485,6 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
   experimentalAgentDashboardPopout?: boolean
-  /** Experimental (Pod): answer local quick open and file search from the ogd index daemon. */
-  experimentalPodNativeSearch?: boolean
   /** Set after the one-time legacy Agents tab introduction has been acknowledged. */
   agentsSidebarIntroShown?: boolean
   /** True when the profile previously opted into the legacy Agents view. */
