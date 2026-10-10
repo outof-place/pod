@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { createConnection, createServer, Socket, type Server } from 'node:net'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -14,10 +14,14 @@ import {
 const addonPath = join(process.cwd(), POD_PEER_IDENTITY_BUILD_PATH)
 const servers: Server[] = []
 const clients: Socket[] = []
+const scratchDirectories: string[] = []
 
 afterEach(() => {
   clients.splice(0).forEach((client) => client.destroy())
   servers.splice(0).forEach((server) => server.close())
+  scratchDirectories
+    .splice(0)
+    .forEach((directory) => rmSync(directory, { recursive: true, force: true }))
 })
 
 /** Connects this process to itself and checks the accepted side with `requirement`. */
@@ -26,7 +30,9 @@ async function checkSelf(requirement: string): Promise<PodPeerCheck> {
   if (!verify) {
     throw new Error('addon did not load')
   }
-  const path = join(mkdtempSync('/tmp/pod-peer-'), 's.sock')
+  const directory = mkdtempSync('/tmp/pod-peer-')
+  scratchDirectories.push(directory)
+  const path = join(directory, 's.sock')
   return new Promise((resolve) => {
     const server = createServer((socket) => {
       resolve(verify(socket))
