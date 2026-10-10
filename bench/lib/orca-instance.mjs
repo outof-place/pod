@@ -15,6 +15,13 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import {
+  ACC_OFF_ENV,
+  assertAccOff,
+  checkAcc,
+  guardInstance,
+  releaseInstance
+} from './acc-guard.mjs'
 import { BENCH_ROOT, TOOLS_BIN, log, sleep } from './bench-session.mjs'
 
 const HOME = os.homedir()
@@ -188,7 +195,7 @@ export function promptTimes(profile) {
     .map((line) => Number(line) * 1000)
 }
 
-function launchEnv(profile, { visible = false } = {}) {
+export function launchEnv(profile, { visible = false } = {}) {
   const presentation = visible
     ? // Only for the visible-window latency run, in a slot the user agreed to.
       { ORCA_E2E_HEADFUL: '1', ORCA_E2E_FOREGROUND: '1' }
@@ -205,8 +212,15 @@ function launchEnv(profile, { visible = false } = {}) {
     ORCA_E2E_HOME_DIR: profile.home,
     ...presentation,
     ZDOTDIR: profile.zdot,
-    POD_BENCH_PROMPT_LOG: profile.promptLog
+    POD_BENCH_PROMPT_LOG: profile.promptLog,
+    // Never let the packaged Pod run claude-acc's setup.sh (acc-guard.mjs).
+    ...ACC_OFF_ENV
   }
+}
+
+// If the guard trips, it must stop the instance synchronously before exiting.
+function guard(pid, profile) {
+  guardInstance(pid, () => execFileSync('/usr/bin/pkill', ['-KILL', '-f', '--', profile.ud]))
 }
 
 const CHROMIUM_ARGS = [
@@ -230,12 +244,15 @@ function assertIsolated(profile) {
 export function spawnInstance(appPath, profile) {
   assertIsolated(profile)
   const info = describeApp(appPath)
+  const env = launchEnv(profile)
+  assertAccOff(env)
   const spawnedAt = Date.now()
   const child = spawn(info.executable, [...CHROMIUM_ARGS, '-ApplePersistenceIgnoreState', 'YES'], {
-    env: launchEnv(profile),
+    env,
     stdio: 'ignore',
     detached: false
   })
+  guard(child.pid, profile)
   return { child, pid: child.pid, profile, info, spawnedAt }
 }
 
@@ -244,15 +261,19 @@ export async function launchInstance(appPath, profile, { visible = false } = {})
   assertIsolated(profile)
   const info = describeApp(appPath)
   const { playwright } = loadPlaywright()
+  const env = launchEnv(profile, { visible })
+  assertAccOff(env)
   const spawnedAt = Date.now()
   const app = await playwright._electron.launch({
     executablePath: info.executable,
     args: [...CHROMIUM_ARGS, '-ApplePersistenceIgnoreState', 'YES'],
-    env: launchEnv(profile, { visible }),
+    env,
     timeout: 180_000
   })
+  guard(app.process().pid, profile)
   const page = await app.firstWindow({ timeout: 180_000 })
   const firstWindowAt = Date.now()
+  checkAcc(`after launching ${info.realPath}`)
   await app.evaluate(({ app: electronApp, BrowserWindow }) => {
     for (const window of BrowserWindow.getAllWindows()) {
       window.webContents.setBackgroundThrottling(false)
@@ -273,7 +294,8 @@ export async function cli(instance, args, timeoutMs = 120_000) {
       env: {
         PATH: '/usr/bin:/bin',
         HOME: instance.profile.home,
-        ORCA_USER_DATA_PATH: instance.profile.ud
+        ORCA_USER_DATA_PATH: instance.profile.ud,
+        ...ACC_OFF_ENV
       },
       timeout: timeoutMs,
       maxBuffer: 64 * 1024 * 1024
@@ -437,6 +459,8 @@ export async function closeInstance(instance, { keepProfile = false } = {}) {
     ])
   }
   await killProfileProcesses(instance.profile)
+  releaseInstance(instance.pid)
+  checkAcc(`after closing ${instance.info.realPath}`)
   if (!instance.info.realPath.startsWith('/Applications/')) {
     try {
       execFileSync(

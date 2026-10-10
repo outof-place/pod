@@ -10,10 +10,16 @@
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 "$here/tools/build.sh"
+out="${POD_BENCH_OUT:-$here/results/$(date -u +%F)}"
+mkdir -p "$out"
+# As run-final.sh: a change to the user's claude-acc install stops the run (lib/acc-guard.mjs).
+export POD_BENCH_ACC_BASELINE="$out/acc-baseline.raw"
+node "$here/lib/acc-guard.mjs" --baseline "$POD_BENCH_ACC_BASELINE"
 suites=("$@")
 [ ${#suites[@]} -gt 0 ] || suites=(polling git-status search startup panes throughput)
 for suite in "${suites[@]}"; do
   echo "==> $suite"
   node "$here/suites/$suite.mjs"
-  node "$here/summarize.mjs" "${POD_BENCH_OUT:-$here/results/$(date -u +%F)}"
+  node "$here/lib/acc-guard.mjs" --check "$POD_BENCH_ACC_BASELINE"
+  node "$here/summarize.mjs" "$out"
 done

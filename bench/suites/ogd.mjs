@@ -12,6 +12,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
+import { ACC_OFF_ENV, checkAcc } from '../lib/acc-guard.mjs'
 import { collectSamples, log, writeSuiteResult } from '../lib/bench-session.mjs'
 import { summarize } from '../lib/sample-stats.mjs'
 
@@ -34,13 +35,17 @@ function runIn(cwd, command, args, env) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
       cwd,
-      env: { ...process.env, ...env },
+      env: { ...process.env, ...env, ...ACC_OFF_ENV },
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let output = ''
     child.stdout.on('data', (chunk) => (output += chunk))
     child.stderr.on('data', (chunk) => (output += chunk))
-    child.on('close', (code) => resolve({ code, output }))
+    child.on('close', (code) => {
+      // The in-app harness launches its own Electron build.
+      checkAcc(`after ${command} ${args.join(' ')}`)
+      resolve({ code, output })
+    })
   })
 }
 

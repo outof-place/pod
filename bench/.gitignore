@@ -1,1 +1,3 @@
 .build/
+# Local run inputs and guard state: real paths, never published.
+results/**/*.raw
