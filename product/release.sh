@@ -45,6 +45,7 @@ done
 [ "$(uname -s)" = Darwin ] || die "macOS only"
 
 identity() { node -p "require('./product/identity.json')$1"; }
+has_script() { node -e "process.exit(require('./package.json').scripts['$1'] ? 0 : 1)"; }
 display_name="$(identity .displayName)"
 app_id="$(identity .appId)"
 feed_repo="$(node -p "const f=require('./product/identity.json').updateFeed; f ? f.owner + '/' + f.repo : ''")"
@@ -107,10 +108,18 @@ if [ "$skip_build" -eq 0 ]; then
   log "build JavaScript, relay, CLI, web and mobile bundles"
   pnpm run build:desktop
   log "build native helpers with the product's identifiers"
-  pnpm run build:ghostty-terminal-macos 2>/dev/null || log "no native terminal addon in this checkout"
   ORCA_COMPUTER_MACOS_BUNDLE_ID="$app_id.computer-use" pnpm run build:computer-macos
   pnpm run build:keyboard-layout-macos
   node config/scripts/build-notification-status-macos.mjs --bundle-id "$app_id"
+  # Helpers that only some stacks carry (native terminal, proc-info): build each one the checkout
+  # has, and fail if it fails, so a release never silently ships without it.
+  for script in build:ghostty-terminal-macos build:proc-info-macos; do
+    if has_script "$script"; then
+      pnpm run "$script"
+    else
+      log "no $script in this checkout"
+    fi
+  done
   pnpm run ensure:electron-runtime
 fi
 
