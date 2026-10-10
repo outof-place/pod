@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store'
-import { getPodWorkspaceApi } from './pod-workspace-api-access'
+import { podWorkspaceRpc } from './pod-workspace-rpc'
 
 let enabled = false
 const listeners = new Set<() => void>()
@@ -11,7 +11,7 @@ const listeners = new Set<() => void>()
 async function refreshEnabled(): Promise<void> {
   let next = false
   try {
-    next = (await getPodWorkspaceApi()?.isEnabled()) === true
+    next = await podWorkspaceRpc.isEnabled()
   } catch {
     next = false
   }
