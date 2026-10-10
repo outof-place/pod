@@ -139,7 +139,7 @@ function interpolateFallback(fallback: string, options: TOptions | undefined): s
     return fallback
   }
   return fallback.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (placeholder, name: string) => {
-    const value: unknown = Reflect.get(options, name)
+    const value: unknown = options[name]
     return value === undefined || value === null ? placeholder : String(value)
   })
 }
