@@ -4,7 +4,10 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { setLocalCloneOptionsOverride } from '../../ipc/repos/repo-clone-options'
+import {
+  setLocalCloneAddedListener,
+  setLocalCloneOptionsOverride
+} from '../../ipc/repos/repo-clone-options'
 import { setDefaultCreateProjectParentOverride } from '../../ipc/repos/repo-creation-handlers'
 import { isPodNativeSearchEnabled } from '../search/pod-native-search-flag'
 import { isPodWorkspaceEnabled } from './pod-workspace-flag'
@@ -91,19 +94,28 @@ export function installPodWorkspace(store: PodWorkspaceStore, runtime: PodWorksp
   if (process.platform !== 'darwin') {
     return
   }
-  setPodWorkspaceRpcService(
-    createPodWorkspaceRpcService({
-      store,
-      isEnabled,
-      status,
-      validation,
-      home,
-      userDataDir: app.getPath('userData'),
-      osTrash: (path) => shell.trashItem(path),
-      onBackgroundDone: (repoId, message) => console.info(`[pod-workspace] ${repoId}: ${message}`)
-    })
-  )
+  const service = createPodWorkspaceRpcService({
+    store,
+    isEnabled,
+    status,
+    validation,
+    home,
+    userDataDir: app.getPath('userData'),
+    osTrash: (path) => shell.trashItem(path),
+    onBackgroundDone: (repoId, message) => console.info(`[pod-workspace] ${repoId}: ${message}`)
+  })
+  setPodWorkspaceRpcService(service)
 
+  setLocalCloneAddedListener(async (repo) => {
+    if (
+      isEnabled() &&
+      isPathInsideWorkspaceRoot(repo.path, resolveWorkspaceRoot(store.getSettings(), home))
+    ) {
+      await service.tuneNewClone(repo.id).catch((error: unknown) => {
+        console.warn('[pod-workspace] tuning a new clone failed:', error)
+      })
+    }
+  })
   setLocalCloneOptionsOverride(
     createPodCloneOptions({
       isEnabled,
