@@ -3,7 +3,6 @@
  * The dev fixture launches out/main, which reads the identity from an E2E override; this proves
  * the packaged identity file brands the native chrome and keeps Chromium off Stably's hosts.
  */
-import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -14,6 +13,12 @@ import {
   createElectronHomeIsolation
 } from './helpers/electron-home-isolation'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
+import {
+  formatListenerCensus,
+  listenerCensus,
+  runningBundleProcesses,
+  wideListeners
+} from './helpers/packaged-listener-census'
 import {
   runningSecurityAgentPids,
   startSecurityAgentWatchdog
@@ -53,40 +58,6 @@ function realLaunchAgentMtimes(realHome: string): Record<string, number> {
   )
 }
 
-/** TCP listeners of the app's process tree that bind beyond loopback (`host:port` from lsof). */
-function wideTcpListeners(rootPid: number): string[] {
-  const rows = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8' })
-    .trim()
-    .split('\n')
-    .map((row) => row.trim().split(/\s+/).map(Number))
-  const pids = [rootPid]
-  for (let index = 0; index < pids.length; index += 1) {
-    for (const [pid, ppid] of rows) {
-      if (ppid === pids[index] && !pids.includes(pid)) {
-        pids.push(pid)
-      }
-    }
-  }
-  let output = ''
-  try {
-    output = execFileSync(
-      'lsof',
-      ['-nP', '-a', '-p', pids.join(','), '-iTCP', '-sTCP:LISTEN', '-Fn'],
-      { encoding: 'utf8' }
-    )
-  } catch (error) {
-    // Why: lsof exits 1 when nothing listens.
-    if (!(error instanceof Error && 'status' in error && error.status === 1)) {
-      throw error
-    }
-  }
-  return output
-    .split('\n')
-    .filter((line) => line.startsWith('n'))
-    .map((line) => line.slice(1))
-    .filter((address) => !address.startsWith('127.') && !address.startsWith('[::1]:'))
-}
-
 test('a packaged Pod names itself Pod in its window and menus', async () => {
   test.skip(process.platform !== 'darwin' || !packagedApp, 'set POD_PACKAGED_APP to a Pod.app')
   test.setTimeout(240_000)
@@ -111,6 +82,11 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
   const baseline = runningSecurityAgentPids()
   if (baseline.length > 0) {
     throw new Error('SecurityAgent is already running, so a new keychain prompt would go unseen')
+  }
+  // Why: the listener census counts every process running from the bundle, so none may predate the run.
+  const strays = runningBundleProcesses(packagedApp)
+  if (strays.length > 0) {
+    throw new Error(`Quit the processes already running from the bundle:\n${strays.join('\n')}`)
   }
   const watchdog = startSecurityAgentWatchdog(packagedApp, baseline)
   let app: ElectronApplication | null = null
@@ -166,7 +142,9 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
     // The slim profile cuts the runtime WebSocket: nothing may listen beyond loopback (*:6768).
     const pid = await app.evaluate(() => process.pid)
     await new Promise((resolve) => setTimeout(resolve, 5_000))
-    expect(wideTcpListeners(pid)).toEqual([])
+    const census = listenerCensus(pid, packagedApp)
+    console.log(`[pod-packaged] listener census:\n${formatListenerCensus(census)}`)
+    expect(wideListeners(census)).toEqual([])
   } catch (error) {
     failure = error
   } finally {
