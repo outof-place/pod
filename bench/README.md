@@ -327,6 +327,12 @@ bench/run-final.sh --pod /path/to/Pod.app --pod-commit <main SHA> \
   --og-sha <pod-search SHA> --search-client-sha <pod/search-client SHA>
 ```
 
+`--og-sha` is the pod-search commit confirmed as bench-ready, never a branch or `HEAD`. Its ogd
+must advertise `search.full_lines` and `search.max_filesize`; `run-final.sh` checks the built
+binary for both and stops before anything is measured. Without `--og-sha`, the og and ogd rows
+appear in `summary.json` under `coming`, with no numbers. Without `--search-client-sha`, only the
+ogd rows do.
+
 The steps, in order:
 
 1. `search/prepare.sh` pins and builds the search inputs. These builds are not measured.
@@ -397,6 +403,7 @@ Both are written for publication, with two safeguards:
 | `caveats`                | caveats that apply to every row                                                                                  |
 | `groups`                 | `pod` (Pod vs Orca and other terminals) and `claude-acc`                                                         |
 | `suites.<name>`          | file, versions, config and suite-wide caveats                                                                    |
+| `coming`                 | rows this run could not measure yet: `id`, `suite`, `subject`, `reason`, `status` `"coming"`; never a number     |
 
 Each `metrics[]` row has these fields:
 
