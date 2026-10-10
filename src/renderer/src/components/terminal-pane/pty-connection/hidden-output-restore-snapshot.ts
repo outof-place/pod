@@ -24,7 +24,7 @@ import {
 } from '../terminal-snapshot-replay-paint'
 
 import { HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING } from './hidden-output-restore-limits'
-import { shouldWritePtyOutputForeground } from './foreground-output-scan'
+import { xtermShowsLiveOutput } from './foreground-output-scan'
 import { restoredSnapshotPaintsPrintableContent } from '../restored-snapshot-coverage'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 
@@ -43,7 +43,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
   session.writeRestoreUnavailableWarning = function (): void {
     // The reset must parse before both the warning and any foreground drain.
     session.writeAbandonedRestoreGap()
-    if (!shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)) {
+    if (!xtermShowsLiveOutput(session)) {
       return
     }
     writeTerminalOutput(session.pane.terminal, HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING, {
