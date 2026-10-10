@@ -15,6 +15,7 @@ import {
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+import { isPodLaneMuted } from '../../../pod-lane/pod-terminal-lanes'
 
 export async function initializeMultiplexStream(
   state: TerminalMultiplexConnection,
@@ -110,7 +111,7 @@ export async function initializeMultiplexStream(
     if (!isMultiplexStreamAttached(state, stream)) {
       return
     }
-    if (stream.outputPaused) {
+    if (stream.outputPaused || isPodLaneMuted(stream)) {
       return
     }
     if (stream.buffering) {
