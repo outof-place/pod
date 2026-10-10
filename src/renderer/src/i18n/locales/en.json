@@ -6995,18 +6995,11 @@
           "storedDefaultUndetected": "Saved as your default, but not detected right now",
           "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out."
         },
-        "AppIconSelector": {
-          "d5a112dc9b": "Next icon",
-          "415fa76f64": "Selected app icon",
-          "5f5142a62a": "Previous icon"
-        },
         "AppearancePane": {
           "3057983501": "Unassigned",
           "872af9556e": "System Tray",
           "2edf606c46": "Minimize to Tray on Close",
           "b707773a0d": "When enabled, closing the window keeps Orca running in the system tray instead of quitting.",
-          "0cd9b8228f": "Choose the app icon shown in the Dock and window switcher.",
-          "ca1590d42f": "App Icon",
           "61d842eca0": "Show the Orca Mobile shortcut in the sidebar. It remains available from Toolbox.",
           "9da1020447": "Show Orca Mobile Button",
           "5db6ba961f": "Show the Orca Mobile button at the top of the left sidebar.",
@@ -9444,15 +9437,8 @@
           "search": {
             "9a115966d3": "Minimize to Tray on Close",
             "4d5b9427b5": "When enabled, closing the window keeps Orca running in the system tray instead of quitting.",
-            "468448bba4": "watercolor",
-            "f586abfa35": "blue",
-            "651f35b2c6": "switcher",
             "e5bc35d59e": "window",
-            "d18b54ca90": "dock",
             "1f2880a9d5": "orca",
-            "2cfb3420c0": "app icon",
-            "e80c2af428": "Choose the app icon shown in the Dock and window switcher.",
-            "2b313598c6": "App Icon",
             "839fb1e3ed": "toolbox",
             "ac79fe4a04": "show",
             "648eeada79": "hide",
