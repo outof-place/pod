@@ -1,4 +1,5 @@
 import { parseRemoteRuntimePtyId } from '../../shared/remote-runtime-pty-id'
+import type { NativeTerminalFeedModel } from '../runtime/runtime-desktop-surface'
 import { loadGhosttyTerminalAddon } from './ghostty-native-terminal-addon'
 
 // Native surfaces fed straight from main's PTY stream. Each bound surface follows main's
@@ -7,17 +8,8 @@ import { loadGhosttyTerminalAddon } from './ghostty-native-terminal-addon'
 // live output. Panes whose bytes never reach main (paired remote runtimes) keep the renderer
 // mirror.
 
-// The runtime's per-PTY headless model, as far as the feed reads it.
-export type NativeTerminalFeedModel = {
-  emulator: {
-    getSnapshot: () => {
-      snapshotAnsi: string
-      scrollbackAnsi?: string
-      rehydrateSequences: string
-      pendingEscapeTailAnsi?: string
-    }
-  }
-}
+// The runtime's per-PTY headless model; the runtime reaches this feed through its desktop surface.
+export type { NativeTerminalFeedModel }
 
 export type NativeTerminalFeedRuntime = {
   // Runs `task` on the PTY's headless model after everything already queued; false if none.

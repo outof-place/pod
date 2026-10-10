@@ -5,7 +5,7 @@ import { observeFreebuffTerminalStatus } from './freebuff-terminal-status'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import { detectAgentStatusFromTitle, normalizeTerminalTitle } from '../../shared/agent-detection'
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
-import { feedNativeTerminalPtyData } from '../native-terminal/ghostty-native-terminal-pty-feed'
+import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 
 export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   // Why: hydrate the runtime headless emulator from the desktop renderer's
@@ -206,7 +206,7 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
       }
       // Native surfaces bound to this PTY take the chunk in the model's own order.
       if (this.headlessTerminals.get(ptyId) === state) {
-        feedNativeTerminalPtyData(ptyId, state, data)
+        getRuntimeDesktopSurface().feedNativeTerminalPty?.(ptyId, state, data)
       }
       state.outputSequence = outputSequence
     })

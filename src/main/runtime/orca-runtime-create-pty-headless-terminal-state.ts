@@ -7,10 +7,7 @@ import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 import { getTerminalViewAttributes } from './terminal-view-attribute-store'
 import { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
-import {
-  feedNativeTerminalPtyData,
-  reseedNativeTerminalPty
-} from '../native-terminal/ghostty-native-terminal-pty-feed'
+import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 
 export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {
   /** Shared factory for the per-PTY runtime emulators (seed, hydration, and
@@ -213,7 +210,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     // clear request and repopulate mobile scrollback.
     state.writeChain = state.writeChain.then(() => {
       state.emulator.clearScrollback()
-      reseedNativeTerminalPty(ptyId, state)
+      getRuntimeDesktopSurface().reseedNativeTerminalPty?.(ptyId, state)
     })
     await state.writeChain
   }
@@ -250,7 +247,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     const completion = state.writeChain.then(async () => {
       const ground = state.ownership.groundInputModes()
       await state.emulator.write(ground)
-      feedNativeTerminalPtyData(ptyId, state, ground)
+      getRuntimeDesktopSurface().feedNativeTerminalPty?.(ptyId, state, ground)
     })
     state.writeChain = completion.catch(() => {})
     await completion
