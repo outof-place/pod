@@ -1,4 +1,9 @@
 import { spawn, spawnSync } from 'node:child_process'
+import {
+  computerUseAppNotFound,
+  productHelperCopy,
+  productHelperPatterns
+} from '../product-identity/product-helper-names'
 import { RuntimeClientError } from './runtime-client-error'
 import { readMacosBundleId, resetMacosTccPermission } from '../macos-tcc-reset'
 import { resolveMacOSComputerUseAppPath } from './macos-native-provider-paths'
@@ -39,7 +44,7 @@ async function openComputerUsePermissionsAsync(
 
   const helperAppPath = resolveMacOSComputerUseAppPath()
   if (!helperAppPath) {
-    throw new RuntimeClientError('accessibility_error', 'Orca Computer Use.app was not found')
+    throw new RuntimeClientError('accessibility_error', computerUseAppNotFound())
   }
   const status = await getComputerUsePermissionStatus()
   if (status.helperUnavailableReason) {
@@ -98,7 +103,7 @@ async function resetComputerUsePermissionsAsync(): Promise<ComputerUsePermission
 
   const helperAppPath = resolveMacOSComputerUseAppPath()
   if (!helperAppPath) {
-    throw new RuntimeClientError('accessibility_error', 'Orca Computer Use.app was not found')
+    throw new RuntimeClientError('accessibility_error', computerUseAppNotFound())
   }
 
   const status = await getComputerUsePermissionStatus()
@@ -124,7 +129,7 @@ function closeExistingPermissionHelpers(): void {
     'orca-computer-use-macos[[:space:]]+--permission([[:space:]]|$)',
     'orca-computer-use-macos[[:space:]]+--permissions([[:space:]]|$)'
   ]
-  for (const pattern of setupHelperPatterns) {
+  for (const pattern of productHelperPatterns(setupHelperPatterns)) {
     spawnSync('/usr/bin/pkill', ['-f', pattern], {
       stdio: 'ignore'
     })
@@ -150,5 +155,7 @@ function nextPermissionStep(
   if (!missing) {
     return null
   }
-  return `Grant ${missing.id === 'accessibility' ? 'Accessibility' : 'Screen Recording'} to Orca Computer Use, then retry get-app-state.`
+  return productHelperCopy(
+    `Grant ${missing.id === 'accessibility' ? 'Accessibility' : 'Screen Recording'} to Orca Computer Use, then retry get-app-state.`
+  )
 }
