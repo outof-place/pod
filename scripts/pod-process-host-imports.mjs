@@ -38,7 +38,9 @@ function filesMentioningOldModule() {
       .filter((file) => /\.(ts|tsx|mts|cts)$/.test(file))
   } catch (error) {
     // git grep exits 1 when nothing matches.
-    if (error.status === 1) return []
+    if (error.status === 1) {
+      return []
+    }
     throw error
   }
 }
@@ -48,10 +50,14 @@ const changed = []
 const unknown = []
 for (const file of files) {
   const before = readFileSync(file, 'utf8')
-  if (!before.includes('child-process/run-process')) continue
+  if (!before.includes('child-process/run-process')) {
+    continue
+  }
   let after = before.replace(IMPORT, (line, isType, list) => {
     const names = list.split(',').map((name) => name.trim()).filter(Boolean)
-    if (isType) return `import type { ${names.join(', ')} } from '@orca/process-host/process-spec'`
+    if (isType) {
+      return `import type { ${names.join(', ')} } from '@orca/process-host/process-spec'`
+    }
     if (names.some((name) => !VALUE_NAMES.has(name.replace(/^type /, '')))) {
       unknown.push(`${file}: ${line}`)
       return line
@@ -70,17 +76,21 @@ for (const file of files) {
   }
   if (after !== before) {
     changed.push(file)
-    if (mode === '--apply') writeFileSync(file, after)
+    if (mode === '--apply') {
+      writeFileSync(file, after)
+    }
   }
 }
 
 if (unknown.length > 0) {
-  console.error('pod-process-host-imports: imports it cannot rewrite:\n  ' + unknown.join('\n  '))
+  console.error(`pod-process-host-imports: imports it cannot rewrite:\n  ${unknown.join('\n  ')}`)
   process.exit(2)
 }
 if (mode === '--check' && changed.length > 0) {
-  console.error('pod-process-host-imports: left to rewrite:\n  ' + changed.join('\n  '))
+  console.error(`pod-process-host-imports: left to rewrite:\n  ${changed.join('\n  ')}`)
   process.exit(1)
 }
 console.log(`pod-process-host-imports: ${mode === '--apply' ? 'rewrote' : 'nothing left in'} ${changed.length} file(s)`)
-for (const file of changed) console.log('  ' + file)
+for (const file of changed) {
+  console.log(`  ${file}`)
+}
