@@ -1,4 +1,5 @@
 import type {
+  PodOrbstackTemplateInfo,
   PodOrbstackMachine,
   PodOrbstackStatus,
   PodOrbstackWorktreeLink
@@ -94,6 +95,11 @@ export async function readPodOrbstackStatus(deps: {
   run: OrbstackToolRunner
   registry: PodOrbstackRegistry
   templates?: readonly PodOrbstackTemplate[]
+  templatesEnabled?: boolean
+  /** OrbStack's disk size per machine, cached by the caller. */
+  diskSizes?: (name: string) => Promise<number | null>
+  /** False skips `docker ps` and `docker stats` (a native client that shows machines only). */
+  containers?: boolean
   busyWorktreeIds: readonly string[]
   now?: () => number
 }): Promise<PodOrbstackStatus> {
@@ -117,7 +123,7 @@ export async function readPodOrbstackStatus(deps: {
   if (service === 'running') {
     const [machinesResult, psResult] = await Promise.all([
       run('orb', ['list', '--format', 'json']),
-      paths.docker
+      paths.docker && deps.containers !== false
         ? run('docker', ['--context', 'orbstack', 'ps', '--all', '--format', DOCKER_PS_FORMAT])
         : null
     ])
@@ -157,17 +163,19 @@ export async function readPodOrbstackStatus(deps: {
         ? parseDockerContexts(contextResult.stdout)
         : { current: null, currentIsOrbstack: false, orbstackContextExists: false },
     machines: mergeMachines(listed, registry, new Set(templates.map((entry) => entry.name))),
-    templates: templates.map((entry) => ({
-      name: entry.name,
-      kind: entry.kind,
-      state:
-        entry.state === 'creating'
-          ? 'creating'
-          : listed && !listed.some((machine) => machine.name === entry.name)
-            ? 'missing'
-            : 'ready',
-      agentVersion: entry.agentVersion
-    })),
+    templates: await Promise.all(
+      templates.map(async (entry): Promise<PodOrbstackTemplateInfo> => {
+        const missing = listed !== null && !listed.some((machine) => machine.name === entry.name)
+        return {
+          name: entry.name,
+          kind: entry.kind,
+          state: entry.state === 'creating' ? 'creating' : missing ? 'missing' : 'ready',
+          agentVersion: entry.agentVersion,
+          diskBytes: missing || !deps.diskSizes ? null : await deps.diskSizes(entry.name)
+        }
+      })
+    ),
+    templatesEnabled: deps.templatesEnabled ?? false,
     containers,
     links: buildLinks(registry),
     sandboxClaudeLogin: registry.sandboxClaudeLogin(),
