@@ -2,27 +2,29 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
-  readFileSync,
   readlinkSync,
   renameSync,
   rmSync,
-  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { PRODUCT_MIGRATION_MARKER } from './deferred-profile-import'
+import {
+  defaultIsProcessAlive,
+  findAdoptableDaemons,
+  readPidRecord
+} from './legacy-daemon-handover'
 import { cloneProfileTreeSync, DEFERRED_PROFILE_ENTRIES } from './profile-clone'
 
-// First launch of a renamed product: clone the legacy Orca profile into the product's own userData,
-// hand the live terminal daemons over by symlink, and reuse the legacy safeStorage key. The legacy
-// profile, keychain item and daemons are never modified, so going back to Orca stays possible.
+// First launch of a renamed product: clone the legacy Orca profile into the product's own userData
+// and reuse the legacy safeStorage key. Running terminal daemons stay with the legacy app; the
+// marker lists the adoptable ones, which move only on an explicit choice (legacy-daemon-handover).
 // This half runs before `ready`; DEFERRED_PROFILE_ENTRIES follow in deferred-profile-import.ts.
 
 export { PRODUCT_MIGRATION_MARKER }
 
 // Any of these means the product profile holds real state and must not be overwritten.
 const PROFILE_STATE_ENTRIES = ['orca-data.json', 'orca-profile-index.json', 'profiles']
-const DAEMON_PID_FILE = /^daemon-v(\d+)\.pid$/
 // Chromium's generated safe-storage secret is base64; anything else is refused rather than quoted.
 const SAFE_STORAGE_SECRET = /^[A-Za-z0-9+/=]{8,256}$/
 
@@ -52,7 +54,7 @@ export type SafeStorageAdoption = 'adopted' | 'already-present' | 'unavailable' 
 export type LegacyProfileMigrationResult =
   | { status: 'not-needed'; reason: 'product-profile-exists' | 'no-legacy-profile' }
   | { status: 'blocked'; reason: 'legacy-app-running' | 'migration-in-progress'; pid: number }
-  | { status: 'imported'; linkedDaemons: number[]; safeStorage: SafeStorageAdoption }
+  | { status: 'imported'; adoptableDaemons: number[]; safeStorage: SafeStorageAdoption }
 
 export function safeStorageService(keychainName: string): string {
   return `${keychainName} Safe Storage`
@@ -62,17 +64,11 @@ export function safeStorageAccount(keychainName: string): string {
   return `${keychainName} Key`
 }
 
-function defaultIsProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return Reflect.get(Object(error), 'code') === 'EPERM'
-  }
-}
-
 /** Chromium's SingletonLock is a symlink to "<host>-<pid>"; returns that pid if it is still alive. */
-function liveSingletonOwner(userData: string, isAlive: (pid: number) => boolean): number | null {
+export function liveSingletonOwner(
+  userData: string,
+  isAlive: (pid: number) => boolean = defaultIsProcessAlive
+): number | null {
   let target: string
   try {
     target = readlinkSync(join(userData, 'SingletonLock'))
@@ -81,51 +77,6 @@ function liveSingletonOwner(userData: string, isAlive: (pid: number) => boolean)
   }
   const pid = Number.parseInt(target.slice(target.lastIndexOf('-') + 1), 10)
   return Number.isSafeInteger(pid) && pid > 0 && isAlive(pid) ? pid : null
-}
-
-function readPid(path: string): number | null {
-  try {
-    const record: unknown = JSON.parse(readFileSync(path, 'utf8'))
-    const pid = typeof record === 'object' && record !== null ? Reflect.get(record, 'pid') : null
-    return typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0 ? pid : null
-  } catch {
-    return null
-  }
-}
-
-/** Links each live, attachable legacy daemon's socket, token and pid record into the new profile. */
-function linkLiveDaemons(
-  legacyUserData: string,
-  stagingUserData: string,
-  attachable: ReadonlySet<number>,
-  isAlive: (pid: number) => boolean
-): number[] {
-  const legacyDaemonDir = join(legacyUserData, 'daemon')
-  if (!existsSync(legacyDaemonDir)) {
-    return []
-  }
-  const linked: number[] = []
-  for (const entry of readdirSync(legacyDaemonDir)) {
-    const match = DAEMON_PID_FILE.exec(entry)
-    if (!match) {
-      continue
-    }
-    const protocol = Number.parseInt(match[1] ?? '', 10)
-    const pid = readPid(join(legacyDaemonDir, entry))
-    if (!attachable.has(protocol) || pid === null || !isAlive(pid)) {
-      continue
-    }
-    const files = ['sock', 'token', 'pid'].map((ext) => `daemon-v${protocol}.${ext}`)
-    if (!files.every((file) => existsSync(join(legacyDaemonDir, file)))) {
-      continue
-    }
-    mkdirSync(join(stagingUserData, 'daemon'), { recursive: true, mode: 0o700 })
-    for (const file of files) {
-      symlinkSync(join(legacyDaemonDir, file), join(stagingUserData, 'daemon', file))
-    }
-    linked.push(protocol)
-  }
-  return linked.sort((left, right) => left - right)
 }
 
 function adoptSafeStorageKey(options: LegacyProfileMigrationOptions): SafeStorageAdoption {
@@ -198,7 +149,7 @@ export function migrateLegacyProfile(
   const staging = join(dirname(productUserData), `.${basename(productUserData)}.migrating`)
   const stagingOwnerFile = join(staging, '.owner')
   if (existsSync(staging)) {
-    const owner = readPid(stagingOwnerFile)
+    const owner = readPidRecord(stagingOwnerFile)
     if (owner !== null && owner !== process.pid && isAlive(owner)) {
       return { status: 'blocked', reason: 'migration-in-progress', pid: owner }
     }
@@ -210,12 +161,12 @@ export function migrateLegacyProfile(
 
   // Why clone: APFS clonefile makes a multi-GB profile copy near-instant and space-free.
   cloneProfileTreeSync(legacyUserData, staging, 'essential')
-  const linkedDaemons = linkLiveDaemons(
+  // Why not linked: two apps attached to one daemon share every PTY (input, resize, close).
+  const adoptableDaemons = findAdoptableDaemons(
     legacyUserData,
-    staging,
     new Set(options.attachableDaemonProtocols),
     isAlive
-  )
+  ).map(({ protocol }) => protocol)
   const safeStorage = adoptSafeStorageKey(options)
   writeFileSync(
     join(staging, PRODUCT_MIGRATION_MARKER),
@@ -224,7 +175,7 @@ export function migrateLegacyProfile(
         from: legacyUserData,
         at: (options.now ?? (() => new Date()))().toISOString(),
         appVersion: options.appVersion,
-        linkedDaemons,
+        adoptableDaemons,
         safeStorage,
         deferred: DEFERRED_PROFILE_ENTRIES.filter((entry) =>
           existsSync(join(legacyUserData, entry))
@@ -237,5 +188,5 @@ export function migrateLegacyProfile(
   )
   rmSync(stagingOwnerFile, { force: true })
   publishStaging(staging, productUserData)
-  return { status: 'imported', linkedDaemons, safeStorage }
+  return { status: 'imported', adoptableDaemons, safeStorage }
 }
