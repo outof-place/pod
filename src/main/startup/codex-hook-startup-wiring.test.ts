@@ -52,6 +52,7 @@ vi.mock('./worktree-removal-records-load')
 vi.mock('./first-window-deferral')
 vi.mock('./startup-diagnostics')
 vi.mock('../opencode/opencode-status-plugin-startup-refresh')
+vi.mock('../pod/workspace/install-pod-workspace')
 
 import { initializeReadyRuntimeServices } from './main-process-ready-runtime'
 
