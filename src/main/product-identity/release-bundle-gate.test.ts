@@ -10,6 +10,7 @@ const gatePath = join(__dirname, '..', '..', '..', 'product', 'release-bundle-ga
 const gate: {
   MAX_DMG_BYTES: number
   PRODUCT_FILE_EXCLUSIONS: string[]
+  PRODUCT_SIGN_IGNORE: string[]
   assertAppAsar(resourcesDir: string, listPackage?: (path: string) => string[]): void
   forbiddenAsarEntries(listing: string[]): string[]
 } = require(gatePath)
@@ -70,8 +71,16 @@ describe('release bundle gate', () => {
     expect(run()).toBe(1)
   })
 
-  it('keeps the exclusions in the product config', () => {
+  it('keeps the exclusions and sign skips in the product config', () => {
     const files: unknown = Reflect.get(Object(productConfig), 'files')
     expect(files).toEqual(expect.arrayContaining(gate.PRODUCT_FILE_EXCLUSIONS))
+    const mac: unknown = Reflect.get(Object(productConfig), 'mac')
+    expect(Reflect.get(Object(mac), 'signIgnore')).toEqual(
+      expect.arrayContaining(gate.PRODUCT_SIGN_IGNORE)
+    )
+    const skip = new RegExp(gate.PRODUCT_SIGN_IGNORE[0])
+    const unpacked = '/Pod.app/Contents/Resources/app.asar.unpacked/resources'
+    expect(skip.test(`${unpacked}/brand/menu-barTemplate.svg`)).toBe(true)
+    expect(skip.test(`${unpacked}/bin/rg`)).toBe(false)
   })
 })
