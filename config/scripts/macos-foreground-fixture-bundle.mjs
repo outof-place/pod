@@ -12,7 +12,7 @@ import {
   realpathSync,
   rmSync
 } from 'node:fs'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 function isWithin(root, path) {
   const suffix = relative(root, path)
@@ -106,6 +106,9 @@ export function createForegroundFixtureBundle({ sourceApp, sourceAddon, app, scr
   const fixtureLocation = relative(resolve(scratch), fixtureApp)
   assert(fixtureLocation && isWithin(resolve(scratch), fixtureApp), 'app must be inside scratch')
   const canonicalApp = join(scratchRoot, fixtureLocation)
+  const parent = dirname(fixtureApp)
+  assert(lstatSync(parent).isDirectory(), 'fixture parent must be a direct directory')
+  assert.equal(realpathSync(parent), dirname(canonicalApp), 'fixture parent moved outside scratch')
   assert(!isWithin(scratchRoot, originalApp), 'source app must be outside scratch')
   assert(!isWithin(scratchRoot, realpathSync(sourceAddon)), 'source addon must be outside scratch')
   assert.equal(lstatSync(fixtureApp, { throwIfNoEntry: false }), undefined, 'fixture app exists')

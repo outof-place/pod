@@ -64,7 +64,7 @@ jobs:
       - name: Build both macOS architectures
         run: node config/scripts/build-proc-info-macos.mjs
       - name: Verify the universal addon
-        run: lipo -verify_arch arm64 x86_64 native/proc-info-darwin/.build/release/orca-proc-info.node
+        run: lipo native/proc-info-darwin/.build/release/orca-proc-info.node -verify_arch arm64 x86_64
       - name: Verify kernel lookup, resize routing, and package resources
         run: >-
           pnpm test src/shared/native-process-info.test.ts

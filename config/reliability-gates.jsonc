@@ -45,9 +45,9 @@
         "https://github.com/stablyai/orca/pull/26985"
       ],
       "invariant": "Only a live PID holding the supplied PTY may name its foreground group for an explicit SIGWINCH; the current host must not share that PTY. Missing or unverifiable group evidence keeps the existing root-only fallback.",
-      "oracle": "Native known-PTY rows match ps without warming a cache. Another device, missing PID, invalid PID and unsafe terminal paths cannot authorize a group. The shared host-PTY guard refuses group signaling; a real owned PTY acknowledges SIGWINCH through packaged native and ps fallback paths.",
+      "oracle": "Native known-PTY rows match ps without warming a cache. Another device, missing PID, invalid PID and unsafe terminal paths cannot authorize a group. The shared host-PTY guard refuses group signaling; a real owned PTY acknowledges SIGWINCH through packaged native and ps fallback paths. Copied signing inputs remain inside the owned temporary app, and source-file fingerprints remain unchanged.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/native-process-info.test.ts src/main/pty/posix-pty-foreground-group.test.ts config/scripts/proc-info-macos-resources.test.mjs config/scripts/electron-builder-config.test.mjs",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/native-process-info.test.ts src/main/pty/posix-pty-foreground-group.test.ts config/scripts/proc-info-macos-resources.test.mjs config/scripts/electron-builder-config.test.mjs config/scripts/macos-foreground-fixture-bundle.test.mjs",
         "ORCA_BACKGROUND_LAUNCH=1 node config/scripts/smoke-macos-foreground-addon.mjs"
       ],
       "testFiles": [
@@ -55,7 +55,8 @@
         "src/main/pty/posix-pty-foreground-group.test.ts",
         "config/scripts/proc-info-macos-resources.test.mjs",
         "config/scripts/electron-builder-config.test.mjs",
-        "config/scripts/smoke-macos-foreground-addon.mjs"
+        "config/scripts/smoke-macos-foreground-addon.mjs",
+        "config/scripts/macos-foreground-fixture-bundle.test.mjs"
       ],
       "assertionRefs": [
         {
@@ -72,6 +73,14 @@
             "refuses when the pid now answers for a different tty",
             "refuses when this process shares the PTY",
             "rechecks its own terminal membership when the supplied PTY changes"
+          ]
+        },
+        {
+          "file": "config/scripts/macos-foreground-fixture-bundle.test.mjs",
+          "assertions": [
+            "rejects an escaping symlink before signing",
+            "rejects a source-linked regular file before signing",
+            "detects source mutation and still removes only its owned scratch"
           ]
         }
       ],
@@ -100,7 +109,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Six alternating fresh Node arm64 runs at 2244 processes: warm native median0.50/p951.44ms versus ps14.83/43.70ms, native zero subprocesses. No Worker, retained native cache, polling loop or user-sized native allocation. Raw artifact /tmp/orca-native-foreground-benchmark.json; timings are diagnostic."
+        "evidence": "Six alternating fresh Node arm64 runs at 2244 processes: warm native median 0.50 ms/p95 1.44 ms versus ps median 14.83 ms/p95 43.70 ms, with zero native subprocesses. No Worker, retained native cache, polling loop or user-sized native allocation. Raw artifact /tmp/orca-native-foreground-benchmark.json; timings are diagnostic."
       },
       "knownGaps": [
         "Actual x64 CI runtime pending.",

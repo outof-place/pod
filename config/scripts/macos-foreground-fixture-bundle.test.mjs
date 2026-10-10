@@ -16,7 +16,7 @@ import { createForegroundFixtureBundle } from './macos-foreground-fixture-bundle
 
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn(), spawnSync: vi.fn() }))
 
-describe('isolated foreground fixture bundle', () => {
+describe.skipIf(process.platform === 'win32')('isolated foreground fixture bundle', () => {
   let root
   let sourceApp
   let sourceAddon
@@ -82,6 +82,21 @@ describe('isolated foreground fixture bundle', () => {
     expect(execFileSync).not.toHaveBeenCalled()
     expect(existsSync(scratch)).toBe(false)
     expect(readFileSync(sourceFile, 'utf8')).toBe('original executable')
+  })
+
+  it('rejects an escaping app parent before copying through it', () => {
+    const parent = join(scratch, 'linked-parent')
+    symlinkSync(sourceApp, parent, 'dir')
+    expect(() =>
+      createForegroundFixtureBundle({
+        sourceApp,
+        sourceAddon,
+        app: join(parent, 'Fixture.app'),
+        scratch
+      })
+    ).toThrow('fixture parent must be a direct directory')
+    expect(execFileSync).not.toHaveBeenCalled()
+    expect(existsSync(join(sourceApp, 'Fixture.app'))).toBe(false)
   })
 
   it('rejects a source-linked regular file before signing', () => {
