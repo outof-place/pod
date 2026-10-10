@@ -90,17 +90,25 @@ const parity = await collectSamples({
         ORCA_OGD_PARITY_REPORT: report
       }
     )
+    // An ogd without search.full_lines fails the test's first assertion by design: record it.
     if (!existsSync(report)) {
-      throw new Error(`parity test wrote no report (exit ${code}): ${output.slice(-2000)}`)
+      return { failed: true, exit: code, outputTail: output.slice(-2000) }
     }
     const result = JSON.parse(readFileSync(report, 'utf8'))
     rmSync(report)
     return { exit: code, rg: result.rg, mismatches: result.mismatches, timings: result.timings }
   }
 })
-const rgVersion = parity.find((sample) => sample.rg)?.rg ?? 'rg'
-const mismatched = parity.some((sample) => Object.keys(sample.mismatches ?? {}).length > 0)
-for (const label of Object.keys(parity[0]?.timings ?? {})) {
+const suiteCaveats = []
+const parityOk = parity.filter((sample) => !sample.failed)
+if (parityOk.length < parity.length) {
+  suiteCaveats.push(
+    `The engine-level parity test failed without a report in ${parity.length - parityOk.length} of ${parity.length} invocations; its rows use the others.`
+  )
+}
+const rgVersion = parityOk.find((sample) => sample.rg)?.rg ?? 'rg'
+const mismatched = parityOk.some((sample) => Object.keys(sample.mismatches ?? {}).length > 0)
+for (const label of Object.keys(parityOk[0]?.timings ?? {})) {
   const id = `ogd.engine.${slug(label)}`
   const conditions = `engine level, ${options['parity-runs']} runs per invocation, ${invocations} invocations, ${inputs.searchRepo} at ${inputs.searchRepoSha.slice(0, 9)}`
   const caveats = mismatched
@@ -117,7 +125,7 @@ for (const label of Object.keys(parity[0]?.timings ?? {})) {
       unit: 'ms',
       better: 'lower',
       stats: summarize(
-        parity.map((sample) => sample.timings[label]?.[engine]),
+        parityOk.map((sample) => sample.timings[label]?.[engine]),
         'ms'
       ),
       conditions,
@@ -152,15 +160,41 @@ const app = await collectSamples({
   }
 })
 const appLabels = Object.keys(app[0]?.timings ?? {})
+// What the daemon advertised decides what its rows measure: without these features the "ogd" rows
+// time Orca's rg fallback (tests/e2e/pod-native-search.spec.ts), so they are left out.
+const features = app[0]?.features ?? []
+const hasAll = (names) => names.every((name) => features.includes(name))
+const servesText = hasAll(['search.full_lines', 'search.max_filesize'])
+const servesIgnoredPaths = hasAll(['fuzzy.ignored', 'files.ignored'])
+const ogdMeasures = (label) =>
+  label.includes(' search ')
+    ? servesText
+    : label.includes('gitignored shown')
+      ? servesIgnoredPaths
+      : true
+if (!servesText) {
+  suiteCaveats.push(
+    'ogd did not advertise search.full_lines and search.max_filesize, so in-app text search ran on rg and has no ogd row.'
+  )
+}
+if (!servesIgnoredPaths) {
+  suiteCaveats.push(
+    'ogd did not advertise fuzzy.ignored and files.ignored, so quick open with gitignored files shown ran on rg and has no ogd row.'
+  )
+}
 // Keys look like `<mode> quick open "<q>"` or `<mode> search "<q>"`, mode rg|ogd (+ gitignored shown).
 for (const label of appLabels.filter((key) => key.startsWith('rg'))) {
   const rest = label.replace(/^rg/, '')
   const ogdLabel = `ogd${rest}`
   const id = `ogd.app.${slug(rest)}`
-  for (const [engine, key] of [
-    ['rg', label],
-    ['ogd', ogdLabel]
-  ]) {
+  // Without the feature the "ogd" timing is the rg fallback: keep the rg row, drop the ogd one.
+  const measured = ogdMeasures(ogdLabel)
+  for (const [engine, key] of measured
+    ? [
+        ['rg', label],
+        ['ogd', ogdLabel]
+      ]
+    : [['rg', label]]) {
     metrics.push({
       id: `${id}.${engine}`,
       subject:
@@ -178,12 +212,15 @@ for (const label of appLabels.filter((key) => key.startsWith('rg'))) {
       branch: 'pod/search-client'
     })
   }
-  comparisons.push({ baseline: `${id}.rg`, candidate: `${id}.ogd`, label: `in app:${rest}` })
+  if (measured) {
+    comparisons.push({ baseline: `${id}.rg`, candidate: `${id}.ogd`, label: `in app:${rest}` })
+  }
 }
 
 log(`ogd: ${metrics.length} rows`)
 writeSuiteResult('ogd', {
   caveats: [
+    ...suiteCaveats,
     'ripgrep here is the one Orca bundles (what Orca users get); og forks rg 15.2.0. The index is built and warm before timing starts; indexing time is not in these numbers.',
     'The in-app rows come from a headless E2E build of pod/search-client, not from the signed Pod build.'
   ],

@@ -4,7 +4,7 @@
 //
 //   node bench/suites/search.mjs [--repo DIR] [--rounds 5] [--engines rg,og] [--og BIN]
 import { execFile, spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { parseArgs, promisify } from 'node:util'
@@ -83,14 +83,17 @@ async function startOgd() {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'pod-bench-ogd-'))
   ogEnv = {
     POD_SEARCH_SOCKET: path.join(dir, 'ogd.sock'),
-    POD_SEARCH_STATE_DIR: path.join(dir, 'state')
+    POD_SEARCH_STATE_DIR: path.join(dir, 'state'),
+    // og's fallback: it execs this rg when it cannot answer; it must be exactly ripgrep 15.2.0.
+    OG_REAL_RG: options.rg === 'rg' ? '/opt/homebrew/bin/rg' : options.rg,
+    // Each og call appends `served\t<us>` or `fallback\t<reason>` here.
+    OG_DECISION_FILE: path.join(dir, 'decisions.log')
   }
+  // A long idle limit: the load gate can wait longer than ogd's default 30 min worktree eviction.
   const daemon = spawn(
     options.ogd,
     ['--socket', ogEnv.POD_SEARCH_SOCKET, '--state-dir', ogEnv.POD_SEARCH_STATE_DIR],
-    {
-      stdio: 'ignore'
-    }
+    { stdio: 'ignore', env: { ...process.env, OGD_IDLE_SECS: '86400' } }
   )
   for (let i = 0; i < 100 && !existsSync(ogEnv.POD_SEARCH_SOCKET); i += 1) {
     await sleep(100)
@@ -101,6 +104,26 @@ async function startOgd() {
   })
   return { daemon, dir }
 }
+/** og's own record of how it answered since the last call: served from the index, or fallen back. */
+function takeDecisions() {
+  if (!ogEnv.OG_DECISION_FILE || !existsSync(ogEnv.OG_DECISION_FILE)) {
+    return { served: 0, fallback: 0, reasons: {} }
+  }
+  const lines = readFileSync(ogEnv.OG_DECISION_FILE, 'utf8').split('\n').filter(Boolean)
+  rmSync(ogEnv.OG_DECISION_FILE)
+  const reasons = {}
+  let served = 0
+  for (const line of lines) {
+    const [kind, detail] = line.split('\t')
+    if (kind === 'served') {
+      served += 1
+    } else {
+      reasons[detail ?? kind] = (reasons[detail ?? kind] ?? 0) + 1
+    }
+  }
+  return { served, fallback: lines.length - served, reasons }
+}
+
 async function stopOgd(ogd) {
   ogStatus = JSON.parse(
     (await run(options.ogctl, ['status'], { env: { ...process.env, ...ogEnv } })).stdout
@@ -163,6 +186,9 @@ for (const engine of engines) {
   for (const query of QUERIES) {
     await search(engine, query)
   }
+  if (ogd) {
+    takeDecisions()
+  }
   samples[engine] = await collectSamples({
     label: `search ${engine}`,
     count: rounds,
@@ -177,8 +203,16 @@ for (const engine of engines) {
       }
       const t0 = process.hrtime.bigint()
       const parallel = await Promise.all(QUERIES.map((query) => search(engine, query)))
+      const decisions = engine === 'og' ? takeDecisions() : null
       const makespanMs = Number(process.hrtime.bigint() - t0) / 1e6
       return {
+        ...(decisions
+          ? {
+              ogServed: decisions.served,
+              ogFallback: decisions.fallback,
+              ogFallbackReasons: decisions.reasons
+            }
+          : {}),
         sequentialTotalMs: sequential.reduce((a, b) => a + b, 0),
         parallelMakespanMs: makespanMs,
         sequentialMs: sequential,
@@ -207,12 +241,25 @@ const disagreements =
 
 const metrics = []
 const conditions = `${repoFacts.trackedFiles} tracked files, ${QUERIES.length} queries, warm OS file cache, ${rounds} rounds`
+const subjectOf = (engine) =>
+  engine === 'og'
+    ? `og (pod-search ${(options['og-sha'] ?? 'unpinned').slice(0, 9)}, ripgrep 15.2.0 fork, warm ogd index)`
+    : (versions.rg ?? 'rg')
 for (const engine of engines) {
   const accepted = samples[engine].filter((sample) => !sample.warmup)
+  // og falls back to the real rg when it cannot answer; say how often that happened.
+  const served = accepted.reduce((sum, sample) => sum + (sample.ogServed ?? 0), 0)
+  const fellBack = accepted.reduce((sum, sample) => sum + (sample.ogFallback ?? 0), 0)
+  const caveats =
+    engine === 'og' && fellBack > 0
+      ? [
+          `og fell back to the real rg in ${fellBack} of ${served + fellBack} calls that recorded a decision.`
+        ]
+      : []
   metrics.push(
     {
       id: `search.single.${engine}`,
-      subject: `${engine} ${versions[engine] ?? ''}`.trim(),
+      subject: subjectOf(engine),
       metric: 'one search, one at a time',
       unit: 'ms',
       better: 'lower',
@@ -220,11 +267,12 @@ for (const engine of engines) {
         accepted.flatMap((sample) => sample.sequentialMs),
         'ms'
       ),
-      conditions
+      conditions,
+      caveats
     },
     {
       id: `search.parallel24.${engine}`,
-      subject: `${engine} ${versions[engine] ?? ''}`.trim(),
+      subject: subjectOf(engine),
       metric: '24 searches at once: time until all finish',
       unit: 'ms',
       better: 'lower',
@@ -236,11 +284,27 @@ for (const engine of engines) {
         perSearch: summarize(
           accepted.flatMap((sample) => sample.parallelMs),
           'ms'
-        )
+        ),
+        ...(engine === 'og' ? { ogServed: served, ogFallback: fellBack } : {})
       },
-      conditions
+      conditions,
+      caveats
     }
   )
+}
+// The index ogd built when the repo was registered: a one-off cost, reported on its own.
+const buildMs = ogStatus?.worktrees?.[0]?.build_ms
+if (Number.isFinite(buildMs)) {
+  metrics.push({
+    id: 'search.og-index-build',
+    subject: subjectOf('og'),
+    metric: 'ogd index build when the repo is first registered (cold, one-off)',
+    unit: 'ms',
+    better: 'lower',
+    stats: { unit: 'ms', n: 1, median: buildMs, p95: null, min: buildMs, max: buildMs },
+    extra: { docs: ogStatus.worktrees[0].docs ?? null },
+    conditions: `${repoFacts.trackedFiles} tracked files, from \`ogctl status\``
+  })
 }
 const comparisons = engines.includes('og')
   ? [

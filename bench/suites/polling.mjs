@@ -297,6 +297,13 @@ const comparisons = [
 ]
 
 writeSuiteResult(SUITE, {
+  // ps' tty= cost follows the open terminals: label which machine state each suite stands for.
+  condition: extraPtys > 0 ? 'agent-heavy' : 'quiet',
+  caveats: [
+    extraPtys > 0
+      ? `Agent-heavy: ${extraPtys} idle ptys added to the quiet window, about the number of terminals this Mac keeps open in normal agent work. This is the condition that matches daily use.`
+      : 'Quiet window: agents parked and few terminals open, so ps has few tty rows to resolve. polling-ptys80 is the agent-heavy condition.'
+  ],
   comparisons: comparisons.map((pair) => ({
     ...pair,
     baseline: pair.baseline.replace(/^polling\./, `${SUITE}.`),
