@@ -6,6 +6,7 @@ import { bindNativeTerminalLocalPty } from './native-terminal-tty'
 import { syncNativeTerminalForwardedChords } from './native-terminal-forwarded-chords-sync'
 import { registerE2eTerminalSessionNotice } from './e2e-terminal-session-notice'
 import { writeTerminalSessionNotice } from './terminal-session-notice'
+import { createNativeTerminalXtermFeed } from './native-terminal-xterm-feed'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 // Lends the native terminal this session's input path, so native keystrokes take the same
@@ -44,7 +45,8 @@ export function attachNativeTerminalForSession(
         syncNativeTerminalForwardedChords()
         bindNativeTerminalLocalPty(session.transport, surfaceId, boundPtyId)
       },
-      pasteText: (text) => dispatchNativeTerminalPasteText(pane.container, text)
+      pasteText: (text) => dispatchNativeTerminalPasteText(pane.container, text),
+      xtermFeed: createNativeTerminalXtermFeed(session, () => useAppStore.getState().settings)
     },
     useAppStore.getState().settings
   )
