@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { access, readdir, rename } from 'node:fs/promises'
+import { access, rename, rmdir } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import {
   POD_SOFT_BLOCKERS,
@@ -217,13 +217,12 @@ export function createWorkspaceTidyActions(deps: WorkspaceTidyActionDeps) {
       'git worktree add'
     )
     if (fromTrash && record.trashedPath) {
-      // Everything but its old `.git` link goes back; the index is rebuilt from HEAD, so edits
-      // that were uncommitted show as uncommitted again.
-      for (const name of await readdir(record.trashedPath)) {
-        if (name !== '.git') {
-          await rename(join(record.trashedPath, name), join(record.path, name))
-        }
-      }
+      // The trashed folder itself comes back, so nothing is left in the Trash: it takes the new
+      // `.git` link, the checkout git just made (now empty) gives way, and the index is rebuilt
+      // from HEAD, so edits that were uncommitted show as uncommitted again.
+      await rename(join(record.path, '.git'), join(record.trashedPath, '.git'))
+      await rmdir(record.path)
+      await rename(record.trashedPath, record.path)
       await mustSucceed(
         git(['reset', '-q'], record.path, { timeoutMs: 120_000, lazyFetch: true }),
         'git reset'

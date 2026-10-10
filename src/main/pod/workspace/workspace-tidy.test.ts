@@ -169,6 +169,8 @@ describe('workspace tidy (real git)', () => {
     expect((await fx.git(path, 'rev-parse', 'HEAD')).trim()).toBe(head)
     expect((await fx.git(path, 'branch', '--show-current')).trim()).toBe('feature')
     expect(readFileSync(join(path, 'notes.local'), 'utf8')).toBe('ignored-by-nobody\n')
+    // The folder itself came back: nothing of it is left in the Trash.
+    expect(existsSync(join(fx.home, '.Trash', 'feature'))).toBe(false)
     expect(await fx.git(path, 'status', '--porcelain')).toBe('?? notes.local\n')
     await expect(fx.git(repo, 'rev-parse', '--verify', record.ref)).rejects.toThrow()
   })
