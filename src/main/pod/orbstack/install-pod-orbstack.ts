@@ -3,6 +3,8 @@ import { app } from 'electron'
 import type { Repo } from '../../../shared/repo-types'
 import { probeClaudeCliVersion } from '../../claude/claude-hook-event-versions'
 import { resolveClaudeCommand } from '../../codex-cli/command'
+import { getMainHttpClient } from '../../network/http-client'
+import { createClaudeReleaseCache, sandboxClaudePlatform } from './pod-orbstack-claude-release'
 import { isPodOrbstackEnabled } from './pod-orbstack-flag'
 import { createPodOrbstackMachines } from './pod-orbstack-machines'
 import { loadPodOrbstackRecipe } from './pod-orbstack-recipe'
@@ -33,14 +35,20 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   const paths = (): OrbstackToolPaths => resolveOrbstackToolPaths()
   const home = resolveOrbstackHomeOverride()
   const run = createOrbstackToolRunner(paths, home)
+  const releases = createClaudeReleaseCache({
+    root: join(dataDir, 'claude-releases'),
+    fetcher: (url, init) => getMainHttpClient().fetch(url, init),
+    platform: () => sandboxClaudePlatform()
+  })
   const machines = createPodOrbstackMachines({
     paths,
     run,
     registry,
     home,
     loadRecipe: () => loadPodOrbstackRecipe(join(dataDir, 'recipe.json')),
-    hostClaudeVersion: () => probeClaudeCliVersion(resolveClaudeCommand()),
-    skipAgentInstall: resolveOrbstackSkipAgentInstall()
+    prepareClaudeRelease: resolveOrbstackSkipAgentInstall()
+      ? async () => null
+      : async () => releases.prepare(await probeClaudeCliVersion(resolveClaudeCommand()))
   })
   setPodOrbstackService(
     createPodOrbstackService({
