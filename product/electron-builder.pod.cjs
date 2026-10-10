@@ -20,6 +20,8 @@ const {
   ...base
 } = require('../config/electron-builder.config.cjs')
 
+const { assertAppAsar, PRODUCT_FILE_EXCLUSIONS } = require('./release-bundle-gate.cjs')
+
 const repoRoot = join(__dirname, '..')
 // claude-acc payload and distro plugins (identity.claudeAcc); the file arrives with the pod/acc branch.
 const podAccConfig = join(repoRoot, 'config', 'pod-acc-extra-resources.cjs')
@@ -131,7 +133,11 @@ module.exports = {
   appId: identity.appId,
   productName: identity.displayName,
   copyright: identity.copyright,
-  ...(podAcc ? { files: [...base.files, ...podAcc.podAccFileExclusions] } : {}),
+  files: [
+    ...base.files,
+    ...PRODUCT_FILE_EXCLUSIONS,
+    ...(podAcc ? podAcc.podAccFileExclusions : [])
+  ],
   protocols: [{ name: identity.displayName, schemes: identity.protocols }],
   extraMetadata: {
     ...base.extraMetadata,
@@ -152,6 +158,8 @@ module.exports = {
       'Contents',
       'Resources'
     )
+    // Before any signing: an oversized or polluted asar never reaches notarization.
+    assertAppAsar(resourcesDir)
     renameComputerUseHelper(resourcesDir)
     await base.afterPack(context)
     installCliLaunchers(resourcesDir, context.packager.appInfo.productFilename)
