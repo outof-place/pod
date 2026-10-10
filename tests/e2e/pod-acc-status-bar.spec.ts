@@ -1,8 +1,8 @@
 /**
  * Pod bundles claude-acc's plugin: with a Pod identity (bundledPlugins + claudeAcc), a fresh profile
  * gets the plugin system on, the bundled outof-place.pod-acc plugin installed and approved without a
- * review dialog, and its status bar items filled from claude-acc's state files in HOME. The payload
- * lifecycle runs in dry-run, so no setup.sh ever runs here.
+ * review dialog, and its status bar items filled from claude-acc's state files in HOME. A harness
+ * launch skips the payload lifecycle, and dry-run backs that up, so no setup.sh ever runs here.
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
