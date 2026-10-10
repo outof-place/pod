@@ -103,6 +103,8 @@ export type PodAdoptPlan = {
   processes: PodTidyProcess[]
   /** Linked worktrees git must repair after the move. */
   linkedWorktrees: string[]
+  /** `<repo>.worktrees/`, which moves along when it exists. */
+  worktreesDir: string | null
   claudeProjectDir: string | null
 }
 
@@ -112,5 +114,6 @@ export type PodAdoptRecord = {
   from: string
   to: string
   movedAt: number
+  worktreesDirMoved: boolean
   claudeProjectDirMoved: boolean
 }
