@@ -18,7 +18,8 @@ const DAEMONS = 'LaunchDaemons'
 // Bytecode never ships: a cache Python wrote in a checkout would be sealed into the app as is
 // (src/main/pod/acc/acc-bundle-seal.test.ts). What is inside a __pycache__ folder stays out, never
 // the name itself: from 1.31.5 the payload has a plain FILE called __pycache__ next to its .py,
-// so no Python can make the folder there.
+// so no Python can make the folder there. The Python's own stdlib .pyc stay: fetch-pod-python
+// compiles them unchecked-hash, so they are never rewritten.
 const NO_BYTECODE = ['!**/__pycache__/**', '!**/*.pyc']
 
 function requireFetched(dir, names, script) {
