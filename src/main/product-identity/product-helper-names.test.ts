@@ -221,4 +221,27 @@ describe.runIf(process.platform === 'darwin')('helper renames in a packaged bund
     }
     expect(helperNames.upstreamNameLeaks(app)).toEqual([])
   })
+
+  it('covers a nested native app and its XPC services wherever the bundle embeds them', () => {
+    const app = join(tempDir(), 'Pod.app')
+    const native = join(app, 'Contents', 'Library', 'LoginItems', 'PodNative.app')
+    const service = join(native, 'Contents', 'XPCServices', 'OrcaIntelligence.xpc')
+    mkdirSync(join(service, 'Contents', 'MacOS'), { recursive: true })
+    mkdirSync(join(native, 'Contents', 'MacOS'), { recursive: true })
+    plist(join(app, 'Contents', 'Info.plist'), { CFBundleName: 'Pod' })
+    plist(join(native, 'Contents', 'Info.plist'), {
+      CFBundleName: 'Pod',
+      CFBundleDisplayName: 'Orca (native)',
+      CFBundleExecutable: 'PodNative'
+    })
+    plist(join(service, 'Contents', 'Info.plist'), {
+      CFBundleName: 'PodIntelligence',
+      CFBundleExecutable: 'PodIntelligenceService'
+    })
+    const nativeDir = 'Contents/Library/LoginItems/PodNative.app'
+    expect(helperNames.upstreamNameLeaks(app)).toEqual([
+      `${nativeDir}: Info.plist CFBundleDisplayName "Orca (native)"`,
+      `${nativeDir}/Contents/XPCServices/OrcaIntelligence.xpc: bundle name`
+    ])
+  })
 })
