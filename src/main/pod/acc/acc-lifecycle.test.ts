@@ -132,6 +132,17 @@ describe('claude-acc lifecycle', () => {
     )
   })
 
+  it.each([
+    [3, 'claude-acc belongs to another owner'],
+    [4, 'HOME is not the account home']
+  ])('takes setup.sh exit %i as a refusal, not a failed install', async (code, reason) => {
+    const input = fixture()
+    await expect(runAccLifecycle(input, fakeSetup(input, code))).resolves.toMatchObject({
+      status: 'refused',
+      message: expect.stringContaining(reason)
+    })
+  })
+
   it('never runs setup.sh from a throwaway HOME', async () => {
     const input = { ...fixture(), accountHome: '/Users/the-real-account' }
     const run = fakeSetup(input)
