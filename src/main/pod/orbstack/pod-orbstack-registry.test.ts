@@ -42,8 +42,16 @@ describe('PodOrbstackRegistry', () => {
       version: 1,
       machines: [],
       dockerPins: [],
-      sandboxAgents: []
+      sandboxAgents: [],
+      sandboxClaudeLogin: false
     })
+  })
+
+  it("keeps sandboxed agents off this Mac's Claude Code login until the user turns it on", () => {
+    const path = registryPath()
+    expect(new PodOrbstackRegistry(path).sandboxClaudeLogin()).toBe(false)
+    new PodOrbstackRegistry(path).setSandboxClaudeLogin(true)
+    expect(new PodOrbstackRegistry(path).sandboxClaudeLogin()).toBe(true)
   })
 
   it('owns a machine only with the pod- prefix and a registry entry', () => {

@@ -54,6 +54,7 @@ function status(overrides: Partial<PodOrbstackStatus>): PodOrbstackStatus {
     machines: [],
     containers: [],
     links: [],
+    sandboxClaudeLogin: false,
     busyWorktreeIds: [],
     errors: [],
     checkedAt: 0,

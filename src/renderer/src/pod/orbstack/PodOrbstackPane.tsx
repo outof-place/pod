@@ -11,6 +11,7 @@ import { useAppStore } from '@/store'
 import { podOrbstackRpc } from './pod-orbstack-rpc'
 import { runPodOrbstackAction } from './pod-orbstack-actions'
 import { buildPodOrbstackWorktreeRows } from './pod-orbstack-worktree-rows'
+import { PodOrbstackClaudeLoginRow } from './PodOrbstackClaudeLoginRow'
 import { PodOrbstackContainerTable } from './PodOrbstackContainerTable'
 import { PodOrbstackMachineTable } from './PodOrbstackMachineTable'
 import { PodOrbstackWorktreeList } from './PodOrbstackWorktreeList'
@@ -65,6 +66,7 @@ export function PodOrbstackPane(): React.JSX.Element {
   const worktreesByRepo = useAppStore((state) => state.worktreesByRepo)
   const [pendingMachine, setPendingMachine] = useState<string | null>(null)
   const [pendingWorktrees, setPendingWorktrees] = useState<ReadonlySet<string>>(new Set())
+  const [claudeLoginBusy, setClaudeLoginBusy] = useState(false)
   const rows = useMemo(
     () =>
       (status ? buildPodOrbstackWorktreeRows(repos, worktreesByRepo, status) : []).map((row) =>
@@ -156,6 +158,17 @@ export function PodOrbstackPane(): React.JSX.Element {
                 refresh
               )
             }
+          />
+          <PodOrbstackClaudeLoginRow
+            enabled={status.sandboxClaudeLogin}
+            busy={claudeLoginBusy}
+            onChange={(enabled) => {
+              setClaudeLoginBusy(true)
+              void runPodOrbstackAction(
+                () => podOrbstackRpc.setSandboxClaudeLogin(enabled),
+                refresh
+              ).finally(() => setClaudeLoginBusy(false))
+            }}
           />
           <PodOrbstackMachineTable
             machines={status.machines}

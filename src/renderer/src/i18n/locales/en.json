@@ -19724,6 +19724,10 @@
       "machines": "Linux machines",
       "vm": "virtual machine",
       "context": "docker context"
+    },
+    "claudeLogin": {
+      "label": "Let sandboxed agents use this Mac's Claude Code login (the token stays on the Mac; same subscription limits)",
+      "description": "Off by default. When on, Claude Code in a sandbox sends its API calls through Pod on this Mac, which adds the login."
     }
   }
 }

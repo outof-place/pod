@@ -24,7 +24,9 @@ const RegistrySchema = z.object({
   machines: z.array(MachineEntrySchema),
   dockerPins: z.array(z.string()),
   /** Worktrees whose Claude launches run in their sandbox by default. */
-  sandboxAgents: z.array(z.string()).default([])
+  sandboxAgents: z.array(z.string()).default([]),
+  /** Sandboxed agents may use this Mac's Claude Code login. Opt-in: off until the user turns it on. */
+  sandboxClaudeLogin: z.boolean().default(false)
 })
 
 export type PodOrbstackMachineKind = z.infer<typeof MachineEntrySchema>['kind']
@@ -51,7 +53,7 @@ export class PodOrbstackRegistry {
     const result = RegistrySchema.safeParse(parsed)
     this.data = result.success
       ? result.data
-      : { version: 1, machines: [], dockerPins: [], sandboxAgents: [] }
+      : { version: 1, machines: [], dockerPins: [], sandboxAgents: [], sandboxClaudeLogin: false }
     return this.data
   }
 
@@ -124,6 +126,15 @@ export class PodOrbstackRegistry {
     const data = this.load()
     const others = data.sandboxAgents.filter((id) => id !== worktreeId)
     data.sandboxAgents = enabled ? [...others, worktreeId] : others
+    this.save()
+  }
+
+  sandboxClaudeLogin(): boolean {
+    return this.load().sandboxClaudeLogin
+  }
+
+  setSandboxClaudeLogin(enabled: boolean): void {
+    this.load().sandboxClaudeLogin = enabled
     this.save()
   }
 }

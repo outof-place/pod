@@ -435,6 +435,7 @@ import {
   PodOrbstackCreateParams,
   PodOrbstackDockerPinParams,
   PodOrbstackMachineParams,
+  PodOrbstackSandboxClaudeLoginParams,
   PodOrbstackWorktreeParams
 } from './pod-orbstack-params'
 import {
@@ -1053,6 +1054,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orbstack.machines': null,
   'orbstack.pinDocker': PodOrbstackDockerPinParams,
   'orbstack.setAgentSandbox': PodOrbstackAgentSandboxParams,
+  'orbstack.setSandboxClaudeLogin': PodOrbstackSandboxClaudeLoginParams,
   'orbstack.start': PodOrbstackMachineParams,
   'orbstack.status': null,
   'orbstack.stop': PodOrbstackMachineParams,

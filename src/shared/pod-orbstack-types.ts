@@ -81,6 +81,8 @@ export type PodOrbstackStatus = {
   machines: PodOrbstackMachine[]
   containers: PodOrbstackContainer[]
   links: PodOrbstackWorktreeLink[]
+  /** Sandboxed agents may use this Mac's Claude Code login (opt-in). */
+  sandboxClaudeLogin: boolean
   /** Worktree ids with a create or remove in flight. */
   busyWorktreeIds: string[]
   /** Commands that failed while reading the status; the rest is still shown. */
@@ -101,5 +103,6 @@ export const POD_ORBSTACK_RPC = {
   stop: 'orbstack.stop',
   delete: 'orbstack.delete',
   pinDocker: 'orbstack.pinDocker',
-  setAgentSandbox: 'orbstack.setAgentSandbox'
+  setAgentSandbox: 'orbstack.setAgentSandbox',
+  setSandboxClaudeLogin: 'orbstack.setSandboxClaudeLogin'
 } as const
