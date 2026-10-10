@@ -10,15 +10,15 @@ import { z } from 'zod'
 import { getClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
 import { readUserClaudeConfigDir } from '../../claude-accounts/claude-profile-paths'
 import { readActiveClaudeKeychainCredentialsStrict } from '../../claude-accounts/keychain'
-import type { SandboxAnthropicCredentials } from './pod-orbstack-anthropic-route'
+import {
+  SandboxCredentialError,
+  type SandboxAnthropicCredentials
+} from './pod-orbstack-anthropic-route'
 
 const RECHECK_MS = 30_000
 const EXPIRY_MARGIN_MS = 60_000
 
-/** A refusal whose message is safe to show the sandbox: it never carries the token. */
-export class SandboxCredentialError extends Error {
-  override name = 'SandboxCredentialError'
-}
+export { SandboxCredentialError }
 
 /** The login a Mac launch would use: the routed account's folder, else the System default. */
 export type ClaudeLoginTarget = { account: 'profile' | 'system'; configDir: string | null }
