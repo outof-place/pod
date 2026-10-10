@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import {
+  RUNTIME_LOCAL_STREAM_CONNECTION_ID_PREFIX,
   RUNTIME_LOCAL_STREAM_MAX_OUTBOUND_FRAME_BYTES,
   RUNTIME_LOCAL_STREAM_PROTOCOL,
   RUNTIME_LOCAL_STREAM_UNSUPPORTED_CODE,
@@ -66,7 +67,7 @@ export class RuntimeRpcLocalStreamDispatch extends RuntimeRpcWebSocketDispatch {
       )
       return
     }
-    const connectionId = `local-stream-${randomBytes(8).toString('hex')}`
+    const connectionId = `${RUNTIME_LOCAL_STREAM_CONNECTION_ID_PREFIX}${randomBytes(8).toString('hex')}`
     const result: RuntimeLocalStreamUpgradeResult = {
       protocol: RUNTIME_LOCAL_STREAM_PROTOCOL,
       version: RUNTIME_LOCAL_STREAM_VERSION,
