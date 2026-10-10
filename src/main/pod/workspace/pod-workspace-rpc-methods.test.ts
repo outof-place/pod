@@ -15,27 +15,26 @@ function call(name: string, params?: unknown): unknown {
   return entry.handler(entry.params ? entry.params.parse(params) : undefined, ctx)
 }
 
-function fakeService(enabled: boolean): PodWorkspaceRpcService {
+function fakeService(enabled: boolean) {
   return {
     isEnabled: () => enabled,
     status: vi.fn(),
-    tidyScan: vi.fn(async () => ({
-      scannedAt: 1,
-      worktrees: [],
-      strayFolders: [],
-      prunable: [],
-      archives: [],
-      adoptions: [],
-      errors: []
+    validateRoot: vi.fn(),
+    excludeBuildFolders: vi.fn(async () => ({
+      excluded: 2,
+      failed: [],
+      destination: 'none' as const
     })),
-    tidyApply: vi.fn(async (_action, remove) => {
+    openSpotlightSettings: vi.fn(async () => true),
+    cloneDestination: vi.fn(async () => '/Users/me/pod/acme'),
+    tidyScan: vi.fn(),
+    tidyApply: vi.fn(async (_request, remove) => {
       await remove('repo-1::/w')
       return { ok: true, message: 'Archived w' }
     }),
-    gitProfile: vi.fn(async () => ({ profile: null })),
-    cloneDestination: vi.fn(async () => '/Users/me/pod/acme'),
+    gitProfile: vi.fn(async () => ({ ok: true, message: 'Tuned 3 settings' })),
     adopt: vi.fn()
-  }
+  } satisfies PodWorkspaceRpcService
 }
 
 afterEach(() => {
@@ -44,18 +43,22 @@ afterEach(() => {
 })
 
 describe('podWorkspace.* RPC methods', () => {
-  it('needs host-admin only to move folders', () => {
-    expect(
-      Object.fromEntries(POD_WORKSPACE_METHODS.map((entry) => [entry.name, entry.permission]))
-    ).toEqual({
-      'podWorkspace.enabled': 'workspace',
-      'podWorkspace.status': 'workspace',
-      'podWorkspace.tidyScan': 'workspace',
-      'podWorkspace.tidyApply': 'workspace',
-      'podWorkspace.gitProfile': 'workspace',
-      'podWorkspace.cloneDestination': 'workspace',
-      'podWorkspace.adopt': 'host-admin'
-    })
+  it('needs host-admin for every method', () => {
+    expect(new Set(POD_WORKSPACE_METHODS.map((entry) => entry.permission))).toEqual(
+      new Set(['host-admin'])
+    )
+    expect(POD_WORKSPACE_METHODS.map((entry) => entry.name)).toEqual([
+      'podWorkspace.enabled',
+      'podWorkspace.status',
+      'podWorkspace.validateRoot',
+      'podWorkspace.excludeBuildFolders',
+      'podWorkspace.openSpotlightSettings',
+      'podWorkspace.cloneDestination',
+      'podWorkspace.tidyScan',
+      'podWorkspace.tidyApply',
+      'podWorkspace.gitProfile',
+      'podWorkspace.adopt'
+    ])
   })
 
   it('answers enabled false and refuses the rest when the feature is off', async () => {
@@ -64,28 +67,76 @@ describe('podWorkspace.* RPC methods', () => {
     expect(() => call('podWorkspace.tidyScan', {})).toThrow(/off in this build/)
   })
 
-  it('archives through the runtime removal, unforced', async () => {
-    setPodWorkspaceRpcService(fakeService(true))
-    await call('podWorkspace.tidyApply', { action: { kind: 'archive', worktreeId: 'repo-1::/w' } })
+  it('archives through the runtime removal, with the plan and ticks it was given', async () => {
+    const service = fakeService(true)
+    setPodWorkspaceRpcService(service)
+    const action = { kind: 'archive', worktreeId: 'repo-1::/w' }
+    await call('podWorkspace.tidyApply', {
+      planId: 'p1',
+      reason: 'user',
+      acknowledged: ['dirty'],
+      action
+    })
+    expect(service.tidyApply).toHaveBeenCalledWith(
+      { planId: 'p1', action, acknowledged: ['dirty'] },
+      expect.any(Function)
+    )
     expect(removeManagedWorktree).toHaveBeenCalledWith('id:repo-1::/w', {
       waitForBackgroundRemoval: true
     })
   })
 
-  it('rejects unknown actions at the schema', () => {
+  it('refuses a change without a plan id or without the user intent', () => {
+    setPodWorkspaceRpcService(fakeService(true))
+    const action = { kind: 'prune', repoId: 'repo-1' }
+    expect(() => call('podWorkspace.tidyApply', { reason: 'user', action })).toThrow()
+    expect(() => call('podWorkspace.tidyApply', { planId: 'p1', action })).toThrow()
+    expect(() =>
+      call('podWorkspace.tidyApply', { planId: 'p1', reason: 'agent', action })
+    ).toThrow()
+    expect(() =>
+      call('podWorkspace.gitProfile', { action: 'apply', planId: 'p1', optIns: ['reftable'] })
+    ).toThrow()
+    expect(() => call('podWorkspace.adopt', { action: 'apply', planId: 'p1' })).toThrow()
+    expect(() => call('podWorkspace.excludeBuildFolders', { planId: 'p1' })).toThrow()
+    expect(() => call('podWorkspace.openSpotlightSettings', {})).toThrow()
+  })
+
+  it('rejects unknown actions and ticks at the schema', () => {
     setPodWorkspaceRpcService(fakeService(true))
     expect(() =>
-      call('podWorkspace.tidyApply', { action: { kind: 'delete-everything' } })
+      call('podWorkspace.tidyApply', {
+        planId: 'p1',
+        reason: 'user',
+        action: { kind: 'delete-everything' }
+      })
+    ).toThrow()
+    expect(() =>
+      call('podWorkspace.tidyApply', {
+        planId: 'p1',
+        reason: 'user',
+        acknowledged: ['main-worktree'],
+        action: { kind: 'prune', repoId: 'repo-1' }
+      })
     ).toThrow()
     expect(() => call('podWorkspace.gitProfile', { repoId: 'r', action: 'force' })).toThrow()
   })
 
-  it('wraps the clone destination', async () => {
+  it('passes a profile apply through with its plan and opt-ins', async () => {
+    const service = fakeService(true)
+    setPodWorkspaceRpcService(service)
+    const request = { action: 'apply', planId: 'p1', reason: 'user', optIns: ['backfill'] }
+    await call('podWorkspace.gitProfile', request)
+    expect(service.gitProfile).toHaveBeenCalledWith(request)
+  })
+
+  it('wraps the clone destination and the Spotlight pane', async () => {
     setPodWorkspaceRpcService(fakeService(true))
     await expect(
       call('podWorkspace.cloneDestination', { url: 'git@github.com:acme/x.git' })
-    ).resolves.toEqual({
-      destination: '/Users/me/pod/acme'
+    ).resolves.toEqual({ destination: '/Users/me/pod/acme' })
+    await expect(call('podWorkspace.openSpotlightSettings', { reason: 'user' })).resolves.toEqual({
+      opened: true
     })
   })
 })
