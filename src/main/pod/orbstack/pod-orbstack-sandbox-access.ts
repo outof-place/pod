@@ -6,6 +6,7 @@ import {
   type AnthropicRoute,
   type AnthropicUpstream
 } from './pod-orbstack-anthropic-route'
+import { readMacClaudePrivacy, type SandboxPrivacy } from './pod-orbstack-privacy-env'
 import type { SandboxRelays } from './pod-orbstack-relay'
 import { SANDBOX_CA_PATH } from './pod-orbstack-relay-agent'
 import { createSandboxCas } from './pod-orbstack-sandbox-ca'
@@ -20,8 +21,12 @@ export const SANDBOX_CREDENTIAL_PLACEHOLDER = 'pod-sandbox-no-credential'
 export function createSandboxAccess(deps: {
   relays: SandboxRelays
   upstream?: AnthropicUpstream
+  /** The Mac's Claude Code privacy switches; re-read at every launch. */
+  readPrivacy?: () => SandboxPrivacy
   log?: (message: string) => void
 }) {
+  const readPrivacy = deps.readPrivacy ?? (() => readMacClaudePrivacy())
+  const privacy = new Map<string, SandboxPrivacy>()
   const hookTokens = createSandboxHookTokens()
   const cas = createSandboxCas()
   const routes = new Map<string, AnthropicRoute>()
@@ -41,6 +46,7 @@ export function createSandboxAccess(deps: {
       machine,
       ca: cas.forMachine(machine),
       upstream: deps.upstream,
+      privacy: () => privacy.get(machine) ?? readPrivacy(),
       log: (message) => deps.log?.(`${machine}: ${message}`)
     })
     routes.set(machine, route)
@@ -61,6 +67,8 @@ export function createSandboxAccess(deps: {
       machine: string,
       hookServer: { port: number; token: string }
     ): { nonce: string; vmEnv: Record<string, string> } {
+      const mac = readPrivacy()
+      privacy.set(machine, mac)
       const mode = getPodSandboxAnthropicCredentials().mode()
       if (mode === 'off') {
         dropRoute(machine)
@@ -78,6 +86,8 @@ export function createSandboxAccess(deps: {
       return {
         nonce,
         vmEnv: {
+          // A sandboxed agent sends nothing the Mac agent would not.
+          ...mac.env,
           ORCA_AGENT_HOOK_TOKEN: hookTokens.tokenFor(machine),
           ...(anthropic
             ? {
@@ -95,6 +105,7 @@ export function createSandboxAccess(deps: {
     forget(machine: string): void {
       deps.relays.stop(machine)
       hookTokens.revokeMachine(machine)
+      privacy.delete(machine)
       dropRoute(machine)
     }
   }
