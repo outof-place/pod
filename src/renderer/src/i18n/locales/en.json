@@ -19692,12 +19692,19 @@
       "description": "Pod only reads OrbStack, except for the machines it creates for worktrees.",
       "refresh": "Refresh"
     },
+    "sandbox": {
+      "version": "Claude Code {{version}}",
+      "delete": "Delete agent sandbox",
+      "create": "Create agent sandbox",
+      "agents": "Run Claude in the sandbox",
+      "agentsLabel": "Run Claude launches of {{name}} in its OrbStack sandbox"
+    },
     "worktrees": {
       "busy": "Working…",
       "create": "Create machine",
       "remove": "Delete machine",
       "title": "Worktree machines",
-      "description": "New terminals of a worktree with a machine open inside it, in the same folder. Agents keep running on this Mac.",
+      "description": "New terminals of a worktree with a machine open inside it, in the same folder. Claude runs in the agent sandbox, which sees only the worktree, when you turn that on.",
       "empty": "No local worktrees.",
       "containers": "Containers: {{count}}",
       "noContainers": "No compose containers",

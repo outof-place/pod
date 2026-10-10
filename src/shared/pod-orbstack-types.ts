@@ -24,6 +24,8 @@ export type PodOrbstackMachine = {
   arch: string | null
   /** In Pod's registry with the pod- prefix: the only machines Pod may change. */
   podOwned: boolean
+  /** shared: the worktree's terminal machine; sandbox: isolated, for agents; null: not Pod's. */
+  kind: PodOrbstackMachineKind | null
   /** The worktree a Pod machine was created for. */
   worktreeId: string | null
   /** A registered Pod machine OrbStack no longer lists. */
@@ -52,12 +54,22 @@ export type PodOrbstackDockerContext = {
   orbstackContextExists: boolean
 }
 
+export type PodOrbstackMachineKind = 'shared' | 'sandbox'
+
 export type PodOrbstackWorktreeLink = {
   worktreeId: string
   /** The Pod machine new terminals of this worktree open in. */
   machine: string | null
   /** New Mac terminals of this worktree get DOCKER_CONTEXT=orbstack. */
   dockerPinned: boolean
+  /** The isolated machine this worktree's Claude launches can run in. */
+  sandbox: string | null
+  /** False while Pod is still provisioning the sandbox. */
+  sandboxReady: boolean
+  /** Claude launches run in the sandbox unless a launch says otherwise. */
+  sandboxAgents: boolean
+  /** Claude Code version installed in the sandbox. */
+  sandboxAgentVersion: string | null
 }
 
 export type PodOrbstackStatus = {
@@ -86,5 +98,6 @@ export const POD_ORBSTACK_RPC = {
   start: 'orbstack.start',
   stop: 'orbstack.stop',
   delete: 'orbstack.delete',
-  pinDocker: 'orbstack.pinDocker'
+  pinDocker: 'orbstack.pinDocker',
+  setAgentSandbox: 'orbstack.setAgentSandbox'
 } as const

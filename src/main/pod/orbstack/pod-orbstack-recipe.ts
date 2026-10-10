@@ -52,8 +52,12 @@ export function loadPodOrbstackRecipe(overridePath: string): OrcaVmRecipe {
 
 const MACHINE_NAME_PATTERN = /^pod-[a-z0-9]+(?:-[a-z0-9]+)*$/
 
-/** `pod-<folder>-<hash>`: readable in `orb list`, stable per worktree, a valid hostname label. */
-export function podOrbstackMachineName(worktreeId: string, worktreePath: string): string {
+/** `pod-<folder>-<hash>[-sbx]`: readable in `orb list`, stable per worktree, a valid hostname label. */
+export function podOrbstackMachineName(
+  worktreeId: string,
+  worktreePath: string,
+  kind: 'shared' | 'sandbox' = 'shared'
+): string {
   const slug =
     basename(worktreePath)
       .toLowerCase()
@@ -62,7 +66,7 @@ export function podOrbstackMachineName(worktreeId: string, worktreePath: string)
       .slice(0, 24)
       .replace(/-+$/g, '') || 'worktree'
   const hash = createHash('sha256').update(worktreeId).digest('hex').slice(0, 8)
-  return `${POD_ORBSTACK_MACHINE_PREFIX}${slug}-${hash}`
+  return `${POD_ORBSTACK_MACHINE_PREFIX}${slug}-${hash}${kind === 'sandbox' ? '-sbx' : ''}`
 }
 
 export function isValidPodOrbstackMachineName(name: string): boolean {

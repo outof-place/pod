@@ -431,6 +431,7 @@ import {
   PluginsPanelActionParams
 } from './plugins-params'
 import {
+  PodOrbstackAgentSandboxParams,
   PodOrbstackCreateParams,
   PodOrbstackDockerPinParams,
   PodOrbstackMachineParams,
@@ -1051,6 +1052,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orbstack.enabled': null,
   'orbstack.machines': null,
   'orbstack.pinDocker': PodOrbstackDockerPinParams,
+  'orbstack.setAgentSandbox': PodOrbstackAgentSandboxParams,
   'orbstack.start': PodOrbstackMachineParams,
   'orbstack.status': null,
   'orbstack.stop': PodOrbstackMachineParams,

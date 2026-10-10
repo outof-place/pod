@@ -4,7 +4,8 @@ import type { PodOrbstackActionResult } from '../../../shared/pod-orbstack-types
 import { redactEphemeralVmRecipeDiagnosticText } from '../../../shared/ephemeral-vm-recipe-diagnostics'
 import { runEphemeralVmRecipeStart } from '../../../shared/ephemeral-vm-recipe-runner'
 import { isValidPodOrbstackMachineName, podOrbstackMachineName } from './pod-orbstack-recipe'
-import type { PodOrbstackRegistry } from './pod-orbstack-registry'
+import type { PodOrbstackMachineKind, PodOrbstackRegistry } from './pod-orbstack-registry'
+import { provisionSandbox, resolveSandboxMounts } from './pod-orbstack-sandbox'
 import type { OrbstackToolPaths, OrbstackToolRunner } from './pod-orbstack-tools'
 
 const MACHINE_COMMAND_TIMEOUT_MS = 120_000
@@ -23,6 +24,12 @@ type MachineDeps = {
   runRecipe?: typeof runEphemeralVmRecipeStart
   /** HOME for the recipe's orb calls; null keeps the inherited one. */
   home?: string | null
+  /** The Mac's Claude Code version, which a new sandbox installs. */
+  hostClaudeVersion?: () => Promise<string | null>
+  provision?: typeof provisionSandbox
+  resolveMounts?: typeof resolveSandboxMounts
+  /** E2E only: skip the Claude Code download. */
+  skipAgentInstall?: boolean
   now?: () => number
 }
 
@@ -105,25 +112,84 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
       return { ok: false, error: detail ? `${start.error}\n${detail}` : start.error }
     })
 
-  const remove = (worktreeId: string): Promise<PodOrbstackActionResult> =>
+  const deleteMachine = (name: string) =>
+    deps.run('orb', ['delete', '--force', name], { timeoutMs: MACHINE_COMMAND_TIMEOUT_MS })
+
+  const createSandbox = (target: PodOrbstackWorktreeTarget): Promise<PodOrbstackActionResult> =>
+    withBusy(target.worktreeId, async () => {
+      if (!deps.paths().orb) {
+        return { ok: false, error: 'OrbStack is not installed.' }
+      }
+      if (deps.registry.findByWorktree(target.worktreeId, 'sandbox')) {
+        return { ok: false, error: 'This worktree already has an agent sandbox.' }
+      }
+      const name = podOrbstackMachineName(target.worktreeId, target.worktreePath, 'sandbox')
+      if (!isValidPodOrbstackMachineName(name) || deps.registry.findByName(name)) {
+        return { ok: false, error: `Cannot use the machine name ${name}.` }
+      }
+      // A machine Pod did not record is the user's, even with Pod's name: leave it alone.
+      if (await machineExists(name)) {
+        return { ok: false, error: `${name} already exists in OrbStack.` }
+      }
+      const mounts = await (deps.resolveMounts ?? resolveSandboxMounts)(target.worktreePath)
+      if (mounts.some((path) => path.includes(':'))) {
+        return { ok: false, error: 'OrbStack cannot share a folder whose path contains ":".' }
+      }
+      const entry = {
+        name,
+        worktreeId: target.worktreeId,
+        worktreePath: target.worktreePath,
+        createdAt: (deps.now ?? Date.now)(),
+        kind: 'sandbox' as const
+      }
+      deps.registry.upsert({ ...entry, state: 'creating' })
+      try {
+        const { agentVersion } = await (deps.provision ?? provisionSandbox)({
+          run: deps.run,
+          name,
+          mounts,
+          claudeVersion: (await deps.hostClaudeVersion?.()) ?? null,
+          skipAgentInstall: deps.skipAgentInstall
+        })
+        deps.registry.upsert({
+          ...entry,
+          state: 'ready',
+          ...(agentVersion ? { agentVersion } : {})
+        })
+        return { ok: true }
+      } catch (error) {
+        // This call created the machine (it did not exist above), so it may delete it.
+        await deleteMachine(name)
+        if (!(await machineExists(name))) {
+          deps.registry.remove(name)
+        }
+        return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
+    })
+
+  const remove = (
+    worktreeId: string,
+    kind: PodOrbstackMachineKind = 'shared'
+  ): Promise<PodOrbstackActionResult> =>
     withBusy(worktreeId, async () => {
-      const entry = deps.registry.findByWorktree(worktreeId)
+      const entry = deps.registry.findByWorktree(worktreeId, kind)
       if (!entry) {
-        return { ok: false, error: 'This worktree has no Pod machine.' }
+        return { ok: false, error: 'This worktree has no Pod machine of that kind.' }
       }
       const refusal = guardOwned(entry.name)
       if (refusal) {
         return { ok: false, error: refusal }
       }
       if (await machineExists(entry.name)) {
-        const result = await deps.run('orb', ['delete', '--force', entry.name], {
-          timeoutMs: MACHINE_COMMAND_TIMEOUT_MS
-        })
+        const result = await deleteMachine(entry.name)
         if (result.code !== 0) {
           return { ok: false, error: lastLines(result.stderr) || `Could not delete ${entry.name}.` }
         }
       }
       deps.registry.remove(entry.name)
+      if (kind === 'sandbox') {
+        deps.registry.setSandboxAgents(worktreeId, false)
+      }
       return { ok: true }
     })
 
@@ -142,6 +208,7 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
 
   return {
     create,
+    createSandbox,
     remove,
     start: (name: string) => setRunning(name, true),
     stop: (name: string) => setRunning(name, false),
