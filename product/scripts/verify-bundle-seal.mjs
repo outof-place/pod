@@ -8,7 +8,7 @@
 //
 //   node product/scripts/verify-bundle-seal.mjs <Pod.app>
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -93,7 +93,8 @@ function main() {
   }
 }
 
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+// Why realpath: run through a symlinked path (/tmp), a plain compare skips main() and exits 0.
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(import.meta.filename)) {
   try {
     main()
   } catch (error) {
