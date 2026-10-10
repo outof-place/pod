@@ -11,6 +11,7 @@ const { copyFileSync, existsSync, readFileSync, writeFileSync } = require('node:
 const { join } = require('node:path')
 const { Arch } = require('electron-builder')
 const { installAgentLauncher } = require('./agent-launcher/install-agent-launcher.cjs')
+const { installNativeCli } = require('./native-cli/install-native-cli.cjs')
 // Why destructure: drop every non-mac platform and target section of the upstream config.
 const {
   win: _win,
@@ -157,6 +158,7 @@ module.exports = {
     renameComputerUseHelper(resourcesDir)
     await base.afterPack(context)
     installCliLaunchers(resourcesDir, context.packager.appInfo.productFilename)
+    installNativeCli(resourcesDir, Arch[context.arch], identity)
     installAgentLauncher(resourcesDir, Arch[context.arch])
     writeFileSync(
       join(resourcesDir, 'product-upstream.json'),
