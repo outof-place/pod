@@ -15,6 +15,7 @@ import {
   tailGainedNewerBlockedReason
 } from './terminal-wait-tail-state'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+import { podTrace } from '../../shared/pod-terminal-trace'
 
 export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
   /** Arrival-order mode scan: the settled tracker plus any in-flight snapshot capture's. */
@@ -283,6 +284,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       this.touchMobileSessionSnapshotsForPty(ptyId)
     }
 
+    podTrace('m.pub', data.length)
     this.terminalStreamConsumers.publish(ptyId, data, () => ({
       seq: outputSequence,
       rawLength: sequenceChars,
