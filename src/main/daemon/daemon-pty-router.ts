@@ -1,4 +1,5 @@
 import { reconcileDaemonRouterSessions } from './daemon-router-session-reconciliation'
+import type { PodLaneRequest } from './pod-lane/pod-lane-requests'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-subscription-fanout'
 import type {
@@ -191,6 +192,17 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async resetInputModes(id: string): Promise<void> {
     await this.adapterFor(id).resetInputModes(id)
+  }
+
+  /** Pod: lanes exist on the current daemon only; a legacy daemon's PTY stays on the multiplex. */
+  podLaneControl(
+    id: string,
+    type: PodLaneRequest['type'],
+    payload: PodLaneRequest['payload']
+  ): Promise<unknown> {
+    return this.adapterFor(id) === this.current
+      ? this.current.podLaneControl(id, type, payload)
+      : Promise.reject(new Error('pod_lane_legacy_daemon'))
   }
 
   async closeStartupQueryAuthority(id: string): Promise<number> {
