@@ -6,7 +6,7 @@ import {
   getCanonicalUserDataPath,
   migrateMobilePairingDataToCanonicalUserDataPath
 } from '../persistence'
-import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import { OrcaRuntimeRpcServer, runtimeWebSocketEnabled } from '../runtime/pod-runtime-websocket'
 import { registerMobileHandlers } from '../ipc/mobile'
 import { getLocalPtyProvider, registerHeadlessPtyRuntime } from '../ipc/pty'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
@@ -80,7 +80,7 @@ function installRuntimeRpc(
     runtime,
     // Why: mobile pairing needs the stable pre-setName() path (getCanonicalUserDataPath), not a late app.getPath('userData') that drops paired devices across restarts.
     userDataPath: getCanonicalUserDataPath(),
-    enableWebSocket: true,
+    enableWebSocket: runtimeWebSocketEnabled({ serveMode: Boolean(serveOptions) }),
     // Why: STA-2370 — the desktop app binds the WS listener to loopback until the user pairs a device;
     // `orca serve` is an explicit remote opt-in, and E2E keeps the wide bind its harness connects over.
     exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
