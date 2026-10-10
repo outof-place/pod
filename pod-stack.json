@@ -6,9 +6,14 @@
       "forkOnly": "Pod product docs, release base pin, upstream sync CI and this stack script"
     },
     {
-      "branch": "pod/electron-44",
-      "forkOnly": "bleeding edge: newest Electron, @xterm betas, release-age exclusions for the chased toolchain",
-      "note": "pod-bleeding; cut from Orca main 4a964633f4. Swap for pod/electron-45 once it is green; never list both"
+      "branch": "fix/speech-preload-without-buffer",
+      "upstream": "https://github.com/stablyai/orca/pull/27070",
+      "note": "pod/electron-45 carries the same commit (4b21a7b1de); it is skipped there. Drop this entry once #27070 merges"
+    },
+    {
+      "branch": "pod/electron-45",
+      "forkOnly": "bleeding edge: newest Electron (45 beta), @xterm betas, release-age exclusions for the chased toolchain",
+      "note": "pod-bleeding; Electron 44.7.0 + 45.0.0-beta.1, node-abi 4.36.0. Electron’s version belongs to pod/electron-* only"
     },
     {
       "branch": "perf/main-compile-cache",
@@ -49,8 +54,8 @@
     {
       "branch": "stack/ps-locale",
       "upstream": "https://github.com/stablyai/orca/pull/27005",
-      "base": "origin/perf/native-proc-info-darwin",
-      "note": "fix/ps-locale-independent-start-time replayed onto perf/native-proc-info-darwin (imports merged); refresh when either changes"
+      "base": "f3b5fba03f0609a37b898474237c23dee797c648",
+      "note": "fix/ps-locale-independent-start-time replayed onto perf/native-proc-info-darwin f3b5fba03f (imports merged); refresh when either changes"
     },
     {
       "branch": "perf/daemon-binary-pty-frames",
@@ -87,14 +92,14 @@
     {
       "branch": "stack/native-terminal-on-proc-info",
       "upstream": "https://github.com/stablyai/orca/pull/26914",
-      "base": "origin/perf/native-proc-info-darwin",
-      "note": "feat/native-ghostty-terminal b12c1748c5 replayed onto perf/native-proc-info-darwin (package.json build steps merged); refresh when either changes"
+      "base": "f3b5fba03f0609a37b898474237c23dee797c648",
+      "note": "feat/native-ghostty-terminal 862740cd4f replayed onto perf/native-proc-info-darwin f3b5fba03f (package.json build steps merged); refresh when either changes"
     },
     {
       "branch": "stack/pod-overlay",
       "forkOnly": "Pod overlay: Stably-hosted services off, product name in UI copy",
-      "base": "1232cfb06f",
-      "note": "pod/overlay e1bd1a451e replayed onto the stack; its bundled-plugins-only commit merged with #26975 (plugin-discovery host argument, locale keys). Refresh when pod/overlay changes, or rebase pod/overlay onto stack/plugins"
+      "base": "37eebe3860",
+      "note": "pod/overlay abf4dc09c9 replayed onto the stack; its bundled-plugins-only commit merged with #26975 (plugin-discovery host argument, locale keys). Refresh when pod/overlay changes, or rebase pod/overlay onto stack/plugins"
     },
     {
       "branch": "pod/native-default",
@@ -122,15 +127,14 @@
       "note": "the product-neutral seam (src/main/search/external-workspace-search-provider.ts and its three hooks, fs:rankedPathSearch, host-ranked quick open) is also upstream as https://github.com/stablyai/orca/pull/27014; once that merges, rebase so only the Pod parts remain"
     },
     {
-      "branch": "stack/pod-slim",
-      "forkOnly": "Pod slim profile: compile-time feature cuts (src/shared/product/features.ts) and macOS packaging cuts (product/electron-builder.slim.cjs)",
-      "base": "607c3dd915",
-      "note": "pod/slim 2533e6b9c2 replayed onto the stack (onboarding-tips imports merged). Refresh when pod/slim changes, or rebase pod/slim onto the current main"
+      "branch": "pod/slim",
+      "forkOnly": "Pod slim profile: compile-time feature cuts (src/shared/product/features.ts) and macOS packaging cuts (product/electron-builder.slim.cjs)"
     },
     {
       "branch": "stack/pod-workspace",
-      "forkOnly": "Pod workspace: ~/pod workspace root and clone default <root>/<owner>/<repo>, Time Machine/Spotlight/volume hygiene, Settings > Workspace health dashboard, pod-search root seam",
-      "base": "3bad7ab9a7"
+      "forkOnly": "Pod workspace: ~/pod workspace root and clone default <root>/<owner>/<repo>, Time Machine/Spotlight/volume hygiene, Settings > Workspace health dashboard, workspace roots registered with Pod native search",
+      "base": "4e59f4d146",
+      "note": "pod/workspace ec516fb8df replayed onto main 3bad7ab9a7 plus pod/search-client d59253f754 (base 4e59f4d146 = that replay). Needs pod/search-client at d59253f754 or later earlier in the stack. The top commit afde803a0b (workspace roots and index status wired to pod/search-client) exists only on this copy; keep it when refreshing from pod/workspace"
     }
   ]
 }
