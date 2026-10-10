@@ -1,7 +1,18 @@
 import assert from 'node:assert/strict'
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { once, EventEmitter } from 'node:events'
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from 'node:fs'
+import {
+  cpSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  realpathSync,
+  rmSync
+} from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
@@ -12,6 +23,8 @@ assert.equal(process.platform, 'darwin', 'this fixture requires macOS')
 const require = createRequire(import.meta.url)
 const root = resolve(import.meta.dirname, '../..')
 const scratch = mkdtempSync(join(tmpdir(), 'orca-foreground-package-'))
+const scratchIdentity = lstatSync(scratch)
+const scratchRealpath = realpathSync(scratch)
 const app = join(scratch, 'Foreground Fixture.app')
 const resources = join(app, 'Contents', 'Resources')
 const addon = join(resources, 'native', 'orca-proc-info.node')
@@ -33,6 +46,8 @@ let terminal
 let ownedPid = 0
 let ownedGroup = 0
 let validatedFixtureEntries = 0
+let originalApp
+let originalState
 
 function command(program, args) {
   return execFileSync(program, args, { encoding: 'utf8', timeout: 120_000, env })
@@ -52,19 +67,75 @@ function acknowledgment(event) {
   })
 }
 
-function validateFixture() {
-  const fixtureRoot = realpathSync(app)
-  const directories = [app]
-  validatedFixtureEntries = 0
+function visitAppEntries(appPath, visit) {
+  const fixtureRoot = realpathSync(appPath)
+  const directories = [appPath]
+  let entries = 0
   while (directories.length) {
     for (const entry of readdirSync(directories.pop(), { withFileTypes: true })) {
-      assert(++validatedFixtureEntries < 10_000, 'unexpected fixture size')
+      assert(++entries < 10_000, 'unexpected fixture size')
       const path = join(entry.parentPath, entry.name)
       const resolved = relative(fixtureRoot, realpathSync(path))
-      assert(!isAbsolute(resolved) && resolved !== '..' && !resolved.startsWith('../'))
+      assert(!isAbsolute(resolved) && resolved !== '..' && !resolved.startsWith('../'), path)
+      visit(path, entry)
       if (entry.isDirectory()) {
         directories.push(path)
       }
+    }
+  }
+  return entries
+}
+
+function assertScratchOwned() {
+  const current = lstatSync(scratch)
+  assert(
+    current.isDirectory() &&
+      current.dev === scratchIdentity.dev &&
+      current.ino === scratchIdentity.ino
+  )
+  assert.equal(realpathSync(scratch), scratchRealpath)
+}
+
+function validateFixture() {
+  assertScratchOwned()
+  assert(lstatSync(app).isDirectory())
+  assert.equal(realpathSync(app), join(scratchRealpath, 'Foreground Fixture.app'))
+  validatedFixtureEntries = visitAppEntries(app, (path, entry) => {
+    if (entry.isFile()) {
+      assert.equal(lstatSync(path).nlink, 1, `fixture file is hard-linked: ${path}`)
+    }
+  })
+}
+
+function fileState(path) {
+  const stat = lstatSync(path)
+  return {
+    size: stat.size,
+    mtime: stat.mtimeMs,
+    ctime: stat.ctimeMs,
+    digest: createHash('sha256').update(readFileSync(path)).digest('hex')
+  }
+}
+
+function sourceState() {
+  const files = {}
+  visitAppEntries(originalApp, (path, entry) => {
+    const name = relative(originalApp, path)
+    files[name] = entry.isFile()
+      ? fileState(path)
+      : { mtime: lstatSync(path).mtimeMs, link: entry.isSymbolicLink() ? readlinkSync(path) : null }
+  })
+  const signature = spawnSync('codesign', ['--display', '--verbose=2', originalApp], {
+    encoding: 'utf8'
+  })
+  return {
+    files,
+    addon: fileState(sourceAddon),
+    signature: {
+      status: signature.status,
+      digest: createHash('sha256')
+        .update(signature.stdout + signature.stderr)
+        .digest('hex')
     }
   }
 }
@@ -78,7 +149,9 @@ function sealFixture() {
 async function main() {
   command(process.execPath, ['config/scripts/build-proc-info-macos.mjs'])
   const originalExecutable = require('electron')
-  cpSync(dirname(dirname(dirname(originalExecutable))), app, {
+  originalApp = dirname(dirname(dirname(originalExecutable)))
+  originalState = sourceState()
+  cpSync(originalApp, app, {
     recursive: true,
     verbatimSymlinks: true
   })
@@ -177,6 +250,7 @@ async function main() {
     JSON.stringify({
       signing: 'ad-hoc sealed fixture; no Developer ID, hardened-runtime or notarization claim',
       validatedFixtureEntries,
+      sourcePreserved: true,
       realPtyResizeAcknowledgments: results.length,
       results
     })
@@ -201,5 +275,13 @@ try {
     terminal.kill('SIGKILL')
     await exited
   }
+  assertScratchOwned()
   rmSync(scratch, { recursive: true, force: true })
+  if (originalState) {
+    assert.deepEqual(
+      sourceState(),
+      originalState,
+      'fixture altered original Electron or addon files'
+    )
+  }
 }
