@@ -123,7 +123,14 @@ describe.skipIf(process.platform === 'win32')('Pod OrbStack machines', () => {
 })
 
 describe.skipIf(process.platform === 'win32')('Pod OrbStack agent sandboxes', () => {
-  function sandboxSetup(provision: () => Promise<{ agentVersion: string | null }>) {
+  function sandboxSetup(
+    provision: () => Promise<{ agentVersion: string | null }>,
+    prepareClaudeRelease = async () => ({
+      version: '2.1.295',
+      platform: 'linux-arm64',
+      dir: '/cache/2.1.295/linux-arm64'
+    })
+  ) {
     const base = setup()
     const paths = () => ({
       appInstalled: true,
@@ -136,7 +143,7 @@ describe.skipIf(process.platform === 'win32')('Pod OrbStack agent sandboxes', ()
       run: createOrbstackToolRunner(paths),
       registry: base.registry,
       loadRecipe: () => POD_ORBSTACK_BUILTIN_RECIPE,
-      hostClaudeVersion: async () => '2.1.295',
+      prepareClaudeRelease,
       resolveMounts: async (path) => [path],
       provision: async (args) => {
         // Stand-in for the real steps: the fake orb only needs the machine to exist.
@@ -179,6 +186,21 @@ describe.skipIf(process.platform === 'win32')('Pod OrbStack agent sandboxes', ()
     expect(result).toEqual({
       ok: false,
       error: 'install Claude Code: curl: (6) Could not resolve host'
+    })
+    expect(existsSync(join(state, name))).toBe(false)
+    expect(registry.machines()).toEqual([])
+  })
+
+  it('creates nothing when the Claude Code download fails', async () => {
+    const { machines, registry, state, target, name } = sandboxSetup(
+      async () => ({ agentVersion: '2.1.295' }),
+      async () => {
+        throw new Error('Could not download manifest.json: 503')
+      }
+    )
+    expect(await machines.createSandbox(target)).toEqual({
+      ok: false,
+      error: 'Could not download manifest.json: 503'
     })
     expect(existsSync(join(state, name))).toBe(false)
     expect(registry.machines()).toEqual([])
