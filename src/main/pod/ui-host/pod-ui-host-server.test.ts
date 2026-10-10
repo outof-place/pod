@@ -1,4 +1,4 @@
-import { mkdtempSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createConnection, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,17 +19,22 @@ afterEach(() => {
   }
 })
 
+// Why /tmp: sun_path is 104 bytes and macOS's per-user tmpdir is long.
+function scratch(): string {
+  return mkdtempSync(join(process.platform === 'darwin' ? '/tmp' : tmpdir(), 'pod-ui-host-'))
+}
+
 async function startServer(overrides: Partial<PodUiHostServerOptions> = {}) {
-  // Why /tmp: sun_path is 104 bytes and macOS's per-user tmpdir is long.
-  const dir = mkdtempSync(join(process.platform === 'darwin' ? '/tmp' : tmpdir(), 'pod-ui-host-'))
   const options: PodUiHostServerOptions = {
-    socketPath: join(dir, 'pod-ui-host.sock'),
+    socketPath: join(scratch(), 'pod-ui-host', 'host.sock'),
     readToken: () => TOKEN,
+    verifyPeer: () => ({ ok: true, pid: 99 }),
     pid: 4242,
-    onShow: vi.fn(),
+    onOpenSurface: vi.fn(),
+    onSecondInstance: vi.fn(),
     onQuit: vi.fn(),
     onUiPresence: vi.fn(),
-    log: () => {},
+    log: vi.fn(),
     ...overrides
   }
   const server = new PodUiHostServer(options)
@@ -46,6 +51,7 @@ async function connect(path: string): Promise<Client> {
   const lines: string[] = []
   let buffered = ''
   socket.setEncoding('utf8')
+  socket.on('error', () => {})
   socket.on('data', (chunk: string) => {
     buffered += chunk
     let newline = buffered.indexOf('\n')
@@ -91,12 +97,40 @@ describe('isPodUiHostLaunch', () => {
 })
 
 describe('PodUiHostServer', () => {
-  it('listens on a socket only its user can open', async () => {
+  it('listens on a 0600 socket in a 0700 directory', async () => {
     const { options } = await startServer()
     expect(statSync(options.socketPath).mode & 0o777).toBe(0o600)
+    expect(statSync(join(options.socketPath, '..')).mode & 0o777).toBe(0o700)
   })
 
-  it('welcomes a hello with the runtime token and reports the UI attached', async () => {
+  it('tightens its own directory to 0700', async () => {
+    const directory = join(scratch(), 'pod-ui-host')
+    mkdirSync(directory, { mode: 0o755 })
+    chmodSync(directory, 0o755)
+    await startServer({ socketPath: join(directory, 'host.sock') })
+    expect(statSync(directory).mode & 0o777).toBe(0o700)
+  })
+
+  it('refuses to listen in a directory that is a link', async () => {
+    const root = scratch()
+    mkdirSync(join(root, 'elsewhere'))
+    symlinkSync(join(root, 'elsewhere'), join(root, 'pod-ui-host'))
+    const server = new PodUiHostServer({
+      socketPath: join(root, 'pod-ui-host', 'host.sock'),
+      readToken: () => TOKEN,
+      verifyPeer: () => ({ ok: true, pid: 1 }),
+      pid: 1,
+      onOpenSurface: () => {},
+      onSecondInstance: () => {},
+      onQuit: () => {},
+      onUiPresence: () => {},
+      log: () => {}
+    })
+    servers.push(server)
+    expect(await server.start()).toBe(false)
+  })
+
+  it('welcomes an admitted peer whose hello carries the runtime token', async () => {
     const { server, options } = await startServer()
     const client = await hello(options.socketPath)
     expect(JSON.parse(client.lines[0])).toEqual({ type: 'welcome', v: 1, pid: 4242 })
@@ -104,41 +138,111 @@ describe('PodUiHostServer', () => {
     expect(server.attached).toBe(true)
   })
 
-  it('closes a connection whose hello carries another token', async () => {
-    const { server, options } = await startServer()
-    const client = await connect(options.socketPath)
-    send(client, { type: 'hello', v: 1, token: 'stale-token', pid: 99 })
-    await client.closed
-    expect(client.lines).toEqual([])
-    expect(server.attached).toBe(false)
-    expect(options.onUiPresence).not.toHaveBeenCalled()
+  describe('refuses', () => {
+    it('a peer that is not PodNative, before reading a byte', async () => {
+      const verifyPeer = vi.fn(() => ({ ok: false, pid: 77, error: 'peer fails the requirement' }))
+      const { options } = await startServer({ verifyPeer })
+      const client = await connect(options.socketPath)
+      send(client, { type: 'hello', v: 1, token: TOKEN, pid: 77 })
+      await client.closed
+      expect(client.lines).toEqual([])
+      expect(verifyPeer).toHaveBeenCalledTimes(1)
+      expect(options.log).toHaveBeenCalledWith(
+        'ui-host: refused pid 77: peer fails the requirement'
+      )
+    })
+
+    it('everyone when there is no peer check', async () => {
+      const { options } = await startServer({ verifyPeer: null })
+      const client = await connect(options.socketPath)
+      send(client, { type: 'hello', v: 1, token: TOKEN, pid: 1 })
+      await client.closed
+      expect(client.lines).toEqual([])
+    })
+
+    it('a hello with another token', async () => {
+      const { server, options } = await startServer()
+      const client = await connect(options.socketPath)
+      send(client, { type: 'hello', v: 1, token: 'stale-token', pid: 99 })
+      await client.closed
+      expect(client.lines).toEqual([])
+      expect(server.attached).toBe(false)
+    })
+
+    it('a hello while the runtime has no token yet', async () => {
+      const { options } = await startServer({ readToken: () => null })
+      const client = await connect(options.socketPath)
+      send(client, { type: 'hello', v: 1, token: TOKEN, pid: 99 })
+      await client.closed
+    })
+
+    it('a hello of another protocol version', async () => {
+      const { options } = await startServer()
+      const client = await connect(options.socketPath)
+      send(client, { type: 'hello', v: 2, token: TOKEN, pid: 99 })
+      await client.closed
+      expect(client.lines).toEqual([])
+    })
+
+    it('anything before the hello', async () => {
+      const { options } = await startServer()
+      const client = await connect(options.socketPath)
+      send(client, { type: 'quit', reason: 'user' })
+      await client.closed
+      expect(options.onQuit).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['an unknown verb', { type: 'exec', command: 'id' }],
+      ['a second hello', { type: 'hello', v: 1, token: TOKEN, pid: 99 }],
+      ['an extra field on a known verb', { type: 'quit', reason: 'user', command: 'id' }],
+      ['a quit for an unknown reason', { type: 'quit', reason: 'later' }],
+      ['an unknown surface', { type: 'openSurface', surface: 'terminal' }],
+      [
+        'a forward of 33 URLs',
+        { type: 'secondInstance', urls: Array(33).fill('pod://x'), files: [] }
+      ]
+    ])('%s after the hello, and ends the connection', async (_name, message) => {
+      const { options } = await startServer()
+      const client = await hello(options.socketPath)
+      send(client, message)
+      await client.closed
+      expect(options.onQuit).not.toHaveBeenCalled()
+      expect(options.onOpenSurface).not.toHaveBeenCalled()
+      expect(options.onSecondInstance).not.toHaveBeenCalled()
+    })
+
+    it('a line that is not JSON', async () => {
+      const { options } = await startServer()
+      const client = await hello(options.socketPath)
+      client.socket.write('quit\n')
+      await client.closed
+    })
+
+    it('a line over 64 KiB', async () => {
+      const { options } = await startServer()
+      const client = await hello(options.socketPath)
+      client.socket.write('x'.repeat(70 * 1024))
+      await client.closed
+    })
   })
 
-  it('closes a connection that asks for anything before its hello', async () => {
-    const { options } = await startServer()
-    const client = await connect(options.socketPath)
-    send(client, { type: 'quit' })
-    await client.closed
-    expect(options.onQuit).not.toHaveBeenCalled()
-  })
-
-  it('refuses every hello while the runtime has no token yet', async () => {
-    const { options } = await startServer({ readToken: () => null })
-    const client = await connect(options.socketPath)
-    send(client, { type: 'hello', v: 1, token: TOKEN, pid: 99 })
-    await client.closed
-  })
-
-  it('routes show and quit from the attached UI', async () => {
+  it('routes the verbs of the attached UI', async () => {
     const { options } = await startServer()
     const client = await hello(options.socketPath)
-    send(client, { type: 'show', surface: 'window', worktreeId: 'repo::/w' })
-    send(client, { type: 'quit' })
-    await vi.waitFor(() => expect(options.onQuit).toHaveBeenCalledTimes(1))
-    expect(options.onShow).toHaveBeenCalledWith({
-      type: 'show',
+    send(client, { type: 'openSurface', surface: 'window', worktreeId: 'repo::/w' })
+    send(client, { type: 'secondInstance', urls: ['pod://skills/x'], files: [] })
+    send(client, { type: 'quit', reason: 'update' })
+    await vi.waitFor(() => expect(options.onQuit).toHaveBeenCalledWith('update'))
+    expect(options.onOpenSurface).toHaveBeenCalledWith({
+      type: 'openSurface',
       surface: 'window',
       worktreeId: 'repo::/w'
+    })
+    expect(options.onSecondInstance).toHaveBeenCalledWith({
+      type: 'secondInstance',
+      urls: ['pod://skills/x'],
+      files: []
     })
   })
 
@@ -149,7 +253,7 @@ describe('PodUiHostServer', () => {
     await vi.waitFor(() => expect(options.onUiPresence).toHaveBeenLastCalledWith(false))
 
     const quitting = await hello(options.socketPath)
-    send(quitting, { type: 'quit' })
+    send(quitting, { type: 'quit', reason: 'user' })
     await vi.waitFor(() => expect(options.onQuit).toHaveBeenCalled())
     quitting.socket.destroy()
     await quitting.closed
@@ -162,8 +266,8 @@ describe('PodUiHostServer', () => {
     const first = await hello(options.socketPath)
     const second = await hello(options.socketPath)
     await first.closed
-    expect(server.send({ type: 'hidden' })).toBe(true)
-    await vi.waitFor(() => expect(second.lines).toContain('{"type":"hidden"}'))
+    expect(server.send({ type: 'surfaceHidden' })).toBe(true)
+    await vi.waitFor(() => expect(second.lines).toContain('{"type":"surfaceHidden"}'))
     expect(vi.mocked(options.onUiPresence).mock.calls).toEqual([[true], [true]])
   })
 
@@ -188,10 +292,12 @@ describe('PodUiHostServer', () => {
 
   it('does not listen on a path longer than sun_path', async () => {
     const server = new PodUiHostServer({
-      socketPath: `/tmp/${'x'.repeat(120)}.sock`,
+      socketPath: `/tmp/${'x'.repeat(120)}/host.sock`,
       readToken: () => TOKEN,
+      verifyPeer: () => ({ ok: true, pid: 1 }),
       pid: 1,
-      onShow: () => {},
+      onOpenSurface: () => {},
+      onSecondInstance: () => {},
       onQuit: () => {},
       onUiPresence: () => {},
       log: () => {}
