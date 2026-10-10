@@ -1,26 +1,31 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Repo } from '../../../shared/repo-types'
-import { getDefaultBaseRefAsync } from '../../git/repo-default-base-ref'
 import { createWorkspaceAdopt } from './workspace-adopt'
+import { resolveWorkspaceCloneDestination } from './workspace-clone-parent'
 import { createWorkspaceGitExec } from './workspace-git-exec'
 import { createWorkspaceGitProfile } from './workspace-git-profile'
 import { createWorkspaceJournal, workspaceJournalPath } from './workspace-journal'
+import { createWorkspacePlanStore, fingerprintOf } from './workspace-plan-store'
 import { createNativeProcessCwdReader } from './workspace-process-cwds'
-import { isLocalGitRepo, resolveWorkspaceRoot } from './workspace-root-path'
+import { validateWorkspaceRoot, type RootValidationDeps } from './workspace-root-validation'
+import { isLocalGitRepo, resolveWorkspaceRoot, workspaceRootSetting } from './workspace-root-path'
 import type { PodWorkspaceRpcService } from './workspace-rpc-service'
+import { openSpotlightSettings } from './workspace-spotlight-settings'
 import type { WorkspaceStatusService } from './workspace-status'
 import { createWorkspaceTidyActions } from './workspace-tidy-actions'
 import { scanWorkspaceTidy } from './workspace-tidy-scan'
-import { parseWorktreePorcelainZ } from './workspace-tidy-git'
+import type { WorkspaceStrayStore } from './workspace-tidy-strays'
+import { createWorkspaceTrash } from './workspace-trash'
 
 export type WorkspaceRpcServiceDeps = {
-  store: { getSettings(): GlobalSettings; getRepos(): Repo[] }
+  store: WorkspaceStrayStore & { getRepos(): Repo[] }
   isEnabled: () => boolean
   status: WorkspaceStatusService
+  validation: RootValidationDeps
   home: string
   userDataDir: string
-  cloneDestination: (url: string) => Promise<string | null>
-  trash: (path: string) => Promise<void>
+  /** The system's Trash, for a folder on another volume than the home folder. */
+  osTrash: (path: string) => Promise<void>
+  onBackgroundDone?: (repoId: string, message: string) => void
 }
 
 export function createPodWorkspaceRpcService(
@@ -29,65 +34,79 @@ export function createPodWorkspaceRpcService(
   const git = createWorkspaceGitExec()
   const processes = createNativeProcessCwdReader()
   const journal = createWorkspaceJournal(workspaceJournalPath(deps.userDataDir))
-  const profile = createWorkspaceGitProfile({ git, home: deps.home })
+  const plans = createWorkspacePlanStore()
+  const trash = createWorkspaceTrash(deps.home, deps.osTrash)
   const localRepos = (): Repo[] => deps.store.getRepos().filter(isLocalGitRepo)
   const getRepo = (repoId: string): Repo | undefined =>
     localRepos().find((repo) => repo.id === repoId)
-  const scanDeps = {
+  const scanDeps = { git, processes, journal, plans, store: deps.store }
+  const profile = createWorkspaceGitProfile({
     git,
-    processes,
+    home: deps.home,
     journal,
-    defaultBaseRef: async (repo: Repo) =>
-      repo.worktreeBaseRef?.trim() || (await getDefaultBaseRefAsync(repo.path))
-  }
+    plans,
+    getRepo,
+    onBackgroundDone: deps.onBackgroundDone
+  })
   const adopt = createWorkspaceAdopt({
     git,
     journal,
+    plans,
     processes,
     getRepo,
     root: () => resolveWorkspaceRoot(deps.store.getSettings(), deps.home),
     home: deps.home
   })
-  const repoOrThrow = (repoId: string): Repo => {
-    const repo = getRepo(repoId)
-    if (!repo) {
-      throw new Error('Unknown repository')
-    }
-    return repo
+  const cloneDeps = {
+    isEnabled: deps.isEnabled,
+    getRootSetting: () => workspaceRootSetting(deps.store.getSettings()),
+    validation: deps.validation
   }
+  // What an Exclude click covers: the build folders the status listed as not yet excluded.
+  const excludeFingerprint = (missing: readonly string[]): string =>
+    fingerprintOf([...missing].sort())
 
   return {
     isEnabled: deps.isEnabled,
-    status: (refresh) => deps.status.getStatus({ refresh }),
+    status: async (refresh) => {
+      const status = await deps.status.getStatus({ refresh })
+      const fingerprints = new Map([['exclude', excludeFingerprint(status.timeMachine.missing)]])
+      return { ...status, excludePlan: plans.issue('status', fingerprints) }
+    },
+    validateRoot: (value) => validateWorkspaceRoot(value, deps.validation),
+    excludeBuildFolders: async (planId) => {
+      plans.expected(planId, 'status', 'exclude')
+      const fresh = await deps.status.getStatus({ refresh: true })
+      plans.verify(planId, 'status', 'exclude', excludeFingerprint(fresh.timeMachine.missing))
+      plans.consume(planId)
+      return deps.status.excludeBuildFolders()
+    },
+    openSpotlightSettings,
+    cloneDestination: (url) => resolveWorkspaceCloneDestination(cloneDeps, url),
     tidyScan: (repoIds) =>
       scanWorkspaceTidy(
         scanDeps,
         localRepos().filter((repo) => !repoIds || repoIds.includes(repo.id))
       ),
-    tidyApply: (action, removeWorktree) =>
-      createWorkspaceTidyActions({ ...scanDeps, getRepo, removeWorktree, trash: deps.trash }).run(
-        action
-      ),
-    gitProfile: async (repoId, action) => {
-      const repo = repoOrThrow(repoId)
-      if (action === 'apply') {
-        const written = await profile.apply(repo.path)
-        return { written, profile: await profile.plan(repo.path) }
+    tidyApply: (request, removeWorktree) =>
+      createWorkspaceTidyActions({ ...scanDeps, getRepo, removeWorktree, trash }).run(request),
+    gitProfile: (request) =>
+      request.action === 'plan'
+        ? profile.plan(request.repoId)
+        : request.action === 'apply'
+          ? profile.apply(request.planId, request.optIns)
+          : profile.undo(request.planId, request.tuneId),
+    adopt: (request) => {
+      switch (request.action) {
+        case 'plan':
+          return adopt.plan(request.repoId)
+        case 'apply':
+          return adopt.apply(request.planId, request.acknowledged)
+        case 'plan-undo':
+          return adopt.planUndo(request.recordId)
+        case 'undo':
+          return adopt.undo(request.planId)
       }
-      if (action === 'revert') {
-        const list = await git(['worktree', 'list', '--porcelain', '-z'], repo.path)
-        const paths = parseWorktreePorcelainZ(list.stdout).map((entry) => entry.path)
-        const removed = await profile.revert(repo.path, paths)
-        return { removed, profile: await profile.plan(repo.path) }
-      }
-      return { profile: await profile.plan(repo.path) }
-    },
-    cloneDestination: deps.cloneDestination,
-    adopt: (action) =>
-      action.kind === 'plan'
-        ? adopt.plan(action.repoId)
-        : action.kind === 'apply'
-          ? adopt.apply(action.repoId)
-          : adopt.undo(action.recordId)
+    }
   }
 }
