@@ -14,6 +14,7 @@ import {
   cpSync,
   existsSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -76,8 +77,30 @@ function install(dir, into) {
   const next = `${into}.next`
   rmSync(next, { recursive: true, force: true })
   cpSync(dir, next, { recursive: true, verbatimSymlinks: true })
+  dropBytecode(next)
   rmSync(into, { recursive: true, force: true })
   renameSync(next, into)
+}
+
+/**
+ * Removes every __pycache__ folder and .pyc file under `dir` (a --from checkout that ran its
+ * tests has them): nothing Python cached may ship inside Pod.app. Returns how many it removed.
+ */
+export function dropBytecode(dir) {
+  let removed = 0
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory() && entry.name === '__pycache__') {
+      rmSync(path, { recursive: true, force: true })
+      removed++
+    } else if (entry.isDirectory()) {
+      removed += dropBytecode(path)
+    } else if (entry.name.endsWith('.pyc')) {
+      rmSync(path, { force: true })
+      removed++
+    }
+  }
+  return removed
 }
 
 /** @param {{ from?: string | null, into?: string, pin?: { repository: string, tag: string, asset: string, sha256: string | null }, download?: typeof fetch }} [options] */
