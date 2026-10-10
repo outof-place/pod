@@ -43,9 +43,13 @@ export function sha256File(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
 
-/** A payload is usable when setup.sh and VERSION are where Pod's lifecycle looks for them. */
+/**
+ * A payload is usable when setup.sh and VERSION are where Pod's lifecycle looks for them. From
+ * 1.31 the menu helper is Pod Menu.app instead of Claude Acc.app.
+ */
 export function assertPayload(dir) {
-  for (const name of ['VERSION', 'setup.sh', 'owner.py', 'Claude Acc.app', 'claude-acc-hook']) {
+  const helper = existsSync(join(dir, 'Pod Menu.app')) ? 'Pod Menu.app' : 'Claude Acc.app'
+  for (const name of ['VERSION', 'setup.sh', 'owner.py', helper, 'claude-acc-hook']) {
     if (!existsSync(join(dir, name))) {
       throw new Error(`claude-acc payload ${dir} has no ${name}`)
     }
