@@ -1,4 +1,5 @@
 import { fetchManagedAccountUsage } from '../claude-fetcher'
+import { POD_USAGE_POLLING } from '../../../shared/product/features'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { RateLimitServicePolling } from './service-polling'
 import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './service-types'
@@ -6,7 +7,10 @@ import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
-    if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
+    if (
+      !POD_USAGE_POLLING ||
+      Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS
+    ) {
       return
     }
     this.pruneInactiveClaudeState()
@@ -83,7 +87,10 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
   }
 
   async fetchInactiveCodexAccountsOnOpen(): Promise<void> {
-    if (Date.now() - this.lastInactiveCodexFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
+    if (
+      !POD_USAGE_POLLING ||
+      Date.now() - this.lastInactiveCodexFetchAt < INACTIVE_FETCH_DEBOUNCE_MS
+    ) {
       return
     }
     this.pruneInactiveCodexState()
