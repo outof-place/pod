@@ -1,5 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { readEntryReftableSignature } from './worktree-git-common-reftable-stack'
 
 const STRUCTURAL_METADATA_FILES = ['HEAD', 'gitdir', 'locked', 'config.worktree']
 const INDEX_FILE = 'index'
@@ -32,6 +33,8 @@ export type GitCommonEntrySnapshot = {
   structuralSignatures: Map<string, string>
   indexSignature: string | null
   headLogSignature: string | null
+  /** `reftable/tables.list` of the entry's own stack; null without one. */
+  reftableSignature?: string | null
 }
 
 export async function snapshotGitCommonEntry(
@@ -58,7 +61,9 @@ export async function snapshotGitCommonEntry(
       }
     )
   }
-  const shouldRescan = forceFullScan || !previous || previous.dirSignature !== nextDirSignature
+  const dirMoved = forceFullScan || !previous || previous.dirSignature !== nextDirSignature
+  const reftableSignature = await readEntryReftableSignature(entryPath, previous, dirMoved)
+  const shouldRescan = dirMoved || reftableSignature !== (previous?.reftableSignature ?? null)
   if (!shouldRescan) {
     return previous
   }
@@ -79,6 +84,7 @@ export async function snapshotGitCommonEntry(
     dirSignature: nextDirSignature,
     structuralSignatures,
     indexSignature,
-    headLogSignature
+    headLogSignature,
+    reftableSignature
   }
 }
