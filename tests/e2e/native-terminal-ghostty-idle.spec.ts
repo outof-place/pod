@@ -32,10 +32,13 @@ import {
 // Idle cost of terminal panes: CPU time, instructions, timer wakeups and footprint per
 // process, xterm.js vs native Ghostty, at 1/4/8 panes. Opt-in:
 //   ORCA_NATIVE_TERMINAL_IDLE_BENCH=1 SKIP_BUILD=1 pnpm run test:e2e tests/e2e/native-terminal-ghostty-idle.spec.ts
+// ORCA_NATIVE_TERMINAL_IDLE_CURSOR_BLINK=0 measures with cursor blink off.
 
 const enabled = process.env.ORCA_NATIVE_TERMINAL_IDLE_BENCH === '1'
 const rounds = Number(process.env.ORCA_NATIVE_TERMINAL_IDLE_ROUNDS ?? 3)
 const idleMs = Number(process.env.ORCA_NATIVE_TERMINAL_IDLE_MS ?? 10_000)
+// Unset keeps Orca's default (blinking); 0 or 1 sets terminalCursorBlink for the run.
+const cursorBlink = process.env.ORCA_NATIVE_TERMINAL_IDLE_CURSOR_BLINK
 const PANE_STEPS = [1, 4, 8]
 const SETTLE_MS = 4_000
 const GATE_PANES = 4
@@ -89,6 +92,11 @@ async function openFirstPane(
     })
     .toBe(0)
   await setTerminalMode(orcaPage, mode)
+  if (cursorBlink === '0' || cursorBlink === '1') {
+    await orcaPage.evaluate(async (blink) => {
+      await window.__store?.getState().updateSettings({ terminalCursorBlink: blink })
+    }, cursorBlink === '1')
+  }
   const firstTabId = await orcaPage.evaluate(() => window.__store?.getState().activeTabId)
   await orcaPage.evaluate(() => {
     const state = window.__store?.getState()
