@@ -121,4 +121,13 @@ describe('registerWorkspaceIndexStatusProvider', () => {
     dropFirst()
     expect(getWorkspaceIndexStatusProvider()).toBe(second)
   })
+
+  it('hides a provider while it reports itself unavailable', () => {
+    let available = false
+    const provider = vi.fn(async () => null)
+    registerWorkspaceIndexStatusProvider(provider, () => available)
+    expect(getWorkspaceIndexStatusProvider()).toBeNull()
+    available = true
+    expect(getWorkspaceIndexStatusProvider()).toBe(provider)
+  })
 })
