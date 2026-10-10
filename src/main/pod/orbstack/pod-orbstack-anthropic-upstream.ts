@@ -50,6 +50,23 @@ const CONNECTION_HEADERS = new Set([
   'http2-settings'
 ])
 
+// Why: Node's HTTP/2 client sends a value with CR, LF or NUL without an error, and the field is
+// dropped on the way, so a malformed credential would go out silently missing.
+const INVALID_HEADER_VALUE = /[\r\n\0]/
+
+class InvalidHeaderValueError extends Error {
+  readonly code = 'ERR_INVALID_CHAR'
+}
+
+function checkedHeaderValue(value: string | string[]): string | string[] {
+  for (const item of Array.isArray(value) ? value : [value]) {
+    if (INVALID_HEADER_VALUE.test(item)) {
+      throw new InvalidHeaderValueError('invalid header value')
+    }
+  }
+  return value
+}
+
 function requestHeaders(request: AnthropicUpstreamRequest, gzip: boolean): OutgoingHttpHeaders {
   const headers: OutgoingHttpHeaders = {
     [h2.HTTP2_HEADER_METHOD]: request.method,
@@ -59,7 +76,7 @@ function requestHeaders(request: AnthropicUpstreamRequest, gzip: boolean): Outgo
   for (const [rawName, value] of Object.entries(request.headers)) {
     const name = rawName.toLowerCase()
     if (!CONNECTION_HEADERS.has(name) && !name.startsWith(':')) {
-      headers[name] = value
+      headers[name] = checkedHeaderValue(value)
     }
   }
   if (gzip) {
