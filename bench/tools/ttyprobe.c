@@ -9,6 +9,7 @@
 // sysctl-rows KERN_PROC_TTY plus KERN_PROCARGS2 per process (the same columns as ps-rows)
 // ps-all     `ps -axo pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command=` (PS_ARGS, the whole table)
 // ps-cheap   `ps -axo pid=,ppid=,pgid=,tpgid=,stat=,lstart=` (CHEAP_PS_ARGS)
+// ps-notty   PS_ARGS without `tty=`; ps-ttyonly `ps -axo pid=,tty=`; ps-pidonly `ps -axo pid=`
 // sysctl-all KERN_PROC_ALL plus KERN_PROCARGS2 per process and devname cached per device: PS_ARGS' columns
 #include <errno.h>
 #include <fcntl.h>
@@ -189,7 +190,8 @@ int main(int argc, char **argv) {
   }
   char tty[64] = "";
   // The whole-table modes read every process; only the per-terminal ones need a tty.
-  int whole_table = !strcmp(mode, "ps-all") || !strcmp(mode, "ps-cheap") || !strcmp(mode, "sysctl-all");
+  int whole_table = !strncmp(mode, "ps-all", 6) || !strcmp(mode, "ps-cheap") || !strcmp(mode, "sysctl-all") ||
+                    !strcmp(mode, "ps-notty") || !strcmp(mode, "ps-ttyonly") || !strcmp(mode, "ps-pidonly");
   if (!whole_table && sysctl_tty(pid, tty, sizeof(tty)) != 0) {
     fprintf(stderr, "pid %d has no controlling terminal\n", pid);
     return 1;
@@ -216,6 +218,18 @@ int main(int argc, char **argv) {
       ok = sysctl_tty(pid, out, sizeof(out));
     } else if (!strcmp(mode, "ps-all")) {
       char *a[] = {"/bin/ps", "-axo", "pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command=", NULL};
+      ok = run_capture(a, out, sizeof(out));
+      if (ok >= 0) rows = count_lines(out);
+    } else if (!strcmp(mode, "ps-notty")) {
+      char *a[] = {"/bin/ps", "-axo", "pid=,ppid=,pgid=,tpgid=,stat=,lstart=,command=", NULL};
+      ok = run_capture(a, out, sizeof(out));
+      if (ok >= 0) rows = count_lines(out);
+    } else if (!strcmp(mode, "ps-ttyonly")) {
+      char *a[] = {"/bin/ps", "-axo", "pid=,tty=", NULL};
+      ok = run_capture(a, out, sizeof(out));
+      if (ok >= 0) rows = count_lines(out);
+    } else if (!strcmp(mode, "ps-pidonly")) {
+      char *a[] = {"/bin/ps", "-axo", "pid=", NULL};
       ok = run_capture(a, out, sizeof(out));
       if (ok >= 0) rows = count_lines(out);
     } else if (!strcmp(mode, "ps-cheap")) {

@@ -22,10 +22,18 @@ import { POD_APP } from '../lib/orca-instance.mjs'
 import { summarize } from '../lib/sample-stats.mjs'
 
 const { values: options } = parseArgs({
-  options: { runs: { type: 'string', default: '7' }, calls: { type: 'string', default: '100' } }
+  options: {
+    runs: { type: 'string', default: '7' },
+    calls: { type: 'string', default: '100' },
+    'extra-ptys': { type: 'string', default: '0' }
+  }
 })
 const runs = Number(options.runs)
 const calls = Number(options.calls)
+const extraPtys = Number(options['extra-ptys'])
+// ps' tty= column pays one /dev scan per tty-bearing row, so its cost follows the number of open
+// terminals: --extra-ptys adds idle ptys, as an agent fleet keeps open, in a suite of its own.
+const SUITE = extraPtys > 0 ? `polling-ptys${extraPtys}` : 'polling'
 const run = promisify(execFile)
 
 // A pane-like terminal: a shell holding the pty with two children, as `login -> zsh -> agent`.
@@ -36,12 +44,17 @@ const holder = spawn(
     stdio: 'ignore'
   }
 )
-// The load gate can wait for hours; never leave the pty behind.
+const extraHolders = Array.from({ length: extraPtys }, () =>
+  spawn('/usr/bin/script', ['-q', '/dev/null', '/bin/sleep', '86400'], { stdio: 'ignore' })
+)
+// The load gate can wait for hours; never leave the ptys behind.
 const stopHolder = () => {
-  try {
-    execFileSync('/usr/bin/pkill', ['-TERM', '-g', String(holder.pid)])
-  } catch {}
-  holder.kill('SIGTERM')
+  for (const child of [holder, ...extraHolders]) {
+    try {
+      execFileSync('/usr/bin/pkill', ['-TERM', '-P', String(child.pid)])
+    } catch {}
+    child.kill('SIGTERM')
+  }
 }
 process.on('exit', stopHolder)
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
@@ -121,6 +134,9 @@ const methods = {
   // The whole process table, as Orca's daemon reads it about once a second (PS_ARGS).
   'c-ps-all': () => probe('ps-all'),
   'c-ps-cheap': () => probe('ps-cheap'),
+  'c-ps-notty': () => probe('ps-notty'),
+  'c-ps-ttyonly': () => probe('ps-ttyonly'),
+  'c-ps-pidonly': () => probe('ps-pidonly'),
   'c-sysctl-all': () => probe('sysctl-all'),
   'node-ps-all': async () => ({
     us: await nodePs(['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command='])
@@ -143,7 +159,13 @@ const samples = await collectSamples({
   count: runs,
   warmup: 1,
   measure: async (index) => {
-    const row = {}
+    // What the tty= column's cost depends on, recorded with every sample.
+    const { stdout: ttys } = await run('/bin/ps', ['-axo', 'tty='], { maxBuffer: 16 * 1024 * 1024 })
+    const rows = ttys.split('\n').filter(Boolean)
+    const row = {
+      processes: rows.length,
+      ttyProcesses: rows.filter((tty) => !tty.trim().startsWith('?')).length
+    }
     // Rotate the order so no method always runs first after the gate.
     const names = Object.keys(methods)
     const order = names.map((_, i) => names[(i + index) % names.length])
@@ -162,6 +184,13 @@ const samples = await collectSamples({
 })
 stopHolder()
 
+function medianOf(rows, field) {
+  return summarize(
+    rows.filter((row) => !row.warmup).map((row) => row[field]),
+    'count'
+  )?.median
+}
+
 const subjects = {
   'c-ps-tty': ['Orca 1.4.223 way: fork `ps -o tty= -p PID` (C posix_spawn)', 'terminal lookup'],
   'c-sysctl-tty': ['sysctl KERN_PROC_PID + devname (C)', 'terminal lookup'],
@@ -179,6 +208,12 @@ const subjects = {
     'Orca 1.4.223 way: fork `ps -axo pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command=` (C posix_spawn)',
     'whole process table (PS_ARGS)'
   ],
+  'c-ps-notty': [
+    '`ps -axo` with PS_ARGS minus tty= (C posix_spawn)',
+    'whole process table, no tty column'
+  ],
+  'c-ps-ttyonly': ['`ps -axo pid=,tty=` (C posix_spawn)', 'whole process table, tty column only'],
+  'c-ps-pidonly': ['`ps -axo pid=` (C posix_spawn)', 'whole process table, pid only'],
   'c-ps-cheap': [
     'Orca 1.4.223 cheap tier: fork `ps -axo pid=,ppid=,pgid=,tpgid=,stat=,lstart=` (C posix_spawn)',
     'whole process table, no tty or command'
@@ -202,13 +237,13 @@ const subjects = {
   ]
 }
 const metrics = Object.keys(methods).map((name) => ({
-  id: `polling.${name}`,
+  id: `${SUITE}.${name}`,
   subject: subjects[name][0],
   metric: `${subjects[name][1]} per call`,
   unit: 'µs',
   better: 'lower',
   stats: summarize(perCall[name], 'µs'),
-  conditions: `${runs} runs x ${calls} calls, plain Node ${process.version}, pty with 3 processes`,
+  conditions: `${runs} runs x ${calls} calls, plain Node ${process.version}, ${medianOf(samples, 'processes')} processes, ${medianOf(samples, 'ttyProcesses')} on a tty${extraPtys > 0 ? ` (${extraPtys} idle ptys added)` : ''}`,
   ...(name.startsWith('addon-')
     ? {
         branch: 'perf/native-proc-info-darwin',
@@ -261,8 +296,12 @@ const comparisons = [
     : [])
 ]
 
-writeSuiteResult('polling', {
-  comparisons,
+writeSuiteResult(SUITE, {
+  comparisons: comparisons.map((pair) => ({
+    ...pair,
+    baseline: pair.baseline.replace(/^polling\./, `${SUITE}.`),
+    candidate: pair.candidate.replace(/^polling\./, `${SUITE}.`)
+  })),
   versions: {
     ps: '/bin/ps (macOS, setuid root)',
     addon: addon

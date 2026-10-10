@@ -4,7 +4,7 @@
 //
 //   node bench/summarize.mjs [results/<date>]
 import { execFileSync } from 'node:child_process'
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { BENCH_ROOT } from './lib/bench-session.mjs'
 
@@ -22,22 +22,31 @@ const GLOBAL_CAVEATS = [
 const dir = path.resolve(
   process.argv[2] ?? path.join(BENCH_ROOT, 'results', new Date().toISOString().slice(0, 10))
 )
+const RUN_FILE = 'run.json'
 const suites = readdirSync(dir)
-  .filter((file) => file.endsWith('.json') && file !== 'summary.json')
+  .filter((file) => file.endsWith('.json') && file !== 'summary.json' && file !== RUN_FILE)
   .map((file) => ({ file, ...JSON.parse(readFileSync(path.join(dir, file), 'utf8')) }))
+// What run-final.sh benched: the Pod build and the commit it was built from, and the pinned
+// search inputs. Absent for runs of single suites.
+const runInfo = existsSync(path.join(dir, RUN_FILE))
+  ? JSON.parse(readFileSync(path.join(dir, RUN_FILE), 'utf8'))
+  : null
 
-// Which topic branches Pod's product stack carries (origin/main:pod-stack.json), so a row that
-// comes from a branch can say whether that change is in Pod yet.
-function podStack() {
+// Which topic branches Pod's product stack carries: pod-stack.json at the commit the benched Pod
+// was built from (else origin/main), so a row that comes from a branch says whether it is in Pod.
+function podStack(commit) {
   const git = (args) =>
     execFileSync('git', ['-C', path.dirname(BENCH_ROOT), ...args], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore']
     }).trim()
+  const ref = commit ?? 'origin/main'
   try {
-    const manifest = JSON.parse(git(['show', 'origin/main:pod-stack.json']))
+    const manifest = JSON.parse(git(['show', `${ref}:pod-stack.json`]))
     return {
-      ref: `origin/main ${git(['rev-parse', '--short', 'origin/main'])}`,
+      ref: `${commit ? 'Pod build commit' : 'origin/main'} ${git(['rev-parse', '--short', ref])}`,
+      commit: git(['rev-parse', ref]),
+      fromBuild: Boolean(commit),
       branches: manifest.stack.map((entry) => entry.branch),
       entries: manifest.stack
     }
@@ -45,7 +54,7 @@ function podStack() {
     return null
   }
 }
-const stack = podStack()
+const stack = podStack(runInfo?.podCommit ?? null)
 
 function hardware(machine) {
   if (!machine) {
@@ -111,6 +120,13 @@ for (const suite of suites) {
       branch: row.branch ?? null,
       upstream: row.upstream ?? null,
       inPodStack: inPodStack(row),
+      // Every Pod row was measured on this build commit (run.json); its stack is podStack.
+      podCommit:
+        (row.group ?? suite.group ?? 'pod') === 'pod'
+          ? stack?.fromBuild
+            ? stack.commit
+            : null
+          : null,
       caveats: rowCaveats(suite, row),
       source: suite.file
     }
@@ -166,6 +182,8 @@ const summary = {
   maxLoad: suites.find((suite) => suite.maxLoad)?.maxLoad ?? null,
   aggregation: suites.find((suite) => suite.aggregation)?.aggregation ?? null,
   podStack: stack,
+  // The Pod build every pod-* row measured, and the pinned inputs of the search suites.
+  run: runInfo,
   caveats: GLOBAL_CAVEATS,
   groups: {
     pod: 'Pod vs Orca and other terminals, measured in this run',
