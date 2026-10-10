@@ -192,7 +192,7 @@ export function CliSection({
                     'auto.components.settings.CliSection.d363e5929b',
                     'Checking CLI registration…'
                   )
-                : (status?.detail ?? brandProductCopy(getInstallDescription(currentPlatform)))}
+                : brandProductCopy(status?.detail ?? getInstallDescription(currentPlatform))}
             </p>
           </div>
           <div className="flex items-center gap-2">
