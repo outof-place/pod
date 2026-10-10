@@ -302,6 +302,29 @@ describe('daemon query responder delegation', () => {
     expect(replies).toEqual(['\x1b[2;1R'])
   })
 
+  it('keeps the daemon answering a hidden pane until main has rebuilt its model', async () => {
+    let eligible = true
+    const { runtime, replies, requests, emit, goDormant, marker } = createDelegatingHarness(
+      () => eligible
+    )
+    await goDormant()
+    markHiddenRendererPty('pty-1')
+    marker(true)
+
+    eligible = false
+    await emit('\x1b[6n')
+    expect(requests).toEqual([true])
+    await runtime.serializeMainTerminalBuffer('pty-1')
+    await emit('x')
+    expect(requests).toEqual([true, false])
+    expect(replies).toEqual([])
+
+    marker(false)
+    await emit('\x1b[6n')
+    await runtime.serializeMainTerminalBuffer('pty-1')
+    expect(replies).toEqual(['\x1b[3;2R'])
+  })
+
   it("reveals a delegated pane after the daemon's take-back without waking main", async () => {
     const { runtime, requests, snapshotReads, emit, goDormant, marker } = createDelegatingHarness()
     await goDormant()
