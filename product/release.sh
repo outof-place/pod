@@ -78,6 +78,29 @@ else
   die "no notarization credentials: set NOTARY_PROFILE, or APPLE_API_KEY(+_ID,+ISSUER), or APPLE_ID(+APPLE_APP_SPECIFIC_PASSWORD,+APPLE_TEAM_ID)"
 fi
 
+# Apple's timestamp service fails now and then mid-signing ("The timestamp service is not
+# available", "A timestamp was expected but was not found"). Reruns only that failure: 3 attempts,
+# 3 min apart; anything else fails at once.
+with_timestamp_retry() {
+  local attempt status output
+  for attempt in 1 2 3; do
+    output="$(mktemp)"
+    status=0
+    "$@" 2>&1 | tee "$output" || status=${PIPESTATUS[0]}
+    if [ "$status" -eq 0 ]; then
+      rm -f "$output"
+      return 0
+    fi
+    if [ "$attempt" -eq 3 ] || ! grep -qi 'timestamp' "$output"; then
+      rm -f "$output"
+      return "$status"
+    fi
+    rm -f "$output"
+    log "Apple's timestamp service failed (attempt $attempt of 3); retrying in 3 min"
+    sleep 180
+  done
+}
+
 # Fails fast (instead of hanging mid-build) when the key's ACL would raise a keychain prompt.
 preflight_sign() {
   local dir status=0
@@ -131,7 +154,7 @@ fi
 
 log "package, sign and notarize the app (electron-builder staples it)"
 rm -rf dist
-POD_RELEASE=1 POD_VERSION="$version" POD_ARCH="$arch" \
+POD_RELEASE=1 POD_VERSION="$version" POD_ARCH="$arch" with_timestamp_retry \
   pnpm exec electron-builder --config product/electron-builder.pod.cjs --mac "--$arch" --publish never
 
 app="dist/mac-$arch/$display_name.app"
