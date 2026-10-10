@@ -205,6 +205,7 @@ export type PtyApi = {
     deliveryInterestPtyCount: number
     hiddenDeliveryDroppedChars: number
     hiddenDeliveryDroppedChunks: number
+    daemonQueryResponderPtyCount: number
     pendingDroppedChars: number
     diagnostics: PtyMainDeliveryDiagnostics
     rendererLifecycleResetCount: number
