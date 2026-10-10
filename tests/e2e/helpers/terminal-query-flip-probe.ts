@@ -11,7 +11,7 @@ const PROGRAM = `
 const fs = require('fs')
 const [out, ready, go1, stop1, sent1, go2, sent2] = process.argv.slice(2)
 let replies = ''
-// Why write-then-rename: the test reads the file while replies arrive, never half written.
+// Written then renamed, so the test never reads a half-written file.
 const record = () => {
   fs.writeFileSync(out + '.tmp', JSON.stringify({
     cpr: (replies.match(/\\x1b\\[\\d+;\\d+R/g) || []).length,
@@ -25,8 +25,9 @@ record()
 const whenExists = (file) => new Promise((resolve) => {
   const wait = setInterval(() => { if (fs.existsSync(file)) { clearInterval(wait); resolve() } }, 20)
 })
-// Paced filler while stop1 is absent: slow enough that the queue behind the held window
-// stays far below the size at which main pauses the PTY. sent1 marks each idle period.
+// Paced filler while stop1 is absent: fast enough that the held window fills well inside main's
+// 10 s ack-silence heal, slow enough that the queue behind it stays far below the size at which
+// main pauses the PTY. sent1 marks each idle period.
 let idle = false
 const fill = () => {
   if (fs.existsSync(stop1)) {
@@ -36,7 +37,7 @@ const fill = () => {
     return
   }
   idle = false
-  process.stdout.write(('x'.repeat(99) + '\\n').repeat(80), () => setTimeout(fill, 20))
+  process.stdout.write(('x'.repeat(99) + '\\n').repeat(160), () => setTimeout(fill, 20))
 }
 fs.writeFileSync(ready, '1')
 whenExists(go1).then(fill)
