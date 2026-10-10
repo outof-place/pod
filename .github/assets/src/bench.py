@@ -67,6 +67,15 @@ SUITE_NAMES = {
 }
 
 
+def is_coming(m: dict, summary: dict) -> bool:
+    """A `coming` entry names a suite (ogd) or an engine within one (og in search), not a metric id."""
+    return any(
+        m.get("suite") == c.get("suite")
+        and (c.get("id") == c.get("suite") or str(m.get("subject", "")).split(" ")[0] == c.get("id"))
+        for c in summary.get("coming", [])
+    )
+
+
 def suite_label(summary: dict, suite: str) -> str:
     """The suite's name (polling-ptys80 is polling under another condition), plus the condition pod-bench labels it with."""
     key = suite if suite in SUITE_NAMES else max((k for k in SUITE_NAMES if suite.startswith(k)), key=len, default=suite)
@@ -100,9 +109,8 @@ def slug(s: str) -> str:
 def groups(summary: dict) -> list[dict]:
     """One chart per suite and metric, its rows in summary order."""
     out: dict[tuple[str, str], dict] = {}
-    coming = {c.get("id") for c in summary.get("coming", [])}
     for m in summary.get("metrics", []):
-        if m.get("median") is None or is_acc(m) or m["id"] in coming:
+        if m.get("median") is None or is_acc(m) or is_coming(m, summary):
             continue
         key = (m["suite"], m["metric"])
         g = out.setdefault(
@@ -365,8 +373,7 @@ def acc_items(summary: dict) -> list[dict]:
     """claude-acc's rows as items (id minus .historical and .before/.after), in summary order; area is the metric's prefix."""
     comps = {c["candidate"]["id"]: c for c in summary.get("comparisons", [])}
     items: dict[str, dict] = {}
-    dropped = [m["id"] for m in summary.get("metrics", []) if is_acc(m) and private_source(m)]
-    dropped += [c.get("id") for c in summary.get("coming", [])]
+    dropped = [m["id"] for m in summary.get("metrics", []) if is_acc(m) and (private_source(m) or is_coming(m, summary))]
     if dropped:
         print(f"claude-acc: left out {len(dropped)} rows sourced from private notes: {', '.join(dropped)}", file=sys.stderr)
     for m in summary.get("metrics", []):

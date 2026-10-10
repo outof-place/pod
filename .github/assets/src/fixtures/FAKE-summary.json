@@ -518,17 +518,17 @@
  },
  "coming": [
   {
-   "id": "search.single.og",
+   "id": "og",
    "status": "coming",
    "suite": "search",
-   "subject": "FAKE og",
+   "subject": "og (FAKE)",
    "reason": "FAKE reason: no runnable CLI yet."
   },
   {
-   "id": "claude-acc.fake.coming",
+   "id": "ogd",
    "status": "coming",
-   "suite": "claude-acc",
-   "subject": "FAKE acc item",
+   "suite": "ogd",
+   "subject": "ogd (FAKE)",
    "reason": null
   }
  ]
