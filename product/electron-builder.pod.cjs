@@ -13,6 +13,9 @@ const { Arch } = require('electron-builder')
 const { installAgentLauncher } = require('./agent-launcher/install-agent-launcher.cjs')
 const { installNativeCli } = require('./native-cli/install-native-cli.cjs')
 const helperNames = require('./helper-names.cjs')
+// Built by config/scripts/build-pod-peer-identity-macos.mjs (release.sh).
+const POD_PEER_IDENTITY_BUILD =
+  'native/pod-peer-identity-macos/.build/release/pod-peer-identity.node'
 // Why destructure: drop every non-mac platform and target section of the upstream config.
 const {
   win: _win,
@@ -172,6 +175,13 @@ module.exports = {
     )
     // Before any signing: an oversized or polluted asar never reaches notarization.
     assertAppAsar(resourcesDir)
+    // Why: electron-builder only warns on a missing extraResources source, and without the addon
+    // the one-app control socket admits no one.
+    if (!existsSync(join(resourcesDir, 'native', 'pod-peer-identity.node'))) {
+      throw new Error(
+        `product: ${POD_PEER_IDENTITY_BUILD} is missing: run build-pod-peer-identity-macos`
+      )
+    }
     renameComputerUseHelper(resourcesDir)
     helperNames.renameComputerUseExecutable(resourcesDir, identity)
     await base.afterPack(context)
@@ -211,6 +221,8 @@ module.exports = {
       { from: 'LICENSE', to: 'ORCA-LICENSE.txt' },
       // Rollback of the opt-in terminal handover, runnable with the app's own Node.
       { from: 'product/scripts/restore-orca-terminals.mjs', to: 'restore-orca-terminals.mjs' },
+      // The one-app control socket admits only PodNative signed by Pod (pod/one-app).
+      { from: POD_PEER_IDENTITY_BUILD, to: 'native/pod-peer-identity.node' },
       ...podAccMacExtraResources()
     ],
     artifactName: `${identity.displayName}-\${version}-\${arch}-mac.\${ext}`,

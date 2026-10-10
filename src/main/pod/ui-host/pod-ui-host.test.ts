@@ -1,10 +1,13 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { createConnection, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
-  const handlers = new Map<string, (() => void)[]>()
+  const handlers = new Map<string, ((...args: unknown[]) => void)[]>()
+  const on = (event: string, handler: (...args: unknown[]) => void): void => {
+    handlers.set(event, [...(handlers.get(event) ?? []), handler])
+  }
   const window = {
     isDestroyed: vi.fn(() => false),
     isMinimized: vi.fn(() => false),
@@ -18,22 +21,25 @@ const mocks = vi.hoisted(() => {
     window,
     dir: { path: '' },
     app: {
-      on: vi.fn((event: string, handler: () => void) => {
-        handlers.set(event, [...(handlers.get(event) ?? []), handler])
-      }),
-      once: vi.fn((event: string, handler: () => void) => {
-        handlers.set(event, [...(handlers.get(event) ?? []), handler])
-      }),
+      on: vi.fn(on),
+      once: vi.fn(on),
+      emit: vi.fn(),
       quit: vi.fn(),
       show: vi.fn(),
-      focus: vi.fn()
+      focus: vi.fn(),
+      getAppPath: () => '/app',
+      isPackaged: false
     },
     state: { mainWindow: window as unknown, isQuitting: false },
     openSettings: vi.fn()
   }
 })
 
-vi.mock('electron', () => ({ app: mocks.app, shell: { openPath: vi.fn() } }))
+vi.mock('electron', () => ({
+  app: mocks.app,
+  shell: { openPath: vi.fn() },
+  powerMonitor: { on: vi.fn() }
+}))
 vi.mock('../../startup/main-process-state', () => ({ mainProcessState: mocks.state }))
 vi.mock('../../startup/main-window-actions', () => ({
   openSettingsFromSystemMenu: mocks.openSettings
@@ -44,6 +50,11 @@ vi.mock('../../persistence/loading-store/user-data-path', () => ({
 vi.mock('../../runtime/runtime-metadata', () => ({
   readRuntimeMetadata: () => ({ authToken: 'token' })
 }))
+vi.mock('../../product-identity/product-identity', () => ({ productUrlSchemes: () => ['pod'] }))
+vi.mock('./pod-peer-identity', () => ({
+  loadPodPeerVerifier: () => () => ({ ok: true, pid: 7 }),
+  podPeerIdentityAddonPath: () => '/addon'
+}))
 vi.mock('./pod-ui-host-launch', () => ({
   isPodUiHostLaunch: () => true,
   podUiHostOuterApp: () => null,
@@ -53,8 +64,14 @@ vi.mock('./pod-ui-host-launch', () => ({
 type Client = { socket: Socket; lines: string[] }
 const clients: Socket[] = []
 
+function fire(event: string, ...args: unknown[]): void {
+  for (const handler of mocks.handlers.get(event) ?? []) {
+    handler(...args)
+  }
+}
+
 async function attach(): Promise<Client> {
-  const socketPath = join(mocks.dir.path, 'pod-ui-host.sock')
+  const socketPath = join(mocks.dir.path, 'pod-ui-host', 'host.sock')
   await vi.waitFor(() => {
     const probe = createConnection(socketPath)
     return new Promise<void>((resolve, reject) => {
@@ -99,9 +116,7 @@ afterEach(() => {
   for (const socket of clients.splice(0)) {
     socket.destroy()
   }
-  for (const handler of mocks.handlers.get('will-quit') ?? []) {
-    handler()
-  }
+  fire('will-quit')
   vi.clearAllMocks()
   vi.useRealTimers()
 })
@@ -110,16 +125,16 @@ describe('installPodUiHost', () => {
   it('shows the hidden window at the asked worktree and tab', async () => {
     await install()
     const client = await attach()
-    send(client, { type: 'show', surface: 'window', worktreeId: 'repo-1::/w', tabId: 'tab-1' })
+    send(client, { type: 'openSurface', surface: 'window', worktreeId: 'repo-1::/w', tabId: 't' })
     await vi.waitFor(() =>
-      expect(client.lines).toContain('{"type":"shown","surface":"window","visible":true}')
+      expect(client.lines).toContain('{"type":"surfaceShown","surface":"window","visible":true}')
     )
     expect(mocks.window.webContents.send).toHaveBeenCalledWith('ui:activateWorktree', {
       repoId: 'repo-1',
       worktreeId: 'repo-1::/w'
     })
     expect(mocks.window.webContents.send).toHaveBeenCalledWith('ui:focusTerminal', {
-      tabId: 'tab-1',
+      tabId: 't',
       worktreeId: 'repo-1::/w'
     })
     expect(mocks.app.show).toHaveBeenCalled()
@@ -130,24 +145,47 @@ describe('installPodUiHost', () => {
     vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
     await install()
     const client = await attach()
-    send(client, { type: 'show', surface: 'settings' })
+    send(client, { type: 'openSurface', surface: 'settings' })
     await vi.waitFor(() =>
-      expect(client.lines).toContain('{"type":"shown","surface":"settings","visible":false}')
+      expect(client.lines).toContain('{"type":"surfaceShown","surface":"settings","visible":false}')
     )
     expect(mocks.openSettings).toHaveBeenCalled()
     expect(mocks.window.show).not.toHaveBeenCalled()
     expect(mocks.app.focus).not.toHaveBeenCalled()
   })
 
+  it('hands Pod URLs and documents to the second-launch path, and shows the window', async () => {
+    const file = join(mocks.dir.path, 'notes.md')
+    writeFileSync(file, '# notes')
+    await install()
+    const client = await attach()
+    send(client, {
+      type: 'secondInstance',
+      urls: ['pod://skills/abc', 'https://example.com', 'file:///etc/passwd'],
+      files: [file, 'relative.md', join(mocks.dir.path, 'missing.md'), mocks.dir.path]
+    })
+    await vi.waitFor(() => expect(mocks.app.emit).toHaveBeenCalledTimes(1))
+    expect(mocks.app.emit.mock.calls[0][0]).toBe('second-instance')
+    expect(mocks.app.emit.mock.calls[0][2]).toEqual([process.execPath, 'pod://skills/abc', file])
+    await vi.waitFor(() => expect(client.lines.some((l) => l.includes('surfaceShown'))).toBe(true))
+  })
+
+  it('drops a forward with nothing Pod can open', async () => {
+    await install()
+    const client = await attach()
+    send(client, { type: 'secondInstance', urls: ['https://example.com'], files: ['/nope'] })
+    send(client, { type: 'openSurface', surface: 'settings' })
+    await vi.waitFor(() => expect(mocks.openSettings).toHaveBeenCalled())
+    expect(mocks.app.emit).not.toHaveBeenCalled()
+  })
+
   it('quits when PodNative asks, and tells it nothing back', async () => {
     await install()
     const client = await attach()
-    send(client, { type: 'quit' })
+    send(client, { type: 'quit', reason: 'update' })
     await vi.waitFor(() => expect(mocks.app.quit).toHaveBeenCalledTimes(1))
     expect(mocks.state.isQuitting).toBe(true)
-    for (const handler of mocks.handlers.get('before-quit') ?? []) {
-      handler()
-    }
+    fire('before-quit')
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(client.lines.some((line) => line.includes('quitRequested'))).toBe(false)
   })
@@ -155,10 +193,20 @@ describe('installPodUiHost', () => {
   it('tells PodNative when something else quits the runtime', async () => {
     await install()
     const client = await attach()
-    for (const handler of mocks.handlers.get('before-quit') ?? []) {
-      handler()
-    }
-    await vi.waitFor(() => expect(client.lines).toContain('{"type":"quitRequested"}'))
+    fire('before-quit')
+    await vi.waitFor(() =>
+      expect(client.lines).toContain('{"type":"quitRequested","reason":"user"}')
+    )
+  })
+
+  it('asks PodNative forward on a reopen or a second launch of the runtime', async () => {
+    await install()
+    const client = await attach()
+    fire('activate')
+    fire('second-instance', {}, ['Pod'])
+    await vi.waitFor(() =>
+      expect(client.lines.filter((line) => line === '{"type":"activate"}')).toHaveLength(2)
+    )
   })
 
   it('quits a minute after PodNative vanished, unless a fallback window is on screen', async () => {
