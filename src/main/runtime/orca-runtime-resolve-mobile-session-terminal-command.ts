@@ -7,6 +7,7 @@ import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resum
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import { withPodSandboxLaunchChoice } from '../pod/orbstack/pod-orbstack-terminal-override'
 
 export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRuntimeWithRunCreateMobileSessionTerminal {
   protected async resolveMobileSessionTerminalCommand(
@@ -66,7 +67,8 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
     }
     return {
       command: startupPlan.launchCommand,
-      env: startupPlan.env,
+      // Fork-only (Pod): the caller's OrbStack sandbox choice; no-op without the marker.
+      env: withPodSandboxLaunchChoice(startupPlan.env, opts.env),
       // Why: a real-home Codex resume strips inherited CODEX_HOME via
       // envToDelete; dropping it here would resume against the wrong home.
       envToDelete: opts.envToDelete,
