@@ -93,13 +93,19 @@
       "branch": "stack/native-terminal-on-proc-info",
       "upstream": "https://github.com/stablyai/orca/pull/26914",
       "base": "f3b5fba03f0609a37b898474237c23dee797c648",
-      "note": "feat/native-ghostty-terminal 862740cd4f replayed onto perf/native-proc-info-darwin f3b5fba03f (package.json build steps merged); refresh when either changes"
+      "note": "feat/native-ghostty-terminal 7d77474138 replayed onto perf/native-proc-info-darwin f3b5fba03f (package.json build steps merged; 7d77474138 drops both imports of the moved isRemoteRuntimePtyId); refresh when either changes"
+    },
+    {
+      "branch": "pod/libghostty-patched",
+      "forkOnly": "patched libghostty (cursor timer idle)",
+      "base": "05e297b33e",
+      "note": "nt-lean; one commit on feat/native-ghostty-terminal 05e297b33e pointing fetch-libghostty-macos.mjs at the patched GhosttyKit build; base excludes the native branch"
     },
     {
       "branch": "stack/pod-overlay",
       "forkOnly": "Pod overlay: Stably-hosted services off, product name in UI copy",
       "base": "37eebe3860",
-      "note": "pod/overlay abf4dc09c9 replayed onto the stack; its bundled-plugins-only commit merged with #26975 (plugin-discovery host argument, locale keys). Refresh when pod/overlay changes, or rebase pod/overlay onto stack/plugins"
+      "note": "pod/overlay 4e08725204 replayed onto the stack; its bundled-plugins-only commit merged with #26975 (plugin-discovery host argument, locale keys). Refresh when pod/overlay changes, or rebase pod/overlay onto stack/plugins"
     },
     {
       "branch": "pod/native-default",
