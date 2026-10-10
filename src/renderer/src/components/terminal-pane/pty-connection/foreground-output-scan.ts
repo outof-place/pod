@@ -44,6 +44,18 @@ export function shouldWritePtyOutputForeground(isPaneVisible: boolean): boolean 
   return isDocumentVisibilityProvenStale()
 }
 
+// The pane's xterm must show live output: on a foreground pane, and not detached from the
+// byte stream under a main-fed native view (parse once), where main's model stands in.
+export function xtermShowsLiveOutput(session: {
+  deps: { isVisibleRef: { current: boolean } }
+  xtermDetachedForNativeView?: boolean
+}): boolean {
+  return (
+    shouldWritePtyOutputForeground(session.deps.isVisibleRef.current) &&
+    session.xtermDetachedForNativeView !== true
+  )
+}
+
 export type SynchronizedForegroundScan = SynchronizedOutputScan
 
 /** Renderer-facing name for the shared latch scan; the logic is protocol, not view. */

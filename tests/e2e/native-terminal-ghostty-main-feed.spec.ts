@@ -9,6 +9,7 @@ import {
   nativeTerminalDebug,
   splitNativeTerminalPane
 } from './helpers/native-terminal-debug'
+import { expectNativeScreenMatchesXterm } from './helpers/native-terminal-screens'
 import {
   execInTerminal,
   splitActiveTerminalPane,
@@ -56,60 +57,6 @@ async function setMainFeed(app: ElectronApplication, enabled: boolean): Promise<
   await nativeTerminalDebug(app, 'mainFeed', [enabled])
 }
 
-function normalizeScreen(text: string): string {
-  const rows = text.split('\n').map((row) => row.trimEnd())
-  while (rows.length > 0 && rows.at(-1) === '') {
-    rows.pop()
-  }
-  return rows.join('\n')
-}
-
-// The xterm model's visible rows, as the native view should show them.
-function xtermScreen(page: Page, ptyId: string): Promise<string> {
-  return page.evaluate((id) => {
-    const pane = [...(window.__paneManagers?.values() ?? [])]
-      .flatMap((manager) => manager.getPanes())
-      .find((candidate) => candidate.container.dataset.ptyId === id)
-    if (!pane) {
-      return ''
-    }
-    const buffer = pane.terminal.buffer.active
-    const rows: string[] = []
-    for (let y = buffer.viewportY; y < buffer.viewportY + pane.terminal.rows; y += 1) {
-      const line = buffer.getLine(y)
-      const text = line?.translateToString(true) ?? ''
-      // Ghostty's screen text joins soft-wrapped rows into one logical line.
-      if (line?.isWrapped && rows.length > 0) {
-        rows[rows.length - 1] += text
-      } else {
-        rows.push(text)
-      }
-    }
-    return rows.join('\n')
-  }, ptyId)
-}
-
-async function expectIdenticalScreens(
-  page: Page,
-  app: ElectronApplication,
-  ptyId: string,
-  surfaceId: number
-): Promise<void> {
-  await expect
-    .poll(
-      async () => {
-        const native = normalizeScreen(await nativeScreenText(app, surfaceId))
-        const xterm = normalizeScreen(await xtermScreen(page, ptyId))
-        // Why whitespace-blind: the two disagree on which rows are soft-wrapped when a shell
-        // wraps its own prompt, while every visible character must still match in order.
-        const same = native.replace(/\s+/g, '') === xterm.replace(/\s+/g, '')
-        return same ? 'identical' : `native:\n${native}\nxterm:\n${xterm}`
-      },
-      { timeout: 15_000 }
-    )
-    .toBe('identical')
-}
-
 test('main feeds the native view from the PTY stream: same screen as xterm, no mirror IPC', async ({
   orcaPage,
   electronApp
@@ -119,7 +66,7 @@ test('main feeds the native view from the PTY stream: same screen as xterm, no m
   const { ptyId, surfaceId } = await splitNativeTerminalPane(orcaPage, electronApp)
   await execInTerminal(orcaPage, ptyId, "seq 1 2000; printf 'MAIN-FEED-%s\\n' DONE")
   await waitForTerminalOutput(orcaPage, 'MAIN-FEED-DONE')
-  await expectIdenticalScreens(orcaPage, electronApp, ptyId, surfaceId)
+  await expectNativeScreenMatchesXterm(orcaPage, electronApp, ptyId, surfaceId)
   expect(await mirrorWrites(electronApp)).toBe(before)
 
   // The renderer mirror stays the fallback where main does not feed a surface.
@@ -127,7 +74,7 @@ test('main feeds the native view from the PTY stream: same screen as xterm, no m
   const mirrored = await splitNativeTerminalPane(orcaPage, electronApp)
   await execInTerminal(orcaPage, mirrored.ptyId, "printf 'MIRROR-%s\\n' OK")
   await waitForTerminalOutput(orcaPage, 'MIRROR-OK')
-  await expectIdenticalScreens(orcaPage, electronApp, mirrored.ptyId, mirrored.surfaceId)
+  await expectNativeScreenMatchesXterm(orcaPage, electronApp, mirrored.ptyId, mirrored.surfaceId)
   expect(await mirrorWrites(electronApp)).toBeGreaterThan(before)
   await setMainFeed(electronApp, true)
 })
@@ -152,7 +99,7 @@ test('a resize in the middle of a flood leaves the native view and xterm identic
   await expect
     .poll(async () => getTerminalContentForPtyId(orcaPage, ptyId, 4000), { timeout: 60_000 })
     .toContain('RESIZE-DONE')
-  await expectIdenticalScreens(orcaPage, electronApp, ptyId, surfaceId)
+  await expectNativeScreenMatchesXterm(orcaPage, electronApp, ptyId, surfaceId)
 })
 
 test('a reload reattaches each native view to its PTY from main’s model', async ({
@@ -179,7 +126,7 @@ test('a reload reattaches each native view to its PTY from main’s model', asyn
   await expect
     .poll(async () => nativeScreenText(electronApp, surfaceId ?? 0), { timeout: 15_000 })
     .toContain('BEFORE-RELOAD')
-  await expectIdenticalScreens(orcaPage, electronApp, ptyId, surfaceId ?? 0)
+  await expectNativeScreenMatchesXterm(orcaPage, electronApp, ptyId, surfaceId ?? 0)
   // Live output keeps flowing to the reattached view.
   await execInTerminal(orcaPage, ptyId, "printf 'AFTER-%s\\n' RELOAD")
   await expect
