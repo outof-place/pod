@@ -16,7 +16,8 @@ export type NativeTerminalApi = {
   // Session text in xterm that is not PTY output, for a surface main feeds.
   writeLocal: (surfaceId: number, data: string) => void
   setFrames: (frames: NativeTerminalFrame[]) => void
-  focus: (surfaceId: number) => void
+  // unlessMousePressed: a restore that must not take the keyboard from a press on page UI.
+  focus: (surfaceId: number, options?: { unlessMousePressed?: boolean }) => void
   readSelection: (surfaceId: number) => Promise<string | null>
   setAppearance: (appearance: NativeTerminalAppearance, zoomFactor: number) => void
   setForwardedChords: (chords: NativeTerminalForwardedChord[]) => void
