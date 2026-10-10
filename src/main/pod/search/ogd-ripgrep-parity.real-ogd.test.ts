@@ -13,14 +13,12 @@ import { decodeRipgrepLine } from '../../../shared/ripgrep-line-decoding'
 import { buildRgArgs } from '../../../shared/text-search'
 import { OgdClient } from './ogd-client'
 import { isOgdMessage } from './ogd-connection'
-import { decodeOgdPathList, quickOpenRipgrepGlobs } from './pod-search-listing'
+import { decodeOgdPathList } from './pod-search-listing'
 import {
-  OGD_FEATURE_FILES_EXCLUDE,
-  OGD_FEATURE_FILES_IGNORED,
-  OGD_FEATURE_SEARCH_FULL_LINES,
-  OGD_FEATURE_SEARCH_MAX_FILESIZE,
-  OGD_FEATURE_SEARCH_NEGATED_GLOBS
-} from './pod-search-provider'
+  OGD_TEXT_SEARCH_FEATURES,
+  quickOpenScanFields,
+  servesIgnoredScan
+} from './ogd-feature-gates'
 import { buildOgdSearchRequest } from './pod-search-text-results'
 
 // Real-daemon parity: ogd must return exactly what Orca's bundled ripgrep returns, line by line
@@ -48,7 +46,7 @@ const TEXT_QUERIES: Omit<SearchOptions, 'rootPath'>[] = [
   { query: 'import', excludePattern: '**/*.test.ts, node_modules/**' }
 ]
 
-type LineHit = { text: string; ranges: string }
+type LineHit = { text: string; ranges: string; clipped?: boolean }
 
 let daemon: ReturnType<typeof spawnProcess> | null = null
 let client: OgdClient | null = null
@@ -56,6 +54,8 @@ let stateDir = ''
 let root = ''
 const timings: Record<string, { ogd: number; rg: number }> = {}
 const mismatches: Record<string, unknown> = {}
+// Queries whose ogd reply the client declines (a clipped line), so rg answers them in Orca.
+const fallbacks: Record<string, string[]> = {}
 
 function requireClient(): OgdClient {
   if (!client) {
@@ -143,11 +143,14 @@ function ogdHits(matches: unknown): Map<string, LineHit> {
       continue
     }
     hits.set(`${String(match.path)}:${String(match.line)}`, {
-      text: decodeRipgrepLine({
-        text: typeof match.text === 'string' ? match.text : undefined,
-        bytes: typeof match.bytes === 'string' ? match.bytes : undefined
-      }).text,
-      ranges: JSON.stringify(match.ranges)
+      // With `bytes`, `text` is lossy and the ranges index the raw bytes.
+      text: decodeRipgrepLine(
+        typeof match.bytes === 'string'
+          ? { bytes: match.bytes }
+          : { text: typeof match.text === 'string' ? match.text : undefined }
+      ).text,
+      ranges: JSON.stringify(match.ranges),
+      clipped: match.clipped === true
     })
   }
   return hits
@@ -161,7 +164,7 @@ function differences(ogd: Map<string, LineHit>, rg: Map<string, LineHit>): strin
       out.push(`${key}: only in ${a ? 'ogd' : 'rg'}`)
     } else if (a.ranges !== b.ranges) {
       out.push(`${key}: ranges ogd ${a.ranges} rg ${b.ranges}`)
-    } else if (a.text !== b.text) {
+    } else if (a.text !== b.text && !a.clipped) {
       out.push(`${key}: line text differs (${a.text.length} vs ${b.text.length} code units)`)
     }
   }
@@ -204,7 +207,7 @@ describe.skipIf(!ogdBin || !parityRepo || process.platform === 'win32')(
       client?.close()
       daemon?.kill()
       rmSync(stateDir, { recursive: true, force: true })
-      const summary = { repo: root, rg: ripgrepVersion, runs, mismatches, timings }
+      const summary = { repo: root, rg: ripgrepVersion, runs, mismatches, fallbacks, timings }
       if (process.env.ORCA_OGD_PARITY_REPORT) {
         writeFileSync(process.env.ORCA_OGD_PARITY_REPORT, `${JSON.stringify(summary, null, 2)}\n`)
       }
@@ -214,33 +217,30 @@ describe.skipIf(!ogdBin || !parityRepo || process.platform === 'win32')(
     it('returns the same lines and byte ranges as the bundled ripgrep', async () => {
       const ogd = requireClient()
       // Without these the client never sends ogd a text search, so there is nothing to compare.
-      expect(ogd.hasFeature(OGD_FEATURE_SEARCH_FULL_LINES)).toBe(true)
-      expect(ogd.hasFeature(OGD_FEATURE_SEARCH_MAX_FILESIZE)).toBe(true)
+      expect(OGD_TEXT_SEARCH_FEATURES.filter((feature) => !ogd.hasFeature(feature))).toEqual([])
       const report: Record<string, string[]> = {}
       for (const query of TEXT_QUERIES) {
         const options: SearchOptions = { ...query, rootPath: root }
-        const { fields, hasGlobs } = buildOgdSearchRequest(options, root)
+        const fields = buildOgdSearchRequest(options, root)
         const label = JSON.stringify(query)
-        if (hasGlobs && !ogd.hasFeature(OGD_FEATURE_SEARCH_NEGATED_GLOBS)) {
-          report[label] = ['skipped: daemon lacks search.negated_globs, so Orca keeps it on rg']
-          continue
-        }
         const indexed = await timed(async () =>
-          ogd.request('search', { ...fields, limit: UNLIMITED, max_matches: UNLIMITED })
+          ogd.request('search', { ...fields, max_matches: UNLIMITED })
         )
         const ripgrep = await timed(() => runRipgrep(buildRgArgs(options.query, '.', options)))
         timings[`search ${label}`] = { ogd: indexed.ms, rg: ripgrep.ms }
         expect(indexed.value.message.truncated).not.toBe(true)
-        const diff = differences(ogdHits(indexed.value.message.matches), ripgrepHits(ripgrep.value))
+        const ogdLines = ogdHits(indexed.value.message.matches)
+        const clipped = [...ogdLines].filter(([, hit]) => hit.clipped).map(([key]) => key)
+        if (clipped.length > 0) {
+          fallbacks[label] = clipped.slice(0, 10)
+        }
+        const diff = differences(ogdLines, ripgrepHits(ripgrep.value))
         if (diff.length > 0) {
           report[label] = diff.slice(0, 10)
         }
       }
-      const textMismatches = Object.fromEntries(
-        Object.entries(report).filter(([, v]) => !v[0]?.startsWith('skipped'))
-      )
       Object.assign(mismatches, report)
-      expect({ rg: ripgrepVersion, textMismatches }).toEqual({
+      expect({ rg: ripgrepVersion, textMismatches: report }).toEqual({
         rg: ripgrepVersion,
         textMismatches: {}
       })
@@ -259,7 +259,7 @@ describe.skipIf(!ogdBin || !parityRepo || process.platform === 'win32')(
           .map((path) => path.replace(/^\.\//, ''))
           .filter((path) => path.length > 0 && shouldIncludeQuickOpenPath(path))
       for (const ignored of [false, true]) {
-        if (ignored && !ogd.hasFeature(OGD_FEATURE_FILES_IGNORED)) {
+        if (ignored && !servesIgnoredScan(ogd, 'files')) {
           continue
         }
         const indexed = await timed(async () =>
@@ -268,9 +268,7 @@ describe.skipIf(!ogdBin || !parityRepo || process.platform === 'win32')(
             hidden: true,
             barrier: true,
             ...(ignored ? { ignored: true } : {}),
-            ...(ogd.hasFeature(OGD_FEATURE_FILES_EXCLUDE)
-              ? { globs: quickOpenRipgrepGlobs([]) }
-              : {})
+            ...quickOpenScanFields(ogd, 'files', [])
           })
         )
         const ripgrep = await timed(async () => [
