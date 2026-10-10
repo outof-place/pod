@@ -1,8 +1,9 @@
 // The bundled `orca` launcher hard-codes Orca's executable and the CLI defaults to Orca's profile.
-// Pod terminals keep `orca` on PATH for agents and skills; `<cliName>` sits next to it for users
-// (install-native-cli.cjs later keeps it as podx-node, the native front's Node fallback).
+// It ships as `<cliName>` only (install-native-cli.cjs later keeps it as podx-node, the native
+// front's Node fallback). Its env prefix is whatever the tree's launcher uses: POD_ once
+// pod-decouple has run (an assembled main), ORCA_ on a bare product branch.
 const { execFileSync } = require('node:child_process')
-const { copyFileSync, readFileSync, writeFileSync } = require('node:fs')
+const { readFileSync, unlinkSync, writeFileSync } = require('node:fs')
 const { join } = require('node:path')
 
 const CLI_LAUNCHER_ANCHOR = 'ELECTRON="$CONTENTS/MacOS/Orca"'
@@ -14,31 +15,40 @@ const APP_PATH_INNERMOST = [
   '\tif [[ $SOURCE_DIR == */Contents/* ]]; then echo "${SOURCE_DIR%/Contents/*}"; fi'
 ].join('\n')
 
-function patchCliLauncher(text, executableName, userDataName) {
+function patchCliLauncher(text, executableName, userDataName, envPrefix) {
   for (const anchor of [CLI_LAUNCHER_ANCHOR, APP_PATH_ANCHOR]) {
     if (!text.includes(anchor)) {
       throw new Error(`product: the CLI launcher no longer contains ${anchor}`)
     }
   }
+  const prefix = envPrefix && text.includes(`${envPrefix}NODE_OPTIONS`) ? envPrefix : 'ORCA_'
   return text
     .replace(APP_PATH_ANCHOR, () => APP_PATH_INNERMOST)
     .replace(CLI_LAUNCHER_ANCHOR, () =>
       [
         `ELECTRON="$CONTENTS/MacOS/${executableName}"`,
-        `export ORCA_USER_DATA_PATH="\${ORCA_USER_DATA_PATH:-$HOME/Library/Application Support/${userDataName}}"`
+        `export ${prefix}USER_DATA_PATH="\${${prefix}USER_DATA_PATH:-$HOME/Library/Application Support/${userDataName}}"`
       ].join('\n')
     )
 }
 
 function installCliLaunchers(resourcesDir, executableName, identity) {
   const launcherPath = join(resourcesDir, 'bin', 'orca')
-  writeFileSync(
-    launcherPath,
-    patchCliLauncher(readFileSync(launcherPath, 'utf8'), executableName, identity.userDataName)
-  )
   const productLauncher = join(resourcesDir, 'bin', identity.cliName)
-  copyFileSync(launcherPath, productLauncher)
+  writeFileSync(
+    productLauncher,
+    patchCliLauncher(
+      readFileSync(launcherPath, 'utf8'),
+      executableName,
+      identity.userDataName,
+      identity.envPrefix
+    )
+  )
   execFileSync('chmod', ['755', productLauncher])
+  // Why drop it: a bare `orca` would be Orca's name for Pod's CLI.
+  if (identity.cliName !== 'orca') {
+    unlinkSync(launcherPath)
+  }
 }
 
 module.exports = { installCliLaunchers, patchCliLauncher }
