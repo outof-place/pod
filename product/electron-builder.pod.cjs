@@ -9,6 +9,8 @@
 const { execFileSync } = require('node:child_process')
 const { copyFileSync, existsSync, readFileSync, writeFileSync } = require('node:fs')
 const { join } = require('node:path')
+const { Arch } = require('electron-builder')
+const { installAgentLauncher } = require('./agent-launcher/install-agent-launcher.cjs')
 // Why destructure: drop every non-mac platform and target section of the upstream config.
 const {
   win: _win,
@@ -155,6 +157,7 @@ module.exports = {
     renameComputerUseHelper(resourcesDir)
     await base.afterPack(context)
     installCliLaunchers(resourcesDir, context.packager.appInfo.productFilename)
+    installAgentLauncher(resourcesDir, Arch[context.arch])
     writeFileSync(
       join(resourcesDir, 'product-upstream.json'),
       `${JSON.stringify(readOrcaUpstream())}\n`
