@@ -11,7 +11,12 @@
 # an earlier entry needs no rebase when that entry is rewritten. A rewritten copy (same author,
 # date and subject) whose change differs stops the run instead.
 #
-# Exit codes: 0 done, 1 usage or environment error, 2 conflict or stale copy, 3 would drop commits.
+# After stacking, every entry is checked against its branch: a pinned "ref" must contain the branch
+# tip, and a copy's "source" branch must have every commit in the result, by author, date and
+# subject or by patch id. A miss fails the run.
+#
+# Exit codes: 0 done, 1 usage or environment error, 2 conflict or stale copy, 3 would drop commits,
+# 4 a listed branch is not fully in the result.
 set -euo pipefail
 
 usage() {
@@ -49,6 +54,10 @@ Manifest:
   Each entry needs exactly one of "upstream" or "forkOnly". "base" is optional: a ref, or a list
   of refs, whose commits are excluded, for a topic branch cut from something other than Orca main.
   "ref" is optional: a commit to stack instead of the branch tip, to pin a snapshot.
+  "hold" (a reason) marks a "ref" kept behind its branch on purpose: the coverage check reports it
+  instead of failing.
+  "source" names the branch a stack/* copy was replayed from; "sourceSince" (a commit) limits the
+  check to the source commits after it, for a copy that squashed the earlier ones.
   "squash": true stacks the branch as one commit, its net change since the Orca main it last
   merged. Use it for a pull request branch that maintainers update by merging Orca main into it:
   the merges hold conflict resolutions that a commit-by-commit replay would lose.
@@ -138,8 +147,11 @@ m.stack.forEach((e, i) => {
   if (bases.some((b) => typeof b !== "string" || !b || /\s/.test(b))) fail(where + " (" + e.branch + "): \"base\" must be a ref or a list of refs")
   if (e.ref !== undefined && (typeof e.ref !== "string" || !e.ref || /\s/.test(e.ref))) fail(where + " (" + e.branch + "): \"ref\" must be a commit")
   if (e.squash !== undefined && typeof e.squash !== "boolean") fail(where + " (" + e.branch + "): \"squash\" must be true or false")
+  for (const k of ["source", "sourceSince"]) if (e[k] !== undefined && (typeof e[k] !== "string" || !e[k] || /\s/.test(e[k]))) fail(where + " (" + e.branch + "): \"" + k + "\" must be a ref")
+  if (e.hold !== undefined && (typeof e.hold !== "string" || !e.hold || /[\t\n]/.test(e.hold) || e.ref === undefined)) fail(where + " (" + e.branch + "): \"hold\" needs a reason and a \"ref\"")
+  if (e.sourceSince !== undefined && e.source === undefined) fail(where + " (" + e.branch + "): \"sourceSince\" needs \"source\"")
   if (/[\t\n]/.test(value + e.branch)) fail(where + " contains a tab or newline")
-  lines.push([e.branch, hasUp ? "Upstream" : "Fork-only", value, bases.join(" ") || "-", e.ref || "-", e.squash ? "squash" : "-"].join("\t"))
+  lines.push([e.branch, hasUp ? "Upstream" : "Fork-only", value, bases.join(" ") || "-", e.ref || "-", e.squash ? "squash" : "-", e.source || "-", e.sourceSince || "-", e.hold || "-"].join("\t"))
 })
 console.log(lines.join("\n"))
 ' "$manifest")
@@ -213,6 +225,7 @@ change_lines() {
 # Stacked commits by patch id ("<patch id> <source> <entry> <topic>") and by author, date and
 # subject ("<key> <source> <built> <entry> <topic>").
 : >"$tmp/patch-ids"
+: >"$tmp/coverage"
 : >"$tmp/commit-keys"
 remember() {
   local commit=$1 built=$2 pid=$3 key=$4 built_pid=$5
@@ -230,7 +243,7 @@ printf '\nPod stack: %s on Orca %s (%s, %s), topic branches from %s\n\n' "$branc
   "$(TZ=UTC0 git log -1 --date=format-local:'%Y-%m-%d %H:%M UTC' --format=%cd "$base_sha")" "$source_kind"
 
 index=0
-while IFS=$'\t' read -r -u 3 topic key value base pin squash; do
+while IFS=$'\t' read -r -u 3 topic key value base pin squash src src_since hold; do
   [ -n "$topic" ] || continue
   index=$((index + 1))
   note=''
@@ -254,6 +267,7 @@ while IFS=$'\t' read -r -u 3 topic key value base pin squash; do
     note=" (local $topic differs from origin: $(git rev-list --left-right --count "$local_sha...$origin_sha" | awk '{print $1 " ahead, " $2 " behind"}'))"
   fi
   printf '%2d. %s @ %s  %s: %s%s\n' "$index" "$topic" "$(short "$ref_sha")" "$key" "$value" "$note"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$index" "$topic" "$ref_sha" "$pin" "$src" "$src_since" "$hold" >>"$tmp/coverage"
 
   if [ "$key" = Upstream ]; then other_key=Fork-only; else other_key=Upstream; fi
   exclude=("^$upstream_main" "^$base_sha")
@@ -306,7 +320,10 @@ while IFS=$'\t' read -r -u 3 topic key value base pin squash; do
       tree=$(pin_tree "$tree")
       pinned=1
     fi
-    for commit in $commits; do seen="$seen$commit "; done
+    for commit in $commits; do
+      seen="$seen$commit "
+      printf '%s %s %s %d %s\n' "$(git log -1 --format='%ae%n%aI%n%s' "$commit" | git hash-object --stdin)" "$commit" "$commit" "$index" "$topic" >>"$tmp/commit-keys"
+    done
     if [ "$tree" = "$(git rev-parse "$tip^{tree}")" ]; then
       printf '    - %d commit(s) at %s (change already present, dropped)\n' "$count" "$(short "$ref_sha")"
       continue
@@ -424,6 +441,59 @@ while IFS=$'\t' read -r -u 3 topic key value base pin squash; do
   done
   [ "$picked" -gt 0 ] || printf '    (nothing new to stack)\n'
 done 3<<<"$entries"
+
+# The tip of a branch as the stack reads it: origin, else local (or local only with --source local).
+branch_tip() {
+  if [ "$source_kind" = origin ]; then
+    git rev-parse --verify --quiet "refs/remotes/origin/$1^{commit}" || git rev-parse --verify --quiet "refs/heads/$1^{commit}" || true
+  else
+    git rev-parse --verify --quiet "refs/heads/$1^{commit}" || true
+  fi
+}
+
+printf '\nCoverage:\n'
+uncovered=0
+while IFS=$'\t' read -r c_index c_topic c_ref c_pin c_src c_since c_hold; do
+  if [ "$c_pin" != - ]; then
+    branch_sha=$(branch_tip "$c_topic")
+    if [ -n "$branch_sha" ] && ! git merge-base --is-ancestor "$branch_sha" "$c_ref" && [ "$c_hold" != - ]; then
+      printf '  ~ entry %d (%s) held at %s, branch at %s (%d commit(s) not stacked): %s\n' \
+        "$c_index" "$c_topic" "$(short "$c_ref")" "$(short "$branch_sha")" "$(git rev-list --count "$c_ref..$branch_sha")" "$c_hold"
+    elif [ -n "$branch_sha" ] && ! git merge-base --is-ancestor "$branch_sha" "$c_ref"; then
+      printf '  ! entry %d (%s) is pinned at %s, but the branch is at %s: %d commit(s) are not stacked\n' \
+        "$c_index" "$c_topic" "$(short "$c_ref")" "$(short "$branch_sha")" "$(git rev-list --count "$c_ref..$branch_sha")"
+      uncovered=1
+    fi
+  fi
+  [ "$c_src" != - ] || continue
+  src_sha=$(branch_tip "$c_src")
+  if [ -z "$src_sha" ]; then
+    printf '  ! entry %d (%s): source branch %s not found\n' "$c_index" "$c_topic" "$c_src"
+    uncovered=1
+    continue
+  fi
+  src_revs=$(printf '%s\n' "$src_sha" "^$upstream_main" "^$base_sha"; [ "$c_since" = - ] || printf '^%s\n' "$(git rev-parse --verify "$c_since^{commit}")"; [ -z "$orca_tags" ] || printf '%s\n' "$orca_tags" | sed 's/^/^/')
+  missing=0
+  for commit in $(git rev-list --stdin --no-merges <<<"$src_revs"); do
+    case $seen in *" $commit "*) continue ;; esac
+    k=$(git log -1 --format='%ae%n%aI%n%s' "$commit" | git hash-object --stdin)
+    grep -q "^$k " "$tmp/commit-keys" && continue
+    p=$(patch_id "$commit")
+    [ -n "$p" ] && grep -q "^$p " "$tmp/patch-ids" && continue
+    printf '  ! entry %d (%s) lacks %s %s from its source %s\n' "$c_index" "$c_topic" "$(short "$commit")" "$(git log -1 --format=%s "$commit")" "$c_src"
+    missing=1
+  done
+  if [ "$missing" -eq 1 ]; then
+    uncovered=1
+  else
+    printf '  = entry %d (%s) has every commit of %s @ %s\n' "$c_index" "$c_topic" "$c_src" "$(short "$src_sha")"
+  fi
+done <"$tmp/coverage"
+if [ "$uncovered" -eq 1 ]; then
+  printf '\nNothing was changed: a listed branch is not fully in the result. Refresh the pin or the copy.\n' >&2
+  exit 4
+fi
+printf '  every pinned entry contains its branch tip\n'
 
 if [ "$pinned" -eq 0 ]; then
   printf '\nWarning: no stacked commit owns upstream.json, so the result does not record its Orca base.\n'
