@@ -11,6 +11,7 @@ import {
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { discardedSeqRange } from './hidden-startup-renderer-query-write'
 
 export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): void {
   // 'drained' = painted all queued bytes; 'overflow' = queue blew its cap (stream outran fetch+replay); 'refetch' = offsets unmappable, need a fresher snapshot.
@@ -31,15 +32,22 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
         if (data === null) {
           // Why: renderer-only OSC stripping makes raw seq offsets unmappable onto cleaned text; refetch instead of risking duplicate output.
           for (const discarded of chunks.slice(index)) {
-            session.salvageRendererQueriesFromDiscardedRestoreData(discarded.data)
+            session.salvageRendererQueriesFromDiscardedRestoreData(
+              discarded.data,
+              discardedSeqRange(discarded.data, discarded)
+            )
           }
           discardPendingLiveChunksSalvagingQueries()
           return 'refetch'
         }
         if (data.length < chunk.data.length) {
           // Why: the snapshot covers these bytes, but their queries are still the view's to answer.
+          const covered = chunk.data.length - data.length
+          const range = discardedSeqRange(chunk.data, chunk)
           session.salvageRendererQueriesFromDiscardedRestoreData(
-            chunk.data.slice(0, chunk.data.length - data.length)
+            chunk.data.slice(0, covered),
+            // Why the whole span when fully covered: a transformed chunk's raw length differs.
+            range && data ? { startSeq: range.startSeq, endSeq: range.startSeq + covered } : range
           )
         }
         // Why: advance the continuity point so reconciliation neither re-drops drained chunks as duplicates nor misreads the next live chunk as a gap.
@@ -68,7 +76,10 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
     session.hiddenOutputRestorePendingChunks = []
     session.hiddenOutputRestorePendingChars = 0
     for (const chunk of discarded) {
-      session.salvageRendererQueriesFromDiscardedRestoreData(chunk.data)
+      session.salvageRendererQueriesFromDiscardedRestoreData(
+        chunk.data,
+        discardedSeqRange(chunk.data, chunk)
+      )
     }
   }
 
