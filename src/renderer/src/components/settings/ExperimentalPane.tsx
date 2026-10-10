@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { POD_DASHBOARD_POPOUT } from '../../../../shared/product/features'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { useAppStore } from '../../store'
@@ -67,7 +68,7 @@ export function ExperimentalPane({
 
   return (
     <div className="space-y-4">
-      {showAgentDashboard ? (
+      {POD_DASHBOARD_POPOUT && showAgentDashboard ? (
         <AgentDashboardExperimentalSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
