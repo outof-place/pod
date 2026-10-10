@@ -7,6 +7,7 @@ import { ACC_MENU_HELPER_APP, ACC_STATE_DIR } from './acc-lifecycle'
  * Contents/Library/LaunchAgents/<appId>.acc.<job>.plist (its BundleProgram is the payload's
  * pod-acc-run), the helper is Contents/Library/LoginItems/Pod Menu.app. launchd lists them under
  * Pod in Login Items and runs them from the app, instead of plists in ~/Library/LaunchAgents.
+ * pod-rootd, the root helper, is Contents/Library/LaunchDaemons/<appId>.rootd.plist (acc-rootd.ts).
  */
 
 // Keeps the bundle id ClaudeAcc had, so its Microphone and Accessibility grants stay valid.
@@ -15,6 +16,7 @@ export const ACC_MENU_HELPER_ID = 'com.filip.claude-acc.menubar'
 export type AccServiceStatus = Electron.LoginItemSettings['status']
 export type AccService =
   | { kind: 'agent'; serviceName: string }
+  | { kind: 'daemon'; serviceName: string }
   | { kind: 'login-item'; serviceName: string }
 export type LoginItemApi = Pick<Electron.App, 'getLoginItemSettings' | 'setLoginItemSettings'>
 
@@ -25,24 +27,37 @@ export type AccServiceReport = {
   registered?: boolean
 }
 
-function electronType(service: AccService): 'agentService' | 'loginItemService' {
-  return service.kind === 'agent' ? 'agentService' : 'loginItemService'
+const ELECTRON_TYPES = {
+  agent: 'agentService',
+  daemon: 'daemonService',
+  'login-item': 'loginItemService'
+} as const
+
+function electronType(service: AccService): (typeof ELECTRON_TYPES)[AccService['kind']] {
+  return ELECTRON_TYPES[service.kind]
+}
+
+function bundledPlists(dir: string, prefix: string): string[] {
+  return existsSync(dir)
+    ? readdirSync(dir)
+        .filter((name) => name.startsWith(prefix) && name.endsWith('.plist'))
+        .sort()
+    : []
 }
 
 /** The services this Pod.app carries: payloads before pod-acc-run ship none. */
 export function bundledAccServices(appPath: string, appId: string): AccService[] {
-  const agentsDir = join(appPath, 'Contents', 'Library', 'LaunchAgents')
-  const prefix = `${appId}.acc.`
-  const agents: AccService[] = existsSync(agentsDir)
-    ? readdirSync(agentsDir)
-        .filter((name) => name.startsWith(prefix) && name.endsWith('.plist'))
-        .sort()
-        .map((serviceName) => ({ kind: 'agent', serviceName }))
-    : []
-  const helper = join(appPath, 'Contents', 'Library', 'LoginItems', ACC_MENU_HELPER_APP)
+  const library = join(appPath, 'Contents', 'Library')
+  const agents = bundledPlists(join(library, 'LaunchAgents'), `${appId}.acc.`).map(
+    (serviceName): AccService => ({ kind: 'agent', serviceName })
+  )
+  const daemons = bundledPlists(join(library, 'LaunchDaemons'), `${appId}.`).map(
+    (serviceName): AccService => ({ kind: 'daemon', serviceName })
+  )
+  const helper = join(library, 'LoginItems', ACC_MENU_HELPER_APP)
   return existsSync(helper)
-    ? [...agents, { kind: 'login-item', serviceName: ACC_MENU_HELPER_ID }]
-    : agents
+    ? [...agents, ...daemons, { kind: 'login-item', serviceName: ACC_MENU_HELPER_ID }]
+    : [...agents, ...daemons]
 }
 
 export function readAccServiceStatus(
@@ -58,24 +73,37 @@ export function readAccServiceStatus(
   }))
 }
 
+function registerAccService(api: LoginItemApi, service: AccService): AccServiceReport {
+  api.setLoginItemSettings({
+    openAtLogin: true,
+    type: electronType(service),
+    serviceName: service.serviceName
+  })
+  const [after] = readAccServiceStatus(api, [service])
+  return { service, status: after.status, registered: true }
+}
+
 /**
- * Registers every service launchd does not run yet. One the user switched off in Login Items
- * reads requires-approval and is left alone: Pod asks, it does not override the user.
+ * Registers every agent and login item launchd does not run yet. One the user switched off in
+ * Login Items reads requires-approval and is left alone: Pod asks, it does not override the user.
+ * Daemons are only read: they need an admin's approval, so registerAccDaemon waits for an opt-in.
  */
 export function ensureAccServices(api: LoginItemApi, services: AccService[]): AccServiceReport[] {
-  return readAccServiceStatus(api, services).map((report) => {
-    if (report.status === 'enabled' || report.status === 'requires-approval') {
-      return report
-    }
-    const { service } = report
-    api.setLoginItemSettings({
-      openAtLogin: true,
-      type: electronType(service),
-      serviceName: service.serviceName
-    })
-    const [after] = readAccServiceStatus(api, [service])
-    return { service, status: after.status, registered: true }
-  })
+  return readAccServiceStatus(api, services).map((report) =>
+    report.status === 'enabled' ||
+    report.status === 'requires-approval' ||
+    report.service.kind === 'daemon'
+      ? report
+      : registerAccService(api, report.service)
+  )
+}
+
+/** For a root feature the user turned on: requires-approval until an admin approves it. */
+export function registerAccDaemon(api: LoginItemApi, service: AccService): AccServiceReport {
+  const [report] = readAccServiceStatus(api, [service])
+  return report.status === 'enabled' || report.status === 'requires-approval'
+    ? report
+    : registerAccService(api, service)
 }
 
 /** For handing claude-acc back or removing Pod: deleting Pod.app alone leaves its agents registered. */
@@ -93,6 +121,10 @@ export function removeAccServices(api: LoginItemApi, services: AccService[]): Ac
 /** $STATE/pod-services.json: what Pod registered, read by every native acc surface through AccKit. */
 export const ACC_SERVICES_REPORT = 'pod-services.json'
 
+function entry({ service, status }: AccServiceReport) {
+  return { kind: service.kind, name: service.serviceName, status }
+}
+
 export function writeAccServicesReport(
   home: string,
   report: { app: string; payload: string | null; services: AccServiceReport[]; at: Date }
@@ -104,11 +136,9 @@ export function writeAccServicesReport(
     at: report.at.toISOString(),
     app: report.app,
     payload: report.payload,
-    services: report.services.map(({ service, status }) => ({
-      kind: service.kind,
-      name: service.serviceName,
-      status
-    }))
+    services: report.services.filter(({ service }) => service.kind !== 'daemon').map(entry),
+    // a key of its own: AccKit before 0.4.0 fails on an unknown kind in services
+    daemons: report.services.filter(({ service }) => service.kind === 'daemon').map(entry)
   }
   const path = join(dir, ACC_SERVICES_REPORT)
   // readers poll this file: never let one see half of it

@@ -74,8 +74,25 @@ describe('Pod claude-acc extraResources', () => {
       distroPlugins: '/distro'
     })
     expect(resources.filter).toEqual(
-      expect.arrayContaining(['!LaunchAgents/**', '!Pod Menu.app/**'])
+      expect.arrayContaining(['!LaunchAgents/**', '!LaunchDaemons/**', '!Pod Menu.app/**'])
     )
+  })
+
+  it("moves pod-rootd's daemon plist into Contents/Library/LaunchDaemons when the payload has one", () => {
+    const withRootd = tree([
+      'VERSION',
+      'setup.sh',
+      'pod-acc-run',
+      'pod-rootd',
+      'LaunchAgents/codes.pod.app.acc.tick.plist',
+      'LaunchDaemons/codes.pod.app.rootd.plist',
+      'Pod Menu.app/Contents/Info.plist'
+    ])
+    expect(podAccMacExtraFiles({ payloadDir: withRootd })).toContainEqual({
+      from: join(withRootd, 'LaunchDaemons'),
+      to: 'Library/LaunchDaemons',
+      filter: ['*.plist']
+    })
   })
 
   it('keeps the entitlement the embedded Python needs for PYTHON_JIT=1', () => {
