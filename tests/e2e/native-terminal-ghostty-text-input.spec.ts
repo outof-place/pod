@@ -101,6 +101,19 @@ test('native panes take dictation, IME, Services, paste and assistive input', as
   // IME: the preedit stays on the surface (never the PTY), the candidate window follows the
   // composition caret inside the view, and the committed text is typed input.
   expect(record(await call('markedText', ['にほんご', 4])).hasMarkedText).toBe(true)
+  // Why settle first: `cat`'s echo can still move the cursor to its own line under load.
+  let settledCaret = ''
+  await expect
+    .poll(
+      async () => {
+        const next = JSON.stringify(record(await call('imeRect', [0])).caret)
+        const stable = next === settledCaret
+        settledCaret = next
+        return stable
+      },
+      { intervals: [250] }
+    )
+    .toBe(true)
   const caretStart = rect(record(await call('imeRect', [0])).caret)
   const ime = record(await call('imeRect', [4]))
   const caret = rect(ime.caret)

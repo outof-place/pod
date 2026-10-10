@@ -3,6 +3,7 @@ import type {
   NativeTerminalHole
 } from '../../../../../shared/native-terminal-ipc'
 import { cssPxToWindowDip } from '../../ui-zoom'
+import { isAbovePaneFitPixelFloor } from '../pane-fit-measurability'
 import {
   describeOverlay,
   overlayHoles,
@@ -133,8 +134,11 @@ function flush(): void {
   const changed: NativeTerminalFrame[] = []
   for (const entry of tracked.values()) {
     const rect = belowTopChrome(contentBox(entry.element), chrome)
+    // Why the fit floor: in a near-zero box Ghostty would shrink its grid to ~2 columns.
     const paneOnScreen =
-      entry.isShown() && entry.element.isConnected && rect.width > 0 && rect.height > 0
+      entry.isShown() &&
+      entry.element.isConnected &&
+      isAbovePaneFitPixelFloor(rect.width, rect.height)
     const holes = paneOnScreen ? overlayHoles(rect, overlays) : null
     const onScreen = holes !== null
     // Why: an overlay hide keeps the view up until the paused xterm underneath has repainted.
