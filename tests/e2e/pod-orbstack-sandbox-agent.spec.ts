@@ -8,7 +8,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https'
+import { createSecureServer, type Http2SecureServer } from 'node:http2'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
@@ -35,7 +35,7 @@ const stubApiCa = createSandboxCa('stub-upstream')
 const stubApiCaPath = path.join(baseDir, 'stub-api-ca.pem')
 const stubApiPort = 41_000 + (process.pid % 2_000)
 const stubApiRequests: { method?: string; url?: string; apiKey?: string }[] = []
-let stubApi: HttpsServer | null = null
+let stubApi: Http2SecureServer | null = null
 
 test.skip(
   process.platform !== 'darwin' || process.env.POD_E2E_ORBSTACK !== '1',
@@ -124,8 +124,8 @@ test.beforeAll(async () => {
   writeFileSync(fakeAgentPath, FAKE_AGENT)
   chmodSync(fakeAgentPath, 0o755)
   writeFileSync(stubApiCaPath, stubApiCa.caCertPem)
-  const server = createHttpsServer(
-    { key: stubApiCa.leafKeyPem, cert: stubApiCa.leafCertPem },
+  const server = createSecureServer(
+    { allowHTTP1: true, key: stubApiCa.leafKeyPem, cert: stubApiCa.leafCertPem },
     (req, res) => {
       stubApiRequests.push({
         method: req.method,
