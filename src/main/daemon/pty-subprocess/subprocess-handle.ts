@@ -11,6 +11,7 @@ import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
 import { PtyPreListenerEvents } from './pre-listener-events'
 import { ptyProcessNameIsSpawnFile } from './spawn-file-foreground-process'
 import { inspectSpawnFileWindowsChildProcesses } from './spawn-file-child-processes'
+import { podTrace } from '../../../shared/pod-terminal-trace'
 
 type DisposableNativePty = pty.IPty & {
   destroy?: () => void
@@ -48,6 +49,7 @@ export function createDaemonPtySubprocessHandle(args: {
   })
 
   proc.onData((data) => {
+    podTrace('d.pd', data.length)
     foreground.recordOutput(data)
     events.acceptData(data)
   })
@@ -88,6 +90,7 @@ export function createDaemonPtySubprocessHandle(args: {
         return
       }
       try {
+        podTrace('d.pw', data.length)
         proc.write(data)
       } catch {
         ioFailed = true

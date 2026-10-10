@@ -9,6 +9,7 @@ import {
   createRuntimeLocalStreamFrameReader,
   encodeRuntimeLocalStreamFrame
 } from '../../../shared/runtime-local-stream-protocol'
+import { podTrace } from '../../../shared/pod-terminal-trace'
 
 // Why: same per-socket ceiling as the encrypted mobile channel; a stalled reader must not grow main's heap.
 export const UNIX_SOCKET_STREAM_MAX_BUFFERED_BYTES = 32 * 1024 * 1024
@@ -93,6 +94,7 @@ export class UnixSocketStreamConnection {
     if (this.socket.writableLength + bytes.length > this.maxBufferedBytes) {
       return false
     }
+    podTrace('m.out', bytes.length)
     this.socket.write(encodeRuntimeLocalStreamFrame(RuntimeLocalStreamFrameKind.Binary, bytes))
     return true
   }

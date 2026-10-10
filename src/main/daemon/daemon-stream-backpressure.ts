@@ -1,5 +1,6 @@
 import type { Socket } from 'node:net'
 import { STREAM_ENTRY_OVERHEAD_BYTES } from './daemon-stream-entry-accounting'
+import { podTrace } from '../../shared/pod-terminal-trace'
 
 const HIGH_WATER_BYTES = 4 * 1024 * 1024
 const LOW_WATER_BYTES = 1024 * 1024
@@ -53,6 +54,7 @@ export class DaemonStreamBackpressure {
     line: string | Buffer,
     onComplete?: () => void
   ): void {
+    podTrace('d.out', line.length)
     const client = this.getOrCreateClient(clientId)
     const bytes =
       (typeof line === 'string' ? Buffer.byteLength(line) : line.length) +

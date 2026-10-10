@@ -24,6 +24,7 @@ import {
 } from './daemon-client-ndjson-readers'
 import { writeNotifyWithSettlement } from './daemon-client-notify-settlement'
 import { requestDaemonRpc } from './daemon-client-rpc-request'
+import { podTrace } from '../../shared/pod-terminal-trace'
 
 const CONNECT_TIMEOUT_MS = 5000
 const CONNECTION_ATTEMPT_WAIT_MS = CONNECT_TIMEOUT_MS * 4
@@ -168,6 +169,7 @@ export class DaemonClient {
       }
       pendingListenerCleanups.push(
         attachStreamEventReader(this.streamSocket, streamHello, (event) => {
+          podTrace('m.dr', 0)
           this.eventListeners.each((listener) => listener(event))
         })
       )

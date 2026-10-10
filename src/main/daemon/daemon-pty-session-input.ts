@@ -1,10 +1,12 @@
 import { DaemonPtySessionSpawn } from './daemon-pty-session-spawn'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { writeRefused, type WriteSettlement } from '../../shared/pty-write-settlement'
+import { podTrace } from '../../shared/pod-terminal-trace'
 
 export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
   write(id: string, data: string): boolean {
     const recoverable = this.prepareWrite(id)
+    podTrace('m.dw', data.length)
     return this.finishWrite(id, this.client.notify('write', { sessionId: id, data }), recoverable)
   }
 
@@ -24,6 +26,7 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
       }
       throw error
     }
+    podTrace('m.dws', data.length)
     const settlement = await this.client.notifyWithSettlement('write', { sessionId: id, data })
     if (settlement.outcome !== 'accepted' && recoverable) {
       this.armWriteRecovery(id)
