@@ -1,4 +1,4 @@
-import type { ChildProcess } from 'node:child_process'
+import type { AiVaultServiceProcessFactory } from './session-scanner-service-client-state'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks,
@@ -9,6 +9,9 @@ import type { SessionTreeRootIdentity } from './session-tree-cache'
 import { BoundedMap } from '../../shared/bounded-map'
 import { RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS } from '../../shared/runtime-file-watch-limits'
 import { SESSION_TREE_CACHE_MAX_ROOTS } from './session-tree-cache-budget'
+
+// Typed through the client's factory, not node:child_process, whose imports @orca/process-host owns.
+type ScannerChild = ReturnType<AiVaultServiceProcessFactory>
 
 export type SessionTreeWatchSubscribe = (
   root: string,
@@ -26,7 +29,7 @@ export const SESSION_TREE_RESUBSCRIBE_MIN_INTERVAL_MS = 30_000
 
 /** Root subscriptions and their event delivery belong to one scanner child. */
 export class AiVaultServiceTreeWatch {
-  private child: ChildProcess | null = null
+  private child: ScannerChild | null = null
   private readonly watches = new Map<string, RootWatch>()
   private readonly lostAt = new BoundedMap<string, number>({ maxEntries: 128 })
   private pendingDelivery: { settled: boolean } | null = null
@@ -38,7 +41,7 @@ export class AiVaultServiceTreeWatch {
     return this.subscribe !== null
   }
 
-  attach(child: ChildProcess): void {
+  attach(child: ScannerChild): void {
     this.detach()
     this.child = child
   }
@@ -54,7 +57,7 @@ export class AiVaultServiceTreeWatch {
     this.resetRoots.clear()
   }
 
-  watch(child: ChildProcess | null, root: string, restart = false): void {
+  watch(child: ScannerChild | null, root: string, restart = false): void {
     const subscribe = this.subscribe
     if (!subscribe || !child || child !== this.child) {
       return
@@ -138,7 +141,7 @@ export class AiVaultServiceTreeWatch {
     }, lose)
   }
 
-  private deliver(child: ChildProcess, root: string, message: AiVaultServiceParentMessage): void {
+  private deliver(child: ScannerChild, root: string, message: AiVaultServiceParentMessage): void {
     if (this.pendingDelivery) {
       this.resetRoots.add(root)
       return
@@ -175,7 +178,7 @@ function closeRootWatch(watch: RootWatch): void {
   watch.subscription = null
 }
 
-function send(child: ChildProcess, message: AiVaultServiceParentMessage): void {
+function send(child: ScannerChild, message: AiVaultServiceParentMessage): void {
   if (child.connected) {
     child.send(message, () => undefined)
   }
