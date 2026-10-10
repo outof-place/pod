@@ -11,6 +11,8 @@ import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/r
  */
 
 export const ACC_STATE_DIR = '.local/share/claude-acc'
+/** The menu helper of a v2 payload, run from Contents/Library/LoginItems as an SMAppService login item. */
+export const ACC_MENU_HELPER_APP = 'Pod Menu.app'
 const OWNER = 'pod'
 const LOCK = 'pod-setup.lock'
 // setup.sh builds bytecode, rewrites hooks and restarts launchd jobs: a minute is normal, five is stuck
@@ -157,25 +159,29 @@ export function decideAccLifecycle(input: AccLifecycleInput): AccLifecycleDecisi
   return { action: 'up-to-date', version }
 }
 
-/**
- * The payload's menu helper: from 1.31 it ships as Pod Menu.app (the same ClaudeAcc, bundle id
- * com.filip.claude-acc.menubar), which setup.sh without --pod-agents still installs as
- * ~/Applications/Claude Acc.app; earlier payloads ship Claude Acc.app itself.
- */
-export function accMenuHelperSource(payloadDir: string): string {
-  const podMenu = join(payloadDir, 'Pod Menu.app')
-  return existsSync(podMenu) ? podMenu : join(payloadDir, 'Claude Acc.app')
+/** A v2 payload ships pod-acc-run: Pod runs its jobs as SMAppService agents, with Pod's Python. */
+export function isPodAgentsPayload(payloadDir: string): boolean {
+  return existsSync(join(payloadDir, 'pod-acc-run'))
 }
 
 /** setup.sh with the payload's own app and helpers, as Pod's owner. */
 export function accSetupSpec(input: AccLifecycleInput): ProcessSpec {
   const p = (name: string): string => join(input.payloadDir, name)
+  const contents = join(input.appPath, 'Contents')
+  const podAgents = isPodAgentsPayload(input.payloadDir)
+  const python = join(contents, 'Resources', 'python', 'bin', 'python3')
+  // v2: setup.sh leaves launchd to Pod's services, and links $STATE/python to Pod's interpreter
+  const v2Args = podAgents
+    ? ['--pod-agents', ...(existsSync(python) ? ['--python', python] : [])]
+    : []
   return {
     program: '/bin/bash',
     args: [
       p('setup.sh'),
       '--app',
-      accMenuHelperSource(input.payloadDir),
+      podAgents
+        ? join(contents, 'Library', 'LoginItems', ACC_MENU_HELPER_APP)
+        : p('Claude Acc.app'),
       '--fanctl',
       p('fanctl'),
       '--hook',
@@ -185,7 +191,8 @@ export function accSetupSpec(input: AccLifecycleInput): ProcessSpec {
       '--owner',
       OWNER,
       '--owner-app',
-      input.appPath
+      input.appPath,
+      ...v2Args
     ],
     env: {
       HOME: input.home,

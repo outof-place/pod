@@ -9,6 +9,9 @@ const { join } = require('node:path')
 const PAYLOAD = join(__dirname, '..', 'resources', 'claude-acc')
 const PYTHON = join(__dirname, '..', 'resources', 'python')
 const DISTRO_PLUGINS = join(__dirname, '..', 'resources', 'plugins', 'distro')
+// payload v2 (claude-acc with pod-acc-run): launchd plists and the menu helper for SMAppService
+const AGENTS = 'LaunchAgents'
+const HELPER = 'Pod Menu.app'
 
 function requireFetched(dir, names, script) {
   for (const name of names) {
@@ -18,22 +21,45 @@ function requireFetched(dir, names, script) {
   }
 }
 
+/** What a payload must hold: v2 (with pod-acc-run) ships the menu helper as Pod Menu.app. */
+function payloadFiles(payloadDir) {
+  return existsSync(join(payloadDir, 'pod-acc-run'))
+    ? ['VERSION', 'setup.sh', 'pod-acc-run', AGENTS, HELPER]
+    : ['VERSION', 'setup.sh', 'Claude Acc.app']
+}
+
 /** Throws when the payload or its Python is missing, so a Pod release cannot ship without them. */
 function podAccMacExtraResources({
   payloadDir = PAYLOAD,
   pythonDir = PYTHON,
   distroPlugins = DISTRO_PLUGINS
 } = {}) {
-  requireFetched(
-    payloadDir,
-    ['VERSION', 'setup.sh', 'Claude Acc.app'],
-    'fetch-claude-acc-payload.mjs'
-  )
+  requireFetched(payloadDir, payloadFiles(payloadDir), 'fetch-claude-acc-payload.mjs')
   requireFetched(pythonDir, ['bin/python3', 'lib/python3.14/os.py'], 'fetch-pod-python.mjs')
   return [
-    { from: payloadDir, to: 'claude-acc', filter: ['**/*', '!.payload-source.json'] },
+    {
+      from: payloadDir,
+      to: 'claude-acc',
+      // a v2 payload's agents and helper live in Contents/Library instead (podAccMacExtraFiles)
+      filter: ['**/*', '!.payload-source.json', `!${AGENTS}/**`, `!${HELPER}/**`]
+    },
     { from: pythonDir, to: 'python', filter: ['**/*', '!.payload-source.json'] },
     { from: distroPlugins, to: 'plugins/distro' }
+  ]
+}
+
+/**
+ * For mac extraFiles (relative to Contents): SMAppService only registers agents from
+ * Contents/Library/LaunchAgents and login items from Contents/Library/LoginItems
+ * (src/main/pod/acc/acc-services.ts). Empty for payloads that predate pod-acc-run.
+ */
+function podAccMacExtraFiles({ payloadDir = PAYLOAD } = {}) {
+  if (!existsSync(join(payloadDir, 'pod-acc-run'))) {
+    return []
+  }
+  return [
+    { from: join(payloadDir, AGENTS), to: `Library/${AGENTS}`, filter: ['*.plist'] },
+    { from: join(payloadDir, HELPER), to: `Library/LoginItems/${HELPER}` }
   ]
 }
 
@@ -53,4 +79,9 @@ const podAccFileExclusions = [
 // JIT (PYTHON_JIT=1) needs under the hardened runtime.
 const podAccMacSignIgnore = ['/Resources/python/lib/python3\\.14/(?!lib-dynload/)']
 
-module.exports = { podAccMacExtraResources, podAccFileExclusions, podAccMacSignIgnore }
+module.exports = {
+  podAccMacExtraResources,
+  podAccMacExtraFiles,
+  podAccFileExclusions,
+  podAccMacSignIgnore
+}
