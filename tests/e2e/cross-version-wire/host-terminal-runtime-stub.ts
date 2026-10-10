@@ -120,6 +120,8 @@ export function createHostTerminalRuntimeStub(
     resolveLiveLeafForHandle: (handle: string) => (handle === terminalHandle ? { ptyId } : null),
     resolveLeafForHandle: (handle: string) => (handle === terminalHandle ? { ptyId } : null),
     registerRemoteTerminalViewSubscriber: () => () => {},
+    modelAnswersTerminalQueries: () => false,
+    answerTerminalQueriesFromModel: () => {},
     requestRendererTerminalTabMount: () => true,
     updateRemoteDesktopViewer: async () => true,
     unregisterRemoteDesktopViewer: async () => true,
