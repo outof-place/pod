@@ -149,9 +149,12 @@ test('a product without Stably services never contacts a Stably host', async ({
       return { title: BrowserWindow.getAllWindows()[0]?.getTitle(), labels }
     })
     expect(chrome.title).toBe('Pod')
-    expect(chrome.labels).toEqual(
-      expect.arrayContaining(['Explore Pod', 'Getting Started with Pod'])
+    expect(chrome.labels.length).toBeGreaterThan(0)
+    // Why "if present": the slim Pod profile cuts the tour and setup-guide items (pod/slim).
+    const promoLabels = chrome.labels.filter((label) =>
+      /^(Explore|Getting Started with) /.test(label)
     )
+    expect(promoLabels.filter((label) => !/\bPod\b/.test(label))).toEqual([])
     expect(chrome.labels.filter((label) => /\bOrca\b/.test(label))).toEqual([])
 
     // The plugin system on, as pod/acc turns it on for the bundled distro plugin: the official
