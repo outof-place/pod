@@ -13,6 +13,7 @@ import {
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import { checkServeUserDataPath } from './serve-user-data-path-guard'
+import { applyPodHeadlessHostChromiumSwitches } from '../pod/headless-host/headless-host-chromium-switches'
 import {
   hasMissingProfileStateDatabaseWithRetainedAuthority,
   readActiveProfileId,
@@ -84,6 +85,8 @@ export function configureElectronNetworkCompatibility(
 
 export function disableUnsupportedChromiumFeatures(): void {
   appendDisabledChromiumFeatures([...DISABLED_CHROMIUM_FEATURES])
+  // Fork-only (Pod): the headless host's opt-in process merges, set on the same pre-ready pass.
+  applyPodHeadlessHostChromiumSwitches()
 }
 
 // Why: Chromium clamps hidden-page timers to 1/min after 5min on every desktop platform,
