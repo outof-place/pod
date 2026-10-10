@@ -54,11 +54,17 @@ vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) =>
   })
 )
 
-import { clearEffectiveUpstreamStatusCacheForTests, getStatus, stageFile } from './status'
+import {
+  clearEffectiveUpstreamStatusCacheForTests,
+  getStatus,
+  stageFile,
+  invalidateGitReadCaches
+} from './status'
 
 describe('getStatus', () => {
   beforeEach(() => {
     clearEffectiveUpstreamStatusCacheForTests()
+    invalidateGitReadCaches()
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncBufferMock.mockReset()
     gitStreamOptionsMock.mockReset()
@@ -217,7 +223,7 @@ describe('getStatus', () => {
       'status',
       '--porcelain=v2',
       '--branch',
-      '--untracked-files=normal'
+      '--untracked-files=all'
     ])
     expect(result.entries).toEqual([
       { path: 'docs/日本語/sample.md', status: 'modified', area: 'unstaged' }
@@ -368,7 +374,7 @@ describe('getStatus', () => {
       'status',
       '--porcelain=v2',
       '--branch',
-      '--untracked-files=normal'
+      '--untracked-files=all'
     ])
     expect('ignoredPaths' in result).toBe(false)
   })

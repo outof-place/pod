@@ -4,7 +4,6 @@ import type {
   GitUpstreamStatus
 } from '../../../shared/git-status-types'
 import { StatusPorcelainParser } from '../../../shared/git-status-porcelain-parser'
-import { statusUntrackedFilesArg } from '../../../shared/git-status-untracked-directory-expansion'
 import { resolveGitStatusLimit } from '../../../shared/git-status-limit'
 import { stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
 import type { GitBranchLineTotal } from '../../../shared/git-branch-line-total'
@@ -20,7 +19,7 @@ import {
   getSafeRelativePath
 } from '../worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
-import { statusReadLeaseOwner } from './git-read-cache-invalidation'
+import { statusReadLeaseOwner, statusUntrackedMode } from './git-read-cache-invalidation'
 import { detectConflictOperation } from './git-conflict-operation'
 import { parseUnmergedEntry } from '../../../shared/git-status-conflict-entries'
 import { getEffectiveUpstreamStatusCacheKey } from './effective-upstream-status-cache'
@@ -30,7 +29,6 @@ import {
   shouldProbeEffectiveUpstreamStatus
 } from './effective-upstream-status-probe'
 import { attachLineStats } from './status-line-stats'
-import { expandStatusUntrackedDirectories } from './status-untracked-directories'
 import {
   createBranchLineTotalInput,
   getStatusLineStatsCacheKey
@@ -141,7 +139,7 @@ async function runGetStatus(
     'status',
     '--porcelain=v2',
     '--branch',
-    statusUntrackedFilesArg(options.includeIgnored === true)
+    '--untracked-files=all'
   ]
   if (options.includeIgnored) {
     statusArgs.push('--ignored=matching')
@@ -152,22 +150,27 @@ async function runGetStatus(
   let didHitLimit = false
   // Why: attach rejection ownership before awaiting marker I/O, so a fast Git failure cannot become unhandled.
   const statusSettlementPromise = Promise.allSettled([
-    (async () => {
-      const result = await gitStreamStdout(statusArgs, {
-        cwd: worktreePath,
-        wslDistro: options.wslDistro,
-        admissionTier: options.admissionTier,
-        preferWslDirectGit: true,
-        // Why: status polling is read-like; disable optional locks to avoid racing terminal Git on index.lock.
-        env: gitOptionalLocksDisabledEnv(),
-        signal: options.signal,
-        onStdout: (chunk) => parser.update(chunk, limit)
-      })
-      if (!result.stoppedEarly) {
-        parser.finish()
-      }
-      return result
-    })()
+    statusUntrackedMode.read({
+      key: stableInFlightKey([worktreePath, options.wslDistro ?? '']),
+      statusArgs,
+      limit,
+      includeIgnored: options.includeIgnored,
+      signal: options.signal,
+      // Local status preserves parsed rows when Git fails after emitting a prefix.
+      onParser: (activeParser) => {
+        parser = activeParser
+      },
+      streamGit: (args, onStdout) =>
+        gitStreamStdout(args, {
+          cwd: worktreePath,
+          wslDistro: options.wslDistro,
+          admissionTier: options.admissionTier,
+          preferWslDirectGit: true,
+          env: gitOptionalLocksDisabledEnv(),
+          signal: options.signal,
+          onStdout
+        })
+    })
   ])
   const conflictOperation = await conflictPromise
 
@@ -176,6 +179,7 @@ async function runGetStatus(
     if (statusResult.status === 'rejected') {
       throw statusResult.reason
     }
+    parser = statusResult.value.parser
     didHitLimit = statusResult.value.stoppedEarly
     statusSucceeded = true
   } catch (error) {
@@ -186,22 +190,6 @@ async function runGetStatus(
     // Not a git repo or git not available
   }
 
-  let statusRecords = parser.statusRecords
-  let statusLength = parser.statusLength
-  if (statusSucceeded) {
-    const expanded = await expandStatusUntrackedDirectories(
-      worktreePath,
-      { parser, stoppedEarly: didHitLimit },
-      limit,
-      options,
-      statusArgs
-    )
-    parser = expanded.parser
-    statusRecords = expanded.records
-    statusLength = expanded.statusLength
-    didHitLimit = expanded.stoppedEarly
-  }
-
   const entries: GitStatusEntry[] = []
   const { head, branch, upstreamName, upstreamAheadBehind } = parser.branch
   // Why: git runs in the distro and answers in its namespace; the working-tree probes below run here.
@@ -209,7 +197,7 @@ async function runGetStatus(
 
   // Why: resolve deferred conflicts in Git's output order so the cap cannot hide
   // an early conflict behind ordinary rows that appeared later in the stream.
-  for (const record of statusRecords) {
+  for (const record of parser.statusRecords) {
     if (didHitLimit && entries.length >= limit) {
       break
     }
@@ -288,7 +276,7 @@ async function runGetStatus(
     branch,
     ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
     ...(branchLineTotal ? { branchLineTotal } : {}),
-    ...(didHitLimit ? { didHitLimit: true, statusLength } : {}),
+    ...(didHitLimit ? { didHitLimit: true, statusLength: parser.statusLength } : {}),
     ...(statusSucceeded
       ? {
           upstreamStatus:

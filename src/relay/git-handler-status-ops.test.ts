@@ -88,36 +88,17 @@ describe('getStatusOp', () => {
     expect(git.mock.calls.some(([args]) => args.includes('diff'))).toBe(false)
   })
 
-  it('expands collapsed untracked directories into per-file rows', async () => {
-    const git = vi.fn<GitExec>(async (args) => {
-      if (args.includes('status')) {
-        return { stdout: '? new/\n? top.txt\n', stderr: '' }
-      }
-      if (args[0] === 'ls-files') {
-        return { stdout: 'new/a.ts\0new/deep/b.ts\0', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
+  it('uses one canonical status for directory-heavy scans', async () => {
+    const git = vi.fn<GitExec>(async () => ({
+      stdout: '? new/a.ts\n? new/deep/b.ts\n? top.txt\n',
+      stderr: ''
+    }))
     const result = await getStatusOp(git, streamGitFromCapture(git), {
       worktreePath: tmpDir,
       includeLineStats: false
     })
-
-    expect(git.mock.calls[0][0]).toContain('--untracked-files=normal')
-    expect(git).toHaveBeenCalledWith(
-      [
-        'ls-files',
-        '-z',
-        '--others',
-        '--exclude-standard',
-        '--full-name',
-        '--',
-        ':(top,literal)new/'
-      ],
-      tmpDir,
-      expect.objectContaining({ disableOptionalLocks: true })
-    )
+    expect(git).toHaveBeenCalledTimes(1)
+    expect(git.mock.calls[0][0]).toContain('--untracked-files=all')
     expect(result.entries.map((entry) => entry.path)).toEqual([
       'new/a.ts',
       'new/deep/b.ts',

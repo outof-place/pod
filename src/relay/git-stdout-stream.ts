@@ -6,7 +6,8 @@ import { GitCommandTimeoutError, gitCommandTimeoutMs } from '../shared/git-comma
 import { expandTilde } from './context'
 import { buildRelayGitEnv } from './relay-command-env'
 import { acquireRelayGitAdmission } from './git-handler-command-termination'
-import { GIT_OUTPUT_MAX_BYTES } from '../shared/git-output-byte-limit'
+
+const DEFAULT_RELAY_GIT_STREAM_MAX_BYTES = 10 * 1024 * 1024
 
 export type RelayGitStreamOptions = {
   disableOptionalLocks?: boolean
@@ -30,7 +31,7 @@ function createAbortError(): Error {
 
 /** Stream Git stdout on the relay host and allow the consumer to stop it early. */
 export const streamRelayGitStdout: RelayGitStreamExec = async (args, cwd, options) => {
-  const maxBuffer = options.maxBuffer ?? GIT_OUTPUT_MAX_BYTES
+  const maxBuffer = options.maxBuffer ?? DEFAULT_RELAY_GIT_STREAM_MAX_BYTES
   const resolvedCwd = expandTilde(cwd)
   const grant = await acquireRelayGitAdmission({ args, cwd: resolvedCwd, signal: options.signal })
   return new Promise((resolve, reject) => {
