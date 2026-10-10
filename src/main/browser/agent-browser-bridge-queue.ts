@@ -1,4 +1,5 @@
 import type { BrowserTabSwitchResult } from '../../shared/runtime-types'
+import { sweepAgentBrowserOrphansOnFirstUse } from '../startup/pod-startup-policy'
 import { BrowserError } from './cdp-bridge'
 import { AgentBrowserBridgeShutdown } from './agent-browser-bridge-shutdown'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
@@ -92,6 +93,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     // Why: the page's guest can change while queued; bind to the one current at execution.
     const target = this.resolveCommandTarget(worktreeId, browserPageId)
     if (options.ensureSession !== false) {
+      sweepAgentBrowserOrphansOnFirstUse(this)
       await this.ensureSession(sessionName, browserPageId, target.webContentsId)
     }
     return execute(sessionName, target)
