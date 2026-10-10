@@ -10,11 +10,10 @@ import {
 import type { OrbstackToolResult, OrbstackToolRunner } from './pod-orbstack-tools'
 
 describe('sandbox hook files', () => {
-  it('points the generated hook script at the Mac through host.orb.internal', () => {
-    const script = buildSandboxHookScript()
-    expect(script).toContain('http://host.orb.internal:${ORCA_AGENT_HOOK_PORT}/hook/claude')
-    expect(script).toContain('--noproxy "host.orb.internal"')
-    expect(script).not.toContain('127.0.0.1')
+  it('keeps the generated hook script on 127.0.0.1, where the relay listens', () => {
+    expect(buildSandboxHookScript()).toContain(
+      'http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/claude'
+    )
   })
 
   it('registers the managed hook for the installed Claude and turns off its updater', () => {
@@ -81,6 +80,7 @@ describe('provisionSandbox', () => {
     expect(calls[0]?.args).toEqual([
       'create',
       '--isolated',
+      '--isolate-network',
       '--mount',
       '/Users/me/web.worktrees/a:/Users/me/web.worktrees/a',
       '--mount',
@@ -112,7 +112,7 @@ describe('provisionSandbox', () => {
       expect.stringContaining('.claude.json'),
       expect.stringContaining('/etc/claude-code/managed-settings.json')
     ])
-    expect(writes[0]?.input).toContain('host.orb.internal')
+    expect(writes[0]?.input).toContain('127.0.0.1')
     expect(writes[1]?.input).toContain('"/Users/me/web.worktrees/a"')
     expect(writes[1]?.input).not.toContain('.git"')
   })
