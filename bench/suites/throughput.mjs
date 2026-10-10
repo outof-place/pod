@@ -77,7 +77,7 @@ async function waitForGeometry(instance, handle) {
 
 const CAVEATS = [
   'Windowless instances with background throttling off: xterm.js keeps painting, while a native view in a window that is never on screen may skip drawing. throughput-visible has the same workloads in visible windows.',
-  "In Pod's native mode xterm.js still answers the device-attributes query, so wall time ends when xterm.js has parsed the output; settle time and app CPU also cover the native view's work."
+  "Wall time ends at the device-attributes reply, which marks parse completion by whichever emulator owns query replies (xterm.js in Orca; in Pod's native panes the main process's headless emulator), not paint. Settle time (the app's CPU back at idle) and the visible-window key-to-pixels run are the paint measures; the reply string is recorded per sample."
 ]
 const samples = {}
 for (const name of names) {
