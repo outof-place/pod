@@ -157,6 +157,16 @@ export function decideAccLifecycle(input: AccLifecycleInput): AccLifecycleDecisi
   return { action: 'up-to-date', version }
 }
 
+/**
+ * The payload's menu helper: from 1.31 it ships as Pod Menu.app (the same ClaudeAcc, bundle id
+ * com.filip.claude-acc.menubar), which setup.sh without --pod-agents still installs as
+ * ~/Applications/Claude Acc.app; earlier payloads ship Claude Acc.app itself.
+ */
+export function accMenuHelperSource(payloadDir: string): string {
+  const podMenu = join(payloadDir, 'Pod Menu.app')
+  return existsSync(podMenu) ? podMenu : join(payloadDir, 'Claude Acc.app')
+}
+
 /** setup.sh with the payload's own app and helpers, as Pod's owner. */
 export function accSetupSpec(input: AccLifecycleInput): ProcessSpec {
   const p = (name: string): string => join(input.payloadDir, name)
@@ -165,7 +175,7 @@ export function accSetupSpec(input: AccLifecycleInput): ProcessSpec {
     args: [
       p('setup.sh'),
       '--app',
-      p('Claude Acc.app'),
+      accMenuHelperSource(input.payloadDir),
       '--fanctl',
       p('fanctl'),
       '--hook',
