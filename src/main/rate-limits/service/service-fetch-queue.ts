@@ -1,4 +1,5 @@
 import { RateLimitServiceProviderCycles } from './service-provider-cycles'
+import { POD_USAGE_POLLING } from '../../../shared/product/features'
 
 export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProviderCycles {
   protected async fetchAll(options?: { force?: boolean }): Promise<void> {
@@ -12,7 +13,7 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
     this.isFetching = true
 
     try {
-      let shouldContinue = true
+      let shouldContinue = POD_USAGE_POLLING
       // Why: only user-directed (force) fetches may bypass a provider's Retry-After gate; queued reruns inherit force because only forced calls queue them.
       let cycleForce = options?.force ?? false
       while (shouldContinue) {
@@ -74,7 +75,7 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
     this.isFetching = true
 
     try {
-      let shouldContinue = true
+      let shouldContinue = POD_USAGE_POLLING
       while (shouldContinue) {
         const signal = await this.runWithFetchAbortSignal((fetchSignal) =>
           this.runFetchCodexOnlyCycle(fetchSignal)
@@ -133,7 +134,7 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
     this.isFetching = true
 
     try {
-      let shouldContinue = true
+      let shouldContinue = POD_USAGE_POLLING
       // Why: only user-directed (force) fetches may bypass a provider's Retry-After gate; queued reruns inherit force because only forced calls queue them.
       let cycleForce = options?.force ?? false
       while (shouldContinue) {
@@ -195,7 +196,7 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
     this.isFetching = true
 
     try {
-      let shouldContinue = true
+      let shouldContinue = POD_USAGE_POLLING
       while (shouldContinue) {
         const signal = await this.runWithFetchAbortSignal((fetchSignal) =>
           this.runFetchGrokOnlyCycle(fetchSignal)
