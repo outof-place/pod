@@ -38,15 +38,25 @@ const ENTITLEMENT_RULES = [
     match: /^Contents\/Resources\/python\/bin\/python3(?:\.\d+)?$/,
     entitlements: 'python-jit.plist'
   },
-  // Exec shims between a user's shell and an agent: without this entitlement dyld strips DYLD_*
-  // from their environment, so the agent would no longer see the user's own variables.
+  // The agent shim runs from the user's shell: without this entitlement dyld strips the DYLD_*
+  // a shell rc exported, so the agent would no longer see them. node-pty's spawn-helper needs none:
+  // every terminal goes on through /usr/bin/login or /bin/bash, which strip them anyway.
   {
-    name: 'exec shims',
-    match:
-      /^Contents\/Resources\/(?:bin\/pod-agent-launcher|node_modules\/node-pty\/(?:build\/Release|prebuilds\/darwin-[a-z0-9]+)\/spawn-helper)$/,
+    name: 'agent shim',
+    match: /^Contents\/Resources\/bin\/pod-agent-launcher$/,
     entitlements: 'exec-shim.plist'
   }
 ]
+
+/**
+ * The app's and Electron helpers' set. The Pod profile drops what no Pod feature uses: location
+ * (browser panes deny geolocation), Bluetooth (no Web Bluetooth chooser) and DYLD variables (Pod
+ * starts from launchd; shells and agents get theirs from the shell). POD_BUILD_PROFILE=orca keeps
+ * upstream's resources/build/entitlements.mac.plist.
+ */
+function productElectronEntitlements(env = process.env) {
+  return env.POD_BUILD_PROFILE === 'orca' ? null : join(ENTITLEMENTS_DIR, 'electron-pod.plist')
+}
 
 /** The rule for `relativePath`; the app itself and its main executable keep Electron's set. */
 function entitlementRule(relativePath, mainExecutable) {
@@ -97,6 +107,7 @@ module.exports = {
   ENTITLEMENT_RULES,
   entitlementRule,
   entitlementsFile,
+  productElectronEntitlements,
   productOptionsForFile,
   signWithProductEntitlements
 }
