@@ -15,6 +15,10 @@ export type PodOrbstackWorktreeRow = {
   path: string
   machine: PodOrbstackMachine | null
   dockerPinned: boolean
+  sandbox: PodOrbstackMachine | null
+  sandboxReady: boolean
+  sandboxAgents: boolean
+  sandboxAgentVersion: string | null
   containers: PodOrbstackContainer[]
   busy: boolean
 }
@@ -36,6 +40,13 @@ function ownerOf(dir: string, paths: readonly string[]): string | null {
     }
   }
   return owner
+}
+
+function findMachine(
+  status: PodOrbstackStatus,
+  name: string | null | undefined
+): PodOrbstackMachine | null {
+  return name ? (status.machines.find((machine) => machine.name === name) ?? null) : null
 }
 
 export function buildPodOrbstackWorktreeRows(
@@ -65,10 +76,12 @@ export function buildPodOrbstackWorktreeRows(
       displayName: worktree.displayName,
       repoName: repo.displayName,
       path: worktree.path,
-      machine: link?.machine
-        ? (status.machines.find((machine) => machine.name === link.machine) ?? null)
-        : null,
+      machine: findMachine(status, link?.machine),
       dockerPinned: link?.dockerPinned === true,
+      sandbox: findMachine(status, link?.sandbox),
+      sandboxReady: link?.sandboxReady === true,
+      sandboxAgents: link?.sandboxAgents === true,
+      sandboxAgentVersion: link?.sandboxAgentVersion ?? null,
       containers: containersByPath.get(worktree.path) ?? [],
       busy: status.busyWorktreeIds.includes(worktree.id)
     }

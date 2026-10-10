@@ -1,4 +1,8 @@
-import type { PodOrbstackActionResult, PodOrbstackStatus } from '../../../shared/pod-orbstack-types'
+import type {
+  PodOrbstackActionResult,
+  PodOrbstackMachineKind,
+  PodOrbstackStatus
+} from '../../../shared/pod-orbstack-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { PodOrbstackMachines } from './pod-orbstack-machines'
 import type { PodOrbstackRegistry } from './pod-orbstack-registry'
@@ -8,11 +12,16 @@ import { resolveLocalWorktreeTarget } from './pod-orbstack-worktree-target'
 export type PodOrbstackService = {
   isEnabled(): boolean
   snapshot(): Promise<PodOrbstackStatus>
-  create(args: { worktreeId: string; displayName?: string }): Promise<PodOrbstackActionResult>
-  remove(worktreeId: string): Promise<PodOrbstackActionResult>
+  create(args: {
+    worktreeId: string
+    displayName?: string
+    kind?: PodOrbstackMachineKind
+  }): Promise<PodOrbstackActionResult>
+  remove(worktreeId: string, kind?: PodOrbstackMachineKind): Promise<PodOrbstackActionResult>
   start(name: string): Promise<PodOrbstackActionResult>
   stop(name: string): Promise<PodOrbstackActionResult>
   setDockerPin(worktreeId: string, pinned: boolean): PodOrbstackActionResult
+  setAgentSandbox(worktreeId: string, enabled: boolean): PodOrbstackActionResult
 }
 
 // Why: status, machines and containers are separate methods; one read serves a burst of them.
@@ -50,14 +59,18 @@ export function createPodOrbstackService(deps: {
       }
       return cached.value
     },
-    create: async ({ worktreeId, displayName }) => {
+    create: async ({ worktreeId, displayName, kind }) => {
       const resolved = target(worktreeId, displayName)
       if (typeof resolved === 'string') {
         return { ok: false, error: resolved }
       }
-      return invalidate(await deps.machines.create(resolved))
+      return invalidate(
+        await (kind === 'sandbox'
+          ? deps.machines.createSandbox(resolved)
+          : deps.machines.create(resolved))
+      )
     },
-    remove: async (worktreeId) => invalidate(await deps.machines.remove(worktreeId)),
+    remove: async (worktreeId, kind) => invalidate(await deps.machines.remove(worktreeId, kind)),
     start: async (name) => invalidate(await deps.machines.start(name)),
     stop: async (name) => invalidate(await deps.machines.stop(name)),
     setDockerPin: (worktreeId, pinned) => {
@@ -66,6 +79,13 @@ export function createPodOrbstackService(deps: {
         return { ok: false, error: resolved }
       }
       deps.registry.setDockerPin(worktreeId, pinned)
+      return invalidate({ ok: true })
+    },
+    setAgentSandbox: (worktreeId, enabled) => {
+      if (enabled && deps.registry.findByWorktree(worktreeId, 'sandbox')?.state !== 'ready') {
+        return { ok: false, error: 'Create the agent sandbox first.' }
+      }
+      deps.registry.setSandboxAgents(worktreeId, enabled)
       return invalidate({ ok: true })
     }
   }
