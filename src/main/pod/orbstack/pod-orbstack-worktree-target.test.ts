@@ -1,9 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
-
-vi.mock('electron', () => ({ ipcMain: { handle: vi.fn() } }))
-
-const { resolveLocalWorktreeTarget } = await import('./pod-orbstack-ipc')
+import { resolveLocalWorktreeTarget } from './pod-orbstack-worktree-target'
 
 function repo(overrides: Partial<Repo>): Repo {
   return {

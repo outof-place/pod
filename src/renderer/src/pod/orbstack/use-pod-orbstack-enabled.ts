@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { getPodOrbstackApi } from './pod-orbstack-api-access'
+import { podOrbstackRpc } from './pod-orbstack-rpc'
 
 let enabled = false
 let asked = false
@@ -11,7 +11,7 @@ const listeners = new Set<() => void>()
 async function refreshEnabled(): Promise<void> {
   let next = false
   try {
-    next = (await getPodOrbstackApi()?.isEnabled()) === true
+    next = await podOrbstackRpc.isEnabled()
   } catch {
     next = false
   }

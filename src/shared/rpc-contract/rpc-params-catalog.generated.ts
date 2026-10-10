@@ -431,6 +431,12 @@ import {
   PluginsPanelActionParams
 } from './plugins-params'
 import {
+  PodOrbstackCreateParams,
+  PodOrbstackDockerPinParams,
+  PodOrbstackMachineParams,
+  PodOrbstackWorktreeParams
+} from './pod-orbstack-params'
+import {
   PreflightCheck,
   PreflightDetectRemoteAgents,
   PreflightDetectRemoteWindowsTerminalCapabilities
@@ -1039,6 +1045,15 @@ export const RPC_PARAMS_BY_METHOD = {
   'notifications.testPush': null,
   'notifications.unregisterPush': null,
   'notifications.unsubscribe': NotificationUnsubscribeParams,
+  'orbstack.containers': null,
+  'orbstack.create': PodOrbstackCreateParams,
+  'orbstack.delete': PodOrbstackWorktreeParams,
+  'orbstack.enabled': null,
+  'orbstack.machines': null,
+  'orbstack.pinDocker': PodOrbstackDockerPinParams,
+  'orbstack.start': PodOrbstackMachineParams,
+  'orbstack.status': null,
+  'orbstack.stop': PodOrbstackMachineParams,
   'orcad.migration.abortCatalog': OrcadMigrationCatalogParams,
   'orcad.migration.catalogState': OrcadMigrationCatalogParams,
   'orcad.migration.commitCatalog': OrcadMigrationCatalogParams,

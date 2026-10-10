@@ -60,7 +60,6 @@ import type { SshApi } from './api/ssh-api'
 import type { DiagnosticsApi, MemoryApi, StatsApi, TelemetryApi } from './api/telemetry-api'
 import type { UiCommandEventApi } from './api/ui-command-event-api'
 import type { UiWindowApi } from './api/ui-window-api'
-import type { PodOrbstackApi } from './api/pod-orbstack-api'
 import type { UpdaterApi } from './api/updater-api'
 import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspace-cleanup-api'
 import type { LocalhostWorktreeLabelsApi, WorkspacePortsApi } from './api/workspace-port-api'
@@ -88,7 +87,6 @@ export type PreloadApi = {
   feedback: FeedbackApi
   crashReports: CrashReportsApi
   export: ExportApi
-  podOrbstack: PodOrbstackApi
   gh: Merged<GithubPullRequestApi & GithubWorkItemApi & GithubAccountApi>
   hostedReview: HostedReviewApi
   gl: GitLabApi
