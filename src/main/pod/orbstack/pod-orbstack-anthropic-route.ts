@@ -28,6 +28,10 @@ export type SandboxAnthropicCredentials = {
   authHeaders(scope: { machine: string }): Promise<Record<string, string> | null>
   /** The API answered 401 to this source's headers. */
   rejected?(scope: { machine: string }): void
+  /** A sandbox launch: the source may bind the sandbox to the login that launch resolves. */
+  launched?(scope: { machine: string }): void
+  /** The sandbox is gone. */
+  released?(scope: { machine: string }): void
 }
 
 export const STUB_SANDBOX_ANTHROPIC_CREDENTIALS: SandboxAnthropicCredentials = {
