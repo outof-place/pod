@@ -3,12 +3,15 @@
 import { z } from 'zod'
 import type { PodOrbstackMachineStats, PodOrbstackStats } from '../../../shared/pod-orbstack-types'
 import { parseOrbMachines } from './pod-orbstack-inventory'
+import type { StatsReaders } from './pod-orbstack-stats-readers'
 import type { OrbstackToolRunner } from './pod-orbstack-tools'
 
 const TICK_MS = 2_000
 const READ_TIMEOUT_MS = 3_000
 const DISK_TTL_MS = 30_000
-const CGROUP_FILES = ['cpu.stat', 'memory.current', 'memory.max', 'memory.stat'].map(
+// Why: with readers, machines already read are known running (their `orb` exits with the VM).
+const LIST_TTL_MS = 10_000
+export const CGROUP_FILES = ['cpu.stat', 'memory.current', 'memory.max', 'memory.stat'].map(
   (file) => `/sys/fs/cgroup/${file}`
 )
 // Why markers: one `cat` per machine, split back into files on the Mac.
@@ -81,20 +84,31 @@ export function createPodOrbstackStats(deps: {
   /** Machines with a start/stop/delete in flight: never read, since `orb run` would start one. */
   busyMachines?: () => readonly string[]
   diskSizes: PodOrbstackDiskSizes
+  /** Long-lived per-machine readers; without them each tick runs one `orb run` per machine. */
+  readers?: StatsReaders
   now?: () => number
 }) {
   const now = deps.now ?? Date.now
   let tick = 0
   let current: { startedAt: number; result: Promise<PodOrbstackStats> } | null = null
+  let listed: { at: number; running: Set<string> } | null = null
+
+  const readCgroups = async (name: string): Promise<{ text: string | null; timedOut: boolean }> => {
+    if (deps.readers) {
+      const text = await deps.readers.read(name)
+      return { text, timedOut: text === null }
+    }
+    const read = await deps.run(
+      'orb',
+      ['run', '-m', name, 'sh', '-c', READ_SCRIPT, 'pod-stats', ...CGROUP_FILES],
+      { timeoutMs: READ_TIMEOUT_MS }
+    )
+    return { text: read.code === 0 ? read.stdout : null, timedOut: read.timedOut }
+  }
 
   const readMachine = async (name: string, errors: string[]) => {
-    const [read, diskBytes] = await Promise.all([
-      deps.run('orb', ['run', '-m', name, 'sh', '-c', READ_SCRIPT, 'pod-stats', ...CGROUP_FILES], {
-        timeoutMs: READ_TIMEOUT_MS
-      }),
-      deps.diskSizes(name)
-    ])
-    const usage = read.code === 0 ? parseCgroupRead(read.stdout) : null
+    const [read, diskBytes] = await Promise.all([readCgroups(name), deps.diskSizes(name)])
+    const usage = read.text === null ? null : parseCgroupRead(read.text)
     if (!usage) {
       errors.push(`${name}: ${read.timedOut ? 'timed out' : 'could not read its usage'}`)
       return null
@@ -102,22 +116,38 @@ export function createPodOrbstackStats(deps: {
     return { name, ...usage, diskBytes }
   }
 
+  /** Running machines from `orb list`, skipped while every candidate already has a reader. */
+  const runningMachines = async (candidates: string[]): Promise<Set<string> | null> => {
+    const known = deps.readers
+      ? candidates.every((name) => deps.readers?.has(name) || listed?.running.has(name) === false)
+      : false
+    if (known && listed && now() - listed.at < LIST_TTL_MS) {
+      return new Set(candidates.filter((name) => deps.readers?.has(name)))
+    }
+    const result = await deps.run('orb', ['list', '--format', 'json'])
+    const machines = result.code === 0 ? parseOrbMachines(result.stdout) : null
+    if (!machines) {
+      return null
+    }
+    const running = new Set(machines.filter((m) => m.state === 'running').map((m) => m.name))
+    listed = { at: now(), running }
+    return running
+  }
+
   const sample = async (): Promise<PodOrbstackStats> => {
     tick += 1
     const sampledAt = now()
     const errors: string[] = []
-    const listed = await deps.run('orb', ['list', '--format', 'json'])
-    const machines = listed.code === 0 ? parseOrbMachines(listed.stdout) : null
-    if (!machines) {
+    const busy = new Set(deps.busyMachines?.() ?? [])
+    const candidates = deps.podMachines().filter((name) => !busy.has(name))
+    const running = await runningMachines(candidates)
+    if (!running) {
       return { tick, sampledAt, machines: [], errors: ['orb list failed'] }
     }
-    const owned = new Set(deps.podMachines())
-    const busy = new Set(deps.busyMachines?.() ?? [])
     // Only machines already running: `orb run` on a stopped one would start it.
-    const running = machines.filter(
-      (machine) => machine.state === 'running' && owned.has(machine.name) && !busy.has(machine.name)
-    )
-    const rows = await Promise.all(running.map((machine) => readMachine(machine.name, errors)))
+    const names = candidates.filter((name) => running.has(name))
+    deps.readers?.retain(new Set(names))
+    const rows = await Promise.all(names.map((name) => readMachine(name, errors)))
     return {
       tick,
       sampledAt,
@@ -127,6 +157,10 @@ export function createPodOrbstackStats(deps: {
   }
 
   return {
+    /** After a change Pod made: the next tick lists machines again. */
+    invalidate: (): void => {
+      listed = null
+    },
     /** `names` filters the tick's rows; it never adds reads. */
     read: async (names?: readonly string[]): Promise<PodOrbstackStats> => {
       if (!current || now() - current.startedAt >= TICK_MS) {
