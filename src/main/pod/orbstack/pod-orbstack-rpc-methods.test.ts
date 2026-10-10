@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PodOrbstackStatus } from '../../../shared/pod-orbstack-types'
+import type { PodOrbstackEvent, PodOrbstackStatus } from '../../../shared/pod-orbstack-types'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../../runtime/rpc/core'
 import { POD_ORBSTACK_METHODS } from './pod-orbstack-rpc-methods'
 import { setPodOrbstackService, type PodOrbstackService } from './pod-orbstack-service'
@@ -17,7 +17,8 @@ function method(name: string) {
 
 function call(name: string, params?: unknown): unknown {
   const entry = method(name)
-  return entry.handler(entry.params ? entry.params.parse(params) : undefined, ctx)
+  // Like the dispatcher: absent or null params parse as {}.
+  return entry.handler(entry.params ? entry.params.parse(params ?? {}) : undefined, ctx)
 }
 
 function emptyStatus(overrides: Partial<PodOrbstackStatus> = {}): PodOrbstackStatus {
@@ -63,8 +64,25 @@ function fakeService(enabled: boolean): PodOrbstackService {
     stop: vi.fn(async () => ({ ok: true as const })),
     setDockerPin: vi.fn(() => ({ ok: true as const })),
     setAgentSandbox: vi.fn(() => ({ ok: true as const })),
-    setSandboxClaudeLogin: vi.fn(() => ({ ok: true as const }))
+    setSandboxClaudeLogin: vi.fn(() => ({ ok: true as const })),
+    setTemplates: vi.fn(async () => ({ ok: true as const })),
+    stats: vi.fn(async () => ({ tick: 1, sampledAt: 5, machines: [], errors: [] })),
+    invalidate: vi.fn(),
+    subscribe: vi.fn((emit: (event: PodOrbstackEvent) => void) => {
+      subscribers.push(emit)
+      return { seed: [], stop: () => subscribers.splice(subscribers.indexOf(emit), 1) }
+    })
   }
+}
+
+const subscribers: ((event: PodOrbstackEvent) => void)[] = []
+
+function streaming(name: string) {
+  const found = eraseRpcMethods(POD_ORBSTACK_METHODS).find((entry) => entry.name === name)
+  if (!found || !isStreamingMethod(found)) {
+    throw new Error(`missing streaming ${name}`)
+  }
+  return found
 }
 
 afterEach(() => setPodOrbstackService(null))
@@ -82,7 +100,11 @@ describe('orbstack.* RPC methods', () => {
       'orbstack.delete',
       'orbstack.pinDocker',
       'orbstack.setAgentSandbox',
-      'orbstack.setSandboxClaudeLogin'
+      'orbstack.setSandboxClaudeLogin',
+      'orbstack.setTemplates',
+      'orbstack.stats',
+      'orbstack.subscribe',
+      'orbstack.unsubscribe'
     ])
     expect(new Set(POD_ORBSTACK_METHODS.map((entry) => entry.permission))).toEqual(
       new Set(['host-admin'])
@@ -125,5 +147,50 @@ describe('orbstack.* RPC methods', () => {
     expect(() => call('orbstack.start', { name: '' })).toThrow()
     expect(() => call('orbstack.pinDocker', { worktreeId: 'r::/x', pinned: 'yes' })).toThrow()
     expect(() => call('orbstack.delete', { worktreeId: 'r::/x', extra: 1 })).toThrow()
+  })
+
+  it('passes the status, stats and templates params through', async () => {
+    const service = fakeService(true)
+    setPodOrbstackService(service)
+    await call('orbstack.status')
+    await call('orbstack.status', { containers: false })
+    expect(service.snapshot).toHaveBeenNthCalledWith(1, { containers: undefined })
+    expect(service.snapshot).toHaveBeenNthCalledWith(2, { containers: false })
+    expect(await call('orbstack.stats', { names: ['pod-web-1'] })).toMatchObject({ tick: 1 })
+    expect(service.stats).toHaveBeenCalledWith(['pod-web-1'])
+    await call('orbstack.setTemplates', { enabled: false })
+    expect(service.setTemplates).toHaveBeenCalledWith(false)
+    expect(() => call('orbstack.status', { containers: 'no' })).toThrow()
+  })
+
+  it('streams ready, the service events and end, and stops on unsubscribe', async () => {
+    setPodOrbstackService(fakeService(true))
+    const cleanups = new Map<string, () => void>()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stream reads only these two runtime calls.
+    const streamCtx = {
+      connectionId: 'c1',
+      runtime: {
+        registerSubscriptionCleanup: (id: string, cleanup: () => void) => cleanups.set(id, cleanup),
+        cleanupSubscription: (id: string) => cleanups.get(id)?.()
+      }
+    } as unknown as RpcContext
+    const events: unknown[] = []
+    let id = ''
+    const done = streaming('orbstack.subscribe').handler(undefined, streamCtx, (event) => {
+      events.push(event)
+      if (typeof event === 'object' && event && 'subscriptionId' in event) {
+        id = String(event.subscriptionId)
+      }
+    })
+    expect(events).toEqual([
+      { type: 'ready', subscriptionId: expect.stringMatching(/^orbstack-c1-/), relay: [] }
+    ])
+    subscribers[0]?.({ type: 'changed' })
+    expect(method('orbstack.unsubscribe').handler({ subscriptionId: id }, streamCtx)).toEqual({
+      unsubscribed: true
+    })
+    await done
+    expect(events.slice(1)).toEqual([{ type: 'changed' }, { type: 'end' }])
+    expect(subscribers).toEqual([])
   })
 })
