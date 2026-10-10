@@ -32,6 +32,8 @@ const DEAD_PID = 2_147_000_000
 
 let root: string
 let servers: Server[]
+// Connections each fake daemon socket accepted, by path.
+let connections: Map<string, number>
 
 function listTree(dir: string): string[] {
   const out: string[] = []
@@ -50,7 +52,10 @@ function listTree(dir: string): string[] {
 
 function listen(path: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const server = createServer((socket) => socket.end('pong'))
+    const server = createServer((socket) => {
+      connections.set(path, (connections.get(path) ?? 0) + 1)
+      socket.end('pong')
+    })
     servers.push(server)
     server.once('error', reject)
     server.listen(path, () => resolve())
@@ -145,6 +150,7 @@ beforeEach(() => {
   // Short base: Unix socket paths are capped at 104 bytes on macOS.
   root = realpathSync(mkdtempSync(join(tmpdir(), 'pm-')))
   servers = []
+  connections = new Map()
 })
 
 afterEach(async () => {
@@ -153,7 +159,7 @@ afterEach(async () => {
 })
 
 describe('migrateLegacyProfile', () => {
-  it('clones state, links live attachable daemons and adopts the legacy safeStorage key', async () => {
+  it('clones state, leaves the daemons alone and adopts the legacy safeStorage key', async () => {
     const legacy = join(root, 'orca')
     await createLegacyProfile(legacy)
     const legacyBefore = listTree(legacy)
@@ -162,7 +168,7 @@ describe('migrateLegacyProfile', () => {
 
     const result = migrateLegacyProfile(baseOptions(keychain))
 
-    expect(result).toEqual({ status: 'imported', linkedDaemons: [41], safeStorage: 'adopted' })
+    expect(result).toEqual({ status: 'imported', adoptableDaemons: [41], safeStorage: 'adopted' })
     const pod = join(root, 'pod')
     expect(readFileSync(join(pod, 'orca-data.json'), 'utf8')).toBe('{"repos":[]}')
     expect(readFileSync(join(pod, 'profiles/local-default/profile-state.db-wal'), 'utf8')).toBe(
@@ -177,16 +183,10 @@ describe('migrateLegacyProfile', () => {
     expect(existsSync(join(pod, 'speech-models'))).toBe(false)
     expect(existsSync(join(pod, 'SingletonLock'))).toBe(false)
     expect(existsSync(join(pod, 'o-1-abc.sock'))).toBe(false)
-    // Only the live v41 daemon is handed over, by symlink, and it still answers through the link.
-    expect(readdirSync(join(pod, 'daemon')).sort()).toEqual([
-      'daemon-v41.pid',
-      'daemon-v41.sock',
-      'daemon-v41.token'
-    ])
-    expect(readlinkSync(join(pod, 'daemon/daemon-v41.sock'))).toBe(
-      join(legacy, 'daemon/daemon-v41.sock')
-    )
-    await expect(readThroughSocket(join(pod, 'daemon/daemon-v41.sock'))).resolves.toBe('pong')
+    // No daemon is linked or contacted; the live v41 one is only listed as adoptable.
+    expect(existsSync(join(pod, 'daemon'))).toBe(false)
+    expect(connections.get(join(legacy, 'daemon/daemon-v41.sock')) ?? 0).toBe(0)
+    await expect(readThroughSocket(join(legacy, 'daemon/daemon-v41.sock'))).resolves.toBe('pong')
     // The new keychain item carries the legacy secret and trusts the product app.
     expect(keychain.items.get('pod Safe Storage/pod Key')).toBe(LEGACY_SECRET)
     expect(keychain.writes).toEqual([
@@ -196,7 +196,7 @@ describe('migrateLegacyProfile', () => {
     expect(marker).toMatchObject({
       from: legacy,
       at: '2026-10-09T12:00:00.000Z',
-      linkedDaemons: [41],
+      adoptableDaemons: [41],
       safeStorage: 'adopted',
       deferred: ['Partitions', 'speech-models'],
       permissionsNoticeShown: false
