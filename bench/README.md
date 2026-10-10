@@ -70,8 +70,8 @@ Support/orca`). Every Orca or Pod instance gets:
   and logs each prompt's time. Orca's zsh wrapper restores `ZDOTDIR`, so no pane reads the user's
   own shell config.
 - control through the instance's own CLI (`orca`, or `podx` in Pod), pointed at its profile with
-  `ORCA_USER_DATA_PATH`: `repo add`, `terminal create --focus`, `terminal split` and
-  `terminal send`.
+  `ORCA_USER_DATA_PATH` and `POD_USER_DATA_PATH` (Pod's name since `pod/decouple`): `repo add`,
+  `terminal create --focus`, `terminal split` and `terminal send`.
 - cleanup afterwards: every process whose argv names the profile is killed (the terminal daemon
   and its shells), and the profile is deleted.
 - `POD_ACC_LIFECYCLE=off` in every launch's environment, the app's and its CLI's. When it starts,

@@ -70,6 +70,16 @@ function markedJson(output, marker) {
   return null
 }
 
+// The parity test's inputs under both prefixes: pod/decouple moves Pod's env names to POD_.
+function parityEnv(values) {
+  return Object.fromEntries(
+    Object.entries(values).flatMap(([name, value]) => [
+      [`ORCA_OGD_PARITY_${name}`, value],
+      [`POD_OGD_PARITY_${name}`, value]
+    ])
+  )
+}
+
 const metrics = []
 const comparisons = []
 const slug = (text) =>
@@ -90,9 +100,11 @@ const parity = await collectSamples({
       ['test', 'src/main/pod/search/ogd-ripgrep-parity.real-ogd.test.ts'],
       {
         ORCA_E2E_OGD_BIN: inputs.ogd,
-        ORCA_OGD_PARITY_REPO: inputs.searchRepo,
-        ORCA_OGD_PARITY_RUNS: options['parity-runs'],
-        ORCA_OGD_PARITY_REPORT: report
+        ...parityEnv({
+          REPO: inputs.searchRepo,
+          RUNS: options['parity-runs'],
+          REPORT: report
+        })
       }
     )
     // An ogd without search.full_lines fails the test's first assertion by design: record it.
