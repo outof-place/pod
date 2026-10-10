@@ -1,5 +1,5 @@
 import { BrowserWindow, Menu, app } from 'electron'
-import { POD_FEATURE_PROMOS, POD_TASKS } from '../../shared/product/features'
+import { podHelpPromoItems, podTasksMenuItem } from './pod-app-menu-cuts'
 import {
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
@@ -253,13 +253,12 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         click: () => onToggleAppearance('statusBarVisible')
       },
       { type: 'separator' },
-      {
+      podTasksMenuItem({
         label: translateMain('menu.showTasksButton', 'Show Tasks Button'),
         type: 'checkbox',
-        visible: POD_TASKS,
         checked: appearance.showTasksButton,
         click: () => onToggleAppearance('showTasksButton')
-      },
+      }),
       {
         label: translateMain('menu.showAutomationsButton', 'Show Automations Button'),
         type: 'checkbox',
@@ -330,9 +329,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     label: translateMain('menu.help', 'Help'),
     submenu: [
       crashReportItem,
-      ...(POD_FEATURE_PROMOS
-        ? [{ type: 'separator' } as const, featureTourItem, setupGuideItem]
-        : []),
+      ...podHelpPromoItems([{ type: 'separator' }, featureTourItem, setupGuideItem]),
       ...(isMac
         ? []
         : ([
