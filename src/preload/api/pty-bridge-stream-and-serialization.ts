@@ -23,6 +23,10 @@ export const ptyStreamAndSerializationApi = {
     ipcRenderer.invoke('pty:disableCodexSharedServerAutoStart', { id }),
   stopCodexSharedServer: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('pty:stopCodexSharedServer', { id }),
+  openedBeforeClaudeAccounts: (
+    id: string,
+    target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
+  ): Promise<boolean> => ipcRenderer.invoke('pty:openedBeforeClaudeAccounts', { id, target }),
   getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
   getSize: (id: string): Promise<{ cols: number; rows: number } | null> =>
     ipcRenderer.invoke('pty:getSize', { id }),
@@ -35,6 +39,7 @@ export const ptyStreamAndSerializationApi = {
       transformed?: boolean
       background?: boolean
       droppedOutput?: boolean
+      sidecarOnly?: boolean
     }) => void
   ): (() => void) => {
     const listener = (
@@ -47,6 +52,7 @@ export const ptyStreamAndSerializationApi = {
         transformed?: boolean
         background?: boolean
         droppedOutput?: boolean
+        sidecarOnly?: boolean
       }
     ) => callback(data)
     ipcRenderer.on('pty:data', listener)
