@@ -4,6 +4,7 @@ import {
   type ProductUpdateFeed
 } from '../product-identity/product-identity'
 import { isOfficialUpdateFeedDisabled } from './official-update-opt-out'
+import { isPodUiHostLaunch } from '../pod/ui-host/pod-ui-host-launch'
 
 export type UpdateFeedPolicy =
   | { kind: 'official' }
@@ -24,6 +25,9 @@ export function resolveUpdateFeedPolicy(
 let cached: UpdateFeedPolicy | undefined
 
 export function getUpdateFeedPolicy(): UpdateFeedPolicy {
-  cached ??= resolveUpdateFeedPolicy(getProductIdentity(), isOfficialUpdateFeedDisabled())
+  // Fork-only (Pod): in the one-app layout Squirrel.Mac would replace the nested runtime, not Pod.app.
+  cached ??= isPodUiHostLaunch()
+    ? { kind: 'disabled' }
+    : resolveUpdateFeedPolicy(getProductIdentity(), isOfficialUpdateFeedDisabled())
   return cached
 }
