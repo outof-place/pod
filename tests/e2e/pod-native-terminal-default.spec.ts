@@ -33,6 +33,10 @@ test('a fresh Pod profile draws its first terminal pane natively', async ({
   expect(
     await orcaPage.evaluate(() => window.__store?.getState().settings?.experimentalNativeTerminal)
   ).toBe(true)
+  // A blinking focused native pane keeps redrawing; Pod's fresh profiles start with it off.
+  expect(
+    await orcaPage.evaluate(() => window.__store?.getState().settings?.terminalCursorBlink)
+  ).toBe(false)
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage, 30_000)
   const ptyId = await waitForActivePanePtyId(orcaPage)
