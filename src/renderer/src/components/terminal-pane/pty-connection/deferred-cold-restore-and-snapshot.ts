@@ -216,6 +216,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     session.paneStartup
   )
   session.hiddenStartupRendererQueryPending = ''
+  session.discardedQueryCarry = null
   session.hiddenRendererStateDirty = false
   session.rendererOrderedPtyId = null
   session.rendererOrderedSeq = null
