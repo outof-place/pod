@@ -80,7 +80,12 @@ const run = promisify(execFile)
 let ogEnv = {}
 let ogStatus = null
 async function startOgd() {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'pod-bench-ogd-'))
+  // A Unix socket path must fit in 104 bytes; fall back to /tmp when TMPDIR is too deep.
+  let dir = mkdtempSync(path.join(os.tmpdir(), 'pod-bench-ogd-'))
+  if (path.join(dir, 'ogd.sock').length >= 104) {
+    rmSync(dir, { recursive: true, force: true })
+    dir = mkdtempSync('/tmp/pod-bench-ogd-')
+  }
   ogEnv = {
     POD_SEARCH_SOCKET: path.join(dir, 'ogd.sock'),
     POD_SEARCH_STATE_DIR: path.join(dir, 'state'),
@@ -88,6 +93,11 @@ async function startOgd() {
     OG_REAL_RG: options.rg === 'rg' ? '/opt/homebrew/bin/rg' : options.rg,
     // Each og call appends `served\t<us>` or `fallback\t<reason>` here.
     OG_DECISION_FILE: path.join(dir, 'decisions.log')
+  }
+  // Any other rg makes og fall back on every call, which would time rg twice.
+  const { stdout: realRg } = await run(ogEnv.OG_REAL_RG, ['--version'])
+  if (!realRg.startsWith('ripgrep 15.2.0')) {
+    throw new Error(`OG_REAL_RG must be ripgrep 15.2.0, got: ${realRg.split('\n')[0]}`)
   }
   // A long idle limit: the load gate can wait longer than ogd's default 30 min worktree eviction.
   const daemon = spawn(
@@ -245,11 +255,20 @@ const subjectOf = (engine) =>
   engine === 'og'
     ? `og (pod-search ${(options['og-sha'] ?? 'unpinned').slice(0, 9)}, ripgrep 15.2.0 fork, warm ogd index)`
     : (versions.rg ?? 'rg')
+const suiteCaveats = []
 for (const engine of engines) {
   const accepted = samples[engine].filter((sample) => !sample.warmup)
   // og falls back to the real rg when it cannot answer; say how often that happened.
   const served = accepted.reduce((sum, sample) => sum + (sample.ogServed ?? 0), 0)
   const fellBack = accepted.reduce((sum, sample) => sum + (sample.ogFallback ?? 0), 0)
+  // og that never answered from the index timed rg behind a wrapper: a broken run, not a result.
+  if (engine === 'og' && served === 0) {
+    log(`search: og served 0 of ${fellBack} calls from the index; its rows are left out`)
+    suiteCaveats.push(
+      `og answered none of its ${fellBack} calls from the index (all fell back to rg), so this run has no og rows.`
+    )
+    continue
+  }
   const caveats =
     engine === 'og' && fellBack > 0
       ? [
@@ -321,6 +340,7 @@ const comparisons = engines.includes('og')
     ]
   : []
 writeSuiteResult('search', {
+  caveats: suiteCaveats,
   ogdStatus: ogStatus,
   versions,
   repo: repoFacts,
