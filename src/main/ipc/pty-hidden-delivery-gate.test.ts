@@ -149,7 +149,8 @@ describe('pty hidden delivery gate', () => {
       deliveryInterestPtyCount: 1,
       hiddenDeliveryDroppedChars: 12,
       hiddenDeliveryDroppedChunks: 2,
-      daemonQueryResponderPtyCount: 0
+      daemonQueryResponderPtyCount: 0,
+      mainTerminalModelSeedFailureCount: 0
     })
 
     clearHiddenRendererPtyDeliveryState(PTY_ID)
