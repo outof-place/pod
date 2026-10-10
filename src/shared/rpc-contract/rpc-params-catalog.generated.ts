@@ -445,6 +445,7 @@ import {
   PodOrbstackUnsubscribeParams,
   PodOrbstackWorktreeParams
 } from './pod-orbstack-params'
+import { PodTerminalDirectLaneParams } from './pod-terminal-lane-params'
 import {
   PreflightAgentDetection,
   PreflightCheck,
@@ -1139,6 +1140,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.panelAction': PluginsPanelActionParams,
   'plugins.readPanelEntry': PluginReadPanelEntryParams,
   'plugins.setEnabled': PluginSetEnabledParams,
+  'pod.terminal.directLane': PodTerminalDirectLaneParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
