@@ -86,6 +86,32 @@ function configValue(value: string): string {
     .join('')
 }
 
+// Ghostty picks a weight by the style name the font advertises; SF Mono's are these.
+const GHOSTTY_FONT_STYLES: Readonly<Record<number, string>> = {
+  100: 'Thin',
+  200: 'Ultralight',
+  300: 'Light',
+  500: 'Medium',
+  600: 'Semibold',
+  700: 'Bold',
+  800: 'Heavy',
+  900: 'Black'
+}
+
+/** The named style for a CSS weight, or null when Ghostty's default already matches. */
+export function toGhosttyFontStyle(
+  weight: number | string | undefined,
+  defaultWeight: 400 | 700
+): string | null {
+  const numeric =
+    weight === 'normal' ? 400 : weight === 'bold' ? 700 : Number.parseFloat(String(weight))
+  if (!Number.isFinite(numeric)) {
+    return null
+  }
+  const rounded = Math.min(900, Math.max(100, Math.round(numeric / 100) * 100))
+  return rounded === defaultWeight ? null : (GHOSTTY_FONT_STYLES[rounded] ?? null)
+}
+
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return allowed.find((candidate) => candidate === value) ?? fallback
 }
@@ -115,6 +141,18 @@ export function buildGhosttyConfig(
   lines.push('font-family = ')
   for (const family of toGhosttyFontFamilies(appearance.fontFamily)) {
     lines.push(`font-family = ${configValue(family)}`)
+  }
+  const regularStyle = toGhosttyFontStyle(appearance.fontWeight, 400)
+  if (regularStyle) {
+    lines.push(`font-style = ${regularStyle}`)
+  }
+  const boldStyle = toGhosttyFontStyle(appearance.fontWeightBold, 700)
+  if (boldStyle) {
+    lines.push(`font-style-bold = ${boldStyle}`)
+  }
+  // Why: xterm draws ligatures only with its addon on; Ghostty draws them unless they are off.
+  if (appearance.ligatures !== true) {
+    lines.push('font-feature = -calt', 'font-feature = -liga', 'font-feature = -dlig')
   }
   const fontSize = Math.max(1, finite(appearance.fontSize, 13) * zoom)
   lines.push(`font-size = ${Number(fontSize.toFixed(2))}`)
