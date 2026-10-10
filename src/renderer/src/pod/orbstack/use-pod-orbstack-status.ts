@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PodOrbstackStatus } from '../../../../shared/pod-orbstack-types'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { getPodOrbstackApi } from './pod-orbstack-api-access'
+import { podOrbstackRpc } from './pod-orbstack-rpc'
 
 // Container CPU and memory change constantly; the page re-reads them while it is open.
 const REFRESH_MS = 10_000
@@ -28,7 +28,7 @@ export function usePodOrbstackStatus(): {
     inFlight.current = true
     setLoading(true)
     try {
-      const next = (await getPodOrbstackApi()?.getStatus()) ?? null
+      const next = await podOrbstackRpc.getStatus()
       if (mounted.current) {
         setStatus(next)
         setError(null)
