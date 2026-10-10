@@ -38,7 +38,11 @@ type RegistryData = z.infer<typeof RegistrySchema>
 export class PodOrbstackRegistry {
   private data: RegistryData | null = null
 
-  constructor(private readonly filePath: string) {}
+  /** `onChange` runs after every save, so status readers and subscribers hear of it. */
+  constructor(
+    private readonly filePath: string,
+    private readonly onChange?: () => void
+  ) {}
 
   private load(): RegistryData {
     if (this.data) {
@@ -60,6 +64,7 @@ export class PodOrbstackRegistry {
   private save(): void {
     mkdirSync(dirname(this.filePath), { recursive: true })
     writeFileAtomically(this.filePath, `${JSON.stringify(this.load(), null, 2)}\n`)
+    this.onChange?.()
   }
 
   machines(): readonly PodOrbstackMachineEntry[] {
