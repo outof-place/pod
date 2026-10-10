@@ -4,7 +4,7 @@
 #include "proc_api_arguments.h"
 
 #include <errno.h>
-#include <dirent.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/param.h>
@@ -29,7 +29,7 @@ static napi_status set_int(napi_env env, napi_value object, const char *name, in
 
 static napi_value ReadProcessForegroundGroup(napi_env env, napi_callback_info info) {
   int32_t pid = 0;
-  char tty[MAXNAMLEN + 1];
+  char tty[NAME_MAX + 1];
   if (!read_process_pid_argument(env, info, &pid) ||
       !read_process_tty_argument(env, info, tty, sizeof(tty))) {
     return NULL;

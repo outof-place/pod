@@ -39,8 +39,7 @@ execFileSync(
     ...arches.flatMap((arch) => ['-arch', arch]),
     '-I',
     resolveNodeApiHeaders(),
-    // Why dynamic_lookup: N-API symbols come from the host (Electron or Node) at load time, so one
-    // binary serves the app, the terminal daemon, and plain-Node tests.
+    // N-API symbols come from Electron or Node at load time, so both load the same binary.
     '-bundle',
     '-undefined',
     'dynamic_lookup',

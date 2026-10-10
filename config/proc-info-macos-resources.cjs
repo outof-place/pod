@@ -14,7 +14,7 @@ const procInfoMacExtraResource = {
 const LIPO_ARCH_BY_ELECTRON_ARCH = { 1: 'x86_64', 3: 'arm64' }
 
 // Why a guard: electron-builder only warns on a missing extraResources source, and the app would
-// then fork `ps` on every poll again with nothing to say it regressed.
+// silently return to blocking ps calls for explicit terminal repaint signals.
 function assertProcInfoAddonBuilt(platform, arch, projectDir = join(__dirname, '..')) {
   if (platform !== 'darwin') {
     return
