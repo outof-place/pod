@@ -37,6 +37,8 @@ Changing a name is a one-line edit here; nothing else in the repo hard-codes the
   - It copies `identity.json` into `Contents/Resources/product-identity.json` and Orca's `LICENSE` into `ORCA-LICENSE.txt`, and writes `product-upstream.json` (the Orca tag and commit, from `upstream.json` or git).
   - It patches the bundled CLI launcher to the product's executable and profile, and adds it as `bin/<cliName>` next to `bin/orca`.
   - It renames the Computer Use helper to `computerUseDisplayName` before the helper is signed.
+  - `product/helper-names.cjs` renames the helper files too: `<computerUseDisplayName>.app` with a `<packageName>-computer-use-macos` executable, and `Contents/MacOS/<packageName>-notification-status` and `-keyboard-layout`. Bundle ids and designated requirements stay, so privacy grants carry over. Runtime lookups follow through `src/main/product-identity/product-helper-names.ts`.
+  - afterPack fails when an app, process or permission-prompt name still says Orca. Check an installed build without launching it: `node product/helper-names.cjs --check /Applications/Pod.app`.
   - With `config/pod-acc-extra-resources.cjs` in the stack, it ships the claude-acc payload and the distro plugins.
 - **Runtime:** `src/main/product-identity/product-identity.ts` reads the resource in packaged builds only, and refuses a malformed file.
   - Startup pins `userData` to `userDataName`.
