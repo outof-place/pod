@@ -8,6 +8,12 @@ import {
   type AccLifecycleOutcome
 } from './acc-lifecycle'
 import { writeAccLifecycleRecord } from './acc-lifecycle-record'
+import {
+  bundledAccServices,
+  ensureAccServices,
+  type AccServiceReport,
+  type LoginItemApi
+} from './acc-services'
 import { isAccMenuHelperRunning } from './acc-menu-helper'
 
 // The helper starts and quits on its own (login item, setup restarting it): look again this often.
@@ -27,6 +33,9 @@ export type PodAccSupervisorOptions = {
   platform: NodeJS.Platform
   env: NodeJS.ProcessEnv
   run: (spec: ProcessSpec) => Promise<ProcessResult>
+  /** Electron's SMAppService bridge and the product's appId, which prefixes the agent plists. */
+  loginItems: LoginItemApi | null
+  appId: string | null
   /** Tells the tray whether the claude-acc menu helper is up, and re-applies the tray. */
   setTrayYield: (helperRunning: () => boolean) => void
   syncTray: () => void
@@ -61,6 +70,7 @@ function describe(outcome: AccLifecycleOutcome): string {
 export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
   stop: () => void
   lifecycle: Promise<AccLifecycleOutcome>
+  services: Promise<AccServiceReport[]>
 } {
   const appPath = appBundlePath(options.execPath)
   const lifecycle = runAccLifecycle(
@@ -89,6 +99,27 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     }
     return outcome
   })
+  // Only once setup.sh made this account Pod's: every lifecycle guard applies to launchd too.
+  const services = lifecycle.then((outcome) => {
+    const { loginItems, appId } = options
+    if (
+      !loginItems ||
+      !appId ||
+      (outcome.status !== 'installed' && outcome.status !== 'up-to-date')
+    ) {
+      return []
+    }
+    const reports = ensureAccServices(
+      loginItems,
+      bundledAccServices(appBundlePath(options.execPath), appId)
+    )
+    for (const report of reports) {
+      if (report.registered || report.status !== 'enabled') {
+        options.log(`claude-acc: ${report.service.serviceName} ${report.status}`)
+      }
+    }
+    return reports
+  })
   let helperRunning = false
   let stopped = false
   options.setTrayYield(() => helperRunning)
@@ -107,6 +138,7 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
   void lifecycle.then(() => probe())
   return {
     lifecycle,
+    services,
     stop: () => {
       stopped = true
       if (timer) {

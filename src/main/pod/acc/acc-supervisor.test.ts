@@ -1,6 +1,67 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
+import { ACC_STATE_DIR } from './acc-lifecycle'
+import type { LoginItemApi } from './acc-services'
 import { appBundlePath, startPodAccSupervisor } from './acc-supervisor'
+
+const roots: string[] = []
+afterEach(() => {
+  for (const root of roots.splice(0)) {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+/** An installed Pod (payload 1.31.0, owner.json saying pod) whose bundle carries one agent. */
+function installedPod() {
+  const root = mkdtempSync(join(tmpdir(), 'pod-acc-supervisor-'))
+  roots.push(root)
+  const app = join(root, 'Pod.app')
+  const home = join(root, 'home')
+  const payload = join(app, 'Contents', 'Resources', 'claude-acc')
+  mkdirSync(payload, { recursive: true })
+  writeFileSync(join(payload, 'VERSION'), '1.31.0\n')
+  writeFileSync(join(payload, 'setup.sh'), '#!/bin/bash\n')
+  mkdirSync(join(app, 'Contents', 'Library', 'LaunchAgents'), { recursive: true })
+  writeFileSync(
+    join(app, 'Contents', 'Library', 'LaunchAgents', 'codes.pod.app.acc.tick.plist'),
+    ''
+  )
+  mkdirSync(join(home, ACC_STATE_DIR), { recursive: true })
+  writeFileSync(
+    join(home, ACC_STATE_DIR, 'owner.json'),
+    JSON.stringify({ owner: 'pod', version: '1.31.0', app })
+  )
+  const profile = join(home, 'Library/Application Support/Pod')
+  return {
+    resourcesPath: join(app, 'Contents', 'Resources'),
+    execPath: join(app, 'Contents', 'MacOS', 'Pod'),
+    home,
+    accountHome: home,
+    userDataPath: profile,
+    defaultUserDataPath: profile
+  }
+}
+
+function fakeLoginItems() {
+  const set = vi.fn()
+  const api: LoginItemApi = {
+    getLoginItemSettings: () => ({
+      openAtLogin: false,
+      openAsHidden: false,
+      wasOpenedAtLogin: false,
+      wasOpenedAsHidden: false,
+      restoreState: false,
+      status: 'not-registered',
+      executableWillLaunchAtLogin: false,
+      launchItems: []
+    }),
+    setLoginItemSettings: set
+  }
+  return { api, set }
+}
 
 function result(code: number): ProcessResult {
   return { code, signal: null, stdout: '', stderr: '', timedOut: false }
@@ -34,6 +95,8 @@ describe('claude-acc supervisor', () => {
       platform: 'darwin',
       env: {},
       run,
+      loginItems: null,
+      appId: null,
       setTrayYield: (fn) => {
         yieldTo = fn
       },
@@ -62,6 +125,8 @@ describe('claude-acc supervisor', () => {
       platform: 'darwin',
       env: { ORCA_E2E_USER_DATA_DIR: '/private/tmp/e2e-home/userData' },
       run,
+      loginItems: null,
+      appId: null,
       setTrayYield: () => {},
       syncTray: () => {},
       log
@@ -72,6 +137,49 @@ describe('claude-acc supervisor', () => {
     })
     expect(log).toHaveBeenCalledWith('claude-acc: skipped (automated-launch)')
     expect(run.mock.calls.every(([spec]) => spec.program === '/usr/bin/pgrep')).toBe(true)
+    supervisor.stop()
+  })
+
+  it('registers the bundled agents once claude-acc is up to date', async () => {
+    const loginItems = fakeLoginItems()
+    const supervisor = startPodAccSupervisor({
+      config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
+      ...installedPod(),
+      platform: 'darwin',
+      env: {},
+      run: vi.fn(async () => result(1)),
+      loginItems: loginItems.api,
+      appId: 'codes.pod.app',
+      setTrayYield: () => {},
+      syncTray: () => {},
+      log: () => {}
+    })
+    await expect(supervisor.lifecycle).resolves.toMatchObject({ status: 'up-to-date' })
+    await supervisor.services
+    expect(loginItems.set).toHaveBeenCalledWith({
+      openAtLogin: true,
+      type: 'agentService',
+      serviceName: 'codes.pod.app.acc.tick.plist'
+    })
+    supervisor.stop()
+  })
+
+  it('never touches launchd services when the lifecycle skipped', async () => {
+    const loginItems = fakeLoginItems()
+    const supervisor = startPodAccSupervisor({
+      config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
+      ...installedPod(),
+      platform: 'darwin',
+      env: { ORCA_E2E_HEADLESS: '1' },
+      run: vi.fn(async () => result(1)),
+      loginItems: loginItems.api,
+      appId: 'codes.pod.app',
+      setTrayYield: () => {},
+      syncTray: () => {},
+      log: () => {}
+    })
+    await expect(supervisor.services).resolves.toEqual([])
+    expect(loginItems.set).not.toHaveBeenCalled()
     supervisor.stop()
   })
 })

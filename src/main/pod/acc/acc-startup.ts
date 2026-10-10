@@ -42,6 +42,8 @@ export function startPodAccFromStartup(): void {
     platform: process.platform,
     env: process.env,
     run: (spec) => runProcess(spec, 'tail'),
+    loginItems: app,
+    appId: getProductIdentity()?.appId ?? null,
     setTrayYield: (helperRunning) => setMacTrayYield(helperRunning),
     syncTray: () => {
       if (state.store) {
