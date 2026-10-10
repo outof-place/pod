@@ -1,20 +1,18 @@
-import { execFileSync, spawnSync } from 'node:child_process'
 import {
   existsSync,
   linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createForegroundFixtureBundle } from './macos-foreground-fixture-bundle.mjs'
-
-vi.mock('node:child_process', () => ({ execFileSync: vi.fn(), spawnSync: vi.fn() }))
 
 describe.skipIf(process.platform === 'win32')('isolated foreground fixture bundle', () => {
   let root
@@ -23,15 +21,12 @@ describe.skipIf(process.platform === 'win32')('isolated foreground fixture bundl
   let sourceFile
   let scratch
   let app
+  let codeSigning
+  let signatures
+  let signedPaths
+  let verifiedPaths
 
   beforeEach(() => {
-    vi.clearAllMocks()
-    vi.mocked(spawnSync).mockReturnValue({
-      status: 0,
-      signal: null,
-      stdout: '',
-      stderr: 'signature'
-    })
     root = mkdtempSync(join(tmpdir(), 'orca-foreground-bundle-test-'))
     sourceApp = join(root, 'Electron.app')
     sourceAddon = join(root, 'addon.node')
@@ -42,6 +37,39 @@ describe.skipIf(process.platform === 'win32')('isolated foreground fixture bundl
     mkdirSync(scratch)
     writeFileSync(sourceFile, 'original executable')
     writeFileSync(sourceAddon, 'original addon')
+    signatures = new Map([
+      [
+        realpathSync(sourceApp),
+        { status: 0, signal: null, error: null, digest: 'source signature' }
+      ]
+    ])
+    signedPaths = []
+    verifiedPaths = []
+    codeSigning = {
+      sign(path) {
+        signedPaths.push(path)
+        signatures.set(realpathSync(path), {
+          status: 0,
+          signal: null,
+          error: null,
+          digest: 'fixture signature'
+        })
+      },
+      verify(path) {
+        const signature = signatures.get(realpathSync(path))
+        if (!signature || signature.status !== 0) {
+          throw new Error('fixture signature is invalid')
+        }
+        verifiedPaths.push(path)
+      },
+      readSignature(path) {
+        const signature = signatures.get(realpathSync(path))
+        if (!signature) {
+          return { status: 1, signal: null, error: null, digest: 'unsigned' }
+        }
+        return { ...signature }
+      }
+    }
   })
 
   afterEach(() => {
@@ -49,18 +77,15 @@ describe.skipIf(process.platform === 'win32')('isolated foreground fixture bundl
   })
 
   function create() {
-    return createForegroundFixtureBundle({ sourceApp, sourceAddon, app, scratch })
+    return createForegroundFixtureBundle({ sourceApp, sourceAddon, app, scratch, codeSigning })
   }
 
   it('copies before validation and preserves both sources through signing and cleanup', () => {
     const bundle = create()
     expect(bundle.validatedEntries).toBe(2)
     bundle.seal()
-    expect(execFileSync).toHaveBeenCalledWith(
-      'codesign',
-      ['--force', '--deep', '--sign', '-', app],
-      expect.objectContaining({ env: expect.objectContaining({ ORCA_BACKGROUND_LAUNCH: '1' }) })
-    )
+    expect(signedPaths).toEqual([app])
+    expect(verifiedPaths).toEqual([app])
     bundle.assertSourcesPreserved()
     bundle.cleanup()
     expect(existsSync(scratch)).toBe(false)
@@ -72,14 +97,16 @@ describe.skipIf(process.platform === 'win32')('isolated foreground fixture bundl
     const bundle = create()
     symlinkSync(sourceFile, join(app, 'outside'))
     expect(() => bundle.seal()).toThrow('bundle entry escapes its app')
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(signedPaths).toEqual([])
+    expect(verifiedPaths).toEqual([])
     bundle.cleanup()
   })
 
   it('validates copied links before returning a bundle for setup', () => {
     symlinkSync(sourceFile, join(sourceApp, 'Contents', 'absolute-link'))
     expect(create).toThrow('bundle entry escapes its app')
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(signedPaths).toEqual([])
+    expect(verifiedPaths).toEqual([])
     expect(existsSync(scratch)).toBe(false)
     expect(readFileSync(sourceFile, 'utf8')).toBe('original executable')
   })
@@ -92,10 +119,12 @@ describe.skipIf(process.platform === 'win32')('isolated foreground fixture bundl
         sourceApp,
         sourceAddon,
         app: join(parent, 'Fixture.app'),
-        scratch
+        scratch,
+        codeSigning
       })
     ).toThrow('fixture parent must be a direct directory')
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(signedPaths).toEqual([])
+    expect(verifiedPaths).toEqual([])
     expect(existsSync(join(sourceApp, 'Fixture.app'))).toBe(false)
   })
 
@@ -105,7 +134,8 @@ describe.skipIf(process.platform === 'win32')('isolated foreground fixture bundl
     rmSync(fixtureFile)
     linkSync(sourceFile, fixtureFile)
     expect(() => bundle.seal()).toThrow('fixture file is hard-linked')
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(signedPaths).toEqual([])
+    expect(verifiedPaths).toEqual([])
     expect(() => bundle.cleanup()).toThrow('fixture altered original Electron or addon files')
     expect(existsSync(scratch)).toBe(false)
     expect(readFileSync(sourceFile, 'utf8')).toBe('original executable')
@@ -124,15 +154,13 @@ describe.skipIf(process.platform === 'win32')('isolated foreground fixture bundl
 
   it('detects a changed source signature without relying only on file content', () => {
     const bundle = create()
-    vi.mocked(spawnSync).mockReturnValueOnce({
-      status: 0,
-      signal: null,
-      stdout: '',
-      stderr: 'changed signature'
-    })
+    const sourcePath = realpathSync(sourceApp)
+    const originalSignature = signatures.get(sourcePath)
+    signatures.set(sourcePath, { ...originalSignature, digest: 'changed signature' })
     expect(() => bundle.assertSourcesPreserved()).toThrow(
       'fixture altered original Electron or addon files'
     )
+    signatures.set(sourcePath, originalSignature)
     bundle.cleanup()
   })
 
@@ -141,7 +169,8 @@ describe.skipIf(process.platform === 'win32')('isolated foreground fixture bundl
     rmSync(app, { recursive: true })
     symlinkSync(sourceApp, app, 'dir')
     expect(() => bundle.seal()).toThrow('fixture app must be a direct directory')
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(signedPaths).toEqual([])
+    expect(verifiedPaths).toEqual([])
     bundle.cleanup()
     expect(readFileSync(sourceFile, 'utf8')).toBe('original executable')
   })
@@ -162,7 +191,8 @@ describe.skipIf(process.platform === 'win32')('isolated foreground fixture bundl
       sourceApp: linkedSource,
       sourceAddon,
       app,
-      scratch
+      scratch,
+      codeSigning
     })
     bundle.validate()
     bundle.cleanup()

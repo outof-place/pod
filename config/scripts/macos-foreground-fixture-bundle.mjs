@@ -14,6 +14,34 @@ import {
 } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
+function signingOptions() {
+  return {
+    encoding: 'utf8',
+    timeout: 120_000,
+    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
+  }
+}
+
+const fixtureCodeSigning = {
+  readSignature(app) {
+    const signature = spawnSync('codesign', ['--display', '--verbose=2', app], signingOptions())
+    return {
+      status: signature.status,
+      signal: signature.signal,
+      error: signature.error?.code ?? null,
+      digest: createHash('sha256')
+        .update((signature.stdout ?? '') + (signature.stderr ?? ''))
+        .digest('hex')
+    }
+  },
+  sign(app) {
+    execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], signingOptions())
+  },
+  verify(app) {
+    execFileSync('codesign', ['--verify', '--deep', '--strict', app], signingOptions())
+  }
+}
+
 function isWithin(root, path) {
   const suffix = relative(root, path)
   return !isAbsolute(suffix) && suffix !== '..' && !suffix.startsWith(`..${sep}`)
@@ -60,7 +88,7 @@ function fileState(path) {
   }
 }
 
-function sourceState(sourceApp, sourceAddon) {
+function sourceState(sourceApp, sourceAddon, codeSigning) {
   const files = new Map()
   visitAppEntries(sourceApp, (path, entry) => {
     const stat = lstatSync(path)
@@ -75,29 +103,23 @@ function sourceState(sourceApp, sourceAddon) {
           }
     )
   })
-  const signature = spawnSync('codesign', ['--display', '--verbose=2', sourceApp], {
-    encoding: 'utf8',
-    timeout: 120_000,
-    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
-  })
   const root = lstatSync(sourceApp)
   return {
     root: { dev: root.dev, ino: root.ino, mtime: root.mtimeMs, ctime: root.ctimeMs },
     files,
     addon: fileState(sourceAddon),
-    signature: {
-      status: signature.status,
-      signal: signature.signal,
-      error: signature.error?.code ?? null,
-      digest: createHash('sha256')
-        .update((signature.stdout ?? '') + (signature.stderr ?? ''))
-        .digest('hex')
-    }
+    signature: codeSigning.readSignature(sourceApp)
   }
 }
 
 /** Copy and sign an isolated bundle while preserving its original Electron files. */
-export function createForegroundFixtureBundle({ sourceApp, sourceAddon, app, scratch }) {
+export function createForegroundFixtureBundle({
+  sourceApp,
+  sourceAddon,
+  app,
+  scratch,
+  codeSigning = fixtureCodeSigning
+}) {
   const scratchIdentity = lstatSync(scratch)
   assert(scratchIdentity.isDirectory(), 'scratch must be a direct directory')
   const scratchRoot = realpathSync(scratch)
@@ -112,7 +134,7 @@ export function createForegroundFixtureBundle({ sourceApp, sourceAddon, app, scr
   assert(!isWithin(scratchRoot, originalApp), 'source app must be outside scratch')
   assert(!isWithin(scratchRoot, realpathSync(sourceAddon)), 'source addon must be outside scratch')
   assert.equal(lstatSync(fixtureApp, { throwIfNoEntry: false }), undefined, 'fixture app exists')
-  const originalState = sourceState(originalApp, sourceAddon)
+  const originalState = sourceState(originalApp, sourceAddon, codeSigning)
   let validatedEntries = 0
   let removed = false
 
@@ -140,7 +162,7 @@ export function createForegroundFixtureBundle({ sourceApp, sourceAddon, app, scr
 
   function assertSourcesPreserved() {
     assert.deepEqual(
-      sourceState(originalApp, sourceAddon),
+      sourceState(originalApp, sourceAddon, codeSigning),
       originalState,
       'fixture altered original Electron or addon files'
     )
@@ -166,13 +188,8 @@ export function createForegroundFixtureBundle({ sourceApp, sourceAddon, app, scr
 
   function seal() {
     validate()
-    const options = {
-      encoding: 'utf8',
-      timeout: 120_000,
-      env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
-    }
-    execFileSync('codesign', ['--force', '--deep', '--sign', '-', fixtureApp], options)
-    execFileSync('codesign', ['--verify', '--deep', '--strict', fixtureApp], options)
+    codeSigning.sign(fixtureApp)
+    codeSigning.verify(fixtureApp)
   }
 
   try {
