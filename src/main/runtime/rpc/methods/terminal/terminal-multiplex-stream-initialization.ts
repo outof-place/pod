@@ -61,6 +61,7 @@ export async function initializeMultiplexStream(
     supportsDesktopViewportClaims: request.capabilities?.desktopViewportClaims === 1,
     desktopClaimTail: Promise.resolve(true),
     registeredRemoteDesktopDriver: false,
+    modelHeldQueryAuthority: false,
     // Why: streamId is client-local, so key the width floor by connectionId or two connections sharing stream 1 for one PTY clobber each other's floor.
     remoteDesktopSubscriptionKey,
     pendingRemoteDesktopViewport: null,
@@ -115,6 +116,7 @@ export async function initializeMultiplexStream(
     stream.outputBatcher.push(data, meta)
   })
   // Why: a multiplexed stream feeds a remote xterm view with query authority, so the main model responder yields while attached (terminal-query-authority.md).
+  stream.modelHeldQueryAuthority = runtime.modelAnswersTerminalQueries(ptyId)
   const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
   stream.unsubscribeData = () => {
     releaseViewSubscriber()
