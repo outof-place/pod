@@ -99,9 +99,13 @@ export async function discoverFiles(args: {
       groups.push(batch.slice(index, index + groupSize))
     }
     const observations = await mapWithConcurrency(groups, NATIVE_DISCOVERY_CONCURRENCY, (group) =>
-      withNativeDiscoverySlot(() =>
-        mapWithConcurrency(group, 1, (path) => observeSessionFile(path, args.contentDependencyPath))
-      )
+      withNativeDiscoverySlot(async () => {
+        const files: SessionFileObservation[] = []
+        for (const path of group) {
+          files.push(await observeSessionFile(path, args.contentDependencyPath))
+        }
+        return files
+      })
     )
     return observations.flat()
   }
