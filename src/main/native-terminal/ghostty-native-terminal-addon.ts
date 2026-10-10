@@ -48,7 +48,7 @@ export type GhosttyTerminalAddon = {
   ) => number
   writeOutput: (surfaceId: number, data: Buffer) => void
   setFrames: (frames: NativeSurfaceFrame[]) => void
-  focus: (surfaceId: number) => void
+  focus: (surfaceId: number, unlessMousePressed?: boolean) => void
   setAppFocus: (focused: boolean) => void
   readSelection: (surfaceId: number) => string | null
   performAction: (surfaceId: number, action: string) => boolean
@@ -112,6 +112,7 @@ export type GhosttyTerminalAddon = {
     surfaces: number
   }
   debugWindowOcclusion: (onScreen: boolean | null) => void
+  debugMousePressed: (pressed: boolean | null) => void
 }
 
 // proc_pid_rusage of one process: cumulative CPU, wakeups and instructions, current footprint.
