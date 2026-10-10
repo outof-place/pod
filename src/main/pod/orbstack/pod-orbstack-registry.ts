@@ -14,7 +14,9 @@ const MachineEntrySchema = z.object({
   // shared: the worktree's terminal machine, all of /Users. sandbox: isolated, for agents.
   kind: z.enum(['shared', 'sandbox']).default('shared'),
   /** Claude Code version installed in a sandbox; matches the host's at provisioning. */
-  agentVersion: z.string().optional()
+  agentVersion: z.string().optional(),
+  /** Sandboxes since --isolate-network; earlier ones reach the Mac's localhost, so Pod skips them. */
+  networkIsolated: z.boolean().optional()
 })
 
 const RegistrySchema = z.object({
