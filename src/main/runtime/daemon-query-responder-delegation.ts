@@ -20,8 +20,9 @@ export type DaemonQueryResponderDelegationHost = {
   send(ptyId: string, responder: boolean): boolean
   /** While pending, the view answers until the daemon confirms, unless main's model can. */
   setHandoffPending(ptyId: string, pending: boolean): void
-  /** Main answers this PTY again once the daemon's take-back lands, so its model must be live. */
-  reclaim(ptyId: string): void
+  /** Wakes main's model for a hidden PTY main will answer again. True once that model has
+   *  caught up, or when main will not be the responder. */
+  reclaim(ptyId: string): boolean
 }
 
 type DelegationEntry = {
@@ -48,8 +49,12 @@ export class DaemonQueryResponderDelegation {
     if (wanted && !existing?.requested) {
       this.request(ptyId, existing ?? this.entryFor(ptyId))
     } else if (!wanted && existing?.requested) {
+      // Why wait: the daemon stays a hidden PTY's responder until main's woken model has caught
+      // up, so no byte falls to a view that may have stopped parsing.
+      if (this.host.isHidden(ptyId) && !this.host.reclaim(ptyId)) {
+        return
+      }
       this.takeBack(ptyId, existing)
-      this.reclaimIfHidden(ptyId)
     }
   }
 

@@ -111,6 +111,12 @@ export class MainTerminalModelDormancy {
     return this.pins.has(ptyId)
   }
 
+  /** Main's model has applied every ingested byte: it never went dormant, or its rebuild caught up. */
+  isCaughtUp(ptyId: string): boolean {
+    const entry = this.currentEntry(ptyId)
+    return !entry || (!entry.dormant && entry.handoff === null)
+  }
+
   /** A caller is seeding main's model itself; stop treating the PTY as dormant. */
   cancelDormancy(ptyId: string): void {
     const entry = this.currentEntry(ptyId)
