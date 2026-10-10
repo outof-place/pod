@@ -56,21 +56,19 @@
       "branch": "perf/native-proc-info-darwin",
       "upstream": "https://github.com/stablyai/orca/pull/26985",
       "note": "Adds a macOS native addon plus a beforePack guard; squashed: maintainers merge Orca main into this PR branch",
-      "squash": true,
-      "ref": "e528cd95638da408d4029920a9a705b588c46ef5",
-      "hold": "maintainer head c7cb1c9589 conflicts with pod/proc-kernel-snapshot in native-process-info.test.ts; held until orca-hotpaths restacks the layer"
+      "squash": true
     },
     {
       "branch": "pod/proc-kernel-snapshot",
       "forkOnly": "kernel process snapshot",
-      "base": "e528cd95638da408d4029920a9a705b588c46ef5",
-      "note": "9a202af064 + 9771e7d948: restores the kernel full-table snapshot, cheap reader, proc_tty_names.c, C-locale lstart, the snapshot worker and its orcad/knip registrations on top of Neil’s readProcessForegroundGroup; ps stays the fallback"
+      "base": "c7cb1c9589dd26d29868c57ff175d942b07580a8",
+      "note": "9a202af064 + 9771e7d948 restacked on #26985 c7cb1c9589 (4be904eed6): restores the kernel full-table snapshot, cheap reader, proc_tty_names.c, C-locale lstart, the snapshot worker and its orcad/knip registrations on top of Neil’s readProcessForegroundGroup; ps stays the fallback"
     },
     {
       "branch": "stack/ps-locale",
       "upstream": "https://github.com/stablyai/orca/pull/27005",
-      "base": "9771e7d9489bc80fd022fd4c092934a674b768a5",
-      "note": "fix/ps-locale-independent-start-time replayed onto pod/proc-kernel-snapshot 9771e7d948 by orca-hotpaths (runProcess from @orca/process-host, nativeProcessTables, plus psLocaleEnvironment); refresh when either changes",
+      "base": "4be904eed635320548e804b4acf3b689cc9fd768",
+      "note": "fix/ps-locale-independent-start-time replayed onto pod/proc-kernel-snapshot 4be904eed6 by orca-hotpaths (runProcess from @orca/process-host, nativeProcessTables, plus psLocaleEnvironment); refresh when either changes",
       "source": "fix/ps-locale-independent-start-time"
     },
     {
@@ -189,12 +187,24 @@
       "forkOnly": "agent CLIs at app priority",
       "base": "6edfc6c8e1",
       "note": "r-hw-perf; one commit on main 6edfc6c8e1: the Swift pod-agent-launcher installed into Contents/Resources/bin with claude/codex symlinks; kill switch POD_AGENT_TURBO=0"
-    },
+    }
+  ],
+  "generated": [
     {
-      "branch": "pod/process-host-imports",
-      "forkOnly": "Pod code on Orca’s @orca/process-host (#26963) until the Pod branches are rebased",
-      "base": "f9f25e5bf1",
-      "note": "pod-repo; one commit rewriting the old src/shared/child-process/run-process imports in Pod code, regenerated on the stack below it. Drop once those branches import @orca/process-host themselves"
+      "name": "pod-process-host-imports",
+      "requires": "scripts/pod-process-host-imports.mjs",
+      "run": [
+        "node",
+        "scripts/pod-process-host-imports.mjs",
+        "--apply"
+      ],
+      "check": [
+        "node",
+        "scripts/pod-process-host-imports.mjs",
+        "--check"
+      ],
+      "subject": "fix(pod): Pod code imports subprocess helpers from @orca/process-host (generated)",
+      "forkOnly": "Pod code on Orca’s @orca/process-host (#26963) until the Pod branches are rebased"
     }
   ]
 }
