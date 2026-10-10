@@ -202,7 +202,9 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
             state.emulator,
             chunk,
             this.terminalSpawnCommandsByPtyId.get(ptyId),
-            pty.launchAgent
+            // Why the foreground agent too: a model rebuilt after dormancy missed the title that
+            // identified a freebuff started by hand.
+            pty.launchAgent ?? pty.foregroundAgent
           )
           if (payload) {
             pty.lastExplicitAgentStatus = {
