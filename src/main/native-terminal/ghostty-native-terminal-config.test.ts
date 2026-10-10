@@ -3,7 +3,8 @@ import type { NativeTerminalAppearance } from '../../shared/native-terminal-appe
 import {
   buildGhosttyConfig,
   toGhosttyColor,
-  toGhosttyFontFamilies
+  toGhosttyFontFamilies,
+  toGhosttyFontStyle
 } from './ghostty-native-terminal-config'
 
 const appearance: NativeTerminalAppearance = {
@@ -63,6 +64,32 @@ describe('buildGhosttyConfig', () => {
     expect(config).toContain('foreground = #e6e6e6\n')
     expect(config).toContain('palette = 1=#ff0000\n')
     expect(config).toContain('palette = 15=#ffffff\n')
+  })
+
+  it('follows the terminal weight and ligature settings', () => {
+    const regular = buildGhosttyConfig(appearance, 1)
+    expect(regular).toContain('font-feature = -calt\nfont-feature = -liga\nfont-feature = -dlig\n')
+    expect(regular).not.toContain('font-style')
+    const medium = buildGhosttyConfig(
+      { ...appearance, fontWeight: 500, fontWeightBold: 'bold', ligatures: true },
+      1
+    )
+    expect(medium).toContain('font-style = Medium\n')
+    expect(medium).not.toContain('font-style-bold')
+    expect(medium).not.toContain('font-feature')
+    expect(buildGhosttyConfig({ ...appearance, fontWeightBold: 800 }, 1)).toContain(
+      'font-style-bold = Heavy\n'
+    )
+  })
+
+  it('maps CSS weights to the style names Ghostty matches', () => {
+    expect(toGhosttyFontStyle('normal', 400)).toBeNull()
+    expect(toGhosttyFontStyle(450, 400)).toBe('Medium')
+    expect(toGhosttyFontStyle('300', 400)).toBe('Light')
+    expect(toGhosttyFontStyle('bold', 700)).toBeNull()
+    expect(toGhosttyFontStyle(600, 700)).toBe('Semibold')
+    expect(toGhosttyFontStyle('heavy', 400)).toBeNull()
+    expect(toGhosttyFontStyle(undefined, 400)).toBeNull()
   })
 
   it('keeps Ghostty from owning keybindings, the clipboard protocol and padding', () => {
