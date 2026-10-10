@@ -70,6 +70,29 @@ Pod never pipes `install.sh` into a shell:
 
 Releases older than 2.1.89 publish no signature, so Pod refuses them.
 
+## Templates
+
+A Pod machine is cloned from a stopped template machine (`orb clone`, which copies data on demand), so a create skips the image, apt and the Claude Code install:
+
+- **Sandbox template** `pod-sbx-<hash>-tmpl`: isolated, with `--isolate-network`, git and the verified Claude Code of one version, and no mounts. A clone gets the worktree mounts (`orbctl config set|add machine.<name>.mounts`) and starts. Then only the per-worktree steps run: the mount checks, the hook script, the trusted worktree and the managed settings. A clone whose `orb info` does not show `isolated` and `isolate_network` is deleted and built the full way.
+- **Shared template** `pod-vm-<hash>-tmpl`: a plain Ubuntu machine with git, for the built-in recipe only. A `recipe.json` override keeps its own lifecycle.
+- **Key and refresh:** the key is the image, the kind, the Claude Code version and a provisioning version. The first create builds the template, then clones it. A newer template replaces the older one of its kind; clones keep working, because they do not depend on their template. One minute after Pod starts, Pod refreshes the templates for the kinds that already have machines (for example after the Mac's Claude Code moved), and only while OrbStack runs.
+- **Records:** templates are recorded in `<userData>/pod-orbstack/templates.json`, not in `registry.json`, so an older Pod still reads its registry. Pod deletes only recorded templates with that name shape.
+- **Off:** `POD_ORBSTACK_TEMPLATES=0`. E2E profiles opt in with `POD_E2E_ORBSTACK_TEMPLATES=1`, because a template outlives its profile.
+
+Measured on OrbStack 2.2.3 (Claude Code 2.1.296, load average 8–25, `POD_E2E_ORBSTACK_TIMING=1`, internal numbers):
+
+|                                         | full build                                                                 | from the template                 |
+| --------------------------------------- | -------------------------------------------------------------------------- | --------------------------------- |
+| sandbox create                          | p50 22.1 s (20.1–32.4: `orb create` ~10 s, apt git 6–14 s, push 2.6–7.8 s) | p50 0.55 s (0.50–0.57)            |
+| worktree machine create                 | p50 16.9 s (16.5–21.8)                                                     | p50 0.30 s (0.28–0.31)            |
+| first create, template built on the way |                                                                            | 21.7 s (sandbox), 19.2 s (shared) |
+
+- **Agent start** in a sandbox, launch command to the first Claude Code screen in a pty that answers terminal queries: p50 ~200 ms with the relay starting alongside, ~140 ms with it already up; `claude --version` 30–40 ms. The relay is ready 30–40 ms after it starts. A finer relay-wait loop (10 ms steps) did not measurably change this, and nor would a pre-started relay outside the first launch per sandbox, so neither ships.
+- **Terminal queries:** `orb` on a terminal sends OSC 11 and a cursor position request and waits **5 s** for each unanswered one before it runs the command. Pod's terminals answer, but a client that renders without answering stalls every `orb -m` pane that long.
+- **Warm pool:** cloning a stopped template takes 50–70 ms, renaming a stopped spare 36 ms. A pool would save ~25 ms per create, so there is none.
+- **File sharing:** OrbStack exposes no cache settings for VirtioFS mounts. On a 35,769-file worktree, `git status` takes ~165 ms on the Mac, ~265 ms in the VM over the mount (2.9 s cold) and ~34 ms on the VM's own disk; `rg` takes ~0.4–0.5 s on the Mac, 1.3–1.8 s over the mount and ~45 ms on the VM's own disk. The mount stays: the agent edits the Mac's files in place.
+
 ## What still gets out
 
 Agents in the sandbox reach the internet directly. Code they can read in the worktree can therefore leave the Mac.
