@@ -16,4 +16,6 @@ export type SettingsNavigationBuildOptions = {
   podWorkspaceEnabled?: boolean
   repos: readonly Repo[]
   projectGrouping?: ProjectGroupingModel
+  /** Fork-only (Pod): the OrbStack section. */
+  podOrbstackEnabled?: boolean
 }
