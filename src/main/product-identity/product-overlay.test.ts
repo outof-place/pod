@@ -15,7 +15,8 @@ import {
   areStablyServicesEnabled,
   brandProductCopy,
   productDisplayName,
-  productUiIdentityArguments
+  productUiIdentityArguments,
+  stablyServicesMenuItem
 } from './product-overlay'
 
 describe('product overlay', () => {
@@ -28,12 +29,18 @@ describe('product overlay', () => {
     expect(productDisplayName()).toBe('Orca')
     expect(productUiIdentityArguments()).toEqual([])
     expect(brandProductCopy('Orca notifications are on')).toBe('Orca notifications are on')
+    const item = { label: 'Report Crash...' }
+    expect(stablyServicesMenuItem(item)).toBe(item)
   })
 
   it('hands the renderer the product name, CLI, services flag and repository', () => {
     identity.current = podIdentityWithoutStablyServices()
     expect(areStablyServicesEnabled()).toBe(false)
     expect(brandProductCopy('Orca notifications are on')).toBe('Pod notifications are on')
+    expect(stablyServicesMenuItem({ label: 'Report Crash...' })).toEqual({
+      label: 'Report Crash...',
+      visible: false
+    })
     expect(readProductUiIdentityArgument(productUiIdentityArguments())).toEqual({
       displayName: 'Pod',
       cliName: 'podx',
