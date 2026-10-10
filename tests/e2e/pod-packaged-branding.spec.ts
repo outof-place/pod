@@ -187,7 +187,9 @@ test('a packaged Pod lists no Orca app, process or permission name', () => {
   test.skip(process.platform !== 'darwin' || !packagedApp, 'set POD_PACKAGED_APP to a Pod.app')
   // Why no launch: Finder, Activity Monitor and Privacy & Security read these from the bundle.
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: product/helper-names.cjs exports this function.
-  const helperNames = createRequire(import.meta.url)('../../product/helper-names.cjs') as {
+  const helperNames = createRequire(path.join(process.cwd(), 'package.json'))(
+    './product/helper-names.cjs'
+  ) as {
     upstreamNameLeaks: (appPath: string) => string[]
   }
   expect(helperNames.upstreamNameLeaks(packagedApp)).toEqual([])
