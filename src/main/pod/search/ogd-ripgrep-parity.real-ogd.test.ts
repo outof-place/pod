@@ -46,7 +46,7 @@ const TEXT_QUERIES: Omit<SearchOptions, 'rootPath'>[] = [
   { query: 'import', excludePattern: '**/*.test.ts, node_modules/**' }
 ]
 
-type LineHit = { text: string; ranges: string; clipped?: boolean }
+type LineHit = { text: string; ranges: string; clipped?: boolean; ranges16Agrees?: boolean }
 
 let daemon: ReturnType<typeof spawnProcess> | null = null
 let client: OgdClient | null = null
@@ -136,21 +136,42 @@ function ripgrepHits(stdout: string): Map<string, LineHit> {
   return hits
 }
 
+// ranges16 lines checked against the byte ranges decoded the way the ripgrep path decodes them.
+const ranges16Coverage = { checked: 0, absent: 0 }
+
+/** ogd's `ranges16` must equal the UTF-16 offsets the client derives from the byte ranges. */
+function ranges16Agrees(
+  match: Record<string, unknown>,
+  readOffset: (byte: number) => number | null
+) {
+  if (!Array.isArray(match.ranges16)) {
+    ranges16Coverage.absent++
+    return true
+  }
+  ranges16Coverage.checked++
+  const derived = (Array.isArray(match.ranges) ? match.ranges : []).map((range) =>
+    Array.isArray(range) ? [readOffset(Number(range[0])), readOffset(Number(range[1]))] : null
+  )
+  return JSON.stringify(derived) === JSON.stringify(match.ranges16)
+}
+
 function ogdHits(matches: unknown): Map<string, LineHit> {
   const hits = new Map<string, LineHit>()
   for (const match of Array.isArray(matches) ? matches : []) {
     if (!isOgdMessage(match)) {
       continue
     }
+    // With `bytes`, `text` is lossy and the ranges index the raw bytes.
+    const decoded = decodeRipgrepLine(
+      typeof match.bytes === 'string'
+        ? { bytes: match.bytes }
+        : { text: typeof match.text === 'string' ? match.text : undefined }
+    )
     hits.set(`${String(match.path)}:${String(match.line)}`, {
-      // With `bytes`, `text` is lossy and the ranges index the raw bytes.
-      text: decodeRipgrepLine(
-        typeof match.bytes === 'string'
-          ? { bytes: match.bytes }
-          : { text: typeof match.text === 'string' ? match.text : undefined }
-      ).text,
+      text: decoded.text,
       ranges: JSON.stringify(match.ranges),
-      clipped: match.clipped === true
+      clipped: match.clipped === true,
+      ranges16Agrees: ranges16Agrees(match, decoded.readOffset)
     })
   }
   return hits
@@ -162,6 +183,8 @@ function differences(ogd: Map<string, LineHit>, rg: Map<string, LineHit>): strin
     const [a, b] = [ogd.get(key), rg.get(key)]
     if (!a || !b) {
       out.push(`${key}: only in ${a ? 'ogd' : 'rg'}`)
+    } else if (a.ranges16Agrees === false) {
+      out.push(`${key}: ranges16 disagrees with the byte ranges ${a.ranges}`)
     } else if (a.ranges !== b.ranges) {
       out.push(`${key}: ranges ogd ${a.ranges} rg ${b.ranges}`)
     } else if (a.text !== b.text && !a.clipped) {
@@ -207,7 +230,15 @@ describe.skipIf(!ogdBin || !parityRepo || process.platform === 'win32')(
       client?.close()
       daemon?.kill()
       rmSync(stateDir, { recursive: true, force: true })
-      const summary = { repo: root, rg: ripgrepVersion, runs, mismatches, fallbacks, timings }
+      const summary = {
+        repo: root,
+        rg: ripgrepVersion,
+        runs,
+        mismatches,
+        fallbacks,
+        ranges16: ranges16Coverage,
+        timings
+      }
       if (process.env.ORCA_OGD_PARITY_REPORT) {
         writeFileSync(process.env.ORCA_OGD_PARITY_REPORT, `${JSON.stringify(summary, null, 2)}\n`)
       }
