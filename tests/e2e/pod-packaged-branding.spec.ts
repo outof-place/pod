@@ -4,6 +4,7 @@
  * the packaged identity file brands the native chrome and keeps Chromium off Stably's hosts.
  */
 import { spawnSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -180,4 +181,14 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
   expect(events.length).toBeGreaterThan(0)
   expect(STABLY_HOST.test(events)).toBe(false)
   rmSync(root, { recursive: true, force: true })
+})
+
+test('a packaged Pod lists no Orca app, process or permission name', () => {
+  test.skip(process.platform !== 'darwin' || !packagedApp, 'set POD_PACKAGED_APP to a Pod.app')
+  // Why no launch: Finder, Activity Monitor and Privacy & Security read these from the bundle.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: product/helper-names.cjs exports this function.
+  const helperNames = createRequire(import.meta.url)('../../product/helper-names.cjs') as {
+    upstreamNameLeaks: (appPath: string) => string[]
+  }
+  expect(helperNames.upstreamNameLeaks(packagedApp)).toEqual([])
 })
