@@ -41,6 +41,7 @@ export function createSandboxAccess(deps: {
     routes.get(machine)?.close()
     routes.delete(machine)
     cas.drop(machine)
+    getPodSandboxAnthropicCredentials().released?.({ machine })
   }
 
   const anthropicRoute = (machine: string): AnthropicRoute => {
@@ -81,6 +82,10 @@ export function createSandboxAccess(deps: {
         dropRoute(machine)
       }
       const anthropic = mode === 'off' ? null : anthropicRoute(machine)
+      if (anthropic) {
+        // Binds the sandbox to the login this launch resolves, as a Mac launch would.
+        getPodSandboxAnthropicCredentials().launched?.({ machine })
+      }
       const { nonce } = deps.relays.ensure(machine, {
         hook: {
           vmPort: hookServer.port,
