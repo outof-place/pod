@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: one cohesive contract (version detect, install-locked deploy, native-deps probe, launch, GC); splitting risks install/GC drift. */
 import { existsSync } from 'node:fs'
+import { assertPodSupportsSshHostPlatform } from './pod-ssh-host-support'
 import { app } from 'electron'
 import { relayBundleCandidates } from './relay-bundle-paths'
 import { PinnedRelayFallbackError, resolveSshRemoteRuntime } from './ssh-relay-pinned-node'
@@ -514,6 +515,7 @@ async function deployAndLaunchRelayAttempt(
   }
   const platform = hostPlatform.relayPlatform
   console.log(`[ssh-relay] Platform: ${platform}`)
+  assertPodSupportsSshHostPlatform(platform)
 
   const localRelayDir = getLocalRelayPath(platform)
   if (!localRelayDir) {
