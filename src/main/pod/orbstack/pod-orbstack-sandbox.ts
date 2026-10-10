@@ -105,6 +105,21 @@ function failed(step: string, result: OrbstackToolResult): Error {
   return new Error(detail ? `${step}: ${detail}` : `${step} failed`)
 }
 
+type ProvisionStep = (label: string, toolArgs: string[], input?: string) => Promise<string>
+
+function stepRunner(run: OrbstackToolRunner): ProvisionStep {
+  return async (label, toolArgs, input) => {
+    const result = await run('orb', toolArgs, {
+      timeoutMs: LONG_STEP_MS,
+      ...(input ? { input } : {})
+    })
+    if (result.code !== 0) {
+      throw failed(label, result)
+    }
+    return result.stdout
+  }
+}
+
 /**
  * Creates the isolated machine and installs Claude plus Pod's hooks in it. The caller owns the
  * registry record and deletes the machine if this throws.
@@ -117,18 +132,24 @@ export async function provisionSandbox(args: {
   /** The cached release to install; null skips Claude (E2E stand-in agents). */
   release: SandboxClaudeRelease | null
 }): Promise<{ agentVersion: string | null }> {
+  const { agentVersion } = await provisionSandboxBase(args)
+  await provisionSandboxWorktree({ ...args, agentVersion })
+  return { agentVersion }
+}
+
+/**
+ * The worktree-independent part: the isolated machine with git and the verified Claude Code. A
+ * sandbox template is exactly this, with no mounts.
+ */
+export async function provisionSandboxBase(args: {
+  run: OrbstackToolRunner
+  name: string
+  mounts: readonly string[]
+  release: SandboxClaudeRelease | null
+}): Promise<{ agentVersion: string | null }> {
   const { run, name } = args
   const mountArgs = args.mounts.flatMap((path) => ['--mount', `${path}:${path}`])
-  const step = async (label: string, toolArgs: string[], input?: string): Promise<string> => {
-    const result = await run('orb', toolArgs, {
-      timeoutMs: LONG_STEP_MS,
-      ...(input ? { input } : {})
-    })
-    if (result.code !== 0) {
-      throw failed(label, result)
-    }
-    return result.stdout
-  }
+  const step = stepRunner(run)
   // Why --isolate-network: the Mac, its LAN and other machines become unreachable (the internet stays);
   // the sandbox relay is then its only way to the Mac.
   await step('orb create', [
@@ -149,9 +170,6 @@ export async function provisionSandbox(args: {
     '-c',
     'command -v git >/dev/null || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git; }'
   ])
-  for (const path of args.mounts) {
-    await step(`mount ${path}`, ['run', '-m', name, 'test', '-d', path])
-  }
   let agentVersion: string | null = null
   const { release } = args
   if (release) {
@@ -199,6 +217,21 @@ export async function provisionSandbox(args: {
       throw new Error(`claude --version: expected ${release.version}, got ${version.trim()}`)
     }
   }
+  return { agentVersion }
+}
+
+/** The per-worktree part: mounts checked, Pod's hooks, the trusted worktree, managed settings. */
+export async function provisionSandboxWorktree(args: {
+  run: OrbstackToolRunner
+  name: string
+  mounts: readonly string[]
+  agentVersion: string | null
+}): Promise<void> {
+  const { name } = args
+  const step = stepRunner(args.run)
+  for (const path of args.mounts) {
+    await step(`mount ${path}`, ['run', '-m', name, 'test', '-d', path])
+  }
   await step(
     'write hook script',
     [
@@ -232,7 +265,6 @@ export async function provisionSandbox(args: {
       '-c',
       `mkdir -p /etc/claude-code && cat > ${MANAGED_SETTINGS_PATH}`
     ],
-    buildSandboxManagedSettings(agentVersion)
+    buildSandboxManagedSettings(args.agentVersion)
   )
-  return { agentVersion }
 }

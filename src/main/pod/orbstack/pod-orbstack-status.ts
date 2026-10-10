@@ -15,6 +15,7 @@ import {
   type OrbMachineRecord
 } from './pod-orbstack-inventory'
 import type { PodOrbstackRegistry } from './pod-orbstack-registry'
+import type { PodOrbstackTemplate } from './pod-orbstack-templates'
 import type {
   OrbstackToolPaths,
   OrbstackToolResult,
@@ -31,9 +32,12 @@ function failure(label: string, result: OrbstackToolResult): string {
 
 function mergeMachines(
   listed: OrbMachineRecord[] | null,
-  registry: PodOrbstackRegistry
+  registry: PodOrbstackRegistry,
+  templateNames: ReadonlySet<string>
 ): PodOrbstackMachine[] {
-  const rows: PodOrbstackMachine[] = (listed ?? []).map((machine) => {
+  // Templates are Pod's clone sources, listed apart; they belong to no worktree.
+  const machines = (listed ?? []).filter((machine) => !templateNames.has(machine.name))
+  const rows: PodOrbstackMachine[] = machines.map((machine) => {
     const entry = registry.findByName(machine.name)
     const podOwned = registry.isPodOwned(machine.name)
     return {
@@ -89,10 +93,12 @@ export async function readPodOrbstackStatus(deps: {
   paths: OrbstackToolPaths
   run: OrbstackToolRunner
   registry: PodOrbstackRegistry
+  templates?: readonly PodOrbstackTemplate[]
   busyWorktreeIds: readonly string[]
   now?: () => number
 }): Promise<PodOrbstackStatus> {
   const { paths, run, registry } = deps
+  const templates = deps.templates ?? []
   const errors: string[] = []
   const [statusResult, versionResult, contextResult] = await Promise.all([
     paths.orbctl ? run('orbctl', ['status']) : null,
@@ -150,7 +156,18 @@ export async function readPodOrbstackStatus(deps: {
       contextResult?.code === 0
         ? parseDockerContexts(contextResult.stdout)
         : { current: null, currentIsOrbstack: false, orbstackContextExists: false },
-    machines: mergeMachines(listed, registry),
+    machines: mergeMachines(listed, registry, new Set(templates.map((entry) => entry.name))),
+    templates: templates.map((entry) => ({
+      name: entry.name,
+      kind: entry.kind,
+      state:
+        entry.state === 'creating'
+          ? 'creating'
+          : listed && !listed.some((machine) => machine.name === entry.name)
+            ? 'missing'
+            : 'ready',
+      agentVersion: entry.agentVersion
+    })),
     containers,
     links: buildLinks(registry),
     sandboxClaudeLogin: registry.sandboxClaudeLogin(),
