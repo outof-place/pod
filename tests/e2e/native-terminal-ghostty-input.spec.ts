@@ -113,8 +113,16 @@ test('native terminal panes keep Orca drops, app chords and held-modifier UI', a
   writeFileSync(droppedFile, 'native drop\n')
   const drop = await nativeTerminalDebug(electronApp, 'drop', [surfaceId, [droppedFile]])
   expect(String(Reflect.get(Object(drop), 'destination'))).not.toMatch(/OrcaGhostty/)
+  await expect
+    .poll(async () =>
+      Reflect.get(Object(await nativeTerminalDebug(electronApp, 'dropOutcome')), 'performed')
+    )
+    .toBe(true)
   await expect.poll(paneContent, { timeout: 10_000 }).toContain(`'${droppedFile}'`)
   await key(electronApp, surfaceId, 'c', KEY_C, CONTROL)
+  // Why: that Ctrl+C travels through main and the renderer, so it can reach the PTY after the
+  // test's next direct write, and the tty's interrupt flush would discard that queued command.
+  await waitForPtyShellEcho(orcaPage, ptyId, 30_000)
 
   // App chords: user bindings reach the native view and Orca claims them; the PTY never
   // sees them (cat -v would echo a chord as ^[^E).

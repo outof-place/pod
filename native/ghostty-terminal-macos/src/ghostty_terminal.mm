@@ -2519,6 +2519,38 @@ NSView* DragDestinationAt(NSWindow* window, NSPoint windowPoint, NSArray<NSPaste
 // debugDrop(id, paths): { destination, operation } | null — drops files at the surface's center
 // through whichever destination AppKit would pick, paced like a real drag session (the web
 // contents only accepts a drop once its page answered a dragover), for headless tests.
+// The last debugDrop's outcome, once it has dropped or given up.
+NSDictionary* g_debug_drop_outcome = nil;
+
+// AppKit keeps sending draggingUpdated while a drag hovers, and the web contents answers each
+// one asynchronously, so a fixed delay drops before a busy renderer has accepted the drag (it
+// then sees a dragleave). Drop once an update reports an accepted operation, as a real drop
+// lands only after that hover; give up after ~5 s like a drag that left the window.
+void StepDebugDrop(NSView* destination, OrcaDebugDraggingInfo* drag, int updates) {
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+    const int seen = updates + 1;
+    const NSDragOperation operation = [destination respondsToSelector:@selector(draggingUpdated:)]
+                                          ? [destination draggingUpdated:drag]
+                                          : NSDragOperationCopy;
+    if ((operation == NSDragOperationNone || seen < 2) && seen < 50) {
+      StepDebugDrop(destination, drag, seen);
+      return;
+    }
+    bool performed = false;
+    if (operation == NSDragOperationNone) {
+      if ([destination respondsToSelector:@selector(draggingExited:)]) [destination draggingExited:drag];
+    } else if ((![destination respondsToSelector:@selector(prepareForDragOperation:)] ||
+                [destination prepareForDragOperation:drag]) &&
+               [destination respondsToSelector:@selector(performDragOperation:)] &&
+               [destination performDragOperation:drag]) {
+      performed = true;
+      if ([destination respondsToSelector:@selector(concludeDragOperation:)]) [destination concludeDragOperation:drag];
+    }
+    if ([destination respondsToSelector:@selector(draggingEnded:)]) [destination draggingEnded:drag];
+    g_debug_drop_outcome = @{@"performed" : @(performed), @"updates" : @(seen), @"operation" : @(operation)};
+  });
+}
+
 napi_value DebugDrop(napi_env env, napi_callback_info info) {
   size_t argc = 2;
   napi_value argv[2];
@@ -2549,28 +2581,25 @@ napi_value DebugDrop(napi_env env, napi_callback_info info) {
 
   NSDragOperation operation = NSDragOperationNone;
   if ([destination respondsToSelector:@selector(draggingEntered:)]) operation = [destination draggingEntered:drag];
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 200 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
-    NSDragOperation updated = operation;
-    if ([destination respondsToSelector:@selector(draggingUpdated:)]) updated = [destination draggingUpdated:drag];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 200 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
-      NSDragOperation last = updated;
-      if ([destination respondsToSelector:@selector(draggingUpdated:)]) last = [destination draggingUpdated:drag];
-      if (last == NSDragOperationNone) {
-        if ([destination respondsToSelector:@selector(draggingExited:)]) [destination draggingExited:drag];
-      } else if ((![destination respondsToSelector:@selector(prepareForDragOperation:)] ||
-                  [destination prepareForDragOperation:drag]) &&
-                 [destination respondsToSelector:@selector(performDragOperation:)] &&
-                 [destination performDragOperation:drag] &&
-                 [destination respondsToSelector:@selector(concludeDragOperation:)]) {
-        [destination concludeDragOperation:drag];
-      }
-      if ([destination respondsToSelector:@selector(draggingEnded:)]) [destination draggingEnded:drag];
-    });
-  });
+  g_debug_drop_outcome = nil;
+  StepDebugDrop(destination, drag, 0);
 
   napi_create_object(env, &result);
   napi_set_named_property(env, result, "destination", String(env, object_getClassName(destination)));
   napi_set_named_property(env, result, "operation", Number(env, operation));
+  return result;
+}
+
+// debugDropOutcome(): { performed, updates, operation } | null — null while a drop is in flight.
+napi_value DebugDropOutcome(napi_env env, napi_callback_info) {
+  napi_value result;
+  napi_get_null(env, &result);
+  if (g_debug_drop_outcome == nil) return result;
+  napi_create_object(env, &result);
+  napi_set_named_property(env, result, "performed", Bool(env, [g_debug_drop_outcome[@"performed"] boolValue]));
+  napi_set_named_property(env, result, "updates", Number(env, [g_debug_drop_outcome[@"updates"] intValue]));
+  napi_set_named_property(env, result, "operation",
+                          Number(env, [g_debug_drop_outcome[@"operation"] unsignedIntegerValue]));
   return result;
 }
 
@@ -2974,6 +3003,7 @@ napi_value ModuleInit(napi_env env, napi_value exports) {
       {"setForwardedChords", nullptr, SetForwardedChords, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"releaseKeyboard", nullptr, ReleaseKeyboard, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugDrop", nullptr, DebugDrop, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"debugDropOutcome", nullptr, DebugDropOutcome, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"debugModifiersChanged", nullptr, DebugModifiersChanged, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"setSurfaceShellPid", nullptr, SetSurfaceShellPid, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"setSurfaceAccessibilityLabel", nullptr, SetSurfaceAccessibilityLabel, nullptr, nullptr, nullptr, napi_default,

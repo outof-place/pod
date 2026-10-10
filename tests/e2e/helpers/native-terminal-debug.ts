@@ -18,6 +18,7 @@ export type NativeTerminalDebugOp =
   | 'focus'
   | 'modifiersChanged'
   | 'drop'
+  | 'dropOutcome'
   | 'forwardedChords'
   | 'action'
   | 'flags'
