@@ -7,7 +7,8 @@ import {
   createPodOrbstackTemplates,
   isPodOrbstackTemplateName,
   podOrbstackTemplateKey,
-  podOrbstackTemplateName
+  podOrbstackTemplateName,
+  SEAL_TEMPLATE
 } from './pod-orbstack-templates'
 import { resolveOrbstackTemplatesEnabled } from './pod-orbstack-tools'
 
@@ -152,5 +153,35 @@ describe('Pod OrbStack templates', () => {
       templates.clone(template, 'pod-a-12345678-sbx', ['/Users/me/a,b'])
     ).rejects.toThrow('":" or ","')
     expect(orb.machines.has('pod-a-12345678-sbx')).toBe(false)
+  })
+
+  it('seals each template before it stops: an empty machine-id, no host keys', async () => {
+    const { orb, templates, provision } = setup()
+    const template = await templates.build(
+      'sandbox',
+      podOrbstackTemplateKey('sandbox', 'x'),
+      provision
+    )
+    const seal = orb.calls.find((call) => call.includes(SEAL_TEMPLATE))
+    expect(seal?.slice(0, 6)).toEqual(['orb', 'run', '-m', template?.name, '-u', 'root'])
+    expect(SEAL_TEMPLATE).toContain('truncate -s 0 /etc/machine-id')
+    expect(SEAL_TEMPLATE).toContain('rm -f /etc/ssh/ssh_host_*')
+    const sealAt = orb.calls.indexOf(seal ?? [])
+    const stopAt = orb.calls.findIndex((call) => call[1] === 'stop')
+    expect(sealAt).toBeLessThan(stopAt)
+  })
+
+  it('turns off: deletes every template, then finds and builds none', async () => {
+    const { orb, templates, provision, file } = setup()
+    const key = podOrbstackTemplateKey('sandbox', 'x')
+    const template = await templates.build('sandbox', key, provision)
+    await templates.setEnabled(false)
+    expect(orb.machines.has(template?.name ?? '')).toBe(false)
+    expect(templates.list()).toEqual([])
+    expect(await templates.find(key)).toBeNull()
+    expect(await templates.build('sandbox', key, provision)).toBeNull()
+    expect(createPodOrbstackTemplates({ run: orb.run, file }).enabled()).toBe(false)
+    await templates.setEnabled(true)
+    expect(await templates.build('sandbox', key, provision)).toMatchObject({ state: 'ready' })
   })
 })
