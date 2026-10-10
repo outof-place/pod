@@ -1,4 +1,5 @@
 import { app as electronApp, type BrowserWindow } from 'electron'
+import { isPodUiHostLaunch } from '../pod/ui-host/pod-ui-host-launch'
 
 /**
  * Foreground policy for automated launches (E2E, benchmarks, agent-driven dev
@@ -34,6 +35,8 @@ export function isBackgroundLaunch(env: PolicyEnv = process.env): boolean {
 export function isWindowlessLaunch(env: PolicyEnv = process.env): boolean {
   return (
     env.ORCA_BACKGROUND_LAUNCH === '1' ||
+    // Fork-only (Pod): a one-app runtime loads its window hidden; PodNative is the visible app.
+    isPodUiHostLaunch() ||
     (isBackgroundLaunch(env) && env.ORCA_E2E_HEADLESS === '1' && env.ORCA_E2E_HEADFUL !== '1')
   )
 }
