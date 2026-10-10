@@ -77,15 +77,14 @@ describe('Pod runtime WebSocket policy', () => {
     }
   })
 
-  it('opens no listener on the headless host unless asked, in either profile', async () => {
+  it('opens no listener on the headless host in either profile, with no switch to bring it back', async () => {
     const argv = process.argv
     process.argv = [...argv, '--serve', '--pod-headless-host']
     try {
       for (const profile of ['pod', 'orca'] as const) {
-        const { runtimeWebSocketEnabled } = await loadPolicy(profile)
-        expect(runtimeWebSocketEnabled({ serveMode: true })).toBe(false)
+        const { podRuntimeWebSocketOptions } = await loadPolicy(profile)
         vi.stubEnv('POD_HEADLESS_HOST_WEBSOCKET', '1')
-        expect(runtimeWebSocketEnabled({ serveMode: true })).toBe(true)
+        expect(podRuntimeWebSocketOptions({ serveMode: true }).enableWebSocket).toBe(false)
         vi.unstubAllEnvs()
       }
     } finally {
@@ -93,9 +92,33 @@ describe('Pod runtime WebSocket policy', () => {
     }
   })
 
+  it('keeps an explicit serve on loopback in the Pod profile, even with a network-paired phone', async () => {
+    const { podRuntimeWebSocketOptions } = await loadPolicy('pod')
+    const options = podRuntimeWebSocketOptions({ serveMode: true })
+    expect(options).toEqual({ enableWebSocket: true, pinnedBindHost: '127.0.0.1' })
+
+    const userDataPath = userDataWithNetworkPairedPhone()
+    // Why exposeNetworkByDefault: it is what serve passes, and the pin must outrank it.
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      ...options,
+      exposeNetworkByDefault: true,
+      wsPort: 0
+    })
+    await server.start()
+    try {
+      expect(server.getWebSocketEndpoint()).toMatch(/^ws:\/\/127\.0\.0\.1:\d+$/)
+      await expect(server.ensureNetworkExposure()).rejects.toThrow(/pinned to 127\.0\.0\.1/)
+    } finally {
+      await server.stop()
+    }
+  })
+
   it('keeps the upstream listener when the profile is not substituted', async () => {
-    const { runtimeWebSocketEnabled } = await loadPolicy('orca')
+    const { podRuntimeWebSocketOptions, runtimeWebSocketEnabled } = await loadPolicy('orca')
     expect(runtimeWebSocketEnabled({ serveMode: false })).toBe(true)
+    expect(podRuntimeWebSocketOptions({ serveMode: true })).toEqual({ enableWebSocket: true })
 
     // Why the control: proves the paired-phone fixture is what widens the bind upstream.
     const userDataPath = userDataWithNetworkPairedPhone()
