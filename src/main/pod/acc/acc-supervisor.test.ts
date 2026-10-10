@@ -201,6 +201,40 @@ describe('claude-acc supervisor', () => {
     supervisor.stop()
   })
 
+  it('removes its services when claude-acc is handed back while Pod runs', async () => {
+    const loginItems = fakeLoginItems()
+    const pod = installedPod()
+    const log = vi.fn()
+    const supervisor = startPodAccSupervisor({
+      config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
+      ...pod,
+      platform: 'darwin',
+      env: {},
+      run: vi.fn(async () => result(1)),
+      loginItems: loginItems.api,
+      appId: 'codes.pod.app',
+      setTrayYield: () => {},
+      syncTray: () => {},
+      log,
+      probeMs: 10
+    })
+    await supervisor.services
+    expect(loginItems.set).toHaveBeenLastCalledWith(expect.objectContaining({ openAtLogin: true }))
+    writeFileSync(
+      join(pod.home, ACC_STATE_DIR, 'owner.json'),
+      JSON.stringify({ owner: 'brew', version: '1.31.0', app: null })
+    )
+    await vi.waitFor(() =>
+      expect(loginItems.set).toHaveBeenLastCalledWith({
+        openAtLogin: false,
+        type: 'agentService',
+        serviceName: 'codes.pod.app.acc.tick.plist'
+      })
+    )
+    expect(log).toHaveBeenCalledWith("claude-acc: handed to brew, removing Pod's services")
+    supervisor.stop()
+  })
+
   it('never touches launchd services when the lifecycle skipped', async () => {
     const loginItems = fakeLoginItems()
     const pod = installedPod()
