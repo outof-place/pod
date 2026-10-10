@@ -32,6 +32,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 describe('terminal output batching', () => {
   it('sends the first chunk after a quiet spell and coalesces the rest of the burst', async () => {
     vi.useFakeTimers()
+    vi.stubEnv('ORCA_TERMINAL_OUTPUT_LEADING_EDGE', '1')
     try {
       const messages: string[] = []
       const registry = createSubscriptionRegistryDouble()
@@ -91,11 +92,13 @@ describe('terminal output batching', () => {
       await dispatchPromise
     } finally {
       vi.useRealTimers()
+      vi.unstubAllEnvs()
     }
   })
 
   it('streams the rest of a binary terminal output burst as one coalesced frame', async () => {
     vi.useFakeTimers()
+    vi.stubEnv('ORCA_TERMINAL_OUTPUT_LEADING_EDGE', '1')
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
@@ -181,6 +184,7 @@ describe('terminal output batching', () => {
       await dispatchPromise
     } finally {
       vi.useRealTimers()
+      vi.unstubAllEnvs()
     }
   })
 
