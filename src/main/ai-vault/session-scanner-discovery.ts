@@ -11,6 +11,7 @@ import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { recordSessionScanIssue } from './session-scan-issues'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
+import { sessionTreeReader, type SessionTreeReader } from './session-tree-cache'
 
 const NATIVE_DISCOVERY_CONCURRENCY = 4
 const NATIVE_DISCOVERY_BATCH_SIZE = 16
@@ -44,6 +45,8 @@ export async function discoverFiles(args: {
   let paths: string[] = []
   let pending: Promise<SessionFileObservation[]> | null = null
   const native = !isWslUncPath(args.rootDir)
+  // Pod: a live FSEvents-watched root answers from memory; any other root reads disk and asks for a watch.
+  const reader = native ? sessionTreeReader(args.rootDir) : null
 
   function consume(observations: readonly SessionFileObservation[]): void {
     for (const observation of observations) {
@@ -102,7 +105,7 @@ export async function discoverFiles(args: {
       withNativeDiscoverySlot(async () => {
         const files: SessionFileObservation[] = []
         for (const path of group) {
-          files.push(await observeSessionFile(path, args.contentDependencyPath))
+          files.push(await observeSessionFile(path, args.contentDependencyPath, reader))
         }
         return files
       })
@@ -123,7 +126,9 @@ export async function discoverFiles(args: {
           ...(native
             ? {
                 readDirectory: (path: string) =>
-                  withNativeDiscoverySlot(() => wslGatedReaddir(path, 'scan'))
+                  withNativeDiscoverySlot(() =>
+                    reader ? reader.readDirectory(path) : wslGatedReaddir(path, 'scan')
+                  )
               }
             : {})
         },
@@ -157,12 +162,13 @@ export async function discoverFiles(args: {
 
 async function observeSessionFile(
   path: string,
-  contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
+  contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>,
+  reader: SessionTreeReader | null = null
 ): Promise<SessionFileObservation> {
   try {
-    const fileStat = await wslGatedStat(path, 'scan')
+    const fileStat = await (reader ? reader.stat(path) : wslGatedStat(path, 'scan'))
     const sidecarPath = contentDependencyPath ? await contentDependencyPath(path) : undefined
-    const sidecar = sidecarPath ? await observeSessionSidecar(sidecarPath) : 'none'
+    const sidecar = sidecarPath ? await observeSessionSidecar(sidecarPath, reader) : 'none'
     return {
       file: {
         path,
@@ -188,13 +194,14 @@ async function observeSessionFile(
  * a stalled WSL distro, EACCES, EIO — is `'unknown'`.
  */
 async function observeSessionSidecar(
-  filePath: string | undefined
+  filePath: string | undefined,
+  reader: SessionTreeReader | null
 ): Promise<SessionSidecarObservation> {
   if (!filePath) {
     return 'none'
   }
   try {
-    const fileStat = await wslGatedStat(filePath, 'scan')
+    const fileStat = await (reader ? reader.stat(filePath) : wslGatedStat(filePath, 'scan'))
     return { path: filePath, mtimeMs: fileStat.mtimeMs, sizeBytes: fileStat.size }
   } catch (error) {
     return isMissingSidecarError(error) ? 'none' : 'unknown'
