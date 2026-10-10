@@ -156,6 +156,12 @@ if [ -f config/scripts/fetch-pod-python.mjs ]; then
   log "fetch the Python pinned in config/pod-python.json"
   node config/scripts/fetch-pod-python.mjs
 fi
+# pod-hookd (pod/hookd branch), built from the private fasthooks tag in native/pod-hookd/pin.json
+# with gh's credentials (CI: a GH_TOKEN that can read outof-place/fasthooks); cached per commit.
+if [ -f native/pod-hookd/build.mjs ]; then
+  log "build pod-hookd pinned in native/pod-hookd/pin.json"
+  POD_ARCH="$arch" node native/pod-hookd/build.mjs
+fi
 
 log "package, sign and notarize the app (electron-builder staples it)"
 rm -rf dist

@@ -38,6 +38,7 @@ Changing a name is a one-line edit here; nothing else in the repo hard-codes the
   - It patches the bundled CLI launcher to the product's executable and profile, and adds it as `bin/<cliName>` next to `bin/orca`.
   - It renames the Computer Use helper to `computerUseDisplayName` before the helper is signed.
   - With `config/pod-acc-extra-resources.cjs` in the stack, it ships the claude-acc payload, its Python and the distro plugins. A payload with pod-acc-run also gets its launchd plists and Pod Menu.app in Contents/Library, where SMAppService looks.
+  - With `config/pod-hookd-resources.cjs` in the stack, it ships pod-hookd in Contents/Resources/pod-hookd and its agent `<appId>.acc.hookd` in Contents/Library/LaunchAgents, registered with claude-acc's agents. The agent runs only while the user's Claude Code settings use pod-hook-client (`pod-hooks native on`).
 - **Runtime:** `src/main/product-identity/product-identity.ts` reads the resource in packaged builds only, and refuses a malformed file.
   - Startup pins `userData` to `userDataName`.
   - It sets the pre-ready app name to `keychainName`, which names the keychain item.
