@@ -6,7 +6,10 @@ import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 import { getProductIdentity } from '../product-identity/product-identity'
-import { applyProductIdentityPreReady } from '../product-identity/product-first-run'
+import {
+  applyProductIdentityPreReady,
+  runProductFirstRun
+} from '../product-identity/product-first-run'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import { checkServeUserDataPath } from './serve-user-data-path-guard'
@@ -210,7 +213,12 @@ export function configureDevUserDataPath(isDev: boolean, isServeMode = false): b
     mkdirSync(e2eHomeDir, { recursive: true, mode: 0o700 })
     app.setPath('home', e2eHomeDir)
     app.setPath('userData', e2eConfig.userDataDir)
-    return true
+    // Why: the product import's E2E reads a disposable legacy profile, never the user's.
+    const scratchLegacyUserData = process.env.POD_E2E_LEGACY_USER_DATA_DIR
+    const e2eProduct = scratchLegacyUserData ? getProductIdentity() : null
+    return e2eProduct && scratchLegacyUserData
+      ? runProductFirstRun(e2eProduct, { legacyUserData: scratchLegacyUserData, keychain: null })
+      : true
   }
 
   if (!isDev) {
