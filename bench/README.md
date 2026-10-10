@@ -184,7 +184,10 @@ finish. The OS file cache is warm, because a warm-up round runs first. Every eng
 same number of matching lines per query, and any disagreement is recorded. The engines:
 
 - ripgrep (`--no-config`);
-- `og` from pod-search, through its `ogctl` client, once its one-shot syntax is confirmed.
+- `og`: pod-search's ripgrep 15.2.0 fork, with the same arguments and output. It answers from
+  ogd's index when it can, and execs the real `rg` when it cannot. The suite starts its own `ogd`
+  (its own socket and state dir) and waits for `ogctl register --wait`. It records `ogctl status`
+  at the end, then stops it.
 
 `suites/ogd.mjs` measures Pod's indexed search (ogd) against ripgrep through the two harnesses on
 `pod/search-client`, each run 5 times, gated on load:
@@ -198,9 +201,13 @@ same number of matching lines per query, and any disagreement is recorded. The e
   shown and hidden.
 
 Both harnesses register the repo with ogd and wait for the index before timing starts, so indexing
-time is not in the numbers. The ogd binary is built by `search/prepare.sh` from a pinned
-pod-search SHA (`cargo build --release --locked --features pcre2`), in its own clone and through
-claude-acc's build scheduler. The harnesses come from a pinned `pod/search-client` worktree. All
+time is not in the numbers. `search/prepare.sh` builds the binaries from a pinned pod-search SHA,
+in their own clone and through claude-acc's build scheduler, as pod-search's README does:
+
+- `cargo build --release --locked -p ogd -p ogctl`;
+- og in `third_party/ripgrep` with `cargo build --release --locked --features pcre2`.
+
+The harnesses come from a pinned `pod/search-client` worktree. All
 three SHAs are in `run.json` and in the ogd suite's `versions`.
 
 ### 6. Source Control status poll (`suites/git-status.mjs`)
