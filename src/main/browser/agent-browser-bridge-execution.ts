@@ -22,6 +22,7 @@ import {
   type SessionState,
   type ResolvedBrowserCommandTarget
 } from './agent-browser-bridge-types'
+import { notePodAgentBrowserCommand } from '../pod/browser-pane/pod-browser-pane-hooks'
 
 export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs {
   protected abstract destroySession(
@@ -88,6 +89,8 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
 
     this.reinitializeIfDaemonIdledOut(sessionName, session)
     session.lastCommandAt = Date.now()
+    // Fork-only (Pod): a native pane shows this page as driven by an agent.
+    notePodAgentBrowserCommand(session.webContentsId)
 
     const args = ['--session', sessionName]
     const managesInterceptRoutes =
