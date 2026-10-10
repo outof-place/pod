@@ -7,6 +7,7 @@ import {
   isHiddenRendererPtyViewGated,
   registerHiddenRendererPtyMarkListener,
   registerHiddenRendererPtyUnmarkListener,
+  recordMainTerminalModelSeedFailure,
   setHiddenDeliveryDaemonHandoff,
   setHiddenDeliveryModelHandoff
 } from '../ipc/pty-hidden-delivery-gate'
@@ -16,10 +17,7 @@ import {
 } from './terminal-model-query-authority'
 import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
-import type {
-  RuntimeHeadlessTerminal,
-  RuntimePtyWorktreeRecord
-} from './runtime-terminal-state-records'
+import type { RuntimeHeadlessTerminal } from './runtime-terminal-state-records'
 import { canAgentMainTerminalModelRest } from './main-terminal-model-agent-rest'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
 
@@ -180,7 +178,7 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
       this.store?.getSettings()?.terminalMainModelDormancy === false ||
       !pty ||
       pty.connectionId ||
-      !this.canAgentPaneMainTerminalModelRest(ptyId, pty)
+      !this.canAgentPaneMainTerminalModelRest(ptyId)
     ) {
       return false
     }
@@ -193,20 +191,13 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
     )
   }
 
-  // Why: agent signals without an identified agent fall to the unknown-pane rules, which read
-  // the screen.
-  private canAgentPaneMainTerminalModelRest(ptyId: string, pty: RuntimePtyWorktreeRecord): boolean {
+  private canAgentPaneMainTerminalModelRest(ptyId: string): boolean {
     const agent = this.getPaneAgentForTuiIdle(ptyId)
-    if (agent) {
-      return canAgentMainTerminalModelRest(agent)
-    }
-    return !(
-      pty.launchAgent ||
-      pty.foregroundAgent ||
-      pty.lastExplicitAgentStatus ||
-      this.leavesByPtyId.get(ptyId)?.some((leaf) => leaf.lastAgentStatus != null)
-    )
+    return !agent || canAgentMainTerminalModelRest(agent)
   }
+
+  /** The rebuild landed or gave up; later classes re-offer work that waited for it. */
+  protected onMainTerminalModelRebuilt(_ptyId: string): void {}
 
   private dropMainTerminalModel(ptyId: string): void {
     const tracker = new TerminalKittyKeyboardModeTracker()
@@ -243,6 +234,10 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
         // renderer on the next byte, as for any PTY whose history arrived late.
         this.headlessHydrationState.delete(ptyId)
         this.mainTerminalModelDormancy.seedFailed(ptyId)
+        // Why re-offer: the seed timeout bounds how long tui-idle holds for this screen; past
+        // it, waits evaluate without one, as for any partial model.
+        recordMainTerminalModelSeedFailure()
+        this.onMainTerminalModelRebuilt(ptyId)
         return
       }
       this.headlessHydrationState.set(ptyId, 'done')
@@ -252,6 +247,7 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
         this.providerModeTrackersByPtyId.delete(ptyId)
       }
       this.mainTerminalModelDormancy.seedSettled(ptyId, seedSeq)
+      this.onMainTerminalModelRebuilt(ptyId)
     })
   }
 

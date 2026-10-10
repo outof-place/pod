@@ -347,7 +347,8 @@ export class OrcaRuntimeWithRuntimeId {
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
     getTitleObservedAtEpochMs: (ptyId) =>
-      (ptyId ? this.ptysById.get(ptyId)?.lastOscTitleEpochMs : null) ?? null
+      (ptyId ? this.ptysById.get(ptyId)?.lastOscTitleEpochMs : null) ?? null,
+    isScreenRebuilding: (ptyId) => !!ptyId && this.isMainTerminalModelCatchingUp(ptyId)
   }
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
