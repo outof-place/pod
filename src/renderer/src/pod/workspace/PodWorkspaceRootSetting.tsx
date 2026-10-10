@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { SearchableSetting } from '@/components/settings/SearchableSetting'
 import { translate } from '@/i18n/i18n'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
-import { getPodWorkspaceApi } from './pod-workspace-api-access'
+import { podWorkspaceRpc } from './pod-workspace-rpc'
 import { rootIssueMessage } from './pod-workspace-copy'
 
 const VALIDATE_DEBOUNCE_MS = 250
@@ -46,7 +46,8 @@ export function PodWorkspaceRootSetting({
   const validate = useCallback(
     async (value: string): Promise<PodWorkspaceRootValidation | null> => {
       const generation = ++validationGenRef.current
-      const result = (await getPodWorkspaceApi()?.validateRoot(value)) ?? null
+      // A runtime that can't answer leaves the field unchecked rather than blocked.
+      const result = await podWorkspaceRpc.validateRoot(value).catch(() => null)
       if (generation === validationGenRef.current) {
         setValidation(result)
       }

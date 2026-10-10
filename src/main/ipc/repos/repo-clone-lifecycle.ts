@@ -27,6 +27,7 @@ import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { runWithClonePathLock } from './clone-path-lock'
 import { abortActiveRemoteClone, cloneRemoteRepo } from './remote-repo-clone'
+import { localCloneOptions } from './repo-clone-options'
 
 type ActiveCloneMetadata = {
   path: string
@@ -158,8 +159,9 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
           try {
             // Why: use the parent destination as cwd so the runner detects a WSL path and routes through wsl.exe.
             // Why: '--' isolates the URL so a malicious URL can't be read as git flags (command injection).
+            const cloneOptions = await localCloneOptions(clonePath)
             proc = await gitSpawnAfterWindowsEnvironmentReady(
-              ['clone', '--progress', '--', args.url, clonePath],
+              ['clone', '--progress', ...cloneOptions, '--', args.url, clonePath],
               {
                 cwd: args.destination,
                 admissionTier: 'interactive',
