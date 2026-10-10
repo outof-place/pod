@@ -58,6 +58,8 @@ export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends Orca
   }
 
   protected notifyRemoteTerminalViewPresenceChanged(ptyId: string): void {
+    // Why first: a remote view answers from now on, and its snapshot must follow the take-back.
+    this.syncDaemonQueryResponder(ptyId)
     // Why: a new viewer reads main's model, so a dormant one is rebuilt before its snapshot.
     this.noteMainTerminalModelDemand(ptyId)
     try {
