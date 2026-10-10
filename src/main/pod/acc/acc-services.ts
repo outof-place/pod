@@ -90,7 +90,7 @@ export function removeAccServices(api: LoginItemApi, services: AccService[]): Ac
   return readAccServiceStatus(api, services)
 }
 
-/** $STATE/pod-services.json: what Pod registered, for every acc surface (plugin page, Pod Menu, AccKit). */
+/** $STATE/pod-services.json: what Pod registered, read by every native acc surface through AccKit. */
 export const ACC_SERVICES_REPORT = 'pod-services.json'
 
 export function writeAccServicesReport(
