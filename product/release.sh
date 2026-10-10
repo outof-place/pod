@@ -157,9 +157,11 @@ if [ -f config/scripts/fetch-pod-python.mjs ]; then
   node config/scripts/fetch-pod-python.mjs
 fi
 # pod-hookd (pod/hookd branch), built from the private fasthooks tag in native/pod-hookd/pin.json
-# with gh's credentials (CI: a GH_TOKEN that can read outof-place/fasthooks); cached per commit.
+# with gh's credentials; cached per commit. Required locally, where gh auth is; CI has no access
+# and ships without it (no hookd, no agent).
 if [ -f native/pod-hookd/build.mjs ]; then
-  log "build pod-hookd pinned in native/pod-hookd/pin.json"
+  [ -n "${GITHUB_ACTIONS:-}" ] || export POD_REQUIRE_HOOKD="${POD_REQUIRE_HOOKD:-1}"
+  log "build pod-hookd pinned in native/pod-hookd/pin.json (required: ${POD_REQUIRE_HOOKD:-0})"
   POD_ARCH="$arch" node native/pod-hookd/build.mjs
 fi
 

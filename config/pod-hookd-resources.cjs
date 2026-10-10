@@ -7,12 +7,23 @@ const { join } = require('node:path')
 const HOOKD = join(__dirname, '..', 'resources', 'pod-hookd')
 const AGENTS = 'LaunchAgents'
 
-/** Throws when pod-hookd was never built, so a release cannot ship without it. */
-function podHookdMacExtraResources({ dir = HOOKD } = {}) {
-  for (const name of ['pod-hookd', AGENTS]) {
-    if (!existsSync(join(dir, name))) {
-      throw new Error(`${join(dir, name)} is missing: run node native/pod-hookd/build.mjs`)
+/**
+ * The binary, when built. Missing: an error with POD_REQUIRE_HOOKD=1 (local release.sh), else a
+ * warning and nothing, so CI and dev builds ship without hookd and without its agent.
+ */
+function podHookdMacExtraResources({
+  dir = HOOKD,
+  required = process.env.POD_REQUIRE_HOOKD === '1',
+  warn = console.warn
+} = {}) {
+  const missing = ['pod-hookd', AGENTS].find((name) => !existsSync(join(dir, name)))
+  if (missing) {
+    const message = `${join(dir, missing)} is missing: run node native/pod-hookd/build.mjs`
+    if (required) {
+      throw new Error(`${message} (POD_REQUIRE_HOOKD=1)`)
     }
+    warn(`[product] ${message}; this build ships without pod-hookd`)
+    return []
   }
   return [{ from: dir, to: 'pod-hookd', filter: ['pod-hookd'] }]
 }

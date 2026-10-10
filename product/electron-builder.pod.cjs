@@ -51,20 +51,6 @@ function podAccMacExtraResources() {
 const podHookdConfig = join(repoRoot, 'config', 'pod-hookd-resources.cjs')
 const podHookd = existsSync(podHookdConfig) ? require(podHookdConfig) : null
 
-function podHookdMacExtraResources() {
-  if (!podHookd) {
-    return []
-  }
-  try {
-    return podHookd.podHookdMacExtraResources()
-  } catch (error) {
-    if (isRelease) {
-      throw error
-    }
-    console.warn(`[product] ${error.message}; this non-release build ships without pod-hookd`)
-    return []
-  }
-}
 const identity = JSON.parse(readFileSync(join(__dirname, 'identity.json'), 'utf8'))
 const arch = process.env.POD_ARCH || 'arm64'
 const isRelease = process.env.POD_RELEASE === '1'
@@ -206,7 +192,8 @@ module.exports = {
       // Rollback of the opt-in terminal handover, runnable with the app's own Node.
       { from: 'product/scripts/restore-orca-terminals.mjs', to: 'restore-orca-terminals.mjs' },
       ...podAccMacExtraResources(),
-      ...podHookdMacExtraResources()
+      // without the build only POD_REQUIRE_HOOKD=1 fails it: CI ships without hookd
+      ...(podHookd ? podHookd.podHookdMacExtraResources() : [])
     ],
     // claude-acc's launchd plists and Pod Menu.app go where SMAppService looks: Contents/Library
     extraFiles: [

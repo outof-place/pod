@@ -12,7 +12,10 @@
 //
 // The pin is a tag and its commit (native/pod-hookd/pin.json). The source is cloned at that tag
 // with gh's credentials, refused unless HEAD is the pinned commit, and built here with Go (cgo,
-// POD_ARCH), so nothing prebuilt from outside ships.
+// POD_ARCH), so nothing prebuilt from outside ships. Optional: without access (CI has no token for
+// the private repo) or a toolchain the build is skipped and resources/pod-hookd removed, so the app
+// ships no hookd and no agent and claude-acc keeps its own hook entry; POD_REQUIRE_HOOKD=1 (local
+// release.sh) makes that an error.
 //
 //   node native/pod-hookd/build.mjs              clone the pinned tag, check the commit, build
 //   node native/pod-hookd/build.mjs --from DIR   build a local fasthooks checkout (stamped with its HEAD)
@@ -62,7 +65,7 @@ export function agentPlist(appId) {
 `
 }
 
-function run(cmd, args, options = {}) {
+function spawnChecked(cmd, args, options = {}) {
   const done = spawnSync(cmd, args, { encoding: 'utf8', ...options })
   if (done.status !== 0) {
     throw new Error(
@@ -88,7 +91,8 @@ export function buildHookd({
   into = HOOKD_DIR,
   pin = readPin(),
   arch = process.env.POD_ARCH || 'arm64',
-  appId = JSON.parse(readFileSync(join(ROOT, 'product', 'identity.json'), 'utf8')).appId
+  appId = JSON.parse(readFileSync(join(ROOT, 'product', 'identity.json'), 'utf8')).appId,
+  run = spawnChecked
 } = {}) {
   const work = mkdtempSync(join(tmpdir(), 'pod-hookd-'))
   try {
@@ -102,20 +106,25 @@ export function buildHookd({
         }
       }
       src = join(work, 'src')
-      run('git', [
-        '-c',
-        'credential.helper=',
-        '-c',
-        'credential.helper=!gh auth git-credential',
-        'clone',
-        '--quiet',
-        '--depth',
-        '1',
-        '--branch',
-        pin.tag,
-        `https://github.com/${pin.repository}.git`,
-        src
-      ])
+      run(
+        'git',
+        [
+          '-c',
+          'credential.helper=',
+          '-c',
+          'credential.helper=!gh auth git-credential',
+          'clone',
+          '--quiet',
+          '--depth',
+          '1',
+          '--branch',
+          pin.tag,
+          `https://github.com/${pin.repository}.git`,
+          src
+        ],
+        // no credential: fail at once instead of prompting (CI would hang)
+        { env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }
+      )
     }
     const commit = run('git', ['-C', src, 'rev-parse', 'HEAD'])
     if (!from && commit !== pin.commit) {
@@ -153,13 +162,37 @@ export function buildHookd({
   }
 }
 
+/**
+ * buildHookd, or with `required` false a skip on any failure: resources/pod-hookd is removed so no
+ * stale binary or agent ships. Returns { skipped: reason } then.
+ * @param {Parameters<typeof buildHookd>[0] & { required?: boolean }} [options]
+ */
+export function buildOrSkip({ required = process.env.POD_REQUIRE_HOOKD === '1', ...options } = {}) {
+  try {
+    return buildHookd(options)
+  } catch (error) {
+    if (required) {
+      throw error
+    }
+    rmSync(options.into ?? HOOKD_DIR, { recursive: true, force: true })
+    return { skipped: String(error.message ?? error).split('\n')[0] }
+  }
+}
+
 if (process.argv[1] && import.meta.filename === process.argv[1]) {
   const i = process.argv.indexOf('--from')
   try {
-    const { commit, source } = buildHookd({ from: i === -1 ? null : process.argv[i + 1] })
-    console.log(`pod-hookd ${commit} from ${source}`)
+    const result = buildOrSkip({ from: i === -1 ? null : process.argv[i + 1] })
+    if (result.skipped) {
+      console.warn(
+        `pod-hookd: skipped (${result.skipped}); this build ships without pod-hookd and its agent, ` +
+          'claude-acc keeps its own hook entry. POD_REQUIRE_HOOKD=1 makes this an error.'
+      )
+    } else {
+      console.log(`pod-hookd ${result.commit} from ${result.source}`)
+    }
   } catch (error) {
-    console.error(String(error.message ?? error))
+    console.error(`pod-hookd (POD_REQUIRE_HOOKD=1): ${String(error.message ?? error)}`)
     process.exit(1)
   }
 }

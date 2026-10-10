@@ -1,10 +1,10 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { agentPlist, goEnv, readPin } from '../../native/pod-hookd/build.mjs'
+import { agentPlist, buildOrSkip, goEnv, readPin } from '../../native/pod-hookd/build.mjs'
 
 const require = createRequire(import.meta.url)
 const {
@@ -82,9 +82,30 @@ describe('Pod pod-hookd resources', () => {
     expect(podHookdFileExclusions).toContain('!resources/pod-hookd/**')
   })
 
-  it('fails the build without pod-hookd and never ships the agent without its binary', () => {
+  it('without pod-hookd fails only with POD_REQUIRE_HOOKD=1, and never ships the agent alone', () => {
     const dir = tree(['LaunchAgents/codes.pod.app.acc.hookd.plist'])
-    expect(() => podHookdMacExtraResources({ dir })).toThrow('native/pod-hookd/build.mjs')
+    expect(() => podHookdMacExtraResources({ dir, required: true })).toThrow('POD_REQUIRE_HOOKD=1')
+    const warnings = []
+    expect(
+      podHookdMacExtraResources({ dir, required: false, warn: (m) => warnings.push(m) })
+    ).toEqual([])
+    expect(warnings.join()).toContain('ships without pod-hookd')
     expect(podHookdMacExtraFiles({ dir })).toEqual([])
+  })
+})
+
+describe('pod-hookd build without access', () => {
+  const pin = { repository: 'outof-place/fasthooks', tag: 'v0.1.1', commit: 'a'.repeat(40) }
+  const noAccess = (cmd, args) => {
+    throw new Error(`${cmd} ${args.join(' ')}: Repository not found`)
+  }
+
+  it('skips and removes a stale build unless POD_REQUIRE_HOOKD=1', () => {
+    const into = join(tree(['pod-hookd/pod-hookd', 'pod-hookd/LaunchAgents/x.plist']), 'pod-hookd')
+    const options = { into, pin, arch: 'arm64', appId: 'codes.pod.app', run: noAccess }
+    expect(() => buildOrSkip({ ...options, required: true })).toThrow('Repository not found')
+    expect(existsSync(join(into, 'pod-hookd'))).toBe(true)
+    expect(buildOrSkip({ ...options, required: false }).skipped).toContain('Repository not found')
+    expect(existsSync(into)).toBe(false)
   })
 })
