@@ -19697,7 +19697,8 @@
       "delete": "Delete agent sandbox",
       "create": "Create agent sandbox",
       "agents": "Run Claude in the sandbox",
-      "agentsLabel": "Run Claude launches of {{name}} in its OrbStack sandbox"
+      "agentsLabel": "Run Claude launches of {{name}} in its OrbStack sandbox",
+      "limitation": "Agent sandboxes see only their worktree, but they can still reach every service on this Mac that listens on localhost. Do not count on them to shield local servers or databases."
     },
     "worktrees": {
       "busy": "Working…",

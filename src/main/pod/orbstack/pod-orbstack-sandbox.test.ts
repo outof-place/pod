@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildSandboxClaudeConfig,
   buildSandboxHookScript,
   buildSandboxManagedSettings,
   provisionSandbox,
-  resolveSandboxMounts
+  resolveSandboxMounts,
+  VERIFY_AND_INSTALL_CLAUDE
 } from './pod-orbstack-sandbox'
 import type { OrbstackToolResult, OrbstackToolRunner } from './pod-orbstack-tools'
 
@@ -21,6 +23,14 @@ describe('sandbox hook files', () => {
     for (const event of ['SessionStart', 'UserPromptSubmit', 'Stop', 'PreToolUse']) {
       expect(JSON.stringify(settings.hooks[event]), event).toContain('claude-hook.sh')
     }
+  })
+})
+
+describe('sandbox Claude config', () => {
+  it('trusts only the mounted worktree', () => {
+    expect(JSON.parse(buildSandboxClaudeConfig('/Users/me/web.worktrees/a'))).toEqual({
+      projects: { '/Users/me/web.worktrees/a': { hasTrustDialogAccepted: true } }
+    })
   })
 })
 
@@ -56,13 +66,15 @@ describe('provisionSandbox', () => {
     return { run, calls }
   }
 
-  it('creates an isolated machine with only the mounts, then installs Claude and the hooks', async () => {
+  const release = { version: '2.1.295', platform: 'linux-arm64', dir: '/cache/2.1.295/linux-arm64' }
+
+  it('creates an isolated machine with only the mounts, then installs the verified Claude and the hooks', async () => {
     const { run, calls } = recorder()
     const result = await provisionSandbox({
       run,
       name: 'pod-web-1a2b3c4d-sbx',
       mounts: ['/Users/me/web.worktrees/a', '/Users/me/web/.git'],
-      claudeVersion: '2.1.295'
+      release
     })
 
     expect(result).toEqual({ agentVersion: '2.1.295' })
@@ -76,33 +88,74 @@ describe('provisionSandbox', () => {
       'ubuntu:24.04',
       'pod-web-1a2b3c4d-sbx'
     ])
-    const install = calls.find((call) => call.args.join(' ').includes('install.sh'))
-    expect(install?.args.at(-1)).toBe('2.1.295')
+    expect(calls.find((call) => call.args[0] === 'push')?.args).toEqual([
+      'push',
+      '-m',
+      'pod-web-1a2b3c4d-sbx',
+      '/cache/2.1.295/linux-arm64/claude',
+      '/cache/2.1.295/linux-arm64/manifest.json',
+      '/cache/2.1.295/linux-arm64/manifest.json.sig',
+      '/cache/2.1.295/linux-arm64/release-key.gpg',
+      '/var/tmp/pod-claude-release/'
+    ])
+    const verify = calls.find((call) => call.args.includes(VERIFY_AND_INSTALL_CLAUDE))
+    expect(verify?.args.slice(-4)).toEqual([
+      '2.1.295',
+      'linux-arm64',
+      '31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE',
+      '/var/tmp/pod-claude-release'
+    ])
+    expect(calls.some((call) => call.args.join(' ').includes('install.sh'))).toBe(false)
     const writes = calls.filter((call) => call.input !== undefined)
     expect(writes.map((call) => call.args.at(-1))).toEqual([
       'claude-hook.sh',
+      expect.stringContaining('.claude.json'),
       expect.stringContaining('/etc/claude-code/managed-settings.json')
     ])
     expect(writes[0]?.input).toContain('host.orb.internal')
+    expect(writes[1]?.input).toContain('"/Users/me/web.worktrees/a"')
+    expect(writes[1]?.input).not.toContain('.git"')
+  })
+
+  it('verifies the signature and checksum before installing anything', () => {
+    const gpgv = VERIFY_AND_INSTALL_CLAUDE.indexOf('gpgv --status-fd 1')
+    const checksum = VERIFY_AND_INSTALL_CLAUDE.indexOf('sha256sum --check')
+    const install = VERIFY_AND_INSTALL_CLAUDE.indexOf('install -m 755')
+    expect(VERIFY_AND_INSTALL_CLAUDE.startsWith('set -eu\n')).toBe(true)
+    expect(gpgv).toBeGreaterThan(0)
+    expect(checksum).toBeGreaterThan(gpgv)
+    expect(install).toBeGreaterThan(checksum)
+    expect(VERIFY_AND_INSTALL_CLAUDE).toContain('VALIDSIG .* $fingerprint\\$')
+  })
+
+  it('fails when the installed Claude reports another version', async () => {
+    const { run } = recorder()
+    await expect(
+      provisionSandbox({
+        run,
+        name: 'pod-x-sbx',
+        mounts: ['/Users/me/x'],
+        release: { ...release, version: '2.1.296' }
+      })
+    ).rejects.toThrow('claude --version: expected 2.1.296, got 2.1.295 (Claude Code)')
   })
 
   it('reports the failing step', async () => {
     const { run } = recorder('root')
     await expect(
-      provisionSandbox({ run, name: 'pod-x-sbx', mounts: ['/Users/me/x'], claudeVersion: null })
+      provisionSandbox({ run, name: 'pod-x-sbx', mounts: ['/Users/me/x'], release })
     ).rejects.toThrow('install git: E: unable to fetch')
   })
 
-  it('skips the Claude download when asked (E2E stand-in agents)', async () => {
+  it('skips Claude without a release (E2E stand-in agents)', async () => {
     const { run, calls } = recorder()
     const result = await provisionSandbox({
       run,
       name: 'pod-x-sbx',
       mounts: ['/Users/me/x'],
-      claudeVersion: null,
-      skipAgentInstall: true
+      release: null
     })
     expect(result).toEqual({ agentVersion: null })
-    expect(calls.some((call) => call.args.join(' ').includes('install.sh'))).toBe(false)
+    expect(calls.some((call) => call.args[0] === 'push')).toBe(false)
   })
 })
