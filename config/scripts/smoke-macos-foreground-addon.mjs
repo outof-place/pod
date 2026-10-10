@@ -155,6 +155,7 @@ async function main() {
     recursive: true,
     verbatimSymlinks: true
   })
+  validateFixture()
   mkdirSync(dirname(addon), { recursive: true })
   mkdirSync(dirname(devAddon), { recursive: true })
   cpSync(sourceAddon, addon)
@@ -246,6 +247,7 @@ async function main() {
     )
   )
   await resized
+  assert.deepEqual(sourceState(), originalState, 'fixture altered original Electron or addon files')
   console.log(
     JSON.stringify({
       signing: 'ad-hoc sealed fixture; no Developer ID, hardened-runtime or notarization claim',
