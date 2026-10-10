@@ -1,12 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { isStatusRepositoryRoot } from './git-status-stream-read'
 import { StatusPorcelainParser } from './git-status-porcelain-parser'
-import {
-  expandUntrackedDirectoryRecords,
-  statusUntrackedFilesArg
-} from './git-status-untracked-directory-expansion'
+import { GitStatusUntrackedMode } from './git-status-untracked-mode'
 
 type RunGit = (args: string[]) => Promise<{ stdout: string; stderr: string }>
 
@@ -27,13 +23,35 @@ async function readStatusRecords(
   return parser.statusRecords
 }
 
-export function registerUntrackedDirectoryExpansionBinaryCompatibilityCases(
+export function registerAdaptiveGitStatusBinaryCompatibilityCases(
   runGit: RunGit,
   resolveFixture: (name: string) => { hostPath: string; gitCwd: string }
 ): void {
-  it('lists the same untracked rows from normal mode plus ls-files as from untracked=all', async () => {
-    const { hostPath, gitCwd } = resolveFixture('untracked-expansion')
+  it('keeps adaptive status canonical on the Git baseline', async () => {
+    const { hostPath, gitCwd } = resolveFixture('adaptive-untracked')
     const runFixtureGit: RunGit = (args) => runGit(['-C', gitCwd, ...args])
+    const statusArgs = [
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain=v2',
+      '--untracked-files=all'
+    ]
+    const mode = new GitStatusUntrackedMode()
+    const calls: string[][] = []
+    const read = (run: RunGit, key: string) =>
+      mode.read({
+        key,
+        statusArgs,
+        limit: 0,
+        streamGit: async (args, onStdout) => {
+          calls.push(args)
+          return { stoppedEarly: onStdout((await run(args)).stdout) }
+        }
+      })
+    await mkdir(hostPath, { recursive: true })
+    await runFixtureGit(['init', '-q'])
+    await read(runFixtureGit, gitCwd)
     const files = [
       'new/a.ts',
       'new/deep/deeper/c.ts',
@@ -50,7 +68,6 @@ export function registerUntrackedDirectoryExpansionBinaryCompatibilityCases(
       await mkdir(join(hostPath, file, '..'), { recursive: true })
       await writeFile(join(hostPath, file), 'untracked\n')
     }
-    await runFixtureGit(['init', '-q'])
     await writeFile(join(hostPath, '.gitignore'), '*.log\n')
     for (const nested of ['nested', 'new/sub']) {
       await mkdir(join(hostPath, nested), { recursive: true })
@@ -58,27 +75,19 @@ export function registerUntrackedDirectoryExpansionBinaryCompatibilityCases(
       await writeFile(join(hostPath, nested, 'inner.txt'), 'nested\n')
     }
 
-    expect(
-      await isStatusRepositoryRoot(async (args, onStdout) => ({
-        stoppedEarly: onStdout((await runFixtureGit(args)).stdout)
-      }))
-    ).toBe(true)
-    expect(
-      await isStatusRepositoryRoot(async (args, onStdout) => ({
-        stoppedEarly: onStdout((await runGit(['-C', `${gitCwd}/sp ace`, ...args])).stdout)
-      }))
-    ).toBe(false)
+    const allRecords = await readStatusRecords(runFixtureGit, '--untracked-files=all')
+    calls.length = 0
+    const status = await read(runFixtureGit, gitCwd)
+    expect(calls.map((args) => args.at(-1))).toEqual([
+      '--untracked-files=normal',
+      '--untracked-files=all'
+    ])
+    expect(status.parser.statusRecords).toEqual(allRecords)
+    const nestedRun: RunGit = (args) => runGit(['-C', `${gitCwd}/sp ace`, ...args])
+    expect((await read(nestedRun, `${gitCwd}/sp ace`)).parser.statusRecords).toEqual(
+      await readStatusRecords(nestedRun, '--untracked-files=all')
+    )
 
-    const allRecords = await readStatusRecords(runFixtureGit, statusUntrackedFilesArg(true))
-    const expansion = await expandUntrackedDirectoryRecords({
-      records: await readStatusRecords(runFixtureGit, statusUntrackedFilesArg(false)),
-      limit: 0,
-      listUntracked: async (args, onStdout) => ({
-        stoppedEarly: onStdout((await runFixtureGit(args)).stdout)
-      })
-    })
-
-    expect(expansion?.records).toEqual(allRecords)
     expect(allRecords.map((record) => record.type === 'entry' && record.entry.path)).toEqual(
       expect.arrayContaining(['[k]eep/glob.txt', 'keep/sibling.txt', 'nested/', 'new/sub/'])
     )

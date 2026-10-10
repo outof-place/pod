@@ -1,16 +1,20 @@
-import { commandLineLength } from '../../../shared/windows-command-line-budget'
 import {
-  batchGitPathspecCommands,
-  gitCommandLineBudget
-} from '../../../shared/git-pathspec-command-batches'
-import {
-  resolveGitCommand,
-  resolveGitCommandWithoutProbe
-} from '../command-runner/git-command-resolution'
+  commandLineLength,
+  MAX_COMMAND_LINE_CHARS
+} from '../../../shared/windows-command-line-budget'
+import { resolveGitCommandWithoutProbe } from '../command-runner/git-command-resolution'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 
 /** Ceiling on argv entries per invocation; under WSL the byte budget bites first. */
 const BULK_CHUNK_SIZE = 100
+
+/**
+ * POSIX hosts have no CreateProcess cap: ARG_MAX is 256KB on macOS and 2MB on
+ * Linux, shared with the environment block. Half the macOS floor keeps a native
+ * or SSH-host invocation clear of E2BIG without charging it the WSL wrapper's
+ * quoting overhead, which is a different transport's problem.
+ */
+const POSIX_COMMAND_LINE_BUDGET = 128_000
 
 export function literalPathspec(filePath: string, options: GitRuntimeOptions): string {
   // Why: Git inside WSL needs POSIX paths, but host paths must stay literal, so convert backslashes only for WSL.
@@ -18,27 +22,44 @@ export function literalPathspec(filePath: string, options: GitRuntimeOptions): s
   return `:(literal)${runtimePath}`
 }
 
-/** Budget both WSL read routes so a direct-route failure can still use the login shell. */
-export function finishedGitCommandLineLength(
+/**
+ * Length of the line the OS will actually be handed, wrapper included.
+ *
+ * Why resolve rather than estimate: a WSL-routed write goes through the login
+ * shell, which shell-quotes every pathspec, quotes the resulting command line
+ * again, and embeds that three times (one branch per guest shell). The finished
+ * line runs ~3.4x the raw pathspec bytes, and nothing about the path list says
+ * so. Writes never take the direct-git lane, so this is the exact shape they
+ * get; a read that does take it resolves shorter, so the estimate stays safe.
+ */
+function finishedCommandLineLength(
   args: readonly string[],
   worktreePath: string,
-  options: GitRuntimeOptions,
-  readOptions?: { preferWslDirectGit: true; env: NodeJS.ProcessEnv }
+  options: GitRuntimeOptions
 ): number {
   const resolved = resolveGitCommandWithoutProbe([...args], {
     cwd: worktreePath,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
   })
-  const fallbackLength = commandLineLength([resolved.binary, ...resolved.args])
-  if (!readOptions) {
-    return fallbackLength
-  }
-  // Direct WSL reads also put the cached PATH and HOME on Windows' command line.
-  const direct = resolveGitCommand([...args], { cwd: worktreePath, ...options, ...readOptions })
-  return Math.max(fallbackLength, commandLineLength([direct.binary, ...direct.args]))
+  return commandLineLength([resolved.binary, ...resolved.args])
 }
 
-/** Preserve whole pathspecs while bounding the resolved host command line. */
+/**
+ * Split a bulk pathspec operation into invocations the host can actually spawn.
+ *
+ * Why a byte budget and not a path count: 100 was chosen against a raw argv, but
+ * a WSL-routed `git add` is folded into one login-shell command line, so 100
+ * ordinary paths reached ~43,000 characters -- past the 32,767 CreateProcess cap
+ * -- and the bulk stage failed with nothing staged. Cost is measured per
+ * pathspec through the real resolver so the wrapper's quoting rules live in one
+ * place.
+ *
+ * Chunks split only between whole pathspecs, and a pathspec that alone exceeds
+ * the budget still ships alone rather than being dropped or truncated. If an
+ * invocation fails partway through, the earlier chunks stay applied: every
+ * operation here is idempotent and per-path, so `git status` shows the true
+ * state and re-running converges.
+ */
 export function bulkPathspecCommands(
   leadingArgs: readonly string[],
   filePaths: readonly string[],
@@ -46,14 +67,25 @@ export function bulkPathspecCommands(
   options: GitRuntimeOptions
 ): string[][] {
   // Budget belongs to the host that spawns; the overhead measured above belongs to the transport.
-  const budget = gitCommandLineBudget()
-  return batchGitPathspecCommands(
-    leadingArgs,
-    filePaths.map((filePath) => literalPathspec(filePath, options)),
-    {
-      maximumPaths: BULK_CHUNK_SIZE,
-      commandLineBudget: budget,
-      measureCommandLine: (args) => finishedGitCommandLineLength(args, worktreePath, options)
+  const budget = process.platform === 'win32' ? MAX_COMMAND_LINE_CHARS : POSIX_COMMAND_LINE_BUDGET
+  const baseLength = finishedCommandLineLength(leadingArgs, worktreePath, options)
+  const commands: string[][] = []
+  let pathspecs: string[] = []
+  let length = baseLength
+  for (const filePath of filePaths) {
+    const pathspec = literalPathspec(filePath, options)
+    const cost =
+      finishedCommandLineLength([...leadingArgs, pathspec], worktreePath, options) - baseLength
+    if (pathspecs.length > 0 && (pathspecs.length >= BULK_CHUNK_SIZE || length + cost > budget)) {
+      commands.push([...leadingArgs, ...pathspecs])
+      pathspecs = []
+      length = baseLength
     }
-  )
+    pathspecs.push(pathspec)
+    length += cost
+  }
+  if (pathspecs.length > 0) {
+    commands.push([...leadingArgs, ...pathspecs])
+  }
+  return commands
 }

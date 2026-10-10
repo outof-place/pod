@@ -9,9 +9,7 @@ import { parseUnmergedEntry } from '../shared/git-status-conflict-entries'
 import type { GitExec } from './git-handler-ops'
 import type { RelayGitStreamExec } from './git-stdout-stream'
 import type { GitUpstreamStatus } from '../shared/git-status-types'
-import { StatusPorcelainParser } from '../shared/git-status-porcelain-parser'
-import { statusUntrackedFilesArg } from '../shared/git-status-untracked-directory-expansion'
-import { expandRelayStatusUntrackedDirectories } from './git-status-untracked-directories'
+import { GitStatusUntrackedMode } from '../shared/git-status-untracked-mode'
 import { splitRemoteBranchName } from '../shared/git-effective-upstream'
 import { collectGitStatusLineStatInputs } from '../shared/git-status-line-stat-inputs'
 import { readOrProbeNoEffectiveUpstreamStatus } from './git-status-upstream-negative-cache'
@@ -72,7 +70,7 @@ export async function getStatusOp(
   git: GitExec,
   streamGit: RelayGitStreamExec,
   params: Record<string, unknown>,
-  options: { signal?: AbortSignal } = {}
+  options: { signal?: AbortSignal; untrackedMode?: GitStatusUntrackedMode } = {}
 ): Promise<{
   entries: Record<string, unknown>[]
   conflictOperation: string
@@ -105,26 +103,26 @@ export async function getStatusOp(
     'status',
     '--porcelain=v2',
     '--branch',
-    statusUntrackedFilesArg(includeIgnored)
+    '--untracked-files=all'
   ]
   if (includeIgnored) {
     statusArgs.push('--ignored=matching')
   }
   // Why: attach rejection ownership before awaiting marker I/O, so a fast Git failure cannot become unhandled.
   const statusSettlementPromise = Promise.allSettled([
-    (async () => {
-      const parser = new StatusPorcelainParser()
-      const result = await streamGit(statusArgs, worktreePath, {
-        // Why: status polling is read-like; avoid racing terminal Git on .git/worktrees/*/index.lock.
-        disableOptionalLocks: true,
-        signal: options.signal,
-        onStdout: (chunk) => parser.update(chunk, limit)
-      })
-      if (!result.stoppedEarly) {
-        parser.finish()
-      }
-      return { parser, stoppedEarly: result.stoppedEarly }
-    })()
+    (options.untrackedMode ?? new GitStatusUntrackedMode()).read({
+      key: worktreePath,
+      statusArgs,
+      limit,
+      includeIgnored,
+      signal: options.signal,
+      streamGit: (args, onStdout) =>
+        streamGit(args, worktreePath, {
+          disableOptionalLocks: true,
+          signal: options.signal,
+          onStdout
+        })
+    })
   ])
   const conflictOperation = await conflictPromise
   const entries: Record<string, unknown>[] = []
@@ -142,18 +140,12 @@ export async function getStatusOp(
     if (statusResult.status === 'rejected') {
       throw statusResult.reason
     }
-    const expanded = await expandRelayStatusUntrackedDirectories(
-      streamGit,
-      statusResult.value,
-      { worktreePath, limit, signal: options.signal },
-      statusArgs
-    )
-    const { parser } = expanded
+    const { parser, stoppedEarly } = statusResult.value
     head = parser.branch.head
     branch = parser.branch.branch
     ignoredPaths = parser.ignoredPaths
-    statusLength = expanded.statusLength
-    didHitLimit = expanded.stoppedEarly
+    statusLength = parser.statusLength
+    didHitLimit = stoppedEarly
     statusSucceeded = true
     const { upstreamName, upstreamAheadBehind } = parser.branch
     upstreamStatus = upstreamName
@@ -187,7 +179,7 @@ export async function getStatusOp(
 
     // Why: resolve deferred conflicts in Git's output order so the cap cannot hide
     // an early conflict behind ordinary rows that appeared later in the stream.
-    for (const record of expanded.records) {
+    for (const record of parser.statusRecords) {
       if (didHitLimit && entries.length >= limit) {
         break
       }
