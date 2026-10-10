@@ -13,7 +13,7 @@ import { installTerminalLiveScrollbackRestore } from '@/lib/pane-manager/termina
 import type { PtyDataMeta } from '../pty-dispatcher'
 import { sendTerminalOscColorQueryReplies } from '../terminal-capability-replies'
 
-import { shouldWritePtyOutputForeground } from './foreground-output-scan'
+import { xtermShowsLiveOutput } from './foreground-output-scan'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { bindWritePtyOutputToXterm } from './write-pty-output-to-xterm'
@@ -86,7 +86,7 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
     }
     session.hiddenOutputRestorePtyId = ptyId
     session.hiddenOutputRestoreNeeded = true
-    if (shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)) {
+    if (xtermShowsLiveOutput(session)) {
       session.requestHiddenOutputRestoreIfNeeded()
     }
   }

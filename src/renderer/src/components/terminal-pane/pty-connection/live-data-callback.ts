@@ -8,6 +8,7 @@ import { sendTerminalOscColorQueryReplies } from '../terminal-capability-replies
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { registerE2eTerminalPtyDataInjection } from './e2e-terminal-pty-harness'
+import { skipViewFedElsewhereOutput } from './native-terminal-xterm-feed'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -53,7 +54,8 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
         // through writePtyOutputToXterm perturbs the hidden-output-restore state
         // machine (it consumes the pending snapshot), so the release rides the
         // restore. Residual gap: a pane whose restore never arrives.
-        if (data) {
+        // Why not flagged ones: main's model answered the queries of chunks it flagged viewFedElsewhere.
+        if (data && meta?.viewFedElsewhere !== true) {
           // The sentinel can carry query bytes carved from the bulk drop (extractDroppedPtyQueryBytes in main); replies must still flow.
           session.salvageRendererQueriesFromDiscardedRestoreData(data)
         }
@@ -78,6 +80,14 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     const codexBackfillNotice = session.codexBackfillErrorDetector?.observe(data)
     if (codexBackfillNotice) {
       session.reportError(codexBackfillNotice)
+    }
+    // Parse once: main's model parses this chunk for the pane's native view and answers its
+    // queries, except pixel-size ones (answered above, as for any pane). The observers above
+    // still saw it; xterm skips it and catches up from main later.
+    if (meta?.viewFedElsewhere === true) {
+      skipViewFedElsewhereOutput(session, data)
+      session.schedulePendingStartupCommandDelivery()
+      return
     }
     // Why: split panes have visible-but-inactive panes the user watches; throttle only when the pane or whole document is hidden.
     const foreground =
