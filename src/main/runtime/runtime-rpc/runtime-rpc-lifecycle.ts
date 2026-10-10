@@ -67,7 +67,10 @@ export class RuntimeRpcLifecycle extends RuntimeRpcLocalStreamDispatch {
         })
     })
 
-    socketTransport.onStreamUpgrade((msg, upgrade) => this.handleLocalStreamUpgrade(msg, upgrade))
+    // Kill switch: ORCA_LOCAL_STREAM_TRANSPORT=0 answers upgrades with method_not_found, as older runtimes do.
+    if (process.env.ORCA_LOCAL_STREAM_TRANSPORT !== '0') {
+      socketTransport.onStreamUpgrade((msg, upgrade) => this.handleLocalStreamUpgrade(msg, upgrade))
+    }
 
     await socketTransport.start()
 
