@@ -1,7 +1,7 @@
 // Fork-only (Pod): downloads a real Claude Code release and installs it in a real OrbStack sandbox.
 // Opt-in: POD_E2E_ORBSTACK=1. Creates and deletes one pod-*-sbx machine; touches no other machine.
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
-import { createServer as createHttpsServer } from 'node:https'
+import { createSecureServer } from 'node:http2'
 import { createServer, type AddressInfo, type Server } from 'node:net'
 import { gunzipSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
@@ -47,50 +47,53 @@ async function stubAnthropicApi() {
     stop_sequence: null,
     usage: { input_tokens: 1, output_tokens: 6 }
   }
-  const server = createHttpsServer({ key: ca.leafKeyPem, cert: ca.leafCertPem }, (req, res) => {
-    const chunks: Buffer[] = []
-    req.on('data', (chunk: Buffer) => chunks.push(chunk))
-    req.on('end', () => {
-      seen.push({
-        method: req.method,
-        path: req.url,
-        apiKey: req.headers['x-api-key']?.toString(),
-        authorization: req.headers.authorization
-      })
-      const raw = Buffer.concat(chunks)
-      const text = req.headers['content-encoding'] === 'gzip' ? gunzipSync(raw) : raw
-      const body = text.length ? JSON.parse(text.toString()) : {}
-      if (req.url?.startsWith('/v1/messages/count_tokens')) {
-        res.end(JSON.stringify({ input_tokens: 1 }))
-      } else if (req.url?.startsWith('/v1/messages') && body.stream) {
-        const event = (type: string, data: object) =>
-          res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`)
-        res.writeHead(200, { 'content-type': 'text/event-stream' })
-        event('message_start', { message: { ...message, content: [], stop_reason: null } })
-        event('content_block_start', { index: 0, content_block: { type: 'text', text: '' } })
-        event('content_block_delta', { index: 0, delta: { type: 'text_delta', text: STUB_TEXT } })
-        event('content_block_stop', { index: 0 })
-        event('message_delta', {
-          delta: { stop_reason: 'end_turn', stop_sequence: null },
-          usage: { output_tokens: 6 }
+  const server = createSecureServer(
+    { allowHTTP1: true, key: ca.leafKeyPem, cert: ca.leafCertPem },
+    (req, res) => {
+      const chunks: Buffer[] = []
+      req.on('data', (chunk: Buffer) => chunks.push(chunk))
+      req.on('end', () => {
+        seen.push({
+          method: req.method,
+          path: req.url,
+          apiKey: req.headers['x-api-key']?.toString(),
+          authorization: req.headers.authorization
         })
-        event('message_stop', {})
-        res.end()
-      } else if (req.url?.startsWith('/v1/messages')) {
-        res.writeHead(200, { 'content-type': 'application/json' })
-        res.end(
-          JSON.stringify({
-            ...message,
-            content: [{ type: 'text', text: STUB_TEXT }],
-            stop_reason: 'end_turn'
+        const raw = Buffer.concat(chunks)
+        const text = req.headers['content-encoding'] === 'gzip' ? gunzipSync(raw) : raw
+        const body = text.length ? JSON.parse(text.toString()) : {}
+        if (req.url?.startsWith('/v1/messages/count_tokens')) {
+          res.end(JSON.stringify({ input_tokens: 1 }))
+        } else if (req.url?.startsWith('/v1/messages') && body.stream) {
+          const event = (type: string, data: object) =>
+            res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`)
+          res.writeHead(200, { 'content-type': 'text/event-stream' })
+          event('message_start', { message: { ...message, content: [], stop_reason: null } })
+          event('content_block_start', { index: 0, content_block: { type: 'text', text: '' } })
+          event('content_block_delta', { index: 0, delta: { type: 'text_delta', text: STUB_TEXT } })
+          event('content_block_stop', { index: 0 })
+          event('message_delta', {
+            delta: { stop_reason: 'end_turn', stop_sequence: null },
+            usage: { output_tokens: 6 }
           })
-        )
-      } else {
-        res.writeHead(200, { 'content-type': 'application/json' })
-        res.end(JSON.stringify({ data: [], has_more: false }))
-      }
-    })
-  })
+          event('message_stop', {})
+          res.end()
+        } else if (req.url?.startsWith('/v1/messages')) {
+          res.writeHead(200, { 'content-type': 'application/json' })
+          res.end(
+            JSON.stringify({
+              ...message,
+              content: [{ type: 'text', text: STUB_TEXT }],
+              stop_reason: 'end_turn'
+            })
+          )
+        } else {
+          res.writeHead(200, { 'content-type': 'application/json' })
+          res.end(JSON.stringify({ data: [], has_more: false }))
+        }
+      })
+    }
+  )
   const port = await listen(server)
   return { ca, seen, port, close: () => server.close() }
 }
