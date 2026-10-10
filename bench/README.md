@@ -190,7 +190,9 @@ same number of matching lines per query, and any disagreement is recorded. The e
   at the end, then stops it. Three details keep the comparison clean:
   - **Fallback.** og's fallback is pinned to Homebrew's ripgrep 15.2.0 (`OG_REAL_RG`). og writes
     every call's decision, served from the index or fallen back, to `OG_DECISION_FILE`. Each sample
-    records both counts, and any fallback becomes a caveat on the og rows.
+    records both counts, and any fallback becomes a caveat on the og rows. The suite stops if
+    that rg is not exactly 15.2.0, since og would then fall back on every call. A run in which
+    og served no call from the index is broken: its og rows are left out and a caveat says so.
   - **Eviction.** The daemon runs with a one-day idle limit, so a long wait at the load gate
     cannot evict the index between samples.
   - **Index build.** The cold index build (`build_ms` from `ogctl status`) is a row of its own,
@@ -215,8 +217,9 @@ Both harnesses register the repo with ogd and wait for the index before timing s
 time is not in the numbers. `search/prepare.sh` builds the binaries from a pinned pod-search SHA,
 in their own clone and through claude-acc's build scheduler, as pod-search's README does:
 
-- `cargo build --release --locked -p ogd -p ogctl`;
-- og in `third_party/ripgrep` with `cargo build --release --locked --features pcre2`.
+- `cargo fetch --locked` in both workspaces, then the builds run with `--offline`;
+- `cargo build --release --offline --locked -p ogd -p ogctl`;
+- og in `third_party/ripgrep` with `cargo build --release --offline --locked --features pcre2`.
 
 The harnesses come from a pinned `pod/search-client` worktree. All
 three SHAs are in `run.json` and in the ogd suite's `versions`.
