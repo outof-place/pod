@@ -3,7 +3,8 @@ import {
   SANDBOX_FORWARDED_ENV,
   applyPodOrbstackTerminalOverride,
   setPodOrbstackTerminalResolver,
-  setPodSandboxAgentEnvProvider
+  setPodSandboxAgentEnvProvider,
+  setPodSandboxRelayStarter
 } from './pod-orbstack-terminal-override'
 
 const ORB = '/Applications/OrbStack.app/Contents/MacOS/bin/orb'
@@ -98,7 +99,10 @@ describe('sandboxed Claude launches', () => {
     }
   }
 
-  afterEach(() => setPodSandboxAgentEnvProvider(null))
+  afterEach(() => {
+    setPodSandboxAgentEnvProvider(null)
+    setPodSandboxRelayStarter(null)
+  })
 
   it('wraps the launch in orb -m <sandbox>, forwarding only the hook routing env', () => {
     resolveSandbox(true)
@@ -108,6 +112,22 @@ describe('sandboxed Claude launches', () => {
       `ORBENV=${SANDBOX_FORWARDED_ENV.join(':')} '${ORB}' '-m' '${SANDBOX}' '-w' '/Users/me/pod/acme/web' 'bash' '-lc' 'export DISABLE_AUTOUPDATER=1; exec claude --model '"'"'opus'"'"`
     )
     expect(options.command).not.toContain('CLAUDE_CONFIG_DIR')
+  })
+
+  it('starts the relay for the hook port and waits for it inside the VM', () => {
+    resolveSandbox(true)
+    const started: unknown[] = []
+    setPodSandboxRelayStarter((machine, routes) => {
+      started.push({ machine, routes })
+      return 'n0nce'
+    })
+    const options = claudeLaunch({ ORCA_AGENT_HOOK_PORT: '41234' })
+    applyPodOrbstackTerminalOverride(options, plainRequest, options.command)
+    expect(started).toEqual([{ machine: SANDBOX, routes: [{ vmPort: 41234, hostPort: 41234 }] }])
+    expect(options.command).toContain(
+      `'bash' '-lc' 'w=0; until [ "$(cat /run/pod-sandbox-relay/ready 2>/dev/null)" = n0nce ]`
+    )
+    expect(options.command).toContain('done; export DISABLE_AUTOUPDATER=1; exec claude')
   })
 
   it('follows the per-launch marker over the worktree default', () => {
@@ -126,16 +146,30 @@ describe('sandboxed Claude launches', () => {
     expect(forcedOff.command).toBe("claude --model 'opus'")
   })
 
-  it('adds a host auth provider env to the forwarded keys without other agents changing', () => {
+  it('adds the credential proxy env to the forwarded keys without other agents changing', () => {
     resolveSandbox(true)
+    const started: unknown[] = []
+    setPodSandboxRelayStarter((_machine, routes) => {
+      started.push(routes)
+      return 'n0nce'
+    })
     setPodSandboxAgentEnvProvider(() => ({
-      ANTHROPIC_BASE_URL: 'http://host.orb.internal:41001',
-      ANTHROPIC_AUTH_TOKEN: 'per-launch'
+      env: {
+        NODE_EXTRA_CA_CERTS: '/etc/pod-sandbox/anthropic-ca.pem',
+        POD_SANDBOX_PROXY_TOKEN: 'per-sandbox'
+      },
+      routes: [{ vmPort: 443, hostPort: 41001 }]
     }))
-    const options = claudeLaunch()
+    const options = claudeLaunch({ ORCA_AGENT_HOOK_PORT: '41234' })
     applyPodOrbstackTerminalOverride(options, plainRequest, options.command)
-    expect(options.env.ANTHROPIC_BASE_URL).toBe('http://host.orb.internal:41001')
-    expect(options.command).toContain(':ANTHROPIC_BASE_URL:ANTHROPIC_AUTH_TOKEN ')
+    expect(options.env.NODE_EXTRA_CA_CERTS).toBe('/etc/pod-sandbox/anthropic-ca.pem')
+    expect(options.command).toContain(':NODE_EXTRA_CA_CERTS:POD_SANDBOX_PROXY_TOKEN ')
+    expect(started).toEqual([
+      [
+        { vmPort: 41234, hostPort: 41234 },
+        { vmPort: 443, hostPort: 41001 }
+      ]
+    ])
 
     const codex = { ...claudeLaunch(), command: 'codex', launchAgent: 'codex' }
     applyPodOrbstackTerminalOverride(codex, plainRequest, codex.command)
