@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { computerUseAppNotFound, productHelperCopy } from '../product-identity/product-helper-names'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -35,13 +36,13 @@ async function getComputerUsePermissionStatusAsync(): Promise<ComputerUsePermiss
 
   const helperAppPath = resolveMacOSComputerUseAppPath()
   if (!helperAppPath) {
-    return createUnavailablePermissionStatus('Orca Computer Use.app was not found', null)
+    return createUnavailablePermissionStatus(computerUseAppNotFound(), null)
   }
 
   const executablePath = resolveMacOSComputerUseExecutablePath()
   if (!executablePath) {
     return createUnavailablePermissionStatus(
-      `${helperAppPath}/Contents/MacOS/orca-computer-use-macos was not found`,
+      productHelperCopy(`${helperAppPath}/Contents/MacOS/orca-computer-use-macos was not found`),
       helperAppPath
     )
   }
