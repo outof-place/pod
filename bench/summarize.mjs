@@ -204,7 +204,9 @@ const summary = {
     ])
   ),
   metrics,
-  comparisons
+  comparisons,
+  // Rows this run could not measure yet (the og and ogd rows without a bench-ready pod-search).
+  coming: runInfo?.coming ?? []
 }
 // summary.json is published: no row may cite a private note, and no string may carry a local path.
 function publicSafetyProblems(value) {
