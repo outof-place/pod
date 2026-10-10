@@ -1,0 +1,7 @@
+{
+  "//": "The Python Pod ships in Contents/Resources/python for claude-acc (python-build-standalone, install_only_stripped). sha256 comes from that release's SHA256SUMS; bump tag, asset and sha256 together. config/scripts/fetch-pod-python.mjs refuses a download that does not match.",
+  "repository": "astral-sh/python-build-standalone",
+  "tag": "20261003",
+  "asset": "cpython-3.14.8+20261003-aarch64-apple-darwin-install_only_stripped.tar.gz",
+  "sha256": "ed14e9042f36c0aa18383f5d9729bcbf17847e842666a793b5a5a5d8505c0ca1"
+}

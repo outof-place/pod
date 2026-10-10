@@ -173,3 +173,6 @@ ci-shards/
 # claude-acc payload, fetched by config/scripts/fetch-claude-acc-payload.mjs
 /resources/claude-acc/
 /resources/claude-acc.next/
+# embedded Python for claude-acc, fetched by config/scripts/fetch-pod-python.mjs
+/resources/python/
+/resources/python.next/

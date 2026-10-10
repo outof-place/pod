@@ -8,39 +8,26 @@
 //   node config/scripts/fetch-claude-acc-payload.mjs --from X   X = an unpacked payload dir or a tarball
 //                                                               (local claude-acc builds; checked against the
 //                                                               pin only when X is the pinned asset)
-import { createHash } from 'node:crypto'
-import { spawnSync } from 'node:child_process'
-import {
-  cpSync,
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
+import {
+  installDir,
+  installPinnedAsset,
+  readPin as readReleasePin,
+  sha256File,
+  STAMP,
+  unpackTarball
+} from './pinned-release-asset.mjs'
+
+export { sha256File }
 
 const ROOT = join(import.meta.dirname, '..', '..')
 export const PAYLOAD_DIR = join(ROOT, 'resources', 'claude-acc')
 const PIN = join(ROOT, 'config', 'claude-acc-payload.json')
-const STAMP = '.payload-source.json'
 const SHA256 = /^[0-9a-f]{64}$/
 
 export function readPin(path = PIN) {
-  const pin = JSON.parse(readFileSync(path, 'utf8'))
-  for (const key of ['repository', 'tag', 'asset']) {
-    if (typeof pin[key] !== 'string' || !pin[key]) {
-      throw new Error(`claude-acc payload pin: "${key}" is missing`)
-    }
-  }
-  return pin
-}
-
-export function sha256File(path) {
-  return createHash('sha256').update(readFileSync(path)).digest('hex')
+  return readReleasePin(path, 'claude-acc payload')
 }
 
 /**
@@ -57,30 +44,7 @@ export function assertPayload(dir) {
   return readFileSync(join(dir, 'VERSION'), 'utf8').trim()
 }
 
-function unpack(tarball, into) {
-  const work = mkdtempSync(join(tmpdir(), 'claude-acc-payload-'))
-  try {
-    const done = spawnSync('/usr/bin/tar', ['-xzf', tarball, '-C', work], { encoding: 'utf8' })
-    if (done.status !== 0) {
-      throw new Error(`tar -xzf ${tarball}: ${done.stderr}`)
-    }
-    const dir = join(work, 'claude-acc')
-    assertPayload(dir)
-    install(dir, into)
-  } finally {
-    rmSync(work, { recursive: true, force: true })
-  }
-}
-
-function install(dir, into) {
-  const next = `${into}.next`
-  rmSync(next, { recursive: true, force: true })
-  cpSync(dir, next, { recursive: true, verbatimSymlinks: true })
-  rmSync(into, { recursive: true, force: true })
-  renameSync(next, into)
-}
-
-/** @param {{ from?: string | null, into?: string, pin?: { repository: string, tag: string, asset: string, sha256: string | null }, download?: typeof fetch }} [options] */
+/** @param {{ from?: string | null, into?: string, pin?: import('./pinned-release-asset.mjs').ReleasePin, download?: typeof fetch }} [options] */
 export async function fetchPayload({
   from = null,
   into = PAYLOAD_DIR,
@@ -90,12 +54,12 @@ export async function fetchPayload({
   if (from) {
     if (statSync(from).isDirectory()) {
       assertPayload(from)
-      install(from, into)
+      installDir(from, into)
     } else {
       if (basename(from) === pin.asset && pin.sha256 && sha256File(from) !== pin.sha256) {
         throw new Error(`${from} does not match the pinned sha256 ${pin.sha256}`)
       }
-      unpack(from, into)
+      unpackTarball(from, 'claude-acc', into, assertPayload)
     }
     writeFileSync(join(into, STAMP), `${JSON.stringify({ from })}\n`)
     return { version: assertPayload(into), source: from }
@@ -105,29 +69,16 @@ export async function fetchPayload({
       'config/claude-acc-payload.json has no sha256 yet: pin a released payload, or use --from <payload>'
     )
   }
-  const stamp = join(into, STAMP)
-  if (existsSync(stamp) && JSON.parse(readFileSync(stamp, 'utf8')).sha256 === pin.sha256) {
-    return { version: assertPayload(into), source: 'cached' }
-  }
-  const url = `https://github.com/${pin.repository}/releases/download/${pin.tag}/${pin.asset}`
-  const response = await download(url)
-  if (!response.ok) {
-    throw new Error(`GET ${url}: ${response.status}`)
-  }
-  const work = mkdtempSync(join(tmpdir(), 'claude-acc-download-'))
-  try {
-    const tarball = join(work, pin.asset)
-    writeFileSync(tarball, Buffer.from(await response.arrayBuffer()))
-    const actual = sha256File(tarball)
-    if (actual !== pin.sha256) {
-      throw new Error(`${url}: sha256 ${actual}, pinned ${pin.sha256}`)
-    }
-    unpack(tarball, into)
-  } finally {
-    rmSync(work, { recursive: true, force: true })
-  }
-  writeFileSync(stamp, `${JSON.stringify({ tag: pin.tag, sha256: pin.sha256 })}\n`)
-  return { version: assertPayload(into), source: url }
+  const source = await installPinnedAsset({
+    pin,
+    label: 'claude-acc payload',
+    pinPath: 'config/claude-acc-payload.json',
+    into,
+    topDir: 'claude-acc',
+    assert: assertPayload,
+    download
+  })
+  return { version: assertPayload(into), source }
 }
 
 if (process.argv[1] && import.meta.filename === process.argv[1]) {
