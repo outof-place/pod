@@ -38,7 +38,7 @@
       "branch": "perf/git-status-untracked-cache",
       "upstream": "https://github.com/stablyai/orca/pull/26979",
       "squash": true,
-      "note": "squashed: maintainers merge Orca main into this PR branch"
+      "note": "squashed: maintainers merge Orca main into this PR branch; if #26979 closes, keep this entry as forkOnly (Pod carries it; nwparker on #26977, 2026-10-10)"
     },
     {
       "branch": "perf/session-scanner-incremental",
