@@ -21,6 +21,7 @@ function harness(initial: string | null, start = 1_000_000) {
   let value: string | null | Error = initial
   let reads = 0
   const source = createClaudeOAuthSandboxCredentials({
+    allowed: () => true,
     now: () => clock,
     target: () => ({ account: 'system', configDir: null }),
     read: async () => {
