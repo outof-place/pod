@@ -196,9 +196,6 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
     return !agent || canAgentMainTerminalModelRest(agent)
   }
 
-  /** The rebuild landed or gave up; later classes re-offer work that waited for it. */
-  protected onMainTerminalModelRebuilt(_ptyId: string): void {}
-
   private dropMainTerminalModel(ptyId: string): void {
     const tracker = new TerminalKittyKeyboardModeTracker()
     // Why: isTerminalAlternateScreen falls back to this tracker while main holds no model.
@@ -237,7 +234,7 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
         // Why re-offer: the seed timeout bounds how long tui-idle holds for this screen; past
         // it, waits evaluate without one, as for any partial model.
         recordMainTerminalModelSeedFailure()
-        this.onMainTerminalModelRebuilt(ptyId)
+        this.terminalIdlePolls.recheckPty(ptyId)
         return
       }
       this.headlessHydrationState.set(ptyId, 'done')
@@ -247,7 +244,8 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
         this.providerModeTrackersByPtyId.delete(ptyId)
       }
       this.mainTerminalModelDormancy.seedSettled(ptyId, seedSeq)
-      this.onMainTerminalModelRebuilt(ptyId)
+      // Why: a wait held only because this screen was being rebuilt settles now.
+      this.terminalIdlePolls.recheckPty(ptyId)
     })
   }
 
