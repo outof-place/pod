@@ -6,13 +6,20 @@
       "forkOnly": "Pod product docs, release base pin, upstream sync CI and this stack script"
     },
     {
+      "branch": "pod/electron-44",
+      "forkOnly": "bleeding edge: newest Electron, @xterm betas, release-age exclusions for the chased toolchain",
+      "note": "pod-bleeding; cut from Orca main 4a964633f4. Swap for pod/electron-45 once it is green; never list both"
+    },
+    {
       "branch": "perf/main-compile-cache",
       "upstream": "https://github.com/stablyai/orca/pull/13487",
       "note": "Our own implementation of the change in nwparker's #13487; drop this entry once that PR is in the Orca release"
     },
     {
       "branch": "fork/perf-experiments",
-      "forkOnly": "perf experiments: CADisplayLink pacing on by default on macOS, Skia Graphite env-only, Electron 43.7.8"
+      "forkOnly": "perf experiments: CADisplayLink pacing on by default on macOS, Skia Graphite env-only",
+      "base": "fb968b165fd857a87a06ca920c0dda55bd845467",
+      "note": "base skips the branch’s Electron 43.7.8 bump: Electron’s version belongs to pod/electron-* only"
     },
     {
       "branch": "fork/no-official-updater",
@@ -51,14 +58,22 @@
       "note": "nt-perf main-feed builds on its DaemonEvent path"
     },
     {
+      "branch": "perf/pty-background-ack",
+      "upstream": "https://github.com/stablyai/orca/pull/27033",
+      "note": "sidecarOnly hidden delivery + receipt credit; nt-perf parse-once builds on it"
+    },
+    {
       "branch": "fix/xterm-empty-write-barrier",
       "upstream": "https://github.com/stablyai/orca/pull/26956"
     },
     {
+      "branch": "fix/managed-hook-script-no-downgrade",
+      "upstream": "https://github.com/stablyai/orca/pull/27039",
+      "note": "keeps Pod and other Orca builds from rewriting each other’s ~/.orca/agent-hooks scripts"
+    },
+    {
       "branch": "app-identity-constant",
-      "upstream": "https://github.com/stablyai/orca/pull/26973",
-      "ref": "8f22a731c8",
-      "note": "Pinned to 8f22a731c8, the commit pod/identity is built on; unpin once pod/identity is rebased onto #26973 71bec057fd"
+      "upstream": "https://github.com/stablyai/orca/pull/26973"
     },
     {
       "branch": "stack/plugins",
@@ -67,29 +82,29 @@
     },
     {
       "branch": "pod/identity",
-      "forkOnly": "Pod identity: name, bundle id, icon, URL scheme and CLI name",
-      "base": "8f22a731c8"
+      "forkOnly": "Pod identity: name, bundle id, icon, URL scheme and CLI name"
     },
     {
       "branch": "stack/native-terminal-on-proc-info",
       "upstream": "https://github.com/stablyai/orca/pull/26914",
       "base": "origin/perf/native-proc-info-darwin",
-      "note": "feat/native-ghostty-terminal replayed onto perf/native-proc-info-darwin (package.json build steps merged); refresh when either changes"
+      "note": "feat/native-ghostty-terminal b12c1748c5 replayed onto perf/native-proc-info-darwin (package.json build steps merged); refresh when either changes"
     },
     {
       "branch": "stack/pod-overlay",
       "forkOnly": "Pod overlay: Stably-hosted services off, product name in UI copy",
-      "base": "d920a0436ff044fc17450c8786e3c58ece45e2cb",
-      "note": "pod/overlay replayed onto the stack; its bundled-plugins-only commit merged with #26975 (plugin-discovery host argument, locale keys). Refresh when pod/overlay changes, or rebase pod/overlay onto stack/plugins"
+      "base": "1232cfb06f",
+      "note": "pod/overlay e1bd1a451e replayed onto the stack; its bundled-plugins-only commit merged with #26975 (plugin-discovery host argument, locale keys). Refresh when pod/overlay changes, or rebase pod/overlay onto stack/plugins"
     },
     {
       "branch": "pod/native-default",
       "forkOnly": "Pod turns the native Ghostty terminal on by default and lists its switch under Terminal settings",
       "base": [
-        "7aaa9e27fa",
-        "origin/feat/native-ghostty-terminal"
+        "e1bd1a451e",
+        "99b9fce6f5",
+        "b12c1748c5"
       ],
-      "note": "Built on pod/overlay 7aaa9e27fa with a merge of feat/native-ghostty-terminal; base excludes both"
+      "note": "Merges pod/overlay e1bd1a451e, pod/identity 99b9fce6f5 and feat/native-ghostty-terminal b12c1748c5; base excludes all three"
     },
     {
       "branch": "pod/readme",
@@ -98,18 +113,24 @@
     {
       "branch": "stack/pod-acc",
       "forkOnly": "claude-acc built into Pod: bundled plugin, payload and tray",
-      "base": "b5e1a04150179a629edb01224c9f75f5d30bb0aa",
-      "note": "pod/acc minus its own status-bar copies, replayed onto the stack (plugin-marketplace imports merged). Refresh when pod/acc changes, or rebase pod/acc onto stack/plugins"
+      "base": "10849bc8b8",
+      "note": "pod/acc 1e73d86784 minus its status-bar copies of stack/plugins, replayed onto the stack (plugin-marketplace imports merged). Refresh when pod/acc changes, or rebase pod/acc onto stack/plugins"
     },
     {
       "branch": "pod/search-client",
-      "forkOnly": "Pod native search: quick open and text search served by the ogd index"
+      "forkOnly": "Pod native search: ogd client for quick open, file search and editor frecency",
+      "note": "the product-neutral seam (src/main/search/external-workspace-search-provider.ts and its three hooks, fs:rankedPathSearch, host-ranked quick open) is also upstream as https://github.com/stablyai/orca/pull/27014; once that merges, rebase so only the Pod parts remain"
     },
     {
       "branch": "stack/pod-slim",
-      "forkOnly": "Pod build profile: compile out cut features, English-only build",
-      "base": "72fd1e468772660d8962aecce6362e53ce761d4f",
-      "note": "pod/slim replayed onto the stack (onboarding-tips imports merged). Refresh when pod/slim changes, or rebase pod/slim onto the current main"
+      "forkOnly": "Pod slim profile: compile-time feature cuts (src/shared/product/features.ts) and macOS packaging cuts (product/electron-builder.slim.cjs)",
+      "base": "607c3dd915",
+      "note": "pod/slim 2533e6b9c2 replayed onto the stack (onboarding-tips imports merged). Refresh when pod/slim changes, or rebase pod/slim onto the current main"
+    },
+    {
+      "branch": "stack/pod-workspace",
+      "forkOnly": "Pod workspace: ~/pod workspace root and clone default <root>/<owner>/<repo>, Time Machine/Spotlight/volume hygiene, Settings > Workspace health dashboard, pod-search root seam",
+      "base": "3bad7ab9a7"
     }
   ]
 }
