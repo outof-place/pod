@@ -11,6 +11,7 @@ export const nativeTerminalApi = {
     ipcRenderer.invoke('nativeTerminal:create', appearance, zoomFactor, accessibilityLabel),
   bindPty: (surfaceId, ptyId) => ipcRenderer.invoke('nativeTerminal:bindPty', surfaceId, ptyId),
   write: (surfaceId, data) => ipcRenderer.send('nativeTerminal:write', surfaceId, data),
+  writeLocal: (surfaceId, data) => ipcRenderer.send('nativeTerminal:writeLocal', surfaceId, data),
   setFrames: (frames) => ipcRenderer.send('nativeTerminal:setFrames', frames),
   focus: (surfaceId) => ipcRenderer.send('nativeTerminal:focus', surfaceId),
   readSelection: (surfaceId) => ipcRenderer.invoke('nativeTerminal:readSelection', surfaceId),

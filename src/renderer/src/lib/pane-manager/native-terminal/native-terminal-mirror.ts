@@ -7,6 +7,9 @@ export type NativeTerminalMirror = {
   attach: (surfaceId: number, serialize: () => string, reset?: boolean) => void
   // Main feeds the surface from the PTY stream itself; the mirror forwards nothing.
   followMain: (surfaceId: number) => void
+  // Session text written into xterm that is not PTY output (a notice): a mirrored surface sees
+  // it in the write stream, a main-fed one gets it through main.
+  writeLocal: (data: string) => void
   // Re-seed after state the byte stream cannot express (xterm clear(), PTY rebind).
   resync: () => void
   detach: () => void
@@ -23,6 +26,20 @@ type MirrorState =
   | { kind: 'live'; surfaceId: number }
   | { kind: 'main'; surfaceId: number }
 
+// Why keyed on the terminal: notice writers hold the pane, not its native state.
+const mirrorsByTerminal = new WeakMap<Terminal, NativeTerminalMirror>()
+
+function sendLocalThroughMain(surfaceId: number, data: string): void {
+  if (typeof window !== 'undefined') {
+    window.api?.nativeTerminal?.writeLocal(surfaceId, data)
+  }
+}
+
+// See NativeTerminalMirror.writeLocal; a pane without a native view ignores it.
+export function writeNativeTerminalLocal(terminal: Terminal, data: string): void {
+  mirrorsByTerminal.get(terminal)?.writeLocal(data)
+}
+
 // RIS: a re-seed starts from a blank surface; the snapshot restores modes and content.
 const RESET_TERMINAL = '\x1bc'
 
@@ -35,7 +52,8 @@ export function installNativeTerminalMirror(
   terminal: Terminal,
   send: (surfaceId: number, data: string) => void,
   // DOM focus landed on this xterm with no native view on screen to take the keyboard.
-  onFocusWithoutNativeView: () => void = () => undefined
+  onFocusWithoutNativeView: () => void = () => undefined,
+  sendLocal: (surfaceId: number, data: string) => void = sendLocalThroughMain
 ): NativeTerminalMirror {
   let state: MirrorState = { kind: 'detached' }
   let serializeSnapshot: (() => string) | null = null
@@ -104,7 +122,7 @@ export function installNativeTerminalMirror(
     }
   }
 
-  return {
+  const mirror: NativeTerminalMirror = {
     attach: (surfaceId, serialize, reset = false) => {
       serializeSnapshot = serialize
       seed(surfaceId, reset)
@@ -112,6 +130,11 @@ export function installNativeTerminalMirror(
     followMain: (surfaceId) => {
       generation += 1
       state = { kind: 'main', surfaceId }
+    },
+    writeLocal: (data) => {
+      if (state.kind === 'main' && data.length > 0) {
+        sendLocal(state.surfaceId, data)
+      }
     },
     resync: () => {
       if (state.kind === 'seeding' || state.kind === 'live') {
@@ -137,6 +160,9 @@ export function installNativeTerminalMirror(
       terminal.write = originalWrite
       terminal.clear = originalClear
       terminal.focus = originalFocus
+      mirrorsByTerminal.delete(terminal)
     }
   }
+  mirrorsByTerminal.set(terminal, mirror)
+  return mirror
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Terminal as HeadlessTerminal } from '@xterm/headless'
 import type { Terminal } from '@xterm/xterm'
-import { installNativeTerminalMirror } from './native-terminal-mirror'
+import { installNativeTerminalMirror, writeNativeTerminalLocal } from './native-terminal-mirror'
 
 type FakeTerminal = {
   write: (data: string | Uint8Array, callback?: () => void) => void
@@ -149,6 +149,25 @@ describe('installNativeTerminalMirror', () => {
     mirror.attach(4, () => 'S', true)
     fake.flush()
     expect(send).toHaveBeenCalledWith(4, '\x1bcS')
+  })
+
+  it('hands session notices to main only while main feeds the surface', () => {
+    const fake = fakeTerminal()
+    const send = vi.fn()
+    const sendLocal = vi.fn()
+    const mirror = installNativeTerminalMirror(asTerminal(fake), send, vi.fn(), sendLocal)
+    writeNativeTerminalLocal(asTerminal(fake), 'too early')
+    mirror.followMain(6)
+    writeNativeTerminalLocal(asTerminal(fake), 'NOTICE')
+    expect(sendLocal).toHaveBeenCalledExactlyOnceWith(6, 'NOTICE')
+    // A mirrored surface already sees the notice in xterm's write stream.
+    mirror.attach(6, () => 'S')
+    fake.flush()
+    writeNativeTerminalLocal(asTerminal(fake), 'mirrored')
+    expect(sendLocal).toHaveBeenCalledTimes(1)
+    mirror.dispose()
+    writeNativeTerminalLocal(asTerminal(fake), 'disposed')
+    expect(sendLocal).toHaveBeenCalledTimes(1)
   })
 
   it('still seeds when xterm resizes before the marker parses', () => {

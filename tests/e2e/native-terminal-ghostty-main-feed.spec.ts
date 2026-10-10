@@ -1,3 +1,4 @@
+import { mkdirSync, rmSync } from 'node:fs'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
@@ -11,6 +12,7 @@ import {
 import {
   execInTerminal,
   splitActiveTerminalPane,
+  waitForActivePanePtyId,
   waitForActiveTerminalManager,
   waitForTerminalOutput
 } from './helpers/terminal'
@@ -183,4 +185,69 @@ test('a reload reattaches each native view to its PTY from main’s model', asyn
   await expect
     .poll(async () => nativeScreenText(electronApp, surfaceId ?? 0))
     .toContain('AFTER-RELOAD')
+})
+
+test('a notice the renderer writes into xterm reaches the main-fed native view too', async ({
+  orcaPage,
+  electronApp
+}, testInfo) => {
+  await prepare(orcaPage, electronApp)
+  // A split whose start folder no longer exists opens at the workspace root, and the renderer
+  // writes Orca's notice about it into the new pane's xterm (not PTY output).
+  const gone = testInfo.outputPath('deleted-start-folder')
+  mkdirSync(gone, { recursive: true })
+  rmSync(gone, { recursive: true, force: true })
+  const previous = await waitForActivePanePtyId(orcaPage)
+  await orcaPage.evaluate((cwd) => {
+    const tabId = window.__store?.getState().activeTabId
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane()
+    if (!manager || !pane) {
+      throw new Error('no active terminal pane to split')
+    }
+    manager.splitPane(pane.id, 'vertical', { cwd })
+  }, gone)
+  let ptyId = previous
+  await expect
+    .poll(async () => (ptyId = await waitForActivePanePtyId(orcaPage)), { timeout: 15_000 })
+    .not.toBe(previous)
+  const notice = 'saved start folder no longer exists'
+  await expect
+    .poll(async () => getTerminalContentForPtyId(orcaPage, ptyId, 4000), { timeout: 15_000 })
+    .toContain(notice)
+  const surfaceId = await findNativeSurfaceForPane(orcaPage, ptyId)
+  expect(surfaceId).not.toBeNull()
+  await expect
+    .poll(async () => nativeScreenText(electronApp, surfaceId ?? 0), { timeout: 10_000 })
+    .toContain(notice)
+})
+
+test('a session notice written after main seeded the view shows on both screens, in order', async ({
+  orcaPage,
+  electronApp
+}) => {
+  await prepare(orcaPage, electronApp)
+  const { ptyId, surfaceId } = await splitNativeTerminalPane(orcaPage, electronApp)
+  await execInTerminal(orcaPage, ptyId, "printf 'BEFORE-%s\\n' NOTICE")
+  await expect.poll(async () => nativeScreenText(electronApp, surfaceId)).toContain('BEFORE-NOTICE')
+  const written = await orcaPage.evaluate(
+    (id) =>
+      Reflect.get(Object(Reflect.get(window, '__terminalSessionNotice')), 'write')?.(
+        id,
+        '\r\n[E2E session notice]\r\n'
+      ),
+    ptyId
+  )
+  expect(written).toBe(true)
+  await execInTerminal(orcaPage, ptyId, "printf 'AFTER-%s\\n' NOTICE")
+  await expect.poll(async () => nativeScreenText(electronApp, surfaceId)).toContain('AFTER-NOTICE')
+  // Both views hold the notice between the output written before and after it.
+  for (const screen of [
+    await nativeScreenText(electronApp, surfaceId),
+    await getTerminalContentForPtyId(orcaPage, ptyId, 4000)
+  ]) {
+    const noticeAt = screen.indexOf('[E2E session notice]')
+    expect(noticeAt).toBeGreaterThan(screen.indexOf('BEFORE-NOTICE'))
+    expect(noticeAt).toBeLessThan(screen.lastIndexOf('AFTER-NOTICE'))
+  }
 })

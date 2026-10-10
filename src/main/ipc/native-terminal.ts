@@ -21,6 +21,7 @@ import {
 import { applyGhosttySurfaceConfig } from '../native-terminal/ghostty-native-terminal-surface-configs'
 import {
   bindNativeTerminalPty,
+  writeNativeTerminalLocalOutput,
   type NativeTerminalFeedRuntime
 } from '../native-terminal/ghostty-native-terminal-pty-feed'
 
@@ -86,6 +87,7 @@ const INVOKE_CHANNELS = [
 ]
 const SEND_CHANNELS = [
   'nativeTerminal:write',
+  'nativeTerminal:writeLocal',
   'nativeTerminal:setFrames',
   'nativeTerminal:focus',
   'nativeTerminal:setAppearance',
@@ -128,6 +130,15 @@ export function registerNativeTerminalHandlers(
   ipcMain.on('nativeTerminal:write', (event, surfaceId: unknown, data: unknown) => {
     if (isSurfaceId(surfaceId) && typeof data === 'string') {
       writeSurfaceOutput(event.sender, surfaceId, data)
+    }
+  })
+  ipcMain.on('nativeTerminal:writeLocal', (event, surfaceId: unknown, data: unknown) => {
+    if (
+      isSurfaceId(surfaceId) &&
+      typeof data === 'string' &&
+      ownedSurfaceAddon(event.sender, surfaceId) !== null
+    ) {
+      writeNativeTerminalLocalOutput(surfaceId, data)
     }
   })
   ipcMain.on('nativeTerminal:setFrames', (event, frames: unknown) => {

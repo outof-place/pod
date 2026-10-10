@@ -4,6 +4,8 @@ import { followNativePaneMouseFocus } from '@/lib/pane-manager/native-terminal/n
 import { dispatchNativeTerminalPasteText } from '@/lib/pane-manager/native-terminal/native-terminal-paste-text'
 import { bindNativeTerminalLocalPty } from './native-terminal-tty'
 import { syncNativeTerminalForwardedChords } from './native-terminal-forwarded-chords-sync'
+import { registerE2eTerminalSessionNotice } from './e2e-terminal-session-notice'
+import { writeTerminalSessionNotice } from './terminal-session-notice'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 // Lends the native terminal this session's input path, so native keystrokes take the same
@@ -13,6 +15,7 @@ export function attachNativeTerminalForSession(
   ptyId: string
 ): void {
   const { pane } = session
+  registerE2eTerminalSessionNotice(ptyId, (text) => writeTerminalSessionNotice(session, text))
   attachNativeTerminal(
     pane.terminal,
     ptyId,

@@ -218,16 +218,16 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
   // Public: native surfaces fed from main seed from this PTY's model in stream order.
   queueHeadlessTerminalTask(
     ptyId: string,
-    task: (state: RuntimeHeadlessTerminal) => void
+    task: (state: RuntimeHeadlessTerminal) => void | Promise<void>
   ): boolean {
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return false
     }
     state.writeChain = state.writeChain
-      .then(() => {
+      .then(async () => {
         if (this.headlessTerminals.get(ptyId) === state) {
-          task(state)
+          await task(state)
         }
       })
       .catch(() => {})

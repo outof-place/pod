@@ -13,6 +13,8 @@ export type NativeTerminalApi = {
   // True when main feeds the surface this PTY's output itself; false keeps the renderer mirror.
   bindPty: (surfaceId: number, ptyId: string) => Promise<boolean>
   write: (surfaceId: number, data: string) => void
+  // Session text in xterm that is not PTY output, for a surface main feeds.
+  writeLocal: (surfaceId: number, data: string) => void
   setFrames: (frames: NativeTerminalFrame[]) => void
   focus: (surfaceId: number) => void
   readSelection: (surfaceId: number) => Promise<string | null>

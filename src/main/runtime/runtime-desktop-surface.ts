@@ -18,6 +18,7 @@ import type { BrowserWindow, IpcMainEvent } from 'electron'
 /** A PTY's headless model, as far as the desktop's native terminal views read it. */
 export type NativeTerminalFeedModel = {
   emulator: {
+    write: (data: string) => Promise<void>
     getSnapshot: () => {
       snapshotAnsi: string
       scrollbackAnsi?: string

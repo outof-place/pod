@@ -14,14 +14,24 @@ import {
   nativeTerminalSurfacePlaced,
   reseedNativeTerminalPty,
   unbindNativeTerminalSurface,
+  writeNativeTerminalLocalOutput,
   type NativeTerminalFeedModel,
   type NativeTerminalFeedRuntime
 } from './ghostty-native-terminal-pty-feed'
 
-function model(screen: string): NativeTerminalFeedModel {
+function model(screen: string): NativeTerminalFeedModel & { parsed: string[] } {
+  const parsed: string[] = []
   return {
+    parsed,
     emulator: {
-      getSnapshot: () => ({ snapshotAnsi: screen, scrollbackAnsi: '', rehydrateSequences: 'M' })
+      write: async (data) => {
+        parsed.push(data)
+      },
+      getSnapshot: () => ({
+        snapshotAnsi: screen + parsed.join(''),
+        scrollbackAnsi: '',
+        rehydrateSequences: 'M'
+      })
     }
   }
 }
@@ -30,7 +40,7 @@ function model(screen: string): NativeTerminalFeedModel {
 function runtime(current: NativeTerminalFeedModel | null): NativeTerminalFeedRuntime & {
   flush: () => void
 } {
-  const queued: ((model: NativeTerminalFeedModel) => void)[] = []
+  const queued: ((model: NativeTerminalFeedModel) => void | Promise<void>)[] = []
   return {
     queueHeadlessTerminalTask: (_ptyId, task) => {
       if (!current) {
@@ -42,7 +52,7 @@ function runtime(current: NativeTerminalFeedModel | null): NativeTerminalFeedRun
     flush: () => {
       for (const task of queued.splice(0)) {
         if (current) {
-          task(current)
+          void task(current)
         }
       }
     }
@@ -144,5 +154,26 @@ describe('native terminal PTY feed', () => {
     unbindNativeTerminalSurface(1)
     feedNativeTerminalPtyData('pty-e', live, 'after')
     expect(await written()).toEqual(['\x1bcMS'])
+  })
+
+  it('writes a renderer notice into the model on the chain, behind the chunks before it', async () => {
+    const live = model('SCREEN')
+    const chain = runtime(live)
+    bindNativeTerminalPty(1, 'pty-local', chain)
+    chain.flush()
+    feedNativeTerminalPtyData('pty-local', live, 'before')
+    writeNativeTerminalLocalOutput(1, 'NOTICE')
+    expect(await written()).toEqual(['\x1bcMSCREENbefore'])
+    chain.flush()
+    // The task awaits the model's write before it feeds the surface.
+    await Promise.resolve()
+    expect(await written()).toEqual(['\x1bcMSCREENbefore', 'NOTICE'])
+    expect(live.parsed).toEqual(['NOTICE'])
+    // A later seed keeps it, since it is now part of the model.
+    reseedNativeTerminalPty('pty-local', live)
+    expect((await written()).at(-1)).toBe('\x1bcMSCREENNOTICE')
+    writeNativeTerminalLocalOutput(2, 'unbound')
+    chain.flush()
+    expect(live.parsed).toEqual(['NOTICE'])
   })
 })

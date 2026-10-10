@@ -15,7 +15,7 @@ export type NativeTerminalFeedRuntime = {
   // Runs `task` on the PTY's headless model after everything already queued; false if none.
   queueHeadlessTerminalTask: (
     ptyId: string,
-    task: (model: NativeTerminalFeedModel) => void
+    task: (model: NativeTerminalFeedModel) => void | Promise<void>
   ) => boolean
 }
 
@@ -166,6 +166,20 @@ export function feedNativeTerminalPtyData(
     stats.chars += data.length
     send(binding.surfaceId, data)
   }
+}
+
+// Session text the renderer wrote into xterm that is not PTY output (a notice). It joins main's
+// model on the PTY's write chain, so the view shows it in stream order and later seeds keep it.
+export function writeNativeTerminalLocalOutput(surfaceId: number, text: string): void {
+  const binding = bindingsBySurface.get(surfaceId)
+  if (!binding || text.length === 0) {
+    return
+  }
+  // Why no model is fine: the first PTY byte hydrates one from xterm, which holds the text.
+  binding.runtime.queueHeadlessTerminalTask(binding.ptyId, async (model) => {
+    await model.emulator.write(text)
+    feedNativeTerminalPtyData(binding.ptyId, model, text)
+  })
 }
 
 // Runtime hook, on the write chain after main changed the model outside the byte stream (clear).
