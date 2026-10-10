@@ -55,7 +55,9 @@ describe('product packaging', () => {
   it('declares the product names claude-acc cannot read from the bundle', () => {
     expect(extendInfo().ClaudeAccHost).toEqual({
       userData: `~/Library/Application Support/${String(Reflect.get(Object(identity), 'userDataName'))}`,
-      cli: Reflect.get(Object(identity), 'cliName')
+      cli: Reflect.get(Object(identity), 'cliName'),
+      hooksDir: `~/${String(Reflect.get(Object(identity), 'homeDirName'))}/agent-hooks`,
+      envPrefix: Reflect.get(Object(identity), 'envPrefix')
     })
   })
 
