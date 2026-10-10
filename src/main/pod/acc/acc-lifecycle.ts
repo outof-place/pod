@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
+import { failedSetup } from './acc-lifecycle-record'
 
 /**
  * Keeps the claude-acc install on this account in step with the payload inside Pod.app.
@@ -49,15 +50,25 @@ export type AccLifecycleSkipReason =
   | 'automated-launch'
   | 'home-override'
   | 'custom-profile'
+  | 'setup-backoff'
+
+type AccInstallReason =
+  | 'first-install'
+  | 'version-changed'
+  | 'owner-changed'
+  | 'app-moved'
+  | 'setup-failed'
 
 export type AccLifecycleDecision =
   | { action: 'skip'; reason: AccLifecycleSkipReason }
   | { action: 'up-to-date'; version: string }
   | {
       action: 'install'
-      reason: 'first-install' | 'version-changed' | 'owner-changed' | 'app-moved'
+      reason: AccInstallReason
       version: string
       from: AccOwnerRecord | null
+      /** Setups of this version that failed in a row before this one (pod-lifecycle.json). */
+      failedAttempts?: number
     }
 
 export type AccLifecycleInput = {
@@ -77,6 +88,8 @@ export type AccLifecycleInput = {
   mode?: string
   /** From automatedLaunchEnv: the harness variable that launched this Pod. */
   automatedBy?: string | null
+  /** Date.now(), for the retry backoff. */
+  now?: number
 }
 
 function isOff(mode: string | undefined): boolean {
@@ -142,19 +155,39 @@ export function decideAccLifecycle(input: AccLifecycleInput): AccLifecycleDecisi
     return { action: 'skip', reason: 'no-payload' }
   }
   const owner = readOwnerRecord(input.home)
+  const reason = installReason(owner, version, input.appPath)
+  // a setup that failed may have written owner.json before it stopped (test3, 2026-10-10)
+  const failed = failedSetup(join(input.home, ACC_STATE_DIR), version)
+  if (!reason && !failed) {
+    return { action: 'up-to-date', version }
+  }
+  if (failed && (input.now ?? Date.now()) < failed.notBefore) {
+    return { action: 'skip', reason: 'setup-backoff' }
+  }
+  return {
+    action: 'install',
+    reason: reason ?? 'setup-failed',
+    version,
+    from: owner,
+    ...(failed ? { failedAttempts: failed.attempts } : {})
+  }
+}
+
+function installReason(
+  owner: AccOwnerRecord | null,
+  version: string,
+  appPath: string
+): AccInstallReason | null {
   if (!owner) {
-    return { action: 'install', reason: 'first-install', version, from: null }
+    return 'first-install'
   }
   if (owner.owner !== OWNER) {
-    return { action: 'install', reason: 'owner-changed', version, from: owner }
+    return 'owner-changed'
   }
   if (owner.version !== version) {
-    return { action: 'install', reason: 'version-changed', version, from: owner }
+    return 'version-changed'
   }
-  if (owner.app !== input.appPath) {
-    return { action: 'install', reason: 'app-moved', version, from: owner }
-  }
-  return { action: 'up-to-date', version }
+  return owner.app === appPath ? null : 'app-moved'
 }
 
 /**
