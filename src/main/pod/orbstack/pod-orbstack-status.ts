@@ -78,7 +78,8 @@ function buildLinks(registry: PodOrbstackRegistry): PodOrbstackWorktreeLink[] {
       sandbox: sandbox?.name ?? null,
       sandboxReady: sandbox?.state === 'ready',
       sandboxAgents: registry.isSandboxAgents(worktreeId),
-      sandboxAgentVersion: sandbox?.agentVersion ?? null
+      sandboxAgentVersion: sandbox?.agentVersion ?? null,
+      sandboxNetworkIsolated: sandbox?.networkIsolated === true
     }
   })
 }
