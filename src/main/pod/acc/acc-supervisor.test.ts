@@ -15,7 +15,7 @@ afterEach(() => {
 })
 
 /** An installed Pod (payload 1.31.0, owner.json saying pod) whose bundle carries one agent. */
-function installedPod() {
+function installedPod(owner = 'pod') {
   const root = mkdtempSync(join(tmpdir(), 'pod-acc-supervisor-'))
   roots.push(root)
   const app = join(root, 'Pod.app')
@@ -32,7 +32,7 @@ function installedPod() {
   mkdirSync(join(home, ACC_STATE_DIR), { recursive: true })
   writeFileSync(
     join(home, ACC_STATE_DIR, 'owner.json'),
-    JSON.stringify({ owner: 'pod', version: '1.31.0', app })
+    JSON.stringify({ owner, version: '1.31.0', app })
   )
   const profile = join(home, 'Library/Application Support/Pod')
   return {
@@ -171,6 +171,33 @@ describe('claude-acc supervisor', () => {
       payload: '1.31.0',
       services: [{ kind: 'agent', name: 'codes.pod.app.acc.tick.plist', status: 'not-registered' }]
     })
+    supervisor.stop()
+  })
+
+  it('unregisters every Pod service once claude-acc was handed back', async () => {
+    const loginItems = fakeLoginItems()
+    const pod = installedPod('brew')
+    const supervisor = startPodAccSupervisor({
+      config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
+      ...pod,
+      platform: 'darwin',
+      env: {},
+      run: vi.fn(async () => result(1)),
+      loginItems: loginItems.api,
+      appId: 'codes.pod.app',
+      setTrayYield: () => {},
+      syncTray: () => {},
+      log: () => {}
+    })
+    await expect(supervisor.lifecycle).resolves.toMatchObject({
+      status: 'skipped',
+      decision: { reason: 'handed-back' }
+    })
+    await supervisor.services
+    expect(loginItems.set.mock.calls).toEqual([
+      [{ openAtLogin: false, type: 'agentService', serviceName: 'codes.pod.app.acc.tick.plist' }]
+    ])
+    expect(existsSync(join(pod.home, ACC_STATE_DIR, ACC_SERVICES_REPORT))).toBe(true)
     supervisor.stop()
   })
 

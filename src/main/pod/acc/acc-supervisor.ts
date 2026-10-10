@@ -5,6 +5,7 @@ import { automatedLaunchEnv, runAccLifecycle, type AccLifecycleOutcome } from '.
 import {
   bundledAccServices,
   ensureAccServices,
+  removeAccServices,
   writeAccServicesReport,
   type AccServiceReport,
   type LoginItemApi
@@ -87,17 +88,17 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
   // Only once setup.sh made this account Pod's: every lifecycle guard applies to launchd too.
   const services = lifecycle.then((outcome) => {
     const { loginItems, appId } = options
-    if (
-      !loginItems ||
-      !appId ||
-      (outcome.status !== 'installed' && outcome.status !== 'up-to-date')
-    ) {
+    const handedBack =
+      outcome.decision.action === 'skip' && outcome.decision.reason === 'handed-back'
+    const owned = outcome.status === 'installed' || outcome.status === 'up-to-date'
+    if (!loginItems || !appId || (!owned && !handedBack)) {
       return []
     }
-    const reports = ensureAccServices(
-      loginItems,
-      bundledAccServices(appBundlePath(options.execPath), appId)
-    )
+    const bundled = bundledAccServices(appBundlePath(options.execPath), appId)
+    // handed back: launchd would otherwise keep running Pod's copies next to the new owner's jobs
+    const reports = handedBack
+      ? removeAccServices(loginItems, bundled)
+      : ensureAccServices(loginItems, bundled)
     for (const report of reports) {
       if (report.registered || report.status !== 'enabled') {
         options.log(`claude-acc: ${report.service.serviceName} ${report.status}`)

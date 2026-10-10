@@ -51,13 +51,14 @@ export type AccLifecycleSkipReason =
   | 'automated-launch'
   | 'home-override'
   | 'custom-profile'
+  | 'handed-back'
 
 export type AccLifecycleDecision =
   | { action: 'skip'; reason: AccLifecycleSkipReason }
   | { action: 'up-to-date'; version: string }
   | {
       action: 'install'
-      reason: 'first-install' | 'version-changed' | 'owner-changed' | 'app-moved'
+      reason: 'first-install' | 'version-changed' | 'app-moved'
       version: string
       from: AccOwnerRecord | null
     }
@@ -147,8 +148,10 @@ export function decideAccLifecycle(input: AccLifecycleInput): AccLifecycleDecisi
   if (!owner) {
     return { action: 'install', reason: 'first-install', version, from: null }
   }
+  // Handed back (`claude-acc handback`) or uninstalled: the account chose against Pod's copy, so
+  // Pod never takes claude-acc over again and its own services go (the supervisor removes them).
   if (owner.owner !== OWNER) {
-    return { action: 'install', reason: 'owner-changed', version, from: owner }
+    return { action: 'skip', reason: 'handed-back' }
   }
   if (owner.version !== version) {
     return { action: 'install', reason: 'version-changed', version, from: owner }
