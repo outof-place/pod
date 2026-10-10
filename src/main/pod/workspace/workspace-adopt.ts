@@ -52,6 +52,21 @@ async function listWorktreePaths(git: WorkspaceGitExec, repoPath: string): Promi
   return list.code === 0 ? parseWorktreePorcelainZ(list.stdout).map((entry) => entry.path) : []
 }
 
+/** Pod's layout keeps linked worktrees next to the repo, in `<repo>.worktrees/`; they move with it. */
+export function worktreesDirOf(repoPath: string): string {
+  return `${repoPath}.worktrees`
+}
+
+/** A path inside a moved folder, re-rooted at the folder's new place. */
+function remap(path: string, moves: readonly (readonly [string, string])[]): string {
+  for (const [from, to] of moves) {
+    if (path === from || path.startsWith(`${from}/`)) {
+      return to + path.slice(from.length)
+    }
+  }
+  return path
+}
+
 export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
   const { git } = deps
   const claudeDir = (path: string) => join(deps.home, '.claude', 'projects', claudeProjectKey(path))
@@ -77,6 +92,7 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
         blockers: ['not-a-repo'],
         processes: [],
         linkedWorktrees: [],
+        worktreesDir: null,
         claudeProjectDir: null
       }
     }
@@ -85,7 +101,8 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
     if (isPathInsideWorkspaceRoot(from, deps.root())) {
       blockers.push('already-inside')
     }
-    if (await pathExists(to)) {
+    const siblings = (await pathExists(worktreesDirOf(from))) ? [worktreesDirOf(from)] : []
+    if ((await pathExists(to)) || (siblings.length > 0 && (await pathExists(worktreesDirOf(to))))) {
       blockers.push('target-exists')
     }
     const [source, target] = await Promise.all([
@@ -98,8 +115,9 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
     }
     const worktrees = await listWorktreePaths(git, from)
     const linkedWorktrees = worktrees.filter((path) => path !== from && path !== repo.path)
-    const inside = deps.processes ? await findProcessesInside(deps.processes, [from]) : new Map()
-    const processes = inside.get(from) ?? []
+    const folders = [from, ...siblings]
+    const inside = deps.processes ? await findProcessesInside(deps.processes, folders) : new Map()
+    const processes = folders.flatMap((folder) => inside.get(folder) ?? [])
     if (processes.length > 0) {
       blockers.push('process-inside')
     }
@@ -111,6 +129,7 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
       blockers,
       processes,
       linkedWorktrees,
+      worktreesDir: siblings[0] ?? null,
       claudeProjectDir: (await pathExists(claude)) ? claude : null
     }
   }
@@ -125,19 +144,21 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
       throw new Error(`Not moved: ${current.blockers.join(', ')}`)
     }
     const { from, to } = current
-    const repo = deps.getRepo(repoId)
+    const moves: [string, string][] = [[from, to]]
+    if (current.worktreesDir) {
+      moves.push([current.worktreesDir, worktreesDirOf(to)])
+    }
     await stopWatchers([from, ...current.linkedWorktrees])
     await mkdir(dirname(to), { recursive: true })
-    await rename(from, to)
-    // Orca, shells and scripts that still name the old path keep working through it.
-    await symlink(to, from)
-    if (repo && repo.path !== from && !(await pathExists(repo.path))) {
-      await symlink(to, repo.path)
+    for (const [old, next] of moves) {
+      await rename(old, next)
+      // Orca, shells and scripts that still name the old path keep working through it.
+      await symlink(next, old)
     }
-    const moved = current.linkedWorktrees.map((path) =>
-      path.startsWith(`${from}/`) ? join(to, path.slice(from.length + 1)) : path
+    await git(
+      ['worktree', 'repair', ...current.linkedWorktrees.map((path) => remap(path, moves))],
+      to
     )
-    await git(['worktree', 'repair', ...moved], to)
     let claudeProjectDirMoved = false
     if (current.claudeProjectDir && !(await pathExists(claudeDir(to)))) {
       await rename(current.claudeProjectDir, claudeDir(to))
@@ -151,6 +172,7 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
       from,
       to,
       movedAt: (deps.now ?? Date.now)(),
+      worktreesDirMoved: current.worktreesDir !== null,
       claudeProjectDirMoved
     }
     await deps.journal.update((data) => void data.adoptions.push(record))
@@ -166,24 +188,25 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
     if (link !== record.to) {
       throw new Error('The old path is no longer Pod’s link to the repository')
     }
-    const inside = deps.processes
-      ? await findProcessesInside(deps.processes, [record.to])
-      : new Map()
-    if ((inside.get(record.to) ?? []).length > 0) {
+    const moves: [string, string][] = [[record.to, record.from]]
+    if (record.worktreesDirMoved) {
+      moves.push([worktreesDirOf(record.to), worktreesDirOf(record.from)])
+    }
+    const folders = moves.map(([current]) => current)
+    const inside = deps.processes ? await findProcessesInside(deps.processes, folders) : new Map()
+    if (folders.some((folder) => (inside.get(folder) ?? []).length > 0)) {
       throw new Error('Not moved back: processes are running inside the repository')
     }
     const worktrees = await listWorktreePaths(git, record.to)
     await stopWatchers(worktrees)
-    await unlink(record.from)
-    await rename(record.to, record.from)
-    const back = worktrees
-      .filter((path) => path !== record.to)
-      .map((path) =>
-        path.startsWith(`${record.to}/`)
-          ? join(record.from, path.slice(record.to.length + 1))
-          : path
-      )
-    await git(['worktree', 'repair', ...back], record.from)
+    for (const [current, previous] of moves) {
+      if ((await readlink(previous).catch(() => null)) === current) {
+        await unlink(previous)
+        await rename(current, previous)
+      }
+    }
+    const linked = worktrees.filter((path) => path !== record.to)
+    await git(['worktree', 'repair', ...linked.map((path) => remap(path, moves))], record.from)
     const oldClaude = claudeDir(record.from)
     if (
       record.claudeProjectDirMoved &&
