@@ -108,6 +108,7 @@ describe('sandbox OAuth account selection', () => {
   it('switches with the routed account at once instead of serving the old one from memory', async () => {
     let home = '/profiles/a'
     const source = createClaudeOAuthSandboxCredentials({
+      allowed: () => true,
       target: () => resolveMacClaudeLoginTarget({ router: { selectedHome: () => home }, env: {} }),
       read: async (target) => item(`fake-token-for-${target.configDir}`, Date.now() + 3_600_000)
     })
@@ -128,6 +129,7 @@ describe('sandbox OAuth launch binding', () => {
       item(`fake-token-for-${target.configDir ?? 'system'}`, Date.now() + 3_600_000)
     )
     const source = createClaudeOAuthSandboxCredentials({
+      allowed: () => true,
       target: () =>
         resolveMacClaudeLoginTarget({
           router: {
@@ -193,6 +195,7 @@ describe('sandbox OAuth source footprint', () => {
     try {
       const reads = vi.fn(async () => item('fake-token', Date.now() + 3_600_000))
       const source = createClaudeOAuthSandboxCredentials({
+        allowed: () => true,
         target: () => ({ account: 'system', configDir: null }),
         read: reads
       })
@@ -211,6 +214,7 @@ describe('sandbox OAuth source footprint', () => {
   it('never calls a token endpoint or any network, even for expired, refused or missing logins', async () => {
     keychainRead.mockResolvedValue(item('fake-expired-token', 1))
     const source = createClaudeOAuthSandboxCredentials({
+      allowed: () => true,
       target: () => ({ account: 'system', configDir: null })
     })
     await expect(source.authHeaders(scope)).rejects.toThrow(SandboxCredentialError)
