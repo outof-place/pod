@@ -36,7 +36,7 @@ export type TranscriptPaneOptions = {
   paneRootPid?: number
   onShellForegroundProof?: () => void
   /** A local daemon's settled snapshot of the pane, which lets main's own model go dormant. */
-  settledDaemonSnapshot?: () => PtyProviderBufferSnapshot
+  settledDaemonSnapshot?: () => PtyProviderBufferSnapshot | Promise<PtyProviderBufferSnapshot>
 }
 
 export async function createTranscriptPane(
@@ -102,7 +102,7 @@ export async function createTranscriptPane(
       ? {
           canProvideSettledBufferSnapshot: () => true,
           hasRendererSerializer: () => true,
-          serializeProviderBuffer: async () => options.settledDaemonSnapshot?.() ?? null
+          serializeProviderBuffer: async () => (await options.settledDaemonSnapshot?.()) ?? null
         }
       : {}),
     ...(options.shellForegroundProven !== undefined
