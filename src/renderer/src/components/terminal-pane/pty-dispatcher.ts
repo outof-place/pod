@@ -56,6 +56,8 @@ export type PtyDataMeta = {
   background?: boolean
   /** Main dropped this PTY's buffered output at the pending cap; repaint from the main-owned snapshot, not the live stream. */
   droppedOutput?: boolean
+  /** Parse once: main's model parses this chunk for a main-fed native view; observers run, xterm skips it. */
+  viewFedElsewhere?: boolean
 }
 
 /** Sidecar PTY-data observers, invoked AFTER the primary handler so a side-effect-only watcher can't delay xterm rendering. */
@@ -119,6 +121,7 @@ function handleDispatchedPtyData(payload: {
   background?: boolean
   droppedOutput?: boolean
   sidecarOnly?: boolean
+  viewFedElsewhere?: boolean
 }): void {
   const chars = payload.rawLength ?? payload.data.length
   if (payload.sidecarOnly === true) {
@@ -145,6 +148,10 @@ function handleDispatchedPtyData(payload: {
   if (payload.droppedOutput === true) {
     meta ??= {}
     meta.droppedOutput = true
+  }
+  if (payload.viewFedElsewhere === true) {
+    meta ??= {}
+    meta.viewFedElsewhere = true
   }
   const dispatch = (): void => {
     if (isPtyDataHandlerShutdownPending(payload.id)) {

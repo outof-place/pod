@@ -10,6 +10,11 @@
  * PTY's hidden bytes for sidecars only, and the view stays gated.
  */
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import {
+  clearAllRendererPtyViewFedElsewhere,
+  clearRendererPtyViewFedElsewhere,
+  isRendererPtyViewFedElsewhere
+} from './pty-view-fed-elsewhere-state'
 
 export type HiddenPtyDeliveryGateSettings = Pick<
   GlobalSettings,
@@ -101,20 +106,33 @@ export function isHiddenRendererPtyViewGated(
   return isHiddenPtyDeliveryGateEnabled(settings) && hiddenRendererPtys.has(id)
 }
 
-/** How main delivers a PTY's bytes to the renderer; the one owner of that decision:
+/** How main delivers a PTY chunk to the renderer; the one owner of that decision:
  *  - 'drop': hidden view, no sidecar wants the bytes; the view restores from the model on reveal.
  *  - 'sidecarsOnly': hidden view, sidecars still get the bytes; the view skips them.
- *  - 'parse': the view parses the bytes.
- *  Main's model owns a chunk's query replies unless its delivery is 'parse'. Delivery stamps
- *  each chunk with the mode it had at ingestion, so a later flip cannot move that ownership. */
-export type RendererPtyViewDelivery = 'parse' | 'sidecarsOnly' | 'drop'
+ *  - 'skipXterm': parse once; the view runs its observers, its xterm skips the bytes.
+ *  - 'parse': the view's xterm parses the bytes.
+ *  Main's model answers a chunk's queries unless its delivery is 'parse'. Delivery stamps
+ *  queued bytes with the gated mode they had at ingestion; the fed-elsewhere set only flips
+ *  while nothing is queued, so it is a per-entry stamp too. */
+export type RendererPtyViewDelivery = 'parse' | 'skipXterm' | 'sidecarsOnly' | 'drop'
 
 export function rendererPtyViewDelivery(
   id: string,
-  settings: HiddenPtyDeliveryGateSettings | null | undefined
+  settings:
+    | (HiddenPtyDeliveryGateSettings & Partial<Pick<GlobalSettings, 'terminalModelQueryAuthority'>>)
+    | null
+    | undefined
 ): RendererPtyViewDelivery {
   if (isHiddenRendererPtyViewGated(id, settings)) {
     return deliveryInterestRendererPtys.has(id) ? 'sidecarsOnly' : 'drop'
+  }
+  // Why the authority switch: main's model must be the responder for bytes xterm never parses.
+  if (
+    isRendererPtyViewFedElsewhere(id) &&
+    isHiddenPtyDeliveryGateEnabled(settings) &&
+    settings?.terminalModelQueryAuthority !== false
+  ) {
+    return 'skipXterm'
   }
   return 'parse'
 }
@@ -160,6 +178,7 @@ export function recordHiddenRendererPtyDataDrop(
 export function resetRendererScopedHiddenPtyDeliveryState(): void {
   hiddenRendererPtys.clear()
   deliveryInterestRendererPtys.clear()
+  clearAllRendererPtyViewFedElsewhere()
   for (const id of runtimeOwnedHiddenRendererPtys) {
     hiddenRendererPtys.add(id)
   }
@@ -172,6 +191,7 @@ export function clearHiddenRendererPtyDeliveryState(id: string): void {
   runtimeOwnedHiddenRendererPtys.delete(id)
   deliveryInterestRendererPtys.delete(id)
   droppedSinceHiddenPtys.delete(id)
+  clearRendererPtyViewFedElsewhere(id)
 }
 
 export type HiddenRendererPtyDeliveryDebug = {
@@ -201,5 +221,6 @@ export function _resetHiddenRendererPtyDeliveryGateForTest(): void {
   runtimeOwnedHiddenRendererPtys.clear()
   deliveryInterestRendererPtys.clear()
   droppedSinceHiddenPtys.clear()
+  clearAllRendererPtyViewFedElsewhere()
   resetHiddenRendererPtyDeliveryDebugCounters()
 }

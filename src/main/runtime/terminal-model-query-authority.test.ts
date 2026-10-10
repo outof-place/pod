@@ -10,9 +10,16 @@ import {
 } from './terminal-model-query-authority'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
+  clearHiddenRendererPtyDeliveryState,
   markHiddenRendererPty,
+  rendererPtyViewDelivery,
+  resetRendererScopedHiddenPtyDeliveryState,
   setRendererPtyDeliveryInterest
 } from '../ipc/pty-hidden-delivery-gate'
+import {
+  applyRendererPtyViewFedElsewhere,
+  requestRendererPtyViewFedElsewhere
+} from '../ipc/pty-view-fed-elsewhere-state'
 
 const ALL_ON = {
   terminalMainSideEffectAuthority: true,
@@ -136,5 +143,69 @@ describe('native-Windows ConPTY spawn record', () => {
     expect(isNativeWindowsConptyPty('pty-2')).toBe(false)
     clearNativeWindowsConptyPty('pty-1')
     expect(isNativeWindowsConptyPty('pty-1')).toBe(false)
+  })
+})
+
+describe('parse once: a view fed elsewhere', () => {
+  const answers = (ptyId: string, settings = ALL_ON): boolean =>
+    shouldModelAnswerHiddenPtyQueries({ ptyId, settings, hasRemoteViewSubscriber: false })
+
+  it('makes main the responder for a visible PTY whose xterm skips its bytes', async () => {
+    expect(rendererPtyViewDelivery('pty-v', ALL_ON)).toBe('parse')
+    expect(answers('pty-v')).toBe(false)
+    await requestRendererPtyViewFedElsewhere('pty-v', true, true)
+    expect(rendererPtyViewDelivery('pty-v', ALL_ON)).toBe('skipXterm')
+    expect(answers('pty-v')).toBe(true)
+    // Without main as responder xterm keeps parsing: double parse, but replies stay right.
+    const noAuthority = { ...ALL_ON, terminalModelQueryAuthority: false }
+    expect(rendererPtyViewDelivery('pty-v', noAuthority)).toBe('parse')
+    expect(answers('pty-v', noAuthority)).toBe(false)
+    expect(
+      shouldModelAnswerHiddenPtyQueries({
+        ptyId: 'pty-v',
+        settings: ALL_ON,
+        hasRemoteViewSubscriber: true
+      })
+    ).toBe(false)
+  })
+
+  it('changes only at a delivery-batch boundary, and settles the request there', async () => {
+    let applied = false
+    void requestRendererPtyViewFedElsewhere('pty-b', true, false).then(() => (applied = true))
+    expect(answers('pty-b')).toBe(false)
+    await Promise.resolve()
+    expect(applied).toBe(false)
+    applyRendererPtyViewFedElsewhere('pty-b')
+    await Promise.resolve()
+    expect(applied).toBe(true)
+    expect(answers('pty-b')).toBe(true)
+    void requestRendererPtyViewFedElsewhere('pty-b', false, false)
+    expect(answers('pty-b')).toBe(true)
+    applyRendererPtyViewFedElsewhere('pty-b')
+    expect(answers('pty-b')).toBe(false)
+  })
+
+  it('settles every pending request when the PTY or the renderer state clears', async () => {
+    const settled: string[] = []
+    void requestRendererPtyViewFedElsewhere('pty-c', true, false).then(() => settled.push('c1'))
+    void requestRendererPtyViewFedElsewhere('pty-c', false, false).then(() => settled.push('c2'))
+    void requestRendererPtyViewFedElsewhere('pty-r', true, false).then(() => settled.push('r'))
+    clearHiddenRendererPtyDeliveryState('pty-c')
+    resetRendererScopedHiddenPtyDeliveryState()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(settled.sort()).toEqual(['c1', 'c2', 'r'])
+  })
+
+  it('leaves a gated PTY to the drop and sidecar paths, one mode at a time', async () => {
+    await requestRendererPtyViewFedElsewhere('pty-g', true, true)
+    markHiddenRendererPty('pty-g')
+    expect(rendererPtyViewDelivery('pty-g', ALL_ON)).toBe('drop')
+    setRendererPtyDeliveryInterest('pty-g', true)
+    expect(rendererPtyViewDelivery('pty-g', ALL_ON)).toBe('sidecarsOnly')
+    expect(answers('pty-g')).toBe(true)
+    resetRendererScopedHiddenPtyDeliveryState()
+    expect(rendererPtyViewDelivery('pty-g', ALL_ON)).toBe('parse')
+    expect(answers('pty-g')).toBe(false)
   })
 })

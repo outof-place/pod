@@ -9,6 +9,8 @@ const PAUSED_TRANSFORM = 'translateX(-100000px)'
 const PAUSE_DELAY_MS = 200
 // Bounds how long a hiding native view waits on xterm's repaint (DEC 2026 can defer it).
 const REPAINT_TIMEOUT_MS = 250
+// Bounds how long a hiding native view waits on a detached xterm catching up from main.
+const REATTACH_TIMEOUT_MS = 1_000
 
 // Terminals whose screen sits out of view under a native surface.
 const pausedUnderNativeView = new WeakSet<object>()
@@ -17,6 +19,14 @@ const pausedUnderNativeView = new WeakSet<object>()
 // screen that stays out of view; they skip these terminals (full repaint on resume instead).
 export function isXtermPausedUnderNativeView(terminal: unknown): boolean {
   return typeof terminal === 'object' && terminal !== null && pausedUnderNativeView.has(terminal)
+}
+
+// Parse once: how a paused xterm leaves the PTY byte stream and catches up again.
+export type NativeTerminalXtermFeed = {
+  // False when xterm keeps parsing (parse once is off, or main cannot take the bytes).
+  detach: () => boolean
+  // Resolves once xterm holds the current screen again.
+  reattach: () => Promise<void>
 }
 
 export type NativeTerminalRenderPause = {
@@ -28,6 +38,8 @@ export type NativeTerminalRenderPause = {
   resume: (onRepainted: () => void) => void
   // True while xterm's own screen may not show the current buffer.
   isStale: () => boolean
+  // While paused, xterm leaves the byte stream through `feed` (null: it keeps parsing).
+  setFeed: (feed: NativeTerminalXtermFeed | null) => void
   dispose: () => void
 }
 
@@ -39,6 +51,22 @@ export function createNativeTerminalRenderPause(
   let pauseTimer: ReturnType<typeof setTimeout> | null = null
   let repaintTimer: ReturnType<typeof setTimeout> | null = null
   let renderListener: IDisposable | null = null
+  let feed: NativeTerminalXtermFeed | null = null
+  let detachedFeed: NativeTerminalXtermFeed | null = null
+  // Why: a newer pause or resume supersedes a resume still waiting on its reattach.
+  let resumeGeneration = 0
+
+  const detachFeed = (): void => {
+    if (feed && !detachedFeed && feed.detach()) {
+      detachedFeed = feed
+    }
+  }
+
+  const reattachFeed = (): Promise<void> => {
+    const detached = detachedFeed
+    detachedFeed = null
+    return detached ? detached.reattach() : Promise.resolve()
+  }
 
   const screen = (): HTMLElement | null =>
     terminal.element?.querySelector<HTMLElement>('.xterm-screen') ?? null
@@ -54,6 +82,7 @@ export function createNativeTerminalRenderPause(
     }
     renderListener?.dispose()
     renderListener = null
+    resumeGeneration += 1
   }
 
   const unpause = (): void => {
@@ -79,6 +108,7 @@ export function createNativeTerminalRenderPause(
           element.style.transform = PAUSED_TRANSFORM
           pausedUnderNativeView.add(terminal)
           phase = 'paused'
+          detachFeed()
         }
       }, PAUSE_DELAY_MS)
     },
@@ -88,22 +118,50 @@ export function createNativeTerminalRenderPause(
         return
       }
       phase = 'repainting'
-      unpause()
-      const finish = (): void => {
-        cancelPending()
-        phase = 'live'
-        onRepainted()
+      const generation = resumeGeneration
+      const repaint = (): void => {
+        if (generation !== resumeGeneration) {
+          return
+        }
+        unpause()
+        const finish = (): void => {
+          cancelPending()
+          phase = 'live'
+          onRepainted()
+        }
+        renderListener = terminal.onRender(finish)
+        repaintTimer = setTimeout(finish, REPAINT_TIMEOUT_MS)
+        // Still paused until the observer fires, so this only guarantees a full repaint then.
+        terminal.refresh(0, terminal.rows - 1)
       }
-      renderListener = terminal.onRender(finish)
-      repaintTimer = setTimeout(finish, REPAINT_TIMEOUT_MS)
-      // Still paused until the observer fires, so this only guarantees a full repaint then.
-      terminal.refresh(0, terminal.rows - 1)
+      if (!detachedFeed) {
+        repaint()
+        return
+      }
+      // The native view keeps covering the pane until xterm caught up, then the repaint.
+      const caughtUp = reattachFeed().catch(() => {})
+      const timeout = new Promise<void>((resolve) => setTimeout(resolve, REATTACH_TIMEOUT_MS))
+      void Promise.race([caughtUp, timeout]).then(repaint)
     },
     isStale: () => phase !== 'live',
+    setFeed: (next) => {
+      if (next === feed) {
+        return
+      }
+      feed = next
+      if (detachedFeed && detachedFeed !== next) {
+        void reattachFeed()
+      }
+      if (phase === 'paused') {
+        detachFeed()
+      }
+    },
     dispose: () => {
       cancelPending()
       unpause()
       phase = 'live'
+      feed = null
+      void reattachFeed()
     }
   }
   return pause

@@ -11,6 +11,10 @@ import { setPaneFitWebglAttachHook } from './pane-fit-webgl-attach-signal'
 import { repairPaneWebglCanvasDprMismatch } from './terminal-canvas-dpr-repair'
 import { recordPaneWebglContextLoss } from './pane-webgl-context-loss-policy'
 import { presentPaneViewport } from './pane-viewport-present'
+import {
+  isPaneWebglSuspendedUnderNativeView,
+  rememberPaneForWebglSuspension
+} from './pane-webgl-native-suspension'
 
 export {
   presentPaneViewport,
@@ -240,6 +244,7 @@ export function attachWebglAfterFitIfMissing(pane: ManagedPaneInternal): void {
     !pane.webglAddon &&
     pane.gpuRenderingEnabled &&
     !pane.webglAttachmentDeferred &&
+    !isPaneWebglSuspendedUnderNativeView(pane) &&
     !pane.webglDisabledAfterContextLoss &&
     !pane.webglAttachFailedSinceRecovery &&
     shouldUseTerminalWebgl(pane)
@@ -257,11 +262,13 @@ setPaneFitWebglAttachHook((pane) => {
 })
 
 export function attachWebgl(pane: ManagedPaneInternal): void {
+  rememberPaneForWebglSuspension(pane)
   if (
     !ENABLE_WEBGL_RENDERER ||
     !pane.gpuRenderingEnabled ||
     !shouldUseTerminalWebgl(pane) ||
     pane.webglAttachmentDeferred ||
+    isPaneWebglSuspendedUnderNativeView(pane) ||
     pane.webglDisabledAfterContextLoss ||
     pane.webglAttachFailedSinceRecovery
   ) {

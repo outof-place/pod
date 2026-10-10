@@ -56,6 +56,7 @@ import { bindProviderListeners } from './provider/bind-listeners'
 import { installSessionSshOutputIntake } from './delivery/ssh-intake'
 import { installPtySerializeBufferIpc } from './ipc/serialize-buffer'
 import { installPtyResizeVisibilityIpc } from './ipc/resize-visibility'
+import { installRendererPtyViewFedElsewhereIpc } from './ipc/view-fed-elsewhere'
 import { adoptStablePane } from './pane/adopt-stable'
 import { getPtyIpc } from '../pty-host-bindings'
 import {
@@ -286,6 +287,7 @@ export function registerPtyHandlers(
   })
   installPtyWriteIpcHandlers({ mainWindow, runtime })
   installPtyResizeVisibilityIpc(session)
+  installRendererPtyViewFedElsewhereIpc(session)
   installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise })
   installPtyCodexSharedServerIpcHandler({ getLocalPtyProviderStartupPromise })
   installPtyClaudeOldTerminalIpcHandler({ getLocalPtyProviderStartupPromise })
