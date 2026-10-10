@@ -6,19 +6,26 @@ import {
   enableNativeTerminal,
   findNativeSurfaceForPane,
   isNativeSurfaceHidden,
+  nativeScreenText,
   nativeTerminalDebug,
   xtermScreenTransform
 } from './helpers/native-terminal-debug'
 import {
-  addTerminalPane,
   cpuMsBetween,
   openTerminalTab,
   usageSnapshot,
-  type CpuMsByKind
+  type CpuMsByKind,
+  type UsageSnapshot
 } from './helpers/native-terminal-process-usage'
+import {
+  setNativeTerminalParseOnce,
+  splitParseOncePane,
+  waitForNativeShellReady
+} from './helpers/native-terminal-parse-once'
 import {
   focusActiveTerminalInput,
   sendToTerminal,
+  splitActiveTerminalPane,
   waitForActivePanePtyId,
   waitForActiveTerminalManager,
   waitForTerminalOutput
@@ -34,19 +41,21 @@ import {
 import { summarizeBenchmarkSamples } from '../../config/scripts/benchmark-sample-summary.mjs'
 
 // Same workloads with experimentalNativeTerminal off (xterm.js WebGL), on (Ghostty/Metal fed by
-// main), and on with main's feed off (fed by the renderer mirror): an output flood,
-// keystroke-to-echo latency, and idle CPU with four panes. Opt-in, not a gate.
+// main), on with main's feed off (fed by the renderer mirror), and on with parse once (xterm off
+// the byte stream under the view): an output flood, keystroke-to-echo latency, and idle CPU and
+// memory with eight panes. Opt-in, not a gate.
 //   ORCA_NATIVE_TERMINAL_BENCH=1 SKIP_BUILD=1 pnpm run test:e2e tests/e2e/native-terminal-ghostty-perf.spec.ts
 
-type Mode = 'xterm' | 'native' | 'native-mirror'
+type Mode = 'xterm' | 'native' | 'native-mirror' | 'native-parse-once'
 
 const enabled = process.env.ORCA_NATIVE_TERMINAL_BENCH === '1'
 const rounds = Number(process.env.ORCA_NATIVE_TERMINAL_BENCH_ROUNDS ?? 5)
 const floodLines = Number(process.env.ORCA_NATIVE_TERMINAL_BENCH_FLOOD_LINES ?? 300_000)
 const keyCount = Number(process.env.ORCA_NATIVE_TERMINAL_BENCH_KEYS ?? 30)
 const idleMs = Number(process.env.ORCA_NATIVE_TERMINAL_BENCH_IDLE_MS ?? 10_000)
-const IDLE_PANES = 4
-const SETTLE_MS = 3_000
+const idlePanes = Number(process.env.ORCA_NATIVE_TERMINAL_BENCH_IDLE_PANES ?? 8)
+// Why past 5 s: parse once suspends WebGL under a native view that long after the view shows.
+const SETTLE_MS = 6_000
 const KEY_GAP_MS = 40
 const FLOOD_TIMEOUT_MS = 120_000
 const KEY_TIMEOUT_MS = 2_000
@@ -90,6 +99,10 @@ type ModeSamples = {
   flood: FloodSample[]
   keys: KeySample[]
   idleCpuMsPerS: CpuMsByKind[]
+  // Footprint per process kind with the idle panes open, in MiB.
+  idleMemoryMiB: CpuMsByKind[]
+  // Idle panes that still hold a WebGL context.
+  idleWebglPanes: number[]
   webgl: boolean[]
   keyMirrorWrites: number[]
 }
@@ -126,7 +139,27 @@ async function mainFeedStats(
 }
 
 function emptySamples(): ModeSamples {
-  return { flood: [], keys: [], idleCpuMsPerS: [], webgl: [], keyMirrorWrites: [] }
+  return {
+    flood: [],
+    keys: [],
+    idleCpuMsPerS: [],
+    idleMemoryMiB: [],
+    idleWebglPanes: [],
+    webgl: [],
+    keyMirrorWrites: []
+  }
+}
+
+function footprintMiB(snapshot: UsageSnapshot): CpuMsByKind {
+  const byKind: CpuMsByKind = { main: 0, renderer: 0, gpu: 0, total: 0 }
+  for (const process of snapshot.processes) {
+    const mib = process.usage.footprint / (1024 * 1024)
+    byKind.total += mib
+    if (process.kind !== 'other') {
+      byKind[process.kind] += mib
+    }
+  }
+  return byKind
 }
 
 function scaleCpu(cpu: CpuMsByKind, factor: number): CpuMsByKind {
@@ -145,11 +178,34 @@ async function armXtermWatch(
   ptyId: string,
   marker: string,
   waitForPaint: boolean,
-  timeoutMs: number
+  timeoutMs: number,
+  watchStream = false
 ): Promise<string> {
   const key = `__orcaNativePerfWatch_${randomUUID()}`
   await page.evaluate(
-    ({ id, watchKey, line, paint, timeout }) => {
+    ({ id, watchKey, line, paint, timeout, stream }) => {
+      // Parse once: xterm never sees the marker, so the run ends the watch once the renderer
+      // has received it (its observers ran) and the native view shows it.
+      let tail = ''
+      let stopStream = (): void => {}
+      const streamed = new Promise<void>((resolve) => {
+        if (!stream) {
+          resolve()
+          return
+        }
+        stopStream = window.api.pty.onData((payload) => {
+          if (payload.id !== id) {
+            return
+          }
+          const text = tail + payload.data
+          if (text.includes(line)) {
+            stopStream()
+            resolve()
+          }
+          tail = text.slice(-line.length)
+        })
+      })
+      Reflect.set(window, `${watchKey}:streamed`, streamed)
       const pane = [...(window.__paneManagers?.values() ?? [])]
         .flatMap((manager) => manager.getPanes())
         .find((candidate) => candidate.container.dataset.ptyId === id)
@@ -183,6 +239,8 @@ async function armXtermWatch(
           }
           resolve(result)
         }
+        Reflect.set(window, `${watchKey}:finish`, finish)
+        cleanups.push(() => stopStream())
         let frame = requestAnimationFrame(function tick() {
           result.frames += 1
           frame = requestAnimationFrame(tick)
@@ -215,13 +273,30 @@ async function armXtermWatch(
       })
       Reflect.set(window, watchKey, done)
     },
-    { id: ptyId, watchKey: key, line: marker, paint: waitForPaint, timeout: timeoutMs }
+    {
+      id: ptyId,
+      watchKey: key,
+      line: marker,
+      paint: waitForPaint,
+      timeout: timeoutMs,
+      stream: watchStream
+    }
   )
   return key
 }
 
 function numberOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function finishXtermWatchOnceStreamed(page: Page, key: string): Promise<void> {
+  return page.evaluate(async (watchKey) => {
+    await Reflect.get(window, `${watchKey}:streamed`)
+    const finish: unknown = Reflect.get(window, `${watchKey}:finish`)
+    if (typeof finish === 'function') {
+      finish()
+    }
+  }, key)
 }
 
 async function readXtermWatch(page: Page, key: string): Promise<XtermWatch> {
@@ -328,11 +403,15 @@ async function openBenchmarkPane(
   mode: Mode
 ): Promise<{ tabId: string; ptyId: string; surfaceId: number | null }> {
   await nativeTerminalDebug(app, 'mainFeed', [mode !== 'native-mirror'])
+  await setNativeTerminalParseOnce(page, mode === 'native-parse-once')
   await enableNativeTerminal(page, mode !== 'xterm')
   const tabId = await openTerminalTab(page)
   const ptyId = await waitForActivePanePtyId(page, 30_000)
-  await waitForPtyShellEcho(page, ptyId, 30_000)
   const surfaceId = await findNativeSurfaceForPane(page, ptyId, mode === 'xterm' ? 1_000 : 15_000)
+  // Parse once keeps the shell's output out of xterm, so readiness reads the native screen.
+  await (mode === 'native-parse-once' && surfaceId !== null
+    ? waitForNativeShellReady(page, app, ptyId, surfaceId)
+    : waitForPtyShellEcho(page, ptyId, 30_000))
   // The xterm baseline must not have a native view; the native run must have one, on screen.
   expect(surfaceId === null).toBe(mode === 'xterm')
   if (surfaceId !== null) {
@@ -347,11 +426,19 @@ async function measureFlood(
   page: Page,
   app: ElectronApplication,
   ptyId: string,
-  surfaceId: number | null
+  surfaceId: number | null,
+  parseOnce: boolean
 ): Promise<FloodSample> {
   const id = randomUUID()
   const marker = `FLOOD-${id}`
-  const watch = await armXtermWatch(page, ptyId, marker, surfaceId === null, FLOOD_TIMEOUT_MS)
+  const watch = await armXtermWatch(
+    page,
+    ptyId,
+    marker,
+    surfaceId === null,
+    FLOOD_TIMEOUT_MS,
+    parseOnce
+  )
   const writesBefore = await mirrorWrites(app)
   const feedBefore = await mainFeedStats(app)
   const before = await usageSnapshot(app)
@@ -361,6 +448,10 @@ async function measureFlood(
       ? null
       : watchNativeScreen(app, surfaceId, marker, FLOOD_POLL_MS, FLOOD_TIMEOUT_MS)
   await sendToTerminal(page, ptyId, `seq 1 ${floodLines}; printf 'FLOOD-%s\\n' ${id}\r`)
+  if (parseOnce && native) {
+    await native
+    await finishXtermWatchOnceStreamed(page, watch)
+  }
   const xterm = await readXtermWatch(page, watch)
   const shownAt = native ? await native : xterm.paintedAt
   const after = await usageSnapshot(app)
@@ -391,7 +482,11 @@ async function measureKeystrokes(
   const arrivalsPath = testInfo.outputPath(`arrivals-${runId}.jsonl`)
   writeTypingEchoProbeScript(scriptPath, runId, arrivalsPath)
   await sendToTerminal(page, ptyId, `${nodeTerminalCommand([scriptPath])}\r`)
-  await waitForTerminalOutput(page, typingProbeReadyMarker(runId), 15_000)
+  await (surfaceId === null
+    ? waitForTerminalOutput(page, typingProbeReadyMarker(runId), 15_000)
+    : expect
+        .poll(async () => nativeScreenText(app, surfaceId), { timeout: 15_000 })
+        .toContain(typingProbeReadyMarker(runId)))
   if (surfaceId === null) {
     await focusActiveTerminalInput(page)
   }
@@ -445,15 +540,81 @@ async function measureKeystrokes(
   return { keys, mirrorWrites: keyWrites }
 }
 
-async function measureIdle(page: Page, app: ElectronApplication, mode: Mode): Promise<CpuMsByKind> {
-  for (let pane = 1; pane < IDLE_PANES; pane += 1) {
-    await addTerminalPane(page, app, mode === 'xterm' ? 'xterm' : 'native', pane)
+async function activatePaneForPty(page: Page, ptyId: string): Promise<void> {
+  await page.evaluate((id) => {
+    for (const manager of window.__paneManagers?.values() ?? []) {
+      const pane = manager.getPanes().find((candidate) => candidate.container.dataset.ptyId === id)
+      if (pane) {
+        manager.setActivePane(pane.id, { focus: false })
+        return
+      }
+    }
+  }, ptyId)
+  await expect.poll(async () => waitForActivePanePtyId(page)).toBe(ptyId)
+}
+
+// Splits the active pane; resolves with the new pane's PTY once its shell runs (and, for the
+// native modes, once its native view is on screen).
+async function splitBenchmarkPane(
+  page: Page,
+  app: ElectronApplication,
+  mode: Mode,
+  direction: 'vertical' | 'horizontal'
+): Promise<string> {
+  if (mode === 'native-parse-once') {
+    return (await splitParseOncePane(page, app, direction)).ptyId
+  }
+  const previous = await waitForActivePanePtyId(page)
+  await splitActiveTerminalPane(page, direction)
+  await expect.poll(async () => waitForActivePanePtyId(page)).not.toBe(previous)
+  const ptyId = await waitForActivePanePtyId(page)
+  await waitForPtyShellEcho(page, ptyId, 30_000)
+  if (mode !== 'xterm') {
+    const surfaceId = await findNativeSurfaceForPane(page, ptyId)
+    if (surfaceId === null) {
+      throw new Error(`no native terminal surface shows the new pane ${ptyId}`)
+    }
+    await expect.poll(async () => isNativeSurfaceHidden(app, surfaceId)).toBe(false)
+  }
+  return ptyId
+}
+
+function activeTabWebglPanes(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const tabId = window.__store?.getState().activeTabId
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    return (manager?.getPanes() ?? []).filter((pane) => manager?.hasWebglRenderer(pane.id)).length
+  })
+}
+
+async function measureIdle(
+  page: Page,
+  app: ElectronApplication,
+  mode: Mode
+): Promise<{ cpu: CpuMsByKind; memory: CpuMsByKind; webglPanes: number }> {
+  // A balanced grid: every pane splits once per level, the direction alternating by level.
+  const ptyIds = [await waitForActivePanePtyId(page)]
+  for (let level = 0; ptyIds.length < idlePanes; level += 1) {
+    // Why a copy: the split appends to the list this level walks.
+    for (const target of ptyIds.slice()) {
+      if (ptyIds.length >= idlePanes) {
+        break
+      }
+      await activatePaneForPty(page, target)
+      ptyIds.push(
+        await splitBenchmarkPane(page, app, mode, level % 2 === 0 ? 'vertical' : 'horizontal')
+      )
+    }
   }
   await page.waitForTimeout(SETTLE_MS)
   const before = await usageSnapshot(app)
   await page.waitForTimeout(idleMs)
   const after = await usageSnapshot(app)
-  return scaleCpu(cpuMsBetween(before, after), 1000 / (after.at - before.at))
+  return {
+    cpu: scaleCpu(cpuMsBetween(before, after), 1000 / (after.at - before.at)),
+    memory: footprintMiB(after),
+    webglPanes: await activeTabWebglPanes(page)
+  }
 }
 
 function summarize(values: number[]): ReturnType<typeof summarizeBenchmarkSamples> | null {
@@ -491,7 +652,9 @@ function summarizeMode(samples: ModeSamples): Record<string, unknown> {
     keyToPtyMs: summarize(
       samples.keys.flatMap((sample) => (sample.keyToPtyMs === null ? [] : [sample.keyToPtyMs]))
     ),
-    idleCpuMsPerS: summarizeCpu(samples.idleCpuMsPerS)
+    idleCpuMsPerS: summarizeCpu(samples.idleCpuMsPerS),
+    idleMemoryMiB: summarizeCpu(samples.idleMemoryMiB),
+    idleWebglPanes: samples.idleWebglPanes
   }
 }
 
@@ -504,7 +667,8 @@ test('native terminal vs xterm.js: output flood, keystroke echo, idle CPU', asyn
     ['rounds', rounds, 1],
     ['flood lines', floodLines, 1],
     ['keys', keyCount, 1],
-    ['idle ms', idleMs, 1000]
+    ['idle ms', idleMs, 1000],
+    ['idle panes', idlePanes, 1]
   ] as const) {
     if (!Number.isInteger(value) || value < minimum) {
       throw new Error(`Invalid native terminal benchmark ${name}: ${value}`)
@@ -528,35 +692,43 @@ test('native terminal vs xterm.js: output flood, keystroke echo, idle CPU', asyn
     .toBe(0)
   await installMirrorWriteCounter(electronApp)
 
-  const modes: Mode[] = ['xterm', 'native', 'native-mirror']
+  const modes: Mode[] = ['xterm', 'native', 'native-mirror', 'native-parse-once']
   const samples: Record<Mode, ModeSamples> = {
     xterm: emptySamples(),
     native: emptySamples(),
-    'native-mirror': emptySamples()
+    'native-mirror': emptySamples(),
+    'native-parse-once': emptySamples()
   }
   for (let round = 0; round < rounds; round += 1) {
     // Rotate the order so warm-up and thermal drift do not favor one mode.
     for (const mode of modes.map((_, index) => modes[(index + round) % modes.length])) {
       const { tabId, ptyId, surfaceId } = await openBenchmarkPane(orcaPage, electronApp, mode)
       samples[mode].webgl.push(await activePaneUsesWebgl(orcaPage))
-      samples[mode].flood.push(await measureFlood(orcaPage, electronApp, ptyId, surfaceId))
+      samples[mode].flood.push(
+        await measureFlood(orcaPage, electronApp, ptyId, surfaceId, mode === 'native-parse-once')
+      )
       const typed = await measureKeystrokes(orcaPage, electronApp, ptyId, surfaceId, testInfo)
       samples[mode].keys.push(...typed.keys)
       samples[mode].keyMirrorWrites.push(typed.mirrorWrites)
-      samples[mode].idleCpuMsPerS.push(await measureIdle(orcaPage, electronApp, mode))
+      const idle = await measureIdle(orcaPage, electronApp, mode)
+      samples[mode].idleCpuMsPerS.push(idle.cpu)
+      samples[mode].idleMemoryMiB.push(idle.memory)
+      samples[mode].idleWebglPanes.push(idle.webglPanes)
       await closeTab(orcaPage, tabId)
       await orcaPage.waitForTimeout(1_000)
     }
   }
   await nativeTerminalDebug(electronApp, 'mainFeed', [true])
+  await setNativeTerminalParseOnce(orcaPage, false)
 
   const summaries = {
     xterm: summarizeMode(samples.xterm),
     native: summarizeMode(samples.native),
-    'native-mirror': summarizeMode(samples['native-mirror'])
+    'native-mirror': summarizeMode(samples['native-mirror']),
+    'native-parse-once': summarizeMode(samples['native-parse-once'])
   }
   const report = {
-    config: { rounds, floodLines, keyCount, idleMs, idlePanes: IDLE_PANES },
+    config: { rounds, floodLines, keyCount, idleMs, idlePanes },
     ...summaries,
     samples
   }
