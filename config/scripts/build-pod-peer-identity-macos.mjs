@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// Fork-only (Pod): builds native/pod-peer-identity-macos, the one-app control socket's peer check.
+// Fork-only (Pod): builds native/pod-peer-identity-macos: the one-app control socket's peer check
+// and the browser pane's frame sender.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
 const repoRoot = path.resolve(import.meta.dirname, '../..')
-const source = path.join(repoRoot, 'native', 'pod-peer-identity-macos', 'src', 'peer_identity.c')
+const sourceDir = path.join(repoRoot, 'native', 'pod-peer-identity-macos', 'src')
+const sources = ['peer_identity.c', 'browser_frames.c'].map((file) => path.join(sourceDir, file))
 export const defaultOutputPath = path.join(
   repoRoot,
   'native',
@@ -47,8 +49,10 @@ execFileSync(
     'Security',
     '-framework',
     'CoreFoundation',
+    '-framework',
+    'IOSurface',
     '-lbsm',
-    source,
+    ...sources,
     '-o',
     outputPath
   ],
