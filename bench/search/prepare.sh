@@ -59,9 +59,16 @@ if [ -n "$og_sha" ]; then
   scheduled "$og_dir" "cargo build --release --locked -p ogd -p ogctl"
   scheduled "$og_dir/third_party/ripgrep" "cargo build --release --locked ${features[*]}"
   # Copied out of target/release: claude-acc's scheduler holds commands that run from there.
+  # Never cp over a binary in place: macOS kills new launches of an inode that was overwritten
+  # while it ran (a leftover ogd), so each copy goes to a temp name and is renamed into place.
   mkdir -p "$og_dir/bin"
-  cp "$og_dir/target/release/ogd" "$og_dir/target/release/ogctl" "$og_dir/bin/"
-  cp "$og_dir/third_party/ripgrep/target/release/rg" "$og_dir/bin/og"
+  install_binary() {
+    cp "$1" "$og_dir/bin/.$2.new"
+    mv -f "$og_dir/bin/.$2.new" "$og_dir/bin/$2"
+  }
+  install_binary "$og_dir/target/release/ogd" ogd
+  install_binary "$og_dir/target/release/ogctl" ogctl
+  install_binary "$og_dir/third_party/ripgrep/target/release/rg" og
   ogd="$og_dir/bin/ogd"
   ogctl="$og_dir/bin/ogctl"
   og="$og_dir/bin/og"

@@ -96,7 +96,13 @@ const parity = await collectSamples({
     }
     const result = JSON.parse(readFileSync(report, 'utf8'))
     rmSync(report)
-    return { exit: code, rg: result.rg, mismatches: result.mismatches, timings: result.timings }
+    return {
+      exit: code,
+      rg: result.rg,
+      mismatches: result.mismatches,
+      fallbacks: result.fallbacks ?? {},
+      timings: result.timings
+    }
   }
 })
 const suiteCaveats = []
@@ -108,12 +114,27 @@ if (parityOk.length < parity.length) {
 }
 const rgVersion = parityOk.find((sample) => sample.rg)?.rg ?? 'rg'
 const mismatched = parityOk.some((sample) => Object.keys(sample.mismatches ?? {}).length > 0)
+// ogd clips lines over 1 MiB. Pod's client declines a reply with a clipped line and asks rg
+// instead, so for such a query Pod users get rg's time, not the ogd row's.
+const fallbackLines = (label) =>
+  Math.max(
+    0,
+    ...parityOk.map((sample) => sample.fallbacks[label.replace(/^search /, '')]?.length ?? 0)
+  )
 for (const label of Object.keys(parityOk[0]?.timings ?? {})) {
   const id = `ogd.engine.${slug(label)}`
   const conditions = `engine level, ${options['parity-runs']} runs per invocation, ${invocations} invocations, ${inputs.searchRepo} at ${inputs.searchRepoSha.slice(0, 9)}`
-  const caveats = mismatched
-    ? ['The parity check found differing results in at least one invocation (see ogd.json).']
-    : []
+  const clipped = fallbackLines(label)
+  const caveats = [
+    ...(mismatched
+      ? ['The parity check found differing results in at least one invocation (see ogd.json).']
+      : []),
+    ...(clipped > 0
+      ? [
+          `ogd clipped ${clipped} line(s) over 1 MiB in this query's answer. Pod's client declines such a reply and rg answers, so in Pod this query takes rg's time; the ogd row times ogd's own clipped answer and has no comparison.`
+        ]
+      : [])
+  ]
   for (const engine of ['rg', 'ogd']) {
     metrics.push({
       id: `${id}.${engine}`,
@@ -133,7 +154,9 @@ for (const label of Object.keys(parityOk[0]?.timings ?? {})) {
       branch: 'pod/search-client'
     })
   }
-  comparisons.push({ baseline: `${id}.rg`, candidate: `${id}.ogd`, label: `engine: ${label}` })
+  if (clipped === 0) {
+    comparisons.push({ baseline: `${id}.rg`, candidate: `${id}.ogd`, label: `engine: ${label}` })
+  }
 }
 
 // ---------- in app ----------
