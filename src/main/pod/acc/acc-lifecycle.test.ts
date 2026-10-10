@@ -208,6 +208,17 @@ describe('claude-acc lifecycle', () => {
     expect(run).toHaveBeenCalledOnce()
   })
 
+  it("installs a 1.31 payload's Pod Menu.app as the menu helper", async () => {
+    const input = fixture()
+    mkdirSync(join(input.payloadDir, 'Pod Menu.app', 'Contents'), { recursive: true })
+    const run = fakeSetup(input)
+    await expect(runAccLifecycle(input, run)).resolves.toMatchObject({ status: 'installed' })
+    const args = run.mock.calls[0]![0].args ?? []
+    expect(args[args.indexOf('--app') + 1]).toBe(join(input.payloadDir, 'Pod Menu.app'))
+    // the v1 setup path: launchd agents in ~/Library/LaunchAgents, never Pod's SMAppService ones
+    expect(args).not.toContain('--pod-agents')
+  })
+
   it('dry run reports the command and runs nothing', async () => {
     const input = { ...fixture(), mode: 'dry-run' }
     const run = fakeSetup(input)
