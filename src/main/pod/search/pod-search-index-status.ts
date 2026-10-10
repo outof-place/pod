@@ -8,7 +8,7 @@ export type PodSearchIndexStatus = {
   state: string
   docs: number
   generation: number
-  /** False while ogd still waits for file events to settle; queries then fall back to rg. */
+  /** True only for a ready index with no pending file events; otherwise queries fall back to rg. */
   settled: boolean
   buildMs: number
 }
@@ -29,7 +29,9 @@ export async function readOgdIndexStatus(
         state: String(worktree.state),
         docs: Number(worktree.docs) || 0,
         generation: Number(worktree.generation) || 0,
-        settled: worktree.unsettled === null || worktree.unsettled === undefined,
+        settled:
+          worktree.state === 'ready' &&
+          (worktree.unsettled === null || worktree.unsettled === undefined),
         buildMs: Number(worktree.build_ms) || 0
       }
     }
