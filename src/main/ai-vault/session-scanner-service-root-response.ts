@@ -1,12 +1,17 @@
-import type { ChildProcess } from 'node:child_process'
-import type { AiVaultServiceClientOptions } from './session-scanner-service-client-state'
+import type {
+  AiVaultServiceClientOptions,
+  AiVaultServiceProcessFactory
+} from './session-scanner-service-client-state'
+
+// Typed through the client's factory, not node:child_process, whose imports @orca/process-host owns.
+type ScannerChild = ReturnType<AiVaultServiceProcessFactory>
 
 /** Sends a fresh roots snapshot to the child that asked, unless it has been replaced since. */
 export function answerAiVaultServiceRootRequest(
-  child: ChildProcess | null,
+  child: ScannerChild | null,
   id: number,
   options: Pick<AiVaultServiceClientOptions, 'init' | 'resolveSessionSearchRoots'>,
-  currentChild: () => ChildProcess | null
+  currentChild: () => ScannerChild | null
 ): void {
   const resolve = options.resolveSessionSearchRoots
   void Promise.resolve()
