@@ -9,8 +9,8 @@ const SECRET = 'c2FsdHlzYWx0eXNhbHR5c2FsdA=='
 
 // Real `/usr/bin/security` against a scratch keychain: items created by `security` itself trust it,
 // so nothing prompts, and the login keychain is never touched.
-// Why opt-in (POD_REAL_KEYCHAIN_TEST=1): create-keychain and delete-keychain rewrite the user's
-// keychain search list, and concurrent runs in several worktrees race on it.
+// Opt-in (POD_REAL_KEYCHAIN_TEST=1) because create-keychain and delete-keychain mutate the user's
+// keychain search list: run it only on CI or as a throwaway user, never on a developer's own login.
 describe.skipIf(process.platform !== 'darwin' || process.env.POD_REAL_KEYCHAIN_TEST !== '1')(
   'createMacSafeStorageKeychain',
   () => {
