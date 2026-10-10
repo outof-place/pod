@@ -1,6 +1,7 @@
 // Fork-only (Pod): OrbStack as runtime RPC, so the renderer, the CLI and the native shell share one API.
 import { defineMethod } from '../../runtime/rpc/core'
 import {
+  PodOrbstackAgentSandboxParams,
   PodOrbstackCreateParams,
   PodOrbstackDockerPinParams,
   PodOrbstackMachineParams,
@@ -70,12 +71,18 @@ export const POD_ORBSTACK_METHODS = [
     name: 'orbstack.delete',
     permission: 'host-admin',
     params: PodOrbstackWorktreeParams,
-    handler: (params) => service().remove(params.worktreeId)
+    handler: (params) => service().remove(params.worktreeId, params.kind)
   }),
   defineMethod({
     name: 'orbstack.pinDocker',
     permission: 'host-admin',
     params: PodOrbstackDockerPinParams,
     handler: (params) => service().setDockerPin(params.worktreeId, params.pinned)
+  }),
+  defineMethod({
+    name: 'orbstack.setAgentSandbox',
+    permission: 'host-admin',
+    params: PodOrbstackAgentSandboxParams,
+    handler: (params) => service().setAgentSandbox(params.worktreeId, params.enabled)
   })
 ]
