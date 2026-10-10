@@ -21,42 +21,36 @@ export function textSearchLimit(options: SearchOptions): number {
   )
 }
 
-export function buildOgdSearchRequest(
-  options: SearchOptions,
-  root: string
-): { fields: OgdMessage; hasGlobs: boolean } {
+/** The ogd `search` request that answers exactly what buildRgArgs asks ripgrep. */
+export function buildOgdSearchRequest(options: SearchOptions, root: string): OgdMessage {
   const includes = options.includePattern
     ? splitSearchGlobPatterns(options.includePattern, 'rg')
     : []
   const excludes = options.excludePattern
     ? splitSearchGlobPatterns(options.excludePattern, 'rg').map((glob) => `!${glob}`)
     : []
-  const limit = textSearchLimit(options)
   return {
-    fields: {
-      root,
-      pattern: options.query,
-      fixed: !options.useRegex,
-      // Orca's search has no smart case: unchecked means --ignore-case.
-      case: options.caseSensitive ? 'sensitive' : 'insensitive',
-      word: options.wholeWord === true,
-      globs: [...includes, ...excludes],
-      // rg runs with --hidden --glob !.git; the daemon never indexes .git.
-      hidden: true,
-      max_filesize: SEARCH_MAX_FILE_SIZE,
-      // `max_matches` counts submatches as maxResults does; `limit` counts lines.
-      max_matches: limit,
-      limit,
-      barrier: true
-    },
-    hasGlobs: includes.length > 0 || excludes.length > 0
+    root,
+    pattern: options.query,
+    fixed: !options.useRegex,
+    // Orca's search has no smart case: unchecked means --ignore-case.
+    case: options.caseSensitive ? 'sensitive' : 'insensitive',
+    word: options.wholeWord === true,
+    // Same globs in rg's argv order (a later glob wins); `!.git` also drops a linked worktree's
+    // `.git` file, which ogd's own .git pruning does not cover.
+    globs: ['!.git', ...includes, ...excludes],
+    hidden: true,
+    max_filesize: SEARCH_MAX_FILE_SIZE,
+    // Counts submatches as maxResults does; `limit` (lines) is left out so only this applies.
+    max_matches: textSearchLimit(options),
+    barrier: true
   }
 }
 
 /**
- * Builds Orca's SearchResult from an ogd `search` reply in `search.full_lines` form: `text` (or
- * base64 `bytes`) is the whole line and `ranges` are byte offsets into it, so the line decodes
- * exactly as ripgrep's JSON does. Null when a line was clipped, so ripgrep answers instead.
+ * Builds Orca's SearchResult from an ogd `search` reply in `search.full_lines` form: `text` is
+ * the whole line, and for invalid UTF-8 base64 `bytes` carries it and `ranges` index those bytes,
+ * so the line decodes exactly as ripgrep's JSON does. Null when a line was clipped.
  */
 export function ogdSearchReplyToResult(
   reply: OgdMessage,
@@ -104,7 +98,10 @@ export function ogdSearchReplyToResult(
       fileResult = { filePath, relativePath, matches: [], matchCount: 0 }
       acc.fileMap.set(filePath, fileResult)
     }
-    const { text: lineContent, readOffset } = decodeRipgrepLine({ text, bytes })
+    // With `bytes`, `text` is lossy and the ranges index the raw bytes.
+    const { text: lineContent, readOffset } = decodeRipgrepLine(
+      bytes === undefined ? { text } : { bytes }
+    )
     for (const sub of ripgrepMatchRanges(lineContent, submatches, readOffset, markTruncated)) {
       const verdict = pushSearchMatch({
         fileResult,
