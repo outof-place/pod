@@ -5,6 +5,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { Agent, request as httpsRequest } from 'node:https'
 import type { Duplex } from 'node:stream'
 import { createSecureContext, TLSSocket } from 'node:tls'
+import { OPEN_PRIVACY, type SandboxPrivacy } from './pod-orbstack-privacy-env'
 import { ANTHROPIC_API_HOST, type SandboxCa } from './pod-orbstack-sandbox-ca'
 
 /** Where the credential comes from. Pod ships the stub; the user picks the real source. */
@@ -40,7 +41,13 @@ export const ANTHROPIC_UPSTREAM: AnthropicUpstream = { host: ANTHROPIC_API_HOST,
 // What Claude Code calls on api.anthropic.com with an API key, observed from 2.1.287 against a stub;
 // forwarding all of it keeps the VM's Claude Code behaving as on the Mac. Everything else (the
 // admin API, files, OAuth endpoints) is refused here.
-const ALLOWED: readonly { method: string; path: RegExp; auth: boolean }[] = [
+// `off` names the Mac privacy switch that closes an entry for the sandbox too.
+const ALLOWED: readonly {
+  method: string
+  path: RegExp
+  auth: boolean
+  off?: keyof Pick<SandboxPrivacy, 'telemetryOff' | 'featureFlagsOff'>
+}[] = [
   { method: 'POST', path: /^\/v1\/messages(\?.*)?$/, auth: true },
   { method: 'POST', path: /^\/v1\/messages\/count_tokens(\?.*)?$/, auth: true },
   { method: 'GET', path: /^\/v1\/models(\/[\w.-]+)?(\?.*)?$/, auth: true },
@@ -48,8 +55,13 @@ const ALLOWED: readonly { method: string; path: RegExp; auth: boolean }[] = [
   { method: 'GET', path: /^\/api\/claude_code\/[\w/.-]+(\?.*)?$/, auth: true },
   { method: 'GET', path: /^\/api\/claude_code_penguin_mode(\?.*)?$/, auth: true },
   { method: 'GET', path: /^\/api\/claude_cli\/bootstrap(\?.*)?$/, auth: true },
-  { method: 'POST', path: /^\/api\/eval\/[\w-]+(\?.*)?$/, auth: true },
-  { method: 'POST', path: /^\/api\/event_logging\/v2\/batch(\?.*)?$/, auth: true },
+  { method: 'POST', path: /^\/api\/eval\/[\w-]+(\?.*)?$/, auth: true, off: 'featureFlagsOff' },
+  {
+    method: 'POST',
+    path: /^\/api\/event_logging\/v2\/batch(\?.*)?$/,
+    auth: true,
+    off: 'telemetryOff'
+  },
   { method: 'GET', path: /^\/mcp-registry\/v0\/servers(\?.*)?$/, auth: false },
   // Unauthenticated connection warm-up.
   { method: 'GET', path: /^\/api\/hello$/, auth: false },
@@ -116,6 +128,8 @@ export function createAnthropicRoute(args: {
   ca: SandboxCa
   credentials?: () => SandboxAnthropicCredentials
   upstream?: AnthropicUpstream
+  /** The Mac's privacy switches, read per request; they close telemetry and flag fetches. */
+  privacy?: () => SandboxPrivacy
   log?: (message: string) => void
 }) {
   const upstream = args.upstream ?? ANTHROPIC_UPSTREAM
@@ -125,8 +139,14 @@ export function createAnthropicRoute(args: {
 
   const proxy = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const path = req.url ?? '/'
+    const privacy = (args.privacy ?? (() => OPEN_PRIVACY))()
     const rule = isPlainPath(path)
-      ? ALLOWED.find((entry) => entry.method === req.method && entry.path.test(path))
+      ? ALLOWED.find(
+          (entry) =>
+            entry.method === req.method &&
+            entry.path.test(path) &&
+            !(entry.off && privacy[entry.off])
+        )
       : undefined
     if (!rule) {
       args.log?.(`refused ${req.method} ${path.split('?')[0]}`)
