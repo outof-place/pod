@@ -90,6 +90,23 @@ describe('claude-acc seal probes', () => {
     )
   })
 
+  it("probes with Pod's own Python as well as the host's, and needs only one of them", () => {
+    const { app: appPath } = app(LAYOUT)
+    const embedded = join(appPath, 'Contents/Resources/python/bin/python3')
+    mkdirSync(dirname(embedded), { recursive: true })
+    writeFileSync(embedded, '')
+    const commands = (host: string | null): string[] =>
+      resources.podAccSealProbes(appPath, { python: host }).map((probe) => probe.command)
+    // two folders (the payload and sdk/python) per Python
+    expect(commands('/usr/bin/false')).toEqual([
+      embedded,
+      embedded,
+      '/usr/bin/false',
+      '/usr/bin/false'
+    ])
+    expect(commands(null)).toEqual([embedded, embedded])
+  })
+
   describe.skipIf(!python)('with Python', () => {
     it('write the bytecode that breaks the seal when the payload lacks its __pycache__ files', () => {
       const { app: appPath, payload } = app(LAYOUT)

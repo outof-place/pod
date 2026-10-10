@@ -76,33 +76,37 @@ function pythonDirs(dir) {
 }
 
 /**
- * One probe per payload folder whose modules import each other. Throws instead of returning
- * none: a gate that ran no Python proves nothing about the seal (v5.3.1 passed with 0 probes).
+ * One probe per payload folder whose modules import each other, for each Python that may run
+ * them: Pod's own (Resources/python, whose stdlib .pyc the same imports check) and the build
+ * machine's, standing in for any other. Throws instead of returning none: a gate that ran no
+ * Python proves nothing about the seal (v5.3.1 passed with 0 probes).
  */
 function podAccSealProbes(app, { payload = 'claude-acc', python = sealProbePython() } = {}) {
   const payloadDir = join(app, 'Contents', 'Resources', payload)
   if (!existsSync(join(payloadDir, 'VERSION'))) {
     throw new Error(`no claude-acc payload in ${app}`)
   }
-  if (!python) {
+  const embedded = join(app, 'Contents', 'Resources', 'python', 'bin', 'python3')
+  const pythons = [
+    ...(existsSync(embedded) ? [{ label: "Pod's Python", command: embedded }] : []),
+    ...(python ? [{ label: 'host Python', command: python }] : [])
+  ]
+  if (pythons.length === 0) {
     throw new Error('no Python to probe the claude-acc payload with: set POD_SEAL_PYTHON')
   }
-  const probes = pythonDirs(payloadDir).flatMap((dir) => {
-    const modules = siblingImports(dir)
-    return modules.length === 0
-      ? []
-      : [
-          {
-            name: `claude-acc ${relative(payloadDir, dir) || '.'}: import ${modules.join(', ')}`,
-            command: python,
-            args: ['-I', '-c', IMPORT_SIBLINGS, dir, ...modules]
-          }
-        ]
-  })
-  if (probes.length === 0) {
+  const folders = pythonDirs(payloadDir)
+    .map((dir) => ({ dir, modules: siblingImports(dir) }))
+    .filter(({ modules }) => modules.length > 0)
+  if (folders.length === 0) {
     throw new Error(`no claude-acc module imports another in ${payloadDir}`)
   }
-  return probes
+  return pythons.flatMap(({ label, command }) =>
+    folders.map(({ dir, modules }) => ({
+      name: `${label}, claude-acc ${relative(payloadDir, dir) || '.'}: import ${modules.join(', ')}`,
+      command,
+      args: ['-I', '-c', IMPORT_SIBLINGS, dir, ...modules]
+    }))
+  )
 }
 
 module.exports = { podAccSealProbes, sealProbePython, siblingImports }
