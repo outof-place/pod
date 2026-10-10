@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { app, dialog, shell } from 'electron'
+import { app, dialog, Notification, shell } from 'electron'
 import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS } from '../daemon/daemon-protocol-version'
 import { setAppBundleId } from '../../shared/app-identity'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
@@ -11,6 +11,7 @@ import {
 } from './deferred-profile-import'
 import { openImportProgressWindow } from './import-progress-window'
 import { offerLegacyDaemonHandover } from './legacy-daemon-handover-prompt'
+import { watchMovedDaemons, type DaemonLoss } from './legacy-daemon-loss-watch'
 import { migrateLegacyProfile, type SafeStorageKeychainPort } from './legacy-profile-migration'
 import { createMacSafeStorageKeychain } from './macos-safe-storage-keychain'
 import { getProductIdentity, type ProductIdentity } from './product-identity'
@@ -117,11 +118,28 @@ export async function completeProductImportBeforeWindows(): Promise<void> {
     // Why continue: a failed handover leaves the daemons with Orca, which is the safe default.
     console.error('[product-migration] daemon handover failed', error)
   }
+  try {
+    watchMovedDaemons({ userData, onLost: (loss) => notifyDaemonLoss(identity, loss) })
+  } catch (error) {
+    console.warn('[product-migration] could not watch the moved daemons', error)
+  }
   const marker = readMigrationMarker(userData)
   // Why from the marker: a background launch defers the notice to the next interactive one.
   if (marker?.permissionsNoticeShown === false && !isBackgroundLaunch()) {
     void showImportNotice(identity, marker)
   }
+}
+
+// Why a notification: it never takes the foreground, and a loss can happen at any time.
+function notifyDaemonLoss(identity: ProductIdentity, loss: DaemonLoss): void {
+  if (!Notification.isSupported()) {
+    return
+  }
+  const name = identity.displayName
+  new Notification({
+    title: 'Terminals moved from Orca have closed',
+    body: `Their terminal service (pid ${loss.pid}) ${loss.reason ? `stopped on ${loss.reason}` : 'was killed'}, and ${name} did not stop it. New terminals open in ${name}'s own service.`
+  }).show()
 }
 
 async function showImportNotice(
