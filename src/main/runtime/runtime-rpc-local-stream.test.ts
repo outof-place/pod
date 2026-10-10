@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { OrcaRuntimeService } from './orca-runtime'
 import { readRuntimeMetadata } from './runtime-metadata'
@@ -17,6 +17,7 @@ import {
 import { sendRequest } from './runtime-rpc-test-harness'
 import { openLocalStreamTestClient } from './runtime-rpc-local-stream-test-harness'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import type { WorkspaceCreatorProvenance } from '../../shared/worktree/types'
 
 vi.mock('../git/worktree', () => {
   const worktrees = [
@@ -65,6 +66,13 @@ async function startServer(writes: { terminal: string; text: string }[] = []) {
 }
 
 describe('OrcaRuntimeRpcServer local stream transport', () => {
+  beforeEach(() => {
+    vi.stubEnv('ORCA_LOCAL_STREAM_TRANSPORT', '1')
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('upgrades an owner connection and serves requests on it while unary calls keep working', async () => {
     const { server, endpoint, authToken } = await startServer()
     const client = await openLocalStreamTestClient(endpoint, authToken)
@@ -123,6 +131,34 @@ describe('OrcaRuntimeRpcServer local stream transport', () => {
       await badVersion.closed
       expect(server.readClientActivity().openConnections).toBe(0)
     } finally {
+      await server.stop()
+    }
+  })
+
+  it('creates workspaces as the host, as a unary call from the CLI does', async () => {
+    const { runtime, server, endpoint, authToken } = await startServer()
+    const provenances: (WorkspaceCreatorProvenance | undefined)[] = []
+    vi.spyOn(runtime, 'createFolderWorkspace').mockImplementation(async (args) => {
+      provenances.push(args.creatorProvenance)
+      throw new Error('folder_workspace_test_stop')
+    })
+    const params = { projectGroupId: 'group-1', name: 'scratch' }
+    const client = await openLocalStreamTestClient(endpoint, authToken)
+    try {
+      client.sendRequest({ id: 'create', method: 'folderWorkspace.create', params })
+      await vi.waitFor(() =>
+        expect(client.responses).toContainEqual(expect.objectContaining({ id: 'create' }))
+      )
+      await sendRequest(endpoint, {
+        id: 'unary',
+        authToken,
+        method: 'folderWorkspace.create',
+        params
+      })
+      expect(provenances).toEqual([{ kind: 'host' }, { kind: 'host' }])
+    } finally {
+      client.close()
+      await client.closed
       await server.stop()
     }
   })
