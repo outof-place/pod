@@ -1,6 +1,7 @@
-import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { ACC_STATE_DIR, type AccLifecycleOutcome, type AccOwnerRecord } from './acc-lifecycle'
+// types only: acc-lifecycle imports failedSetup from here
+import type { AccLifecycleOutcome, AccOwnerRecord } from './acc-lifecycle'
 
 /**
  * $STATE/pod-lifecycle.json: what the last Pod launch decided about claude-acc. A Finder or `open`
@@ -22,6 +23,39 @@ export type AccLifecycleRecord = {
   exit: number | null
   timedOut: boolean
   message: string | null
+  /** Setups of this payload that failed in a row, this one included; 0 when it did not fail. */
+  attempts: number
+}
+
+// A failed setup reruns at the next launch, then 10 min, 20 min, … up to 6 h after the last try,
+// so one that keeps failing never runs at every launch.
+const RETRY_BASE_MS = 10 * 60_000
+const RETRY_MAX_MS = 6 * 60 * 60_000
+
+/** The last launch's failed setup of `version` (exit or timeout), and when it may run again. */
+export function failedSetup(
+  stateDir: string,
+  version: string
+): { attempts: number; notBefore: number } | null {
+  let record: unknown
+  try {
+    record = JSON.parse(readFileSync(join(stateDir, ACC_LIFECYCLE_RECORD), 'utf8'))
+  } catch {
+    return null
+  }
+  if (
+    typeof record !== 'object' ||
+    record === null ||
+    Reflect.get(record, 'status') !== 'failed' ||
+    Reflect.get(record, 'payload') !== version
+  ) {
+    return null
+  }
+  const counted = Reflect.get(record, 'attempts')
+  const attempts = typeof counted === 'number' && counted >= 1 ? Math.floor(counted) : 1
+  const at = Date.parse(String(Reflect.get(record, 'at')))
+  const wait = attempts < 2 ? 0 : Math.min(RETRY_BASE_MS * 2 ** (attempts - 2), RETRY_MAX_MS)
+  return { attempts, notBefore: (Number.isNaN(at) ? 0 : at) + wait }
 }
 
 /**
@@ -48,13 +82,17 @@ export function accLifecycleRecord(
     from: decision.action === 'install' ? decision.from : null,
     exit: result?.code ?? null,
     timedOut: result?.timedOut ?? false,
-    message: 'message' in outcome ? outcome.message || null : null
+    message: 'message' in outcome ? outcome.message || null : null,
+    attempts:
+      outcome.status === 'failed'
+        ? (decision.action === 'install' ? (decision.failedAttempts ?? 0) : 0) + 1
+        : 0
   }
 }
 
 /** Writes the record when there is one; returns whether it did. */
 export function writeAccLifecycleRecord(
-  home: string,
+  stateDir: string,
   outcome: AccLifecycleOutcome,
   context: { app: string; at: Date; pid: number }
 ): boolean {
@@ -62,9 +100,8 @@ export function writeAccLifecycleRecord(
   if (!record) {
     return false
   }
-  const dir = join(home, ACC_STATE_DIR)
-  mkdirSync(dir, { recursive: true })
-  const path = join(dir, ACC_LIFECYCLE_RECORD)
+  mkdirSync(stateDir, { recursive: true })
+  const path = join(stateDir, ACC_LIFECYCLE_RECORD)
   // a reader must never see half of it
   writeFileSync(`${path}.tmp`, `${JSON.stringify(record, null, 2)}\n`)
   renameSync(`${path}.tmp`, path)
