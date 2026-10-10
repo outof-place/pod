@@ -7,6 +7,10 @@ import {
   headIdentityEntryKey,
   type WorktreeHeadIdentityScope
 } from './worktree-head-identity-scope'
+import {
+  readReftableHeadIdentity,
+  REFTABLE_HEAD_PLACEHOLDER
+} from './worktree-reftable-head-reader'
 
 // Why: the whole point of this reader is replacing `git worktree list` fanout
 // with bounded metadata-file reads, so head freshness never re-creates the
@@ -152,6 +156,10 @@ async function readHeadIdentity(
   }
   if (!head) {
     return null
+  }
+  if (head === REFTABLE_HEAD_PLACEHOLDER) {
+    const adminDir = dirname(headFilePath)
+    return readReftableHeadIdentity(commonDirPath, adminDir, worktreePath, resolved, UNREADABLE)
   }
   if (head.startsWith('ref: ')) {
     const ref = head.slice('ref: '.length).trim()
