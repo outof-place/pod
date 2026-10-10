@@ -109,6 +109,8 @@ export const ORCAD_SERVER_ENTRY_FILENAME = 'orcad-server.js'
 export const ORCAD_FOREIGN_SQLITE_READER_ENTRY = 'foreign-sqlite-reader-entry.js'
 /** Worker thread that runs workspace port detection's probe commands off the event loop. */
 export const ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY = 'port-scan-command-worker-entry.js'
+// Equals NATIVE_PROCESS_SNAPSHOT_ENTRY_FILENAME: the worker thread that reads the kernel process table.
+export const ORCAD_NATIVE_PROCESS_SNAPSHOT_WORKER_ENTRY = 'native-process-snapshot-worker-entry.js'
 // Equals AI_VAULT_SERVICE_ENTRY_FILENAME: the forked child that lists agent sessions.
 export const ORCAD_SESSION_SCANNER_SERVICE_ENTRY = 'session-scanner-service-entry.js'
 
@@ -176,6 +178,7 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   // Worker thread that reads other apps' SQLite (the OpenCode binder and history) off the event loop.
   { filename: ORCAD_FOREIGN_SQLITE_READER_ENTRY },
   { filename: ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY },
+  { filename: ORCAD_NATIVE_PROCESS_SNAPSHOT_WORKER_ENTRY },
   // Forked so transcript parsing stays off the server's event loop; session search stays in-process.
   { filename: ORCAD_SESSION_SCANNER_SERVICE_ENTRY },
   // Target-specific even when the JavaScript bundle is shared across packaged slots.
