@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { runProcess } from '../../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { setMacTrayYield } from '../../tray/system-tray'
 import { syncMacMenuBarIcon } from '../../startup/main-window-actions'
 import { mainProcessState as state } from '../../startup/main-process-state'
