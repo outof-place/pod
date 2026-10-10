@@ -402,7 +402,7 @@ Both are written for publication, with two safeguards:
 | `podStack`               | `pod-stack.json` at that Pod commit (`origin/main` without run.json): the topic branches the benched Pod carries |
 | `caveats`                | caveats that apply to every row                                                                                  |
 | `groups`                 | `pod` (Pod vs Orca and other terminals) and `claude-acc`                                                         |
-| `suites.<name>`          | file, versions, config and suite-wide caveats                                                                    |
+| `suites.<name>`          | file, versions, config, `condition` (polling: `quiet` or `agent-heavy`, else null) and suite-wide caveats        |
 | `coming`                 | rows this run could not measure yet: `id`, `suite`, `subject`, `reason`, `status` `"coming"`; never a number     |
 
 Each `metrics[]` row has these fields:
