@@ -44,6 +44,7 @@ const status = emptyStatus({
       distroVersion: null,
       arch: null,
       podOwned: true,
+      kind: 'shared',
       worktreeId: null,
       missing: false
     }
@@ -59,7 +60,8 @@ function fakeService(enabled: boolean): PodOrbstackService {
     remove: vi.fn(async () => ({ ok: true as const })),
     start: vi.fn(async () => ({ ok: true as const })),
     stop: vi.fn(async () => ({ ok: true as const })),
-    setDockerPin: vi.fn(() => ({ ok: true as const }))
+    setDockerPin: vi.fn(() => ({ ok: true as const })),
+    setAgentSandbox: vi.fn(() => ({ ok: true as const }))
   }
 }
 
@@ -76,7 +78,8 @@ describe('orbstack.* RPC methods', () => {
       'orbstack.start',
       'orbstack.stop',
       'orbstack.delete',
-      'orbstack.pinDocker'
+      'orbstack.pinDocker',
+      'orbstack.setAgentSandbox'
     ])
     expect(new Set(POD_ORBSTACK_METHODS.map((entry) => entry.permission))).toEqual(
       new Set(['host-admin'])
@@ -108,7 +111,7 @@ describe('orbstack.* RPC methods', () => {
     await call('orbstack.pinDocker', { worktreeId: 'r::/x', pinned: true })
     expect(service.create).toHaveBeenCalledWith({ worktreeId: 'r::/x', displayName: 'x' })
     expect(service.stop).toHaveBeenCalledWith('pod-web-1')
-    expect(service.remove).toHaveBeenCalledWith('r::/x')
+    expect(service.remove).toHaveBeenCalledWith('r::/x', undefined)
     expect(service.setDockerPin).toHaveBeenCalledWith('r::/x', true)
   })
 
