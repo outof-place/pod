@@ -225,9 +225,13 @@ export function setSurfaceFrames(webContents: WebContents, frames: NativeTermina
   addon.setFrames(owned)
 }
 
-export function focusSurface(webContents: WebContents, surfaceId: number): void {
+export function focusSurface(
+  webContents: WebContents,
+  surfaceId: number,
+  unlessMousePressed = false
+): void {
   if (addon && ownedBy(surfaceId, webContents)) {
-    addon.focus(surfaceId)
+    addon.focus(surfaceId, unlessMousePressed)
   }
 }
 
