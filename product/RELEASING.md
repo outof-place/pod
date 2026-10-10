@@ -72,6 +72,24 @@ Export that certificate with its key as a `.p12`, then add these secrets under S
 
 Both certificates belong to team `75Y2KR6P5W`. The updater's designated-requirement check pins the team, not the certificate, so CI and local releases update each other.
 
+## Installing a build by hand
+
+LaunchServices registers a bundle as soon as it appears, so a half-copied Pod.app (a Finder drag in progress, a running `cp`) gets registered and later opens as "damaged". Copy it whole under a temporary name first, then rename it into place:
+
+```sh
+staging="$(mktemp -d /tmp/pod-install.XXXX)"
+ditto "/Volumes/Pod <version>/Pod.app" "$staging/Pod.app"     # or dist/mac-arm64/Pod.app
+codesign --verify --deep --strict "$staging/Pod.app"
+[ -d /Applications/Pod.app ] && mv /Applications/Pod.app "$staging/Pod.app.old"
+mv "$staging/Pod.app" /Applications/Pod.app                    # one rename: never half there
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/Pod.app
+open /Applications/Pod.app                                     # by path, never `open -b`
+```
+
+Quit Pod first. Trash `$staging` once the new copy runs.
+
+Never keep built `.app` copies where LaunchServices, Spotlight or the Dock can find them (Desktop, Downloads, an indexed archive folder): `open -b` and the Dock may pick a stale one. Archive folders get a `.metadata_never_index` file, and a stray copy is unregistered with `lsregister -u <path>`.
+
 ## Notes
 
 - **Keep release outputs out of the worktree:** electron-builder packs the repository root into app.asar, minus upstream's denylist and `dist/`. Move an older `dist/` outside the checkout before the next release, never beside it. On 2026-10-10 two parked `dist-*` folders grew app.asar from 140 MB to 2.5 GB; the bundle gate now stops that.
