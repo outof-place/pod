@@ -26,8 +26,10 @@ import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPre
 import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
 import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
 import { brandDocumentTitle } from './lib/product-ui-identity'
+import { installProductSystemFonts } from './lib/product-system-fonts'
 
 brandDocumentTitle()
+installProductSystemFonts()
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
