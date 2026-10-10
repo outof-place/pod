@@ -9,6 +9,7 @@ import type { MainWindowStateLifecycle } from './main-window-state-lifecycle'
 import { syncTrafficLightPosition } from './main-window-visual-lifecycle'
 import { consumeUserQuitWindowClose } from './user-quit-window-close'
 import { productDisplayName } from '../product-identity/product-overlay'
+import { hidePodUiHostWindowOnClose } from '../pod/ui-host/pod-ui-host-window'
 
 export const WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS = QUIT_RENDERER_ACK_TIMEOUT_MS
 
@@ -93,6 +94,14 @@ export function installMainWindowCloseLifecycle(args: {
 
   mainWindow.on('close', (e) => {
     const userQuitClose = consumeUserQuitWindowClose(mainWindow)
+    // Fork-only (Pod): a one-app fallback window hides; its renderer keeps serving PodNative.
+    if (
+      !userQuitClose &&
+      hidePodUiHostWindowOnClose(mainWindow, opts?.getIsQuitting?.() === true)
+    ) {
+      e.preventDefault()
+      return
+    }
     // Why: Alt+F4/programmatic closes hit the native event; apply the same minimize-to-tray guard the renderer-drawn X uses.
     if (!windowCloseConfirmed && !userQuitClose && hideToTrayIfEnabled()) {
       e.preventDefault()
