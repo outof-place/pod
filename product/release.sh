@@ -139,6 +139,8 @@ dmg="dist/$display_name-$version-$arch.dmg"
 zip="dist/$display_name-$version-$arch-mac.zip"
 for f in "$app" "$dmg" "$zip" dist/latest-mac.yml; do [ -e "$f" ] || die "missing build output $f"; done
 
+node product/release-bundle-gate.cjs --dmg "$dmg"
+
 log "notarize and staple the DMG"
 xcrun notarytool submit "$dmg" "${notary_args[@]}" --wait
 xcrun stapler staple "$dmg"
