@@ -179,6 +179,9 @@ module.exports = {
   mac: {
     ...base.mac,
     signIgnore: [...(base.mac.signIgnore ?? []), ...PRODUCT_SIGN_IGNORE],
+    // The Icon Composer document: electron-builder compiles it into Assets.car (CFBundleIconName),
+    // so macOS renders Liquid Glass and the dark, clear and tinted appearances. Needs actool 26+.
+    icon: 'resources/icon-source/icon.icon',
     extendInfo: {
       ...productUsageDescriptions(base.mac.extendInfo),
       ClaudeAccHost: claudeAccHost()
@@ -211,6 +214,8 @@ module.exports = {
   },
   dmg: {
     ...base.dmg,
+    // The volume icon takes an .icns; generate.sh's has the trimmed small slots.
+    icon: 'resources/build/icon.icns',
     // A signed DMG is what `spctl -a -t open --context context:primary-signature` accepts.
     sign: isRelease,
     artifactName: `${identity.displayName}-\${version}-\${arch}.\${ext}`
