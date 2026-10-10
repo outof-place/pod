@@ -1,11 +1,15 @@
 // Fork-only (Pod): OrbStack as runtime RPC, so the renderer, the CLI and the native shell share one API.
-import { defineMethod } from '../../runtime/rpc/core'
+import { defineMethod, defineStreamingMethod } from '../../runtime/rpc/core'
 import {
   PodOrbstackAgentSandboxParams,
   PodOrbstackCreateParams,
   PodOrbstackDockerPinParams,
   PodOrbstackMachineParams,
   PodOrbstackSandboxClaudeLoginParams,
+  PodOrbstackStatsParams,
+  PodOrbstackStatusParams,
+  PodOrbstackTemplatesParams,
+  PodOrbstackUnsubscribeParams,
   PodOrbstackWorktreeParams
 } from '../../../shared/rpc-contract/pod-orbstack-params'
 import { getPodOrbstackService, type PodOrbstackService } from './pod-orbstack-service'
@@ -18,6 +22,9 @@ function service(): PodOrbstackService {
   return value
 }
 
+// Per process, so two subscribes in one millisecond never share a cleanup id.
+let subscriptionSeq = 0
+
 // Why host-admin: these list and change Linux machines on this Mac, not Orca workspace state.
 export const POD_ORBSTACK_METHODS = [
   defineMethod({
@@ -29,8 +36,8 @@ export const POD_ORBSTACK_METHODS = [
   defineMethod({
     name: 'orbstack.status',
     permission: 'host-admin',
-    params: null,
-    handler: () => service().snapshot()
+    params: PodOrbstackStatusParams,
+    handler: (params) => service().snapshot({ containers: params.containers })
   }),
   defineMethod({
     name: 'orbstack.machines',
@@ -91,5 +98,51 @@ export const POD_ORBSTACK_METHODS = [
     permission: 'host-admin',
     params: PodOrbstackSandboxClaudeLoginParams,
     handler: (params) => service().setSandboxClaudeLogin(params.enabled)
+  }),
+  defineMethod({
+    name: 'orbstack.setTemplates',
+    permission: 'host-admin',
+    params: PodOrbstackTemplatesParams,
+    handler: (params) => service().setTemplates(params.enabled)
+  }),
+  // Why on demand: each tick runs one `orb run` per running Pod machine. A client polls it only
+  // while its OrbStack panel is visible and the app is active; ticks are at most every 2 s and
+  // shared, so two clients cost what one does.
+  defineMethod({
+    name: 'orbstack.stats',
+    permission: 'host-admin',
+    params: PodOrbstackStatsParams,
+    handler: (params) => service().stats(params.names)
+  }),
+  defineStreamingMethod({
+    name: 'orbstack.subscribe',
+    permission: 'host-admin',
+    params: null,
+    handler: async (_params, { runtime, connectionId }, emit) => {
+      const events = service()
+      await new Promise<void>((resolve) => {
+        const subscriptionId = `orbstack-${connectionId ?? 'inproc'}-${++subscriptionSeq}`
+        const { seed, stop } = events.subscribe(emit)
+        runtime.registerSubscriptionCleanup(
+          subscriptionId,
+          () => {
+            stop()
+            emit({ type: 'end' })
+            resolve()
+          },
+          connectionId
+        )
+        emit({ type: 'ready', subscriptionId, relay: seed })
+      })
+    }
+  }),
+  defineMethod({
+    name: 'orbstack.unsubscribe',
+    permission: 'host-admin',
+    params: PodOrbstackUnsubscribeParams,
+    handler: (params, { runtime }) => {
+      runtime.cleanupSubscription(params.subscriptionId)
+      return { unsubscribed: true }
+    }
   })
 ]
