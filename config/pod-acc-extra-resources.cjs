@@ -8,9 +8,11 @@ const { join } = require('node:path')
 const PAYLOAD = join(__dirname, '..', 'resources', 'claude-acc')
 const DISTRO_PLUGINS = join(__dirname, '..', 'resources', 'plugins', 'distro')
 
-// Bytecode never ships: a cache Python wrote in a checkout would be sealed into the app as is,
-// and the folder invites the next run to write there (src/main/pod/acc/acc-bundle-seal.test.ts).
-const NO_BYTECODE = ['!**/__pycache__', '!**/__pycache__/**', '!**/*.pyc']
+// Bytecode never ships: a cache Python wrote in a checkout would be sealed into the app as is
+// (src/main/pod/acc/acc-bundle-seal.test.ts). What is inside a __pycache__ folder stays out, never
+// the name itself: from 1.31.5 the payload has a plain FILE called __pycache__ next to its .py,
+// so no Python can make the folder there.
+const NO_BYTECODE = ['!**/__pycache__/**', '!**/*.pyc']
 
 /** Throws when the payload is missing, so a Pod release cannot ship without claude-acc. */
 function podAccMacExtraResources({ payloadDir = PAYLOAD, distroPlugins = DISTRO_PLUGINS } = {}) {
