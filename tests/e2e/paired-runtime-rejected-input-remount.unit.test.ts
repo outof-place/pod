@@ -96,6 +96,8 @@ function startHost(): {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     registerRemoteTerminalViewSubscriber: () => () => {},
+    modelAnswersTerminalQueries: vi.fn().mockReturnValue(false),
+    answerTerminalQueriesFromModel: vi.fn(),
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     requestRendererTerminalTabMount: vi.fn().mockReturnValue(true),
     updateRemoteDesktopViewer: vi.fn().mockResolvedValue(true),
