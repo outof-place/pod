@@ -8,6 +8,8 @@ import { getHiddenRendererPtyDeliveryDebug } from '../ipc/pty-hidden-delivery-ga
 
 const SIZE = { cols: 80, rows: 24 }
 const CODEX_SIZE = { cols: 120, rows: 40 }
+// Why a neutral line: a ready screen would make the title's ready strong.
+const NAME_ONLY_TITLE_OUTPUT = '\x1b]0;Codex\x07Reading the repository layout\r\n'
 
 /** An agent pane on a local daemon whose output went quiet long enough for main's model to rest. */
 async function createQuietAgentPane(
@@ -103,6 +105,30 @@ describe("main's terminal model for an agent pane", () => {
     })
   }, 15_000)
 
+  it('settles a weak-ready wait as the rebuild lands, not on the next poll', async () => {
+    // Why the name-only title: its ready is weak, which only a poll's screen read settles.
+    const pane = await createQuietAgentPane('codex', NAME_ONLY_TITLE_OUTPUT, CODEX_SIZE, 500)
+    expect(pane.runtime.isMainTerminalModelDormant(TRANSCRIPT_PANE_PTY_ID)).toBe(true)
+    // Why quiet first: a name-only title counts only on a quiet stream, which a live model settles at once.
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+      now: Date.now() + MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS
+    })
+    const startedAt = Date.now()
+    let settledAt = -1
+    const waiting = pane.runtime
+      .waitForTerminal(pane.handle, { condition: 'tui-idle', timeoutMs: 6_000 })
+      .then((result) => {
+        settledAt = Date.now()
+        return result
+      })
+    void waiting.catch(() => {})
+    await vi.advanceTimersByTimeAsync(6_000)
+    await expect(waiting).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+    // The poll sweeps every 2 s; the rebuild lands at 0.5 s.
+    expect(settledAt - startedAt).toBeLessThan(1_000)
+  }, 15_000)
+
   it.each([
     ['lands', 1_000],
     ['times out', 5_000]
@@ -137,36 +163,39 @@ describe("main's terminal model for an agent pane", () => {
     await expect(waitForIdleFromNow(pane, 6_000)).rejects.toThrow(/timeout/)
   }, 15_000)
 
-  it('does not hold a wait past the seed timeout when the rebuild never lands', async () => {
-    const pane = await createQuietAgentPane(
-      'codex',
-      readRuntimeFixture('codex-0157-plain-ready'),
-      CODEX_SIZE,
-      'never'
-    )
-    expect(pane.runtime.isMainTerminalModelDormant(TRANSCRIPT_PANE_PTY_ID)).toBe(true)
-    const failuresBefore = getHiddenRendererPtyDeliveryDebug().mainTerminalModelSeedFailureCount
-    vi.useFakeTimers({
-      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
-      now: Date.now()
-    })
-    const startedAt = Date.now()
-    let settledAt = -1
-    const waiting = pane.runtime
-      .waitForTerminal(pane.handle, { condition: 'tui-idle', timeoutMs: 10_000 })
-      .then((result) => {
-        settledAt = Date.now()
-        return result
+  it.each([
+    ['a ready screen', () => readRuntimeFixture('codex-0157-plain-ready')],
+    ['a name-only title', () => NAME_ONLY_TITLE_OUTPUT]
+  ])(
+    'does not hold a wait on %s past the seed timeout when the rebuild never lands',
+    async (_label, output) => {
+      const pane = await createQuietAgentPane('codex', output(), CODEX_SIZE, 'never')
+      expect(pane.runtime.isMainTerminalModelDormant(TRANSCRIPT_PANE_PTY_ID)).toBe(true)
+      const failuresBefore = getHiddenRendererPtyDeliveryDebug().mainTerminalModelSeedFailureCount
+      // Why quiet first: the seed timeout, not the quiet window, is then all the wait holds for.
+      vi.useFakeTimers({
+        toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+        now: Date.now() + MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS
       })
-    void waiting.catch(() => {})
-    await vi.advanceTimersByTimeAsync(10_000)
-    await expect(waiting).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
-    // The bound: the 2 s seed timeout, then at most one 2 s poll that evaluates without a screen.
-    expect(settledAt - startedAt).toBeLessThanOrEqual(4_000)
-    expect(getHiddenRendererPtyDeliveryDebug().mainTerminalModelSeedFailureCount).toBe(
-      failuresBefore + 1
-    )
-  }, 20_000)
+      const startedAt = Date.now()
+      let settledAt = -1
+      const waiting = pane.runtime
+        .waitForTerminal(pane.handle, { condition: 'tui-idle', timeoutMs: 10_000 })
+        .then((result) => {
+          settledAt = Date.now()
+          return result
+        })
+      void waiting.catch(() => {})
+      await vi.advanceTimersByTimeAsync(10_000)
+      await expect(waiting).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+      // The bound: the 2 s seed timeout, whose failure re-checks the wait without a screen.
+      expect(settledAt - startedAt).toBeLessThanOrEqual(2_000)
+      expect(getHiddenRendererPtyDeliveryDebug().mainTerminalModelSeedFailureCount).toBe(
+        failuresBefore + 1
+      )
+    },
+    20_000
+  )
 
   it("holds OMP's idle title while the screen that vetoes its setup wizard is being rebuilt", async () => {
     // Why OMP: its idle title lands before the wizard opens, and only its screen refuses input.
