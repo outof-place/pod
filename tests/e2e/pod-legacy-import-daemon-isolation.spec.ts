@@ -47,8 +47,6 @@ const podTest = test.extend<{ legacyProfile: LegacyProfile }>({
     await new Promise((resolve) => server.close(resolve))
     rmSync(dir, { recursive: true, force: true })
   },
-  // Why fresh: a seeded orca-data.json would read as an existing product profile and skip the import.
-  dismissOnboarding: [false, { option: true }],
   orcaAppExtraEnv: async ({ legacyProfile }, provideFixture) => {
     await provideFixture({
       POD_E2E_PRODUCT_IDENTITY_PATH: path.join(process.cwd(), 'product/identity.json'),
@@ -56,6 +54,9 @@ const podTest = test.extend<{ legacyProfile: LegacyProfile }>({
     })
   }
 })
+
+// Why fresh: a seeded orca-data.json would read as an existing product profile and skip the import.
+podTest.use({ dismissOnboarding: false })
 
 podTest(
   'the first-run import leaves a running legacy daemon alone and starts its own',
