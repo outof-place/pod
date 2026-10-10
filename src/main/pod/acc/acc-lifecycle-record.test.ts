@@ -63,7 +63,9 @@ function installedPod() {
         run,
         setTrayYield: () => {},
         syncTray: () => {},
-        log
+        log,
+        loginItems: null,
+        appId: null
       })
       return { supervisor, run, log }
     }
