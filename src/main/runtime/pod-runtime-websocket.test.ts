@@ -56,6 +56,7 @@ async function startDesktopRuntime(enableWebSocket: boolean, userDataPath: strin
 describe('Pod runtime WebSocket policy', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
   })
 
   it('keeps the desktop runtime off the network in the Pod profile', async () => {
@@ -73,6 +74,22 @@ describe('Pod runtime WebSocket policy', () => {
       expect(advertisedTransports(userDataPath)).toEqual(['unix'])
     } finally {
       await server.stop()
+    }
+  })
+
+  it('opens no listener on the headless host unless asked, in either profile', async () => {
+    const argv = process.argv
+    process.argv = [...argv, '--serve', '--pod-headless-host']
+    try {
+      for (const profile of ['pod', 'orca'] as const) {
+        const { runtimeWebSocketEnabled } = await loadPolicy(profile)
+        expect(runtimeWebSocketEnabled({ serveMode: true })).toBe(false)
+        vi.stubEnv('POD_HEADLESS_HOST_WEBSOCKET', '1')
+        expect(runtimeWebSocketEnabled({ serveMode: true })).toBe(true)
+        vi.unstubAllEnvs()
+      }
+    } finally {
+      process.argv = argv
     }
   })
 
