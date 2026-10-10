@@ -17,6 +17,8 @@ export type NativeTerminalFeedRuntime = {
     ptyId: string,
     task: (model: NativeTerminalFeedModel) => void | Promise<void>
   ) => boolean
+  // Keeps main's model of the PTY live (no dormancy) until the returned release runs.
+  acquireTerminalOutputReader?: (ptyId: string, reader: { kind: 'model' }) => () => void
 }
 
 type Binding = {
@@ -24,6 +26,7 @@ type Binding = {
   ptyId: string
   runtime: NativeTerminalFeedRuntime
   seededFrom: NativeTerminalFeedModel | null
+  releaseModel: (() => void) | null
 }
 
 // RIS first: a seed always starts from a blank surface.
@@ -88,6 +91,7 @@ export function unbindNativeTerminalSurface(surfaceId: number): void {
   }
   bindingsBySurface.delete(surfaceId)
   pendingBySurface.delete(surfaceId)
+  binding.releaseModel?.()
   const forPty = bindingsByPty.get(binding.ptyId)
   forPty?.delete(surfaceId)
   if (forPty?.size === 0) {
@@ -105,7 +109,10 @@ export function bindNativeTerminalPty(
   if (!enabled || !runtime || parseRemoteRuntimePtyId(ptyId)) {
     return false
   }
-  const binding: Binding = { surfaceId, ptyId, runtime, seededFrom: null }
+  // Why a reader: the surface is fed from main's model, so main must keep parsing this PTY even
+  // while a visible renderer would let it go dormant; acquiring first also wakes a dormant one.
+  const releaseModel = runtime.acquireTerminalOutputReader?.(ptyId, { kind: 'model' }) ?? null
+  const binding: Binding = { surfaceId, ptyId, runtime, seededFrom: null, releaseModel }
   bindingsBySurface.set(surfaceId, binding)
   const forPty = bindingsByPty.get(ptyId) ?? new Map<number, Binding>()
   forPty.set(surfaceId, binding)
