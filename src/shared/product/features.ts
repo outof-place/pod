@@ -164,6 +164,8 @@ export const POD_UI_LOCALES: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.uiLocales
 export const POD_DICTATION: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.dictation
+export const POD_WINDOWS_SSH_HOSTS: boolean =
+  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.windowsSshHosts
 export const POD_USAGE_POLLING: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.usagePolling
 export const POD_EMULATOR: boolean =
