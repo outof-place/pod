@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 const require = createRequire(import.meta.url)
 const {
   podAccMacExtraResources,
+  podAccMacExtraFiles,
   podAccFileExclusions,
   podAccMacSignIgnore
 } = require('./pod-acc-extra-resources.cjs')
@@ -52,6 +53,29 @@ describe('Pod claude-acc extraResources', () => {
         distroPlugins: '/distro'
       })
     ).toThrow('fetch-pod-python.mjs')
+  })
+
+  it("moves a v2 payload's launchd plists and menu helper into Contents/Library", () => {
+    expect(podAccMacExtraFiles({ payloadDir: payloadDir() })).toEqual([])
+    const v2 = tree([
+      'VERSION',
+      'setup.sh',
+      'pod-acc-run',
+      'LaunchAgents/codes.pod.app.acc.tick.plist',
+      'Pod Menu.app/Contents/Info.plist'
+    ])
+    expect(podAccMacExtraFiles({ payloadDir: v2 }).map((entry) => entry.to)).toEqual([
+      'Library/LaunchAgents',
+      'Library/LoginItems/Pod Menu.app'
+    ])
+    const [resources] = podAccMacExtraResources({
+      payloadDir: v2,
+      pythonDir: pythonDir(),
+      distroPlugins: '/distro'
+    })
+    expect(resources.filter).toEqual(
+      expect.arrayContaining(['!LaunchAgents/**', '!Pod Menu.app/**'])
+    )
   })
 
   it('leaves only the Python Mach-Os to osx-sign', () => {

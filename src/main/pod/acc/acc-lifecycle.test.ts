@@ -119,6 +119,28 @@ describe('claude-acc lifecycle', () => {
     expect(automatedLaunchEnv({ ORCA_BACKGROUND_LAUNCH: '' })).toBeNull()
   })
 
+  it('keeps a v1 payload on its own app and launchd agents', () => {
+    const input = fixture()
+    const args = accSetupSpec(input).args ?? []
+    expect(args[args.indexOf('--app') + 1]).toBe(join(input.payloadDir, 'Claude Acc.app'))
+    expect(args).not.toContain('--pod-agents')
+    expect(args).not.toContain('--python')
+  })
+
+  it("hands a v2 payload Pod's services, menu helper and Python", () => {
+    const input = { ...fixture(), appPath: join(roots.at(-1) ?? '', 'Pod.app') }
+    writeFileSync(join(input.payloadDir, 'pod-acc-run'), '')
+    const python = join(input.appPath, 'Contents/Resources/python/bin/python3')
+    expect(accSetupSpec(input).args).not.toContain('--python')
+    mkdirSync(join(python, '..'), { recursive: true })
+    writeFileSync(python, '')
+    const args = accSetupSpec(input).args ?? []
+    expect(args[args.indexOf('--app') + 1]).toBe(
+      join(input.appPath, 'Contents/Library/LoginItems/Pod Menu.app')
+    )
+    expect(args.slice(-3)).toEqual(['--pod-agents', '--python', python])
+  })
+
   it('refuses at the spawn a setup.sh whose HOME is not the account home', () => {
     const input = fixture()
     expect(setupHomeRefusal(input, accSetupSpec(input))).toBeNull()

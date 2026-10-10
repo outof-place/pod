@@ -31,12 +31,14 @@ export function readPin(path = PIN) {
 }
 
 /**
- * A payload is usable when setup.sh and VERSION are where Pod's lifecycle looks for them. From
- * 1.31 the menu helper is Pod Menu.app instead of Claude Acc.app.
+ * A payload is usable when setup.sh and VERSION are where Pod's lifecycle looks for them. From v2
+ * (pod-acc-run) the menu helper is Pod Menu.app and the launchd plists ship for SMAppService.
  */
 export function assertPayload(dir) {
-  const helper = existsSync(join(dir, 'Pod Menu.app')) ? 'Pod Menu.app' : 'Claude Acc.app'
-  for (const name of ['VERSION', 'setup.sh', 'owner.py', helper, 'claude-acc-hook']) {
+  const helper = existsSync(join(dir, 'pod-acc-run'))
+    ? ['pod-acc-run', 'Pod Menu.app', 'LaunchAgents']
+    : ['Claude Acc.app']
+  for (const name of ['VERSION', 'setup.sh', 'owner.py', 'claude-acc-hook', ...helper]) {
     if (!existsSync(join(dir, name))) {
       throw new Error(`claude-acc payload ${dir} has no ${name}`)
     }

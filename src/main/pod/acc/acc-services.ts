@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { ACC_STATE_DIR } from './acc-lifecycle'
+import { ACC_MENU_HELPER_APP, ACC_STATE_DIR } from './acc-lifecycle'
 
 /**
  * claude-acc's launchd jobs and its menu helper as SMAppService services of Pod.app: each job is
@@ -11,7 +11,6 @@ import { ACC_STATE_DIR } from './acc-lifecycle'
 
 // Keeps the bundle id ClaudeAcc had, so its Microphone and Accessibility grants stay valid.
 export const ACC_MENU_HELPER_ID = 'com.filip.claude-acc.menubar'
-export const ACC_MENU_HELPER_APP = 'Pod Menu.app'
 
 export type AccServiceStatus = Electron.LoginItemSettings['status']
 export type AccService =

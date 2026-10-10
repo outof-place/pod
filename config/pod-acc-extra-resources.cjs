@@ -9,6 +9,9 @@ const { join } = require('node:path')
 const PAYLOAD = join(__dirname, '..', 'resources', 'claude-acc')
 const PYTHON = join(__dirname, '..', 'resources', 'python')
 const DISTRO_PLUGINS = join(__dirname, '..', 'resources', 'plugins', 'distro')
+// payload v2 (claude-acc with pod-acc-run): launchd plists and the menu helper for SMAppService
+const AGENTS = 'LaunchAgents'
+const HELPER = 'Pod Menu.app'
 
 // Bytecode never ships: a cache Python wrote in a checkout would be sealed into the app as is
 // (src/main/pod/acc/acc-bundle-seal.test.ts). What is inside a __pycache__ folder stays out, never
@@ -24,24 +27,56 @@ function requireFetched(dir, names, script) {
   }
 }
 
+/** What a payload must hold: v2 (with pod-acc-run) ships the menu helper as Pod Menu.app. */
+function payloadFiles(payloadDir) {
+  if (isV2(payloadDir)) {
+    return ['VERSION', 'setup.sh', 'pod-acc-run', AGENTS, HELPER]
+  }
+  // a 1.31 payload without pod-acc-run ships its helper as Pod Menu.app too (acc-lifecycle.ts)
+  return ['VERSION', 'setup.sh', existsSync(join(payloadDir, HELPER)) ? HELPER : 'Claude Acc.app']
+}
+
+function isV2(payloadDir) {
+  return existsSync(join(payloadDir, 'pod-acc-run'))
+}
+
 /** Throws when the payload or its Python is missing, so a Pod release cannot ship without them. */
 function podAccMacExtraResources({
   payloadDir = PAYLOAD,
   pythonDir = PYTHON,
   distroPlugins = DISTRO_PLUGINS
 } = {}) {
-  // from 1.31 the menu helper ships as Pod Menu.app (src/main/pod/acc/acc-lifecycle.ts)
-  const helper = existsSync(join(payloadDir, 'Pod Menu.app')) ? 'Pod Menu.app' : 'Claude Acc.app'
-  requireFetched(payloadDir, ['VERSION', 'setup.sh', helper], 'fetch-claude-acc-payload.mjs')
+  requireFetched(payloadDir, payloadFiles(payloadDir), 'fetch-claude-acc-payload.mjs')
   requireFetched(pythonDir, ['bin/python3', 'lib/python3.14/os.py'], 'fetch-pod-python.mjs')
   return [
     {
       from: payloadDir,
       to: 'claude-acc',
-      filter: ['**/*', '!.payload-source.json', ...NO_BYTECODE]
+      // a v2 payload's agents and helper live in Contents/Library instead (podAccMacExtraFiles)
+      filter: [
+        '**/*',
+        '!.payload-source.json',
+        ...(isV2(payloadDir) ? [`!${AGENTS}/**`, `!${HELPER}/**`] : []),
+        ...NO_BYTECODE
+      ]
     },
     { from: pythonDir, to: 'python', filter: ['**/*', '!.payload-source.json'] },
     { from: distroPlugins, to: 'plugins/distro' }
+  ]
+}
+
+/**
+ * For mac extraFiles (relative to Contents): SMAppService only registers agents from
+ * Contents/Library/LaunchAgents and login items from Contents/Library/LoginItems
+ * (src/main/pod/acc/acc-services.ts). Empty for payloads that predate pod-acc-run.
+ */
+function podAccMacExtraFiles({ payloadDir = PAYLOAD } = {}) {
+  if (!existsSync(join(payloadDir, 'pod-acc-run'))) {
+    return []
+  }
+  return [
+    { from: join(payloadDir, AGENTS), to: `Library/${AGENTS}`, filter: ['*.plist'] },
+    { from: join(payloadDir, HELPER), to: `Library/LoginItems/${HELPER}` }
   ]
 }
 
@@ -67,6 +102,7 @@ const { podAccSealProbes } = require('./pod-acc-seal-probes.cjs')
 module.exports = {
   NO_BYTECODE,
   podAccMacExtraResources,
+  podAccMacExtraFiles,
   podAccFileExclusions,
   podAccMacSignIgnore,
   podAccSealProbes
