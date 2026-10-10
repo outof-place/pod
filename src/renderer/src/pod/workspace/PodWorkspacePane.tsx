@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { SettingsSubsectionHeader } from '@/components/settings/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { getPodWorkspaceApi } from './pod-workspace-api-access'
+import { podWorkspaceRpc } from './pod-workspace-rpc'
 import { PodWorkspaceHealth } from './PodWorkspaceHealth'
 import { PodWorkspaceRepoList } from './PodWorkspaceRepoList'
 import { PodWorkspaceRootSetting } from './PodWorkspaceRootSetting'
@@ -27,7 +27,9 @@ export function PodWorkspacePane({
   const excludeBuildFolders = async (): Promise<void> => {
     setExcluding(true)
     try {
-      const result = await getPodWorkspaceApi()?.excludeBuildFolders()
+      const result = status
+        ? await podWorkspaceRpc.excludeBuildFolders(status.excludePlan.planId)
+        : null
       if (result) {
         const backupsNote =
           result.destination === 'none'
@@ -65,8 +67,9 @@ export function PodWorkspacePane({
   }
 
   const openSpotlightSettings = (): void => {
-    void getPodWorkspaceApi()
-      ?.openSpotlightSettings()
+    void podWorkspaceRpc
+      .openSpotlightSettings()
+      .catch(() => false)
       .then((opened) => {
         if (!opened) {
           toast.error(

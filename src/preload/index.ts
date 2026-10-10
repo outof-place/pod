@@ -19,7 +19,6 @@ import { worktreesApi } from './api/worktrees-bridge'
 import { workspaceCleanupApi } from './api/workspace-cleanup-bridge'
 import { workspaceSpaceApi } from './api/workspace-space-bridge'
 import { workspacePortsApi } from './api/workspace-ports-bridge'
-import { podWorkspaceApi } from './api/pod-workspace-bridge'
 import { ptyApi } from './api/pty-bridge'
 import { feedbackApi } from './api/feedback-bridge'
 import { crashReportsApi } from './api/crash-reports-bridge'
@@ -118,7 +117,6 @@ const api = {
   workspaceCleanup: workspaceCleanupApi,
   workspaceSpace: workspaceSpaceApi,
   workspacePorts: workspacePortsApi,
-  podWorkspace: podWorkspaceApi,
   pty: ptyApi,
   feedback: feedbackApi,
   crashReports: crashReportsApi,

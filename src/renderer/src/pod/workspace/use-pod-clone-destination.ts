@@ -1,7 +1,7 @@
 // Fork-only (Pod): local clones default to <root>/<owner>; Orca appends the repo folder.
 import { useEffect, useRef } from 'react'
 import { getDefaultCloneParent } from '@/components/sidebar/clone-defaults'
-import { getPodWorkspaceApi } from './pod-workspace-api-access'
+import { podWorkspaceRpc } from './pod-workspace-rpc'
 import { usePodWorkspaceEnabled } from './use-pod-workspace-enabled'
 
 const URL_DEBOUNCE_MS = 150
@@ -49,8 +49,8 @@ export function usePodCloneDestination({
     }
     let cancelled = false
     const timer = setTimeout(() => {
-      void getPodWorkspaceApi()
-        ?.getCloneDestination(cloneUrl.trim())
+      void podWorkspaceRpc
+        .getCloneDestination(cloneUrl.trim())
         .then((destination) => {
           if (!cancelled && destination) {
             podDefaultRef.current = destination

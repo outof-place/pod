@@ -2,6 +2,8 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi } from 'vitest'
+import { getDefaultSettings } from '../../../shared/constants'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { gitExecFileAsync } from '../../git/runner'
 import type { Repo } from '../../../shared/repo-types'
 
@@ -14,6 +16,8 @@ export type RealGitFixture = {
   cloneWithOrigin: (name: string) => Promise<{ origin: string; repo: string }>
   commit: (cwd: string, file: string, message: string) => Promise<void>
   repoRecord: (path: string, id?: string) => Repo
+  /** Orca's store as #27020's stray scan reads it: these repos, worktrees under `<root>/orca`. */
+  store: (repos: Repo[]) => { getRepos: () => Repo[]; getSettings: () => GlobalSettings }
   dispose: () => void
 }
 
@@ -65,6 +69,14 @@ export async function createRealGitFixture(prefix: string): Promise<RealGitFixtu
       addedAt: 0,
       kind: 'git'
     }),
+    store: (repos) => {
+      const settings: GlobalSettings = {
+        ...getDefaultSettings(root),
+        workspaceDir: join(root, 'orca'),
+        nestWorkspaces: false
+      }
+      return { getRepos: () => repos, getSettings: () => settings }
+    },
     dispose: () => {
       vi.unstubAllEnvs()
       rmSync(root, { recursive: true, force: true })

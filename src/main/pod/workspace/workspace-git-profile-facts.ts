@@ -10,15 +10,12 @@ import {
 import type { WorkspaceGitExec } from './workspace-git-exec'
 
 export const PROFILE_KEYS: readonly PodGitProfileKey[] = [
-  'core.untrackedCache',
-  'core.fsmonitor',
-  'index.version',
-  'checkout.workers',
   'checkout.thresholdForParallelism',
-  'fetch.writeCommitGraph',
   'maintenance.strategy',
   'maintenance.prefetch.enabled',
-  'maintenance.geometric-repack.schedule'
+  'maintenance.geometric-repack.schedule',
+  'feature.manyFiles',
+  'repack.writeBitmaps'
 ]
 
 const RECORD = POD_GIT_PROFILE_RECORD_KEY.toLowerCase()
@@ -128,54 +125,82 @@ export async function readProfileConfig(
   return result.code === 0 ? parseScopedConfig(result.stdout) : []
 }
 
-export type GitHostFacts = { version: [number, number, number] | null; geometric: boolean }
+export type GitHostFacts = {
+  version: [number, number, number] | null
+  geometric: boolean
+  /** `git backfill` (2.49+) and `git refs migrate` (2.46+), by name, as this build lists them. */
+  backfill: boolean
+  refsMigrate: boolean
+}
+
+function listsCommand(helpAll: string, name: string): boolean {
+  return new RegExp(`^\\s+${name}\\s`, 'm').test(helpAll)
+}
 
 /** Facts about the git binary itself; one probe per process is enough. */
 export function createGitHostFactsReader(git: WorkspaceGitExec, cwd: string) {
   let cached: Promise<GitHostFacts> | null = null
   return (): Promise<GitHostFacts> => {
     cached ??= (async () => {
-      const [version, help] = await Promise.all([
+      const [version, help, commands] = await Promise.all([
         git(['version'], cwd),
         // Lists every config key this build knows: a capability probe that needs no repo.
-        git(['help', '--config'], cwd)
+        git(['help', '--config'], cwd),
+        git(['help', '-a'], cwd)
       ])
       return {
         version: parseGitVersion(version.stdout),
-        geometric: help.stdout.includes('maintenance.geometric-repack.auto')
+        geometric: help.stdout.includes('maintenance.geometric-repack.auto'),
+        backfill: listsCommand(commands.stdout, 'backfill'),
+        refsMigrate: listsCommand(commands.stdout, 'refs')
       }
     })()
     return cached
   }
 }
 
+export type RepoProfileFacts = PodGitProfileFacts & {
+  refFormat: 'files' | 'reftable'
+  gitDir: string
+  commonDir: string
+  head: string | null
+  linkedWorktrees: number
+}
+
 export async function readRepoProfileFacts(
   git: WorkspaceGitExec,
   repoPath: string,
   host: GitHostFacts
-): Promise<PodGitProfileFacts | null> {
+): Promise<RepoProfileFacts | null> {
   const dirs = await readRepoGitDirs(git, repoPath)
   if (!dirs) {
     return null
   }
-  const [trackedFiles, packCount, promisor, fsmonitor] = await Promise.all([
+  const [trackedFiles, packCount, promisor, refFormat, head, worktrees] = await Promise.all([
     readIndexEntryCount(dirs.gitDir),
     countPacks(dirs.commonDir),
     git(
       ['config', '--get-regexp', '^(remote\\..*\\.promisor|extensions\\.partialclone)$'],
       repoPath
     ),
-    git(['fsmonitor--daemon', 'status'], repoPath)
+    git(['rev-parse', '--show-ref-format'], repoPath),
+    git(['rev-parse', '--verify', '--quiet', 'HEAD'], repoPath),
+    git(['worktree', 'list', '--porcelain', '-z'], repoPath)
   ])
   return {
     gitVersion: host.version,
     trackedFiles,
     packCount,
     partialClone: promisor.code === 0 && promisor.stdout.trim().length > 0,
-    // Exit 1 with "not watching" is a supported folder; git names refusals explicitly.
-    fsmonitorSupported: !/incompatible|not supported|is not a git command/i.test(
-      `${fsmonitor.stdout}\n${fsmonitor.stderr}`
-    ),
-    geometricMaintenance: host.geometric
+    geometricMaintenance: host.geometric,
+    refFormat: refFormat.stdout.trim() === 'reftable' ? 'reftable' : 'files',
+    gitDir: dirs.gitDir,
+    commonDir: dirs.commonDir,
+    head: head.code === 0 ? head.stdout.trim() : null,
+    // One `worktree <path>` record per checkout; the first is the main one.
+    linkedWorktrees: Math.max(
+      0,
+      worktrees.stdout.split('\0').filter((f) => f.startsWith('worktree ')).length - 1
+    )
   }
 }

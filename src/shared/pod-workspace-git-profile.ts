@@ -1,33 +1,40 @@
-// Fork-only (Pod): the git config Pod sets in the repositories it manages, and the pure planner
-// that decides it. Measured on a 35k-file, 13k-commit repo with 22k refs (git 2.56, M4 Max).
+// Fork-only (Pod): the git config Pod sets in the repositories it manages, on top of Orca's
+// recommended tuning (#27028). Measured on a 35k-file blobless repo (git 2.56, M4 Max).
 
-/** Multi-valued `<key>=<value>` record of what Pod wrote, so a revert removes exactly that. */
+/** Multi-valued `<key>=<value>` record of what Pod wrote, so an undo removes exactly that. */
 export const POD_GIT_PROFILE_RECORD_KEY = 'pod.workspaceConfig'
 
-/** Repos at least this big get the file watcher and index v4: status 808 → 135 M instructions. */
+/**
+ * From here Pod opts into Orca's file watcher: status 808 → 135 M instructions on 35k files;
+ * below it a daemon (~5 MiB) buys a few ms. Orca's own index v4 floor is the same count.
+ */
 export const POD_GIT_PROFILE_LARGE_REPO_FILES = 10_000
 
 /** Pack count above which Pod repacks hourly rather than daily (lazy-fetch churn). */
 export const POD_GIT_PROFILE_MANY_PACKS = 50
 
+/** Bytes per missing blob a backfill downloads, measured on this repo's history (8.7–8.9 KB). */
+export const POD_BACKFILL_BYTES_PER_BLOB = 8_800
+
+/** Pod's own keys; Orca's (#27028) come from its planner. Opt-ins are off unless ticked. */
 export type PodGitProfileKey =
-  | 'core.untrackedCache'
-  | 'core.fsmonitor'
-  | 'index.version'
-  | 'checkout.workers'
   | 'checkout.thresholdForParallelism'
-  | 'fetch.writeCommitGraph'
   | 'maintenance.strategy'
   | 'maintenance.prefetch.enabled'
   | 'maintenance.geometric-repack.schedule'
+  | 'feature.manyFiles'
+  | 'repack.writeBitmaps'
+
+export const POD_OPT_IN_KEYS: Readonly<Record<'many-files' | 'bitmaps', PodGitProfileKey>> = {
+  'many-files': 'feature.manyFiles',
+  bitmaps: 'repack.writeBitmaps'
+}
 
 export type PodGitProfileFacts = {
   gitVersion: readonly [number, number, number] | null
   trackedFiles: number | null
   packCount: number | null
   partialClone: boolean
-  /** `git fsmonitor--daemon status` accepted the worktree (it refuses network mounts). */
-  fsmonitorSupported: boolean
   /** `git help --config` lists `maintenance.geometric-repack.auto`. */
   geometricMaintenance: boolean
 }
@@ -41,106 +48,67 @@ export type PodGitProfileCurrent = Record<
   { local: string | null; other: boolean; recorded: string | null }
 >
 
-export type PodGitProfileAction = 'set' | 'keep' | 'user' | 'skip'
-
-export type PodGitProfileReason =
-  | 'always'
-  | 'large-repo'
-  | 'small-repo'
-  | 'git-too-old'
-  | 'fsmonitor-unsupported'
-  | 'no-geometric-maintenance'
-  | 'pack-churn'
-  | 'few-packs'
-  | 'user-value'
-  | 'already-set'
+export type PodGitProfileAction = 'set' | 'keep' | 'user' | 'skip' | 'opt-in'
 
 export type PodGitProfileRow = {
-  key: PodGitProfileKey
+  key: string
   value: string
   action: PodGitProfileAction
-  reason: PodGitProfileReason
+  /** Pod's reason, or Orca's skip reason for its keys. */
+  reason: string
   /** What the repository has now; null when unset. */
   current: string | null
+  /** `orca`: #27028's key, recorded in `orca.performanceConfig`; `pod`: Pod's own. */
+  source: 'orca' | 'pod'
 }
 
-type Wanted = { key: PodGitProfileKey; value: string; when: () => PodGitProfileReason | null }
+type Wanted = { key: PodGitProfileKey; value: string; reason: string | null; skip: string }
 
 function atLeast(version: PodGitProfileFacts['gitVersion'], major: number, minor: number): boolean {
-  if (!version) {
-    return false
-  }
-  return version[0] > major || (version[0] === major && version[1] >= minor)
+  return version !== null && (version[0] > major || (version[0] === major && version[1] >= minor))
 }
 
-function wantedKeys(facts: PodGitProfileFacts): { entry: Wanted; skip: PodGitProfileReason }[] {
-  const large = (facts.trackedFiles ?? 0) >= POD_GIT_PROFILE_LARGE_REPO_FILES
+function wantedKeys(facts: PodGitProfileFacts): Wanted[] {
   const churn = facts.partialClone || (facts.packCount ?? 0) > POD_GIT_PROFILE_MANY_PACKS
-  const geometric = (): PodGitProfileReason | null => (facts.geometricMaintenance ? 'always' : null)
+  const geometric = facts.geometricMaintenance ? 'measured' : null
   return [
-    { entry: { key: 'core.untrackedCache', value: 'true', when: () => 'always' }, skip: 'always' },
     {
-      entry: {
-        key: 'core.fsmonitor',
-        value: 'true',
-        // Why 2.37: the builtin daemon. Older Git reads `true` as a hook name and misses edits.
-        when: () =>
-          large && facts.fsmonitorSupported && atLeast(facts.gitVersion, 2, 37)
-            ? 'large-repo'
-            : null
-      },
-      skip: !large
-        ? 'small-repo'
-        : !facts.fsmonitorSupported
-          ? 'fsmonitor-unsupported'
-          : 'git-too-old'
-    },
-    {
-      entry: { key: 'index.version', value: '4', when: () => (large ? 'large-repo' : null) },
-      skip: 'small-repo'
-    },
-    {
-      entry: {
-        key: 'checkout.workers',
-        value: '0',
-        when: () => (atLeast(facts.gitVersion, 2, 32) ? 'always' : null)
-      },
+      // Why: workers=0 took worktree add 3.8 → 2.4 s but a 785-file branch switch 0.7 → 1.3 s;
+      // at 4000 the add stays parallel (2.1 s) and the switch sequential (0.6 s).
+      key: 'checkout.thresholdForParallelism',
+      value: '4000',
+      reason: atLeast(facts.gitVersion, 2, 32) ? 'measured' : null,
       skip: 'git-too-old'
     },
+    // Why geometric: 3754 packs cost every git command +32 ms; one repack took cat-file 46 → 12 ms,
+    // ahead/behind 144 → 12 ms. The incremental strategy's MIDX repack left the packs (3754 → 3811).
     {
-      // Why: workers pay off on a whole checkout (worktree add, 35k files: 3.8 → 2.4 s) but a
-      // branch switch of 785 files took 0.7 → 1.3 s with them; only big checkouts go parallel.
-      entry: {
-        key: 'checkout.thresholdForParallelism',
-        value: '4000',
-        when: () => (atLeast(facts.gitVersion, 2, 32) ? 'always' : null)
-      },
-      skip: 'git-too-old'
+      key: 'maintenance.strategy',
+      value: 'geometric',
+      reason: geometric,
+      skip: 'no-geometric-maintenance'
     },
+    // Why: Pod fetches on its own; an hourly background fetch per repo costs a metered link.
     {
-      entry: { key: 'fetch.writeCommitGraph', value: 'true', when: () => 'always' },
-      skip: 'always'
-    },
-    {
-      entry: { key: 'maintenance.strategy', value: 'geometric', when: geometric },
+      key: 'maintenance.prefetch.enabled',
+      value: 'false',
+      reason: geometric,
       skip: 'no-geometric-maintenance'
     },
     {
-      // Why: Pod fetches on its own; an hourly background fetch per repo costs a metered link.
-      entry: { key: 'maintenance.prefetch.enabled', value: 'false', when: geometric },
-      skip: 'no-geometric-maintenance'
-    },
-    {
-      // Why: a blobless clone gains a pack per lazy fetch (50-90 a minute measured); each costs
-      // every later git command an index probe. Daily repack lets thousands pile up.
-      entry: {
-        key: 'maintenance.geometric-repack.schedule',
-        value: 'hourly',
-        when: () => (facts.geometricMaintenance && churn ? 'pack-churn' : null)
-      },
+      // Why: a blobless clone gains a pack per lazy fetch (50–90 a minute measured).
+      key: 'maintenance.geometric-repack.schedule',
+      value: 'hourly',
+      reason: facts.geometricMaintenance && churn ? 'pack-churn' : null,
       skip: facts.geometricMaintenance ? 'few-packs' : 'no-geometric-maintenance'
     }
   ]
+}
+
+function rowFor(key: string, value: string, current: PodGitProfileCurrent) {
+  const state = current[key.toLowerCase()] ?? { local: null, other: false, recorded: null }
+  const theirs = state.other || (state.local !== null && state.recorded !== state.local)
+  return { state, theirs, base: { key, value, current: state.local, source: 'pod' as const } }
 }
 
 /** Never overrides: any value Pod did not record is the user's, including `false`. */
@@ -148,25 +116,33 @@ export function planPodGitProfile(
   facts: PodGitProfileFacts,
   current: PodGitProfileCurrent
 ): PodGitProfileRow[] {
-  return wantedKeys(facts).map(({ entry, skip }) => {
-    const state = current[entry.key.toLowerCase()] ?? { local: null, other: false, recorded: null }
-    const reason = entry.when()
-    const base = { key: entry.key, value: entry.value, current: state.local }
-    if (state.other || (state.local !== null && state.recorded !== state.local)) {
+  const rows: PodGitProfileRow[] = wantedKeys(facts).map((wanted) => {
+    const { state, theirs, base } = rowFor(wanted.key, wanted.value, current)
+    if (theirs) {
       return {
         ...base,
-        action: state.local === entry.value ? 'keep' : 'user',
+        action: state.local === wanted.value ? 'keep' : 'user',
         reason: 'user-value'
       }
     }
-    if (reason === null) {
-      return { ...base, action: 'skip', reason: skip }
+    if (wanted.reason === null) {
+      return { ...base, action: 'skip', reason: wanted.skip }
     }
-    if (state.local === entry.value) {
+    if (state.local === wanted.value) {
       return { ...base, action: 'keep', reason: 'already-set' }
     }
-    return { ...base, action: 'set', reason }
+    return { ...base, action: 'set', reason: wanted.reason }
   })
+  // Opt-ins: no measured win, so only a tick sets them.
+  for (const [optIn, key] of Object.entries(POD_OPT_IN_KEYS)) {
+    const { state, theirs, base } = rowFor(key, 'true', current)
+    rows.push({
+      ...base,
+      action: theirs ? 'user' : state.local === 'true' ? 'keep' : 'opt-in',
+      reason: theirs ? 'user-value' : optIn
+    })
+  }
+  return rows
 }
 
 /** `2.56.0` from `git version 2.56.0 (Apple Git-157)`; null when unparseable. */

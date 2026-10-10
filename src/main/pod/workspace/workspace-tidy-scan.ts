@@ -1,17 +1,22 @@
-import { readdir, stat } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { access } from 'node:fs/promises'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import type {
   PodTidyBlocker,
   PodTidyReason,
   PodTidyScan,
-  PodTidyStrayFolder,
   PodTidyWorktree
 } from '../../../shared/pod-workspace-tidy-types'
 import type { Repo } from '../../../shared/repo-types'
 import { WORKTREE_ID_SEPARATOR } from '../../../shared/worktree/id'
+import type { WorkspaceCleanupGitRoute } from '../../ipc/workspace-cleanup-git-route'
+import {
+  createWorkspaceCleanupBaseRefResolver,
+  isWorkspaceCleanupBranchMerged
+} from '../../ipc/workspace-cleanup-merged'
 import type { WorkspaceGitExec } from './workspace-git-exec'
 import type { WorkspaceJournal } from './workspace-journal'
+import { fingerprintOf, type WorkspacePlanStore } from './workspace-plan-store'
 import { findProcessesInside, type ProcessCwdReader } from './workspace-process-cwds'
 import {
   BRANCH_TRACKING_ARGS,
@@ -24,69 +29,78 @@ import {
   type BranchTracking,
   type PorcelainWorktree
 } from './workspace-tidy-git'
+import { scanStrayFolders, type WorkspaceStrayStore } from './workspace-tidy-strays'
 
 export const TIDY_STALE_MS = 30 * 24 * 60 * 60 * 1000
 /** A watcher daemon idle this long is ~5 MiB held for nothing (75 daemons held 400 MiB). */
 export const TIDY_IDLE_WATCHER_MS = 2 * 60 * 60 * 1000
 const REPO_CONCURRENCY = 2
 const WORKTREE_CONCURRENCY = 4
-const STRAY_MIN_AGE_MS = 24 * 60 * 60 * 1000
-const MAX_STRAY_ENTRIES = 200
+const LOCAL_ROUTE: WorkspaceCleanupGitRoute = { kind: 'local', hostId: LOCAL_EXECUTION_HOST_ID }
 
 export type WorkspaceTidyScanDeps = {
   git: WorkspaceGitExec
   processes: ProcessCwdReader | null
   journal: WorkspaceJournal
-  defaultBaseRef: (repo: Repo) => Promise<string | null>
+  plans: WorkspacePlanStore
+  store: WorkspaceStrayStore
   now?: () => number
 }
 
-type RepoFacts = {
-  base: string | null
-  tracking: Map<string, BranchTracking>
-}
+type ScannedWorktree = Omit<PodTidyWorktree, 'processes' | 'fingerprint'> & { statusText: string }
 
+/**
+ * Orca's merged rule (#27020: ancestry, and a branch with a single reflog entry never counts),
+ * plus Pod's: a branch restored from a Pod archive has one entry too, yet carried work.
+ */
 async function isMerged(
   git: WorkspaceGitExec,
-  repo: Repo,
   entry: PorcelainWorktree,
-  facts: RepoFacts
+  isMain: boolean,
+  base: string | null
 ): Promise<boolean> {
-  if (!entry.branch || !entry.head || !facts.base) {
+  if (!entry.branch || !base) {
     return false
   }
-  // A branch is never "merged" into its own remote copy (`main` vs `origin/main`).
+  const checkout = {
+    path: entry.path,
+    branch: entry.branch,
+    isMainWorktree: isMain,
+    prunable: false
+  }
+  if (await isWorkspaceCleanupBranchMerged(checkout, base, LOCAL_ROUTE)) {
+    return true
+  }
   const short = entry.branch.replace(/^refs\/heads\//, '')
-  if (facts.base === short || facts.base.endsWith(`/${short}`)) {
+  if (isMain || base === short || base.endsWith(`/${short}`)) {
     return false
   }
-  const ancestor = await git(['merge-base', '--is-ancestor', entry.head, facts.base], repo.path)
-  if (ancestor.code !== 0) {
-    return false
-  }
-  // A branch created and never committed to also sits behind its base; its reflog says so.
-  // One restored from a Pod archive was committed to before, so it still counts.
-  const reflog = await git(['reflog', 'show', '-n', '2', '--format=%gs', entry.branch], repo.path)
+  const reflog = await git(['reflog', 'show', '-n', '2', '--format=%gs', entry.branch], entry.path)
   const lines = reflog.stdout.split('\n').filter(Boolean)
-  return lines.length > 1 || (lines.length === 1 && lines[0].includes('refs/pod/archive/'))
+  if (lines.length !== 1 || !lines[0].includes('refs/pod/archive/')) {
+    return false
+  }
+  return (await git(['merge-base', '--is-ancestor', 'HEAD', base], entry.path)).code === 0
 }
 
 async function scanWorktree(
-  deps: WorkspaceTidyScanDeps,
+  git: WorkspaceGitExec,
   repo: Repo,
   entry: PorcelainWorktree,
-  facts: RepoFacts,
+  tracking: Map<string, BranchTracking>,
+  base: string | null,
   isMain: boolean,
   now: number
-): Promise<Omit<PodTidyWorktree, 'processes'>> {
+): Promise<ScannedWorktree> {
   const reasons: PodTidyReason[] = []
   const blockers: PodTidyBlocker[] = []
   const gitDir = entry.prunable ? null : await readWorktreeGitDir(entry.path)
   const [activity, watcher] = gitDir
     ? await Promise.all([readWorktreeActivity(gitDir), isFsmonitorSocketPresent(gitDir)])
     : [0, false]
-  const tracking = entry.branch ? facts.tracking.get(entry.branch) : undefined
+  const branch = entry.branch ? tracking.get(entry.branch) : undefined
   let dirtyCount: number | null = null
+  let statusText = ''
   if (isMain) {
     blockers.push('main-worktree')
   }
@@ -96,20 +110,28 @@ async function scanWorktree(
   if (entry.prunable) {
     reasons.push('prunable')
   } else {
-    const status = await deps.git(
-      ['--no-optional-locks', 'status', '--porcelain=v1', '--untracked-files=normal'],
+    const status = await git(
+      // Rename detection reads blobs; a blobless clone would fetch them.
+      [
+        '--no-optional-locks',
+        'status',
+        '--porcelain=v1',
+        '--untracked-files=normal',
+        '--no-renames'
+      ],
       entry.path
     )
+    statusText = status.stdout
     dirtyCount = status.code === 0 ? countStatusLines(status.stdout) : null
     if (dirtyCount === null) {
       blockers.push('git-error')
     } else if (dirtyCount > 0) {
       blockers.push('dirty')
     }
-    if (!isMain && (await isMerged(deps.git, repo, entry, facts))) {
+    if (await isMerged(git, entry, isMain, base)) {
       reasons.push('merged')
     }
-    if (tracking?.gone) {
+    if (branch?.gone) {
       reasons.push('upstream-gone')
     }
     if (activity > 0 && now - activity >= TIDY_STALE_MS) {
@@ -121,8 +143,8 @@ async function scanWorktree(
   }
   // Unpushed: ahead of a live upstream, or no upstream and not already in the base.
   const unpushed =
-    tracking && !tracking.gone && tracking.upstream
-      ? (tracking.ahead ?? 0) > 0
+    branch && !branch.gone && branch.upstream
+      ? (branch.ahead ?? 0) > 0
       : !reasons.includes('merged') && !isMain && entry.branch !== null
   if (unpushed && !entry.prunable) {
     blockers.push('unpushed')
@@ -137,78 +159,57 @@ async function scanWorktree(
     reasons,
     blockers,
     lastActivityAt: activity,
-    ahead: tracking?.ahead ?? null,
+    ahead: branch?.ahead ?? null,
     dirtyCount,
-    fsmonitorRunning: watcher
+    fsmonitorRunning: watcher,
+    statusText
   }
-}
-
-/** Pod's layout keeps linked worktrees in `<repo>.worktrees/`; anything there git does not name is stray. */
-async function findStrayFolders(
-  repo: Repo,
-  registered: ReadonlySet<string>,
-  now: number
-): Promise<PodTidyStrayFolder[]> {
-  const parent = join(dirname(repo.path), `${basename(repo.path)}.worktrees`)
-  let names: string[]
-  try {
-    names = (await readdir(parent))
-      .filter((name) => !name.startsWith('.'))
-      .slice(0, MAX_STRAY_ENTRIES)
-  } catch {
-    return []
-  }
-  const out: PodTidyStrayFolder[] = []
-  for (const name of names) {
-    const path = join(parent, name)
-    if (registered.has(path)) {
-      continue
-    }
-    try {
-      const info = await stat(path)
-      // A folder with any `.git` may be a checkout git lost track of: leave it to the user.
-      const hasGit = await stat(join(path, '.git')).then(
-        () => true,
-        () => false
-      )
-      if (info.isDirectory() && !hasGit && now - info.mtimeMs >= STRAY_MIN_AGE_MS) {
-        out.push({ repoId: repo.id, path, modifiedAt: info.mtimeMs })
-      }
-    } catch {
-      // Vanished between readdir and stat.
-    }
-  }
-  return out
 }
 
 export async function scanRepoWorktrees(
-  deps: WorkspaceTidyScanDeps,
+  git: WorkspaceGitExec,
   repo: Repo,
   now: number
-): Promise<{
-  worktrees: Omit<PodTidyWorktree, 'processes'>[]
-  stray: PodTidyStrayFolder[]
-  prunable: string[]
-}> {
+): Promise<{ worktrees: ScannedWorktree[]; registered: string[] }> {
+  const resolveBase = createWorkspaceCleanupBaseRefResolver(repo, LOCAL_ROUTE)
   const [list, trackingOut, base] = await Promise.all([
-    deps.git(['worktree', 'list', '--porcelain', '-z'], repo.path),
-    deps.git(BRANCH_TRACKING_ARGS, repo.path),
-    deps.defaultBaseRef(repo)
+    git(['worktree', 'list', '--porcelain', '-z'], repo.path),
+    git(BRANCH_TRACKING_ARGS, repo.path),
+    resolveBase({}).catch(() => null)
   ])
   if (list.code !== 0) {
     throw new Error(list.stderr.trim() || 'git worktree list failed')
   }
   const entries = parseWorktreePorcelainZ(list.stdout).filter((entry) => !entry.bare)
-  const facts: RepoFacts = { base, tracking: parseBranchTracking(trackingOut.stdout) }
+  const tracking = parseBranchTracking(trackingOut.stdout)
   const worktrees = await mapWithConcurrency(entries, WORKTREE_CONCURRENCY, (entry, index) =>
-    scanWorktree(deps, repo, entry, facts, index === 0, now)
+    scanWorktree(git, repo, entry, tracking, base, index === 0, now)
   )
-  const registered = new Set(entries.map((entry) => entry.path))
-  return {
-    worktrees,
-    stray: await findStrayFolders(repo, registered, now),
-    prunable: entries.filter((entry) => entry.prunable).map((entry) => entry.path)
-  }
+  return { worktrees, registered: entries.map((entry) => entry.path) }
+}
+
+/** What an apply depends on: the commit, the branch, the exact status and who works inside. */
+export function worktreeFingerprint(
+  worktree: Omit<PodTidyWorktree, 'fingerprint'> & { statusText: string }
+): string {
+  return fingerprintOf([
+    worktree.path,
+    worktree.head,
+    worktree.branch,
+    worktree.statusText,
+    [...worktree.blockers].sort(),
+    worktree.processes.map((process) => process.pid).sort((a, b) => a - b)
+  ])
+}
+
+async function present(path: string | null): Promise<boolean> {
+  return (
+    path !== null &&
+    (await access(path).then(
+      () => true,
+      () => false
+    ))
+  )
 }
 
 export async function scanWorkspaceTidy(
@@ -219,13 +220,13 @@ export async function scanWorkspaceTidy(
   const errors: PodTidyScan['errors'] = []
   const perRepo = await mapWithConcurrency(repos, REPO_CONCURRENCY, async (repo) => {
     try {
-      return { repo, ...(await scanRepoWorktrees(deps, repo, now)) }
+      return { repo, ...(await scanRepoWorktrees(deps.git, repo, now)) }
     } catch (error) {
       errors.push({
         repoId: repo.id,
         message: error instanceof Error ? error.message : String(error)
       })
-      return { repo, worktrees: [], stray: [], prunable: [] }
+      return { repo, worktrees: [], registered: [] }
     }
   })
   const scanned = perRepo.flatMap((entry) => entry.worktrees)
@@ -233,25 +234,58 @@ export async function scanWorkspaceTidy(
     .filter((entry) => !entry.reasons.includes('prunable'))
     .map((entry) => entry.path)
   const inside = deps.processes ? await findProcessesInside(deps.processes, live) : new Map()
-  const worktrees: PodTidyWorktree[] = scanned.map((entry) => {
+  const fingerprints = new Map<string, string>()
+  const worktrees: PodTidyWorktree[] = scanned.map(({ statusText, ...entry }) => {
     const processes = inside.get(entry.path) ?? []
-    return {
-      ...entry,
-      processes,
-      blockers: processes.length > 0 ? [...entry.blockers, 'process-inside'] : entry.blockers
-    }
+    const blockers: PodTidyBlocker[] =
+      processes.length > 0 ? [...entry.blockers, 'process-inside'] : entry.blockers
+    const fingerprint = worktreeFingerprint({ ...entry, blockers, processes, statusText })
+    fingerprints.set(entry.worktreeId, fingerprint)
+    return { ...entry, processes, blockers, fingerprint }
   })
+  const strayFolders = await scanStrayFolders(
+    deps.store,
+    repos,
+    perRepo.flatMap((entry) => entry.registered),
+    now
+  )
+  for (const folder of strayFolders) {
+    fingerprints.set(`stray:${folder.path}`, folder.fingerprint)
+  }
+  const prunable = perRepo
+    .map((entry) => ({
+      repoId: entry.repo.id,
+      paths: entry.worktrees.filter((w) => w.reasons.includes('prunable')).map((w) => w.path)
+    }))
+    .filter((entry) => entry.paths.length > 0)
+  for (const entry of prunable) {
+    fingerprints.set(`prune:${entry.repoId}`, fingerprintOf(entry.paths))
+  }
   const journal = await deps.journal.read()
   const inScope = (entry: { repoId: string }): boolean =>
     repos.some((repo) => repo.id === entry.repoId)
+  const archives = journal.archives.filter(inScope)
+  const trashed = journal.trashed.filter(inScope)
+  for (const archive of archives) {
+    fingerprints.set(
+      `archive:${archive.id}`,
+      fingerprintOf([archive.id, await present(archive.trashedPath)])
+    )
+  }
+  for (const item of trashed) {
+    fingerprints.set(
+      `trashed:${item.id}`,
+      fingerprintOf([item.id, await present(item.trashedPath)])
+    )
+  }
   return {
+    ...deps.plans.issue('tidy', fingerprints),
     scannedAt: now,
     worktrees,
-    strayFolders: perRepo.flatMap((entry) => entry.stray),
-    prunable: perRepo
-      .filter((entry) => entry.prunable.length > 0)
-      .map((entry) => ({ repoId: entry.repo.id, names: entry.prunable })),
-    archives: journal.archives.filter(inScope),
+    strayFolders,
+    prunable,
+    archives,
+    trashed,
     adoptions: journal.adoptions.filter(inScope),
     errors
   }

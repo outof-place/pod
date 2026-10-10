@@ -1,15 +1,21 @@
-// Fork-only (Pod): the workspace root and its health snapshot, shared by main, preload and renderer.
+// Fork-only (Pod): the workspace root and its health snapshot, shared by main, renderer and the
+// native shell through the podWorkspace.* runtime RPC.
+import type { PodWorkspacePlanRef } from './pod-workspace-tidy-types'
 
 /** Used when `podWorkspaceRoot` is unset; `~` is the user's home. */
 export const POD_WORKSPACE_DEFAULT_ROOT = '~/pod'
 
-export const POD_WORKSPACE_IPC = {
-  enabled: 'pod:workspace:enabled',
-  status: 'pod:workspace:status',
-  validateRoot: 'pod:workspace:validateRoot',
-  excludeBuildFolders: 'pod:workspace:excludeBuildFolders',
-  openSpotlightSettings: 'pod:workspace:openSpotlightSettings',
-  cloneDestination: 'pod:workspace:cloneDestination'
+export const POD_WORKSPACE_RPC = {
+  enabled: 'podWorkspace.enabled',
+  status: 'podWorkspace.status',
+  validateRoot: 'podWorkspace.validateRoot',
+  excludeBuildFolders: 'podWorkspace.excludeBuildFolders',
+  openSpotlightSettings: 'podWorkspace.openSpotlightSettings',
+  cloneDestination: 'podWorkspace.cloneDestination',
+  tidyScan: 'podWorkspace.tidyScan',
+  tidyApply: 'podWorkspace.tidyApply',
+  gitProfile: 'podWorkspace.gitProfile',
+  adopt: 'podWorkspace.adopt'
 } as const
 
 export type PodWorkspaceRootIssueCode =
@@ -111,6 +117,9 @@ export type PodWorkspaceStatus = {
   migrationScript: { path: string; exists: boolean }
   generatedAt: number
 }
+
+/** The status, plus the plan an Exclude build folders click names. */
+export type PodWorkspaceStatusReply = PodWorkspaceStatus & { excludePlan: PodWorkspacePlanRef }
 
 export type PodWorkspaceExcludeResult = {
   excluded: number

@@ -435,10 +435,13 @@ import {
 import {
   PodWorkspaceAdoptParams,
   PodWorkspaceCloneDestinationParams,
+  PodWorkspaceExcludeBuildFoldersParams,
   PodWorkspaceGitProfileParams,
   PodWorkspaceStatusParams,
   PodWorkspaceTidyApplyParams,
-  PodWorkspaceTidyScanParams
+  PodWorkspaceTidyScanParams,
+  PodWorkspaceUserIntentParams,
+  PodWorkspaceValidateRootParams
 } from './pod-workspace-params'
 import {
   PreflightAgentDetection,
@@ -1121,10 +1124,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'podWorkspace.adopt': PodWorkspaceAdoptParams,
   'podWorkspace.cloneDestination': PodWorkspaceCloneDestinationParams,
   'podWorkspace.enabled': null,
+  'podWorkspace.excludeBuildFolders': PodWorkspaceExcludeBuildFoldersParams,
   'podWorkspace.gitProfile': PodWorkspaceGitProfileParams,
+  'podWorkspace.openSpotlightSettings': PodWorkspaceUserIntentParams,
   'podWorkspace.status': PodWorkspaceStatusParams,
   'podWorkspace.tidyApply': PodWorkspaceTidyApplyParams,
   'podWorkspace.tidyScan': PodWorkspaceTidyScanParams,
+  'podWorkspace.validateRoot': PodWorkspaceValidateRootParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,

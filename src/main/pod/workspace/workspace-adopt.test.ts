@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { claudeProjectKey, createWorkspaceAdopt } from './workspace-adopt'
 import { createWorkspaceGitExec } from './workspace-git-exec'
 import { createWorkspaceJournal } from './workspace-journal'
+import { createWorkspacePlanStore } from './workspace-plan-store'
 import type { ProcessCwdReader } from './workspace-process-cwds'
 import { createRealGitFixture, type RealGitFixture } from './workspace-real-git-test-fixture'
 
@@ -12,6 +13,7 @@ describe('workspace adopt (real git)', () => {
   let repo: string
   let podRoot: string
   let cwds: Map<number, string>
+  let plans: ReturnType<typeof createWorkspacePlanStore>
 
   const processes: ProcessCwdReader = {
     listPids: () => [...cwds.keys()],
@@ -26,6 +28,7 @@ describe('workspace adopt (real git)', () => {
     podRoot = join(fx.root, 'pod')
     mkdirSync(podRoot)
     cwds = new Map()
+    plans = createWorkspacePlanStore()
   })
 
   afterEach(() => fx.dispose())
@@ -34,6 +37,7 @@ describe('workspace adopt (real git)', () => {
     createWorkspaceAdopt({
       git: createWorkspaceGitExec(),
       journal: createWorkspaceJournal(join(fx.root, 'journal.json')),
+      plans,
       processes,
       getRepo: () => fx.repoRecord(repo),
       root: () => podRoot,
@@ -62,7 +66,8 @@ describe('workspace adopt (real git)', () => {
     })
     expect(plan.claudeProjectDir).toBe(claude)
 
-    const record = await service.apply('repo-1')
+    const record = await service.apply(plan.planId)
+    await expect(service.apply(plan.planId)).rejects.toThrow(/expired/)
     expect(lstatSync(repo).isSymbolicLink()).toBe(true)
     expect(readlinkSync(repo)).toBe(target)
     // git follows the move in the linked worktree, not just through the symlink.
@@ -76,7 +81,9 @@ describe('workspace adopt (real git)', () => {
     ).toBe(true)
     expect(lstatSync(claude).isSymbolicLink()).toBe(true)
 
-    await service.undo(record.id)
+    const undoPlan = await service.planUndo(record.id)
+    expect(undoPlan.blockers).toEqual([])
+    await service.undo(undoPlan.planId)
     expect(lstatSync(repo).isDirectory()).toBe(true)
     expect(existsSync(target)).toBe(false)
     expect(await fx.git(linked, 'rev-parse', '--git-common-dir')).toContain(repo)
@@ -85,12 +92,35 @@ describe('workspace adopt (real git)', () => {
     expect(lstatSync(claude).isDirectory()).toBe(true)
   })
 
-  it('refuses while a process works inside, or when the target exists', async () => {
-    cwds.set(77, join(repo, 'src'))
+  it('refuses when the target exists, whatever the user ticks', async () => {
     mkdirSync(join(podRoot, 'acme', 'app'), { recursive: true })
-    const plan = await adopt().plan('repo-1')
-    expect(plan.blockers).toEqual(expect.arrayContaining(['process-inside', 'target-exists']))
-    await expect(adopt().apply('repo-1')).rejects.toThrow(/Not moved/)
+    const service = adopt()
+    const plan = await service.plan('repo-1')
+    expect(plan.blockers).toEqual(['target-exists'])
+    await expect(service.apply(plan.planId, ['process-inside'])).rejects.toThrow(/target-exists/)
+    expect(lstatSync(repo).isDirectory()).toBe(true)
+  })
+
+  it('moves with a process inside only once the user ticked it', async () => {
+    cwds.set(77, join(repo, 'src'))
+    const service = adopt()
+    const plan = await service.plan('repo-1')
+    expect(plan.blockers).toEqual(['process-inside'])
+    await expect(service.apply(plan.planId)).rejects.toThrow(/process-inside/)
+    expect(lstatSync(repo).isDirectory()).toBe(true)
+    const record = await service.apply(plan.planId, ['process-inside'])
+    // Moving back under a running process is refused outright.
+    cwds.set(77, join(record.to, 'src'))
+    const undoPlan = await service.planUndo(record.id)
+    expect(undoPlan.blockers).toEqual(['process-inside'])
+    await expect(service.undo(undoPlan.planId)).rejects.toThrow(/Not moved back/)
+  })
+
+  it('refuses a plan the folder moved past', async () => {
+    const service = adopt()
+    const plan = await service.plan('repo-1')
+    await fx.git(repo, 'worktree', 'add', '-q', '-b', 'late', join(fx.root, 'late'))
+    await expect(service.apply(plan.planId)).rejects.toThrow(/changed since you looked/)
     expect(lstatSync(repo).isDirectory()).toBe(true)
   })
 
