@@ -62,11 +62,15 @@ function tcpListenersByPid(pids: readonly number[]): Map<number, string[]> {
   return listeners
 }
 
-/** The app's descendants plus every process running from its bundle, with their TCP listeners. */
+/** The app, every process running from its bundle, and all their descendants, with TCP listeners. */
 export function listenerCensus(rootPid: number, bundle: string): CensusProcess[] {
   const table = processTable()
   const prefixes = bundleContentsPrefixes(bundle)
-  const pids = new Set([rootPid])
+  // Why seed with the bundle: a re-parented daemon's children (shells, relays) run from outside it.
+  const pids = new Set([
+    rootPid,
+    ...table.filter((row) => isInBundle(row, prefixes)).map((row) => row.pid)
+  ])
   let grew = true
   while (grew) {
     grew = false
@@ -75,11 +79,6 @@ export function listenerCensus(rootPid: number, bundle: string): CensusProcess[]
         pids.add(row.pid)
         grew = true
       }
-    }
-  }
-  for (const row of table) {
-    if (isInBundle(row, prefixes)) {
-      pids.add(row.pid)
     }
   }
   const listeners = tcpListenersByPid([...pids])
