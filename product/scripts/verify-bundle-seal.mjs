@@ -3,7 +3,8 @@
 // under Resources/claude-acc broke the seal of 0.0.1-test, and Gatekeeper then called the
 // installed app damaged. Runs the bundle's script entry points from a temporary copy (the
 // probes come from the claude-acc layer when it is stacked), then requires the copy to be
-// unchanged and its signature to verify.
+// unchanged and its signature to verify. An app that ships Resources/claude-acc fails when no
+// probe ran.
 //
 //   node product/scripts/verify-bundle-seal.mjs <Pod.app>
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -44,6 +45,15 @@ function sealProbes(app) {
   return typeof config.podAccSealProbes === 'function' ? config.podAccSealProbes(app) : []
 }
 
+/** Why: v5.3.1 passed 0.0.1-test3 "intact after 0 probe(s)" without running claude-acc's Python. */
+export function assertProbesCoverPayload(app, probes) {
+  if (probes.length === 0 && existsSync(join(app, 'Contents', 'Resources', 'claude-acc'))) {
+    throw new Error(
+      'the app ships Resources/claude-acc, but no probe ran: stack the claude-acc layer (podAccSealProbes)'
+    )
+  }
+}
+
 function main() {
   const source = process.argv[2]
   if (!source || !existsSync(join(source, 'Contents', 'Info.plist'))) {
@@ -56,6 +66,7 @@ function main() {
     execFileSync('/usr/bin/ditto', [source, app])
     const before = Date.now()
     const probes = sealProbes(app)
+    assertProbesCoverPayload(app, probes)
     for (const probe of probes) {
       const result = spawnSync(probe.command, probe.args ?? [], {
         encoding: 'utf8',
