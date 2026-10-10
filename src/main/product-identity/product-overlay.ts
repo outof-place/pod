@@ -40,6 +40,14 @@ export function brandProductCopy(text: string): string {
   return branding ? brandProductName(text, branding) : text
 }
 
+/** Renames upstream copy on a built native notification, so its construction stays upstream's. */
+export function brandNotificationCopy(notification: { title: string; body: string }): void {
+  if (getProductNameBranding()) {
+    notification.title = brandProductCopy(notification.title)
+    notification.body = brandProductCopy(notification.body)
+  }
+}
+
 export function getProductUiIdentity(): ProductUiIdentity | null {
   const identity = getProductIdentity()
   if (!identity) {
