@@ -24,6 +24,23 @@ const repoRoot = join(__dirname, '..')
 // claude-acc payload and distro plugins (identity.claudeAcc); the file arrives with the pod/acc branch.
 const podAccConfig = join(repoRoot, 'config', 'pod-acc-extra-resources.cjs')
 const podAcc = existsSync(podAccConfig) ? require(podAccConfig) : null
+
+// Releases must ship claude-acc (it throws without the payload); a local `dir` build or a config
+// read by tests carries on without it, so loading this file never needs the fetched payload.
+function podAccMacExtraResources() {
+  if (!podAcc) {
+    return []
+  }
+  try {
+    return podAcc.podAccMacExtraResources()
+  } catch (error) {
+    if (isRelease) {
+      throw error
+    }
+    console.warn(`[product] ${error.message}; this non-release build ships without claude-acc`)
+    return []
+  }
+}
 const identity = JSON.parse(readFileSync(join(__dirname, 'identity.json'), 'utf8'))
 const arch = process.env.POD_ARCH || 'arm64'
 const isRelease = process.env.POD_RELEASE === '1'
@@ -155,7 +172,9 @@ module.exports = {
       ...base.mac.extraResources,
       { from: 'product/identity.json', to: 'product-identity.json' },
       { from: 'LICENSE', to: 'ORCA-LICENSE.txt' },
-      ...(podAcc ? podAcc.podAccMacExtraResources() : [])
+      // Rollback of the opt-in terminal handover, runnable with the app's own Node.
+      { from: 'product/scripts/restore-orca-terminals.mjs', to: 'restore-orca-terminals.mjs' },
+      ...podAccMacExtraResources()
     ],
     artifactName: `${identity.displayName}-\${version}-\${arch}-mac.\${ext}`,
     target: isRelease
