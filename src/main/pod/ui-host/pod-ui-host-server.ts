@@ -3,6 +3,8 @@ import { timingSafeEqual } from 'node:crypto'
 import { chmodSync, lstatSync, mkdirSync, unlinkSync } from 'node:fs'
 import { createServer, type Server, type Socket } from 'node:net'
 import { dirname } from 'node:path'
+import type { PodBrowserPaneClientMessage } from '../browser-pane/pod-browser-pane-protocol'
+import { isPodBrowserPaneMessage } from '../browser-pane/pod-browser-pane-protocol'
 import type { PodPeerVerifier } from './pod-peer-identity'
 import {
   encodePodUiHostServerMessage,
@@ -31,6 +33,8 @@ export type PodUiHostServerOptions = {
   onSecondInstance: (request: PodUiHostSecondInstance) => void
   /** `version`: the asking PodNative's protocol version; below 2 it expects no answer. */
   onQuit: (request: { reason: PodUiHostQuitReason; confirmed: boolean; version: number }) => void
+  /** The browser pane's verbs; without a handler the welcome names no `browser` feature. */
+  onBrowser?: (message: PodBrowserPaneClientMessage) => void
   /** A UI attached (true), or the attached one went away without asking to quit (false). */
   onUiPresence: (attached: boolean) => void
   log: (message: string) => void
@@ -228,7 +232,8 @@ export class PodUiHostServer {
         type: 'welcome',
         // The version this connection speaks: the client's own.
         v: message.v,
-        pid: this.options.pid
+        pid: this.options.pid,
+        features: this.options.onBrowser ? ['browser'] : []
       })
     )
     this.options.log(`ui-host: PodNative ${message.pid} attached`)
@@ -251,6 +256,13 @@ export class PodUiHostServer {
       this.options.onOpenSurface(message)
     } else if (message.type === 'secondInstance') {
       this.options.onSecondInstance(message)
+    } else if (isPodBrowserPaneMessage(message)) {
+      if (!this.options.onBrowser) {
+        this.options.log('ui-host: refused a browser verb this runtime did not offer')
+        socket.destroy()
+        return
+      }
+      this.options.onBrowser(message)
     } else {
       // Version 2 may answer needsConfirmation; its quit commits later (noteQuitCommitted).
       if (this.uiVersion < 2) {
