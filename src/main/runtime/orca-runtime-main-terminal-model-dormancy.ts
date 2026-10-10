@@ -15,6 +15,10 @@ import type { PtyProviderBufferSnapshot } from '../providers/types'
 const DORMANT_MODEL_SEED_SCROLLBACK_ROWS = MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
 const DORMANT_MODEL_SEED_TIMEOUT_MS = 2_000
 
+/** An in-process consumer of one PTY's output. A 'model' reader reads main's emulator, or
+ *  relies on it answering the PTY's queries, so it keeps that emulator live. */
+export type TerminalOutputReader = { kind: 'model' }
+
 export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSerializeHeadlessTerminalBuffer {
   protected readonly mainTerminalModelDormancy = this.createMainTerminalModelDormancy()
   // Why: only the alt-screen tracker dormancy installed is retired when the model returns.
@@ -27,6 +31,14 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
 
   protected noteMainTerminalModelDemand(ptyId: string): void {
     this.mainTerminalModelDormancy.noteDemand(ptyId)
+  }
+
+  /** Registers a reader of this PTY's output; call the returned release when it stops reading. */
+  acquireTerminalOutputReader(ptyId: string, reader: TerminalOutputReader): () => void {
+    switch (reader.kind) {
+      case 'model':
+        return this.mainTerminalModelDormancy.pin(ptyId)
+    }
   }
 
   isMainTerminalModelDormant(ptyId: string): boolean {
