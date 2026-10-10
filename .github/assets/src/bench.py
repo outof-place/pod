@@ -100,8 +100,9 @@ def slug(s: str) -> str:
 def groups(summary: dict) -> list[dict]:
     """One chart per suite and metric, its rows in summary order."""
     out: dict[tuple[str, str], dict] = {}
+    coming = {c.get("id") for c in summary.get("coming", [])}
     for m in summary.get("metrics", []):
-        if m.get("median") is None or is_acc(m):
+        if m.get("median") is None or is_acc(m) or m["id"] in coming:
             continue
         key = (m["suite"], m["metric"])
         g = out.setdefault(
@@ -365,6 +366,7 @@ def acc_items(summary: dict) -> list[dict]:
     comps = {c["candidate"]["id"]: c for c in summary.get("comparisons", [])}
     items: dict[str, dict] = {}
     dropped = [m["id"] for m in summary.get("metrics", []) if is_acc(m) and private_source(m)]
+    dropped += [c.get("id") for c in summary.get("coming", [])]
     if dropped:
         print(f"claude-acc: left out {len(dropped)} rows sourced from private notes: {', '.join(dropped)}", file=sys.stderr)
     for m in summary.get("metrics", []):
@@ -749,7 +751,7 @@ def acc_readme_block(charts: list[tuple[str, str, list[dict]]], summary: dict, p
         + "".join(f"\n- Caveat: {c}" for c in dict.fromkeys(caveats))
         + "\n\n</details>\n"
     )
-    return "\n".join(out)
+    return "\n".join(out) + coming_block(summary, acc=True)
 
 
 def cell(v: float | int | None, unit: str = "") -> str:
@@ -813,7 +815,20 @@ def readme_block(
         + "".join(f"\n- Caveat: {c}" for c in summary.get("caveats", []))
         + "\n\n</details>\n"
     )
-    return "\n".join(out)
+    return "\n".join(out) + coming_block(summary, acc=False)
+
+
+def coming_block(summary: dict, acc: bool) -> str:
+    """Rows the run could not measure (summary.json's `coming`): named, with pod-bench's reason, and never a number."""
+    entries = [c for c in summary.get("coming", []) if (c.get("suite") == "claude-acc") == acc]
+    if not entries:
+        return ""
+    return "\n**Coming**, not measured in this run:\n\n" + "".join(
+        f"- {suite_label(summary, c.get('suite', ''))}: {c.get('subject', c.get('id'))}. {c['reason']}\n"
+        if c.get("reason")
+        else f"- {suite_label(summary, c.get('suite', ''))}: {c.get('subject', c.get('id'))}.\n"
+        for c in entries
+    )
 
 
 def main() -> None:
