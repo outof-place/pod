@@ -1,10 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
 import { ACC_STATE_DIR } from './acc-lifecycle'
-import type { LoginItemApi } from './acc-services'
+import { ACC_SERVICES_REPORT, type LoginItemApi } from './acc-services'
 import { appBundlePath, startPodAccSupervisor } from './acc-supervisor'
 
 const roots: string[] = []
@@ -140,11 +140,12 @@ describe('claude-acc supervisor', () => {
     supervisor.stop()
   })
 
-  it('registers the bundled agents once claude-acc is up to date', async () => {
+  it('registers the bundled agents once claude-acc is up to date, and reports them', async () => {
     const loginItems = fakeLoginItems()
+    const pod = installedPod()
     const supervisor = startPodAccSupervisor({
       config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
-      ...installedPod(),
+      ...pod,
       platform: 'darwin',
       env: {},
       run: vi.fn(async () => result(1)),
@@ -161,14 +162,24 @@ describe('claude-acc supervisor', () => {
       type: 'agentService',
       serviceName: 'codes.pod.app.acc.tick.plist'
     })
+    const report = JSON.parse(
+      readFileSync(join(pod.home, ACC_STATE_DIR, ACC_SERVICES_REPORT), 'utf8')
+    )
+    expect(report).toMatchObject({
+      version: 1,
+      app: appBundlePath(pod.execPath),
+      payload: '1.31.0',
+      services: [{ kind: 'agent', name: 'codes.pod.app.acc.tick.plist', status: 'not-registered' }]
+    })
     supervisor.stop()
   })
 
   it('never touches launchd services when the lifecycle skipped', async () => {
     const loginItems = fakeLoginItems()
+    const pod = installedPod()
     const supervisor = startPodAccSupervisor({
       config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
-      ...installedPod(),
+      ...pod,
       platform: 'darwin',
       env: { ORCA_E2E_HEADLESS: '1' },
       run: vi.fn(async () => result(1)),
@@ -180,6 +191,7 @@ describe('claude-acc supervisor', () => {
     })
     await expect(supervisor.services).resolves.toEqual([])
     expect(loginItems.set).not.toHaveBeenCalled()
+    expect(existsSync(join(pod.home, ACC_STATE_DIR, ACC_SERVICES_REPORT))).toBe(false)
     supervisor.stop()
   })
 })

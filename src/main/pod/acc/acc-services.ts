@@ -1,5 +1,6 @@
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { ACC_STATE_DIR } from './acc-lifecycle'
 
 /**
  * claude-acc's launchd jobs and its menu helper as SMAppService services of Pod.app: each job is
@@ -88,4 +89,30 @@ export function removeAccServices(api: LoginItemApi, services: AccService[]): Ac
     })
   }
   return readAccServiceStatus(api, services)
+}
+
+/** $STATE/pod-services.json: what Pod registered, for every acc surface (plugin page, Pod Menu, AccKit). */
+export const ACC_SERVICES_REPORT = 'pod-services.json'
+
+export function writeAccServicesReport(
+  home: string,
+  report: { app: string; payload: string | null; services: AccServiceReport[]; at: Date }
+): void {
+  const dir = join(home, ACC_STATE_DIR)
+  mkdirSync(dir, { recursive: true })
+  const body = {
+    version: 1,
+    at: report.at.toISOString(),
+    app: report.app,
+    payload: report.payload,
+    services: report.services.map(({ service, status }) => ({
+      kind: service.kind,
+      name: service.serviceName,
+      status
+    }))
+  }
+  const path = join(dir, ACC_SERVICES_REPORT)
+  // readers poll this file: never let one see half of it
+  writeFileSync(`${path}.tmp`, `${JSON.stringify(body, null, 2)}\n`)
+  renameSync(`${path}.tmp`, path)
 }

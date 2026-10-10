@@ -11,6 +11,7 @@ import { writeAccLifecycleRecord } from './acc-lifecycle-record'
 import {
   bundledAccServices,
   ensureAccServices,
+  writeAccServicesReport,
   type AccServiceReport,
   type LoginItemApi
 } from './acc-services'
@@ -118,6 +119,12 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
         options.log(`claude-acc: ${report.service.serviceName} ${report.status}`)
       }
     }
+    writeAccServicesReport(options.home, {
+      app: appBundlePath(options.execPath),
+      payload: outcome.decision.action === 'skip' ? null : outcome.decision.version,
+      services: reports,
+      at: new Date()
+    })
     return reports
   })
   let helperRunning = false
