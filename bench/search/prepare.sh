@@ -47,6 +47,8 @@ scheduled() {
 
 ogd="" ogctl="" og="" og_dir=""
 if [ -n "$og_sha" ]; then
+  # pod-search has no remote: the SHA (or HEAD) is resolved in the local repo at bench time.
+  og_sha="$(git -C "$HOME/Documents/pod-search" rev-parse "$og_sha^{commit}")"
   og_dir="$base/pod-search-${og_sha:0:12}"
   if [ ! -d "$og_dir/.git" ]; then
     git clone -q --no-checkout "$HOME/Documents/pod-search" "$og_dir"
@@ -56,9 +58,13 @@ if [ -n "$og_sha" ]; then
   [ -z "$og_features" ] || features=(--features "$og_features")
   scheduled "$og_dir" "cargo build --release --locked -p ogd -p ogctl"
   scheduled "$og_dir/third_party/ripgrep" "cargo build --release --locked ${features[*]}"
-  ogd="$og_dir/target/release/ogd"
-  ogctl="$og_dir/target/release/ogctl"
-  og="$og_dir/third_party/ripgrep/target/release/rg"
+  # Copied out of target/release: claude-acc's scheduler holds commands that run from there.
+  mkdir -p "$og_dir/bin"
+  cp "$og_dir/target/release/ogd" "$og_dir/target/release/ogctl" "$og_dir/bin/"
+  cp "$og_dir/third_party/ripgrep/target/release/rg" "$og_dir/bin/og"
+  ogd="$og_dir/bin/ogd"
+  ogctl="$og_dir/bin/ogctl"
+  og="$og_dir/bin/og"
   for binary in "$ogd" "$ogctl" "$og"; do
     [ -x "$binary" ] || { echo "missing after the build: $binary" >&2; exit 1; }
   done

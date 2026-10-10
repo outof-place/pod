@@ -187,7 +187,14 @@ same number of matching lines per query, and any disagreement is recorded. The e
 - `og`: pod-search's ripgrep 15.2.0 fork, with the same arguments and output. It answers from
   ogd's index when it can, and execs the real `rg` when it cannot. The suite starts its own `ogd`
   (its own socket and state dir) and waits for `ogctl register --wait`. It records `ogctl status`
-  at the end, then stops it.
+  at the end, then stops it. Three details keep the comparison clean:
+  - **Fallback.** og's fallback is pinned to Homebrew's ripgrep 15.2.0 (`OG_REAL_RG`). og writes
+    every call's decision, served from the index or fallen back, to `OG_DECISION_FILE`. Each sample
+    records both counts, and any fallback becomes a caveat on the og rows.
+  - **Eviction.** The daemon runs with a one-day idle limit, so a long wait at the load gate
+    cannot evict the index between samples.
+  - **Index build.** The cold index build (`build_ms` from `ogctl status`) is a row of its own,
+    `search.og-index-build`, kept out of the search timings.
 
 `suites/ogd.mjs` measures Pod's indexed search (ogd) against ripgrep through the two harnesses on
 `pod/search-client`, each run 5 times, gated on load:
@@ -254,6 +261,10 @@ process table with sysctl:
   `polling.mjs --extra-ptys 80` repeats every measurement with 80 idle ptys added, as an agent
   fleet keeps open, in a suite of its own (`polling-ptys80`).
 
+  Each polling suite says which state it stands for, in `condition` and in its caveat:
+  - `quiet`: the window with the agents parked;
+  - `agent-heavy`: the 80 extra ptys. This one matches daily use.
+
 The C sysctl versions are a reference implementation in `tools/ttyprobe.c`. What Pod ships is its
 process-info addon ([stablyai/orca#26985](https://github.com/stablyai/orca/pull/26985)). The suite
 loads it from the Pod build under test (`Contents/Resources/native/orca-proc-info.node`) and
@@ -265,24 +276,27 @@ target is a pty holding a shell with two children.
 claude-acc ships inside Pod. Its numbers come in two kinds, and summary.json tells them apart with
 `provenance.kind`:
 
-- **historical**: measured before this suite existed, copied as written from claude-acc's README
-  or the project notes, with the date, the source and the commit that added it. A range in the
-  source stays a range: `min` and `max`, no median. `historical.json` also lists what was left out
-  and why: general Mac tuning, the user's own hooks, and items with no measured number.
+- **historical**: measured before this suite existed and published in claude-acc's README. Each
+  row has the date and the commit that added the number. A range in the source stays a range:
+  `min` and `max`, no median. A number that was only ever written down in private notes is never a
+  source, so it is either re-measured fresh or left out. `historical.json` lists what was left out
+  and why: general Mac tuning, the user's own hooks, unpublished numbers, and items with no
+  measured number.
 - **fresh**: re-measured in the final run with `--fresh`. Each one reproduces "before" without
   touching the user's live settings:
 
-| Fresh measurement | Before                                                   | After                                                                                            |
-| ----------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `compile-cache`   | `require('typescript')`, NODE_COMPILE_CACHE unset        | the same with a temporary cache dir                                                              |
-| `rg-threads`      | `rg` with its default threads on Portivo                 | `rg --threads=4`                                                                                 |
-| `guard-hook`      | `devguard.py admit` on a PreToolUse payload for `ls -la` | `claude-acc-hook`, the native hook                                                               |
-| `launcher-python` | `/usr/bin/python3 -I -c pass`                            | claude-acc's uv Python                                                                           |
-| `git-speed`       | `git status` in a temporary clone of Portivo, caches off | the same clone with untrackedCache and fsmonitor                                                 |
-| `compress`        | copies of the user's transcripts in a temporary dir      | after `afsctool -c -T LZFSE`, as the janitor runs it                                             |
-| `devtools`        | a fresh Go binary's first exec, started by a launchd job | the same, started from the run's own app (in Developer Tools)                                    |
-| `sched`           | 7 Go builds behind a mkdir lock, as the old plock        | the same through `sched.py` in a temporary HOME                                                  |
-| `hook-wait`       | (none)                                                   | the hook wait per tool call in the last 24 h of transcripts, from `claude-acc perf bench agents` |
+| Fresh measurement | Before                                                           | After                                                                                            |
+| ----------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `compile-cache`   | `require('typescript')`, NODE_COMPILE_CACHE unset                | the same with a temporary cache dir                                                              |
+| `rg-threads`      | `rg` with its default threads on Portivo                         | `rg --threads=4`                                                                                 |
+| `guard-hook`      | `devguard.py admit` on a PreToolUse payload for `ls -la`         | `claude-acc-hook`, the native hook                                                               |
+| `launcher-python` | `/usr/bin/python3 -I -c pass`                                    | claude-acc's uv Python                                                                           |
+| `git-speed`       | `git status` in a temporary clone of Portivo, caches off         | the same clone with untrackedCache and fsmonitor                                                 |
+| `compress`        | copies of the user's transcripts in a temporary dir              | after `afsctool -c -T LZFSE`, as the janitor runs it                                             |
+| `compress-apps`   | decompressed copies of user-owned app bundles from /Applications | after `afsctool -c -T LZFSE`, as the janitor runs it                                             |
+| `devtools`        | a fresh Go binary's first exec, started by a launchd job         | the same, started from the run's own app (in Developer Tools)                                    |
+| `sched`           | 7 Go builds behind a mkdir lock, as the old plock                | the same through `sched.py` in a temporary HOME                                                  |
+| `hook-wait`       | (none)                                                           | the hook wait per tool call in the last 24 h of transcripts, from `claude-acc perf bench agents` |
 
 ## Running without taking the desktop
 
@@ -293,7 +307,7 @@ Mac:
   DeskPad uses, is present on macOS 27: `.build/bin/vdisplay --probe`. `vdisplay --create` adds a
   120 Hz HiDPI virtual monitor that windows can be moved to, and ScreenCaptureKit can capture it.
   Creating one moves the user's display layout, so the final run skips it. Only
-  `run-final.sh --with-vdisplay` runs it, as a 20 s check that writes `vdisplay.json`. The finding
+  `run-final.sh --vdisplay` runs it, as a 20 s check that writes `vdisplay.json`. The finding
   stays at the API level: present and probed, never created on this Mac.
 - **Keyboard input: does not work without focus.** `keylat --probe-post` posts a key with
   `CGEventPostToPid` to its own window in an inactive, Dock-less process. The window cannot become
@@ -320,7 +334,7 @@ The steps, in order:
 1. `suites/preflight.mjs`: every subject launches and gives one synced terminal workload.
 1. polling (also with 80 extra ptys), git-status, search, ogd, startup, panes and throughput.
 1. `claude-acc.mjs --fresh`.
-1. The virtual display check, only with `--with-vdisplay`.
+1. The virtual display check, only with `--vdisplay`.
 1. `latency.mjs --confirm-visible --throughput`.
 1. `summarize.mjs` and the Markdown tables.
 
@@ -360,6 +374,12 @@ Overrides:
 - the headline `metrics`.
 
 They are committed on `pod/bench` together with `summary.json`.
+
+Both are written for publication, with two safeguards:
+
+- **Paths.** Every string has the user's home directory replaced by `~`.
+- **Sources.** `summarize.mjs` refuses to write a summary in which a row's source or note cites a
+  private note or a local path.
 
 <a id="summaryjson"></a>
 
