@@ -8,7 +8,9 @@ import type {
   PodBrowserPaneClientMessage,
   PodBrowserPaneServerMessage
 } from './pod-browser-pane-protocol'
-import { isNavigablePaneUrl, PaneInputState } from './pod-browser-pane-input'
+import { PaneInputState } from './pod-browser-pane-input'
+import { navigatePanePage } from './pod-browser-pane-navigation'
+import { PaneSelectMenus } from './pod-browser-pane-select'
 
 // The device scale offscreen pages render at: Retina pixels on every Mac display Pod targets.
 export const POD_BROWSER_PANE_SCALE = 2
@@ -38,6 +40,7 @@ type Page = {
   token: number | null
   seq: number
   input: PaneInputState
+  select: PaneSelectMenus
   agentDrivingUntil: number
   agentTimer: ReturnType<typeof setTimeout> | null
 }
@@ -69,6 +72,12 @@ export class PodBrowserPaneController {
       token: null,
       seq: 0,
       input: new PaneInputState(),
+      // Why not while an agent drives: its clicks on a select must not open a menu on the screen.
+      select: new PaneSelectMenus(wc, (menu) => {
+        if (page.token !== null && Date.now() >= page.agentDrivingUntil) {
+          this.deps.send({ type: 'browserPopupMenu', pageId, ...menu })
+        }
+      }),
       agentDrivingUntil: 0,
       agentTimer: null
     }
@@ -187,7 +196,10 @@ export class PodBrowserPaneController {
         return
       }
       case 'browserNavigate':
-        this.navigate(wc, message)
+        navigatePanePage(wc, message, this.deps.log)
+        return
+      case 'browserPopupChoose':
+        page.select.choose(message.menuId, message.index)
         return
       case 'browserFind':
         wc.findInPage(message.text, { forward: message.forward, findNext: message.findNext })
@@ -226,39 +238,6 @@ export class PodBrowserPaneController {
     const [currentWidth, currentHeight] = page.win.getContentSize()
     if (currentWidth !== width || currentHeight !== height) {
       page.win.setContentSize(width, height)
-    }
-  }
-
-  private navigate(
-    wc: WebContents,
-    message: Extract<PodBrowserPaneClientMessage, { type: 'browserNavigate' }>
-  ): void {
-    const history = wc.navigationHistory
-    switch (message.action) {
-      case 'back':
-        if (history.canGoBack()) {
-          history.goBack()
-        }
-        return
-      case 'forward':
-        if (history.canGoForward()) {
-          history.goForward()
-        }
-        return
-      case 'reload':
-        wc.reload()
-        return
-      case 'stop':
-        wc.stop()
-        return
-      case 'load':
-        if (!isNavigablePaneUrl(message.url)) {
-          this.deps.log('browser-pane: refused to load a URL that is not http(s)')
-          return
-        }
-        void wc.loadURL(message.url).catch(() => {
-          // An aborted or failed load still leaves the page usable; its state says how it went.
-        })
     }
   }
 
