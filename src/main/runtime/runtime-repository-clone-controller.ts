@@ -25,6 +25,7 @@ import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { applyRepoPerformanceConfigOnAdd } from '../git/repo-performance-config'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
+import { localCloneOptions } from '../ipc/repos/repo-clone-options'
 
 type RuntimeRepositoryCloneDependencies = {
   getStore: () => RuntimeStore | null
@@ -111,8 +112,9 @@ export class RuntimeRepositoryCloneController {
     const claimedTarget = await claimCloneTarget(clonePath)
     let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
     try {
+      const cloneOptions = await localCloneOptions(clonePath)
       proc = await gitSpawnAfterWindowsEnvironmentReady(
-        ['clone', '--progress', '--', trimmedUrl, clonePath],
+        ['clone', '--progress', ...cloneOptions, '--', trimmedUrl, clonePath],
         {
           cwd: trimmedDestination,
           admissionTier: 'interactive',
