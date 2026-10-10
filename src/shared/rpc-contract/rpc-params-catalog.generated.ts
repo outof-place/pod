@@ -448,6 +448,14 @@ import {
 import { PodTerminalDirectLaneParams } from './pod-terminal-lane-params'
 import { PodSettingsSetParams, PodSettingsUnsubscribeParams } from './pod-settings-params'
 import {
+  PodWorkspaceAdoptParams,
+  PodWorkspaceCloneDestinationParams,
+  PodWorkspaceGitProfileParams,
+  PodWorkspaceStatusParams,
+  PodWorkspaceTidyApplyParams,
+  PodWorkspaceTidyScanParams
+} from './pod-workspace-params'
+import {
   PreflightAgentDetection,
   PreflightCheck,
   PreflightDetectRemoteAgents,
@@ -1147,6 +1155,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'podSettings.set': PodSettingsSetParams,
   'podSettings.subscribe': null,
   'podSettings.unsubscribe': PodSettingsUnsubscribeParams,
+  'podWorkspace.adopt': PodWorkspaceAdoptParams,
+  'podWorkspace.cloneDestination': PodWorkspaceCloneDestinationParams,
+  'podWorkspace.enabled': null,
+  'podWorkspace.gitProfile': PodWorkspaceGitProfileParams,
+  'podWorkspace.status': PodWorkspaceStatusParams,
+  'podWorkspace.tidyApply': PodWorkspaceTidyApplyParams,
+  'podWorkspace.tidyScan': PodWorkspaceTidyScanParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
