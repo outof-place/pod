@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { AgentTokenUsageReporter } from './agent-token-usage-reporter'
+import { POD_USAGE_POLLING } from '../../shared/product/features'
 import type { AgentTokenSession } from './agent-token-usage'
 import type { AgentTokenUsage } from '../../shared/telemetry-agent-token-usage-schema'
 import { isTelemetryEnabled } from '../telemetry/client'
@@ -111,6 +112,9 @@ export abstract class UsageProviderStoreLifecycle<
 
   async refresh(force = false): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
     if (!this.state.scanState.enabled) {
+      return this.getScanState()
+    }
+    if (!POD_USAGE_POLLING) {
       return this.getScanState()
     }
     const currentWorktreeFingerprint = await this.getCurrentWorktreeFingerprint()

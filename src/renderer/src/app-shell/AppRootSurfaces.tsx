@@ -13,7 +13,7 @@ import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeOn
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
-import { POD_FEATURE_PROMOS } from '../../../shared/product/features'
+import { POD_DICTATION, POD_FEATURE_PROMOS } from '../../../shared/product/features'
 import { ZoomOverlay } from '../components/ZoomOverlay'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store'
@@ -150,7 +150,8 @@ export function AppRootSurfaces(props: {
 
   const shouldMountSetupGuideTelemetryObserver = POD_FEATURE_PROMOS && persistedUIReady
   const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
-  const shouldMountDictationController = voiceEnabled || dictationState !== 'idle'
+  const shouldMountDictationController =
+    POD_DICTATION && (voiceEnabled || dictationState !== 'idle')
   const renderPetOverlay = shouldRenderPetOverlay({ persistedUIReady, petEnabled, petVisible })
 
   return (

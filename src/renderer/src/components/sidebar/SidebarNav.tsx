@@ -15,7 +15,7 @@ import { HideSidebarMenu } from './sidebar-nav-controls'
 import { translate } from '@/i18n/i18n'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { POD_FEATURE_PROMOS } from '../../../../shared/product/features'
+import { POD_DASHBOARD_POPOUT, POD_FEATURE_PROMOS } from '../../../../shared/product/features'
 
 export function shouldShowMobileButton(
   settings: Partial<Pick<GlobalSettings, 'showMobileButton'>> | null | undefined
@@ -44,7 +44,7 @@ export function shouldShowSkillsButton(
 export function shouldShowAgentDashboardButton(
   settings: Partial<Pick<GlobalSettings, 'experimentalAgentDashboardPopout'>> | null | undefined
 ): boolean {
-  return settings?.experimentalAgentDashboardPopout === true
+  return POD_DASHBOARD_POPOUT && settings?.experimentalAgentDashboardPopout === true
 }
 
 const AgentDashboardSidebarEntry = lazyWithRetry(() => import('./AgentDashboardSidebarEntry'))
