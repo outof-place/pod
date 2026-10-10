@@ -14,11 +14,11 @@ import { applyNativeTerminalGrid } from './native-terminal-grid'
 import { isNativeTerminalRequested } from './native-terminal-requested'
 import { createNativeTerminalSurface } from './native-terminal-surface-create'
 import { connectNativeTerminalSource } from './native-terminal-pty-source'
+import { forgetNativeTerminalKeyboard } from './native-terminal-keyboard'
 import {
   focusNativeIfShown,
-  noteNativeTerminalKeyboard,
-  restoreNativeKeyboardOnWindowFocus
-} from './native-terminal-keyboard'
+  installNativeKeyboardRestores
+} from './native-terminal-keyboard-restore'
 import {
   createNativeTerminalRenderPause,
   type NativeTerminalRenderPause
@@ -114,7 +114,6 @@ function handleEvent(event: NativeTerminalEvent): void {
       applyNativeTerminalGrid(terminal, state, event)
       return
     case 'focus':
-      noteNativeTerminalKeyboard(event.surfaceId, event.focused)
       if (event.focused) {
         // Paste/copy listeners resolve their pane from document.activeElement.
         mirrors.get(terminal)?.focusShadow()
@@ -150,7 +149,7 @@ function ensureGlobalListeners(): void {
     return
   }
   eventsUnsubscribe = nativeTerminalApi()?.onEvent(handleEvent) ?? null
-  restoreNativeKeyboardOnWindowFocus(activeShownSurface)
+  installNativeKeyboardRestores(activeShownSurface)
   // Ghostty sizes fonts in window points, so a UI zoom needs a config with the new scale.
   window.addEventListener(UI_ZOOM_CHANGED_EVENT, () => {
     if (lastAppearance) {
@@ -306,7 +305,7 @@ export function disposeNativeTerminal(terminal: Terminal): void {
   state.renderPause?.dispose()
   if (state.surfaceId !== null) {
     terminalsBySurface.delete(state.surfaceId)
-    noteNativeTerminalKeyboard(state.surfaceId, false)
+    forgetNativeTerminalKeyboard(state.surfaceId)
     terminal.element?.parentElement?.removeAttribute('data-native-surface-id')
     nativeTerminalApi()?.destroy(state.surfaceId)
   }
