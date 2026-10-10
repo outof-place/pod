@@ -1,6 +1,6 @@
 import {
   resetHiddenRendererPtyDeliveryDebugCounters,
-  setHiddenDeliveryModelHandoffChangeListener
+  setHiddenDeliveryViewGateChangeListener
 } from '../../pty-hidden-delivery-gate'
 import {
   setReadPtyRendererDeliveryDebugSnapshot,
@@ -154,8 +154,8 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
   setInvalidatePendingPtyDrainPolicy((id, schedule) =>
     invalidatePendingPtyDrainClassification(session, id, schedule)
   )
-  // Why: queued bytes of a hidden PTY start dropping once main's rebuilt model has caught up.
-  setHiddenDeliveryModelHandoffChangeListener((id) =>
+  // Why: queued bytes of a hidden PTY start (or stop) dropping when a model or daemon handoff ends.
+  setHiddenDeliveryViewGateChangeListener((id) =>
     invalidatePendingPtyDrainClassification(session, id)
   )
 }
