@@ -6,13 +6,17 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { _electron as electron, expect, test } from '@playwright/test'
+import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 import { getElectronIsolatedKeychainArgs } from './helpers/electron-launch-args'
 import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation
 } from './helpers/electron-home-isolation'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
+import {
+  runningSecurityAgentPids,
+  startSecurityAgentWatchdog
+} from './helpers/security-agent-watchdog'
 
 const packagedApp = process.env.POD_PACKAGED_APP ?? ''
 const STABLY_HOST = /(^|[./"@])(onorca\.dev|orca\.dev|posthog\.com)\b/i
@@ -51,12 +55,20 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
     extraEnv: { ORCA_BACKGROUND_LAUNCH: '1' },
     userDataDir
   })
-  const app = await electron.launch({
-    executablePath: path.join(packagedApp, 'Contents', 'MacOS', 'Pod'),
-    args: packagedLaunchArgs(netLogPath),
-    env: { ...isolation.env, ORCA_E2E_HEADLESS: '1' }
-  })
+  const args = packagedLaunchArgs(netLogPath)
+  const baseline = runningSecurityAgentPids()
+  if (baseline.length > 0) {
+    throw new Error('SecurityAgent is already running, so a new keychain prompt would go unseen')
+  }
+  const watchdog = startSecurityAgentWatchdog(packagedApp, baseline)
+  let app: ElectronApplication | null = null
+  let failure: unknown = null
   try {
+    app = await electron.launch({
+      executablePath: path.join(packagedApp, 'Contents', 'MacOS', 'Pod'),
+      args,
+      env: { ...isolation.env, ORCA_E2E_HEADLESS: '1' }
+    })
     assertElectronResolvedIsolatedHome(
       await app.evaluate(({ app: electronApp }) => electronApp.getPath('home')),
       isolation
@@ -92,13 +104,28 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
     expect(chrome.titles).toContain('Pod')
     expect(chrome.titles.filter((title) => /\bOrca\b/.test(title))).toEqual([])
     expect(await page.title()).toBe('Pod')
-    expect(chrome.labels).toEqual(
-      expect.arrayContaining(['About Pod', 'Quit Pod', 'Explore Pod', 'Getting Started with Pod'])
+    expect(chrome.labels).toEqual(expect.arrayContaining(['About Pod', 'Quit Pod']))
+    // Why "if present": the slim Pod profile cuts the tour and setup-guide items (pod/slim).
+    const promoLabels = chrome.labels.filter((label) =>
+      /^(Explore|Getting Started with) /.test(label)
     )
+    expect(promoLabels.filter((label) => !/\bPod\b/.test(label))).toEqual([])
     expect(chrome.labels.filter((label) => /\bOrca\b/.test(label))).toEqual([])
+  } catch (error) {
+    failure = error
   } finally {
-    await closeElectronAppForE2E(app)
+    watchdog.stop()
+    if (app && !watchdog.tripped()) {
+      await closeElectronAppForE2E(app)
+    }
     await cleanupE2EDaemons(userDataDir)
+  }
+  // Why first: a keychain prompt is the failure that matters, whatever it broke on the way.
+  if (watchdog.tripped()) {
+    throw new Error('keychain prompt: SecurityAgent started during the run; the app was killed')
+  }
+  if (failure !== null) {
+    throw failure
   }
   // Why only events: the netlog's constants echo the command line, which names the blocked hosts.
   const netLog = existsSync(netLogPath) ? readFileSync(netLogPath, 'utf8') : ''
