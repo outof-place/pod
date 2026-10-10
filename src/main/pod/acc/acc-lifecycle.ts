@@ -191,7 +191,11 @@ export function accSetupSpec(input: AccLifecycleInput): ProcessSpec {
       HOME: input.home,
       USER: input.home.split('/').pop() ?? '',
       PATH: `${input.home}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`,
-      LANG: 'en_US.UTF-8'
+      LANG: 'en_US.UTF-8',
+      // setup.sh and its children run Python on the payload's own files: a __pycache__ written
+      // next to them is a file added to Pod.app's sealed resources, and Gatekeeper then calls the
+      // app damaged. Python under -I ignores this, so claude-acc gives those runs -B itself.
+      PYTHONDONTWRITEBYTECODE: '1'
     },
     timeoutMs: SETUP_TIMEOUT_MS
   }
