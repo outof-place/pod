@@ -41,7 +41,7 @@ Set `POD_SIGN_IDENTITY`, or `NOTARY_PROFILE` / `APPLE_API_KEY` (+`_ID`, `_ISSUER
 1. Checks that the identity is a Developer ID in the keychain, then makes a test signature (keychain access and Apple's timestamp server).
 2. Builds the JS, mobile web bundle and native helpers. The helpers get the product's identifiers: `<appId>.computer-use` and the notification helper's `--bundle-id`.
 3. Fetches the claude-acc payload pinned in `config/claude-acc-payload.json` into `resources/claude-acc`, when the stack has that script. This also runs with `--skip-build`.
-4. Runs electron-builder with `product/electron-builder.pod.cjs` (`POD_RELEASE=1`, `ORCA_MAC_RELEASE=1`). Before any signing, `afterPack` fails the build when app.asar is over 400 MB or packs a `dist`, `dist-*`, `test-results`, `playwright-report` or hidden folder (`product/release-bundle-gate.cjs`). Then it signs every nested binary with hardened runtime and a timestamp, notarizes and staples the app.
+4. Runs electron-builder with `product/electron-builder.pod.cjs` (`POD_RELEASE=1`, `ORCA_MAC_RELEASE=1`). Before any signing, `afterPack` fails the build when app.asar is over 400 MB or packs a `dist`, `dist-*`, `test-results`, `playwright-report` or hidden folder (`product/release-bundle-gate.cjs`). Then it signs every nested binary with hardened runtime and a timestamp, notarizes and staples the app. When Apple's timestamp service fails mid-signing, the step reruns: at most 3 attempts, 3 min apart, and only for that failure.
 5. Fails when the DMG is over 350 MB, then submits it with `notarytool submit --wait` and staples it.
 6. Re-hashes `latest-mac.yml`, since stapling changed the DMG.
 7. Gates on Gatekeeper:
