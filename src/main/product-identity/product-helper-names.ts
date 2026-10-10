@@ -55,6 +55,12 @@ export function productHelperCopy(text: string): string {
     : text.replace(new RegExp(keys.join('|'), 'g'), (name) => table.get(name) ?? name)
 }
 
+/** A name Orca gives a process of its own (ps shows bash's $0 `orca-tcc-login`); not a file. */
+export function productProcessName(upstreamName: string): string {
+  const identity = getProductIdentity()
+  return identity ? upstreamName.replace(/^orca-/, `${identity.packageName}-`) : upstreamName
+}
+
 export function computerUseAppNotFound(): string {
   return productHelperCopy(`${COMPUTER_USE_NAME}.app was not found`)
 }
