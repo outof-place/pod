@@ -5,10 +5,11 @@
 #
 #   bench/run-final.sh --pod /path/to/Pod.app [--pod-commit SHA] [--orca /Applications/Orca.app]
 #                      [--og-sha SHA] [--og-features pcre2] [--search-client-sha SHA]
-#                      [--no-visible] [--vdisplay]
+#                      [--pod-profile pod|orca] [--no-visible] [--vdisplay]
 #
 # --pod-commit is the main commit the Pod build came from (read from the bundle when it records
-# one); every Pod row and the stack check use it. --og-sha is the pod-search commit confirmed as
+# one); every Pod row and the stack check use it. --pod-profile is the POD_BUILD_PROFILE it was
+# built with: pod (slim, the default) or orca (every upstream feature). --og-sha is the pod-search commit confirmed as
 # bench-ready: its ogd must advertise search.full_lines and search.max_filesize, checked before
 # anything is measured. Without it the og and ogd rows are listed as "coming", with no numbers.
 # --vdisplay adds a virtual display for 20 s, which moves the user's display layout, so it is off
@@ -20,6 +21,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 pod="${POD_BENCH_POD_APP:-}"
 orca="${POD_BENCH_ORCA_APP:-/Applications/Orca.app}"
 pod_commit=""
+pod_profile="pod"
 og_sha=""
 og_features="pcre2"
 client_sha=""
@@ -29,19 +31,21 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --pod) pod="${2:?}"; shift 2 ;;
     --pod-commit) pod_commit="${2:?}"; shift 2 ;;
+    --pod-profile) pod_profile="${2:?}"; shift 2 ;;
     --orca) orca="${2:?}"; shift 2 ;;
     --og-sha) og_sha="${2:?}"; shift 2 ;;
     --og-features) og_features="$2"; shift 2 ;;
     --search-client-sha) client_sha="${2:?}"; shift 2 ;;
     --no-visible) visible=0; shift ;;
     --vdisplay) vdisplay=1; shift ;;
-    -h | --help) sed -n '2,17p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,19p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 # Never benchmark a stale build by accident: the Pod app is always named explicitly.
 [ -n "$pod" ] && [ -d "$pod/Contents" ] || { echo "pass --pod <Pod.app> (the build under test)" >&2; exit 2; }
 [ -d "$orca/Contents" ] || { echo "no Orca at $orca" >&2; exit 2; }
+case "$pod_profile" in pod | orca) ;; *) echo "--pod-profile is pod or orca" >&2; exit 2 ;; esac
 # A commit, not a ref: the og rows name the pod-search build that was confirmed, not whatever a
 # branch or HEAD points at on the day.
 [ -z "$og_sha" ] || [[ "$og_sha" =~ ^[0-9a-f]{7,40}$ ]] || {
@@ -89,14 +93,14 @@ elif [ -z "$client_sha" ]; then
   coming="ogd"
 fi
 node -e '
-  const fs = require("fs"), [out, podApp, podCommit, orcaApp, inputs, comingList] = process.argv.slice(1)
+  const fs = require("fs"), [out, podApp, podCommit, podProfile, orcaApp, inputs, comingList] = process.argv.slice(1)
   const reasons = {
     og: { suite: "search", subject: "og (pod-search)", reason: "no bench-ready pod-search build was confirmed for this run" },
     ogd: { suite: "ogd", subject: "Pod search on ogd", reason: "needs a bench-ready pod-search build and a pinned pod/search-client" }
   }
   const coming = comingList ? comingList.split(",").map((id) => ({ id, status: "coming", ...reasons[id] })) : []
-  fs.writeFileSync(out, JSON.stringify({ podApp, podCommit, orcaApp, startedAt: new Date().toISOString(), search: JSON.parse(fs.readFileSync(inputs, "utf8")), coming }, null, 2) + "\n")
-' "$POD_BENCH_OUT/run.json" "$pod" "$pod_commit" "$orca" "$inputs" "$coming"
+  fs.writeFileSync(out, JSON.stringify({ podApp, podCommit, podProfile, orcaApp, startedAt: new Date().toISOString(), search: JSON.parse(fs.readFileSync(inputs, "utf8")), coming }, null, 2) + "\n")
+' "$POD_BENCH_OUT/run.json" "$pod" "$pod_commit" "$pod_profile" "$orca" "$inputs" "$coming"
 
 node "$here/suites/preflight.mjs"
 run_suite() {
