@@ -15,6 +15,11 @@ import { isNativeTerminalRequested } from './native-terminal-requested'
 import { createNativeTerminalSurface } from './native-terminal-surface-create'
 import { connectNativeTerminalSource } from './native-terminal-pty-source'
 import {
+  focusNativeIfShown,
+  noteNativeTerminalKeyboard,
+  restoreNativeKeyboardOnWindowFocus
+} from './native-terminal-keyboard'
+import {
   createNativeTerminalRenderPause,
   type NativeTerminalRenderPause
 } from './native-terminal-render-pause'
@@ -109,6 +114,7 @@ function handleEvent(event: NativeTerminalEvent): void {
       applyNativeTerminalGrid(terminal, state, event)
       return
     case 'focus':
+      noteNativeTerminalKeyboard(event.surfaceId, event.focused)
       if (event.focused) {
         // Paste/copy listeners resolve their pane from document.activeElement.
         mirrors.get(terminal)?.focusShadow()
@@ -144,16 +150,7 @@ function ensureGlobalListeners(): void {
     return
   }
   eventsUnsubscribe = nativeTerminalApi()?.onEvent(handleEvent) ?? null
-  // Why: Chromium restores focus to the web contents when the window becomes main again.
-  window.addEventListener('focus', () => {
-    for (const [surfaceId, terminal] of terminalsBySurface) {
-      const state = states.get(terminal)
-      if (state?.host.isActivePane() && isNativeTerminalShown(surfaceId)) {
-        nativeTerminalApi()?.focus(surfaceId)
-        return
-      }
-    }
-  })
+  restoreNativeKeyboardOnWindowFocus(activeShownSurface)
   // Ghostty sizes fonts in window points, so a UI zoom needs a config with the new scale.
   window.addEventListener(UI_ZOOM_CHANGED_EVENT, () => {
     if (lastAppearance) {
@@ -180,12 +177,13 @@ function sendAppearance(appearance: NativeTerminalAppearance): void {
   scheduleNativeTerminalFrames()
 }
 
-function focusNativeIfShown(surfaceId: number): boolean {
-  if (!isNativeTerminalShown(surfaceId)) {
-    return false
+function activeShownSurface(): number | null {
+  for (const [surfaceId, terminal] of terminalsBySurface) {
+    if (states.get(terminal)?.host.isActivePane() && isNativeTerminalShown(surfaceId)) {
+      return surfaceId
+    }
   }
-  nativeTerminalApi()?.focus(surfaceId)
-  return true
+  return null
 }
 
 // Binds (or re-binds) the pane's PTY to a native surface. A rebind to another PTY keeps the
@@ -308,6 +306,7 @@ export function disposeNativeTerminal(terminal: Terminal): void {
   state.renderPause?.dispose()
   if (state.surfaceId !== null) {
     terminalsBySurface.delete(state.surfaceId)
+    noteNativeTerminalKeyboard(state.surfaceId, false)
     terminal.element?.parentElement?.removeAttribute('data-native-surface-id')
     nativeTerminalApi()?.destroy(state.surfaceId)
   }
