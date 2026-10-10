@@ -6,6 +6,7 @@
 
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { runProcess } from '@orca/process-host'
+import { getNativeProcessInfo, type NativeProcessRow } from '../../shared/native-process-info'
 import { parseShellForegroundRows, type ProcessTableRow } from '../../shared/process-table-snapshot'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -35,7 +36,10 @@ async function terminalOf(rootPid: number): Promise<string | null> {
   if (cached) {
     return cached
   }
-  const tty = (await ps(['-o', 'tty=', '-p', String(rootPid)]))?.trim()
+  const native = readNativeProcess(rootPid)
+  const tty = (
+    native !== undefined ? native?.tty : await ps(['-o', 'tty=', '-p', String(rootPid)])
+  )?.trim()
   // `??` (macOS) and `?` (Linux): no controlling terminal.
   if (!tty || tty.startsWith('?')) {
     return null
@@ -47,15 +51,58 @@ async function terminalOf(rootPid: number): Promise<string | null> {
   return tty
 }
 
+/** Undefined when the addon cannot answer, so `ps` does; null when the pid is gone. */
+function readNativeProcess(pid: number): NativeProcessRow | null | undefined {
+  try {
+    return getNativeProcessInfo()?.readProcess(pid)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * `ps -t` from sysctl(KERN_PROC_TTY) plus argv for that terminal's processes only (#24889).
+ * Null sends the caller to `ps`, including when a foreground-group member's argv belongs to
+ * another user: only root `ps` can name it, and the verdict reads exactly those rows.
+ */
+function readNativeTerminalRows(tty: string, rootPid: number): ProcessTableRow[] | null {
+  try {
+    const rows = getNativeProcessInfo()?.listTerminalProcesses(tty)
+    const foregroundGroup = rows?.find((row) => row.pid === rootPid)?.tpgid
+    if (
+      !rows ||
+      rows.some(
+        (row) =>
+          (row.command === null && row.pgid === foregroundGroup) || row.command?.trim() === ''
+      )
+    ) {
+      return null
+    }
+    return rows.map(({ pid, ppid, pgid, tpgid, stat, command, name }) => ({
+      pid,
+      ppid,
+      pgid,
+      tpgid,
+      stat,
+      command: (command ?? name).trim()
+    }))
+  } catch {
+    return null
+  }
+}
+
 /** Every process on the terminal a pane's root process holds, or null when `ps` cannot say. */
 export async function readTerminalProcessRows(rootPid: number): Promise<ProcessTableRow[] | null> {
   const tty = await terminalOf(rootPid)
   if (!tty) {
     return null
   }
-  const stdout = await ps(['-o', 'pid=,ppid=,pgid=,tpgid=,stat=,command=', '-t', tty])
+  const native = readNativeTerminalRows(tty, rootPid)
+  const stdout = native
+    ? null
+    : await ps(['-o', 'pid=,ppid=,pgid=,tpgid=,stat=,command=', '-t', tty])
   try {
-    const rows = stdout === null ? null : parseShellForegroundRows(stdout)
+    const rows = native ?? (stdout === null ? null : parseShellForegroundRows(stdout))
     // A pid reused by another process on another terminal reads as this pane's root missing.
     if (!rows?.some((row) => row.pid === rootPid)) {
       ttyByRootPid.delete(rootPid)
