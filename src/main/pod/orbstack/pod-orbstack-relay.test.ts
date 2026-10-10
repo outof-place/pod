@@ -1,14 +1,17 @@
 import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer as createHttpServer, request, type IncomingHttpHeaders } from 'node:http'
+import { createServer as createHttpsServer, request as httpsRequest } from 'node:https'
 import { connect, createServer, type AddressInfo, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '../../../shared/child-process/run-process'
+import { createAnthropicRoute } from './pod-orbstack-anthropic-route'
 import { RELAY_FRAME } from './pod-orbstack-relay-agent'
+import { createSandboxCa } from './pod-orbstack-sandbox-ca'
 import {
   buildRelayWait,
   createSandboxRelays,
@@ -128,19 +131,22 @@ describe('host side', () => {
       }
     })
     relays.ensure('pod-x-sbx', {
-      vmPort: 1,
-      hostPort: 1,
-      hookToken: 'server-token',
-      authorize: () => true
+      hook: { vmPort: 1, hostPort: 1, hookToken: 'server-token', authorize: () => true },
+      anthropic: null
     })
     const replies: number[][] = []
     stdin.on('data', (chunk: Buffer) => {
       decodeRelayFrames(chunk, (kind, conn) => replies.push([kind, conn]))
     })
     stdout.write(encodeRelayFrame(RELAY_FRAME.open, 9, Buffer.from([4])))
+    // The anthropic-api route is off: its index is refused like any other.
+    stdout.write(encodeRelayFrame(RELAY_FRAME.open, 10, Buffer.from([1])))
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(dialed).toEqual([])
-    expect(replies).toEqual([[RELAY_FRAME.close, 9]])
+    expect(replies).toEqual([
+      [RELAY_FRAME.close, 9],
+      [RELAY_FRAME.close, 10]
+    ])
   })
 })
 
@@ -176,8 +182,14 @@ describe.skipIf(process.platform === 'win32' || !hasPython())('relay agent over 
       hookToken: 'server-token',
       authorize: (token) => token === 'sandbox-token'
     }
+    // Stand-ins for the VM's /etc/hosts and CA path.
+    const hostsFile = join(stateDir, 'hosts')
+    writeFileSync(hostsFile, '127.0.0.1 localhost\n')
+    const caPath = join(stateDir, 'pod-sandbox', 'anthropic-ca.pem')
     const relays = createSandboxRelays({
       stateDir,
+      hostsFile,
+      caPath,
       spawnAgent: (_machine, args) => spawnProcess({ program: 'python3', args })
     })
     cleanups.push(() => {
@@ -185,12 +197,13 @@ describe.skipIf(process.platform === 'win32' || !hasPython())('relay agent over 
       hookServer.close()
       rmSync(stateDir, { recursive: true, force: true })
     })
-    return { relays, route, vmPort, stateDir, seen }
+    const hook = (route: SandboxHookRoute) => ({ hook: route, anthropic: null })
+    return { relays, route, hook, vmPort, stateDir, seen, hostsFile, caPath }
   }
 
   it('forwards hook posts with the server token swapped in', async () => {
-    const { relays, route, vmPort, stateDir, seen } = await setup()
-    const handle = relays.ensure('pod-x-sbx', route)
+    const { relays, route, hook, vmPort, stateDir, seen } = await setup()
+    const handle = relays.ensure('pod-x-sbx', hook(route))
     expect(await handle.ready).toBe(true)
     expect(readFileSync(join(stateDir, 'ready'), 'utf8')).toBe(handle.nonce)
 
@@ -211,8 +224,8 @@ describe.skipIf(process.platform === 'win32' || !hasPython())('relay agent over 
   })
 
   it('answers everything but a token-bearing hook post itself', async () => {
-    const { relays, route, vmPort, seen } = await setup()
-    expect(await relays.ensure('pod-x-sbx', route).ready).toBe(true)
+    const { relays, route, hook, vmPort, seen } = await setup()
+    expect(await relays.ensure('pod-x-sbx', hook(route)).ready).toBe(true)
     expect((await post(vmPort, { token: 'server-token' })).status).toBe(403)
     expect((await post(vmPort, { path: '/hook/codex' })).status).toBe(403)
     expect((await post(vmPort, { path: '/' })).status).toBe(403)
@@ -222,14 +235,84 @@ describe.skipIf(process.platform === 'win32' || !hasPython())('relay agent over 
   })
 
   it('reuses a live relay for the same hook server and replaces it for another', async () => {
-    const { relays, route, vmPort } = await setup()
-    const first = relays.ensure('pod-x-sbx', route)
+    const { relays, route, hook, vmPort } = await setup()
+    const first = relays.ensure('pod-x-sbx', hook(route))
     expect(await first.ready).toBe(true)
-    expect(relays.ensure('pod-x-sbx', { ...route, authorize: () => false })).toBe(first)
+    expect(relays.ensure('pod-x-sbx', hook({ ...route, authorize: () => false }))).toBe(first)
 
-    const second = relays.ensure('pod-x-sbx', { ...route, hookToken: 'rotated' })
+    const second = relays.ensure('pod-x-sbx', hook({ ...route, hookToken: 'rotated' }))
     expect(second.nonce).not.toBe(first.nonce)
     expect(await second.ready).toBe(true)
     expect((await post(vmPort, {})).status).toBe(200)
+  })
+
+  it('serves api.anthropic.com from the Mac while the anthropic-api route is on, then unpins', async () => {
+    const { relays, route, hostsFile, caPath } = await setup()
+    const upstreamCa = createSandboxCa('stub-upstream')
+    const keys: (string | string[] | undefined)[] = []
+    const upstream = createHttpsServer(
+      { key: upstreamCa.leafKeyPem, cert: upstreamCa.leafCertPem },
+      (req, res) => {
+        keys.push(req.headers['x-api-key'])
+        req.resume()
+        req.on('end', () => res.end('{"type":"message"}'))
+      }
+    )
+    const upstreamPort = await listen(upstream)
+    const ca = createSandboxCa('pod-x-sbx')
+    const anthropic = createAnthropicRoute({
+      machine: 'pod-x-sbx',
+      ca,
+      credentials: () => ({
+        mode: () => 'api-key',
+        authHeaders: async () => ({ 'x-api-key': 'stub-key-not-a-secret' })
+      }),
+      upstream: { host: '127.0.0.1', port: upstreamPort, ca: upstreamCa.caCertPem }
+    })
+    cleanups.push(() => {
+      anthropic.close()
+      upstream.close()
+    })
+    const apiPort = await freePort()
+    const handle = relays.ensure('pod-x-sbx', {
+      hook: route,
+      anthropic: { route: anthropic, vmPort: apiPort }
+    })
+    expect(await handle.ready).toBe(true)
+    expect(readFileSync(hostsFile, 'utf8')).toBe(
+      '127.0.0.1 localhost\n# pod-sandbox-relay begin\n127.0.0.1 api.anthropic.com\n::1 api.anthropic.com\n# pod-sandbox-relay end\n'
+    )
+    expect(readFileSync(caPath, 'utf8')).toBe(ca.caCertPem)
+
+    const reply = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const req = httpsRequest(
+        {
+          host: '127.0.0.1',
+          port: apiPort,
+          servername: 'api.anthropic.com',
+          ca: readFileSync(caPath, 'utf8'),
+          method: 'POST',
+          path: '/v1/messages',
+          headers: { 'x-api-key': 'pod-sandbox-no-credential', 'content-type': 'application/json' }
+        },
+        (res) => {
+          const chunks: Buffer[] = []
+          res.on('data', (chunk: Buffer) => chunks.push(chunk))
+          res.on('end', () =>
+            resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString() })
+          )
+        }
+      )
+      req.on('error', reject)
+      req.end('{}')
+    })
+    expect(reply).toEqual({ status: 200, body: '{"type":"message"}' })
+    expect(keys).toEqual(['stub-key-not-a-secret'])
+
+    relays.stop('pod-x-sbx')
+    await expect
+      .poll(() => readFileSync(hostsFile, 'utf8'), { timeout: 5_000 })
+      .toBe('127.0.0.1 localhost\n')
+    expect(existsSync(caPath)).toBe(false)
   })
 })
