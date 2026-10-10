@@ -62,6 +62,22 @@ export function createWorkspaceTidyActions(deps: WorkspaceTidyActionDeps) {
     return repo
   }
 
+  /**
+   * Orca's removal tears down its terminals and metadata too. A worktree it doesn't list yet (one
+   * git just added, such as a restore its catalog hasn't caught up with) has none of those, so
+   * git alone removes it; the archive already proved it clean.
+   */
+  const removeThroughRuntime = async (worktreeId: string, path: string, repoPath: string) => {
+    try {
+      await deps.removeWorktree(worktreeId)
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'selector_not_found') {
+        throw error
+      }
+      await mustSucceed(git(['worktree', 'remove', path], repoPath), 'git worktree remove')
+    }
+  }
+
   /** Keeps the commits in `refs/pod/archive/…`, then lets Orca remove the worktree as usual. */
   const archive = async (worktreeId: string): Promise<PodTidyResult> => {
     const repo = repoOrThrow(getRepoIdFromWorktreeId(worktreeId))
@@ -91,7 +107,7 @@ export function createWorkspaceTidyActions(deps: WorkspaceTidyActionDeps) {
     await mustSucceed(git(['update-ref', record.ref, record.head, ''], repo.path), 'update-ref')
     await deps.journal.update((data) => void data.archives.push(record))
     try {
-      await deps.removeWorktree(worktreeId)
+      await removeThroughRuntime(worktreeId, entry.path, repo.path)
     } catch (error) {
       await git(['update-ref', '-d', record.ref, record.head], repo.path)
       await deps.journal.update((data) => {
