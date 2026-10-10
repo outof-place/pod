@@ -18,6 +18,7 @@ import {
 } from './pod-orbstack-anthropic-oauth'
 import { setPodSandboxAnthropicCredentials } from './pod-orbstack-anthropic-route'
 import { createSandboxAccess } from './pod-orbstack-sandbox-access'
+import { createPodOrbstackTemplates } from './pod-orbstack-templates'
 import { readPodOrbstackStatus } from './pod-orbstack-status'
 import {
   setPodOrbstackTerminalResolver,
@@ -28,11 +29,14 @@ import {
   resolveOrbstackE2eAnthropic,
   resolveOrbstackHomeOverride,
   resolveOrbstackSkipAgentInstall,
+  resolveOrbstackTemplatesEnabled,
   resolveOrbstackToolPaths,
   type OrbstackToolPaths
 } from './pod-orbstack-tools'
 
 let installed = false
+// Why late: the template refresh is background work; it must not compete with Pod's own startup.
+const PREWARM_DELAY_MS = 60_000
 
 /** Idempotent. Backs the orbstack.* RPC methods and the terminal resolver; nothing runs until asked. */
 export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
@@ -78,6 +82,8 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     log: (message) => console.warn(`[pod-orbstack] ${message}`)
   })
   app.on('will-quit', () => relays.stopAll())
+  const log = (message: string): void => console.warn(`[pod-orbstack] ${message}`)
+  const templates = createPodOrbstackTemplates({ run, file: join(dataDir, 'templates.json'), log })
   const machines = createPodOrbstackMachines({
     paths,
     run,
@@ -86,6 +92,8 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     loadRecipe: () => loadPodOrbstackRecipe(join(dataDir, 'recipe.json')),
     onSandboxCreated: (name) => access.created(name),
     onSandboxRemoved: (name) => access.forget(name),
+    ...(resolveOrbstackTemplatesEnabled() ? { templates } : {}),
+    log,
     prepareClaudeRelease: resolveOrbstackSkipAgentInstall()
       ? async () => null
       : async () => releases.prepare(await probeClaudeCliVersion(resolveClaudeCommand()))
@@ -101,6 +109,7 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
           paths: paths(),
           run,
           registry,
+          templates: templates.list(),
           busyWorktreeIds: machines.busyWorktreeIds()
         })
     })
@@ -108,6 +117,9 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   if (!enabled) {
     return
   }
+  setTimeout(() => {
+    machines.prewarm().catch((error) => log(`template refresh failed: ${String(error)}`))
+  }, PREWARM_DELAY_MS).unref()
   setPodSandboxRelayStarter((machine, hookServer) => {
     try {
       return access.start(machine, hookServer)
