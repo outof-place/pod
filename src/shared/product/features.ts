@@ -25,7 +25,8 @@ export const POD_FEATURE_IDS = [
   'tccPromptWatch',
   'startupHangWatchdog',
   'nonMacPayloads',
-  'cloudSources'
+  'cloudSources',
+  'geistFont'
 ] as const
 
 export type PodFeatureId = (typeof POD_FEATURE_IDS)[number]
@@ -62,7 +63,11 @@ type PodFeature = {
   readonly settingsSections?: readonly string[]
   /** Modules compiled to an empty stub; rolldown still emits a chunk for a dead import(). */
   readonly stubModules?: readonly RegExp[]
+  /** Renderer font faces dropped from the emitted CSS (and their files); the family becomes `to`. */
+  readonly rendererFontSwaps?: readonly PodFontSwap[]
 }
+
+export type PodFontSwap = { readonly family: string; readonly to: string }
 
 export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
   featurePromos: {
@@ -154,6 +159,11 @@ export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
     pod: false,
     reason: "Stably's relay and push service sources are deploy inputs, not app runtime",
     packaging: { excludeFiles: ['!cloud{,/**/*}'] }
+  },
+  geistFont: {
+    pod: false,
+    reason: 'The UI draws in the macOS system font (system-ui); drops the bundled Geist face',
+    rendererFontSwaps: [{ family: 'Geist', to: 'system-ui' }]
   }
 }
 
@@ -188,6 +198,8 @@ export const POD_STARTUP_BROWSER_SWEEP: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.startupBrowserSweep
 export const POD_TCC_PROMPT_WATCH: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.tccPromptWatch
+export const POD_GEIST_FONT: boolean =
+  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.geistFont
 export const POD_STARTUP_HANG_WATCHDOG: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.startupHangWatchdog
 
@@ -210,7 +222,8 @@ export function podFeatureFlags(profile: PodBuildProfile): PodFeatureFlags {
     tccPromptWatch: on('tccPromptWatch'),
     startupHangWatchdog: on('startupHangWatchdog'),
     nonMacPayloads: on('nonMacPayloads'),
-    cloudSources: on('cloudSources')
+    cloudSources: on('cloudSources'),
+    geistFont: on('geistFont')
   }
 }
 
@@ -227,6 +240,13 @@ export function podFeatureDefines(profile: PodBuildProfile): Record<string, stri
 export function podStubModules(profile: PodBuildProfile): RegExp[] {
   const flags = podFeatureFlags(profile)
   return POD_FEATURE_IDS.flatMap((id) => (flags[id] ? [] : (POD_FEATURES[id].stubModules ?? [])))
+}
+
+export function podRendererFontSwaps(profile: PodBuildProfile): PodFontSwap[] {
+  const flags = podFeatureFlags(profile)
+  return POD_FEATURE_IDS.flatMap((id) =>
+    flags[id] ? [] : (POD_FEATURES[id].rendererFontSwaps ?? [])
+  )
 }
 
 export function isPodSettingsSectionEnabled(sectionId: string): boolean {
