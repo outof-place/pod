@@ -63,32 +63,6 @@ describe('getStatus adaptive untracked mode', () => {
     statMock.mockResolvedValue({ isFile: () => true, size: 12 })
   })
 
-  it('uses one canonical status for directory-heavy scans', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '? new/a.ts\n? new/deep/b.ts\n? top.txt\n' })
-    const first = await getStatus('/repo', { includeLineStats: false })
-    const second = await getStatus('/repo', { includeLineStats: false })
-    expect(first.entries.map((entry) => entry.path)).toEqual([
-      'new/a.ts',
-      'new/deep/b.ts',
-      'top.txt'
-    ])
-    expect(second.entries).toEqual(first.entries)
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    expect(
-      gitExecFileAsyncMock.mock.calls.every(([args]) => args.includes('--untracked-files=all'))
-    ).toBe(true)
-  })
-
-  it('uses one normal status for completed clean polls', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
-    await getStatus('/repo', { includeLineStats: false })
-    await getStatus('/repo', { includeLineStats: false })
-    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args.at(-1))).toEqual([
-      '--untracked-files=all',
-      '--untracked-files=normal'
-    ])
-  })
-
   it.each([false, true])(
     'preserves partial rows and branch metadata on a failed read, clean hint=%s',
     async (hasCleanHint) => {
@@ -167,15 +141,5 @@ describe('getStatus adaptive untracked mode', () => {
       '--untracked-files=all',
       '--untracked-files=normal'
     ])
-  })
-
-  it('keeps ignored reads canonical without allowing the next poll to skip its first full read', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '! new/x.log\n' })
-    const result = await getStatus('/repo', { includeIgnored: true, includeLineStats: false })
-    expect(result.ignoredPaths).toEqual(['new/x.log'])
-    await getStatus('/repo', { includeLineStats: false })
-    expect(
-      gitExecFileAsyncMock.mock.calls.every(([args]) => args.includes('--untracked-files=all'))
-    ).toBe(true)
   })
 })

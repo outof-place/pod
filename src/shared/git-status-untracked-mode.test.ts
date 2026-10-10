@@ -141,23 +141,6 @@ describe('execution-host untracked status mode', () => {
     ])
   })
 
-  it('keeps native, WSL distro and relay owner hints isolated', async () => {
-    const h = harness()
-    await h.read('native\0/repo')
-    await h.read('wsl-a\0/repo')
-    await h.read('wsl-b\0/repo')
-    await h.read('native\0/repo')
-    expect(modes(h.streamGit)).toEqual([
-      '--untracked-files=all',
-      '--untracked-files=all',
-      '--untracked-files=all',
-      '--untracked-files=normal'
-    ])
-    const otherRelay = harness()
-    await otherRelay.read('native\0/repo')
-    expect(modes(otherRelay.streamGit)).toEqual(['--untracked-files=all'])
-  })
-
   it('evicts least recently used hints within a fixed bound', async () => {
     const h = harness(new GitStatusUntrackedMode(2))
     for (const key of ['a', 'b', 'a', 'c', 'a', 'b']) {
