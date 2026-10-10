@@ -3,7 +3,7 @@
  * The dev fixture launches out/main, which reads the identity from an E2E override; this proves
  * the packaged identity file brands the native chrome and keeps Chromium off Stably's hosts.
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
@@ -41,6 +41,17 @@ function packagedLaunchArgs(netLogPath: string): string[] {
 
 type NativeChrome = { isPackaged: boolean; name: string; titles: string[]; labels: string[] }
 
+/** mtime of every file in the developer's real ~/Library/LaunchAgents, which a run must not touch. */
+function realLaunchAgentMtimes(realHome: string): Record<string, number> {
+  const dir = path.join(realHome, 'Library', 'LaunchAgents')
+  if (!existsSync(dir)) {
+    return {}
+  }
+  return Object.fromEntries(
+    readdirSync(dir).map((name) => [name, statSync(path.join(dir, name)).mtimeMs])
+  )
+}
+
 test('a packaged Pod names itself Pod in its window and menus', async () => {
   test.skip(process.platform !== 'darwin' || !packagedApp, 'set POD_PACKAGED_APP to a Pod.app')
   test.setTimeout(240_000)
@@ -52,9 +63,15 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
   const isolation = createElectronHomeIsolation({
     inheritedEnv,
     launchEnv: { NODE_ENV: 'production' },
-    extraEnv: { ORCA_BACKGROUND_LAUNCH: '1' },
+    // Why POD_ACC_LIFECYCLE=off: the bundled claude-acc setup.sh runs launchctl against the real
+    // gui/<uid> domain whatever HOME is, so it could replace the developer's own agents.
+    extraEnv: { ORCA_BACKGROUND_LAUNCH: '1', POD_ACC_LIFECYCLE: 'off' },
     userDataDir
   })
+  if (isolation.env.POD_ACC_LIFECYCLE !== 'off') {
+    throw new Error('Refusing to launch a packaged app whose claude-acc lifecycle is on')
+  }
+  const launchAgentsBefore = realLaunchAgentMtimes(isolation.realHome)
   const args = packagedLaunchArgs(netLogPath)
   const baseline = runningSecurityAgentPids()
   if (baseline.length > 0) {
@@ -124,6 +141,7 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
   if (watchdog.tripped()) {
     throw new Error('keychain prompt: SecurityAgent started during the run; the app was killed')
   }
+  expect(realLaunchAgentMtimes(isolation.realHome)).toEqual(launchAgentsBefore)
   if (failure !== null) {
     throw failure
   }
