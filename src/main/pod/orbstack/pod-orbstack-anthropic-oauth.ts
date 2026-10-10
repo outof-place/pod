@@ -1,4 +1,4 @@
-// Fork-only (Pod): the sandbox route's OAuth credential, the user's choice for VM agents. It reads the
+// Fork-only (Pod): the sandbox route's OAuth credential, opt-in per Pod install. It reads the
 // login a Mac launch would use (Pod's Claude account routing, else the System default) through the
 // keychain reader Pod's usage meter already uses, read-only, and keeps only the access token, in
 // memory. It never refreshes: Claude Code rotates the refresh token on every refresh, so a refresh
@@ -85,17 +85,28 @@ export function parseClaudeLogin(raw: string): ClaudeLogin | null {
   }
 }
 
+const NOT_ALLOWED_MESSAGE =
+  "Sandboxed agents may not use this Mac's Claude Code login. Turn it on in Settings > OrbStack."
+
+/** The opt-in: the persisted Settings › OrbStack switch, with POD_SANDBOX_ANTHROPIC=off as a hard off. */
+export function sandboxClaudeLoginAllowed(
+  setting: { sandboxClaudeLogin(): boolean },
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  return env.POD_SANDBOX_ANTHROPIC !== 'off' && setting.sandboxClaudeLogin()
+}
+
 /**
  * Reads only when a sandbox request asks for a credential: no timer, so with no sandbox using the
- * route there are no `security` spawns at all.
+ * route there are no `security` spawns at all. `allowed` is read per launch and per request, so the
+ * opt-in switch takes effect without a restart.
  */
-export function createClaudeOAuthSandboxCredentials(
-  deps: {
-    target?: () => ClaudeLoginTarget
-    read?: (target: ClaudeLoginTarget) => Promise<string | null>
-    now?: () => number
-  } = {}
-): Required<Pick<SandboxAnthropicCredentials, 'launched' | 'released' | 'rejected'>> &
+export function createClaudeOAuthSandboxCredentials(deps: {
+  allowed: () => boolean
+  target?: () => ClaudeLoginTarget
+  read?: (target: ClaudeLoginTarget) => Promise<string | null>
+  now?: () => number
+}): Required<Pick<SandboxAnthropicCredentials, 'launched' | 'released' | 'rejected'>> &
   SandboxAnthropicCredentials {
   const targetOf = deps.target ?? (() => resolveMacClaudeLoginTarget())
   const read = deps.read ?? readClaudeLoginItem
@@ -132,7 +143,7 @@ export function createClaudeOAuthSandboxCredentials(
     login != null && (login.expiresAt === null || login.expiresAt - now() > EXPIRY_MARGIN_MS)
 
   return {
-    mode: () => 'oauth',
+    mode: () => (deps.allowed() ? 'oauth' : 'off'),
     launched({ machine }) {
       try {
         pins.set(machine, targetOf())
@@ -153,6 +164,11 @@ export function createClaudeOAuthSandboxCredentials(
       }
     },
     async authHeaders({ machine }) {
+      if (!deps.allowed()) {
+        // Turned off while a sandbox still runs: refuse before any read, and forget what was read.
+        cached.clear()
+        throw new SandboxCredentialError(NOT_ALLOWED_MESSAGE)
+      }
       const pinned = pins.get(machine)
       if (pinned instanceof SandboxCredentialError) {
         throw pinned
