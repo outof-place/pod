@@ -123,6 +123,15 @@
       "unless": "import { getProductIdentity } from '../product-identity/product-identity'"
     },
     {
+      "id": "docs-host",
+      "stage": "pre-env",
+      "why": "Orca's docs links open Pod's docs, which keep the path and forward shared pages to Orca's (pod.codes/docs); the classifier test keeps a Stably URL",
+      "files": "^(?!src/shared/product-ui-identity\\.test\\.ts$)(src|tests)/",
+      "find": "https://(?:www\\.)?onorca\\.dev/docs(?=[/'\"`#?]|$)",
+      "replace": "https://pod.codes/docs",
+      "applied": "https://pod\\.codes/docs"
+    },
+    {
       "id": "local-cli-command",
       "stage": "post-env",
       "why": "local terminals name the CLI, so agents and skills never fall back to a bare `orca`",
