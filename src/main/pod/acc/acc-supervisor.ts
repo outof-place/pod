@@ -1,7 +1,12 @@
 import { dirname, join } from 'node:path'
 import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
 import type { PodClaudeAccConfig } from '../pod-distro-config'
-import { automatedLaunchEnv, runAccLifecycle, type AccLifecycleOutcome } from './acc-lifecycle'
+import {
+  ACC_STATE_DIR,
+  automatedLaunchEnv,
+  runAccLifecycle,
+  type AccLifecycleOutcome
+} from './acc-lifecycle'
 import { writeAccLifecycleRecord } from './acc-lifecycle-record'
 import { isAccMenuHelperRunning } from './acc-menu-helper'
 
@@ -74,7 +79,7 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
   ).then((outcome) => {
     options.log(describe(outcome))
     try {
-      writeAccLifecycleRecord(options.home, outcome, {
+      writeAccLifecycleRecord(join(options.home, ACC_STATE_DIR), outcome, {
         app: appPath,
         at: new Date(),
         pid: process.pid
