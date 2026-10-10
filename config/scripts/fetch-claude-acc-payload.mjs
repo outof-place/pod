@@ -8,7 +8,7 @@
 //   node config/scripts/fetch-claude-acc-payload.mjs --from X   X = an unpacked payload dir or a tarball
 //                                                               (local claude-acc builds; checked against the
 //                                                               pin only when X is the pinned asset)
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import {
   installDir,
@@ -46,6 +46,27 @@ export function assertPayload(dir) {
   return readFileSync(join(dir, 'VERSION'), 'utf8').trim()
 }
 
+/**
+ * Removes every __pycache__ folder and .pyc file under `dir` (a --from checkout that ran its
+ * tests has them): nothing Python cached may ship inside Pod.app. Returns how many it removed.
+ */
+export function dropBytecode(dir) {
+  let removed = 0
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory() && entry.name === '__pycache__') {
+      rmSync(path, { recursive: true, force: true })
+      removed++
+    } else if (entry.isDirectory()) {
+      removed += dropBytecode(path)
+    } else if (entry.name.endsWith('.pyc')) {
+      rmSync(path, { force: true })
+      removed++
+    }
+  }
+  return removed
+}
+
 /** @param {{ from?: string | null, into?: string, pin?: import('./pinned-release-asset.mjs').ReleasePin, download?: typeof fetch }} [options] */
 export async function fetchPayload({
   from = null,
@@ -57,11 +78,12 @@ export async function fetchPayload({
     if (statSync(from).isDirectory()) {
       assertPayload(from)
       installDir(from, into)
+      dropBytecode(into)
     } else {
       if (basename(from) === pin.asset && pin.sha256 && sha256File(from) !== pin.sha256) {
         throw new Error(`${from} does not match the pinned sha256 ${pin.sha256}`)
       }
-      unpackTarball(from, 'claude-acc', into, assertPayload)
+      unpackTarball(from, 'claude-acc', into, assertPayload, dropBytecode)
     }
     writeFileSync(join(into, STAMP), `${JSON.stringify({ from })}\n`)
     return { version: assertPayload(into), source: from }
@@ -78,6 +100,7 @@ export async function fetchPayload({
     into,
     topDir: 'claude-acc',
     assert: assertPayload,
+    prepare: dropBytecode,
     download
   })
   return { version: assertPayload(into), source }

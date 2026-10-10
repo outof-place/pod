@@ -73,13 +73,17 @@ export function preparePython(dir) {
   }
   // Why unchecked-hash: copies (cpSync, electron-builder) change source mtimes, and a timestamp
   // .pyc that looks stale makes Python write a new one into the signed bundle, breaking its seal.
+  // -B and -f: without them the modules compileall and its workers import first kept the
+  // timestamp .pyc the import wrote (93 of 555, encodings among them).
   const compiled = spawnSync(
     join(dir, 'bin/python3'),
     [
       '-I',
+      '-B',
       '-m',
       'compileall',
       '-q',
+      '-f',
       '-j',
       '0',
       '--invalidation-mode',

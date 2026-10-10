@@ -15,6 +15,11 @@ const HELPER = 'Pod Menu.app'
 // pod-rootd's daemonService plist, in payloads that ship the root helper
 const DAEMONS = 'LaunchDaemons'
 
+// Bytecode never ships with claude-acc: a cache Python wrote in a checkout would be sealed into
+// the app as is (src/main/pod/acc/acc-bundle-seal.test.ts). The Python's own stdlib .pyc stay:
+// fetch-pod-python compiles them unchecked-hash, so they are never rewritten.
+const NO_BYTECODE = ['!**/__pycache__', '!**/__pycache__/**', '!**/*.pyc']
+
 function requireFetched(dir, names, script) {
   for (const name of names) {
     if (!existsSync(join(dir, name))) {
@@ -43,7 +48,14 @@ function podAccMacExtraResources({
       from: payloadDir,
       to: 'claude-acc',
       // a v2 payload's launchd plists and helper live in Contents/Library (podAccMacExtraFiles)
-      filter: ['**/*', '!.payload-source.json', `!${AGENTS}/**`, `!${DAEMONS}/**`, `!${HELPER}/**`]
+      filter: [
+        '**/*',
+        '!.payload-source.json',
+        `!${AGENTS}/**`,
+        `!${DAEMONS}/**`,
+        `!${HELPER}/**`,
+        ...NO_BYTECODE
+      ]
     },
     { from: pythonDir, to: 'python', filter: ['**/*', '!.payload-source.json'] },
     { from: distroPlugins, to: 'plugins/distro' }
@@ -88,6 +100,7 @@ const podAccFileExclusions = [
 const podAccMacSignIgnore = ['/Resources/python/lib/python3\\.14/(?!.*\\.(?:so|dylib)$)']
 
 module.exports = {
+  NO_BYTECODE,
   podAccMacExtraResources,
   podAccMacExtraFiles,
   podAccFileExclusions,
