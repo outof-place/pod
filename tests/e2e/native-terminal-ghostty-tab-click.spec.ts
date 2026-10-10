@@ -2,7 +2,8 @@
  * A native Ghostty view holding AppKit's keyboard leaves the page blurred, so a click on page UI
  * is what focuses the page again, while the button is still down. That focus must neither flush
  * the tab strip's pending press nor give the keyboard back to the native view (whose blur cancels
- * the press), or switching tabs takes two clicks.
+ * the press), or switching tabs takes two clicks. The skipped restore lands on release unless the
+ * click put focus somewhere real (an input).
  *
  * The E2E window is never key, so AppKit's part of a real click is replayed by hand: the web
  * contents take the keyboard, the button reads as pressed, and the page gets its focus event.
@@ -128,6 +129,29 @@ test('one click switches tabs and worktrees while a native terminal holds the ke
   } finally {
     await nativeTerminalDebug(electronApp, 'mousePressed', [null])
   }
+
+  // A click on nothing focusable (the sidebar title) gives the keyboard back on release.
+  await clickWhileNativeHoldsKeyboard(
+    orcaPage,
+    electronApp,
+    surfaceId,
+    orcaPage.locator('[data-sidebar-section-title]').first()
+  )
+  await expect.poll(() => holdsKeyboard(electronApp, surfaceId)).toBe(true)
+
+  // A click into an input keeps the keyboard in the page.
+  await orcaPage.evaluate(() => {
+    const input = document.createElement('input')
+    input.id = 'native-tab-click-probe'
+    input.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:2147483647'
+    document.body.append(input)
+  })
+  const probe = orcaPage.locator('#native-tab-click-probe')
+  await clickWhileNativeHoldsKeyboard(orcaPage, electronApp, surfaceId, probe)
+  await orcaPage.waitForTimeout(500)
+  expect(await holdsKeyboard(electronApp, surfaceId)).toBe(false)
+  await expect(probe).toBeFocused()
+  await probe.evaluate((input) => input.remove())
 
   // Sidebar rows activate on click, which must survive the same handoff.
   const otherWorktreeId = (await getAllWorktreeIds(orcaPage)).find((id) => id !== worktreeId)
