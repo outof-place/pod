@@ -1,6 +1,7 @@
 import {
-  isHiddenRendererPtyViewGated,
-  recordHiddenRendererPtyDataDrop
+  recordHiddenRendererPtyDataDrop,
+  rendererPtyViewDelivery,
+  type RendererPtyViewDelivery
 } from '../../pty-hidden-delivery-gate'
 import type { PendingPtyData } from '../../pty-pending-data-drain-queue'
 import {
@@ -12,13 +13,25 @@ import {
 import type { PtyIpcSession } from '../session'
 
 /** The stamp for bytes main ingests now, read in the same tick as the runtime's reply-ownership
- *  decision (shouldModelAnswerHiddenPtyQueries), which answers only while the view is gated. */
-export function isRendererPtyViewGatedForIngestion(session: PtyIpcSession, id: string): boolean {
-  return isHiddenRendererPtyViewGated(id, session.getSettings?.())
+ *  decision (shouldModelAnswerHiddenPtyQueries), which reads the same mode. */
+export function rendererPtyViewDeliveryForIngestion(
+  session: PtyIpcSession,
+  id: string
+): RendererPtyViewDelivery {
+  return rendererPtyViewDelivery(id, session.getSettings?.())
 }
 
-/** Drops a gated entry: its queries were answered outside the view, which restores from main. */
-export function dropViewGatedPendingPtyData(
+export function pendingIngestedDelivery(pending: PendingPtyData): RendererPtyViewDelivery {
+  return pending.ingestedDelivery ?? 'parse'
+}
+
+/** Whether the view was to answer these bytes' queries: only bytes ingested as 'parse'. */
+export function viewOwesPendingReplies(pending: PendingPtyData): boolean {
+  return pending.ingestedDelivery === undefined
+}
+
+/** Drops an entry whose replies were owned outside the view, which restores from main. */
+export function dropOwnedOutsideViewPendingPtyData(
   session: PtyIpcSession,
   id: string,
   pending: PendingPtyData
@@ -36,31 +49,31 @@ export function dropViewGatedPendingPtyData(
   }
 }
 
-/** Runs before bytes stamped `viewGatedAtIngestion` join `id`'s pending entry, so one entry
- *  never mixes stamps. Returns the entry the bytes may join. */
-export function settlePendingViewGateStamp(
+/** Runs before bytes ingested as `delivery` join `id`'s pending entry, so one entry never mixes
+ *  reply owners. Returns the entry the bytes may join. */
+export function settlePendingDeliveryStamp(
   session: PtyIpcSession,
   id: string,
-  viewGatedAtIngestion: boolean
+  delivery: RendererPtyViewDelivery
 ): PendingPtyData | undefined {
   const pending = session.pendingData.get(id)
-  if (!pending || (pending.viewGatedAtIngestion === true) === viewGatedAtIngestion) {
+  if (!pending || viewOwesPendingReplies(pending) === (delivery === 'parse')) {
     return pending
   }
-  if (viewGatedAtIngestion) {
-    // The view went gated before it parsed these bytes: answer their queries now, then
-    // treat them as gated so a quick reveal cannot make the view answer them again.
+  if (delivery !== 'parse') {
+    // The view stopped parsing before it saw these bytes: answer their queries now, then
+    // stamp them like the new bytes so a quick flip back cannot make the view answer again.
     sendSkippedViewQueries(session, id, pending.data)
     const settled: PendingPtyData = {
       ...pending,
       ...(pending.droppedOutput === true ? { data: '' } : {}),
-      viewGatedAtIngestion: true
+      ingestedDelivery: delivery
     }
     session.setPendingPtyData(id, settled)
     return settled
   }
-  // Revealed with gated bytes still queued: their queries were answered outside the view,
-  // so they go to sidecars only (the view restores from main) and fresh bytes start anew.
+  // The view parses again with bytes still queued whose replies were owned outside it: they go
+  // to sidecars only (the view restores from main) and fresh bytes start anew.
   session.deletePendingPtyData(id)
   session.pendingOverflowMarkedPtys.delete(id)
   if (pending.droppedOutput !== true && pending.data && session.rendererPtyDispatcherReady) {
@@ -76,10 +89,10 @@ export function settlePendingViewGateStamp(
         pending.transformed
       ),
       pending.projectionAdmissionIds,
-      true
+      pendingIngestedDelivery(pending)
     )
   } else {
-    dropViewGatedPendingPtyData(session, id, pending)
+    dropOwnedOutsideViewPendingPtyData(session, id, pending)
   }
   return undefined
 }
