@@ -1,5 +1,6 @@
 import type { SynchronizedOutputLatchState } from '../../shared/terminal-synchronized-output-scan'
 import type { Mode2031ReplyScanState } from '../../shared/terminal-color-scheme-protocol'
+import type { RendererPtyViewDelivery } from './pty-hidden-delivery-gate'
 
 export type PendingPtyData = {
   data: string
@@ -7,9 +8,10 @@ export type PendingPtyData = {
   rawLength?: number
   transformed?: true
   containsBackgroundOutput?: boolean
-  /** Ingested while the renderer view was gated, so its queries were answered outside the
-   *  view (main's model, a remote view, or nobody); the view must never parse these bytes. */
-  viewGatedAtIngestion?: true
+  /** The delivery mode when main ingested these bytes (rendererPtyViewDelivery); absent means
+   *  'parse'. Any other mode means the replies were owned outside the view (main's model, a
+   *  remote view, or nobody), so the view must never parse these bytes. */
+  ingestedDelivery?: Exclude<RendererPtyViewDelivery, 'parse'>
   droppedOutput?: true
   droppedMode2031Data?: string
   droppedMode2031ScanState?: Mode2031ReplyScanState
