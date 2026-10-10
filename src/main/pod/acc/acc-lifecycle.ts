@@ -52,14 +52,10 @@ export type AccLifecycleSkipReason =
   | 'automated-launch'
   | 'home-override'
   | 'custom-profile'
+  | 'handed-back'
   | 'setup-backoff'
 
-type AccInstallReason =
-  | 'first-install'
-  | 'version-changed'
-  | 'owner-changed'
-  | 'app-moved'
-  | 'setup-failed'
+type AccInstallReason = 'first-install' | 'version-changed' | 'app-moved' | 'setup-failed'
 
 export type AccLifecycleDecision =
   | { action: 'skip'; reason: AccLifecycleSkipReason }
@@ -157,6 +153,11 @@ export function decideAccLifecycle(input: AccLifecycleInput): AccLifecycleDecisi
     return { action: 'skip', reason: 'no-payload' }
   }
   const owner = readOwnerRecord(input.home)
+  // Handed back (`claude-acc handback`) or uninstalled: the account chose against Pod's copy, so
+  // Pod never takes claude-acc over again and its own services go (the supervisor removes them).
+  if (owner && owner.owner !== OWNER) {
+    return { action: 'skip', reason: 'handed-back' }
+  }
   const reason = installReason(owner, version, input.appPath)
   // a setup that failed may have written owner.json before it stopped (test3, 2026-10-10)
   const failed = failedSetup(join(input.home, ACC_STATE_DIR), version)
@@ -182,9 +183,6 @@ function installReason(
 ): AccInstallReason | null {
   if (!owner) {
     return 'first-install'
-  }
-  if (owner.owner !== OWNER) {
-    return 'owner-changed'
   }
   if (owner.version !== version) {
     return 'version-changed'

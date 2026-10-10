@@ -184,7 +184,6 @@ describe('claude-acc lifecycle', () => {
 
   it.each([
     ['first-install', null],
-    ['owner-changed', { owner: 'brew', version: '1.27.0', app: APP }],
     ['version-changed', { owner: 'pod', version: '1.26.0', app: APP }],
     ['app-moved', { owner: 'pod', version: '1.27.0', app: '/Users/me/Downloads/Pod.app' }]
   ])('installs on %s', (reason, owner) => {
@@ -192,6 +191,13 @@ describe('claude-acc lifecycle', () => {
       action: 'install',
       reason,
       version: '1.27.0'
+    })
+  })
+
+  it.each(['brew', 'none'])('stays out once claude-acc was handed to %s', (owner) => {
+    expect(decideAccLifecycle(fixture({ owner: { owner, version: '1.27.0', app: APP } }))).toEqual({
+      action: 'skip',
+      reason: 'handed-back'
     })
   })
 
