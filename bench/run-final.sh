@@ -5,10 +5,10 @@
 #
 #   bench/run-final.sh --pod /path/to/Pod.app [--pod-commit SHA] [--orca /Applications/Orca.app]
 #                      [--og-sha SHA] [--og-features pcre2] [--search-client-sha SHA]
-#                      [--no-visible] [--with-vdisplay]
+#                      [--no-visible] [--vdisplay]
 #
 # --pod-commit is the main commit the Pod build came from (read from the bundle when it records
-# one); every Pod row and the stack check use it. --with-vdisplay adds a virtual display for 20 s,
+# one); every Pod row and the stack check use it. --vdisplay adds a virtual display for 20 s,
 # which moves the user's display layout, so it is off unless asked for.
 #
 # Every sample still waits for a 1-minute load average <= POD_BENCH_MAX_LOAD (default 8).
@@ -31,7 +31,7 @@ while [ $# -gt 0 ]; do
     --og-features) og_features="$2"; shift 2 ;;
     --search-client-sha) client_sha="${2:?}"; shift 2 ;;
     --no-visible) visible=0; shift ;;
-    --with-vdisplay) vdisplay=1; shift ;;
+    --vdisplay) vdisplay=1; shift ;;
     -h | --help) sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -78,7 +78,7 @@ run_suite git-status
 if [ -n "$og_sha" ]; then
   field() { node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[process.argv[2]]' "$inputs" "$1"; }
   run_suite search --repo "$search_repo" --engines rg,og --og "$(field og)" --ogd "$(field ogd)" \
-    --ogctl "$(field ogctl)" --og-sha "$og_sha"
+    --ogctl "$(field ogctl)" --og-sha "$(field ogSha)"
 else
   run_suite search --repo "$search_repo"
 fi
