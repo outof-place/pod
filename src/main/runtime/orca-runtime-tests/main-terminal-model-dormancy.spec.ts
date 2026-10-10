@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { HeadlessEmulator } from '../../daemon/headless-emulator'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
   isHiddenRendererPtyViewGated,
@@ -9,9 +8,9 @@ import {
   shouldDropHiddenRendererPtyData,
   unmarkHiddenRendererPty
 } from '../../ipc/pty-hidden-delivery-gate'
-import type { PtyProviderBufferSnapshot } from '../../providers/types'
 import type { RuntimePtyController } from '../runtime-pty-controller-contract'
 import { MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS } from '../main-terminal-model-dormancy'
+import { FakeDaemonModel } from '../fake-daemon-terminal-model.test-fixture'
 import {
   createRuntime,
   makeDeferred,
@@ -21,34 +20,10 @@ import {
 
 const GRID = { cols: 80, rows: 24 }
 
-/** Stands in for the terminal daemon: parses every byte and serves settled snapshots. */
-class FakeDaemonModel {
-  readonly emulator = new HeadlessEmulator(GRID)
-  seq = 0
-
-  async feed(data: string): Promise<void> {
-    this.seq += data.length
-    await this.emulator.write(data)
-  }
-
-  snapshot(): PtyProviderBufferSnapshot {
-    const snapshot = this.emulator.getSnapshot({ scrollbackRows: 1000 })
-    return {
-      data: snapshot.rehydrateSequences + snapshot.snapshotAnsi,
-      ...(snapshot.scrollbackAnsi ? { scrollbackAnsi: snapshot.scrollbackAnsi } : {}),
-      cols: snapshot.cols,
-      rows: snapshot.rows,
-      seq: this.seq,
-      source: 'headless',
-      alternateScreen: snapshot.modes.alternateScreen
-    }
-  }
-}
-
 let now = 1_000_000
 
 function createHarness(overrides: Partial<RuntimePtyController> = {}) {
-  const daemon = new FakeDaemonModel()
+  const daemon = new FakeDaemonModel(GRID)
   const runtime = createRuntime()
   const replies: string[] = []
   const snapshotReads = { count: 0 }
