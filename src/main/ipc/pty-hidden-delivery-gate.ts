@@ -101,11 +101,29 @@ export function isHiddenRendererPtyViewGated(
   return isHiddenPtyDeliveryGateEnabled(settings) && hiddenRendererPtys.has(id)
 }
 
+/** How main delivers a PTY's bytes to the renderer; the one owner of that decision:
+ *  - 'drop': hidden view, no sidecar wants the bytes; the view restores from the model on reveal.
+ *  - 'sidecarsOnly': hidden view, sidecars still get the bytes; the view skips them.
+ *  - 'parse': the view parses the bytes.
+ *  Main's model owns a chunk's query replies unless its delivery is 'parse'. Delivery stamps
+ *  each chunk with the mode it had at ingestion, so a later flip cannot move that ownership. */
+export type RendererPtyViewDelivery = 'parse' | 'sidecarsOnly' | 'drop'
+
+export function rendererPtyViewDelivery(
+  id: string,
+  settings: HiddenPtyDeliveryGateSettings | null | undefined
+): RendererPtyViewDelivery {
+  if (isHiddenRendererPtyViewGated(id, settings)) {
+    return deliveryInterestRendererPtys.has(id) ? 'sidecarsOnly' : 'drop'
+  }
+  return 'parse'
+}
+
 export function shouldDropHiddenRendererPtyData(
   id: string,
   settings: HiddenPtyDeliveryGateSettings | null | undefined
 ): boolean {
-  return isHiddenRendererPtyViewGated(id, settings) && !deliveryInterestRendererPtys.has(id)
+  return rendererPtyViewDelivery(id, settings) === 'drop'
 }
 
 /** Hidden bytes still sent because a sidecar needs them, which the view must skip:
@@ -114,7 +132,7 @@ export function shouldDeliverHiddenRendererPtyDataToSidecarsOnly(
   id: string,
   settings: HiddenPtyDeliveryGateSettings | null | undefined
 ): boolean {
-  return isHiddenRendererPtyViewGated(id, settings) && deliveryInterestRendererPtys.has(id)
+  return rendererPtyViewDelivery(id, settings) === 'sidecarsOnly'
 }
 
 /** Record one gated drop. Returns whether the caller should emit the one-shot
