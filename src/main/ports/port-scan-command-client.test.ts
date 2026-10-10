@@ -211,6 +211,17 @@ describe('PortScanCommandClient', () => {
 // asar shim can load a Worker entry from inside app.asar is not testable here —
 // that still needs a packaged smoke test.
 describe('resolveWorkerEntryPath', () => {
+  it('resolves an unpackaged shared client from its chunks directory to the entry directory', () => {
+    const mainDir = join(sep, 'repo', 'out', 'main')
+    expect(
+      resolveWorkerEntryPath({
+        isPackaged: false,
+        resourcesPath: undefined,
+        moduleDir: join(mainDir, 'chunks')
+      })
+    ).toBe(join(mainDir, 'port-scan-command-worker-entry.js'))
+  })
+
   const WORKER_ENTRY_FILENAME = 'port-scan-command-worker-entry.js'
 
   it('resolves a packaged build under resourcesPath/app.asar/out/main', () => {
