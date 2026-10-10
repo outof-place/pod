@@ -10,14 +10,16 @@ import {
 } from './terminal-model-query-authority'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
-  applyRendererPtyViewFedElsewhere,
   clearHiddenRendererPtyDeliveryState,
   markHiddenRendererPty,
   rendererPtyViewDelivery,
-  requestRendererPtyViewFedElsewhere,
   resetRendererScopedHiddenPtyDeliveryState,
   setRendererPtyDeliveryInterest
 } from '../ipc/pty-hidden-delivery-gate'
+import {
+  applyRendererPtyViewFedElsewhere,
+  requestRendererPtyViewFedElsewhere
+} from '../ipc/pty-view-fed-elsewhere-state'
 
 const ALL_ON = {
   terminalMainSideEffectAuthority: true,

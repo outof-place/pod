@@ -5,11 +5,11 @@ import { recordPtyRendererDeliveryPressure } from './accounting'
 import { DROPPED_QUERY_SALVAGE_MAX_CHARS } from './constants'
 import { extractDroppedPtyQueryBytes } from './pending'
 import {
-  applyRendererPtyViewFedElsewhere,
   recordHiddenRendererPtyDataDrop,
   rendererPtyViewDelivery,
   type RendererPtyViewDelivery
 } from '../../pty-hidden-delivery-gate'
+import { applyRendererPtyViewFedElsewhere } from '../../pty-view-fed-elsewhere-state'
 import type { PtyDataPayload, PtyIpcSession } from '../session'
 
 export function makePtyDataPayload(

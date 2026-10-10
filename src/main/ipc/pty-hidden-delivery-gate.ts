@@ -10,6 +10,11 @@
  * PTY's hidden bytes for sidecars only, and the view stays gated.
  */
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import {
+  clearAllRendererPtyViewFedElsewhere,
+  clearRendererPtyViewFedElsewhere,
+  isRendererPtyViewFedElsewhere
+} from './pty-view-fed-elsewhere-state'
 
 export type HiddenPtyDeliveryGateSettings = Pick<
   GlobalSettings,
@@ -31,14 +36,6 @@ const droppedSinceHiddenPtys = new Set<string>()
 // reload/crash, so its hidden mark must outlive renderer-scoped resets until a
 // renderer unmarks it (visible mount) or the PTY is torn down.
 const runtimeOwnedHiddenRendererPtys = new Set<string>()
-
-// Parse once: PTYs whose pane xterm left the byte stream under a native view main feeds. The
-// renderer asks; the change takes effect only between delivery batches, so a chunk's reply owner
-// (decided at ingestion) and its delivery (decided at send) always agree.
-const viewFedElsewhereRequestedPtys = new Set<string>()
-const viewFedElsewherePtys = new Set<string>()
-// Resolves a renderer's pending request once the change took effect (or the PTY's state cleared).
-const viewFedElsewhereAppliedWaiters = new Map<string, () => void>()
 
 let droppedHiddenDeliveryChars = 0
 let droppedHiddenDeliveryChunks = 0
@@ -131,7 +128,7 @@ export function rendererPtyViewDelivery(
   }
   // Why the authority switch: main's model must be the responder for bytes xterm never parses.
   if (
-    viewFedElsewherePtys.has(id) &&
+    isRendererPtyViewFedElsewhere(id) &&
     isHiddenPtyDeliveryGateEnabled(settings) &&
     settings?.terminalModelQueryAuthority !== false
   ) {
@@ -154,54 +151,6 @@ export function shouldDeliverHiddenRendererPtyDataToSidecarsOnly(
   settings: HiddenPtyDeliveryGateSettings | null | undefined
 ): boolean {
   return rendererPtyViewDelivery(id, settings) === 'sidecarsOnly'
-}
-
-/** Resolves once main delivers by the new state: every chunk flagged before it was sent first. */
-export function requestRendererPtyViewFedElsewhere(
-  id: string,
-  fedElsewhere: boolean,
-  atBatchBoundary: boolean
-): Promise<void> {
-  if (fedElsewhere) {
-    viewFedElsewhereRequestedPtys.add(id)
-  } else {
-    viewFedElsewhereRequestedPtys.delete(id)
-  }
-  if (atBatchBoundary) {
-    applyRendererPtyViewFedElsewhere(id)
-    return Promise.resolve()
-  }
-  return new Promise((resolve) => {
-    const previous = viewFedElsewhereAppliedWaiters.get(id)
-    viewFedElsewhereAppliedWaiters.set(id, () => {
-      previous?.()
-      resolve()
-    })
-  })
-}
-
-/** At a delivery-batch boundary (nothing pending for the PTY): the request takes effect. */
-export function applyRendererPtyViewFedElsewhere(id: string): void {
-  if (viewFedElsewhereRequestedPtys.has(id)) {
-    viewFedElsewherePtys.add(id)
-  } else {
-    viewFedElsewherePtys.delete(id)
-  }
-  settleViewFedElsewhereWaiter(id)
-}
-
-function settleViewFedElsewhereWaiter(id: string): void {
-  const waiter = viewFedElsewhereAppliedWaiters.get(id)
-  viewFedElsewhereAppliedWaiters.delete(id)
-  waiter?.()
-}
-
-function clearViewFedElsewhereState(): void {
-  viewFedElsewhereRequestedPtys.clear()
-  viewFedElsewherePtys.clear()
-  for (const id of viewFedElsewhereAppliedWaiters.keys()) {
-    settleViewFedElsewhereWaiter(id)
-  }
 }
 
 /** Record one gated drop. Returns whether the caller should emit the one-shot
@@ -229,7 +178,7 @@ export function recordHiddenRendererPtyDataDrop(
 export function resetRendererScopedHiddenPtyDeliveryState(): void {
   hiddenRendererPtys.clear()
   deliveryInterestRendererPtys.clear()
-  clearViewFedElsewhereState()
+  clearAllRendererPtyViewFedElsewhere()
   for (const id of runtimeOwnedHiddenRendererPtys) {
     hiddenRendererPtys.add(id)
   }
@@ -242,9 +191,7 @@ export function clearHiddenRendererPtyDeliveryState(id: string): void {
   runtimeOwnedHiddenRendererPtys.delete(id)
   deliveryInterestRendererPtys.delete(id)
   droppedSinceHiddenPtys.delete(id)
-  viewFedElsewhereRequestedPtys.delete(id)
-  viewFedElsewherePtys.delete(id)
-  settleViewFedElsewhereWaiter(id)
+  clearRendererPtyViewFedElsewhere(id)
 }
 
 export type HiddenRendererPtyDeliveryDebug = {
@@ -274,6 +221,6 @@ export function _resetHiddenRendererPtyDeliveryGateForTest(): void {
   runtimeOwnedHiddenRendererPtys.clear()
   deliveryInterestRendererPtys.clear()
   droppedSinceHiddenPtys.clear()
-  clearViewFedElsewhereState()
+  clearAllRendererPtyViewFedElsewhere()
   resetHiddenRendererPtyDeliveryDebugCounters()
 }

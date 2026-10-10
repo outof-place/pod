@@ -1,4 +1,4 @@
-import { requestRendererPtyViewFedElsewhere } from '../../pty-hidden-delivery-gate'
+import { requestRendererPtyViewFedElsewhere } from '../../pty-view-fed-elsewhere-state'
 import { getPtyIpc } from '../../pty-host-bindings'
 import type { PtyIpcSession } from '../session'
 
