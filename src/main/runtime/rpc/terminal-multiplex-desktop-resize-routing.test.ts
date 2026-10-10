@@ -271,9 +271,11 @@ describe('terminal multiplex RPC', () => {
       const outputFrames = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
-      expect(outputFrames).toHaveLength(1)
-      expect(outputFrames[0]?.streamId).toBe(5)
-      expect(outputFrames[0] ? decodeTerminalStreamText(outputFrames[0].payload) : '').toBe('ab')
+      // The first chunk after a quiet spell goes out at once; the rest of the burst is coalesced.
+      expect(outputFrames.map((frame) => frame?.streamId)).toEqual([5, 5])
+      expect(
+        outputFrames.map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : '')).join('')
+      ).toBe('ab')
 
       handlers.get(5)?.(
         decodeTerminalStreamFrame(
