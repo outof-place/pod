@@ -11,6 +11,7 @@ import {
   PRIMARY_HEAD_IDENTITY_SCOPE,
   type WorktreeHeadIdentityScope
 } from './worktree-head-identity-scope'
+import { isReftableStackListParts } from './worktree-git-common-reftable-stack'
 
 type WorktreeBaseWatcherEvent = {
   type: 'create' | 'update' | 'delete'
@@ -228,6 +229,10 @@ function classifyGitCommonEvent(
     if (isHeadLogParts(parts, 0)) {
       return headIdentityChange(repoIds, PRIMARY_HEAD_IDENTITY_SCOPE)
     }
+    // The shared reftable stack holds every branch tip and the primary HEAD.
+    if (isReftableStackListParts(parts, 0)) {
+      return headIdentityChange(repoIds, FULL_HEAD_IDENTITY_SCOPE)
+    }
     if (isBoundUpstreamRef(target, event.path, parts)) {
       return gitStatusChange(repoIds)
     }
@@ -257,7 +262,7 @@ function classifyGitCommonEvent(
       return gitStatusChange(repoIds)
     }
   }
-  if (isHeadLogParts(parts, 2)) {
+  if (isHeadLogParts(parts, 2) || isReftableStackListParts(parts, 2)) {
     return headIdentityChange(repoIds, headIdentityScopeForEntry(parts[1]))
   }
   return NO_CHANGE
