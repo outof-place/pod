@@ -6,6 +6,7 @@ import type {
 } from '../../shared/browser-guest-events'
 import type { ActiveDownload } from './browser-manager-types'
 import { BrowserManagerDownloadCreation } from './browser-manager-download-creation'
+import { forwardPodBrowserDownload } from '../pod/browser-pane/pod-browser-pane-hooks'
 
 export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDownloadCreation {
   protected bindDownloadToTab(downloadId: string, browserTabId: string): void {
@@ -67,6 +68,15 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     }
     const renderer = this.resolveRendererForBrowserTab(download.browserTabId)
     if (!renderer) {
+      // Fork-only (Pod): one-app's native panes list the downloads of pages no renderer hosts.
+      forwardPodBrowserDownload({
+        kind: 'requested',
+        browserPageId: download.browserTabId,
+        downloadId: download.downloadId,
+        filename: download.filename,
+        totalBytes: download.totalBytes,
+        savePath: download.savePath
+      })
       return
     }
     renderer.send('browser:download-requested', {
@@ -91,6 +101,8 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     }
     const renderer = this.resolveRendererForBrowserTab(browserTabId)
     if (!renderer) {
+      // Fork-only (Pod): see sendDownloadStarted.
+      forwardPodBrowserDownload({ kind: 'progress', ...payload, browserPageId: browserTabId })
       return
     }
     renderer.send('browser:download-progress', payload)
@@ -105,6 +117,15 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     }
     const renderer = this.resolveRendererForBrowserTab(browserTabId)
     if (!renderer) {
+      // Fork-only (Pod): see sendDownloadStarted.
+      forwardPodBrowserDownload({
+        kind: 'finished',
+        browserPageId: browserTabId,
+        downloadId: payload.downloadId,
+        status: payload.status,
+        savePath: payload.savePath,
+        error: payload.error
+      })
       return
     }
     renderer.send('browser:download-finished', payload)
