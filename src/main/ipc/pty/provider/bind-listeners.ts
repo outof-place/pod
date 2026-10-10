@@ -15,6 +15,8 @@ import { setDaemonQueryResponderConfirmed } from '../../pty-hidden-delivery-gate
 import { clearProviderPtyState } from './state-cleanup'
 import { providerSnapshotRequiredPtys } from '../delivery/visibility-state'
 import type { PtyIpcSession } from '../session'
+import { handlePodLaneEvent } from '../../../runtime/pod-lane/pod-terminal-lanes'
+import { recordPodLaneInput } from '../../../runtime/pod-lane/pod-lane-input-records'
 
 export function bindProviderListeners(session: PtyIpcSession): void {
   localDataUnsub?.()
@@ -71,6 +73,14 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           'hidden-drop',
           session.runtime?.getPtyOutputSequence(payload.id)
         )
+        return
+      }
+      if (payload.kind === 'podLaneInput') {
+        recordPodLaneInput(session.runtime, payload.id, payload.data, payload.at)
+        return
+      }
+      if (payload.kind === 'podLane') {
+        handlePodLaneEvent(payload)
         return
       }
       session.runtime?.emitDaemonPtyTransientFact(payload.id, payload.fact)
