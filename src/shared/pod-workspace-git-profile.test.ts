@@ -26,6 +26,7 @@ describe('planPodGitProfile', () => {
       'core.fsmonitor': 'set:large-repo',
       'index.version': 'set:large-repo',
       'checkout.workers': 'set:always',
+      'checkout.thresholdForParallelism': 'set:always',
       'fetch.writeCommitGraph': 'set:always',
       'maintenance.strategy': 'set:always',
       'maintenance.prefetch.enabled': 'set:always',
