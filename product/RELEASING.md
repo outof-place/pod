@@ -87,7 +87,7 @@ mv "$staging/Pod.app" /Applications/Pod.app                    # one rename: nev
 open /Applications/Pod.app                                     # by path, never `open -b`
 ```
 
-Quit Pod first. Trash `$staging` once the new copy runs.
+Quit Pod first, and check it is really gone: `pgrep -f '/Contents/MacOS/Pod$'` and `lsappinfo find bundleid=codes.pod.app` must both print nothing. Never modify, `chmod`, `mv`, `ditto` over or `lsregister` the bundle of a running app: on macOS 27 Gatekeeper kills it on the spot (syspolicyd "Terminating process due to Gatekeeper rejection"). Trash `$staging` once the new copy runs.
 
 Never keep built `.app` copies where LaunchServices, Spotlight or the Dock can find them (Desktop, Downloads, an indexed archive folder): `open -b` and the Dock may pick a stale one. Archive folders get a `.metadata_never_index` file, and a stray copy is unregistered with `lsregister -u <path>`.
 
