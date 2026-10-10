@@ -202,7 +202,10 @@ same number of matching lines per query, and any disagreement is recorded. The e
 - **Engine level** (`src/main/pod/search/ogd-ripgrep-parity.real-ogd.test.ts`): 8 text queries and
   2 file listings, each through ogd and through Orca's bundled ripgrep. That rg is what Orca users
   get; og forks rg 15.2.0. Each value is the median of 5 runs, and every result is diffed, so a
-  timing run is also a correctness check.
+  timing run is also a correctness check. ogd clips lines over 1 MiB, and Pod's client then
+  declines its reply and asks rg. A query whose answer had a clipped line (the report's
+  `fallbacks`) keeps both rows with a caveat but gets no comparison, since in Pod it takes rg's
+  time.
 - **In app** (`tests/e2e/pod-native-search.spec.ts`): headless Pod UI. It times quick open and
   text search from the request to the first result row, on rg and on ogd, with gitignored files
   shown and hidden.
