@@ -92,7 +92,7 @@ def groups(summary: dict) -> list[dict]:
     """One chart per suite and metric, its rows in summary order."""
     out: dict[tuple[str, str], dict] = {}
     for m in summary.get("metrics", []):
-        if m.get("median") is None:
+        if m.get("median") is None or is_acc(m):
             continue
         key = (m["suite"], m["metric"])
         g = out.setdefault(
@@ -116,7 +116,7 @@ def groups(summary: dict) -> list[dict]:
         g["conditions"] = sorted(
             {r["conditions"] for r in g["rows"] if r.get("conditions")}
         )
-        g["caveats"] = [c for r in g["rows"] for c in r.get("caveats", [])]
+        g["caveats"] = list(dict.fromkeys(c for r in g["rows"] for c in r.get("caveats", [])))
     return list(out.values())
 
 
@@ -337,6 +337,262 @@ def chart(g: dict, summary: dict, theme: Theme, narrow: bool = False) -> Doc:
     return doc
 
 
+ACC_PHASES = ("before", "after")
+
+
+def is_acc(m: dict) -> bool:
+    return m.get("group", m.get("suite")) == "claude-acc"
+
+
+def acc_items(summary: dict) -> list[dict]:
+    """claude-acc's rows as items (id minus .historical and .before/.after), in summary order; area is the metric's prefix."""
+    comps = {c["candidate"]["id"]: c for c in summary.get("comparisons", [])}
+    items: dict[str, dict] = {}
+    for m in summary.get("metrics", []):
+        if not is_acc(m):
+            continue
+        parts = m["id"].split(".")
+        phase = parts[-1] if parts[-1] in ACC_PHASES else None
+        key = ".".join(p for p in parts[1:] if p != "historical" and p not in ACC_PHASES)
+        area, _, what = m["metric"].partition(": ")
+        if not what:
+            area, what = SUITE_NAMES["claude-acc"], m["metric"]
+        it = items.setdefault(
+            key,
+            {"key": key, "area": area, "what": what, "metric": m["metric"], "unit": m["unit"],
+             "better": m.get("better", "lower"), "rows": [], "comparisons": []},
+        )
+        it["rows"].append({**m, "phase": phase})
+        if m["id"] in comps:
+            it["comparisons"].append(comps[m["id"]])
+    for it in items.values():
+        # Fresh rows first, then historical; before above after.
+        it["rows"].sort(key=lambda r: (provenance(r) is not None, ACC_PHASES.index(r["phase"]) if r["phase"] else 2))
+        it["comparisons"].sort(key=lambda c: (c.get("provenance") or {}).get("kind") == "historical")
+        it["context"] = any((r.get("extra") or {}).get("role") == "context" for r in it["rows"])
+    return list(items.values())
+
+
+def acc_areas(items: list[dict]) -> list[tuple[str, list[dict]]]:
+    out: dict[str, list[dict]] = {}
+    for it in items:
+        out.setdefault(it["area"], []).append(it)
+    return list(out.items())
+
+
+def value_label(r: dict, unit: str) -> str:
+    if r.get("median") is None:
+        return f"{fmt(r.get('min'))}–{fmt(r.get('max'))} {unit}"
+    return f"{fmt(r['median'])} {unit}"
+
+
+def factor_label(c: dict, better: str) -> str:
+    if c.get("candidateAhead", c["factor"] > 1):
+        return f"{c['factor']:.3g}× {'higher' if better == 'higher' else 'lower'}"
+    return f"{c['factor']:.3g}×, behind"
+
+
+def rich_words(s: str) -> list[list[tuple[str, bool]]]:
+    """Words of a string whose `code spans` are set in mono: each word as (text, is_code) pieces."""
+    words, code = [], False
+    for raw in s.split(" "):
+        pieces = []
+        for j, p in enumerate(raw.split("`")):
+            if j:
+                code = not code
+            if p:
+                pieces.append((p, code))
+        if pieces:
+            words.append(pieces)
+    return words
+
+
+def _rich_type(t: Type, mono: Type, code: bool) -> Type:
+    return mono if code else t
+
+
+def rich_wrap(s: str, t: Type, mono: Type, max_w: float) -> list[list[list[tuple[str, bool]]]]:
+    space = face(t.face).width(" ", t.size, t.tracking)
+    width = lambda word: sum(
+        face(_rich_type(t, mono, c).face).width(p, _rich_type(t, mono, c).size, _rich_type(t, mono, c).tracking)
+        for p, c in word
+    )
+    lines: list = []
+    line: list = []
+    w = 0.0
+    for word in rich_words(s):
+        ww = width(word)
+        if line and w + space + ww > max_w:
+            lines.append(line)
+            line, w = [], 0.0
+        w += (space if line else 0) + ww
+        line.append(word)
+    if line:
+        lines.append(line)
+    return lines
+
+
+def rich_line(doc: Doc, x: float, y: float, line: list, t: Type, mono: Type, ink: Ink) -> float:
+    space = face(t.face).width(" ", t.size, t.tracking)
+    for i, word in enumerate(line):
+        if i:
+            x += space
+        for p, c in word:
+            x += doc.text(x, y, p, _rich_type(t, mono, c), ink)
+    return x
+
+
+def acc_chart(area: str, items: list[dict], summary: dict, theme: Theme, narrow: bool = False) -> Doc:
+    """One claude-acc area. Each item gets its own zero-based scale, since units differ; factors are summary.json's."""
+    k = 1.32 if narrow else 1.0
+    W = 720 if narrow else 1280
+    pad = 40 * (0.8 if narrow else 1)
+    eyebrow_t = Type("suisse", 16 * k)
+    title_t = Type("neue", 32 * k, 1.15, -0.02)
+    sub_t = Type("suisse", 16 * k, 1.4)
+    what_t = Type("neue-medium", 18 * k, 1.3)
+    fig_t = Type("neue-medium", 18 * k)
+    subj_t = Type("suisse", 15 * k, 1.3)
+    what_mono = Type("mono-medium", 16.5 * k)
+    subj_mono = Type("mono", 13.8 * k)
+    value_t = Type("neue-medium", 15 * k)
+    meta_t = Type("suisse", 13.5 * k, 1.4)
+    foot_t = Type("suisse", 14 * k, 1.45)
+    fixture = "fixture" in summary
+    text_w = W - 2 * pad
+    subj_w = 0 if narrow else 360
+    x0 = pad + subj_w + (0 if narrow else 24)
+    x1 = W - pad - 200 * k
+    bar_h = 14 * k
+    title = f"claude-acc, {area}" + (" (FAKE fixture data)" if fixture else "")
+    doc = Doc(W, 0, title)
+    y = pad + eyebrow_t.size * 0.8
+    doc.text(pad, y, "claude-acc · measured", eyebrow_t, theme.pod_ink)
+    y += 14 + title_t.size
+    doc.text(pad, y, area, title_t, theme.ink)
+    y += sub_t.size * 1.6
+    hatched = any(provenance(r) for it in items for r in it["rows"])
+    sub = "Each item on its own scale from zero" + (" · hatched: historical" if hatched else "")
+    for line in wrap(sub, sub_t, text_w):
+        doc.text(pad, y, line, sub_t, theme.ink3)
+        y += sub_t.size * sub_t.leading
+
+    for i, it in enumerate(items):
+        if i:
+            doc.add(f'<path d="M{n(pad)} {n(y)}H{n(W - pad)}" {theme.hairline.stroke()}/>')
+        y += 26 * k
+        comps = it["comparisons"]
+        fig = "Context, not a win" if it["context"] else (factor_label(comps[0], it["better"]) if comps else "")
+        fig_ink = theme.ink3 if it["context"] else theme.ink
+        fw = face(fig_t.face).width(fig, fig_t.size, fig_t.tracking) if fig else 0
+        # As summary.json writes it: no case change, since items start with names like rtk or `git status`.
+        what_rows = rich_wrap(it["what"], what_t, what_mono, text_w - fw - 24 * k)
+        y += what_t.size * 0.8
+        if fig:
+            doc.text(W - pad, y, fig, fig_t, fig_ink, anchor="end")
+        for j, line in enumerate(what_rows):
+            if j:
+                y += what_t.size * what_t.leading
+            rich_line(doc, pad, y, line, what_t, what_mono, theme.ink)
+        y += 12 * k
+        hi = max((r["median"] if r.get("median") is not None else r.get("max") or 0) for r in it["rows"])
+        if it["unit"].startswith("%"):
+            hi = max(hi, 100)
+        hi = hi or 1
+        sx = lambda v: x0 + (x1 - x0) * v / hi
+        lit_ids = {c["candidate"]["id"] for c in comps}
+        top = y
+        mixed = len({provenance(r) is None for r in it["rows"]}) > 1
+        for r in it["rows"]:
+            hist = provenance(r)
+            subject = r["subject"]
+            if mixed:
+                subject += f" · {hist.get('date', 'historical')}" if hist else " · this run"
+            if narrow:
+                y += subj_t.size
+                rich_line(doc, pad, y, [w for ln in rich_wrap(subject, subj_t, subj_mono, 1e9) for w in ln], subj_t, subj_mono, theme.ink2)
+                cy = y + 8 * k + bar_h / 2
+                y = cy + bar_h / 2 + 12 * k
+            else:
+                rows_s = rich_wrap(subject, subj_t, subj_mono, subj_w)
+                cy = y + 4 * k + bar_h / 2
+                for j, line in enumerate(rows_s):
+                    rich_line(doc, pad, cy + cap_middle(subj_t) + j * subj_t.size * subj_t.leading, line, subj_t, subj_mono, theme.ink2)
+                y += max(bar_h + 16 * k, len(rows_s) * subj_t.size * subj_t.leading + 8 * k)
+            lit = not it["context"] and (r["id"] in lit_ids if lit_ids else r["phase"] == "after")
+            fill = theme.pod_glyph if lit else theme.chart_muted
+            if r.get("median") is None:
+                a, b = sx(r.get("min") or 0), sx(r.get("max") or 0)
+            else:
+                a, b = x0, sx(r["median"])
+            b = max(b, a + 2)
+            rr = min(4.0, (b - a) / 2)
+            ra = rr if r.get("median") is None else 0
+            bar = (
+                f"M{n(a + ra)} {n(cy - bar_h / 2)}H{n(b - rr)}Q{n(b)} {n(cy - bar_h / 2)} {n(b)} {n(cy - bar_h / 2 + rr)}"
+                f"V{n(cy + bar_h / 2 - rr)}Q{n(b)} {n(cy + bar_h / 2)} {n(b - rr)} {n(cy + bar_h / 2)}H{n(a + ra)}"
+                + (f"Q{n(a)} {n(cy + bar_h / 2)} {n(a)} {n(cy + bar_h / 2 - ra)}V{n(cy - bar_h / 2 + ra)}Q{n(a)} {n(cy - bar_h / 2)} {n(a + ra)} {n(cy - bar_h / 2)}" if ra else "")
+                + "Z"
+            )
+            if hist:
+                pid = doc.define(
+                    f"hatch-{fill.hex[1:]}",
+                    f'<pattern id="hatch-{fill.hex[1:]}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
+                    f'<path d="M0 0V6" {fill.stroke()} stroke-width="2"/></pattern>',
+                )
+                doc.add(f'<path d="{bar}" fill="url(#{pid})" {fill.stroke()} stroke-width="1.5"/>')
+            else:
+                doc.add(f'<path d="{bar}" {fill.fill()}/>')
+            doc.text(b + 10 * k, cy + cap_middle(value_t), value_label(r, it["unit"]), value_t, theme.ink)
+        doc.add(f'<path d="M{n(x0)} {n(top - 2)}V{n(y - 8 * k)}" {theme.hairline_strong.stroke()}/>')
+        # Provenance and the source's own notes, as written.
+        when = sorted({(provenance(r) or {}).get("date") or "" for r in it["rows"] if provenance(r)})
+        fresh = [r for r in it["rows"] if not provenance(r)]
+        bits = []
+        if fresh:
+            ns = sorted({r["n"] for r in fresh if r.get("n")})
+            bits.append("this run" + (f", n = {', '.join(f'{v:,}' for v in ns)}" if ns else ""))
+        if when:
+            bits.append(f"historical, measured {', '.join(when)}")
+        for r in it["rows"]:
+            note = (r.get("extra") or {}).get("note")
+            if note:
+                bits.append(f"{r['phase'] or 'note'}: {note}" if len(it["rows"]) > 1 else note)
+        for c in comps[1:]:
+            bits.append(f"{'historical ' if provenance(c) else ''}{factor_label(c, it['better'])}")
+        meta = " · ".join(bits)
+        meta = meta[:1].upper() + meta[1:]
+        y += meta_t.size * 0.4
+        y = doc.lines(pad, y + meta_t.size, wrap(meta, meta_t, text_w), meta_t, theme.ink3) + 22 * k
+
+    # Foot
+    y += 10 * k
+    doc.add(f'<path d="M{n(pad)} {n(y)}H{n(W - pad)}" {theme.hairline_strong.stroke()}/>')
+    y += 16 * k + foot_t.size
+    foot = [f"{summary.get('hardware', 'hardware not recorded')}"]
+    if hatched:
+        foot.append("Hatched: measured before this run, on the date shown. Every source is in the table below.")
+    for c in dict.fromkeys(c for it in items for r in it["rows"] for c in r.get("caveats", [])):
+        foot.append(f"Caveat: {c}")
+    foot.append("Methodology: bench/README.md in outof-place/pod.")
+    for part in foot:
+        for line in wrap(part, foot_t, text_w):
+            doc.text(pad, y, line, foot_t, theme.ink2 if not line.startswith("Methodology") else theme.ink3)
+            y += foot_t.size * foot_t.leading
+    H = y - foot_t.size * foot_t.leading + pad + 6
+    doc.h = H
+    panel = squircle(0.5, 0.5, W - 1, H - 1, 28)
+    doc.body[:0] = [f'<path d="{panel}" {_ground(theme).fill()}/>', ring(panel, Ink("#ffffff", 0.09) if theme.dark else theme.hairline_strong)]
+    if fixture:
+        warn = Ink(oklch(0.66, 0.18, 28))
+        doc.add(f'<g opacity=".9" transform="rotate(-14 {n(W / 2)} {n(H / 2)})">')
+        words = "FAKE FIXTURE · NOT A MEASUREMENT"
+        mark_t = Type("neue-medium", 64 * W * 0.9 / face("neue-medium").width(words, 64, 0.02), tracking=0.02)
+        doc.text(W / 2, H / 2 + 20, words, mark_t, warn.with_a(0.55), anchor="middle")
+        doc.add("</g>")
+    return doc
+
+
 def pending(theme: Theme, narrow: bool = False) -> Doc:
     """The card the README shows until pod-bench publishes: what is measured, and no number."""
     k = 1.3 if narrow else 1.0
@@ -420,6 +676,71 @@ ACC_PENDING = (
 )
 
 
+def methodology_url(summary: dict | None) -> str:
+    m = (summary or {}).get("methodology")
+    return m.get("url", METHODOLOGY) if isinstance(m, dict) else METHODOLOGY
+
+
+def acc_readme_block(charts: list[tuple[str, str, list[dict]]], summary: dict, prefix: str) -> str:
+    out = []
+    for name, area, items in charts:
+        alt = f"claude-acc, {area}, each item on its own scale. " + " ".join(
+            f"{it['what'].replace('`', '')}: "
+            + ", ".join(
+                f"{r['subject'].replace('`', '')} {value_label(r, it['unit'])}"
+                + (f" (historical, {provenance(r).get('date')})" if provenance(r) else "")
+                for r in it["rows"]
+            )
+            + (f"; {factor_label(it['comparisons'][0], it['better'])}." if it["comparisons"] and not it["context"] else ".")
+            for it in items
+        )
+        out.append(
+            "<picture>\n"
+            f'  <source media="(prefers-color-scheme: dark) and (max-width: 600px)" srcset="{prefix}{name}-narrow-dark.svg">\n'
+            f'  <source media="(max-width: 600px)" srcset="{prefix}{name}-narrow-light.svg">\n'
+            f'  <source media="(prefers-color-scheme: dark)" srcset="{prefix}{name}-dark.svg">\n'
+            f'  <img alt="{escape_attr(alt)}" src="{prefix}{name}-light.svg" width="100%">\n'
+            "</picture>\n"
+        )
+    rows = [
+        "| Item | Subject | Median | Min | Max | n | Measured | Note |",
+        "| --- | --- | ---: | ---: | ---: | ---: | --- | --- |",
+    ]
+    for _, _, items in charts:
+        for it in items:
+            for r in it["rows"]:
+                p = provenance(r)
+                when = "this run" if not p else f"historical, {p.get('date', 'earlier')}" + (f": {p['source']}" if p.get("source") else "")
+                note = (r.get("extra") or {}).get("note") or ""
+                if (r.get("extra") or {}).get("role") == "context":
+                    note = "context, not a win" + (f"; {note}" if note else "")
+                cells = [it["metric"], r["subject"], cell(r.get("median"), it["unit"]), cell(r.get("min"), it["unit"]),
+                         cell(r.get("max"), it["unit"]), cell(r.get("n")), when, note]
+                rows.append("| " + " | ".join(c.replace("|", "\\|") for c in cells) + " |")
+    date = summary.get("resultsDir", "").split("/")[-1] or summary.get("generatedAt", "")[:10]
+    caveats = [*summary.get("caveats", []), *summary.get("suites", {}).get("claude-acc", {}).get("caveats", [])]
+    out.append(
+        "\n<details>\n<summary>Every claude-acc number, with its date and source</summary>\n\n"
+        + "\n".join(rows)
+        + f"\n\nFrom `bench/{summary.get('resultsDir', 'results')}/summary.json`, {date}, on {summary.get('hardware', 'unrecorded hardware')}. "
+        + f"How it is measured: [bench/README.md]({methodology_url(summary)}).\n"
+        + "".join(f"\n- Caveat: {c}" for c in dict.fromkeys(caveats))
+        + "\n\n</details>\n"
+    )
+    return "\n".join(out)
+
+
+def cell(v: float | int | None, unit: str = "") -> str:
+    """Every digit as written, for the table."""
+    if v is None:
+        return "–"
+    return f"{v:,}" + (f" {unit}" if unit else "") if isinstance(v, int) else f"{v:g}" + (f" {unit}" if unit else "")
+
+
+def escape_attr(s: str) -> str:
+    return s.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def readme_block(
     charts: list[tuple[str, dict]], summary: dict | None, prefix: str
 ) -> str:
@@ -466,7 +787,7 @@ def readme_block(
         + "\n".join(rows)
         + f"\n\nMeasured on {summary.get('hardware', 'unrecorded hardware')}, {date}. "
         + f"Source: `{summary.get('resultsDir', 'bench/results')}/summary.json`. "
-        + f"How it is measured: [bench/README.md]({METHODOLOGY}).\n"
+        + f"How it is measured: [bench/README.md]({methodology_url(summary)}).\n"
         + "".join(f"\n- Caveat: {c}" for c in summary.get("caveats", []))
         + "\n\n</details>\n"
     )
@@ -501,6 +822,7 @@ def main() -> None:
         )
     out.mkdir(parents=True, exist_ok=True)
     charts: list[tuple[str, dict]] = []
+    acc_charts: list[tuple[str, str, list[dict]]] = []
     if summary:
         for g in groups(summary):
             name = f"bench-{g['suite']}-{slug(g['metric'])}"
@@ -511,20 +833,25 @@ def main() -> None:
                 )
             charts.append((name, g))
             print(f"{name}: {len(g['rows'])} rows")
-    else:
+        for area, items in acc_areas(acc_items(summary)):
+            name = f"bench-acc-{slug(area)}"
+            for t in THEMES:
+                acc_chart(area, items, summary, t).save(out / f"{name}-{t.name}.svg")
+                acc_chart(area, items, summary, t, narrow=True).save(out / f"{name}-narrow-{t.name}.svg")
+            acc_charts.append((name, area, items))
+            print(f"{name}: {len(items)} items")
+    if not charts:
         for t in THEMES:
             pending(t).save(out / f"bench-pending-{t.name}.svg")
             pending(t, narrow=True).save(out / f"bench-pending-narrow-{t.name}.svg")
-        print("no summary.json yet: wrote the pending card")
+        print("no Pod rows yet: wrote the pending card")
     if args.readme:
         if summary and "fixture" in summary:
             raise SystemExit("refusing to put FAKE fixture data into the README")
         readme = REPO / ".github" / "README.md"
         text = readme.read_text()
-        main_charts = [(nm, g) for nm, g in charts if g["suite"] != "claude-acc"]
-        acc_charts = [(nm, g) for nm, g in charts if g["suite"] == "claude-acc"]
-        block = readme_block(main_charts, summary, "assets/")
-        acc_block = readme_block(acc_charts, summary, "assets/") if acc_charts else ACC_PENDING
+        block = readme_block(charts, summary if charts else None, "assets/")
+        acc_block = acc_readme_block(acc_charts, summary, "assets/") if acc_charts else ACC_PENDING
         new = re.sub(
             r"(<!-- bench:start -->\n).*?(<!-- bench:end -->)",
             lambda m: m.group(1) + block + m.group(2),
