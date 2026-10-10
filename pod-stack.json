@@ -36,9 +36,9 @@
     },
     {
       "branch": "perf/git-status-untracked-cache",
-      "upstream": "https://github.com/stablyai/orca/pull/26979",
       "squash": true,
-      "note": "squashed: maintainers merge Orca main into this PR branch; if #26979 closes, keep this entry as forkOnly (Pod carries it; nwparker on #26977, 2026-10-10)"
+      "note": "squashed: maintainers merge Orca main into this PR branch; if #26979 closes, keep this entry as forkOnly (Pod carries it; nwparker on #26977, 2026-10-10)",
+      "forkOnly": "git status untracked cache (stablyai/orca#26979 closed; Pod carries it)"
     },
     {
       "branch": "perf/session-scanner-incremental",
@@ -77,17 +77,68 @@
       "note": "sidecarOnly hidden delivery + receipt credit; nt-perf parse-once builds on it"
     },
     {
+      "branch": "perf/pty-responder-stamp",
+      "upstream": "https://github.com/stablyai/orca/pull/27129",
+      "base": "ec99e24f1c",
+      "ref": "8d45934d40acc271c63e89814894b021508f00c0",
+      "hold": "v6: the tip 5e82dfad92 is a spec-only flip e2e that conflicts with parse-once; #27086 replays from it",
+      "note": "b4-perf; built on #27033"
+    },
+    {
       "branch": "perf/lazy-main-terminal-model",
       "upstream": "https://github.com/stablyai/orca/pull/27086",
-      "base": "ec99e24f1c",
-      "note": "b4-perf; built on #27033. Ships only together with pod/native-model-consumer after the native terminal: without it a visible native pane freezes once main’s model goes dormant",
-      "ref": "ddaa5c6144b1f9a18f0a46a9adccae952b433d25",
-      "hold": "v6: the branch tip b814beccf7 sits on #27129 5e82dfad92, which conflicts with parse-once; main keeps ddaa5c6144 until the v6 batch"
+      "base": "5e82dfad92",
+      "note": "b4-perf; on #27129 5e82dfad92 (that commit left out). Ships only together with pod/native-model-consumer after the native terminal"
+    },
+    {
+      "branch": "fix/salvaged-query-replies",
+      "upstream": "https://github.com/stablyai/orca/pull/27299",
+      "base": "b814beccf7f463b9415a884dca745770f8799639",
+      "note": "b4-perf; renderer only, on #27086 b814beccf7"
+    },
+    {
+      "branch": "perf/daemon-query-responder",
+      "upstream": "https://github.com/stablyai/orca/pull/27123",
+      "base": "b814beccf7",
+      "note": "b4-perf; on #27086"
+    },
+    {
+      "branch": "perf/agent-model-dormancy",
+      "upstream": "https://github.com/stablyai/orca/pull/27185",
+      "base": "bff7c7f891",
+      "note": "b4-perf; on #27123"
+    },
+    {
+      "branch": "perf/screen-agent-dormancy",
+      "upstream": "https://github.com/stablyai/orca/pull/27207",
+      "base": "2a3d70a0c8",
+      "note": "b4-perf; on #27185"
+    },
+    {
+      "branch": "fix/multiplex-attach-query-gap",
+      "upstream": "https://github.com/stablyai/orca/pull/27312",
+      "note": "r-orca-lowlevel; CPR reply while a multiplex viewer attaches; after #27207"
+    },
+    {
+      "branch": "perf/terminal-tail-scan",
+      "upstream": "https://github.com/stablyai/orca/pull/27170",
+      "note": "b4-perf; positions-only sentinel index"
     },
     {
       "branch": "perf/local-stream-transport",
       "upstream": "https://github.com/stablyai/orca/pull/27156",
       "note": "r-orca-lowlevel; RPC and terminal frames over the local socket, kill switch ORCA_LOCAL_STREAM_TRANSPORT=0"
+    },
+    {
+      "branch": "perf/terminal-output-leading-edge",
+      "upstream": "https://github.com/stablyai/orca/pull/27169",
+      "note": "r-orca-lowlevel; terminal-output-batcher leading edge"
+    },
+    {
+      "branch": "pod/terminal-input-flush",
+      "forkOnly": "fast output batches after local-stream viewer input (kill switch POD_TERMINAL_INPUT_FLUSH=0)",
+      "base": "8ee39fb383",
+      "note": "r-orca-lowlevel; on #27156 8ee39fb383 with #27169 cherry-picks (dedupe by patch id) + one layer commit"
     },
     {
       "branch": "fix/xterm-empty-write-barrier",
@@ -99,11 +150,26 @@
       "note": "keeps Pod and other Orca builds from rewriting each other’s ~/.orca/agent-hooks scripts"
     },
     {
+      "branch": "fix/vercel-recipe-empty-args-bash32",
+      "upstream": "https://github.com/stablyai/orca/pull/27051",
+      "note": "b1; behavior change, lead: v6"
+    },
+    {
       "branch": "stack/agent-browser-warm-cli",
       "upstream": "https://github.com/stablyai/orca/pull/27192",
       "base": "e74f2f6c308046a2ee2eafbae94a3124d63952d2",
       "source": "perf/agent-browser-warm-cli",
       "note": "#27192 replayed onto the stack: package.json resolved key by key next to pod/electron-45’s @xterm pins; refresh when perf/agent-browser-warm-cli changes"
+    },
+    {
+      "branch": "test/isolate-host-env",
+      "upstream": "https://github.com/stablyai/orca/pull/27211",
+      "note": "b1; tests only: real-git fixtures never sign with the developer key, real-shell tests off the launching terminal and rc files"
+    },
+    {
+      "branch": "test/sqlite-repro-pinned-prompt",
+      "upstream": "https://github.com/stablyai/orca/pull/27053",
+      "note": "b1; test only: the exec-replaced shell repro pins the sqlite3 prompt"
     },
     {
       "branch": "app-identity-constant",
@@ -118,6 +184,12 @@
       "branch": "pod/identity",
       "forkOnly": "Pod identity: name, bundle id, icon, URL scheme and CLI name",
       "base": "71bec057fd"
+    },
+    {
+      "branch": "pod/least-entitlements",
+      "forkOnly": "least-privilege entitlements for every nested executable",
+      "base": "bf87e2b7ce89dba0bc68c8527fee45d0e92a5f86",
+      "note": "nt-packaging; 2 commits on identity bf87e2b7ce; pod/native-embed relies on its policy"
     },
     {
       "branch": "stack/native-terminal-on-proc-info",
@@ -135,6 +207,14 @@
         "ddaa5c6144"
       ],
       "note": "nt-input; only 7bd0fd98d0 replays. Must follow both the native terminal and #27086"
+    },
+    {
+      "branch": "stack/native-parse-once",
+      "forkOnly": "parse-once (upstream PR pending)",
+      "base": "c725436cd3cef4f040259be49afd2837e8a91843",
+      "source": "perf/native-parse-once",
+      "sourceSince": "6307f88f6a3525c523df19283ab92f2447ad9ccc",
+      "note": "perf/native-parse-once 1ce23f1673 (3 commits on 6307f88f6a) replayed after the #27086-#27207 chain; pty-hidden-delivery-gate.ts, terminal-model-query-authority.test.ts and live-data-callback.ts (#27299) keep both sides"
     },
     {
       "branch": "pod/libghostty-patched",
@@ -184,7 +264,7 @@
       "branch": "stack/pod-acc",
       "forkOnly": "claude-acc built into Pod: bundled plugin, payload and tray",
       "base": "10849bc8b8",
-      "note": "pod/acc minus its status-bar copies of stack/plugins, replayed onto the stack (plugin-marketplace imports merged). Refresh when pod/acc changes, or rebase pod/acc onto stack/plugins",
+      "note": "pod/acc minus its status-bar copies of stack/plugins, replayed onto the stack; v6 adds ddb9adf6b6 4ad324fdc6 5fc7b455c3 a2486ad095 722cf633e7 (lifecycle outcome record, seal gate probes, rerun a failed setup, claude-acc 1.31.7, then 1.31.8)",
       "source": "pod/acc"
     },
     {
@@ -216,10 +296,65 @@
       "source": "pod/workspace"
     },
     {
+      "branch": "stack/pod-orbstack",
+      "forkOnly": "OrbStack machines per worktree (Settings > OrbStack, POD_ORBSTACK)",
+      "base": "ea15bb80f174b669dea6876b7ca0df7e0bdbd0c7",
+      "source": "pod/orbstack",
+      "note": "pod/orbstack ef0f25e4c3 (b5; 4 commits on identity d745b3a705) replayed after stack/pod-workspace: settings nav keeps the workspace flag and the slim section filter, en.json key by key, RPC index and params catalog keep both imports"
+    },
+    {
+      "branch": "pod/orbstack-agents",
+      "forkOnly": "Claude in network-isolated OrbStack sandboxes",
+      "base": "ef0f25e4c3",
+      "note": "b5; parked until the user picks a credential mode"
+    },
+    {
+      "branch": "pod/sandbox-anthropic-upstream",
+      "forkOnly": "sandbox anthropic-api route upstream; Mac Claude Code login opt-in, default off",
+      "base": "9ca1946cba",
+      "note": "agent-api; 9 commits on 9ca1946cba"
+    },
+    {
       "branch": "pod/agent-turbo",
       "forkOnly": "agent CLIs at app priority",
       "base": "6edfc6c8e1",
       "note": "r-hw-perf; one commit on main 6edfc6c8e1: the Swift pod-agent-launcher installed into Contents/Resources/bin with claude/codex symlinks; kill switch POD_AGENT_TURBO=0"
+    },
+    {
+      "branch": "pod/native-cli",
+      "forkOnly": "native podx front (Swift), kill switch POD_NATIVE_CLI=0",
+      "base": "d48a79696f",
+      "note": "agent-api; 6 commits on main d48a79696f, after pod/agent-turbo (its electron-builder hook sits next to installAgentLauncher)"
+    },
+    {
+      "branch": "stack/git-performance-config",
+      "upstream": "https://github.com/stablyai/orca/pull/27028",
+      "base": "34b56791ff",
+      "source": "feat/git-performance-config",
+      "sourceSince": "ae35e7299f",
+      "note": "pod-workspace; squashed copy"
+    },
+    {
+      "branch": "stack/pod-settings-keys",
+      "forkOnly": "Pod settings keys for git performance",
+      "base": "8811b571b0",
+      "note": "pod-workspace; one commit"
+    },
+    {
+      "branch": "stack/pod-naming",
+      "forkOnly": "Pod names in bundled helpers, XPC services and main-process errors",
+      "base": "57e357f35925de869dd8ee8df5d67275e2d45499",
+      "source": "pod/naming",
+      "sourceSince": "525a5850e67fd00e6b85b725ec4fcfe9df4cea4f",
+      "note": "pod/naming 7fac8733bb replayed without phase2: helper-names require next to installNativeCli"
+    },
+    {
+      "branch": "stack/pod-one-app",
+      "forkOnly": "one app: Pod runtime host behind --pod-ui-host / nested Helpers/Pod Runtime.app, control socket for PodNative",
+      "base": "36d08e91be2bf5d58557d9b375ef1a9668f6e6b5",
+      "source": "pod/one-app",
+      "sourceSince": "525a5850e67fd00e6b85b725ec4fcfe9df4cea4f",
+      "note": "pod/one-app bf0d308217 replayed without phase2, plus the tsconfig.tc.web.json fix"
     }
   ],
   "generated": [
