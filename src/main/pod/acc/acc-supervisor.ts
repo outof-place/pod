@@ -1,5 +1,5 @@
 import { dirname, join } from 'node:path'
-import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import type { PodClaudeAccConfig } from '../pod-distro-config'
 import { automatedLaunchEnv, runAccLifecycle, type AccLifecycleOutcome } from './acc-lifecycle'
 import { isAccMenuHelperRunning } from './acc-menu-helper'
