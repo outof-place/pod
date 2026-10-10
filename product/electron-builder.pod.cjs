@@ -11,6 +11,7 @@ const { copyFileSync, existsSync, readFileSync, writeFileSync } = require('node:
 const { join } = require('node:path')
 const { Arch } = require('electron-builder')
 const { installAgentLauncher } = require('./agent-launcher/install-agent-launcher.cjs')
+const helperNames = require('./helper-names.cjs')
 // Why destructure: drop every non-mac platform and target section of the upstream config.
 const {
   win: _win,
@@ -167,13 +168,16 @@ module.exports = {
     // Before any signing: an oversized or polluted asar never reaches notarization.
     assertAppAsar(resourcesDir)
     renameComputerUseHelper(resourcesDir)
+    helperNames.renameComputerUseExecutable(resourcesDir, identity)
     await base.afterPack(context)
+    helperNames.renameSignedHelpers(resourcesDir, identity)
     installCliLaunchers(resourcesDir, context.packager.appInfo.productFilename)
     installAgentLauncher(resourcesDir, Arch[context.arch])
     writeFileSync(
       join(resourcesDir, 'product-upstream.json'),
       `${JSON.stringify(readOrcaUpstream())}\n`
     )
+    helperNames.assertNoUpstreamNames(join(resourcesDir, '..', '..'))
   },
   mac: {
     ...base.mac,
