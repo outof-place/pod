@@ -122,6 +122,8 @@ export type { PtyProcessInfo, PtySpawnResult }
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
+  /** SSH providers only: the relay session generation that registered them. */
+  readonly providerGeneration?: number
   requestHostRpc?: (
     method: string,
     params: unknown,
@@ -191,6 +193,8 @@ export type IPtyProvider = {
   ) => Promise<PtyProviderBufferSnapshot | null>
   /** Whether this exact PTY can return a sequence-safe provider snapshot. */
   canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
+  /** Whether that snapshot's seq is settled: it never counts a byte the image does not show. */
+  canProvideSettledBufferSnapshot?: (id: string) => boolean
   /**
    * The size the PTY has ACTUALLY applied, not the last size requested.
    * resize() is fire-and-forget for remote providers (daemon/SSH `notify`),

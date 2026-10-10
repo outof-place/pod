@@ -6,7 +6,10 @@ import type {
   DaemonAuditTrigger
 } from './daemon-audit-classifier'
 import { CheckpointSessionQueue } from './daemon-checkpoint-session-queue'
-import { SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
+import {
+  SETTLED_BUFFER_SNAPSHOT_DAEMON_PROTOCOL_VERSION,
+  SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION
+} from './daemon-protocol-version'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-incarnation-evidence'
 import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
@@ -247,11 +250,18 @@ export abstract class DaemonPtyRuntimeState {
   }
 
   // Why the id is read rather than ignored: the contract promises a fact about THIS pty, and
-  // getProviderForPty falls back to the local provider for any id it cannot place. A
-  // remote-runtime id therefore reaches this adapter, and answering from the protocol flag
-  // alone returned `true` for a session this daemon has never owned.
+  // answering from the protocol flag alone returned `true` for a session this daemon never owned.
   canProvideAuthoritativeBufferSnapshot(id: string): boolean {
     return this.supportsAuthoritativeBufferSnapshots && this.activeSessionIds.has(id)
+  }
+
+  // Why separate: rebuilding main's model skips live bytes the snapshot's seq claims, which is
+  // only safe when that seq never runs ahead of the image.
+  canProvideSettledBufferSnapshot(id: string): boolean {
+    return (
+      this.protocolVersion >= SETTLED_BUFFER_SNAPSHOT_DAEMON_PROTOCOL_VERSION &&
+      this.canProvideAuthoritativeBufferSnapshot(id)
+    )
   }
 
   protected get canDelegateBackgroundToDaemon(): boolean {
