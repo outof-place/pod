@@ -29,6 +29,8 @@ export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRu
     // Why: every multiplex stream registers as a remote view subscriber for
     // Phase-5 query-authority suppression (terminal-query-authority.md).
     registerRemoteTerminalViewSubscriber: () => () => {},
+    modelAnswersTerminalQueries: vi.fn().mockReturnValue(false),
+    answerTerminalQueriesFromModel: vi.fn(),
     // Why: the multiplex subscribe path resolves handles via
     // resolveLiveLeafForHandle (#7718). Default to a live pty so tests that
     // only stub the legacy resolveLeafForHandle still bind; tests that need a
