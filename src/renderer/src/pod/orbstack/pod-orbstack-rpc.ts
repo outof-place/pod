@@ -27,6 +27,8 @@ export const podOrbstackRpc = {
     call(POD_ORBSTACK_RPC.delete, { worktreeId, kind: 'sandbox' }),
   setAgentSandbox: (worktreeId: string, enabled: boolean): Promise<PodOrbstackActionResult> =>
     call(POD_ORBSTACK_RPC.setAgentSandbox, { worktreeId, enabled }),
+  setSandboxClaudeLogin: (enabled: boolean): Promise<PodOrbstackActionResult> =>
+    call(POD_ORBSTACK_RPC.setSandboxClaudeLogin, { enabled }),
   startMachine: (name: string): Promise<PodOrbstackActionResult> =>
     call(POD_ORBSTACK_RPC.start, { name }),
   stopMachine: (name: string): Promise<PodOrbstackActionResult> =>

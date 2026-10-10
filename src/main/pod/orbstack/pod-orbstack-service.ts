@@ -22,6 +22,7 @@ export type PodOrbstackService = {
   stop(name: string): Promise<PodOrbstackActionResult>
   setDockerPin(worktreeId: string, pinned: boolean): PodOrbstackActionResult
   setAgentSandbox(worktreeId: string, enabled: boolean): PodOrbstackActionResult
+  setSandboxClaudeLogin(enabled: boolean): PodOrbstackActionResult
 }
 
 // Why: status, machines and containers are separate methods; one read serves a burst of them.
@@ -86,6 +87,10 @@ export function createPodOrbstackService(deps: {
         return { ok: false, error: 'Create the agent sandbox first.' }
       }
       deps.registry.setSandboxAgents(worktreeId, enabled)
+      return invalidate({ ok: true })
+    },
+    setSandboxClaudeLogin: (enabled) => {
+      deps.registry.setSandboxClaudeLogin(enabled)
       return invalidate({ ok: true })
     }
   }
