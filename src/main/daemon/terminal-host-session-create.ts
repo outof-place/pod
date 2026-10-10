@@ -1,4 +1,5 @@
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
+import { registerPodLaneSession } from './pod-lane/pod-lane-sessions'
 import {
   discardStagedStartupCommand,
   stageStartupCommand,
@@ -171,6 +172,7 @@ async function spawnAndPublishSession(
       ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
       : {})
   })
+  registerPodLaneSession(session)
 
   if (opts.isCanceled?.()) {
     // Retain cleanup ownership if the native child refuses to exit.
