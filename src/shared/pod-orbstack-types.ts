@@ -3,16 +3,6 @@
 /** Pod creates, starts, stops and deletes only machines whose name starts with this. */
 export const POD_ORBSTACK_MACHINE_PREFIX = 'pod-'
 
-export const POD_ORBSTACK_IPC = {
-  enabled: 'pod:orbstack:enabled',
-  status: 'pod:orbstack:status',
-  createMachine: 'pod:orbstack:createMachine',
-  removeMachine: 'pod:orbstack:removeMachine',
-  startMachine: 'pod:orbstack:startMachine',
-  stopMachine: 'pod:orbstack:stopMachine',
-  setDockerPin: 'pod:orbstack:setDockerPin'
-} as const
-
 export type PodOrbstackInstall = {
   /** OrbStack.app was found. */
   appInstalled: boolean
@@ -85,3 +75,16 @@ export type PodOrbstackStatus = {
 }
 
 export type PodOrbstackActionResult = { ok: true } | { ok: false; error: string }
+
+/** Runtime RPC method names: the renderer section and the native shell call the same API. */
+export const POD_ORBSTACK_RPC = {
+  enabled: 'orbstack.enabled',
+  status: 'orbstack.status',
+  machines: 'orbstack.machines',
+  containers: 'orbstack.containers',
+  create: 'orbstack.create',
+  start: 'orbstack.start',
+  stop: 'orbstack.stop',
+  delete: 'orbstack.delete',
+  pinDocker: 'orbstack.pinDocker'
+} as const
