@@ -23,7 +23,6 @@ function ports(liveWebContents: number, renderers: number): SpareRendererPorts &
 }
 
 const CUTS: PodHeadlessHostCuts = {
-  dropWebSocket: true,
   releaseSpareRenderer: true,
   inProcessGpu: false,
   inProcessNetwork: false
