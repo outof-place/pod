@@ -53,6 +53,7 @@ async function requestSnapshotReply(options: {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     registerRemoteTerminalViewSubscriber: () => () => {},
+    modelAnswersTerminalQueries: vi.fn().mockReturnValue(false),
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     requestRendererTerminalTabMount: vi.fn().mockReturnValue(true),
     updateRemoteDesktopViewer: vi.fn().mockResolvedValue(true),
