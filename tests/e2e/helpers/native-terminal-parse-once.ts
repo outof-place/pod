@@ -56,3 +56,29 @@ export async function splitParseOncePane(
   await waitForNativeShellReady(page, app, ptyId, surfaceId)
   return { ptyId, surfaceId }
 }
+
+const DIALOG_ID = 'e2e-parse-once-dialog'
+
+// A dialog over part of the pane: the native view hides, so xterm must show the screen.
+export function showDialogOverPane(page: Page, ptyId: string): Promise<void> {
+  return page.evaluate(
+    ({ id, dialogId }) => {
+      const box = document
+        .querySelector(`.pane[data-pty-id="${id}"] .xterm-container`)
+        ?.getBoundingClientRect()
+      if (!box) {
+        throw new Error(`no terminal box for PTY ${id}`)
+      }
+      const dialog = document.createElement('div')
+      dialog.id = dialogId
+      dialog.setAttribute('role', 'dialog')
+      dialog.style.cssText = `position:fixed;left:${box.left + 40}px;top:${box.top + 40}px;width:200px;height:120px;background:#fff;z-index:9999`
+      document.body.appendChild(dialog)
+    },
+    { id: ptyId, dialogId: DIALOG_ID }
+  )
+}
+
+export function removeDialog(page: Page): Promise<void> {
+  return page.evaluate((dialogId) => document.getElementById(dialogId)?.remove(), DIALOG_ID)
+}
