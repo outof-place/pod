@@ -18,6 +18,7 @@ import {
 } from './native-notification-lifecycle'
 import { recordNotificationDeliveryOutcome } from './notification-permission-probe'
 import { getTrustedUIRendererWindow } from './ui'
+import { brandNotificationCopy } from '../product-identity/product-overlay'
 
 export function deliverNativeNotification(
   args: NotificationDispatchRequest,
@@ -31,6 +32,7 @@ export function deliverNativeNotification(
     notificationOptions.sound = 'default'
   }
   const notification = new Notification(notificationOptions)
+  brandNotificationCopy(notification)
   if (args.notificationId) {
     const previous = activeNotificationsById.get(args.notificationId)
     if (previous) {
