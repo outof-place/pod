@@ -28,6 +28,7 @@ import {
   type DaemonRequest
 } from './types'
 import { encodeNdjson } from './ndjson'
+import * as podLane from './pod-lane/pod-lane-daemon-wiring'
 
 export class DaemonServer {
   private static readonly INITIAL_ADOPTION_TIMEOUT_MS = 2 * 60 * 1000
@@ -44,6 +45,7 @@ export class DaemonServer {
   private readonly lifecycle: DaemonServerLifecycle
   private readonly admission: DaemonTerminalAdmission
   private readonly requestRouter: DaemonRequestRouter
+  private readonly podLane: podLane.PodLaneServer
   private stopStreamBacklogProbe: () => void = () => {}
 
   constructor(options: DaemonServerOptions) {
@@ -100,6 +102,14 @@ export class DaemonServer {
     )
 
     const protocolVersion = options.protocolVersion ?? PROTOCOL_VERSION
+    this.podLane = podLane.createDaemonPodLaneServer({
+      socketPath: options.socketPath,
+      protocolVersion,
+      host: this.host,
+      attachments: this.attachments,
+      streamDataBatcher: this.streamDataBatcher,
+      log: this.log
+    })
     const launchNonce =
       options.launchNonce ??
       (protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION ? randomUUID() : null)
@@ -140,17 +150,20 @@ export class DaemonServer {
         })
       },
       onControlReplaced: (clientId) => {
+        this.podLane.onMainDisconnected(clientId)
         this.preparations.cancelForClient(clientId)
         this.historySeedTransfers.clearOwner(clientId)
         this.streamDataBatcher.clear(clientId)
       },
       onClientDisconnected: (clientId) => {
+        this.podLane.onMainDisconnected(clientId)
         this.preparations.cancelForClient(clientId)
         this.historySeedTransfers.clearOwner(clientId)
         this.streamDataBatcher.clear(clientId)
         this.attachments.detachClientSessions(clientId)
       },
       onStreamDisconnected: (clientId) => {
+        this.podLane.onMainDisconnected(clientId)
         this.preparations.cancelForClient(clientId)
         this.streamDataBatcher.clear(clientId)
         this.attachments.detachClientSessions(clientId)
@@ -230,8 +243,9 @@ export class DaemonServer {
     }))
   }
 
-  start(): Promise<void> {
-    return this.lifecycle.start((socket) => this.connections.accept(socket))
+  async start(): Promise<void> {
+    await this.lifecycle.start((socket) => this.connections.accept(socket))
+    await this.podLane.start()
   }
 
   shutdown(): Promise<void> {
@@ -249,6 +263,7 @@ export class DaemonServer {
   }
 
   private async disposeResources(): Promise<void> {
+    await this.podLane.close()
     this.endpoint.stopOwnershipWatch()
     this.stopStreamBacklogProbe()
     this.transientFactRelay.dispose()
@@ -274,7 +289,9 @@ export class DaemonServer {
   ): Promise<void> {
     const isNotify = request.id.startsWith(NOTIFY_PREFIX)
     try {
-      const result = await this.requestRouter.route(clientId, request)
+      const result = podLane.isPodLaneRequest(request)
+        ? this.podLane.route(clientId, request)
+        : await this.requestRouter.route(clientId, request)
       if (!isNotify) {
         socket.write(encodeNdjson({ id: request.id, ok: true, payload: result }), () => {
           this.lifecycle.startPendingShutdownReply(clientId, request.id)
