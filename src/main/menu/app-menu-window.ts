@@ -1,3 +1,5 @@
+import { podNativeWindowMenuItems } from '../pod/native-app/pod-native-app'
+
 export function createAppWindowMenu(
   label: string,
   isMac: boolean
@@ -10,7 +12,9 @@ export function createAppWindowMenu(
         role: 'minimize',
         ...(isMac ? {} : { accelerator: '', registerAccelerator: false })
       },
-      { role: 'zoom' }
+      { role: 'zoom' },
+      // Pod: opens the nested native UI; empty for upstream builds.
+      ...podNativeWindowMenuItems()
     ]
   }
 }
