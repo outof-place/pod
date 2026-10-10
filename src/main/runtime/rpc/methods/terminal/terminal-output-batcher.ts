@@ -10,14 +10,20 @@ const TERMINAL_OUTPUT_FLUSH_MS = 5
 // Why: a keystroke echo after a quiet spell goes out at once instead of waiting out the coalescing timer;
 // output that keeps arriving still batches. Kill switch: ORCA_TERMINAL_OUTPUT_LEADING_EDGE=0.
 export const TERMINAL_OUTPUT_LEADING_EDGE_MAX_BYTES = 4 * 1024
+// Pod: after a local-stream viewer types, its batches use a 1 ms timer for 8 ms, so the echo does not wait out a
+// burst; frames are nearly free on the local socket. Kill switch: POD_TERMINAL_INPUT_FLUSH=0.
+const INPUT_FLUSH_MS = 1
+const INPUT_FLUSH_WINDOW_MS = 8
 export type TerminalOutputBatcher = {
   push: (data: string, meta?: TerminalOutputMeta) => void
   flush: () => void
   dispose: () => void
+  noteInput: () => void
 }
 
 export function createTerminalOutputBatcher(
-  onFlush: (data: string, meta?: TerminalOutputMeta) => void
+  onFlush: (data: string, meta?: TerminalOutputMeta) => void,
+  options: { fastAfterInput?: boolean } = {}
 ): TerminalOutputBatcher {
   let chunks: string[] = []
   let bytes = 0
@@ -28,6 +34,10 @@ export function createTerminalOutputBatcher(
   let timer: ReturnType<typeof setTimeout> | null = null
   const leadingEdge = process.env.ORCA_TERMINAL_OUTPUT_LEADING_EDGE !== '0'
   let lastEnqueueAt = Number.NEGATIVE_INFINITY
+  const fastAfterInput =
+    options.fastAfterInput === true && process.env.POD_TERMINAL_INPUT_FLUSH !== '0'
+  let fastUntil = Number.NEGATIVE_INFINITY
+  let timerDeadline = 0
 
   const clearTimer = (): void => {
     if (!timer) {
@@ -120,14 +130,28 @@ export function createTerminalOutputBatcher(
         return
       }
       if (!timer) {
+        const delay = enqueuedAt < fastUntil ? INPUT_FLUSH_MS : TERMINAL_OUTPUT_FLUSH_MS
+        timerDeadline = enqueuedAt + delay
         // Why: coalesce stream output before it crosses the network; desktop subscribers share the same burst boundary.
-        timer = setTimeout(flush, TERMINAL_OUTPUT_FLUSH_MS)
+        timer = setTimeout(flush, delay)
         if (typeof timer.unref === 'function') {
           timer.unref()
         }
       }
     },
     flush,
+    noteInput(): void {
+      if (!fastAfterInput) {
+        return
+      }
+      const now = performance.now()
+      fastUntil = now + INPUT_FLUSH_WINDOW_MS
+      if (timer && timerDeadline - now > INPUT_FLUSH_MS) {
+        clearTimeout(timer)
+        timerDeadline = now + INPUT_FLUSH_MS
+        timer = setTimeout(flush, INPUT_FLUSH_MS)
+      }
+    },
     dispose(): void {
       clearTimer()
       chunks = []

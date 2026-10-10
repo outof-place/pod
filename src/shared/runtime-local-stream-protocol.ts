@@ -7,6 +7,11 @@ export const RUNTIME_LOCAL_STREAM_UPGRADE_METHOD = 'transport.upgrade'
 export const RUNTIME_LOCAL_STREAM_PROTOCOL = 'orca-local-stream'
 export const RUNTIME_LOCAL_STREAM_VERSION = 1
 export const RUNTIME_LOCAL_STREAM_UNSUPPORTED_CODE = 'unsupported_transport'
+export const RUNTIME_LOCAL_STREAM_CONNECTION_ID_PREFIX = 'local-stream-'
+
+export function isRuntimeLocalStreamConnectionId(connectionId: string | undefined): boolean {
+  return connectionId?.startsWith(RUNTIME_LOCAL_STREAM_CONNECTION_ID_PREFIX) === true
+}
 
 export const RuntimeLocalStreamFrameKind = {
   Text: 1,
