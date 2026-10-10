@@ -57,6 +57,31 @@ function podStack(commit) {
 }
 const stack = podStack(runInfo?.podCommit ?? null)
 
+// What else differs between the Pod and Orca builds besides Pod's own changes.
+function buildCaveats() {
+  const electron = {}
+  for (const suite of suites) {
+    for (const [name, version] of Object.entries(suite.versions ?? {})) {
+      if (version?.electron) {
+        electron[name] = version.electron
+      }
+    }
+  }
+  const pod = electron['pod-native'] ?? electron['pod-xterm']
+  const caveats = []
+  if (electron.orca && pod && electron.orca !== pod) {
+    caveats.push(
+      `Pod runs Electron ${pod} and Orca ${electron.orca}: part of any startup, memory or CPU difference can come from Electron itself.`
+    )
+  }
+  if (runInfo?.podProfile === 'pod') {
+    caveats.push(
+      'Pod is built with its default slim profile, which leaves some Orca features out at build time (src/shared/product/features.ts); startup and memory differences include that. POD_BUILD_PROFILE=orca builds the full set.'
+    )
+  }
+  return caveats
+}
+
 function hardware(machine) {
   if (!machine) {
     return null
@@ -185,7 +210,7 @@ const summary = {
   podStack: stack,
   // The Pod build every pod-* row measured, and the pinned inputs of the search suites.
   run: runInfo,
-  caveats: GLOBAL_CAVEATS,
+  caveats: [...GLOBAL_CAVEATS, ...buildCaveats()],
   groups: {
     pod: 'Pod vs Orca and other terminals, measured in this run',
     'claude-acc': 'claude-acc, which ships inside Pod: re-measured rows plus historical ones'
