@@ -166,6 +166,46 @@ export function addComputerAndStatusCases(add) {
     }
   })
 
+  // One-call browser handlers.
+  for (const argv of [
+    ['viewport', '--width', '390', '--height', '844', '--scale', '3', '--mobile'],
+    ['viewport', '--width', '1280.5', '--height', '800'],
+    ['set', 'device', '--name', 'iPhone 12'],
+    ['set', 'offline', '--state', 'on'],
+    ['set', 'offline'],
+    ['set', 'headers', '--headers', '{"x-a":"1"}'],
+    ['set', 'credentials', '--user', 'u', '--pass', ''],
+    ['set', 'media', '--color-scheme', 'dark'],
+    ['mouse', 'move', '--x', '10.5', '--y', '-2'],
+    ['mouse', 'down', '--button', 'right'],
+    ['mouse', 'up'],
+    ['mouse', 'wheel', '--dy', '300', '--dx', '0'],
+    ['mouse', 'wheel', '--dy', '-120'],
+    ['scrollintoview', '--element', '@e4'],
+    ['get', '--what', 'text', '--element', '@e1'],
+    ['is', '--what', 'visible', '--element', '@e1'],
+    ['inserttext', '--text', 'abc'],
+    ['select', '--element', '@e5', '--value', 'b'],
+    ['check', '--element', '@e6'],
+    ['uncheck', '--element', '@e6'],
+    ['highlight', '--selector', '#main'],
+    ['clipboard', 'read'],
+    ['clipboard', 'write', '--text', 'hi'],
+    ['dialog', 'accept', '--text', 'yes'],
+    ['dialog', 'dismiss']
+  ]) {
+    add(argv.join(' '), argv)
+    add(`${argv.join(' ')} --json`, [...argv, '--json'])
+  }
+  add('viewport negative falls back', ['viewport', '--width', '-1', '--height', '2'])
+  add('get object result', ['get', '--what', 'box', '--element', '@e1'], {
+    responses: { 'browser.get': ok({ x: 1, y: [2] }) }
+  })
+  add('is object result', ['is', '--what', 'x', '--element', '@e1'], {
+    responses: { 'browser.is': ok({ a: 1 }) }
+  })
+  add('get undefined result', ['get', '--what', 'x'], { responses: { 'browser.get': [{}] } })
+
   // status: reads orca-runtime.json and probes status.get itself.
   const status = (result) => ({ responses: { 'status.get': ok(result) } })
   const ready = {
