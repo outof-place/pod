@@ -8,6 +8,7 @@ import { sendTerminalOscColorQueryReplies } from '../terminal-capability-replies
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { registerE2eTerminalPtyDataInjection } from './e2e-terminal-pty-harness'
+import { discardedSeqRange } from './hidden-startup-renderer-query-write'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -91,7 +92,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     // Why salvage on every discard below: main delivered this chunk because the view answers its
     // queries (main answered none), so skipping its bytes must not skip its replies.
     if (reconciliation.action === 'drop-duplicate') {
-      session.salvageRendererQueriesFromDiscardedRestoreData(data)
+      session.salvageRendererQueriesFromDiscardedRestoreData(data, discardedSeqRange(data, meta))
       return
     }
     if (reconciliation.action === 'force-fresh-restore') {
@@ -112,8 +113,11 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       }
     } else {
       if (reconciliation.data.length < data.length) {
+        const covered = data.length - reconciliation.data.length
+        const range = discardedSeqRange(data, meta)
         session.salvageRendererQueriesFromDiscardedRestoreData(
-          data.slice(0, data.length - reconciliation.data.length)
+          data.slice(0, covered),
+          range ? { startSeq: range.startSeq, endSeq: range.startSeq + covered } : undefined
         )
       }
       data = reconciliation.data
