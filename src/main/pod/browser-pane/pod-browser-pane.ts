@@ -8,6 +8,8 @@ import type {
   PodBrowserPaneClientMessage,
   PodBrowserPaneServerMessage
 } from './pod-browser-pane-protocol'
+import { PaneDownloads } from './pod-browser-pane-downloads'
+import type { PodBrowserDownloadEvent } from './pod-browser-pane-hooks'
 import { PaneInputState } from './pod-browser-pane-input'
 import { navigatePanePage } from './pod-browser-pane-navigation'
 import { PaneSelectMenus } from './pod-browser-pane-select'
@@ -50,6 +52,7 @@ export type PodBrowserPaneStats = { framesSent: number; sendFailures: number; se
 export class PodBrowserPaneController {
   private readonly pages = new Map<string, Page>()
   private connected = false
+  private readonly downloads = new PaneDownloads()
   // Attached paints in a row with no shared texture: Ganesh (disable-skia-graphite) turns them off.
   private texturelessPaints = 0
   readonly stats: PodBrowserPaneStats = { framesSent: 0, sendFailures: 0, sendNs: 0 }
@@ -143,8 +146,18 @@ export class PodBrowserPaneController {
     }
   }
 
+  /** A download of one of these pages: PodNative's list follows it. */
+  noteDownload(event: PodBrowserDownloadEvent): void {
+    const record = this.pages.has(event.browserPageId) ? this.downloads.note(event) : null
+    if (record) {
+      this.deps.send(record)
+    }
+  }
+
   handle(message: PodBrowserPaneClientMessage): void {
     if (message.type === 'browserRendezvous') {
+      // A PodNative that just connected learns what downloaded meanwhile.
+      this.downloads.all().forEach((record) => this.deps.send(record))
       this.connected = this.deps.frames?.browserConnect(message.service) ?? false
       this.deps.log(
         this.connected
