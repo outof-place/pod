@@ -8,8 +8,9 @@ import {
 } from '@/components/settings/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import type { PodOrbstackWorktreeRow } from './pod-orbstack-worktree-rows'
+import { PodOrbstackSandboxRow, type PodOrbstackSandboxActions } from './PodOrbstackSandboxRow'
 
-type WorktreeListProps = {
+type WorktreeListProps = PodOrbstackSandboxActions & {
   rows: readonly PodOrbstackWorktreeRow[]
   canCreate: boolean
   onCreate: (row: PodOrbstackWorktreeRow) => void
@@ -22,7 +23,7 @@ function MachineCell({
   canCreate,
   onCreate,
   onRemove
-}: Omit<WorktreeListProps, 'rows' | 'onDockerPin'> & {
+}: Pick<WorktreeListProps, 'canCreate' | 'onCreate' | 'onRemove'> & {
   row: PodOrbstackWorktreeRow
 }): React.JSX.Element {
   if (row.busy) {
@@ -66,7 +67,7 @@ export function PodOrbstackWorktreeList(props: WorktreeListProps): React.JSX.Ele
         title={translate('podOrbstack.worktrees.title', 'Worktree machines')}
         description={translate(
           'podOrbstack.worktrees.description',
-          'New terminals of a worktree with a machine open inside it, in the same folder. Agents keep running on this Mac.'
+          'New terminals of a worktree with a machine open inside it, in the same folder. Claude runs in the agent sandbox, which sees only the worktree, when you turn that on.'
         )}
       />
       {rows.length === 0 ? (
@@ -112,6 +113,13 @@ export function PodOrbstackWorktreeList(props: WorktreeListProps): React.JSX.Ele
                   />
                 </label>
               </div>
+              <PodOrbstackSandboxRow
+                row={row}
+                canCreate={props.canCreate}
+                onCreateSandbox={props.onCreateSandbox}
+                onDeleteSandbox={props.onDeleteSandbox}
+                onAgentSandbox={props.onAgentSandbox}
+              />
             </li>
           ))}
         </ul>
