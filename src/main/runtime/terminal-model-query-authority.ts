@@ -13,7 +13,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import {
   isHiddenPtyDeliveryGateEnabled,
-  isHiddenRendererPtyViewGated
+  rendererPtyViewDelivery
 } from '../ipc/pty-hidden-delivery-gate'
 
 export type TerminalModelQueryAuthoritySettings = Pick<
@@ -43,7 +43,7 @@ export function shouldModelAnswerHiddenPtyQueries(opts: {
   return (
     isTerminalModelQueryAuthorityEnabled(opts.settings) &&
     !opts.hasRemoteViewSubscriber &&
-    isHiddenRendererPtyViewGated(opts.ptyId, opts.settings)
+    rendererPtyViewDelivery(opts.ptyId, opts.settings) !== 'parse'
   )
 }
 
