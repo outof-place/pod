@@ -42,7 +42,8 @@ function setup(repos: Repo[]) {
     remove: vi.fn(async () => ({ ok: true as const })),
     start: vi.fn(async () => ({ ok: true as const })),
     stop: vi.fn(async () => ({ ok: true as const })),
-    busyWorktreeIds: () => []
+    busyWorktreeIds: () => [],
+    prewarm: vi.fn(async () => undefined)
   } satisfies PodOrbstackMachines
   const registry = new PodOrbstackRegistry(join(root, 'registry.json'))
   const service = createPodOrbstackService({
