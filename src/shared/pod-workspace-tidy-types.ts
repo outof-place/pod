@@ -69,6 +69,8 @@ export type PodTidyScan = {
   /** Per repo: registrations whose folder is gone, as `git worktree prune --dry-run` names them. */
   prunable: { repoId: string; names: string[] }[]
   archives: PodTidyArchive[]
+  /** Moves into the root that can still be undone. */
+  adoptions: PodAdoptRecord[]
   errors: { repoId: string; message: string }[]
 }
 
