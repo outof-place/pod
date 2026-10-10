@@ -30,7 +30,7 @@ export type NativeTerminalFeedModel = {
 
 export type RuntimeDesktopSurface = {
   /** Headless hosts retain the formatter's English defaults. */
-  translateNotification?(key: string, fallback: string): string
+  translateNotification?(key: string, fallback: string, values?: Record<string, string>): string
   /** Show a native notification. Returns false when the host cannot, so callers can say so. */
   isAwayForMobileNotifications?(): boolean | undefined
   showNotification(input: { title: string; body: string }): boolean
