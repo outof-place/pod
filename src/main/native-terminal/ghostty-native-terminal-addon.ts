@@ -1,7 +1,7 @@
-import { app } from 'electron'
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
+import { getAppEnvironment } from '../../shared/app-environment'
 
 type SurfacePlacement = [
   surfaceId: number,
@@ -130,13 +130,13 @@ const requireFromMain = createRequire(__filename)
 let cached: GhosttyTerminalAddon | null | undefined
 
 function candidatePaths(): string[] {
-  if (app.isPackaged) {
+  if (getAppEnvironment().isPackaged()) {
     return [join(process.resourcesPath, 'ghostty-terminal-macos', ADDON_FILE)]
   }
   // Dev and E2E run the bundle from out/main; the addon is built in the repo.
   return [
     join(__dirname, '../../native/ghostty-terminal-macos/build', ADDON_FILE),
-    join(app.getAppPath(), 'native/ghostty-terminal-macos/build', ADDON_FILE)
+    join(getAppEnvironment().getAppPath(), 'native/ghostty-terminal-macos/build', ADDON_FILE)
   ]
 }
 
