@@ -3,11 +3,23 @@ import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { IPtyProvider } from '../providers/types'
+import type { PodLaneRequest } from './pod-lane/pod-lane-requests'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
   /** Identity of the daemon behind this adapter; null until hello completes or after a disconnect. */
   getDaemonIdentity(): DaemonEndpointIdentity | null {
     return this.client.getDaemonIdentity()
+  }
+
+  /** Pod: the direct terminal lane; a grant is answered, the rest are notifies on the ordered control socket. */
+  podLaneControl(
+    _id: string,
+    type: PodLaneRequest['type'],
+    payload: PodLaneRequest['payload']
+  ): Promise<unknown> {
+    return type === 'podLaneGrant'
+      ? this.client.request(type, payload)
+      : Promise.resolve(this.client.notify(type, payload))
   }
 
   protected setupEventRouting(): void {
@@ -77,6 +89,16 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           id: event.sessionId,
           kind: 'transientFact',
           fact: event.payload
+        })
+      } else if (event.event === 'podLane') {
+        this.emitBackgroundStreamEvent({ id: event.sessionId, kind: 'podLane', ...event.payload })
+      } else if (event.event === 'podLaneInput') {
+        this.markSessionDirty(event.sessionId)
+        this.emitBackgroundStreamEvent({
+          id: event.sessionId,
+          kind: 'podLaneInput',
+          data: event.payload.data,
+          at: event.payload.at
         })
       } else if (event.event === 'exit') {
         const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)
