@@ -14,7 +14,11 @@ import {
 import { applyPostgresSchema } from './postgres-schema-startup.js'
 import { POSTGRES_STATEMENT_STATS_MIGRATION } from './postgres-statement-stats.js'
 import { reportPostgresQueryFailure } from './postgres-query-failure.js'
-import { markRelayDatabaseError } from './relay-database-rejection-fence.js'
+import {
+  isPostgresReadTimeout,
+  isRelayDatabaseLayerError,
+  markRelayDatabaseError
+} from './relay-database-rejection-fence.js'
 import {
   CellInventoryHoldSamples,
   emptyCellInventoryHoldCounts,
@@ -890,8 +894,25 @@ class PostgresTransaction implements RelayDatabase {
   private lockUnavailable = 0
   private lockTimeouts = 0
   private state: 'open' | 'committed' | 'rolled-back' = 'open'
+  // A read timeout leaves the statement running with its reply lost: pg keeps it as the
+  // client's active query, so anything sent next queues behind it, and if it then lands, a
+  // later COMMIT would commit a statement its caller saw fail. The connection is finished.
+  private lostReply: Error | undefined
 
   constructor(protected readonly client: pg.PoolClient) {}
+
+  get poisonedBy(): Error | undefined {
+    return this.lostReply
+  }
+
+  private failIfPoisoned(): void {
+    if (this.lostReply) throw this.lostReply
+  }
+
+  private noteFailure(error: unknown): void {
+    markRelayDatabaseError(error)
+    if (isPostgresReadTimeout(error)) this.lostReply ??= error
+  }
 
   get open(): boolean {
     return this.state === 'open'
@@ -899,6 +920,7 @@ class PostgresTransaction implements RelayDatabase {
 
   async commitWithFinal(sql: string, params: unknown[] = []): Promise<boolean> {
     this.assertNotCommitted()
+    this.failIfPoisoned()
     // Zero rows divides by zero, so the message stops before COMMIT exactly when the write missed.
     const message =
       `WITH final_write AS (${inlinePostgresParameters(sql, params, this.client)}) ` +
@@ -909,13 +931,13 @@ class PostgresTransaction implements RelayDatabase {
       // Simple query stops at the first error, so any server error means COMMIT never ran:
       // retryable codes take the caller's normal rollback-and-retry path. A lost connection
       // leaves the outcome unknown, and nothing retries it.
-      markRelayDatabaseError(error)
+      this.noteFailure(error)
       if (String((error as { code?: unknown }).code) !== '22012') {
         rememberPostgresTransactionPhase(error, sql)
         throw error
       }
       await this.client.query('ROLLBACK').catch((rollbackError: unknown) => {
-        markRelayDatabaseError(rollbackError)
+        this.noteFailure(rollbackError)
         throw rollbackError
       })
       this.state = 'rolled-back'
@@ -953,11 +975,12 @@ class PostgresTransaction implements RelayDatabase {
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
     this.assertNotCommitted()
+    this.failIfPoisoned()
     try {
       const result = await this.client.query(postgresSql(sql), params)
       return returnsRows(sql) ? (result.rows as SqlRow[]) : [{ changes: result.rowCount ?? 0 }]
     } catch (error) {
-      markRelayDatabaseError(error)
+      this.noteFailure(error)
       rememberPostgresTransactionPhase(error, sql)
       throw error
     }
@@ -1021,6 +1044,11 @@ const POSTGRES_CONNECTION_TIMEOUT_MS = 2_000
 // leaves room for the connect timeout above.
 export const POSTGRES_STATEMENT_TIMEOUT_MS = 5_000
 const POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS = 5_000
+// Past statement_timeout because a whole-VM database stall delays replies the server has
+// already timed: 5-7 s stalls are routine (connect-burst RCA), and a read timeout inside one
+// would destroy healthy clients and fail requests that succeed today.
+export const POSTGRES_READ_TIMEOUT_MARGIN_MS = 10_000
+const POSTGRES_IDLE_SESSION_TIMEOUT_MS = 30_000
 
 export function relayPostgresStatementTimeoutMs(
   env: NodeJS.ProcessEnv = process.env
@@ -1032,6 +1060,18 @@ export function relayPostgresStatementTimeoutMs(
   // to enforce from being disabled by a typo in an environment variable.
   if (!Number.isInteger(milliseconds) || milliseconds < 1) {
     throw new Error('invalid_statement_timeout')
+  }
+  return milliseconds
+}
+
+export function relayPostgresReadTimeoutMarginMs(
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const configured = env.ORCA_RELAY_POSTGRES_READ_TIMEOUT_MARGIN_MS
+  if (configured === undefined || configured === '') return POSTGRES_READ_TIMEOUT_MARGIN_MS
+  const milliseconds = Number(configured)
+  if (!Number.isInteger(milliseconds) || milliseconds < 1) {
+    throw new Error('invalid_read_timeout_margin')
   }
   return milliseconds
 }
@@ -1056,14 +1096,33 @@ export function isRelayDatabaseTransientError(error: unknown): boolean {
       '57014',
       '53300',
       '57P03',
+      '08000',
       '08001',
+      '08003',
       '08006',
+      // The server ended the session: pg_terminate_backend or a fast/immediate shutdown.
+      '57P01',
+      '57P02',
       // The server ended a session idle in a transaction past its limit (a database stall).
       '25P03'
     ].includes(code)
   ) {
     return true
   }
+  // The connection dropped mid-statement: pg's own message, or the socket's reset. Only from
+  // the database layer, since any other socket can raise the same errno.
+  if (
+    isRelayDatabaseLayerError(error) &&
+    (code === 'ECONNRESET' ||
+      code === 'EPIPE' ||
+      String((error as { message?: unknown }).message).startsWith('Connection terminated'))
+  ) {
+    return true
+  }
+  // A lost reply, answered 503 like 08006. Its write may have landed, so transaction() never
+  // retries it. The one startup retry that can see it, the director's cell reconcile
+  // (cell-admission-startup.ts), re-runs only upserts that converge on the same rows.
+  if (isPostgresReadTimeout(error)) return true
   // A pool that cannot hand out a client reports no SQLSTATE at all, so the
   // acquire boundary owns that vocabulary.
   return isPostgresPoolConnectFailure(error)
@@ -1103,6 +1162,7 @@ export class PostgresDatabase implements RelayDatabase {
     const startedAt = performance.now()
     let phase: 'acquire' | 'execute' = 'acquire'
     let client: pg.PoolClient | undefined
+    let lostReply: Error | undefined
     try {
       client = await this.pressure.connect(lane)
       phase = 'execute'
@@ -1110,6 +1170,7 @@ export class PostgresDatabase implements RelayDatabase {
       return returnsRows(sql) ? (result.rows as SqlRow[]) : [{ changes: result.rowCount ?? 0 }]
     } catch (error) {
       markRelayDatabaseError(error)
+      if (isPostgresReadTimeout(error)) lostReply = error
       reportPostgresQueryFailure({
         error,
         phase,
@@ -1122,7 +1183,8 @@ export class PostgresDatabase implements RelayDatabase {
       })
       throw error
     } finally {
-      client?.release()
+      // An error destroys the client rather than handing the next caller a dead connection.
+      client?.release(lostReply)
     }
   }
 
@@ -1154,9 +1216,12 @@ export class PostgresDatabase implements RelayDatabase {
     for (let attempt = 1; attempt <= POSTGRES_TRANSACTION_ATTEMPTS; attempt++) {
       const client = await this.pressure.connect()
       const transaction = new PostgresTransaction(client)
+      let lostReply: Error | undefined
       try {
         await client.query('BEGIN')
         const result = await operation(transaction)
+        // Even when the operation caught it: COMMIT must not run after a lost reply.
+        if (transaction.poisonedBy) throw transaction.poisonedBy
         if (transaction.open) await client.query('COMMIT')
         recordMeasuredHold(this.holds, transaction)
         this.holds.recordUnavailable(transaction.consumeLockUnavailable())
@@ -1164,13 +1229,17 @@ export class PostgresDatabase implements RelayDatabase {
         return result
       } catch (error) {
         markRelayDatabaseError(error)
+        // No ROLLBACK behind a lost reply: it would queue behind the dead statement. Destroying
+        // the client ends the session, and the server drops its locks.
+        lostReply = transaction.poisonedBy ?? (isPostgresReadTimeout(error) ? error : undefined)
         const open = transaction.open
-        if (open) await client.query('ROLLBACK').catch(() => undefined)
+        if (open && !lostReply) await client.query('ROLLBACK').catch(() => undefined)
         this.holds.recordUnavailable(transaction.consumeLockUnavailable())
         this.holds.recordLockTimeout(transaction.consumeLockTimeouts())
         // Once the fused commit has ended the transaction, a retry would apply the work twice.
         if (
           !open ||
+          lostReply ||
           !retryablePostgresTransactionError(error) ||
           attempt === POSTGRES_TRANSACTION_ATTEMPTS
         ) {
@@ -1197,7 +1266,7 @@ export class PostgresDatabase implements RelayDatabase {
           )
         }
       } finally {
-        client.release()
+        client.release(lostReply)
       }
       // A PostgreSQL transaction is unusable after an abort, so retry all work
       // on a fresh pooled client with a small full-jitter delay.
@@ -1257,6 +1326,27 @@ export function readRelayDatabasePoolOldestWaitMs(database: RelayDatabase): numb
 export function keepPostgresClientErrorsHandled(pool: Pick<pg.Pool, 'on'>): void {
   pool.on('connect', (client) => {
     client.on('error', () => undefined)
+  })
+}
+
+// An `options=` in the database URL silently replaces the pool's, so the session reports what
+// it actually got. The URL itself is never read or logged.
+function reportPostgresIdleSessionTimeoutOnce(pool: Pick<pg.Pool, 'on'>): void {
+  let reported = false
+  pool.on('connect', (client) => {
+    if (reported) return
+    reported = true
+    client
+      .query("SELECT current_setting('idle_session_timeout') AS value")
+      .then((result: pg.QueryResult) => {
+        console.log(
+          JSON.stringify({
+            event: 'orca_relay_postgres_session_settings',
+            idleSessionTimeout: String(result.rows[0]?.value)
+          })
+        )
+      })
+      .catch(() => undefined)
   })
 }
 
@@ -1336,6 +1426,7 @@ export type RelayDatabaseOpenInput = {
   poolMax?: number
   applicationName?: string
   statementTimeoutMs?: number
+  readTimeoutMarginMs?: number
   // Directors own the PostgreSQL schema. A cell skips it and never touches the database
   // at boot, so it starts listening while the database is down and stays unready until
   // its first successful query.
@@ -1349,17 +1440,26 @@ export async function openRelayDatabase(input: RelayDatabaseOpenInput): Promise<
     if (appliesPostgresSchema) {
       await applySchemaOnUntimedPool(input.databaseUrl, input.applicationName)
     }
+    const statementTimeoutMs = input.statementTimeoutMs ?? relayPostgresStatementTimeoutMs()
     const pool = new pg.Pool({
       connectionString: input.databaseUrl,
       max: input.poolMax ?? 10,
       application_name: input.applicationName,
       connectionTimeoutMillis: POSTGRES_CONNECTION_TIMEOUT_MS,
-      statement_timeout: input.statementTimeoutMs ?? relayPostgresStatementTimeoutMs(),
+      statement_timeout: statementTimeoutMs,
+      // The server answers every statement within statement_timeout, as 57014 at worst, so
+      // this fires only on a lost reply, or a database or event-loop stall past the margin.
+      query_timeout:
+        statementTimeoutMs + (input.readTimeoutMarginMs ?? relayPostgresReadTimeoutMarginMs()),
       lock_timeout: POSTGRES_LOCK_TIMEOUT_MS,
-      idle_in_transaction_session_timeout: POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS
+      idle_in_transaction_session_timeout: POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS,
+      // Bounds a backend whose client was destroyed outside a transaction (after a lost
+      // reply on an autocommit write or COMMIT). pg-pool closes healthy idle clients at 10 s.
+      options: `-c idle_session_timeout=${POSTGRES_IDLE_SESSION_TIMEOUT_MS}`
     })
     absorbPostgresIdleClientErrors(pool)
     keepPostgresClientErrorsHandled(pool)
+    reportPostgresIdleSessionTimeoutOnce(pool)
     database = new PostgresDatabase(pool)
   } else {
     mkdirSync(input.dataDir, { recursive: true })

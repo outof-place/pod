@@ -25,6 +25,16 @@ const FENCED_SQLSTATE_CLASSES = new Set(['08', '23', '40', '53', '55', '57', '58
 // does to any backend caught idle mid-transaction at its onset.
 const FENCED_SQLSTATES = new Set(['25P03'])
 
+export function isPostgresReadTimeout(error: unknown): error is Error {
+  return error instanceof Error && error.message === POSTGRES_READ_TIMEOUT_MESSAGE
+}
+
+// The database layer threw or rethrew this; an errno or message alone could be any socket's.
+export function isRelayDatabaseLayerError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  return databaseLayerErrors.has(error) || isPostgresPoolAcquireFailure(error)
+}
+
 export function markRelayDatabaseError(error: unknown): void {
   if (typeof error === 'object' && error !== null) databaseLayerErrors.add(error)
 }
