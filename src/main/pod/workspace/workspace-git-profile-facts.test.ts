@@ -23,11 +23,19 @@ describe('parseScopedConfig', () => {
   it('tells Pod’s own values from the user’s', () => {
     const current = currentFromEntries(
       parseScopedConfig(
-        'global\0checkout.workers\n4\0local\0core.fsmonitor\ntrue\0local\0pod.workspaceconfig\ncore.fsmonitor=true\0'
+        'global\0checkout.thresholdforparallelism\n100\0local\0maintenance.strategy\ngeometric\0local\0pod.workspaceconfig\nmaintenance.strategy=geometric\0'
       )
     )
-    expect(current['core.fsmonitor']).toEqual({ local: 'true', other: false, recorded: 'true' })
-    expect(current['checkout.workers']).toEqual({ local: null, other: true, recorded: null })
+    expect(current['maintenance.strategy']).toEqual({
+      local: 'geometric',
+      other: false,
+      recorded: 'geometric'
+    })
+    expect(current['checkout.thresholdforparallelism']).toEqual({
+      local: null,
+      other: true,
+      recorded: null
+    })
   })
 })
 

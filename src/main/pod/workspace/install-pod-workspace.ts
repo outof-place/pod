@@ -4,12 +4,15 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { setLocalCloneOptionsOverride } from '../../ipc/repos/repo-clone-options'
 import { setDefaultCreateProjectParentOverride } from '../../ipc/repos/repo-creation-handlers'
 import { isPodNativeSearchEnabled } from '../search/pod-native-search-flag'
 import { isPodWorkspaceEnabled } from './pod-workspace-flag'
 import { workspaceCreateProjectParent } from './workspace-clone-destination'
+import { createPodCloneOptions } from './workspace-clone-options'
 import { createPodWorkspaceRpcService } from './create-workspace-rpc-service'
-import { registerWorkspaceIpc, resolveWorkspaceCloneDestination } from './workspace-ipc'
+import { createWorkspaceGitExec } from './workspace-git-exec'
+import { createGitHostFactsReader } from './workspace-git-profile-facts'
 import {
   notifyPodWorkspaceWorktreeLifecycle,
   setPodWorkspaceWorktreeLifecycleHandler,
@@ -25,8 +28,7 @@ import {
 import {
   isLocalGitRepo,
   isPathInsideWorkspaceRoot,
-  resolveWorkspaceRoot,
-  workspaceRootSetting
+  resolveWorkspaceRoot
 } from './workspace-root-path'
 import {
   isInsideICloudDrive,
@@ -36,12 +38,13 @@ import {
 import { setPodWorkspaceRpcService } from './workspace-rpc-service'
 import { wireWorkspaceToPodSearch } from './workspace-search-wiring'
 import { createWorkspaceStatusService } from './workspace-status'
+import type { WorkspaceStrayStore } from './workspace-tidy-strays'
 import { createWorkspaceToolRunner } from './workspace-tool-runner'
 
 const FINDER_SYNC_CACHE_MS = 10 * 60 * 1000
 const ROOT_SETTING_KEYS = new Set<string>(['podWorkspaceRoot', 'experimentalPodWorkspace'])
 
-type PodWorkspaceStore = {
+type PodWorkspaceStore = WorkspaceStrayStore & {
   getSettings(): GlobalSettings
   getRepos(): Repo[]
   onSettingsChanged(listener: (updates: Partial<GlobalSettings>) => void): () => void
@@ -57,7 +60,7 @@ type PodWorkspaceRuntime = {
 
 let installed = false
 
-/** Idempotent. Registers listeners and IPC only: nothing here touches disk or spawns at startup. */
+/** Idempotent. Registers listeners and RPC only: nothing here touches disk or spawns at startup. */
 export function installPodWorkspace(store: PodWorkspaceStore, runtime: PodWorkspaceRuntime): void {
   if (installed) {
     return
@@ -84,14 +87,7 @@ export function installPodWorkspace(store: PodWorkspaceStore, runtime: PodWorksp
     home,
     validation
   })
-  const ipcDeps = {
-    isEnabled,
-    getRootSetting: () => workspaceRootSetting(store.getSettings()),
-    validation,
-    status
-  }
-  // Other platforms still answer the renderer's gate query (false), and do nothing else.
-  registerWorkspaceIpc(ipcDeps)
+  // Other platforms answer podWorkspace.enabled with false (no service), and do nothing else.
   if (process.platform !== 'darwin') {
     return
   }
@@ -100,13 +96,21 @@ export function installPodWorkspace(store: PodWorkspaceStore, runtime: PodWorksp
       store,
       isEnabled,
       status,
+      validation,
       home,
       userDataDir: app.getPath('userData'),
-      cloneDestination: (url) => resolveWorkspaceCloneDestination(ipcDeps, url),
-      trash: (path) => shell.trashItem(path)
+      osTrash: (path) => shell.trashItem(path),
+      onBackgroundDone: (repoId, message) => console.info(`[pod-workspace] ${repoId}: ${message}`)
     })
   )
 
+  setLocalCloneOptionsOverride(
+    createPodCloneOptions({
+      isEnabled,
+      root: () => resolveWorkspaceRoot(store.getSettings(), home),
+      hostFacts: createGitHostFactsReader(createWorkspaceGitExec(), home)
+    })
+  )
   setDefaultCreateProjectParentOverride(() => {
     if (!isEnabled()) {
       return null

@@ -1,19 +1,23 @@
-import { existsSync, mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PodTidyWorktree } from '../../../shared/pod-workspace-tidy-types'
+import type { PodTidyAction, PodTidyWorktree } from '../../../shared/pod-workspace-tidy-types'
 import { createWorkspaceGitExec } from './workspace-git-exec'
 import { createWorkspaceJournal } from './workspace-journal'
+import { createWorkspacePlanStore } from './workspace-plan-store'
 import type { ProcessCwdReader } from './workspace-process-cwds'
 import { createRealGitFixture, type RealGitFixture } from './workspace-real-git-test-fixture'
 import { createWorkspaceTidyActions } from './workspace-tidy-actions'
 import { scanWorkspaceTidy, TIDY_STALE_MS } from './workspace-tidy-scan'
+import { createWorkspaceTrash } from './workspace-trash'
 
 describe('workspace tidy (real git)', () => {
   let fx: RealGitFixture
   let repo: string
   let wtRoot: string
   let cwds: Map<number, string>
+  let plans: ReturnType<typeof createWorkspacePlanStore>
+  let osTrash: ReturnType<typeof vi.fn<(path: string) => Promise<void>>>
 
   const processes: ProcessCwdReader = {
     listPids: () => [...cwds.keys()],
@@ -25,8 +29,23 @@ describe('workspace tidy (real git)', () => {
     git: createWorkspaceGitExec(),
     processes,
     journal: createWorkspaceJournal(join(fx.root, 'journal.json')),
-    defaultBaseRef: async () => 'origin/main'
+    plans,
+    store: fx.store([fx.repoRecord(repo)])
   })
+
+  const actionsWith = (removeWorktree: (worktreeId: string) => Promise<void>) =>
+    createWorkspaceTidyActions({
+      ...deps(),
+      getRepo: () => fx.repoRecord(repo),
+      removeWorktree,
+      trash: createWorkspaceTrash(fx.home, osTrash)
+    })
+
+  // What Orca's own removal leaves behind: no registration, no branch.
+  const orcaRemoval = (path: string, branch: string) => async () => {
+    await fx.git(repo, 'worktree', 'remove', '--force', path)
+    await fx.git(repo, 'branch', '-D', branch)
+  }
 
   const addWorktree = async (name: string) => {
     const path = join(wtRoot, name)
@@ -40,6 +59,8 @@ describe('workspace tidy (real git)', () => {
     wtRoot = `${repo}.worktrees`
     mkdirSync(wtRoot)
     cwds = new Map()
+    plans = createWorkspacePlanStore()
+    osTrash = vi.fn(async () => {})
   })
 
   afterEach(() => fx.dispose())
@@ -50,6 +71,12 @@ describe('workspace tidy (real git)', () => {
       scan.worktrees.find((entry) => entry.path === join(wtRoot, name))
     return { scan, byName }
   }
+
+  const applyOn = async (
+    actions: ReturnType<typeof actionsWith>,
+    action: PodTidyAction,
+    acknowledged?: ('dirty' | 'unpushed' | 'process-inside')[]
+  ) => actions.run({ planId: (await scanOne()).scan.planId, action, acknowledged })
 
   it('flags merged, gone, dirty, unpushed, prunable, stray and busy worktrees', async () => {
     const merged = await addWorktree('merged')
@@ -82,6 +109,7 @@ describe('workspace tidy (real git)', () => {
 
     const { scan, byName } = await scanOne()
     expect(scan.errors).toEqual([])
+    expect(scan.planId).toMatch(/^[0-9a-f-]{36}$/)
     expect(byName('merged')?.reasons).toContain('merged')
     expect(byName('merged')?.blockers).toEqual([])
     expect(byName('gone')?.reasons).toContain('upstream-gone')
@@ -93,7 +121,7 @@ describe('workspace tidy (real git)', () => {
     expect(byName('busy')?.processes).toEqual([{ pid: 4242, name: 'proc-4242' }])
     expect(scan.worktrees.find((entry) => entry.path === repo)?.blockers).toContain('main-worktree')
     expect(scan.strayFolders.map((folder) => folder.path)).toEqual([stray])
-    expect(scan.prunable).toEqual([{ repoId: 'repo-1', names: [vanished] }])
+    expect(scan.prunable).toEqual([{ repoId: 'repo-1', paths: [vanished] }])
   })
 
   it('does not call a branch that was never committed to merged', async () => {
@@ -117,31 +145,48 @@ describe('workspace tidy (real git)', () => {
     expect(byName('old')?.reasons).toContain('stale')
   })
 
-  it('archives a clean worktree through the runtime removal and restores it', async () => {
+  it('archives into the Trash through the runtime removal and restores every file', async () => {
     const path = await addWorktree('feature')
     await fx.commit(path, 'f.txt', 'feature work')
+    await fx.git(path, 'push', '-q', '-u', 'origin', 'feature')
+    writeFileSync(join(path, 'notes.local'), 'ignored-by-nobody\n')
     const head = (await fx.git(path, 'rev-parse', 'HEAD')).trim()
-    const removeWorktree = vi.fn(async () => {
-      await fx.git(repo, 'worktree', 'remove', path)
-      await fx.git(repo, 'branch', '-D', 'feature')
-    })
-    const trash = vi.fn(async () => {})
-    const actions = createWorkspaceTidyActions({
-      ...deps(),
-      getRepo: () => fx.repoRecord(repo),
-      removeWorktree,
-      trash
-    })
-    const archived = await actions.run({ kind: 'archive', worktreeId: `repo-1::${path}` })
-    expect(removeWorktree).toHaveBeenCalledWith(`repo-1::${path}`)
-    expect(existsSync(path)).toBe(false)
-    const ref = archived.archive?.ref ?? ''
-    expect((await fx.git(repo, 'rev-parse', ref)).trim()).toBe(head)
+    const removeWorktree = vi.fn(orcaRemoval(path, 'feature'))
+    const actions = actionsWith(removeWorktree)
+    const worktreeId = `repo-1::${path}`
 
-    await actions.run({ kind: 'restore', archiveId: archived.archive?.id ?? '' })
+    await expect(applyOn(actions, { kind: 'archive', worktreeId })).rejects.toThrow(/dirty/)
+    const archived = await applyOn(actions, { kind: 'archive', worktreeId }, ['dirty'])
+    expect(removeWorktree).toHaveBeenCalledWith(worktreeId)
+    expect(existsSync(path)).toBe(false)
+    expect(existsSync(join(fx.home, '.Trash', 'feature', 'notes.local'))).toBe(true)
+    expect(archived.undo?.kind).toBe('restore')
+
+    const { scan } = await scanOne()
+    const [record] = scan.archives
+    expect((await fx.git(repo, 'rev-parse', record.ref)).trim()).toBe(head)
+    await actions.run({ planId: scan.planId, action: { kind: 'restore', archiveId: record.id } })
     expect((await fx.git(path, 'rev-parse', 'HEAD')).trim()).toBe(head)
     expect((await fx.git(path, 'branch', '--show-current')).trim()).toBe('feature')
-    await expect(fx.git(repo, 'rev-parse', '--verify', ref)).rejects.toThrow()
+    expect(readFileSync(join(path, 'notes.local'), 'utf8')).toBe('ignored-by-nobody\n')
+    expect(await fx.git(path, 'status', '--porcelain')).toBe('?? notes.local\n')
+    await expect(fx.git(repo, 'rev-parse', '--verify', record.ref)).rejects.toThrow()
+  })
+
+  it('refuses an apply once the worktree changed since the scan', async () => {
+    const path = await addWorktree('moving')
+    await fx.commit(path, 'm.txt', 'first')
+    await fx.git(path, 'push', '-q', '-u', 'origin', 'moving')
+    const actions = actionsWith(orcaRemoval(path, 'moving'))
+    const { scan } = await scanOne()
+    await fx.commit(path, 'm2.txt', 'second')
+    await fx.git(path, 'push', '-q')
+    const archive = { kind: 'archive' as const, worktreeId: `repo-1::${path}` }
+    await expect(actions.run({ planId: scan.planId, action: archive })).rejects.toThrow(
+      /changed since you looked/
+    )
+    await expect(actions.run({ planId: 'not-a-plan', action: archive })).rejects.toThrow(/expired/)
+    expect(existsSync(path)).toBe(true)
   })
 
   it('still calls a restored merged branch merged', async () => {
@@ -149,17 +194,13 @@ describe('workspace tidy (real git)', () => {
     await fx.commit(path, 's.txt', 'shipped work')
     await fx.git(path, 'push', '-q', 'origin', 'shipped:main')
     await fx.git(repo, 'fetch', '-q', 'origin')
-    const actions = createWorkspaceTidyActions({
-      ...deps(),
-      getRepo: () => fx.repoRecord(repo),
-      removeWorktree: async () => {
-        await fx.git(repo, 'worktree', 'remove', path)
-        await fx.git(repo, 'branch', '-D', 'shipped')
-      },
-      trash: async () => {}
+    const actions = actionsWith(orcaRemoval(path, 'shipped'))
+    await applyOn(actions, { kind: 'archive', worktreeId: `repo-1::${path}` })
+    const { scan } = await scanOne()
+    await actions.run({
+      planId: scan.planId,
+      action: { kind: 'restore', archiveId: scan.archives[0].id }
     })
-    const archived = await actions.run({ kind: 'archive', worktreeId: `repo-1::${path}` })
-    await actions.run({ kind: 'restore', archiveId: archived.archive?.id ?? '' })
     const { byName } = await scanOne()
     expect(byName('shipped')?.reasons).toContain('merged')
   })
@@ -167,80 +208,80 @@ describe('workspace tidy (real git)', () => {
   it('removes with git alone a worktree the runtime does not list yet', async () => {
     const path = await addWorktree('fresh-restore')
     await fx.commit(path, 'r.txt', 'work')
-    const actions = createWorkspaceTidyActions({
-      ...deps(),
-      getRepo: () => fx.repoRecord(repo),
-      removeWorktree: async () => {
-        throw new Error('selector_not_found')
-      },
-      trash: async () => {}
+    const actions = actionsWith(async () => {
+      throw new Error('selector_not_found')
     })
-    const archived = await actions.run({ kind: 'archive', worktreeId: `repo-1::${path}` })
+    await applyOn(actions, { kind: 'archive', worktreeId: `repo-1::${path}` }, ['unpushed'])
     expect(existsSync(path)).toBe(false)
-    expect(archived.archive?.ref).toMatch(/^refs\/pod\/archive\//)
+    const { scan } = await scanOne()
+    expect(scan.archives[0].ref).toMatch(/^refs\/pod\/archive\//)
     // The branch stays (only Orca's removal deletes it), so restore checks it out again.
-    await actions.run({ kind: 'restore', archiveId: archived.archive?.id ?? '' })
+    await actions.run({
+      planId: scan.planId,
+      action: { kind: 'restore', archiveId: scan.archives[0].id }
+    })
     expect((await fx.git(path, 'branch', '--show-current')).trim()).toBe('fresh-restore')
   })
 
-  it('keeps no archive when the runtime refuses the removal', async () => {
+  it('puts everything back when the runtime refuses the removal', async () => {
     const path = await addWorktree('refused')
-    const actions = createWorkspaceTidyActions({
-      ...deps(),
-      getRepo: () => fx.repoRecord(repo),
-      removeWorktree: async () => {
-        throw new Error('worktree_busy')
-      },
-      trash: async () => {}
+    const actions = actionsWith(async () => {
+      throw new Error('worktree_busy')
     })
-    await expect(actions.run({ kind: 'archive', worktreeId: `repo-1::${path}` })).rejects.toThrow(
-      'worktree_busy'
-    )
-    expect(existsSync(path)).toBe(true)
+    await expect(
+      applyOn(actions, { kind: 'archive', worktreeId: `repo-1::${path}` })
+    ).rejects.toThrow('worktree_busy')
+    expect(existsSync(join(path, 'README.md'))).toBe(true)
     expect(await fx.git(repo, 'for-each-ref', 'refs/pod/archive')).toBe('')
     expect((await createWorkspaceJournal(join(fx.root, 'journal.json')).read()).archives).toEqual(
       []
     )
   })
 
-  it('refuses to archive a dirty worktree or one a process is in', async () => {
-    const path = await addWorktree('wip')
-    writeFileSync(join(path, 'note.txt'), 'unsaved\n')
-    const removeWorktree = vi.fn(async () => {})
-    const actions = createWorkspaceTidyActions({
-      ...deps(),
-      getRepo: () => fx.repoRecord(repo),
-      removeWorktree,
-      trash: async () => {}
-    })
-    await expect(actions.run({ kind: 'archive', worktreeId: `repo-1::${path}` })).rejects.toThrow(
-      /dirty/
+  it('needs a tick for a process inside, and never archives the main checkout', async () => {
+    const path = await addWorktree('busy')
+    cwds.set(77, path)
+    const removeWorktree = vi.fn(orcaRemoval(path, 'busy'))
+    const actions = actionsWith(removeWorktree)
+    const worktreeId = `repo-1::${path}`
+    await expect(applyOn(actions, { kind: 'archive', worktreeId })).rejects.toThrow(
+      /process-inside/
     )
+    await expect(
+      applyOn(actions, { kind: 'archive', worktreeId: `repo-1::${repo}` }, ['dirty', 'unpushed'])
+    ).rejects.toThrow(/main-worktree/)
     expect(removeWorktree).not.toHaveBeenCalled()
+    await applyOn(actions, { kind: 'archive', worktreeId }, ['process-inside'])
+    expect(removeWorktree).toHaveBeenCalledOnce()
   })
 
-  it('prunes registrations of deleted folders and trashes only proven stray folders', async () => {
+  it('prunes gone registrations, trashes proven strays and puts them back', async () => {
     const gone = await addWorktree('gone')
     rmSync(gone, { recursive: true, force: true })
     const stray = join(wtRoot, 'leftover')
     mkdirSync(stray)
+    writeFileSync(join(stray, 'keep.txt'), 'mine\n')
     const old = (Date.now() - 2 * 24 * 60 * 60 * 1000) / 1000
     utimesSync(stray, old, old)
-    const trash = vi.fn(async () => {})
-    const actions = createWorkspaceTidyActions({
-      ...deps(),
-      getRepo: () => fx.repoRecord(repo),
-      removeWorktree: async () => {},
-      trash
-    })
-    const pruned = await actions.run({ kind: 'prune', repoId: 'repo-1' })
+    const actions = actionsWith(async () => {})
+
+    const pruned = await applyOn(actions, { kind: 'prune', repoId: 'repo-1' })
     expect(pruned.pruned).toEqual(['gone'])
     expect(await fx.git(repo, 'worktree', 'list')).not.toContain('gone')
 
-    await actions.run({ kind: 'trash-stray', repoId: 'repo-1', path: stray })
-    expect(trash).toHaveBeenCalledWith(stray)
+    const trashed = await applyOn(actions, { kind: 'trash-stray', repoId: 'repo-1', path: stray })
+    expect(existsSync(stray)).toBe(false)
+    expect(osTrash).not.toHaveBeenCalled()
+    expect(trashed.undo?.kind).toBe('put-back')
     await expect(
-      actions.run({ kind: 'trash-stray', repoId: 'repo-1', path: repo })
-    ).rejects.toThrow(/no longer a stray/)
+      applyOn(actions, { kind: 'trash-stray', repoId: 'repo-1', path: repo })
+    ).rejects.toThrow(/does not cover/)
+
+    const { scan } = await scanOne()
+    await actions.run({
+      planId: scan.planId,
+      action: { kind: 'put-back', trashedId: scan.trashed[0].id }
+    })
+    expect(readFileSync(join(stray, 'keep.txt'), 'utf8')).toBe('mine\n')
   })
 })
