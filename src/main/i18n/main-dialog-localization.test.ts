@@ -20,7 +20,7 @@ describe('main-process dialog localization', () => {
 
   it('builds dialog copy in the language active when the dialog opens', async () => {
     vi.resetModules()
-    const { ensureMainI18n, setMainUiLanguage } = await import('./main-i18n')
+    const { ensureMainI18n, setMainUiLanguage, translateMain } = await import('./main-i18n')
     const { UI_LANGUAGE_SPANISH } = await import('../../shared/ui-language')
     const { gpuFallbackRestartOptions } =
       await import('../crash-reporting/gpu-fallback-restart-prompt')
@@ -39,7 +39,8 @@ describe('main-process dialog localization', () => {
     await chooseProfileStateCopy({
       sqliteSavedAt: new Date(0),
       formatTime: () => '1/1/1970',
-      showMessageBox
+      showMessageBox,
+      translate: translateMain
     })
     expect(showMessageBox).toHaveBeenCalledWith(
       expect.objectContaining({
