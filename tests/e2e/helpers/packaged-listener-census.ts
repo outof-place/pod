@@ -1,11 +1,11 @@
 /**
- * Fork-only (Pod): which processes a packaged-app run owns, and the TCP ports they listen on.
+ * Fork-only (Pod): which processes a packaged-app run owns, and the TCP and UDP ports they listen on.
  * The descendant tree alone misses processes that re-parent to launchd (the daemon after a
  * hand-over, Pod Menu, the claude-acc LaunchAgents), so the census also takes every process whose
  * executable lives inside the bundle.
  */
 import { spawnSync } from 'node:child_process'
-import { realpathSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 
 export type CensusProcess = { pid: number; path: string; listeners: string[] }
@@ -40,12 +40,14 @@ export function runningBundleProcesses(bundle: string): string[] {
     .map((row) => `${row.pid} ${row.path}`)
 }
 
-function tcpListenersByPid(pids: readonly number[]): Map<number, string[]> {
-  const result = spawnSync(
-    'lsof',
-    ['-nP', '-a', '-p', pids.join(','), '-iTCP', '-sTCP:LISTEN', '-Fpn'],
-    { encoding: 'utf8' }
-  )
+/** `-iTCP -sTCP:LISTEN` gives listening TCP sockets; `-iUDP` gives every UDP socket. */
+function lsofSocketsByPid(
+  pids: readonly number[],
+  filter: readonly string[]
+): Map<number, string[]> {
+  const result = spawnSync('lsof', ['-nP', '-a', '-p', pids.join(','), ...filter, '-Fpn'], {
+    encoding: 'utf8'
+  })
   // lsof exits 1 when nothing listens.
   if (result.status !== 0 && result.status !== 1) {
     throw new Error(`lsof failed: ${result.stderr || result.error?.message || result.status}`)
@@ -62,7 +64,25 @@ function tcpListenersByPid(pids: readonly number[]): Map<number, string[]> {
   return listeners
 }
 
-/** The app, every process running from its bundle, and all their descendants, with TCP listeners. */
+/**
+ * TCP listeners as `address`, and UDP sockets bound without a peer as `udp:address`. A connected
+ * UDP socket (`local->remote`, a DNS or QUIC client) receives only from its peer, so it is no listener.
+ */
+function listenersByPid(pids: readonly number[]): Map<number, string[]> {
+  const tcp = lsofSocketsByPid(pids, ['-iTCP', '-sTCP:LISTEN'])
+  const udp = lsofSocketsByPid(pids, ['-iUDP'])
+  return new Map(
+    pids.map((pid) => [
+      pid,
+      [
+        ...(tcp.get(pid) ?? []),
+        ...(udp.get(pid) ?? []).filter((name) => !name.includes('->')).map((name) => `udp:${name}`)
+      ]
+    ])
+  )
+}
+
+/** The app, every process running from its bundle, and all their descendants, with their listeners. */
 export function listenerCensus(rootPid: number, bundle: string): CensusProcess[] {
   const table = processTable()
   const prefixes = bundleContentsPrefixes(bundle)
@@ -81,7 +101,7 @@ export function listenerCensus(rootPid: number, bundle: string): CensusProcess[]
       }
     }
   }
-  const listeners = tcpListenersByPid([...pids])
+  const listeners = listenersByPid([...pids])
   return [...pids]
     .sort((a, b) => a - b)
     .map((pid) => ({
@@ -94,17 +114,34 @@ export function listenerCensus(rootPid: number, bundle: string): CensusProcess[]
 export function formatListenerCensus(census: readonly CensusProcess[]): string {
   return census
     .map(({ pid, path: executable, listeners }) => {
-      const ports = listeners.length > 0 ? listeners.join(', ') : 'no TCP listeners'
+      const ports = listeners.length > 0 ? listeners.join(', ') : 'no listeners'
       return `${pid} ${executable}: ${ports}`
     })
     .join('\n')
 }
 
-/** `pid path address` for every listener bound beyond loopback (127.0.0.0/8, ::1). */
+/** `pid path address` for every TCP or UDP listener bound beyond loopback (127.0.0.0/8, ::1). */
 export function wideListeners(census: readonly CensusProcess[]): string[] {
   return census.flatMap(({ pid, path: executable, listeners }) =>
     listeners
-      .filter((address) => !address.startsWith('127.') && !address.startsWith('[::1]:'))
+      .filter((listener) => {
+        const address = listener.replace(/^udp:/, '')
+        return !address.startsWith('127.') && !address.startsWith('[::1]:')
+      })
       .map((address) => `${pid} ${executable} ${address}`)
   )
+}
+
+/** The Electron executable: the app's own, or the one-app layout's nested runtime's. */
+export function packagedRuntimeExecutable(app: string): string {
+  const nested = path.join(
+    app,
+    'Contents',
+    'Helpers',
+    'Pod Runtime.app',
+    'Contents',
+    'MacOS',
+    'Pod'
+  )
+  return existsSync(nested) ? nested : path.join(app, 'Contents', 'MacOS', 'Pod')
 }
