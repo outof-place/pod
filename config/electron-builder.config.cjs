@@ -20,6 +20,9 @@ const {
 } = require('./scripts/verify-packaged-mobile-web-bundle.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
 const {
+  assertGhosttyTerminalAddonBuilt
+} = require('./scripts/verify-packaged-ghostty-terminal-addon.cjs')
+const {
   assertBundledRipgrepInstalled,
   bundledRipgrepExtraResources,
   bundledRipgrepMacSignIgnore,
@@ -346,6 +349,7 @@ module.exports = {
     assertBundledRipgrepInstalled()
     assertOrcadTemplateBuilt()
     assertMobileWebBundleBuilt(mobileWebBundleDir)
+    assertGhosttyTerminalAddonBuilt(context.electronPlatformName, { required: isMacRelease })
   },
   afterPack: async (context) => {
     const resourcesDir =
@@ -594,6 +598,10 @@ module.exports = {
       {
         from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
         to: 'Orca Computer Use.app'
+      },
+      {
+        from: 'native/ghostty-terminal-macos/build/ghostty_terminal.node',
+        to: 'ghostty-terminal-macos/ghostty_terminal.node'
       },
       featureWallResources
     ],
