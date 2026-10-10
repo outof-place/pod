@@ -2,6 +2,7 @@ import {
   openSidebarProjectDialog,
   openSidebarWorkspaceComposer
 } from './helpers/sidebar-project-dialog'
+import { e2ePodFeatures } from './helpers/pod-build-profile'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -462,6 +463,14 @@ test.describe('New-user golden core flow', () => {
     await expectTerminalSurface(orcaPage)
     await waitForTerminalPaneManager(orcaPage)
 
+    if (!e2ePodFeatures.featurePromos) {
+      // Why: the Pod profile compiles contextual tours out; split and create without the handoff.
+      await splitTerminalPaneAndAssertIdentity(orcaPage)
+      const podWorkspaceName = `golden-new-${Date.now()}`
+      await createWorkspace(orcaPage, podWorkspaceName)
+      await expectActiveWorkspaceBelongsToRepo(orcaPage, podWorkspaceName, repoPath)
+      return
+    }
     await requestAgentSessionsTour(orcaPage)
     const paneCountBeforeTourSplit = await countVisibleTerminalPanes(orcaPage)
     await orcaPage.getByRole('button', { name: /^Split terminal$/ }).click()
