@@ -7,7 +7,11 @@
 # built with `git merge-tree` and `git commit-tree`, so no working tree is touched and a dry
 # run is a complete assembly that only skips the final ref update.
 #
-# Exit codes: 0 done, 1 usage or environment error, 2 conflict, 3 would drop commits.
+# A commit whose patch is already stacked is skipped, so a topic branch built on an older copy of
+# an earlier entry needs no rebase when that entry is rewritten. A rewritten copy (same author,
+# date and subject) whose change differs stops the run instead.
+#
+# Exit codes: 0 done, 1 usage or environment error, 2 conflict or stale copy, 3 would drop commits.
 set -euo pipefail
 
 usage() {
@@ -46,6 +50,11 @@ Manifest:
   of refs, whose commits are excluded, for a topic branch cut from something other than Orca main.
   "ref" is optional: a commit to stack instead of the branch tip, to pin a snapshot.
   "note" is free text for people and is ignored.
+
+Commits are deduplicated by patch id against everything stacked so far. A topic branch that
+still carries an older copy of an earlier entry's commits replays only its own commits. If an old
+copy differs in content from the stacked commit (same author, date and subject), the run stops
+with exit code 2 and names the files, and nothing is resolved for you.
 EOF
 }
 
@@ -182,6 +191,32 @@ pin_tree() {
 
 short() { git rev-parse --short "$1"; }
 
+# Patch id of one commit, or of the change between two; empty when nothing changes.
+patch_id() { git diff-tree -p --no-commit-id -r "$@" | git patch-id --stable | cut -d' ' -f1; }
+
+# The lines a change adds and removes per file, without context or line numbers.
+change_lines() {
+  git diff-tree -p --no-commit-id -r --no-renames "$@" | awk '
+    /^diff --git / { file = $NF; sub(/^b\//, "", file); header = 1; next }
+    header && /^index / { blobs = $0; next }
+    header && /^Binary files / { print file "\t" blobs; next }
+    header && /^(new|deleted) file mode |^old mode |^new mode / { print file "\t" $0; next }
+    /^@@ / { header = 0; next }
+    !header && /^[-+]/ { print file "\t" $0 }
+  ' | LC_ALL=C sort
+}
+
+# Stacked commits by patch id ("<patch id> <source> <entry> <topic>") and by author, date and
+# subject ("<key> <source> <built> <entry> <topic>").
+: >"$tmp/patch-ids"
+: >"$tmp/commit-keys"
+remember() {
+  local commit=$1 built=$2 pid=$3 key=$4 built_pid=$5
+  [ -z "$pid" ] || printf '%s %s %d %s\n' "$pid" "$commit" "$index" "$topic" >>"$tmp/patch-ids"
+  [ -z "$built_pid" ] || [ "$built_pid" = "$pid" ] || printf '%s %s %d %s\n' "$built_pid" "$commit" "$index" "$topic" >>"$tmp/patch-ids"
+  printf '%s %s %s %d %s\n' "$key" "$commit" "$built" "$index" "$topic" >>"$tmp/commit-keys"
+}
+
 tip=$base_sha
 picked_total=0
 pinned=0
@@ -240,6 +275,35 @@ while IFS=$'\t' read -r -u 3 topic key value base pin; do
     esac
     seen="$seen$commit "
 
+    pid=$(patch_id "$commit")
+    same=''
+    [ -z "$pid" ] || same=$(awk -v p="$pid" '$1 == p { print $2 " " $3 " " $4; exit }' "$tmp/patch-ids")
+    if [ -n "$same" ]; then
+      read -r same_commit same_index same_topic <<<"$same"
+      printf '    = %s %s (same patch as %s from entry %d, %s)\n' "$(short "$commit")" "$subject" "$(short "$same_commit")" "$same_index" "$same_topic"
+      continue
+    fi
+    key=$(git log -1 --format='%ae%n%aI%n%s' "$commit" | git hash-object --stdin)
+    copy=$(awk -v k="$key" '$1 == k { print $2 " " $3 " " $4 " " $5; exit }' "$tmp/commit-keys")
+    if [ -n "$copy" ]; then
+      read -r copy_commit copy_built copy_index copy_topic <<<"$copy"
+      lines=$(change_lines "$commit")
+      if [ "$lines" = "$(change_lines "$copy_commit")" ] || [ "$lines" = "$(change_lines "${copy_built}^" "$copy_built")" ]; then
+        printf '    = %s %s (copy of %s from entry %d, %s; same lines, other context)\n' "$(short "$commit")" "$subject" "$(short "$copy_commit")" "$copy_index" "$copy_topic"
+        remember "$commit" "$copy_built" "$pid" "$key" ''
+        continue
+      fi
+      {
+        printf '\nSTALE COPY while stacking entry %d (%s)\n' "$index" "$topic"
+        printf '  commit:   %s %s\n' "$(short "$commit")" "$subject"
+        printf '  copy of:  %s from entry %d (%s): same author, date and subject, different change\n' "$(short "$copy_commit")" "$copy_index" "$copy_topic"
+        printf '  files that differ:\n'
+        diff <(change_lines "$copy_commit") <(printf '%s\n' "$lines") | sed -n 's/^[<>] //p' | cut -f1 | sort -u | sed 's/^/    /' || true
+        printf '\nNothing was changed. Rebase %s onto the current %s, or give its entry a "base" past the old copy.\n' "$topic" "$copy_topic"
+      } >&2
+      exit 2
+    fi
+
     parent=$(git rev-parse "$commit^")
     set +e
     merge_out=$(git merge-tree --write-tree --name-only --no-messages --merge-base="$parent" "$tip" "$commit")
@@ -271,6 +335,7 @@ while IFS=$'\t' read -r -u 3 topic key value base pin; do
 
     if [ "$tree" = "$(git rev-parse "$tip^{tree}")" ]; then
       printf '    - %s %s (change already present, dropped)\n' "$(short "$commit")" "$subject"
+      remember "$commit" "$commit" "$pid" "$key" ''
       continue
     fi
 
@@ -281,6 +346,7 @@ while IFS=$'\t' read -r -u 3 topic key value base pin; do
       message=$(printf '%s\n' "$message" | grep -v "^$other_key: ")
     fi
     message=$(printf '%s\n' "$message" | git interpret-trailers --if-exists doNothing --trailer "$key: $value")
+    prev_tip=$tip
     tip=$(
       GIT_AUTHOR_NAME=$(git log -1 --format=%an "$commit") \
       GIT_AUTHOR_EMAIL=$(git log -1 --format=%ae "$commit") \
@@ -289,6 +355,7 @@ while IFS=$'\t' read -r -u 3 topic key value base pin; do
     )
     picked=$((picked + 1))
     picked_total=$((picked_total + 1))
+    remember "$commit" "$tip" "$pid" "$key" "$(patch_id "$prev_tip" "$tip")"
     printf '    + %s %s\n' "$(short "$commit")" "$subject"
   done
   [ "$picked" -gt 0 ] || printf '    (nothing new to stack)\n'
