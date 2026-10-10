@@ -72,6 +72,13 @@ async function listMachines(): Promise<string[]> {
   return (await run(ORB, ['list', '--quiet'])).split('\n').filter(Boolean)
 }
 
+/** `orb` processes on the Mac that name the machine: its relay, or an agent launch inside it. */
+async function orbProcessesFor(machine: string, only?: 'relay'): Promise<string[]> {
+  const pattern = only === 'relay' ? `-m ${machine} -u root python3` : `-m ${machine}`
+  const result = await runProcess({ program: 'pgrep', args: ['-fl', '--', pattern] })
+  return result.stdout.split('\n').filter((line) => line.includes('orb'))
+}
+
 async function screenshot(page: Page, name: string): Promise<void> {
   if (!screenshotDir) {
     return
@@ -105,6 +112,10 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
+  // Pod has quit by now, and a relay never outlives it.
+  for (const name of createdMachines) {
+    expect(await orbProcessesFor(name, 'relay')).toEqual([])
+  }
   // Only machines this spec created, and only if a failed run left them behind.
   const remaining = await listMachines().catch((): string[] => [])
   for (const name of createdMachines) {
@@ -208,4 +219,8 @@ test('a Claude launch runs in the worktree sandbox and its hook status reaches P
     timeout: 120_000
   })
   expect(await listMachines()).not.toContain(sandbox)
+  // Destroying the sandbox ends its relay and the agent launch inside it: no orphan `orb run`.
+  await expect.poll(() => orbProcessesFor(sandbox), { timeout: 15_000 }).toEqual([])
+  // Other machines in `orb list` are the user's; none of Pod's may remain.
+  expect((await listMachines()).filter((name) => name.startsWith('pod-'))).toEqual([])
 })
