@@ -1,10 +1,102 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { loadNativeProcessInfoFrom, type NativeProcessInfo } from './native-process-info'
+import { dirname, join } from 'node:path'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as appEnvironment from './app-environment'
+import {
+  getNativeProcessInfo,
+  loadNativeProcessInfoFrom,
+  NATIVE_PROCESS_INFO_BUILD_PATH,
+  NATIVE_PROCESS_INFO_RESOURCE_PATH,
+  setNativeProcessInfoForTests,
+  type NativeProcessInfo
+} from './native-process-info'
+
+describe.runIf(process.platform === 'darwin')('trusted native addon selection', () => {
+  const resourcesDescriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
+  const native: NativeProcessInfo = { readProcessForegroundGroup: () => null }
+  let scratch = ''
+  const hasEnvironment = () => vi.spyOn(appEnvironment, 'hasAppEnvironment')
+  const loadAddon = () => vi.spyOn(process, 'dlopen')
+
+  beforeEach(() => {
+    scratch = mkdtempSync(join(tmpdir(), 'orca-proc-info-selection-'))
+    for (const relative of [NATIVE_PROCESS_INFO_BUILD_PATH, NATIVE_PROCESS_INFO_RESOURCE_PATH]) {
+      mkdirSync(dirname(join(scratch, relative)), { recursive: true })
+      writeFileSync(join(scratch, relative), 'fixture')
+    }
+    Object.defineProperty(process, 'resourcesPath', { configurable: true, value: scratch })
+    vi.stubEnv('ORCA_DISABLE_NATIVE_PROCESS_INFO', '0')
+    hasEnvironment().mockReturnValue(false)
+    vi.spyOn(appEnvironment, 'getAppEnvironment').mockReturnValue({
+      getAppPath: () => scratch,
+      isPackaged: () => false,
+      getPath: () => scratch,
+      getVersion: () => 'fixture',
+      getAppMetrics: () => [],
+      onWillQuit: () => {},
+      exit: () => {}
+    })
+    loadAddon().mockImplementation((module) => {
+      Object.assign(module, { exports: native })
+    })
+    setNativeProcessInfoForTests(undefined)
+  })
+
+  afterEach(() => {
+    setNativeProcessInfoForTests(undefined)
+    vi.restoreAllMocks()
+    vi.unstubAllEnvs()
+    if (resourcesDescriptor) {
+      Object.defineProperty(process, 'resourcesPath', resourcesDescriptor)
+    } else {
+      Reflect.deleteProperty(process, 'resourcesPath')
+    }
+    rmSync(scratch, { recursive: true, force: true })
+  })
+
+  it('loads packaged resources before app initialization and caches the result', () => {
+    writeFileSync(join(scratch, 'app.asar'), '')
+    expect(getNativeProcessInfo()).toBe(native)
+    expect(getNativeProcessInfo()).toBe(native)
+    const path = join(scratch, NATIVE_PROCESS_INFO_RESOURCE_PATH)
+    expect(loadAddon()).toHaveBeenCalledExactlyOnceWith(expect.anything(), path)
+  })
+
+  it.each(['missing', 'incompatible'])('caches a definitive packaged %s result', (mode) => {
+    writeFileSync(join(scratch, 'app.asar'), '')
+    if (mode === 'missing') {
+      rmSync(join(scratch, NATIVE_PROCESS_INFO_RESOURCE_PATH))
+    } else {
+      loadAddon().mockImplementationOnce(() => {
+        throw new Error('incompatible architecture')
+      })
+    }
+    expect(getNativeProcessInfo()).toBeNull()
+    writeFileSync(join(scratch, NATIVE_PROCESS_INFO_RESOURCE_PATH), 'repaired fixture')
+    expect(getNativeProcessInfo()).toBeNull()
+    expect(loadAddon()).toHaveBeenCalledTimes(mode === 'missing' ? 0 : 1)
+  })
+
+  it('does not probe cwd and retries only after an explicit development environment appears', () => {
+    vi.spyOn(process, 'cwd').mockReturnValue(scratch)
+    expect(getNativeProcessInfo()).toBeNull()
+    expect(loadAddon()).not.toHaveBeenCalled()
+    hasEnvironment().mockReturnValue(true)
+    expect(getNativeProcessInfo()).toBe(native)
+    const path = join(scratch, NATIVE_PROCESS_INFO_BUILD_PATH)
+    expect(loadAddon()).toHaveBeenCalledExactlyOnceWith(expect.anything(), path)
+  })
+
+  it('never probes the development path for a packaged environment without resources', () => {
+    hasEnvironment().mockReturnValue(true)
+    vi.spyOn(appEnvironment.getAppEnvironment(), 'isPackaged').mockReturnValue(true)
+    expect(getNativeProcessInfo()).toBeNull()
+    expect(loadAddon()).not.toHaveBeenCalled()
+  })
+})
 
 describe('loadNativeProcessInfoFrom', () => {
   it('returns null for a missing or foreign module', () => {
