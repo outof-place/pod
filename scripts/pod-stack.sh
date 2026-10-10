@@ -49,6 +49,9 @@ Manifest:
   Each entry needs exactly one of "upstream" or "forkOnly". "base" is optional: a ref, or a list
   of refs, whose commits are excluded, for a topic branch cut from something other than Orca main.
   "ref" is optional: a commit to stack instead of the branch tip, to pin a snapshot.
+  "squash": true stacks the branch as one commit, its net change since the Orca main it last
+  merged. Use it for a pull request branch that maintainers update by merging Orca main into it:
+  the merges hold conflict resolutions that a commit-by-commit replay would lose.
   "note" is free text for people and is ignored.
 
 Commits are deduplicated by patch id against everything stacked so far. A topic branch that
@@ -134,8 +137,9 @@ m.stack.forEach((e, i) => {
   const bases = e.base === undefined ? [] : Array.isArray(e.base) ? e.base : [e.base]
   if (bases.some((b) => typeof b !== "string" || !b || /\s/.test(b))) fail(where + " (" + e.branch + "): \"base\" must be a ref or a list of refs")
   if (e.ref !== undefined && (typeof e.ref !== "string" || !e.ref || /\s/.test(e.ref))) fail(where + " (" + e.branch + "): \"ref\" must be a commit")
+  if (e.squash !== undefined && typeof e.squash !== "boolean") fail(where + " (" + e.branch + "): \"squash\" must be true or false")
   if (/[\t\n]/.test(value + e.branch)) fail(where + " contains a tab or newline")
-  lines.push([e.branch, hasUp ? "Upstream" : "Fork-only", value, bases.join(" ") || "-", e.ref || "-"].join("\t"))
+  lines.push([e.branch, hasUp ? "Upstream" : "Fork-only", value, bases.join(" ") || "-", e.ref || "-", e.squash ? "squash" : "-"].join("\t"))
 })
 console.log(lines.join("\n"))
 ' "$manifest")
@@ -226,7 +230,7 @@ printf '\nPod stack: %s on Orca %s (%s, %s), topic branches from %s\n\n' "$branc
   "$(TZ=UTC0 git log -1 --date=format-local:'%Y-%m-%d %H:%M UTC' --format=%cd "$base_sha")" "$source_kind"
 
 index=0
-while IFS=$'\t' read -r -u 3 topic key value base pin; do
+while IFS=$'\t' read -r -u 3 topic key value base pin squash; do
   [ -n "$topic" ] || continue
   index=$((index + 1))
   note=''
@@ -262,8 +266,68 @@ while IFS=$'\t' read -r -u 3 topic key value base pin; do
   # Revs go through stdin: a thousand tag exclusions overflow a Windows command line.
   revs=$(printf '%s\n' "$ref_sha" "${exclude[@]}"; [ -z "$orca_tags" ] || printf '%s\n' "$orca_tags" | sed 's/^/^/')
   merges=$(git rev-list --stdin --min-parents=2 <<<"$revs")
-  if [ -n "$merges" ]; then
+  if [ -n "$merges" ] && [ "$squash" != squash ]; then
     printf '    ! skipping %d merge commit(s); their conflict resolutions are not replayed\n' "$(printf '%s\n' "$merges" | wc -l | tr -d ' ')"
+  fi
+
+  if [ "$squash" = squash ]; then
+    commits=$(git rev-list --stdin --reverse --topo-order --no-merges <<<"$revs")
+    if [ -z "$commits" ]; then
+      printf '    (nothing new to stack)\n'
+      continue
+    fi
+    count=$(printf '%s\n' "$commits" | wc -l | tr -d ' ')
+    # The newest Orca main commit merged into the branch: the net change is measured from it.
+    squash_base=$(git merge-base "$ref_sha" "$upstream_main")
+    git merge-base --is-ancestor "$squash_base" "$base_sha" \
+      || printf '    ! %s has merged Orca main past %s; its net change may rely on newer Orca code\n' "$topic" "$(short "$base_sha")"
+    set +e
+    merge_out=$(git merge-tree --write-tree --name-only --no-messages --merge-base="$squash_base" "$tip" "$ref_sha")
+    merge_status=$?
+    set -e
+    if [ "$merge_status" -eq 1 ] && [ "$(printf '%s\n' "$merge_out" | tail -n +2 | grep -v '^$')" = upstream.json ]; then
+      merge_status=0
+    fi
+    if [ "$merge_status" -eq 1 ]; then
+      {
+        printf '\nCONFLICT while stacking entry %d (%s, squashed)\n' "$index" "$topic"
+        printf '  change:   %d commit(s) since Orca %s, at %s\n' "$count" "$(short "$squash_base")" "$(short "$ref_sha")"
+        printf '  onto:     %s (Orca %s plus %d stacked commit(s))\n' "$(short "$tip")" "$(short "$base_sha")" "$picked_total"
+        printf '  files:\n'
+        printf '%s\n' "$merge_out" | tail -n +2 | sed 's/^/    /'
+        printf '\nNothing was changed. Merge a newer Orca main into %s and resolve, reorder the manifest, or drop the entry.\n' "$topic"
+      } >&2
+      exit 2
+    elif [ "$merge_status" -ne 0 ]; then
+      die "git merge-tree failed on $topic (squashed)"
+    fi
+    tree=$(printf '%s\n' "$merge_out" | head -n 1)
+    if [ -n "$(git diff --name-only "$squash_base" "$ref_sha" -- upstream.json)" ]; then
+      tree=$(pin_tree "$tree")
+      pinned=1
+    fi
+    for commit in $commits; do seen="$seen$commit "; done
+    if [ "$tree" = "$(git rev-parse "$tip^{tree}")" ]; then
+      printf '    - %d commit(s) at %s (change already present, dropped)\n' "$count" "$(short "$ref_sha")"
+      continue
+    fi
+    first=$(printf '%s\n' "$commits" | head -n 1)
+    if [ "$count" -eq 1 ]; then
+      message=$(git log -1 --format=%B "$first" | grep -v "^$other_key: ")
+    else
+      message=$(printf '%s: %d commits squashed at %s\n\n' "$topic" "$count" "$(short "$ref_sha")"
+        for commit in $commits; do git log -1 --format='- %s' "$commit"; done)
+    fi
+    message=$(printf '%s\n' "$message" | git interpret-trailers --if-exists doNothing --trailer "$key: $value")
+    tip=$(
+      GIT_AUTHOR_NAME=$(git log -1 --format=%an "$first") \
+      GIT_AUTHOR_EMAIL=$(git log -1 --format=%ae "$first") \
+      GIT_AUTHOR_DATE=$(git log -1 --format=%aI "$first") \
+      git commit-tree "$tree" -p "$tip" <<<"$message"
+    )
+    picked_total=$((picked_total + 1))
+    printf '    + %d commit(s) since Orca %s, squashed at %s\n' "$count" "$(short "$squash_base")" "$(short "$ref_sha")"
+    continue
   fi
 
   picked=0
