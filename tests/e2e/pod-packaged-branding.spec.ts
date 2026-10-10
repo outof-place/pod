@@ -21,6 +21,7 @@ import {
   runningBundleProcesses,
   wideListeners
 } from './helpers/packaged-listener-census'
+import { backupPreferences, restorePreferences } from './helpers/packaged-preferences-guard'
 import {
   runningSecurityAgentPids,
   startSecurityAgentWatchdog
@@ -90,6 +91,7 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
   if (strays.length > 0) {
     throw new Error(`Quit the processes already running from the bundle:\n${strays.join('\n')}`)
   }
+  const preferences = backupPreferences()
   const watchdog = startSecurityAgentWatchdog(packagedApp, baseline)
   let app: ElectronApplication | null = null
   let failure: unknown = null
@@ -156,10 +158,12 @@ test('a packaged Pod names itself Pod in its window and menus', async () => {
     }
     await cleanupE2EDaemons(userDataDir)
   }
+  const preferenceProblems = restorePreferences(preferences)
   // Why first: a keychain prompt is the failure that matters, whatever it broke on the way.
   if (watchdog.tripped()) {
     throw new Error('keychain prompt: SecurityAgent started during the run; the app was killed')
   }
+  expect(preferenceProblems).toEqual([])
   expect(realLaunchAgentMtimes(isolation.realHome)).toEqual(launchAgentsBefore)
   // Why after the run: anything the app writes into its own bundle (a Python __pycache__ under
   // Resources/claude-acc did) breaks the seal, and Gatekeeper then calls the installed app damaged.
