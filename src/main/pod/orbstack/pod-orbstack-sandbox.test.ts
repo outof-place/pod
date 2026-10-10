@@ -5,6 +5,7 @@ import {
   buildSandboxManagedSettings,
   provisionSandbox,
   resolveSandboxMounts,
+  SETUP_WORKTREE,
   VERIFY_AND_INSTALL_CLAUDE
 } from './pod-orbstack-sandbox'
 import type { OrbstackToolResult, OrbstackToolRunner } from './pod-orbstack-tools'
@@ -106,15 +107,18 @@ describe('provisionSandbox', () => {
       '/var/tmp/pod-claude-release'
     ])
     expect(calls.some((call) => call.args.join(' ').includes('install.sh'))).toBe(false)
-    const writes = calls.filter((call) => call.input !== undefined)
-    expect(writes.map((call) => call.args.at(-1))).toEqual([
-      'claude-hook.sh',
-      expect.stringContaining('.claude.json'),
-      expect.stringContaining('/etc/claude-code/managed-settings.json')
-    ])
-    expect(writes[0]?.input).toContain('127.0.0.1')
-    expect(writes[1]?.input).toContain('"/Users/me/web.worktrees/a"')
-    expect(writes[1]?.input).not.toContain('.git"')
+    // One exec writes every per-worktree file; its arguments carry them base64-encoded.
+    const setups = calls.filter((call) => call.args.includes(SETUP_WORKTREE))
+    expect(setups).toHaveLength(1)
+    const [hookFile, script, trust, managed, ...mounts] = setups[0]?.args.slice(7) ?? []
+    const decode = (text = ''): string => Buffer.from(text, 'base64').toString()
+    expect(hookFile).toBe('claude-hook.sh')
+    expect(decode(script)).toContain('127.0.0.1')
+    expect(decode(trust)).toContain('"/Users/me/web.worktrees/a"')
+    expect(decode(trust)).not.toContain('.git"')
+    expect(decode(managed)).toContain('"DISABLE_AUTOUPDATER": "1"')
+    expect(mounts).toEqual(['/Users/me/web.worktrees/a', '/Users/me/web/.git'])
+    expect(SETUP_WORKTREE).toContain('/etc/claude-code/managed-settings.json')
   })
 
   it('verifies the signature and checksum before installing anything', () => {
