@@ -1,7 +1,7 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
@@ -76,6 +76,23 @@ describe('Pod claude-acc extraResources', () => {
     expect(resources.filter).toEqual(
       expect.arrayContaining(['!LaunchAgents/**', '!Pod Menu.app/**'])
     )
+  })
+
+  it('keeps the entitlement the embedded Python needs for PYTHON_JIT=1', () => {
+    // CPython's JIT maps W+X memory without MAP_JIT: under the hardened runtime, allow-jit alone
+    // gets bin/python3.14 SIGKILLed. osx-sign gives it the inherit entitlements, so they must
+    // keep allow-unsigned-executable-memory for as long as Contents/Resources/python ships.
+    const root = resolve(import.meta.dirname, '..')
+    const base = require('./electron-builder.config.cjs')
+    const inherit = readFileSync(resolve(root, base.mac.entitlementsInherit), 'utf8')
+    expect(inherit).toMatch(
+      /<key>com\.apple\.security\.cs\.allow-unsigned-executable-memory<\/key>\s*<true\/>/
+    )
+    const product = readFileSync(join(root, 'product', 'electron-builder.pod.cjs'), 'utf8')
+    expect(
+      product,
+      'a product override of entitlementsInherit must keep the Python JIT entitlement'
+    ).not.toMatch(/entitlementsInherit\s*:/)
   })
 
   it('leaves only the Python Mach-Os to osx-sign', () => {
