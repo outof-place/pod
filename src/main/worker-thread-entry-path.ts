@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from '../shared/app-environment'
 
 /**
@@ -35,7 +35,10 @@ export function resolveWorkerThreadEntryPath(
   if (layout.isPackaged && layout.resourcesPath) {
     return join(layout.resourcesPath, 'app.asar', 'out', 'main', entryFileName)
   }
-  return join(layout.moduleDir, entryFileName)
+  // Electron-vite places shared clients in chunks/ beside the worker entries.
+  const entryDir =
+    basename(layout.moduleDir) === 'chunks' ? dirname(layout.moduleDir) : layout.moduleDir
+  return join(entryDir, entryFileName)
 }
 
 /**
