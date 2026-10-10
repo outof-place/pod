@@ -23,6 +23,7 @@ function emptyStatus(overrides: Partial<PodOrbstackStatus> = {}): PodOrbstackSta
     machines: [],
     containers: [],
     links: [],
+    sandboxClaudeLogin: false,
     busyWorktreeIds: [],
     errors: [],
     checkedAt: 0,
