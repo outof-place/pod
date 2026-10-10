@@ -223,4 +223,22 @@ describe('pod-lifecycle.json', () => {
     writeFileSync(pod.record, failure.replace('1.31.2', '1.31.1'))
     expect(pod.decide(Date.now())).toEqual({ action: 'up-to-date', version: '1.31.2' })
   })
+
+  it('never reruns a failed setup once claude-acc is handed back', () => {
+    const pod = installedPod()
+    writeFileSync(
+      pod.record,
+      JSON.stringify({
+        status: 'failed',
+        payload: '1.31.2',
+        at: new Date(0).toISOString(),
+        attempts: 1
+      })
+    )
+    writeFileSync(
+      join(pod.state, 'owner.json'),
+      JSON.stringify({ owner: 'brew', version: '1.31.2' })
+    )
+    expect(pod.decide(Date.now())).toEqual({ action: 'skip', reason: 'handed-back' })
+  })
 })
