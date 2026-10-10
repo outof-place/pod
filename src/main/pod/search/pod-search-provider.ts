@@ -17,26 +17,15 @@ import type {
 import type { OgdClient } from './ogd-client'
 import { isOgdMessage, OgdRequestError, OgdUnavailableError, type OgdReply } from './ogd-connection'
 import {
-  collectQuickOpenListing,
-  decodeOgdPathList,
-  quickOpenRipgrepGlobs
-} from './pod-search-listing'
+  OGD_FEATURE_FUZZY_GLOBS,
+  OGD_TEXT_SEARCH_FEATURES,
+  quickOpenScanFields,
+  servesIgnoredScan
+} from './ogd-feature-gates'
+import { collectQuickOpenListing, decodeOgdPathList } from './pod-search-listing'
 import { buildOgdSearchRequest, ogdSearchReplyToResult } from './pod-search-text-results'
 
-// Optional daemon capabilities, advertised in the hello `features` list. Without them the
-// matching requests stay on ripgrep, because the results would not be the same.
-export const OGD_FEATURE_FILES_IGNORED = 'files.ignored'
-export const OGD_FEATURE_FUZZY_IGNORED = 'fuzzy.ignored'
-// `exclude` prefixes plus `globs` with rg `-g` semantics, so the daemon prunes like ripgrep.
-export const OGD_FEATURE_FILES_EXCLUDE = 'files.exclude'
-export const OGD_FEATURE_FUZZY_EXCLUDE = 'fuzzy.exclude'
-// Whole lines and ranges into them, matched by ripgrep's own searcher (case, -w, binary, BOM).
-export const OGD_FEATURE_SEARCH_FULL_LINES = 'search.full_lines'
-export const OGD_FEATURE_SEARCH_MAX_FILESIZE = 'search.max_filesize'
-// `globs` with rg `-g` semantics, `!` negations included.
-export const OGD_FEATURE_SEARCH_NEGATED_GLOBS = 'search.negated_globs'
-
-// Without daemon-side exclusion, over-fetch so client-side filtering still fills the page.
+// Without daemon-side globs, over-fetch so client-side filtering still fills the page.
 const FUZZY_OVERFETCH = 4
 
 type RootState = 'registered' | 'unsupported'
@@ -160,7 +149,7 @@ export function createPodSearchProvider(
         request.candidatePaths !== undefined ||
         // Registering first also handshakes, so the feature list below is known.
         !(await register(client, request.rootPath)) ||
-        (request.includeIgnored && !client.hasFeature(OGD_FEATURE_FILES_IGNORED))
+        (request.includeIgnored && !servesIgnoredScan(client, 'files'))
       ) {
         return null
       }
@@ -173,9 +162,7 @@ export function createPodSearchProvider(
           hidden: true,
           barrier: true,
           ...(request.includeIgnored ? { ignored: true } : {}),
-          ...(client.hasFeature(OGD_FEATURE_FILES_EXCLUDE)
-            ? { globs: quickOpenRipgrepGlobs(request.excludePathPrefixes) }
-            : {})
+          ...quickOpenScanFields(client, 'files', request.excludePathPrefixes)
         },
         request.signal,
         cancellation
@@ -195,12 +182,13 @@ export function createPodSearchProvider(
         !client ||
         request.followSymlinks ||
         !(await register(client, request.rootPath)) ||
-        (request.includeIgnored && !client.hasFeature(OGD_FEATURE_FUZZY_IGNORED))
+        (request.includeIgnored && !servesIgnoredScan(client, 'fuzzy'))
       ) {
         return null
       }
-      const daemonExcludes = client.hasFeature(OGD_FEATURE_FUZZY_EXCLUDE)
-      const fetchLimit = daemonExcludes ? request.limit + 1 : request.limit * FUZZY_OVERFETCH
+      const fetchLimit = client.hasFeature(OGD_FEATURE_FUZZY_GLOBS)
+        ? request.limit + 1
+        : request.limit * FUZZY_OVERFETCH
       const reply = await query(
         client,
         request.rootPath,
@@ -213,7 +201,8 @@ export function createPodSearchProvider(
             ? { current: currentFiles.get(request.rootPath) }
             : {}),
           ...(request.includeIgnored ? { ignored: true } : {}),
-          ...(daemonExcludes ? { globs: quickOpenRipgrepGlobs(request.excludePathPrefixes) } : {})
+          ...quickOpenScanFields(client, 'fuzzy', request.excludePathPrefixes),
+          barrier: true
         },
         request.signal,
         () => fileListingCancellationError(request.signal)
@@ -251,12 +240,8 @@ export function createPodSearchProvider(
       if (!client || !(await register(client, request.rootPath))) {
         return null
       }
-      const { fields, hasGlobs } = buildOgdSearchRequest(request.options, request.rootPath)
-      if (
-        !client.hasFeature(OGD_FEATURE_SEARCH_FULL_LINES) ||
-        !client.hasFeature(OGD_FEATURE_SEARCH_MAX_FILESIZE) ||
-        (hasGlobs && !client.hasFeature(OGD_FEATURE_SEARCH_NEGATED_GLOBS))
-      ) {
+      const fields = buildOgdSearchRequest(request.options, request.rootPath)
+      if (!OGD_TEXT_SEARCH_FEATURES.every((feature) => client.hasFeature(feature))) {
         return null
       }
       const reply = await query(client, request.rootPath, 'search', fields, request.signal, () =>
@@ -273,7 +258,7 @@ export function createPodSearchProvider(
       if (!client || request.followSymlinks || !(await register(client, request.rootPath))) {
         return false
       }
-      return !request.includeIgnored || client.hasFeature(OGD_FEATURE_FUZZY_IGNORED)
+      return !request.includeIgnored || servesIgnoredScan(client, 'fuzzy')
     },
 
     worktreeAdded(worktreePath: string): void {
