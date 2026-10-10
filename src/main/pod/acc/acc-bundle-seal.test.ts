@@ -32,8 +32,11 @@ afterEach(() => {
   }
 })
 
-/** An ad-hoc signed app whose Resources/claude-acc has a script that imports a sibling module. */
-function signedBundle(): { app: string; payload: string } {
+/**
+ * An ad-hoc signed app whose Resources/claude-acc has a script that imports a sibling module and,
+ * with `sentinel`, claude-acc 1.31.5's plain file __pycache__ beside them.
+ */
+function signedBundle({ sentinel = false } = {}): { app: string; payload: string } {
   const root = mkdtempSync(join(tmpdir(), 'pod-acc-seal-'))
   roots.push(root)
   const app = join(root, 'Seal.app')
@@ -58,6 +61,9 @@ function signedBundle(): { app: string; payload: string } {
     join(payload, 'perf.py'),
     'import os, sys\nsys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))\nimport orcahost\n'
   )
+  if (sentinel) {
+    writeFileSync(join(payload, '__pycache__'), '')
+  }
   const signed = spawnSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', app], {
     encoding: 'utf8'
   })
@@ -103,6 +109,17 @@ describe.skipIf(!python)('the payload runs without breaking the seal', () => {
     })
     expect(ran.status, ran.stderr).toBe(0)
     expect(existsSync(join(payload, '__pycache__'))).toBe(false)
+    expect(verify(app)).toMatchObject({ ok: true })
+  })
+
+  it("keeps it with 1.31.5's __pycache__ file even for a bare environment", () => {
+    // e.g. a terminal daemon left running from an older bundle (test1): no Pod env at all
+    const { app, payload } = signedBundle({ sentinel: true })
+    const ran = spawnSync(python!, [join(payload, 'perf.py')], {
+      env: { HOME: homedir(), PATH: '/usr/bin:/bin' },
+      encoding: 'utf8'
+    })
+    expect(ran.status, ran.stderr).toBe(0)
     expect(verify(app)).toMatchObject({ ok: true })
   })
 })
