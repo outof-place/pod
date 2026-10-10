@@ -85,6 +85,11 @@ Fork-only: Pod identity: name, bundle id, icon
   change), the run stops and names the files. Rebase the branch, or give its entry a `base` that
   excludes the old copy. An entry's `base` may be one ref or a list, and `ref` pins an entry to a
   commit for a snapshot run.
+- An upstream pull request branch that maintainers update by merging Orca `main` into it gets
+  `"squash": true`: it is stacked as one commit, its net change since the Orca commit it last
+  merged, because a commit-by-commit replay would lose the merges' conflict resolutions.
+- A pull request that Orca has merged leaves the manifest. Squash merges are not caught by the
+  patch-id dedupe, so check that the merged commit matches the branch, then drop the entry.
 - The [upstream sync](.github/workflows/upstream-sync.yml) workflow runs daily. It fast-forwards
   `orca-main`. When Orca's `main` has a newer green commit, it rebases `main` into
   `sync/orca-main`, runs the typecheck, unit tests, the daemon protocol crossing check and the
