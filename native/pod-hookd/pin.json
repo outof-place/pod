@@ -1,0 +1,6 @@
+{
+  "//": "pod-hookd, the warm hook server behind pod-hook-client (outof-place/fasthooks, private). native/pod-hookd/build.mjs clones this tag with gh's credentials, refuses it unless HEAD is this commit, and builds it. Bump tag and commit together.",
+  "repository": "outof-place/fasthooks",
+  "tag": "v0.1.1",
+  "commit": "ca5b4159db733c63533ef1355fe8fa1e507dea59"
+}

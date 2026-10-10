@@ -176,3 +176,6 @@ ci-shards/
 # embedded Python for claude-acc, fetched by config/scripts/fetch-pod-python.mjs
 /resources/python/
 /resources/python.next/
+# pod-hookd, built by native/pod-hookd/build.mjs
+/resources/pod-hookd/
+/resources/pod-hookd.next/

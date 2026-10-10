@@ -47,6 +47,24 @@ function podAccMacExtraResources() {
     return []
   }
 }
+// pod-hookd, the warm hook server (native/pod-hookd); the file arrives with the pod/hookd branch.
+const podHookdConfig = join(repoRoot, 'config', 'pod-hookd-resources.cjs')
+const podHookd = existsSync(podHookdConfig) ? require(podHookdConfig) : null
+
+function podHookdMacExtraResources() {
+  if (!podHookd) {
+    return []
+  }
+  try {
+    return podHookd.podHookdMacExtraResources()
+  } catch (error) {
+    if (isRelease) {
+      throw error
+    }
+    console.warn(`[product] ${error.message}; this non-release build ships without pod-hookd`)
+    return []
+  }
+}
 const identity = JSON.parse(readFileSync(join(__dirname, 'identity.json'), 'utf8'))
 const arch = process.env.POD_ARCH || 'arm64'
 const isRelease = process.env.POD_RELEASE === '1'
@@ -140,7 +158,8 @@ module.exports = {
   files: [
     ...base.files,
     ...PRODUCT_FILE_EXCLUSIONS,
-    ...(podAcc ? podAcc.podAccFileExclusions : [])
+    ...(podAcc ? podAcc.podAccFileExclusions : []),
+    ...(podHookd ? podHookd.podHookdFileExclusions : [])
   ],
   protocols: [{ name: identity.displayName, schemes: identity.protocols }],
   extraMetadata: {
@@ -186,10 +205,15 @@ module.exports = {
       { from: 'LICENSE', to: 'ORCA-LICENSE.txt' },
       // Rollback of the opt-in terminal handover, runnable with the app's own Node.
       { from: 'product/scripts/restore-orca-terminals.mjs', to: 'restore-orca-terminals.mjs' },
-      ...podAccMacExtraResources()
+      ...podAccMacExtraResources(),
+      ...podHookdMacExtraResources()
     ],
     // claude-acc's launchd plists and Pod Menu.app go where SMAppService looks: Contents/Library
-    extraFiles: [...(base.mac.extraFiles ?? []), ...(podAcc ? podAcc.podAccMacExtraFiles() : [])],
+    extraFiles: [
+      ...(base.mac.extraFiles ?? []),
+      ...(podAcc ? podAcc.podAccMacExtraFiles() : []),
+      ...(podHookd ? podHookd.podHookdMacExtraFiles() : [])
+    ],
     // one key: a second signIgnore in this literal would silently replace the first
     signIgnore: [
       ...(base.mac.signIgnore ?? []),
