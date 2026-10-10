@@ -101,7 +101,7 @@ export class AgentSessionRecordStore {
     hostId: string
   }): AgentSessionRecordStore {
     const rows = loadAgentSessionStoreRows(args.journalDatabase.db)
-    const transactions = new AgentSessionStoreTransactions(args.journalDatabase, rows)
+    const transactions = new AgentSessionStoreTransactions(args.journalDatabase, rows, args.hostId)
     return new AgentSessionRecordStore(transactions, args.hostId)
   }
 
@@ -118,6 +118,9 @@ export class AgentSessionRecordStore {
     this.state.records.get(sessionId) ?? null
 
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
+
+  /** The runtimes this one replaced for a chat, as found at load; absent for a chat it began. */
+  replacedRuntime = (sessionId: string) => this.transactions.replacedRuntimes.get(sessionId)
 
   /** Every chat this host holds a row for, readable or not. */
   listHeldSessionIds = (): string[] => heldAgentSessionIds(this.state)
@@ -180,9 +183,7 @@ export class AgentSessionRecordStore {
     )
 
   /** A record this build cannot validate: readable as present, never grantable as a writer. */
-  isSessionUnreadable(sessionId: string): boolean {
-    return this.state.unreadableRecords.has(sessionId)
-  }
+  isSessionUnreadable = (sessionId: string): boolean => this.state.unreadableRecords.has(sessionId)
 
   listOperationRows = (): AgentSessionOperationRow[] => [...this.state.operations.values()]
 
