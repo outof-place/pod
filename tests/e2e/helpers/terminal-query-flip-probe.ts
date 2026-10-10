@@ -11,10 +11,14 @@ const PROGRAM = `
 const fs = require('fs')
 const [out, ready, go1, stop1, sent1, go2, sent2] = process.argv.slice(2)
 let replies = ''
-const record = () => fs.writeFileSync(out, JSON.stringify({
-  cpr: (replies.match(/\\x1b\\[\\d+;\\d+R/g) || []).length,
-  da1: (replies.match(/\\x1b\\[\\?[\\d;]*c/g) || []).length
-}))
+// Written then renamed, so the test never reads a half-written file.
+const record = () => {
+  fs.writeFileSync(out + '.tmp', JSON.stringify({
+    cpr: (replies.match(/\\x1b\\[\\d+;\\d+R/g) || []).length,
+    da1: (replies.match(/\\x1b\\[\\?[\\d;]*c/g) || []).length
+  }))
+  fs.renameSync(out + '.tmp', out)
+}
 process.stdin.setRawMode(true)
 process.stdin.on('data', (data) => { replies += data.toString('latin1'); record() })
 record()
