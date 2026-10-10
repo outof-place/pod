@@ -155,6 +155,8 @@ module.exports = {
       ...base.mac.extraResources,
       { from: 'product/identity.json', to: 'product-identity.json' },
       { from: 'LICENSE', to: 'ORCA-LICENSE.txt' },
+      // Rollback of the opt-in terminal handover, runnable with the app's own Node.
+      { from: 'product/scripts/restore-orca-terminals.mjs', to: 'restore-orca-terminals.mjs' },
       ...(podAcc ? podAcc.podAccMacExtraResources() : [])
     ],
     artifactName: `${identity.displayName}-\${version}-\${arch}-mac.\${ext}`,
