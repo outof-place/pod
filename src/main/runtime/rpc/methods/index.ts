@@ -57,6 +57,7 @@ import { AGENT_HOOK_METHODS } from './agent-hooks'
 import { AGENT_LAUNCH_METHODS } from './agent-launch'
 import { WORKSPACE_LAYOUT_METHODS } from './workspace-layout'
 import { POD_ORBSTACK_METHODS } from '../../../pod/orbstack/pod-orbstack-rpc-methods'
+import { POD_TERMINAL_LANE_METHODS } from './pod-terminal-lane'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -121,5 +122,6 @@ export const ALL_RPC_METHODS = [
   ...CLIENT_UI_METHODS,
   ...EMULATOR_METHODS,
   ...PAIRING_METHODS,
-  ...UPDATER_METHODS
+  ...UPDATER_METHODS,
+  ...POD_TERMINAL_LANE_METHODS
 ]
