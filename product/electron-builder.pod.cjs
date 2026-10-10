@@ -174,7 +174,6 @@ module.exports = {
   },
   mac: {
     ...base.mac,
-    signIgnore: [...(base.mac.signIgnore ?? []), ...PRODUCT_SIGN_IGNORE],
     extendInfo: {
       ...productUsageDescriptions(base.mac.extendInfo),
       ClaudeAccHost: claudeAccHost()
@@ -188,6 +187,14 @@ module.exports = {
       // Rollback of the opt-in terminal handover, runnable with the app's own Node.
       { from: 'product/scripts/restore-orca-terminals.mjs', to: 'restore-orca-terminals.mjs' },
       ...podAccMacExtraResources()
+    ],
+    // claude-acc's launchd plists and Pod Menu.app go where SMAppService looks: Contents/Library
+    extraFiles: [...(base.mac.extraFiles ?? []), ...(podAcc ? podAcc.podAccMacExtraFiles() : [])],
+    // one key: a second signIgnore in this literal would silently replace the first
+    signIgnore: [
+      ...(base.mac.signIgnore ?? []),
+      ...PRODUCT_SIGN_IGNORE,
+      ...(podAcc ? podAcc.podAccMacSignIgnore : [])
     ],
     artifactName: `${identity.displayName}-\${version}-\${arch}-mac.\${ext}`,
     target: isRelease
