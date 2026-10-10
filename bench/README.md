@@ -104,6 +104,17 @@ Inside a focused pane, `termload` runs one workload and then sends a primary dev
 query (`CSI c`). It stops the clock when the reply arrives: a terminal answers only after it has
 parsed every byte written before the query, which is the vtebench method.
 
+**What the reply proves.** The reply marks parse completion by whichever emulator owns query
+replies, not paint:
+
+- In Orca that is xterm.js in the renderer.
+- In Pod's native panes (with renderer parse-once) it is the main process's headless emulator,
+  neither xterm.js nor the Ghostty view.
+
+Paint has two measures of its own. `settle` is the time until the app's CPU is back at idle, which
+includes drawing. The visible run's keystroke-to-pixels time comes from ScreenCaptureKit. The reply
+string is recorded with every sample, so a result file shows which emulator answered.
+
 The workloads:
 
 - `seq 1 3000000`: 22.9 MB of short lines;
@@ -161,16 +172,36 @@ are excluded. Default settings, so cursor blink is on.
 
 ### 5. Code search for agents (`suites/search.mjs`)
 
-This runs on Portivo (`~/Documents/portivo-app/Untitled`, about 18.7k tracked files), with 24
-fixed queries: literals and regexes an agent would grep for, listed in the script. Each query runs
-as its own process, first one at a time and then all 24 at once. The second case is a fleet of
-agents searching in parallel: the result is the time until all 24 finish.
+**The repo.** Every search suite reads one Portivo checkout: a fresh local clone of the Portivo
+mirror `~/.local/share/portivo-repo` (about 18.6k files). `search/prepare.sh` makes it, and its
+SHA is recorded. The suites never write to it. The user's working checkout changes all the time,
+so it is not used.
 
-The OS file cache is warm, because a warm-up round runs first. Every engine must give the same
-number of matching lines per query, and any disagreement is recorded. The engines:
+`suites/search.mjs` runs 24 fixed queries: literals and regexes an agent would grep for, listed in
+the script. Each query runs as its own process, first one at a time and then all 24 at once. The
+second case is a fleet of agents searching in parallel, and the result is the time until all 24
+finish. The OS file cache is warm, because a warm-up round runs first. Every engine must give the
+same number of matching lines per query, and any disagreement is recorded. The engines:
 
-- ripgrep 15.2.0 (`--no-config`);
-- `og` from pod-search, once it has a runnable CLI.
+- ripgrep (`--no-config`);
+- `og` from pod-search, through its `ogctl` client, once its one-shot syntax is confirmed.
+
+`suites/ogd.mjs` measures Pod's indexed search (ogd) against ripgrep through the two harnesses on
+`pod/search-client`, each run 5 times, gated on load:
+
+- **Engine level** (`src/main/pod/search/ogd-ripgrep-parity.real-ogd.test.ts`): 8 text queries and
+  2 file listings, each through ogd and through Orca's bundled ripgrep. That rg is what Orca users
+  get; og forks rg 15.2.0. Each value is the median of 5 runs, and every result is diffed, so a
+  timing run is also a correctness check.
+- **In app** (`tests/e2e/pod-native-search.spec.ts`): headless Pod UI. It times quick open and
+  text search from the request to the first result row, on rg and on ogd, with gitignored files
+  shown and hidden.
+
+Both harnesses register the repo with ogd and wait for the index before timing starts, so indexing
+time is not in the numbers. The ogd binary is built by `search/prepare.sh` from a pinned
+pod-search SHA (`cargo build --release --locked --features pcre2`), in its own clone and through
+claude-acc's build scheduler. The harnesses come from a pinned `pod/search-client` worktree. All
+three SHAs are in `run.json` and in the ogd suite's `versions`.
 
 ### 6. Source Control status poll (`suites/git-status.mjs`)
 
@@ -204,6 +235,17 @@ process table with sysctl:
   `devname`;
 - that terminal's process rows: `ps -o pid=,ppid=,pgid=,tpgid=,stat=,command= -t TTY` vs
   `KERN_PROC_TTY` plus `KERN_PROCARGS2`.
+
+`ps`'s cost depends on the machine:
+
+- **Process and pty counts.** The `tty=` column runs one /dev scan per tty-bearing row, so its
+  cost follows the number of open terminals. Every sample records how many processes there are
+  and how many sit on a tty.
+- **Column variants.** The suite also times `ps -axo` without `tty=`, with `tty=` only, and with
+  `pid=` only, to show where the time goes.
+- **An agent fleet's ptys.** In the quiet window the agents are parked and few ptys are open.
+  `polling.mjs --extra-ptys 80` repeats every measurement with 80 idle ptys added, as an agent
+  fleet keeps open, in a suite of its own (`polling-ptys80`).
 
 The C sysctl versions are a reference implementation in `tools/ttyprobe.c`. What Pod ships is its
 process-info addon ([stablyai/orca#26985](https://github.com/stablyai/orca/pull/26985)). The suite
@@ -243,8 +285,9 @@ Mac:
 - **Virtual display: works for visibility.** CoreGraphics' private `CGVirtualDisplay` API, the one
   DeskPad uses, is present on macOS 27: `.build/bin/vdisplay --probe`. `vdisplay --create` adds a
   120 Hz HiDPI virtual monitor that windows can be moved to, and ScreenCaptureKit can capture it.
-  Creating one reconfigures the display arrangement, which the user sees. So it runs only in the
-  final window, as a 20 s check that writes `vdisplay.json`.
+  Creating one moves the user's display layout, so the final run skips it. Only
+  `run-final.sh --with-vdisplay` runs it, as a 20 s check that writes `vdisplay.json`. The finding
+  stays at the API level: present and probed, never created on this Mac.
 - **Keyboard input: does not work without focus.** `keylat --probe-post` posts a key with
   `CGEventPostToPid` to its own window in an inactive, Dock-less process. The window cannot become
   key, and the key never arrives. AppKit routes keys only to the key window of the active app.
@@ -255,21 +298,24 @@ Mac:
 
 ## Reproduce
 
-The final run is one command. It takes about 70 minutes on a quiet Mac, and its last 20 minutes
-take the desktop and keyboard focus:
+The final run is one command. It takes about 90 minutes on a quiet Mac, plus the search builds of
+step 1, and its last 20 minutes take the desktop and keyboard focus:
 
 ```sh
-bench/run-final.sh --pod /path/to/Pod.app     # preflight, every suite, claude-acc --fresh, vdisplay, visible run, summary
+bench/run-final.sh --pod /path/to/Pod.app --pod-commit <main SHA> \
+  --og-sha <pod-search SHA> --search-client-sha <pod/search-client SHA>
 ```
 
 The steps, in order:
 
+1. `search/prepare.sh` pins and builds the search inputs. These builds are not measured.
+   `run.json` records the Pod build, its commit and those inputs.
 1. `suites/preflight.mjs`: every subject launches and gives one synced terminal workload.
-2. polling, git-status, search, startup, panes and throughput.
-3. `claude-acc.mjs --fresh`.
-4. The virtual display check.
-5. `latency.mjs --confirm-visible --throughput`.
-6. `summarize.mjs` and the Markdown tables.
+1. polling (also with 80 extra ptys), git-status, search, ogd, startup, panes and throughput.
+1. `claude-acc.mjs --fresh`.
+1. The virtual display check, only with `--with-vdisplay`.
+1. `latency.mjs --confirm-visible --throughput`.
+1. `summarize.mjs` and the Markdown tables.
 
 `--no-visible` stops before the desktop is needed.
 
@@ -314,28 +360,30 @@ They are committed on `pod/bench` together with `summary.json`.
 
 `summarize.mjs` writes it (`schemaVersion` 2). Top level:
 
-| Field                    | What it holds                                                                  |
-| ------------------------ | ------------------------------------------------------------------------------ |
-| `hardware`, `machine`    | model, chip, cores, memory, macOS build, power source                          |
-| `methodology`            | this file's path and URL                                                       |
-| `maxLoad`, `aggregation` | the load gate; median = average of the middle pair, p95 = nearest rank         |
-| `podStack`               | `origin/main:pod-stack.json` at summary time: which topic branches Pod carries |
-| `caveats`                | caveats that apply to every row                                                |
-| `groups`                 | `pod` (Pod vs Orca and other terminals) and `claude-acc`                       |
-| `suites.<name>`          | file, versions, config and suite-wide caveats                                  |
+| Field                    | What it holds                                                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `hardware`, `machine`    | model, chip, cores, memory, macOS build, power source                                                            |
+| `methodology`            | this file's path and URL                                                                                         |
+| `maxLoad`, `aggregation` | the load gate; median = average of the middle pair, p95 = nearest rank                                           |
+| `run`                    | `run.json`: the Pod build, the main commit it came from, the search inputs' SHAs                                 |
+| `podStack`               | `pod-stack.json` at that Pod commit (`origin/main` without run.json): the topic branches the benched Pod carries |
+| `caveats`                | caveats that apply to every row                                                                                  |
+| `groups`                 | `pod` (Pod vs Orca and other terminals) and `claude-acc`                                                         |
+| `suites.<name>`          | file, versions, config and suite-wide caveats                                                                    |
 
 Each `metrics[]` row has these fields:
 
-| Field                                 | What it holds                                                 |
-| ------------------------------------- | ------------------------------------------------------------- |
-| `id`, `suite`, `group`                | e.g. `throughput.cat.wall.pod-native`, `throughput`, `pod`    |
-| `subject`, `metric`, `unit`, `better` | `better` is `lower` or `higher`                               |
-| `n`, `median`, `p95`, `min`, `max`    | `n` and `median` are null when the source gave only a range   |
-| `extra`                               | secondary numbers (settle time, RSS, p90, notes)              |
-| `conditions`                          | how it was measured                                           |
-| `provenance`                          | `{ kind: "fresh" \| "historical", date, source, note }`       |
-| `branch`, `upstream`, `inPodStack`    | where a change comes from, and whether Pod's stack carries it |
-| `caveats`                             | strings to print with the number                              |
+| Field                                 | What it holds                                                             |
+| ------------------------------------- | ------------------------------------------------------------------------- |
+| `id`, `suite`, `group`                | e.g. `throughput.cat.wall.pod-native`, `throughput`, `pod`                |
+| `subject`, `metric`, `unit`, `better` | `better` is `lower` or `higher`                                           |
+| `n`, `median`, `p95`, `min`, `max`    | `n` and `median` are null when the source gave only a range               |
+| `extra`                               | secondary numbers (settle time, RSS, p90, notes)                          |
+| `conditions`                          | how it was measured                                                       |
+| `provenance`                          | `{ kind: "fresh" \| "historical", date, source, note }`                   |
+| `branch`, `upstream`, `inPodStack`    | where a change comes from, and whether the benched Pod's stack carries it |
+| `podCommit`                           | on every `pod` group row: the main commit of the Pod build it measured    |
+| `caveats`                             | strings to print with the number                                          |
 
 `comparisons[]` rows have:
 
