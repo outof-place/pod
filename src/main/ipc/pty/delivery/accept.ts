@@ -15,6 +15,10 @@ import {
   getDroppedSynchronizedOutputRendererData
 } from './pending'
 import { sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
+import {
+  isRendererPtyViewGatedForIngestion,
+  settlePendingViewGateStamp
+} from './pending-view-gate-stamp'
 import { shouldSendInteractiveOutputNow } from './interactive'
 import { requestDeliveryResyncForGatedPty } from './accounting'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
@@ -86,17 +90,19 @@ export function acceptPtyDataForRenderer(
   if (projection?.desktopSpan) {
     session.sourceCreditPendingPtys.add(payload.id)
   }
+  const viewGatedAtIngestion = isRendererPtyViewGatedForIngestion(session, payload.id)
   const pending = appendPendingPtyData(
     session,
     payload.id,
-    session.pendingData.get(payload.id),
+    settlePendingViewGateStamp(session, payload.id, viewGatedAtIngestion),
     payload.data,
     startSeq,
     preservesSeq,
     containsBackgroundOutput,
     rawLength,
     payload.transformed === true,
-    projectionId
+    projectionId,
+    viewGatedAtIngestion
   )
   const shouldEmitPendingCapRestoreMarker =
     pending.droppedOutput === true &&
@@ -147,7 +153,8 @@ export function acceptPtyDataForRenderer(
           ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
           ...(pending.droppedOutput === true ? { droppedOutput: true } : {})
         },
-        pending.projectionAdmissionIds
+        pending.projectionAdmissionIds,
+        pending.viewGatedAtIngestion === true
       )
     } finally {
       session.updateProducerFlowControl(payload.id)
