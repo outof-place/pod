@@ -15,7 +15,7 @@ afterEach(() => {
 })
 
 /** An installed Pod (payload 1.31.0, owner.json saying pod) whose bundle carries one agent. */
-function installedPod(owner = 'pod') {
+function installedPod(owner = 'pod', ownedVersion = '1.31.0') {
   const root = mkdtempSync(join(tmpdir(), 'pod-acc-supervisor-'))
   roots.push(root)
   const app = join(root, 'Pod.app')
@@ -32,7 +32,7 @@ function installedPod(owner = 'pod') {
   mkdirSync(join(home, ACC_STATE_DIR), { recursive: true })
   writeFileSync(
     join(home, ACC_STATE_DIR, 'owner.json'),
-    JSON.stringify({ owner, version: '1.31.0', app })
+    JSON.stringify({ owner, version: ownedVersion, app })
   )
   const profile = join(home, 'Library/Application Support/Pod')
   return {
@@ -234,6 +234,66 @@ describe('claude-acc supervisor', () => {
     expect(log).toHaveBeenCalledWith("claude-acc: handed to brew, removing Pod's services")
     supervisor.stop()
   })
+
+  it.each([
+    ['restarts', 'enabled', true],
+    ['leaves', 'not-registered', false]
+  ] as const)(
+    '%s the menu helper after installing a new payload when launchd ran it already (%s)',
+    async (_verb, helperStatus, restarts) => {
+      const pod = installedPod('pod', '1.30.3')
+      const app = appBundlePath(pod.execPath)
+      mkdirSync(join(app, 'Contents', 'Library', 'LoginItems', 'Pod Menu.app'), { recursive: true })
+      const statuses: Record<string, Electron.LoginItemSettings['status']> = {
+        'com.filip.claude-acc.menubar': helperStatus
+      }
+      const set = vi.fn((settings: Electron.Settings) => {
+        statuses[settings.serviceName ?? ''] = settings.openAtLogin ? 'enabled' : 'not-registered'
+      })
+      const loginItems: LoginItemApi = {
+        getLoginItemSettings: (o) => ({
+          ...fakeLoginItems().api.getLoginItemSettings(o),
+          status: statuses[o?.serviceName ?? ''] ?? 'not-registered'
+        }),
+        setLoginItemSettings: set
+      }
+      const run = vi.fn(async (spec: ProcessSpec) => {
+        if (spec.program === '/bin/bash') {
+          // what setup.sh does on success: Pod owns the new version
+          writeFileSync(
+            join(pod.home, ACC_STATE_DIR, 'owner.json'),
+            JSON.stringify({ owner: 'pod', version: '1.31.0', app })
+          )
+          return result(0)
+        }
+        return result(spec.program === '/usr/bin/pgrep' ? 1 : 0)
+      })
+      const supervisor = startPodAccSupervisor({
+        config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
+        ...pod,
+        platform: 'darwin',
+        env: {},
+        run,
+        loginItems,
+        appId: 'codes.pod.app',
+        setTrayYield: () => {},
+        syncTray: () => {},
+        log: () => {}
+      })
+      await expect(supervisor.lifecycle).resolves.toMatchObject({ status: 'installed' })
+      await supervisor.services
+      const programs = run.mock.calls.map(([spec]) =>
+        [spec.program, ...(spec.args ?? [])].join(' ')
+      )
+      expect(programs.includes('/usr/bin/pkill -x ClaudeAcc')).toBe(restarts)
+      expect(
+        programs.includes(
+          `/usr/bin/open -g ${join(app, 'Contents/Library/LoginItems/Pod Menu.app')}`
+        )
+      ).toBe(restarts)
+      supervisor.stop()
+    }
+  )
 
   it('never touches launchd services when the lifecycle skipped', async () => {
     const loginItems = fakeLoginItems()

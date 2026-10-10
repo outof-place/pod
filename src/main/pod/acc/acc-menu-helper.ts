@@ -17,3 +17,16 @@ export async function isAccMenuHelperRunning(
     return false
   }
 }
+
+/**
+ * Puts the bundled helper's new binary to work after an update: a login item launchd already
+ * runs keeps its old process through a re-registration, so it is ended and opened again.
+ */
+export async function restartAccMenuHelper(
+  run: (spec: ProcessSpec) => Promise<ProcessResult>,
+  helperApp: string
+): Promise<void> {
+  await run({ program: '/usr/bin/pkill', args: ['-x', ACC_MENU_HELPER_PROCESS], timeoutMs: 5000 })
+  // -g: in the background, Pod keeps the focus
+  await run({ program: '/usr/bin/open', args: ['-g', helperApp], timeoutMs: 10_000 })
+}
