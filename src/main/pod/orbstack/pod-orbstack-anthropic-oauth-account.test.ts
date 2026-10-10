@@ -121,6 +121,72 @@ describe('sandbox OAuth account selection', () => {
   })
 })
 
+describe('sandbox OAuth launch binding', () => {
+  function routed(initial: string | null | Error) {
+    let home: string | null | Error = initial
+    const reads = vi.fn(async (target: { configDir: string | null }) =>
+      item(`fake-token-for-${target.configDir ?? 'system'}`, Date.now() + 3_600_000)
+    )
+    const source = createClaudeOAuthSandboxCredentials({
+      target: () =>
+        resolveMacClaudeLoginTarget({
+          router: {
+            selectedHome: () => {
+              if (home instanceof Error) {
+                throw home
+              }
+              return home
+            }
+          },
+          env: {}
+        }),
+      read: reads
+    })
+    return { source, reads, select: (next: string | null | Error) => (home = next) }
+  }
+
+  it('keeps a launched sandbox on the account its launch resolved, like a Mac pane', async () => {
+    const { source, select } = routed('/profiles/a')
+    source.launched({ machine: 'pod-a-sbx' })
+    select('/profiles/b')
+    expect(await source.authHeaders({ machine: 'pod-a-sbx' })).toEqual({
+      authorization: 'Bearer fake-token-for-/profiles/a'
+    })
+    // A sandbox launched after the switch, or this one relaunched, gets the new account.
+    source.launched({ machine: 'pod-b-sbx' })
+    expect(await source.authHeaders({ machine: 'pod-b-sbx' })).toEqual({
+      authorization: 'Bearer fake-token-for-/profiles/b'
+    })
+    source.launched({ machine: 'pod-a-sbx' })
+    expect(await source.authHeaders({ machine: 'pod-a-sbx' })).toEqual({
+      authorization: 'Bearer fake-token-for-/profiles/b'
+    })
+  })
+
+  it('keeps refusing a sandbox launched while the routed account folder was missing', async () => {
+    const { source, select } = routed(new Error("The selected Claude account's folder is missing."))
+    source.launched({ machine: 'pod-a-sbx' })
+    select('/profiles/b')
+    await expect(source.authHeaders({ machine: 'pod-a-sbx' })).rejects.toThrow(
+      "The selected Claude account's folder is missing."
+    )
+  })
+
+  it('drops every token from memory once the last sandbox is gone', async () => {
+    const { source, reads } = routed(null)
+    source.launched({ machine: 'pod-a-sbx' })
+    source.launched({ machine: 'pod-b-sbx' })
+    await source.authHeaders({ machine: 'pod-a-sbx' })
+    source.released({ machine: 'pod-a-sbx' })
+    await source.authHeaders({ machine: 'pod-b-sbx' })
+    expect(reads).toHaveBeenCalledTimes(1)
+    source.released({ machine: 'pod-b-sbx' })
+    source.launched({ machine: 'pod-c-sbx' })
+    await source.authHeaders({ machine: 'pod-c-sbx' })
+    expect(reads).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('sandbox OAuth source footprint', () => {
   it('starts no timer and reads nothing while no sandbox request asks for a credential', async () => {
     vi.useFakeTimers()
@@ -148,7 +214,7 @@ describe('sandbox OAuth source footprint', () => {
       target: () => ({ account: 'system', configDir: null })
     })
     await expect(source.authHeaders(scope)).rejects.toThrow(SandboxCredentialError)
-    source.rejected()
+    source.rejected({ machine: 'pod-x-sbx' })
     keychainRead.mockResolvedValue(null)
     await expect(source.authHeaders(scope)).rejects.toThrow(SandboxCredentialError)
     expect(network).not.toHaveBeenCalled()
