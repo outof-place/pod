@@ -42,8 +42,9 @@ Manifest:
       { "branch": "some/topic", "upstream": "https://github.com/stablyai/orca/pull/1", "base": "<ref>" }
     ]
   }
-  Each entry needs exactly one of "upstream" or "forkOnly". "base" is optional: an extra ref
-  whose commits are excluded, for a topic branch cut from something other than Orca main.
+  Each entry needs exactly one of "upstream" or "forkOnly". "base" is optional: a ref, or a list
+  of refs, whose commits are excluded, for a topic branch cut from something other than Orca main.
+  "ref" is optional: a commit to stack instead of the branch tip, to pin a snapshot.
   "note" is free text for people and is ignored.
 EOF
 }
@@ -121,8 +122,11 @@ m.stack.forEach((e, i) => {
   if (hasUp && !/^https:\/\/github\.com\/stablyai\/orca\/pull\/\d+$/.test(e.upstream))
     fail(where + " (" + e.branch + "): \"upstream\" must be a stablyai/orca pull request URL")
   const value = hasUp ? e.upstream : e.forkOnly
-  if (/[\t\n]/.test(value + e.branch + (e.base || ""))) fail(where + " contains a tab or newline")
-  lines.push([e.branch, hasUp ? "Upstream" : "Fork-only", value, e.base || "-"].join("\t"))
+  const bases = e.base === undefined ? [] : Array.isArray(e.base) ? e.base : [e.base]
+  if (bases.some((b) => typeof b !== "string" || !b || /\s/.test(b))) fail(where + " (" + e.branch + "): \"base\" must be a ref or a list of refs")
+  if (e.ref !== undefined && (typeof e.ref !== "string" || !e.ref || /\s/.test(e.ref))) fail(where + " (" + e.branch + "): \"ref\" must be a commit")
+  if (/[\t\n]/.test(value + e.branch)) fail(where + " contains a tab or newline")
+  lines.push([e.branch, hasUp ? "Upstream" : "Fork-only", value, bases.join(" ") || "-", e.ref || "-"].join("\t"))
 })
 console.log(lines.join("\n"))
 ' "$manifest")
@@ -187,7 +191,7 @@ printf '\nPod stack: %s on Orca %s (%s, %s), topic branches from %s\n\n' "$branc
   "$(TZ=UTC0 git log -1 --date=format-local:'%Y-%m-%d %H:%M UTC' --format=%cd "$base_sha")" "$source_kind"
 
 index=0
-while IFS=$'\t' read -r -u 3 topic key value base; do
+while IFS=$'\t' read -r -u 3 topic key value base pin; do
   [ -n "$topic" ] || continue
   index=$((index + 1))
   note=''
@@ -202,6 +206,10 @@ while IFS=$'\t' read -r -u 3 topic key value base; do
   else
     ref_sha=$local_sha
   fi
+  if [ "$pin" != - ]; then
+    ref_sha=$(git rev-parse --verify --quiet "$pin^{commit}") || die "$topic: pinned ref $pin not found"
+    note=" (pinned)"
+  fi
   [ -n "$ref_sha" ] || die "$topic: no such branch locally or on origin"
   if [ -n "$local_sha" ] && [ -n "$origin_sha" ] && [ "$local_sha" != "$origin_sha" ]; then
     note=" (local $topic differs from origin: $(git rev-list --left-right --count "$local_sha...$origin_sha" | awk '{print $1 " ahead, " $2 " behind"}'))"
@@ -210,7 +218,11 @@ while IFS=$'\t' read -r -u 3 topic key value base; do
 
   if [ "$key" = Upstream ]; then other_key=Fork-only; else other_key=Upstream; fi
   exclude=("^$upstream_main" "^$base_sha")
-  [ "$base" = - ] || exclude+=("^$(git rev-parse --verify "$base^{commit}")")
+  if [ "$base" != - ]; then
+    for base_ref in $base; do
+      exclude+=("^$(git rev-parse --verify "$base_ref^{commit}")")
+    done
+  fi
 
   # Revs go through stdin: a thousand tag exclusions overflow a Windows command line.
   revs=$(printf '%s\n' "$ref_sha" "${exclude[@]}"; [ -z "$orca_tags" ] || printf '%s\n' "$orca_tags" | sed 's/^/^/')
