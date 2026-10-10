@@ -178,6 +178,15 @@ test('a Claude launch runs in the worktree sandbox and its hook status reaches P
   await orcaPage.evaluate(() => window.__store?.getState().openSettingsPage())
   await orcaPage.getByRole('button', { name: 'OrbStack', exact: true }).click()
   const section = orcaPage.locator('#pod-orbstack')
+  // The Mac's Claude Code login is opt-in: off until the user flips it, and the switch persists.
+  const loginSwitch = section.getByRole('switch', {
+    name: /Let sandboxed agents use this Mac's Claude Code login/
+  })
+  await expect(loginSwitch).not.toBeChecked()
+  await loginSwitch.click()
+  await expect(loginSwitch).toBeChecked()
+  await loginSwitch.click()
+  await expect(loginSwitch).not.toBeChecked()
   const row = section.locator(
     `[data-testid="pod-orbstack-worktree-row"][data-worktree-path="${repoPath}"]`
   )
