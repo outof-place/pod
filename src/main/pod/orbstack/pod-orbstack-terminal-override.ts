@@ -38,6 +38,21 @@ export function setPodSandboxRelayStarter(starter: SandboxRelayStarter | null): 
 
 /** Per-launch override: `1` runs this Claude launch in the sandbox, `0` keeps it on the Mac. */
 export const POD_ORBSTACK_SANDBOX_LAUNCH_ENV = 'POD_ORBSTACK_SANDBOX'
+
+/**
+ * An agent tab the runtime builds (`session.tabs.createTerminal {agent}`) gets its env from the
+ * startup plan, not the request. This carries the caller's sandbox choice over, and nothing else.
+ */
+export function withPodSandboxLaunchChoice(
+  planEnv: Record<string, string> | undefined,
+  requestEnv: Record<string, string> | undefined
+): Record<string, string> | undefined {
+  const choice = requestEnv?.[POD_ORBSTACK_SANDBOX_LAUNCH_ENV]
+  if (choice !== '0' && choice !== '1') {
+    return planEnv
+  }
+  return { ...planEnv, [POD_ORBSTACK_SANDBOX_LAUNCH_ENV]: choice }
+}
 /**
  * Why a prefix: the pane's Mac shell keeps its own ORCA_AGENT_HOOK_TOKEN and no ANTHROPIC_API_KEY;
  * `POD_SANDBOX_VM_<NAME>` reaches the VM through ORBENV and becomes `<NAME>` only there.
