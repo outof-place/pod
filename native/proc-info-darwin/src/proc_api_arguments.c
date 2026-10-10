@@ -17,31 +17,26 @@ int read_process_pid_argument(napi_env env, napi_callback_info info, int32_t *pi
   return 1;
 }
 
-proc_tty_argument_status read_process_tty_argument(
-    napi_env env, napi_callback_info info, size_t index, int optional, char *out, size_t size) {
+int read_process_tty_argument(napi_env env, napi_callback_info info, char *out, size_t size) {
   size_t argc = 2;
   napi_value argv[2];
-  napi_valuetype type = napi_undefined;
   size_t length = 0;
-  if (index >= argc || napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok) {
-    goto invalid;
-  }
-  if (argc > index && napi_typeof(env, argv[index], &type) != napi_ok) {
-    goto invalid;
-  }
-  if (optional && type == napi_undefined) {
-    return PROC_TTY_ARGUMENT_ABSENT;
-  }
-  if (type != napi_string ||
-      napi_get_value_string_utf8(env, argv[index], NULL, 0, &length) != napi_ok ||
+  if (napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok || argc < 2 ||
+      napi_get_value_string_utf8(env, argv[1], NULL, 0, &length) != napi_ok ||
       length == 0 || length >= size ||
-      napi_get_value_string_utf8(env, argv[index], out, size, &length) != napi_ok ||
+      napi_get_value_string_utf8(env, argv[1], out, size, &length) != napi_ok ||
       strlen(out) != length) {
     goto invalid;
   }
-  return PROC_TTY_ARGUMENT_PRESENT;
+  const char *name = strncmp(out, "/dev/", 5) == 0 ? out + 5 : out;
+  if (*name == '\0' || strchr(name, '/') != NULL || strchr(name, '\\') != NULL ||
+      strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+    goto invalid;
+  }
+  memmove(out, name, strlen(name) + 1);
+  return 1;
 
 invalid:
   napi_throw_type_error(env, "ORCA_PROC_INFO_ARGUMENT", "expected a terminal name");
-  return PROC_TTY_ARGUMENT_ERROR;
+  return 0;
 }

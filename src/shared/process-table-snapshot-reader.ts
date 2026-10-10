@@ -1,7 +1,6 @@
 import { execFile as execFileCb } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { promisify } from 'node:util'
-import { readNativeFullProcessTable, readNativeShellForegroundRows } from './native-process-table'
 import {
   PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS,
   PS_ARGS,
@@ -273,10 +272,6 @@ async function captureProcessTable(args: readonly string[]): Promise<string> {
 
 const processTableReader = createProcessTableSnapshotReader<ProcessTableCapture>({
   runPs: async () => {
-    const native = await readNativeFullProcessTable()
-    if (native) {
-      return { lenient: () => native, strict: () => native }
-    }
     const stdout = await captureProcessTable(PS_ARGS)
     const baseCapture = createProcessTableCapture(stdout)
     const startTimesByPid = await readLinuxProcessStartTimes(baseCapture.lenient())
@@ -288,9 +283,7 @@ const processTableReader = createProcessTableSnapshotReader<ProcessTableCapture>
 // Its own reader, not a column-set flag on the shared one: terminal-name resolution dominates
 // macOS capture time, and a shell proof must not queue behind a full capture it cannot use.
 const shellForegroundReader = createProcessTableSnapshotReader<ProcessTableRow[]>({
-  runPs: async () =>
-    (await readNativeShellForegroundRows()) ??
-    parseShellForegroundRows(await captureProcessTable(SHELL_FOREGROUND_PS_ARGS)),
+  runPs: async () => parseShellForegroundRows(await captureProcessTable(SHELL_FOREGROUND_PS_ARGS)),
   now: () => Date.now()
 })
 

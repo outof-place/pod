@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import {
   setNativeProcessInfoForTests,
-  type NativeProcessRow
+  type NativeProcessForegroundRow
 } from '../../shared/native-process-info'
 import {
   getPosixPtyForegroundGroup,
@@ -231,20 +231,16 @@ describe('process table lookup', () => {
 })
 
 describe('signalPosixPtyForegroundGroup with the native process-info addon', () => {
-  const rows: NativeProcessRow[] = [
-    { pid: 84644, ppid: 1, pgid: 84644, tpgid: 84985, stat: 'Ss', tty: 'ttys318', startTime: '' },
-    { pid: 4242, ppid: 1, pgid: 4242, tpgid: 4242, stat: 'S', tty: 'ttys002', startTime: '' }
+  const rows: NativeProcessForegroundRow[] = [
+    { pid: 84644, tpgid: 84985, tty: 'ttys318' },
+    { pid: 4242, tpgid: 4242, tty: 'ttys002' }
   ]
 
   beforeEach(() => {
     vi.mocked(execFileSync).mockClear()
     resetPosixPtyForegroundGroupOwnRowCache()
     setNativeProcessInfoForTests({
-      listProcesses: () => rows,
-      listProcessesWithCommands: () => [],
-      readProcess: (pid) => rows.find((row) => row.pid === pid) ?? null,
-      listTerminalProcesses: () => null,
-      readProcessCwd: () => null
+      readProcessForegroundGroup: (pid) => rows.find((row) => row.pid === pid) ?? null
     })
   })
 
@@ -280,14 +276,10 @@ describe('signalPosixPtyForegroundGroup with the native process-info addon', () 
 
   it('rechecks its own terminal membership when the supplied PTY changes', () => {
     setNativeProcessInfoForTests({
-      listProcesses: () => rows,
-      listProcessesWithCommands: () => [],
-      readProcess: (pid, expectedTty) => {
+      readProcessForegroundGroup: (pid, expectedTty) => {
         const row = rows.find((candidate) => candidate.pid === pid)
         return row ? { ...row, tty: expectedTty === `/dev/${row.tty}` ? row.tty : '??' } : null
-      },
-      listTerminalProcesses: () => null,
-      readProcessCwd: () => null
+      }
     })
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
     const fallback = vi.fn()

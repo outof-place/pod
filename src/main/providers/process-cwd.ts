@@ -1,6 +1,5 @@
 import { execFile as execFileCb } from 'node:child_process'
 import { readlink } from 'node:fs/promises'
-import { getNativeProcessInfo } from '../../shared/native-process-info'
 
 /**
  * Resolve the current working directory of a local process by pid.
@@ -10,7 +9,7 @@ import { getNativeProcessInfo } from '../../shared/native-process-info'
  * is not a pattern used in this repo. The function is short and pure, and
  * the duplication is cheaper than reshaping both bundle graphs.
  *
- * Tries `/proc/<pid>/cwd` on Linux, then proc_pidinfo on macOS, falling back to `lsof -d cwd`.
+ * Tries `/proc/<pid>/cwd` on Linux, falls back to `lsof -d cwd` on macOS.
  * Returns `''` when neither works (including Windows, where `/proc` is
  * absent and `lsof` is not native).
  *
@@ -85,11 +84,6 @@ async function doResolve(pid: number): Promise<string> {
     /* fall through */
   }
 
-  const nativeCwd = readNativeProcessCwd(pid)
-  if (nativeCwd) {
-    return nativeCwd
-  }
-
   try {
     // Why: `-a` ANDs the -p and -d filters. Without it, macOS lsof ORs them
     // and emits cwd records for every process on the system, so the n-line
@@ -110,15 +104,6 @@ async function doResolve(pid: number): Promise<string> {
   }
 
   return ''
-}
-
-/** macOS: proc_pidinfo answers in ~1 µs where `lsof` forks for 40-120 ms (#24889). */
-function readNativeProcessCwd(pid: number): string | null {
-  try {
-    return getNativeProcessInfo()?.readProcessCwd(pid) ?? null
-  } catch {
-    return null
-  }
 }
 
 function readCwdWithLsof(pid: number): Promise<string> {

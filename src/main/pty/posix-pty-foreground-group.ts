@@ -52,7 +52,7 @@ function readNativeProcessRow(pid: number, ptsName: string): string | null {
     if (!native) {
       return null
     }
-    const row = native.readProcess(pid, ptsName)
+    const row = native.readProcessForegroundGroup(pid, ptsName)
     return row ? `${row.pid} ${row.tpgid} ${row.tty}` : ''
   } catch {
     return null

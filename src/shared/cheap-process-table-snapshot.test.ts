@@ -11,7 +11,6 @@ import {
   resetCheapProcessTableSnapshotForTests
 } from './cheap-process-table-snapshot-reader'
 import { PS_TIMEOUT_MS } from './process-table-snapshot-reader'
-import { setNativeProcessInfoForTests, type NativeProcessInfo } from './native-process-info'
 import {
   CHEAP_PS_ARGS,
   PS_ARGS,
@@ -144,73 +143,5 @@ describe('getCheapProcessTableSnapshot', () => {
       timedOut: false
     })
     await expect(getCheapProcessTableSnapshot()).rejects.toMatchObject({ reason: 'ps_exit_1' })
-  })
-})
-
-describe('getCheapProcessTableSnapshot with the native process-info addon', () => {
-  function installNative(listProcesses: NativeProcessInfo['listProcesses']): void {
-    setNativeProcessInfoForTests({
-      listProcesses,
-      listProcessesWithCommands: () => [],
-      readProcess: () => null,
-      listTerminalProcesses: () => null,
-      readProcessCwd: () => null
-    })
-  }
-
-  beforeEach(() => {
-    runProcessMock.mockReset()
-    resetCheapProcessTableSnapshotForTests()
-  })
-
-  afterEach(() => {
-    setNativeProcessInfoForTests(undefined)
-  })
-
-  it('answers from sysctl with the same row shape, without forking ps', async () => {
-    const calls = installPs(' 7 1 7 7 S\n')
-    installNative(() => [
-      {
-        pid: 4243,
-        ppid: 4242,
-        pgid: 4243,
-        tpgid: 4243,
-        stat: 'R+',
-        tty: 'ttys003',
-        startTime: 'Thu Sep  3 16:02:05 2026'
-      },
-      { pid: 4244, ppid: 4243, pgid: 4243, tpgid: 4243, stat: 'R+', tty: 'ttys003', startTime: '' }
-    ])
-
-    await expect(getCheapProcessTableSnapshot()).resolves.toEqual([
-      {
-        pid: 4243,
-        ppid: 4242,
-        pgid: 4243,
-        tpgid: 4243,
-        stat: 'R+',
-        startTime: 'Thu Sep  3 16:02:05 2026'
-      },
-      // An unformatted start stays absent, as ps leaves it, so the fingerprint refuses it.
-      { pid: 4244, ppid: 4243, pgid: 4243, tpgid: 4243, stat: 'R+' }
-    ])
-    expect(calls).toEqual([])
-  })
-
-  it('falls back to ps when the addon throws or reads nothing', async () => {
-    const calls = installPs(' 7 1 7 7 S\n')
-    installNative(() => {
-      throw new Error('sysctl(KERN_PROC_ALL) failed: Cannot allocate memory')
-    })
-    await expect(getCheapProcessTableSnapshot()).resolves.toEqual([
-      { pid: 7, ppid: 1, pgid: 7, tpgid: 7, stat: 'S' }
-    ])
-    resetCheapProcessTableSnapshotForTests()
-    installNative(() => [])
-    await getCheapProcessTableSnapshot()
-    expect(calls).toEqual([
-      ['ps', ...CHEAP_PS_ARGS],
-      ['ps', ...CHEAP_PS_ARGS]
-    ])
   })
 })

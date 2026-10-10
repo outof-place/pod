@@ -73,32 +73,4 @@ describe('resolveProcessCwd', () => {
     await expect(cwdPromise).resolves.toBe('')
     expect(killMock).toHaveBeenCalled()
   })
-
-  it('asks proc_pidinfo before forking lsof on macOS', async () => {
-    readlinkMock.mockRejectedValue(new Error('proc unavailable'))
-    const native = await import('../../shared/native-process-info')
-    native.setNativeProcessInfoForTests({
-      listProcesses: () => [],
-      listProcessesWithCommands: () => [],
-      readProcess: () => null,
-      listTerminalProcesses: () => null,
-      readProcessCwd: (pid) => (pid === 42 ? '/Users/me/repo' : null)
-    })
-    try {
-      const { resolveProcessCwd } = await import('./process-cwd')
-
-      await expect(resolveProcessCwd(42)).resolves.toBe('/Users/me/repo')
-      expect(execFileMock).not.toHaveBeenCalled()
-
-      // Another user's process: the kernel refuses, so lsof still gets its say.
-      execFileMock.mockImplementation((_file, _args, _options, callback) => {
-        callback(null, 'p43\nfcwd\nn/Users/other\n')
-        return { kill: vi.fn() }
-      })
-      await expect(resolveProcessCwd(43)).resolves.toBe('/Users/other')
-      expect(execFileMock).toHaveBeenCalledTimes(1)
-    } finally {
-      native.setNativeProcessInfoForTests(undefined)
-    }
-  })
 })
