@@ -29,6 +29,7 @@ import {
 } from './plugin-artifact-validation'
 import { PluginPanelSessions, type PluginPanelSessionBinding } from './plugin-panel-sessions'
 import { PluginPanelMounts } from './plugin-panel-mounts'
+import { findSurfaceContribution } from './plugin-surface-contribution'
 
 type PluginPanelControllerOptions = {
   resolveApprovedPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
@@ -55,19 +56,6 @@ type PluginPanelControllerOptions = {
 type SessionCallAdmission =
   | { ok: true; binding: PluginPanelSessionBinding }
   | { ok: false; outcome: PluginPanelActionOutcome }
-
-/** The contribution a session renders: a sidebar panel or a settings page. */
-function findSurfaceContribution(
-  plugin: ValidDiscoveredPlugin | null,
-  surface: PluginPanelSurface,
-  id: string
-): { id: string; entry: string } | null {
-  const contributions =
-    surface === 'settingsPage'
-      ? plugin?.manifest.contributes.settingsPages
-      : plugin?.manifest.contributes.panels
-  return contributions?.find((entry) => entry.id === id) ?? null
-}
 
 type LoadedPluginPanel = {
   entry: { html: string }
