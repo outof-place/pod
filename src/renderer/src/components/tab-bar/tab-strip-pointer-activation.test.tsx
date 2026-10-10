@@ -2,6 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { noteNativeTerminalKeyboard } from '@/lib/pane-manager/native-terminal/native-terminal-keyboard'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
@@ -156,5 +157,24 @@ describe('useTabStripPointerActivation', () => {
 
     expect(onActivate).not.toHaveBeenCalled()
     guest.remove()
+  })
+
+  // Why: a native Ghostty view holding AppKit's keyboard blurs the page like a guest does, so the
+  // press on a tab is what focuses the window again. Flushing it made tab switches need two clicks.
+  it('still activates when the press is what pulled focus back from a native terminal', () => {
+    const onActivate = vi.fn()
+    noteNativeTerminalKeyboard(7, true)
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    act(() => window.dispatchEvent(new Event('focus')))
+    firePointer('pointerup', 11, 11)
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    act(() => window.dispatchEvent(new Event('focus')))
+    act(() => window.dispatchEvent(new Event('focus')))
+    firePointer('pointerup', 11, 11)
+
+    expect(onActivate).toHaveBeenCalledTimes(1)
+    noteNativeTerminalKeyboard(7, false)
   })
 })
