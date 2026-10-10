@@ -35,6 +35,15 @@ public struct AccCommandResult: Equatable, Sendable {
     }
 }
 
+/// A command that ran and exited non-zero (or never started: status -1).
+public struct AccActionError: Error, Equatable, Sendable {
+    public let action: AccAction
+    public let status: Int32
+    public let stderr: String
+    /// The script's last line, usually its own explanation.
+    public let message: String
+}
+
 public struct AccActions: Sendable {
     public let paths: AccPaths
 
@@ -56,7 +65,18 @@ public struct AccActions: Sendable {
         return (python, [paths.launcher.path] + action.arguments, environment)
     }
 
-    /// Runs off the caller's actor.
+    /// Runs it and throws its exit status and stderr when it fails; the output on success.
+    @concurrent
+    public func perform(_ action: AccAction) async throws(AccActionError) -> AccCommandResult {
+        let result = await run(action)
+        guard result.status == 0 else {
+            throw AccActionError(
+                action: action, status: result.status, stderr: result.stderr, message: result.message)
+        }
+        return result
+    }
+
+    /// Runs off the caller's actor; never throws, the result carries the exit status.
     @concurrent
     public func run(_ action: AccAction) async -> AccCommandResult {
         let (executable, arguments, environment) = command(action)

@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 
+import AccKitTesting
+
 @testable import AccKit
 
 /// A throwaway HOME with claude-acc's state directory; never the account's real one.
@@ -55,6 +57,44 @@ private let accountsJSON = """
         #expect(snapshot.host?.name == "Pod")
     }
 
+    @Test(arguments: ["status.json", "devguard-state.json", "sched-state.json", "awake-state.json", "pod-services.json", "owner.json"])
+    func everyFixtureDecodes(fixture: String) {
+        let data = AccFixtures.data(fixture)
+        let decoded: Bool = switch fixture {
+        case "status.json": AccJSON.decode(AccSnapshot.self, from: data) != nil
+        case "devguard-state.json": AccJSON.decode(AccGuardState.self, from: data)?.snapshot?.units.first?.place == "site-spacing"
+        case "sched-state.json": AccJSON.decode(AccSchedState.self, from: data)?.busy == true
+        case "awake-state.json": AccJSON.decode(AccAwakeState.self, from: data)?.until != nil
+        case "pod-services.json": AccJSON.decode(AccPodServices.self, from: data)?.needsApproval.count == 1
+        default: AccJSON.decode(AccOwner.self, from: data)?.isPod == true
+        }
+        #expect(decoded, "\(fixture)")
+    }
+
+    @MainActor
+    @Test func storeReadsAWholeFixtureState() async throws {
+        let store = AccStore(paths: try AccFixtures.makeState())
+        await store.reload()
+        #expect(store.accounts?.accounts.count == 3)
+        #expect(store.devguard?.snapshot?.units.first?.target == ":3000")
+        #expect(store.sched?.queue.first?.reason?.needGb == 23.4)
+        #expect(store.awake?.on == true)
+        #expect(store.services?.services.count == 3)
+        #expect(store.owner?.isPod == true)
+    }
+
+    @Test func performThrowsTheScriptsStatusAndStderr() async throws {
+        let paths = try tempPaths()
+        try write("#!/bin/sh\necho 'nie ma takiego konta' >&2\nexit 3\n", to: paths.python)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: paths.python.path)
+        await #expect(throws: AccActionError(
+            action: .switchAccount(email: "x@example.com"), status: 3,
+            stderr: "nie ma takiego konta\n", message: "nie ma takiego konta")
+        ) {
+            try await AccActions(paths: paths).perform(.switchAccount(email: "x@example.com"))
+        }
+    }
+
     @Test func decodesASchedStateWithoutItsLists() throws {
         let sched = try #require(AccJSON.decode(AccSchedState.self, from: Data(#"{"updated_at": 1}"#.utf8)))
         #expect(sched.running.isEmpty && sched.queue.isEmpty && sched.recent.isEmpty)
@@ -73,24 +113,24 @@ private let accountsJSON = """
     }
 
     @MainActor
-    @Test func storeFollowsWritesRemovalsAndKeepsTheLastGoodValue() throws {
+    @Test func storeFollowsWritesRemovalsAndKeepsTheLastGoodValue() async throws {
         let paths = try tempPaths()
         let store = AccStore(paths: paths)
-        store.reload()
+        await store.reload()
         #expect(store.accounts == nil)
 
         try write(accountsJSON, to: paths.accounts)
         try write(#"{"owner": "pod", "version": "1.31.0", "app": "/Applications/Pod.app", "at": 1760000000}"#, to: paths.owner)
-        store.reload()
+        await store.reload()
         #expect(store.accounts?.accounts.count == 2)
         #expect(store.owner?.isPod == true)
 
         try write("{not json", to: paths.accounts)
-        store.reload()
+        await store.reload()
         #expect(store.accounts?.accounts.count == 2)
 
         try FileManager.default.removeItem(at: paths.owner)
-        store.reload()
+        await store.reload()
         #expect(store.owner == nil)
     }
 
