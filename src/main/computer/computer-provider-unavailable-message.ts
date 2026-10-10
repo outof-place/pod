@@ -1,7 +1,11 @@
+import { productHelperCopy } from '../product-identity/product-helper-names'
+
 export function computerProviderUnavailableMessage(platform: NodeJS.Platform): string {
   if (platform === 'darwin') {
     return [
-      'computer-use has no native provider for darwin because Orca Computer Use.app was not found or this macOS version is unsupported.',
+      productHelperCopy(
+        'computer-use has no native provider for darwin because Orca Computer Use.app was not found or this macOS version is unsupported.'
+      ),
       'For local development, run pnpm build:computer-macos and restart Orca from this worktree.'
     ].join(' ')
   }
