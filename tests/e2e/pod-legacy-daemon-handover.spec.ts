@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import { expect, test, type TestInfo } from '@playwright/test'
@@ -6,6 +6,10 @@ import { createLegacyDaemonAdapters } from '../../src/main/daemon/daemon-legacy-
 import type { DaemonPtyAdapter } from '../../src/main/daemon/daemon-pty-adapter'
 import { probeDaemonSocket } from '../../src/main/daemon/daemon-launch-paths'
 import { moveLegacyDaemons } from '../../src/main/product-identity/legacy-daemon-handover'
+import {
+  watchMovedDaemons,
+  type DaemonLoss
+} from '../../src/main/product-identity/legacy-daemon-loss-watch'
 import {
   cleanupDaemonGenerationFixtures,
   createDaemonGenerationRuntime,
@@ -154,6 +158,71 @@ test('moves a live legacy daemon to the product, back, and leaves Orca a fresh o
     runtime.retainDiagnostics(generations)
     throw error
   } finally {
+    for (const attached of attachments) {
+      attached.adapter.dispose()
+    }
+    await cleanupDaemonGenerationFixtures({ generations, canaries })
+    runtime.remove()
+  }
+})
+
+test('a moved daemon killed after the reattach is recorded as lost and reported once', async (// oxlint-disable-next-line no-empty-pattern -- Playwright requires the fixture argument before testInfo.
+{}, testInfo: TestInfo) => {
+  test.setTimeout(120_000)
+  const runtime = await createDaemonGenerationRuntime(testInfo)
+  const generations: DaemonGeneration[] = []
+  const canaries: GenerationCanary[] = []
+  const attachments: Attached[] = []
+  const podUserData = path.join(runtime.rootDir, 'pod-user-data')
+  const historyDir = path.join(runtime.rootDir, 'history')
+  mkdirSync(podUserData)
+  const losses: DaemonLoss[] = []
+  let stopWatch = (): void => {}
+  try {
+    const legacy = await launchDaemonGeneration({
+      runtime,
+      label: 'orca',
+      protocolVersion: LEGACY_PROTOCOL
+    })
+    generations.push(legacy)
+    writeFileSync(
+      path.join(runtime.daemonDir, `daemon-v${LEGACY_PROTOCOL}.pid`),
+      JSON.stringify({ pid: legacy.identity.pid })
+    )
+    const canary = await spawnGenerationCanary({ runtime, generation: legacy, role: 'live' })
+    canaries.push(canary)
+    await canary.adapter.disconnectOnly()
+    handOver(runtime.userDataDir, podUserData)
+    const pod = await attachFromDiscovery(path.join(podUserData, 'daemon'), historyDir, canary)
+    attachments.push(pod)
+    await ping(pod, canary, 'before-kill')
+
+    stopWatch = watchMovedDaemons({
+      userData: podUserData,
+      logPath: legacy.logPath,
+      intervalMs: 200,
+      onLost: (loss) => losses.push(loss)
+    })
+    expect(losses).toEqual([])
+    // What took the user's moved terminals on 2026-10-10: a SIGTERM from outside the product.
+    process.kill(legacy.identity.pid, 'SIGTERM')
+    await waitForCondition('the loss is reported', () => losses.length > 0)
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+    expect(losses).toEqual([
+      expect.objectContaining({ protocol: LEGACY_PROTOCOL, pid: legacy.identity.pid })
+    ])
+    const marker = JSON.parse(
+      readFileSync(path.join(podUserData, 'product-profile-migration.json'), 'utf8')
+    )
+    expect(marker.daemonHandover).toMatchObject({
+      decision: 'moved',
+      lost: [{ protocol: LEGACY_PROTOCOL, pid: legacy.identity.pid, reason: losses[0].reason }]
+    })
+  } catch (error) {
+    runtime.retainDiagnostics(generations)
+    throw error
+  } finally {
+    stopWatch()
     for (const attached of attachments) {
       attached.adapter.dispose()
     }
