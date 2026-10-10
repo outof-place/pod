@@ -15,7 +15,7 @@ import {
   setNativeTerminalParseOnce,
   splitParseOncePane
 } from './helpers/native-terminal-parse-once'
-import { expectIdenticalScreens } from './helpers/native-terminal-screens'
+import { expectNativeScreenMatchesXterm } from './helpers/native-terminal-screens'
 import {
   execInTerminal,
   splitActiveTerminalPane,
@@ -250,7 +250,7 @@ test('xterm catches up from main’s model before the native view hides for a di
   await expect.poll(async () => isNativeSurfaceHidden(electronApp, surfaceId)).toBe(true)
   // The view hid only after xterm held the same screen.
   expect(await getTerminalContentForPtyId(orcaPage, ptyId, 4000)).toContain('FLOOD-DONE')
-  await expectIdenticalScreens(orcaPage, electronApp, ptyId, surfaceId)
+  await expectNativeScreenMatchesXterm(orcaPage, electronApp, ptyId, surfaceId)
   if (usedWebgl) {
     expect(await paneUsesWebgl(orcaPage, ptyId)).toBe(true)
   }
@@ -437,6 +437,6 @@ const timer = setInterval(() => {
   await expect
     .poll(async () => getTerminalContentForPtyId(orcaPage, ptyId, 4000), { timeout: 60_000 })
     .toContain('FLOOD-OVER')
-  await expectIdenticalScreens(orcaPage, electronApp, ptyId, surfaceId)
+  await expectNativeScreenMatchesXterm(orcaPage, electronApp, ptyId, surfaceId)
   await removeDialog(orcaPage)
 })

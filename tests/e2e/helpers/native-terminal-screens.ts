@@ -11,7 +11,7 @@ function normalizeScreen(text: string): string {
 }
 
 // The xterm model's visible rows, as the native view should show them.
-export function xtermScreen(page: Page, ptyId: string): Promise<string> {
+function xtermScreen(page: Page, ptyId: string): Promise<string> {
   return page.evaluate((id) => {
     const pane = [...(window.__paneManagers?.values() ?? [])]
       .flatMap((manager) => manager.getPanes())
@@ -35,7 +35,9 @@ export function xtermScreen(page: Page, ptyId: string): Promise<string> {
   }, ptyId)
 }
 
-export async function expectIdenticalScreens(
+// Whitespace-blind: the two disagree on which rows are soft-wrapped when a shell wraps its own
+// prompt, while every visible character must still match in order.
+export async function expectNativeScreenMatchesXterm(
   page: Page,
   app: ElectronApplication,
   ptyId: string,
@@ -46,10 +48,9 @@ export async function expectIdenticalScreens(
       async () => {
         const native = normalizeScreen(await nativeScreenText(app, surfaceId))
         const xterm = normalizeScreen(await xtermScreen(page, ptyId))
-        // Why whitespace-blind: the two disagree on which rows are soft-wrapped when a shell
-        // wraps its own prompt, while every visible character must still match in order.
-        const same = native.replace(/\s+/g, '') === xterm.replace(/\s+/g, '')
-        return same ? 'identical' : `native:\n${native}\nxterm:\n${xterm}`
+        return native.replace(/\s+/g, '') === xterm.replace(/\s+/g, '')
+          ? 'identical'
+          : `native:\n${native}\nxterm:\n${xterm}`
       },
       { timeout: 15_000 }
     )

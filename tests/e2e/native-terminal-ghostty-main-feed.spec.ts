@@ -9,7 +9,7 @@ import {
   nativeTerminalDebug,
   splitNativeTerminalPane
 } from './helpers/native-terminal-debug'
-import { expectIdenticalScreens } from './helpers/native-terminal-screens'
+import { expectNativeScreenMatchesXterm } from './helpers/native-terminal-screens'
 import {
   execInTerminal,
   splitActiveTerminalPane,
@@ -66,7 +66,7 @@ test('main feeds the native view from the PTY stream: same screen as xterm, no m
   const { ptyId, surfaceId } = await splitNativeTerminalPane(orcaPage, electronApp)
   await execInTerminal(orcaPage, ptyId, "seq 1 2000; printf 'MAIN-FEED-%s\\n' DONE")
   await waitForTerminalOutput(orcaPage, 'MAIN-FEED-DONE')
-  await expectIdenticalScreens(orcaPage, electronApp, ptyId, surfaceId)
+  await expectNativeScreenMatchesXterm(orcaPage, electronApp, ptyId, surfaceId)
   expect(await mirrorWrites(electronApp)).toBe(before)
 
   // The renderer mirror stays the fallback where main does not feed a surface.
@@ -74,7 +74,7 @@ test('main feeds the native view from the PTY stream: same screen as xterm, no m
   const mirrored = await splitNativeTerminalPane(orcaPage, electronApp)
   await execInTerminal(orcaPage, mirrored.ptyId, "printf 'MIRROR-%s\\n' OK")
   await waitForTerminalOutput(orcaPage, 'MIRROR-OK')
-  await expectIdenticalScreens(orcaPage, electronApp, mirrored.ptyId, mirrored.surfaceId)
+  await expectNativeScreenMatchesXterm(orcaPage, electronApp, mirrored.ptyId, mirrored.surfaceId)
   expect(await mirrorWrites(electronApp)).toBeGreaterThan(before)
   await setMainFeed(electronApp, true)
 })
@@ -99,7 +99,7 @@ test('a resize in the middle of a flood leaves the native view and xterm identic
   await expect
     .poll(async () => getTerminalContentForPtyId(orcaPage, ptyId, 4000), { timeout: 60_000 })
     .toContain('RESIZE-DONE')
-  await expectIdenticalScreens(orcaPage, electronApp, ptyId, surfaceId)
+  await expectNativeScreenMatchesXterm(orcaPage, electronApp, ptyId, surfaceId)
 })
 
 test('a reload reattaches each native view to its PTY from main’s model', async ({
@@ -126,7 +126,7 @@ test('a reload reattaches each native view to its PTY from main’s model', asyn
   await expect
     .poll(async () => nativeScreenText(electronApp, surfaceId ?? 0), { timeout: 15_000 })
     .toContain('BEFORE-RELOAD')
-  await expectIdenticalScreens(orcaPage, electronApp, ptyId, surfaceId ?? 0)
+  await expectNativeScreenMatchesXterm(orcaPage, electronApp, ptyId, surfaceId ?? 0)
   // Live output keeps flowing to the reattached view.
   await execInTerminal(orcaPage, ptyId, "printf 'AFTER-%s\\n' RELOAD")
   await expect
