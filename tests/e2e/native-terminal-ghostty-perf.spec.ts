@@ -18,7 +18,9 @@ import {
   type UsageSnapshot
 } from './helpers/native-terminal-process-usage'
 import {
+  removeDialog,
   setNativeTerminalParseOnce,
+  showDialogOverPane,
   splitParseOncePane,
   waitForNativeShellReady
 } from './helpers/native-terminal-parse-once'
@@ -42,8 +44,9 @@ import { summarizeBenchmarkSamples } from '../../config/scripts/benchmark-sample
 
 // Same workloads with experimentalNativeTerminal off (xterm.js WebGL), on (Ghostty/Metal fed by
 // main), on with main's feed off (fed by the renderer mirror), and on with parse once (xterm off
-// the byte stream under the view): an output flood, keystroke-to-echo latency, and idle CPU and
-// memory with eight panes. Opt-in, not a gate.
+// the byte stream under the view): an output flood, the native view hiding for a dialog right
+// after it (xterm catching up first), keystroke-to-echo latency, and idle CPU and memory with
+// eight panes. Opt-in, not a gate.
 //   ORCA_NATIVE_TERMINAL_BENCH=1 SKIP_BUILD=1 pnpm run test:e2e tests/e2e/native-terminal-ghostty-perf.spec.ts
 
 type Mode = 'xterm' | 'native' | 'native-mirror' | 'native-parse-once'
@@ -94,9 +97,11 @@ type FloodSample = {
   mainFeedChunks: number
   mainFeedWrites: number
 }
+type CatchUpSample = { wallMs: number; cpuMs: CpuMsByKind }
 type KeySample = { keyToScreenMs: number; keyToParsedMs: number | null; keyToPtyMs: number | null }
 type ModeSamples = {
   flood: FloodSample[]
+  catchUp: CatchUpSample[]
   keys: KeySample[]
   idleCpuMsPerS: CpuMsByKind[]
   // Footprint per process kind with the idle panes open, in MiB.
@@ -141,6 +146,7 @@ async function mainFeedStats(
 function emptySamples(): ModeSamples {
   return {
     flood: [],
+    catchUp: [],
     keys: [],
     idleCpuMsPerS: [],
     idleMemoryMiB: [],
@@ -470,6 +476,56 @@ async function measureFlood(
   }
 }
 
+// Main-side wait for the native view to hide; under parse once it hides only after xterm caught up.
+function watchNativeHidden(
+  app: ElectronApplication,
+  surfaceId: number,
+  timeoutMs: number
+): Promise<number | null> {
+  return app.evaluate(
+    async (_electron, { id, poll, timeout }) => {
+      const debug: unknown = Reflect.get(globalThis, '__orcaNativeTerminalDebug')
+      const state: unknown =
+        typeof debug === 'object' && debug !== null ? Reflect.get(debug, 'state') : null
+      if (typeof state !== 'function') {
+        throw new Error('native terminal debug hooks are not installed')
+      }
+      const deadline = performance.now() + timeout
+      while (performance.now() < deadline) {
+        const value: unknown = Reflect.apply(state, debug, [id])
+        if (typeof value === 'object' && value !== null && Reflect.get(value, 'hidden') === true) {
+          return performance.timeOrigin + performance.now()
+        }
+        await new Promise((resolve) => setTimeout(resolve, poll))
+      }
+      return null
+    },
+    { id: surfaceId, poll: KEY_POLL_MS, timeout: timeoutMs }
+  )
+}
+
+// A dialog over the pane right after the flood: the time and CPU until the native view hid.
+async function measureCatchUp(
+  page: Page,
+  app: ElectronApplication,
+  ptyId: string,
+  surfaceId: number
+): Promise<CatchUpSample> {
+  const before = await usageSnapshot(app)
+  const startedAt = now()
+  const hidden = watchNativeHidden(app, surfaceId, FLOOD_TIMEOUT_MS)
+  await showDialogOverPane(page, ptyId)
+  const hiddenAt = await hidden
+  const after = await usageSnapshot(app)
+  await removeDialog(page)
+  if (hiddenAt === null) {
+    throw new Error('the native view never hid for the dialog')
+  }
+  await expect.poll(async () => isNativeSurfaceHidden(app, surfaceId)).toBe(false)
+  await expect.poll(async () => xtermScreenTransform(page, ptyId)).not.toBe('')
+  return { wallMs: hiddenAt - startedAt, cpuMs: cpuMsBetween(before, after) }
+}
+
 async function measureKeystrokes(
   page: Page,
   app: ElectronApplication,
@@ -642,6 +698,8 @@ function summarizeMode(samples: ModeSamples): Record<string, unknown> {
     floodMirrorWrites: samples.flood.map((sample) => sample.mirrorWrites),
     floodMainFeedChunks: samples.flood.map((sample) => sample.mainFeedChunks),
     floodMainFeedWrites: samples.flood.map((sample) => sample.mainFeedWrites),
+    catchUpMs: summarize(samples.catchUp.map((sample) => sample.wallMs)),
+    catchUpCpuMs: summarizeCpu(samples.catchUp.map((sample) => sample.cpuMs)),
     keyMirrorWrites: samples.keyMirrorWrites,
     keyToScreenMs: summarize(samples.keys.map((sample) => sample.keyToScreenMs)),
     keyToXtermParsedMs: summarize(
@@ -707,6 +765,9 @@ test('native terminal vs xterm.js: output flood, keystroke echo, idle CPU', asyn
       samples[mode].flood.push(
         await measureFlood(orcaPage, electronApp, ptyId, surfaceId, mode === 'native-parse-once')
       )
+      if (surfaceId !== null) {
+        samples[mode].catchUp.push(await measureCatchUp(orcaPage, electronApp, ptyId, surfaceId))
+      }
       const typed = await measureKeystrokes(orcaPage, electronApp, ptyId, surfaceId, testInfo)
       samples[mode].keys.push(...typed.keys)
       samples[mode].keyMirrorWrites.push(typed.mirrorWrites)
