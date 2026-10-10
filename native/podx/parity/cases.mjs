@@ -1,5 +1,6 @@
 // Parity cases: argv shapes plus response edge cases on top of the base world.
 // Each response list is consumed in order per method; the last entry repeats.
+import { addComputerAndStatusCases } from './cases-computer-status.mjs'
 import { ok } from './world.mjs'
 
 export function buildCases({ worktree }) {
@@ -447,102 +448,6 @@ export function buildCases({ worktree }) {
       })
     }
   })
-  // status: reads orca-runtime.json and probes status.get itself.
-  const status = (result) => ({ responses: { 'status.get': ok(result) } })
-  const ready = {
-    runtimeId: 'rt-parity-0001',
-    graphStatus: 'ready',
-    desktopWindowStatus: 'available',
-    appVersion: '0.0.1-test',
-    capabilities: ['a', 'b']
-  }
-  for (const [name, extra] of [
-    ['status ready', status(ready)],
-    [
-      'status window closed',
-      status({
-        ...ready,
-        graphStatus: 'starting',
-        desktopWindowStatus: 'openable',
-        capabilities: []
-      })
-    ],
-    [
-      'status legacy window id',
-      status({
-        runtimeId: 'rt-parity-0001',
-        graphStatus: 'ready',
-        authoritativeWindowId: 3,
-        appVersion: ''
-      })
-    ],
-    ['status remote reconnecting', status({ ...ready, remoteControl: { state: 'reconnecting' } })],
-    ['status remote awaiting', status({ ...ready, remoteControl: { state: 'awaiting_ready' } })],
-    [
-      'status remote ready',
-      status({ ...ready, remoteControl: { state: 'ready' }, degradations: [{ id: 'x' }] })
-    ],
-    [
-      'status rpc failure',
-      { responses: { 'status.get': [{ error: { code: 'boom', message: 'no' } }] } }
-    ],
-    ['status closed', { responses: { 'status.get': [{ close: true }] } }],
-    ['status not running', { env: { ORCA_USER_DATA_PATH: '/nonexistent/podx-parity' } }],
-    [
-      'status stale no transports',
-      {
-        userData: {
-          'orca-runtime.json': '{"runtimeId":"x","pid":1,"transports":[],"authToken":"t"}'
-        }
-      }
-    ],
-    [
-      'status stale empty token',
-      {
-        userData: {
-          'orca-runtime.json':
-            '{"runtimeId":"x","pid":__PID__,"transports":[{"kind":"unix","endpoint":"__SOCK__"}],"authToken":""}'
-        }
-      }
-    ],
-    [
-      'status dead socket live pid',
-      {
-        userData: {
-          'orca-runtime.json':
-            '{"runtimeId":"x","pid":__PID__,"transports":[{"kind":"unix","endpoint":"/tmp/podx-parity-no.sock"}],"authToken":"t"}'
-        }
-      }
-    ],
-    [
-      'status dead socket dead pid',
-      {
-        userData: {
-          'orca-runtime.json':
-            '{"runtimeId":"x","pid":999999,"transports":[{"kind":"unix","endpoint":"/tmp/podx-parity-no.sock"}],"authToken":"t"}'
-        }
-      }
-    ],
-    [
-      'status no pid',
-      {
-        userData: {
-          'orca-runtime.json':
-            '{"runtimeId":"rt-parity-0001","transports":[{"kind":"unix","endpoint":"__SOCK__"}],"authToken":"t"}'
-        },
-        ...status(ready)
-      }
-    ],
-    ['status null metadata', { userData: { 'orca-runtime.json': 'null' } }],
-    ['status garbage metadata', { userData: { 'orca-runtime.json': '{not json' } }],
-    ['status number metadata falls back', { userData: { 'orca-runtime.json': '5' } }],
-    [
-      'status agent session falls back',
-      { env: { ORCA_AGENT_SESSION_ID: 'sess-1' }, ...status(ready) }
-    ]
-  ]) {
-    add(name, ['status'], extra)
-    add(`${name} --json`, ['status', '--json'], extra)
-  }
+  addComputerAndStatusCases(add)
   return cases
 }

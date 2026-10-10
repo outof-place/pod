@@ -110,6 +110,9 @@ func formatCliError(_ view: ErrorView, selector: JSONValue?, context: CliErrorCo
   if !steps.isEmpty {
     return formatMessageWithNextSteps(view.message, steps)
   }
+  if view.code == "invalid_argument" && context.commandPath.first == "computer" {
+    return formatMessageWithNextSteps(view.message, COMPUTER_INVALID_ARGUMENT_NEXT_STEPS)
+  }
   return view.message
 }
 
