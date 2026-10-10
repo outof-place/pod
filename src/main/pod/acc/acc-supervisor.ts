@@ -25,7 +25,8 @@ import {
   ACC_ROOTD_REQUEST,
   accRootdServiceName,
   restoreAccRootDefaults,
-  takeAccRootdRequest
+  takeAccRootdRequest,
+  type AccRootdRequestOutcome
 } from './acc-rootd'
 
 // The helper starts and quits on its own (login item, setup restarting it): look again this often.
@@ -55,6 +56,8 @@ export type PodAccSupervisorOptions = {
   /** How often to look at the menu helper and owner.json; tests shorten it. */
   probeMs?: number
   now?: () => Date
+  /** Pod's own confirmation before pod-rootd is registered; without one, a request is declined. */
+  confirmRootd?: () => Promise<boolean>
 }
 
 /** `/Applications/Pod.app/Contents/MacOS/Pod` → `/Applications/Pod.app`. */
@@ -111,6 +114,7 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
   // Ensured this session: a later handback (owner.json naming another owner) removes them again.
   let servicesOwned = false
   let payloadVersion: string | null = null
+  let rootdRequest: AccRootdRequestOutcome | null = null
   const publishReport = (reports: AccServiceReport[]): AccServiceReport[] => {
     for (const r of reports) {
       if (r.registered || r.status !== 'enabled') {
@@ -121,7 +125,8 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
       app: appPath,
       payload: payloadVersion,
       services: reports,
-      at: new Date()
+      at: new Date(),
+      rootdRequest
     })
     return reports
   }
@@ -210,11 +215,27 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     }
     requestBusy = true
     try {
-      if (takeAccRootdRequest(options.home, options.now?.() ?? new Date())) {
-        const registered = await registerRootd()
-        options.log(
-          `claude-acc: pod-rootd asked for in the panel: ${registered?.status ?? 'not shipped'}`
-        )
+      const request = takeAccRootdRequest(options.home, options.now?.() ?? new Date())
+      if (!request) {
+        return
+      }
+      if (!request.ok) {
+        options.log(`claude-acc: ignored a pod-rootd request (${request.reason})`)
+        return
+      }
+      options.log('claude-acc: pod-rootd requested in the panel, asking to confirm')
+      const confirmed = (await options.confirmRootd?.().catch(() => false)) ?? false
+      const registered = confirmed ? await registerRootd() : null
+      rootdRequest = {
+        at: request.at,
+        outcome: !confirmed ? 'declined' : registered ? 'registered' : 'unavailable'
+      }
+      options.log(
+        `claude-acc: pod-rootd request ${rootdRequest.outcome}${registered ? ` (${registered.status})` : ''}`
+      )
+      const { loginItems, appId } = options
+      if (loginItems && appId) {
+        publishReport(readAccServiceStatus(loginItems, bundledAccServices(appPath, appId)))
       }
     } finally {
       requestBusy = false
