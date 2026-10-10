@@ -305,6 +305,32 @@ describe('PodBrowserPaneController', () => {
     ])
   })
 
+  it("lists its pages' downloads, and repeats them to a PodNative that connects", () => {
+    const { panes, sent } = setup()
+    panes.noteDownload({
+      kind: 'requested',
+      browserPageId: 'other',
+      downloadId: 'x',
+      filename: 'x',
+      totalBytes: null,
+      savePath: ''
+    })
+    panes.noteDownload({
+      kind: 'requested',
+      browserPageId: 'page-1',
+      downloadId: 'd1',
+      filename: 'a.zip',
+      totalBytes: 10,
+      savePath: '/tmp/a.zip'
+    })
+    expect(sent).toEqual([
+      expect.objectContaining({ type: 'browserDownload', downloadId: 'd1', state: 'downloading' })
+    ])
+    sent.length = 0
+    panes.handle(rendezvous)
+    expect(sent).toEqual([expect.objectContaining({ type: 'browserDownload', downloadId: 'd1' })])
+  })
+
   it("shows an agent's command as driving for three seconds", () => {
     vi.useFakeTimers()
     const { panes, wc, sent } = setup()
