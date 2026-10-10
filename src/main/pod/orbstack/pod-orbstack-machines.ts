@@ -3,10 +3,22 @@ import type { OrcaVmRecipe } from '../../../shared/orca-yaml-hook-types'
 import type { PodOrbstackActionResult } from '../../../shared/pod-orbstack-types'
 import { redactEphemeralVmRecipeDiagnosticText } from '../../../shared/ephemeral-vm-recipe-diagnostics'
 import { runEphemeralVmRecipeStart } from '../../../shared/ephemeral-vm-recipe-runner'
-import { isValidPodOrbstackMachineName, podOrbstackMachineName } from './pod-orbstack-recipe'
+import {
+  isValidPodOrbstackMachineName,
+  POD_ORBSTACK_BUILTIN_RECIPE,
+  podOrbstackMachineName
+} from './pod-orbstack-recipe'
 import type { PodOrbstackMachineKind, PodOrbstackRegistry } from './pod-orbstack-registry'
 import type { SandboxClaudeRelease } from './pod-orbstack-claude-release'
 import { provisionSandbox, resolveSandboxMounts } from './pod-orbstack-sandbox'
+import {
+  cloneSandbox,
+  cloneSharedMachine,
+  sandboxTemplate,
+  sharedTemplate
+} from './pod-orbstack-template-machines'
+import type { PodOrbstackTemplates } from './pod-orbstack-templates'
+import { parseOrbctlStatus } from './pod-orbstack-inventory'
 import type { OrbstackToolPaths, OrbstackToolRunner } from './pod-orbstack-tools'
 
 const MACHINE_COMMAND_TIMEOUT_MS = 120_000
@@ -33,6 +45,9 @@ type MachineDeps = {
   onSandboxCreated?: (name: string) => void
   /** Stops anything Pod runs against a sandbox (its relay, its token) before the machine goes. */
   onSandboxRemoved?: (name: string) => void
+  /** Clone sources; without them every create builds its machine from the image. */
+  templates?: PodOrbstackTemplates
+  log?: (message: string) => void
   now?: () => number
 }
 
@@ -49,8 +64,25 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
       ? null
       : `${name} was not created by Pod, so Pod leaves it alone.`
 
+  const deleteMachine = (name: string) =>
+    deps.run('orb', ['delete', '--force', name], { timeoutMs: MACHINE_COMMAND_TIMEOUT_MS })
+
   const machineExists = async (name: string): Promise<boolean> =>
     (await deps.run('orb', ['info', name, '--format', 'json'])).code === 0
+
+  /** Runs a template path; on failure deletes what it made, so the full build starts clean. */
+  const fromTemplate = async <T>(name: string, make: (t: PodOrbstackTemplates) => Promise<T>) => {
+    if (!deps.templates) {
+      return null
+    }
+    try {
+      return await make(deps.templates)
+    } catch (error) {
+      deps.log?.(`${name} from template failed, building it: ${String(error)}`)
+      await deleteMachine(name)
+      return null
+    }
+  }
 
   const withBusy = async (
     worktreeId: string,
@@ -94,6 +126,25 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
       }
       // Recorded before create, so a crash still leaves Pod allowed to delete the machine.
       deps.registry.upsert({ ...entry, state: 'creating' })
+      // A recipe.json override keeps its own lifecycle; only the built-in one has a template.
+      if (recipe === POD_ORBSTACK_BUILTIN_RECIPE && !(await machineExists(name))) {
+        const cloned = await fromTemplate(name, async (templates) => {
+          const template = await sharedTemplate(deps.run, templates)
+          return template
+            ? cloneSharedMachine({
+                run: deps.run,
+                templates,
+                template,
+                name,
+                worktreePath: target.worktreePath
+              })
+            : null
+        })
+        if (cloned !== null) {
+          deps.registry.upsert({ ...entry, state: 'ready' })
+          return { ok: true }
+        }
+      }
       const start = await runRecipe({
         recipe,
         repoPath: target.worktreePath,
@@ -114,9 +165,6 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
       const detail = lastLines(start.stderr)
       return { ok: false, error: detail ? `${start.error}\n${detail}` : start.error }
     })
-
-  const deleteMachine = (name: string) =>
-    deps.run('orb', ['delete', '--force', name], { timeoutMs: MACHINE_COMMAND_TIMEOUT_MS })
 
   const createSandbox = (target: PodOrbstackWorktreeTarget): Promise<PodOrbstackActionResult> =>
     withBusy(target.worktreeId, async () => {
@@ -155,12 +203,15 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
       }
       deps.registry.upsert({ ...entry, state: 'creating' })
       try {
-        const { agentVersion } = await (deps.provision ?? provisionSandbox)({
-          run: deps.run,
-          name,
-          mounts,
-          release
+        const cloned = await fromTemplate(name, async (templates) => {
+          const template = await sandboxTemplate(deps.run, templates, release)
+          return template
+            ? cloneSandbox({ run: deps.run, templates, template, name, mounts })
+            : null
         })
+        const { agentVersion } =
+          cloned ??
+          (await (deps.provision ?? provisionSandbox)({ run: deps.run, name, mounts, release }))
         deps.registry.upsert({
           ...entry,
           state: 'ready',
@@ -220,13 +271,42 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
       : { ok: false, error: lastLines(result.stderr) || `Could not change ${name}.` }
   }
 
+  /**
+   * Builds the templates the next creates need, for kinds Pod already has machines of (after the
+   * Mac's Claude Code moved, say). Never starts OrbStack for it.
+   */
+  const prewarm = async (): Promise<void> => {
+    const status = await deps.run('orbctl', ['status'])
+    if (!deps.templates || parseOrbctlStatus(status.code, status.stdout) !== 'running') {
+      return
+    }
+    const kinds = new Set(deps.registry.machines().map((entry) => entry.kind))
+    if (kinds.has('sandbox')) {
+      const release = await (deps.prepareClaudeRelease?.() ?? null)?.catch(() => undefined)
+      if (release !== undefined) {
+        await sandboxTemplate(deps.run, deps.templates, release)
+      }
+    }
+    const builtin = (() => {
+      try {
+        return deps.loadRecipe() === POD_ORBSTACK_BUILTIN_RECIPE
+      } catch {
+        return false
+      }
+    })()
+    if (kinds.has('shared') && builtin) {
+      await sharedTemplate(deps.run, deps.templates)
+    }
+  }
+
   return {
     create,
     createSandbox,
     remove,
     start: (name: string) => setRunning(name, true),
     stop: (name: string) => setRunning(name, false),
-    busyWorktreeIds: (): string[] => [...busy]
+    busyWorktreeIds: (): string[] => [...busy],
+    prewarm
   }
 }
 
