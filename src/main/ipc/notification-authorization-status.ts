@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { productHelperPath } from '../product-identity/product-helper-names'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
@@ -26,7 +27,7 @@ function resolveHelperPath(): string | null {
     cachedHelperPath = null
     return cachedHelperPath
   }
-  const candidate = join(dirname(process.execPath), HELPER_EXECUTABLE)
+  const candidate = productHelperPath(join(dirname(process.execPath), HELPER_EXECUTABLE))
   cachedHelperPath = existsSync(candidate) ? candidate : null
   return cachedHelperPath
 }
