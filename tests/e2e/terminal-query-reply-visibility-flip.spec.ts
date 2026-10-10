@@ -24,10 +24,14 @@ const PROGRAM = `
 const fs = require('fs')
 const [out, ready, go1, stop1, sent1, go2, sent2] = process.argv.slice(2)
 let replies = ''
-const record = () => fs.writeFileSync(out, JSON.stringify({
-  cpr: (replies.match(/\\x1b\\[\\d+;\\d+R/g) || []).length,
-  da1: (replies.match(/\\x1b\\[\\?[\\d;]*c/g) || []).length
-}))
+// Written then renamed, so the test never reads a half-written file.
+const record = () => {
+  fs.writeFileSync(out + '.tmp', JSON.stringify({
+    cpr: (replies.match(/\\x1b\\[\\d+;\\d+R/g) || []).length,
+    da1: (replies.match(/\\x1b\\[\\?[\\d;]*c/g) || []).length
+  }))
+  fs.renameSync(out + '.tmp', out)
+}
 process.stdin.setRawMode(true)
 process.stdin.on('data', (data) => { replies += data.toString('latin1'); record() })
 record()
@@ -35,7 +39,8 @@ const whenExists = (file) => new Promise((resolve) => {
   const wait = setInterval(() => { if (fs.existsSync(file)) { clearInterval(wait); resolve() } }, 20)
 })
 // Paced filler while stop1 is absent: slow enough that the queue behind the held window
-// stays far below the size at which main pauses the PTY. sent1 marks each idle period.
+// stays far below the size at which main pauses the PTY, fast enough that the held window
+// fills well inside main's 10 s ack-silence heal. sent1 marks each idle period.
 let idle = false
 const fill = () => {
   if (fs.existsSync(stop1)) {
@@ -45,7 +50,7 @@ const fill = () => {
     return
   }
   idle = false
-  process.stdout.write(('x'.repeat(99) + '\\n').repeat(80), () => setTimeout(fill, 20))
+  process.stdout.write(('x'.repeat(99) + '\\n').repeat(160), () => setTimeout(fill, 20))
 }
 fs.writeFileSync(ready, '1')
 whenExists(go1).then(fill)
