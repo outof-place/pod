@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  POD_SANDBOX_VM_ENV_PREFIX,
   SANDBOX_FORWARDED_ENV,
   applyPodOrbstackTerminalOverride,
   setPodOrbstackTerminalResolver,
@@ -18,6 +19,8 @@ function resolveFor(machine: string | null, dockerPinned = false): void {
 }
 
 const plainRequest = { worktreeId: WORKTREE, connectionId: null }
+// Why built: Pod's decouple codemod renames a standalone ORCA_ name, never one inside the VM name.
+const VM_HOOK_TOKEN = `${POD_SANDBOX_VM_ENV_PREFIX}ORCA_AGENT_HOOK_TOKEN`
 
 afterEach(() => setPodOrbstackTerminalResolver(null))
 
@@ -134,13 +137,13 @@ describe('sandboxed Claude launches', () => {
     ])
     expect(options.env).toMatchObject({
       ORCA_AGENT_HOOK_TOKEN: 'server-token',
-      POD_SANDBOX_VM_ORCA_AGENT_HOOK_TOKEN: 'sbx-token',
+      [VM_HOOK_TOKEN]: 'sbx-token',
       POD_SANDBOX_VM_ANTHROPIC_API_KEY: 'pod-sandbox-no-credential'
     })
     expect(options.env.ANTHROPIC_API_KEY).toBeUndefined()
     const orbenv = options.command.split(' ')[0] ?? ''
     expect(orbenv).toContain(
-      ':POD_SANDBOX_VM_ORCA_AGENT_HOOK_TOKEN:POD_SANDBOX_VM_NODE_EXTRA_CA_CERTS:POD_SANDBOX_VM_ANTHROPIC_API_KEY'
+      `:${VM_HOOK_TOKEN}:POD_SANDBOX_VM_NODE_EXTRA_CA_CERTS:POD_SANDBOX_VM_ANTHROPIC_API_KEY`
     )
     expect(orbenv).not.toContain(':ORCA_AGENT_HOOK_TOKEN')
     expect(options.command).not.toContain('server-token')
@@ -148,7 +151,7 @@ describe('sandboxed Claude launches', () => {
       `'bash' '-lc' 'w=0; until [ "$(cat /run/pod-sandbox-relay/ready 2>/dev/null)" = n0nce ]`
     )
     expect(options.command).toContain(
-      'done; export ORCA_AGENT_HOOK_TOKEN="$POD_SANDBOX_VM_ORCA_AGENT_HOOK_TOKEN"; unset POD_SANDBOX_VM_ORCA_AGENT_HOOK_TOKEN; export NODE_EXTRA_CA_CERTS='
+      `done; export ORCA_AGENT_HOOK_TOKEN="$${VM_HOOK_TOKEN}"; unset ${VM_HOOK_TOKEN}; export NODE_EXTRA_CA_CERTS=`
     )
     expect(options.command).toContain(
       'unset POD_SANDBOX_VM_ANTHROPIC_API_KEY; export DISABLE_AUTOUPDATER=1; exec claude'
