@@ -134,6 +134,74 @@ describe('createNativeTerminalRenderPause', () => {
     expect(pause.isStale()).toBe(false)
   })
 
+  it('detaches xterm from the byte stream while paused and repaints only once it caught up', async () => {
+    const fake = fakeTerminal()
+    const pause = createNativeTerminalRenderPause(asTerminal(fake))
+    let caughtUp: () => void = () => {}
+    const feed = {
+      detach: vi.fn(() => true),
+      reattach: vi.fn(() => new Promise<void>((resolve) => (caughtUp = resolve)))
+    }
+    pause.setFeed(feed)
+    pause.pause()
+    expect(feed.detach).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(200)
+    expect(feed.detach).toHaveBeenCalledTimes(1)
+    const onRepainted = vi.fn()
+    pause.resume(onRepainted)
+    expect(feed.reattach).toHaveBeenCalledTimes(1)
+    // Still under the native view: no repaint of the stale buffer yet.
+    expect(fake.refresh).not.toHaveBeenCalled()
+    expect(pause.isStale()).toBe(true)
+    caughtUp()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.refresh).toHaveBeenCalledWith(0, 23)
+    fake.render()
+    expect(onRepainted).toHaveBeenCalledTimes(1)
+    expect(pause.isStale()).toBe(false)
+  })
+
+  it('stops waiting on a reattach that never finishes', async () => {
+    const fake = fakeTerminal()
+    const pause = createNativeTerminalRenderPause(asTerminal(fake))
+    pause.setFeed({ detach: () => true, reattach: () => new Promise<void>(() => {}) })
+    pause.pause()
+    vi.advanceTimersByTime(200)
+    pause.resume(vi.fn())
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(fake.refresh).toHaveBeenCalledWith(0, 23)
+  })
+
+  it('reattaches a detached feed when it is replaced or the pause is disposed', () => {
+    const fake = fakeTerminal()
+    const pause = createNativeTerminalRenderPause(asTerminal(fake))
+    const first = { detach: vi.fn(() => true), reattach: vi.fn(async () => {}) }
+    const second = { detach: vi.fn(() => true), reattach: vi.fn(async () => {}) }
+    pause.setFeed(first)
+    pause.pause()
+    vi.advanceTimersByTime(200)
+    pause.setFeed(second)
+    expect(first.reattach).toHaveBeenCalledTimes(1)
+    expect(second.detach).toHaveBeenCalledTimes(1)
+    pause.setFeed(null)
+    expect(second.reattach).toHaveBeenCalledTimes(1)
+    pause.setFeed(first)
+    pause.dispose()
+    expect(first.reattach).toHaveBeenCalledTimes(2)
+  })
+
+  it('repaints at once when the feed declined to detach', () => {
+    const fake = fakeTerminal()
+    const pause = createNativeTerminalRenderPause(asTerminal(fake))
+    const feed = { detach: vi.fn(() => false), reattach: vi.fn(async () => {}) }
+    pause.setFeed(feed)
+    pause.pause()
+    vi.advanceTimersByTime(200)
+    pause.resume(vi.fn())
+    expect(feed.reattach).not.toHaveBeenCalled()
+    expect(fake.refresh).toHaveBeenCalledWith(0, 23)
+  })
+
   it('restores the screen on dispose', () => {
     const fake = fakeTerminal()
     const pause = createNativeTerminalRenderPause(asTerminal(fake))
