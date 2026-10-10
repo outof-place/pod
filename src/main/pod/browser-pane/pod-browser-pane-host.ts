@@ -38,7 +38,15 @@ export function installPodBrowserPanes(options: {
       onWindowCreated: (browserPageId, win) => panes.trackPage(browserPageId, win)
     })
   )
-  setPodBrowserPaneHooks((webContentsId) => panes.noteAgentCommand(webContentsId))
+  // POD_E2E_DOWNLOADS_DIR: an E2E's downloads land in its own directory, never ~/Downloads.
+  const downloads = process.env.POD_E2E_DOWNLOADS_DIR
+  if (downloads) {
+    app.setPath('downloads', downloads)
+  }
+  setPodBrowserPaneHooks({
+    agentCommand: (webContentsId) => panes.noteAgentCommand(webContentsId),
+    download: (event) => panes.noteDownload(event)
+  })
   app.once('will-quit', () => setPodBrowserPaneHooks(null))
   return panes
 }
