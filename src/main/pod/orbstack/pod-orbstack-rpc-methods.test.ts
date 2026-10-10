@@ -28,6 +28,7 @@ function emptyStatus(overrides: Partial<PodOrbstackStatus> = {}): PodOrbstackSta
     machines: [],
     containers: [],
     links: [],
+    sandboxClaudeLogin: false,
     busyWorktreeIds: [],
     errors: [],
     checkedAt: 0,
@@ -61,7 +62,8 @@ function fakeService(enabled: boolean): PodOrbstackService {
     start: vi.fn(async () => ({ ok: true as const })),
     stop: vi.fn(async () => ({ ok: true as const })),
     setDockerPin: vi.fn(() => ({ ok: true as const })),
-    setAgentSandbox: vi.fn(() => ({ ok: true as const }))
+    setAgentSandbox: vi.fn(() => ({ ok: true as const })),
+    setSandboxClaudeLogin: vi.fn(() => ({ ok: true as const }))
   }
 }
 
@@ -79,7 +81,8 @@ describe('orbstack.* RPC methods', () => {
       'orbstack.stop',
       'orbstack.delete',
       'orbstack.pinDocker',
-      'orbstack.setAgentSandbox'
+      'orbstack.setAgentSandbox',
+      'orbstack.setSandboxClaudeLogin'
     ])
     expect(new Set(POD_ORBSTACK_METHODS.map((entry) => entry.permission))).toEqual(
       new Set(['host-admin'])
@@ -109,10 +112,12 @@ describe('orbstack.* RPC methods', () => {
     await call('orbstack.stop', { name: 'pod-web-1' })
     await call('orbstack.delete', { worktreeId: 'r::/x' })
     await call('orbstack.pinDocker', { worktreeId: 'r::/x', pinned: true })
+    await call('orbstack.setSandboxClaudeLogin', { enabled: true })
     expect(service.create).toHaveBeenCalledWith({ worktreeId: 'r::/x', displayName: 'x' })
     expect(service.stop).toHaveBeenCalledWith('pod-web-1')
     expect(service.remove).toHaveBeenCalledWith('r::/x', undefined)
     expect(service.setDockerPin).toHaveBeenCalledWith('r::/x', true)
+    expect(service.setSandboxClaudeLogin).toHaveBeenCalledWith(true)
   })
 
   it('rejects malformed params before they reach the service', () => {
