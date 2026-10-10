@@ -149,7 +149,7 @@ describe('PodUiHostServer', () => {
   it('welcomes an admitted peer whose hello carries the runtime token', async () => {
     const { server, options } = await startServer()
     const client = await hello(options.socketPath)
-    expect(JSON.parse(client.lines[0])).toEqual({ type: 'welcome', v: 1, pid: 4242 })
+    expect(JSON.parse(client.lines[0])).toEqual({ type: 'welcome', v: 1, pid: 4242, features: [] })
     expect(options.onUiPresence).toHaveBeenCalledWith(true)
     expect(server.attached).toBe(true)
   })
@@ -157,7 +157,78 @@ describe('PodUiHostServer', () => {
   it('welcomes a version 2 PodNative in its own version', async () => {
     const { options } = await startServer()
     const client = await hello(options.socketPath, TOKEN, 2)
-    expect(JSON.parse(client.lines[0])).toEqual({ type: 'welcome', v: 2, pid: 4242 })
+    expect(JSON.parse(client.lines[0])).toEqual({ type: 'welcome', v: 2, pid: 4242, features: [] })
+  })
+
+  describe('browser verbs', () => {
+    const attach = {
+      type: 'browserAttach',
+      pageId: 'page-1',
+      token: 7,
+      width: 800,
+      height: 600,
+      scale: 2
+    }
+
+    it('names the browser feature and routes its verbs when the runtime takes them', async () => {
+      const onBrowser = vi.fn()
+      const { options } = await startServer({ onBrowser })
+      const client = await hello(options.socketPath)
+      expect(JSON.parse(client.lines[0]).features).toEqual(['browser'])
+      send(client, attach)
+      send(client, {
+        type: 'browserNavigate',
+        pageId: 'page-1',
+        action: 'load',
+        url: 'https://example.com'
+      })
+      await vi.waitFor(() => expect(onBrowser).toHaveBeenCalledTimes(2))
+      expect(onBrowser.mock.calls[0][0]).toEqual(attach)
+    })
+
+    it('ends the connection on a browser verb this runtime did not offer', async () => {
+      const { options } = await startServer()
+      const client = await hello(options.socketPath)
+      send(client, attach)
+      await client.closed
+    })
+
+    it.each([
+      [
+        'a rendezvous name of another app',
+        { type: 'browserRendezvous', service: 'com.evil.browser.0123456789abcdef0123456789abcdef' }
+      ],
+      ['a token of 0', { ...attach, token: 0 }],
+      ['a size over the limit', { ...attach, width: 9000 }],
+      ['a load without a URL', { type: 'browserNavigate', pageId: 'page-1', action: 'load' }],
+      [
+        'a back with a URL',
+        { type: 'browserNavigate', pageId: 'page-1', action: 'back', url: 'https://x' }
+      ],
+      [
+        'an input event with an extra field',
+        {
+          type: 'browserInput',
+          pageId: 'page-1',
+          event: { kind: 'text', text: 'hi', script: 'alert(1)' }
+        }
+      ],
+      [
+        'an unknown modifier',
+        {
+          type: 'browserInput',
+          pageId: 'page-1',
+          event: { kind: 'key', action: 'down', keyCode: 'A', modifiers: ['hyper'] }
+        }
+      ]
+    ])('refuses %s and ends the connection', async (_name, message) => {
+      const onBrowser = vi.fn()
+      const { options } = await startServer({ onBrowser })
+      const client = await hello(options.socketPath)
+      send(client, message)
+      await client.closed
+      expect(onBrowser).not.toHaveBeenCalled()
+    })
   })
 
   describe('refuses', () => {

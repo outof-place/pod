@@ -5,6 +5,10 @@
 // PodNative's side mirrors these shapes (PodRuntime/UIHostChannel.swift in outof-place/pod-native).
 // Version 2 answers a quit: `quitting` and a heartbeat until exit, or `needsConfirmation`.
 import { z } from 'zod'
+import {
+  POD_BROWSER_PANE_CLIENT_MESSAGES,
+  type PodBrowserPaneServerMessage
+} from '../browser-pane/pod-browser-pane-protocol'
 
 export const POD_UI_HOST_PROTOCOL_VERSION = 2
 // The oldest PodNative still admitted; its quit gets no answer (the version 1 behaviour).
@@ -58,15 +62,19 @@ export const PodUiHostClientMessage = z.discriminatedUnion('type', [
   Hello,
   Quit,
   OpenSurface,
-  SecondInstance
+  SecondInstance,
+  ...POD_BROWSER_PANE_CLIENT_MESSAGES
 ])
 export type PodUiHostClientMessage = z.infer<typeof PodUiHostClientMessage>
 export type PodUiHostOpenSurface = z.infer<typeof OpenSurface>
 export type PodUiHostSecondInstance = z.infer<typeof SecondInstance>
 export type PodUiHostQuitReason = z.infer<typeof Quit>['reason']
 
+// What a welcome's `features` may name beyond the base verbs; PodNative sends only what it lists.
+export const POD_UI_HOST_FEATURES = ['browser'] as const
+
 export type PodUiHostServerMessage =
-  | { type: 'welcome'; v: number; pid: number }
+  | { type: 'welcome'; v: number; pid: number; features: readonly string[] }
   // `visible` is false when this launch must not take the screen (ORCA_BACKGROUND_LAUNCH=1).
   | { type: 'surfaceShown'; surface: PodUiHostOpenSurface['surface']; visible: boolean }
   | { type: 'surfaceHidden' }
@@ -90,6 +98,7 @@ export type PodUiHostServerMessage =
     }
   // A committed quit was vetoed (the session could not be saved): this runtime keeps running.
   | { type: 'quitAborted'; reason: string }
+  | PodBrowserPaneServerMessage
 
 /** One line from the client, or null when it isn't a message of this version. */
 export function parsePodUiHostClientLine(line: string): PodUiHostClientMessage | null {
