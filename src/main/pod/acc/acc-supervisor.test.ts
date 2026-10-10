@@ -7,6 +7,8 @@ import { ACC_STATE_DIR } from './acc-lifecycle'
 import { ACC_SERVICES_REPORT, type LoginItemApi } from './acc-services'
 import { appBundlePath, startPodAccSupervisor } from './acc-supervisor'
 
+const ROOTD = 'codes.pod.app.rootd.plist'
+
 const roots: string[] = []
 afterEach(() => {
   for (const root of roots.splice(0)) {
@@ -15,7 +17,7 @@ afterEach(() => {
 })
 
 /** An installed Pod (payload 1.31.0, owner.json saying pod) whose bundle carries one agent. */
-function installedPod(owner = 'pod', ownedVersion = '1.31.0') {
+function installedPod(owner = 'pod', ownedVersion = '1.31.0', { rootd = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'pod-acc-supervisor-'))
   roots.push(root)
   const app = join(root, 'Pod.app')
@@ -29,6 +31,10 @@ function installedPod(owner = 'pod', ownedVersion = '1.31.0') {
     join(app, 'Contents', 'Library', 'LaunchAgents', 'codes.pod.app.acc.tick.plist'),
     ''
   )
+  if (rootd) {
+    mkdirSync(join(app, 'Contents', 'Library', 'LaunchDaemons'), { recursive: true })
+    writeFileSync(join(app, 'Contents', 'Library', 'LaunchDaemons', ROOTD), '')
+  }
   mkdirSync(join(home, ACC_STATE_DIR), { recursive: true })
   writeFileSync(
     join(home, ACC_STATE_DIR, 'owner.json'),
@@ -61,6 +67,25 @@ function fakeLoginItems() {
     setLoginItemSettings: set
   }
   return { api, set }
+}
+
+/** launchd as Electron reports it, by serviceName; `events` logs each (un)registration. */
+function statefulLoginItems(
+  statuses: Record<string, Electron.LoginItemSettings['status']>,
+  events: string[] = []
+) {
+  const set = vi.fn((settings: Electron.Settings) => {
+    events.push(`${settings.openAtLogin ? 'register' : 'unregister'} ${settings.serviceName}`)
+    statuses[settings.serviceName ?? ''] = settings.openAtLogin ? 'enabled' : 'not-registered'
+  })
+  const api: LoginItemApi = {
+    getLoginItemSettings: (o) => ({
+      ...fakeLoginItems().api.getLoginItemSettings(o),
+      status: statuses[o?.serviceName ?? ''] ?? 'not-registered'
+    }),
+    setLoginItemSettings: set
+  }
+  return { api, set, statuses }
 }
 
 function result(code: number): ProcessResult {
@@ -294,6 +319,111 @@ describe('claude-acc supervisor', () => {
       supervisor.stop()
     }
   )
+
+  it.each([
+    ['unregisters', 0],
+    ['keeps', 1]
+  ] as const)(
+    '%s an enabled pod-rootd on handback once pod-rootctl restore exits %i',
+    async (_verb, restoreCode) => {
+      const pod = installedPod('brew', '1.31.0', { rootd: true })
+      const events: string[] = []
+      const loginItems = statefulLoginItems({ [ROOTD]: 'enabled' }, events)
+      const ctl = join(pod.resourcesPath, 'claude-acc', 'pod-rootctl')
+      const run = vi.fn(async (spec: ProcessSpec) => {
+        if (spec.program === ctl) {
+          events.push(`${spec.program} ${(spec.args ?? []).join(' ')}`)
+          return result(restoreCode)
+        }
+        return result(1)
+      })
+      const log = vi.fn()
+      const supervisor = startPodAccSupervisor({
+        config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
+        ...pod,
+        platform: 'darwin',
+        env: {},
+        run,
+        loginItems: loginItems.api,
+        appId: 'codes.pod.app',
+        setTrayYield: () => {},
+        syncTray: () => {},
+        log
+      })
+      await supervisor.services
+      expect(events[0]).toBe(`${ctl} restore`)
+      expect(events.includes(`unregister ${ROOTD}`)).toBe(restoreCode === 0)
+      expect(events).toContain('unregister codes.pod.app.acc.tick.plist')
+      if (restoreCode !== 0) {
+        expect(log).toHaveBeenCalledWith(
+          'claude-acc: pod-rootctl restore failed (exit 1), pod-rootd stays registered'
+        )
+      }
+      supervisor.stop()
+    }
+  )
+
+  it('registers pod-rootd only on the opt-in, and reports it under daemons', async () => {
+    const pod = installedPod('pod', '1.31.0', { rootd: true })
+    const loginItems = statefulLoginItems({})
+    const supervisor = startPodAccSupervisor({
+      config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
+      ...pod,
+      platform: 'darwin',
+      env: {},
+      run: vi.fn(async () => result(1)),
+      loginItems: loginItems.api,
+      appId: 'codes.pod.app',
+      setTrayYield: () => {},
+      syncTray: () => {},
+      log: () => {}
+    })
+    await supervisor.services
+    const daemonCalls = () =>
+      loginItems.set.mock.calls.filter(([settings]) => settings.type === 'daemonService')
+    expect(daemonCalls()).toEqual([])
+    const readReport = () =>
+      JSON.parse(readFileSync(join(pod.home, ACC_STATE_DIR, ACC_SERVICES_REPORT), 'utf8'))
+    expect(readReport()).toMatchObject({
+      services: [
+        {
+          kind: 'agent',
+          name: 'codes.pod.app.acc.tick.plist',
+          status: 'enabled'
+        }
+      ],
+      daemons: [{ kind: 'daemon', name: ROOTD, status: 'not-registered' }]
+    })
+    await expect(supervisor.registerRootd()).resolves.toMatchObject({
+      status: 'enabled',
+      registered: true
+    })
+    expect(daemonCalls()).toEqual([
+      [{ openAtLogin: true, type: 'daemonService', serviceName: ROOTD }]
+    ])
+    expect(readReport().daemons).toEqual([{ kind: 'daemon', name: ROOTD, status: 'enabled' }])
+    supervisor.stop()
+  })
+
+  it('offers no pod-rootd opt-in once claude-acc was handed back', async () => {
+    const pod = installedPod('brew', '1.31.0', { rootd: true })
+    const loginItems = statefulLoginItems({})
+    const supervisor = startPodAccSupervisor({
+      config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
+      ...pod,
+      platform: 'darwin',
+      env: {},
+      run: vi.fn(async () => result(1)),
+      loginItems: loginItems.api,
+      appId: 'codes.pod.app',
+      setTrayYield: () => {},
+      syncTray: () => {},
+      log: () => {}
+    })
+    await expect(supervisor.registerRootd()).resolves.toBeNull()
+    expect(loginItems.set).not.toHaveBeenCalledWith(expect.objectContaining({ openAtLogin: true }))
+    supervisor.stop()
+  })
 
   it('never touches launchd services when the lifecycle skipped', async () => {
     const loginItems = fakeLoginItems()

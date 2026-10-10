@@ -11,12 +11,15 @@ import {
 import {
   bundledAccServices,
   ensureAccServices,
+  readAccServiceStatus,
+  registerAccDaemon,
   removeAccServices,
   writeAccServicesReport,
   type AccServiceReport,
   type LoginItemApi
 } from './acc-services'
 import { isAccMenuHelperRunning, restartAccMenuHelper } from './acc-menu-helper'
+import { accRootdServiceName, restoreAccRootDefaults } from './acc-rootd'
 
 // The helper starts and quits on its own (login item, setup restarting it): look again this often.
 const HELPER_PROBE_MS = 30_000
@@ -75,7 +78,10 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
   stop: () => void
   lifecycle: Promise<AccLifecycleOutcome>
   services: Promise<AccServiceReport[]>
+  /** The opt-in for a root feature; null while Pod does not own claude-acc or ships no pod-rootd. */
+  registerRootd: () => Promise<AccServiceReport | null>
 } {
+  const payloadDir = join(options.resourcesPath, options.config.payload)
   const lifecycle = runAccLifecycle(
     {
       platform: options.platform,
@@ -83,7 +89,7 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
       accountHome: options.accountHome,
       userDataPath: options.userDataPath,
       defaultUserDataPath: options.defaultUserDataPath,
-      payloadDir: join(options.resourcesPath, options.config.payload),
+      payloadDir,
       appPath: appBundlePath(options.execPath),
       mode: options.env.POD_ACC_LIFECYCLE,
       automatedBy: automatedLaunchEnv(options.env)
@@ -96,42 +102,70 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
   const appPath = appBundlePath(options.execPath)
   // Ensured this session: a later handback (owner.json naming another owner) removes them again.
   let servicesOwned = false
-  const applyServices = (mode: 'ensure' | 'remove', payload: string | null): AccServiceReport[] => {
-    const { loginItems, appId } = options
-    if (!loginItems || !appId) {
-      return []
-    }
-    const bundled = bundledAccServices(appPath, appId)
-    const reports =
-      mode === 'ensure'
-        ? ensureAccServices(loginItems, bundled)
-        : removeAccServices(loginItems, bundled)
-    servicesOwned = mode === 'ensure'
-    for (const report of reports) {
-      if (report.registered || report.status !== 'enabled') {
-        options.log(`claude-acc: ${report.service.serviceName} ${report.status}`)
+  let payloadVersion: string | null = null
+  const publishReport = (reports: AccServiceReport[]): AccServiceReport[] => {
+    for (const r of reports) {
+      if (r.registered || r.status !== 'enabled') {
+        options.log(`claude-acc: ${r.service.serviceName} ${r.status}`)
       }
     }
     writeAccServicesReport(options.home, {
       app: appPath,
-      payload,
+      payload: payloadVersion,
       services: reports,
       at: new Date()
     })
     return reports
+  }
+  const ensureServices = (payload: string): AccServiceReport[] => {
+    const { loginItems, appId } = options
+    if (!loginItems || !appId) {
+      return []
+    }
+    servicesOwned = true
+    payloadVersion = payload
+    return publishReport(ensureAccServices(loginItems, bundledAccServices(appPath, appId)))
+  }
+  const removeServices = async (): Promise<AccServiceReport[]> => {
+    const { loginItems, appId } = options
+    if (!loginItems || !appId) {
+      return []
+    }
+    servicesOwned = false
+    payloadVersion = null
+    const bundled = bundledAccServices(appPath, appId)
+    const running = readAccServiceStatus(loginItems, bundled).filter(
+      (r) => r.service.kind === 'daemon' && r.status === 'enabled'
+    )
+    let keep: string[] = []
+    if (running.length > 0) {
+      const restored = await restoreAccRootDefaults(options.run, payloadDir).catch(() => null)
+      if (restored?.code !== 0) {
+        // unregistered, it could never undo them: the next launch's handback pass tries again
+        options.log(
+          `claude-acc: pod-rootctl restore failed (${restored ? `exit ${restored.code}` : 'did not run'}), pod-rootd stays registered`
+        )
+        keep = running.map((r) => r.service.serviceName)
+      }
+    }
+    removeAccServices(
+      loginItems,
+      bundled.filter((service) => !keep.includes(service.serviceName))
+    )
+    return publishReport(readAccServiceStatus(loginItems, bundled))
   }
   // Only once setup.sh made this account Pod's: every lifecycle guard applies to launchd too.
   const services = lifecycle.then(async (outcome) => {
     const d = outcome.decision
     if (d.action === 'skip') {
       // handed back: launchd would otherwise keep running Pod's copies next to the new owner's jobs
-      return d.reason === 'handed-back' ? applyServices('remove', null) : []
+      return d.reason === 'handed-back' ? removeServices() : []
     }
     const owned = outcome.status === 'installed' || outcome.status === 'up-to-date'
     if (!owned) {
       return []
     }
-    const reports = applyServices('ensure', d.version)
+    const reports = ensureServices(d.version)
     // setup.sh just installed a new payload: a helper launchd already ran keeps the old binary
     const helper = reports.find((report) => report.service.kind === 'login-item')
     if (outcome.status === 'installed' && helper?.status === 'enabled' && !helper.registered) {
@@ -155,7 +189,7 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     const owner = servicesOwned ? readOwnerRecord(options.home) : null
     if (!stopped && owner && owner.owner !== 'pod') {
       options.log(`claude-acc: handed to ${owner.owner}, removing Pod's services`)
-      applyServices('remove', null)
+      await removeServices()
     }
   }
   void probe()
@@ -166,9 +200,25 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
   timer?.unref?.()
   // after setup restarted the helper, look at once instead of waiting a whole probe interval
   void lifecycle.then(() => probe())
+  const registerRootd = async (): Promise<AccServiceReport | null> => {
+    await services
+    const { loginItems, appId } = options
+    const daemon = appId
+      ? bundledAccServices(appPath, appId).find(
+          (service) => service.serviceName === accRootdServiceName(appId)
+        )
+      : undefined
+    if (!loginItems || !appId || !daemon || !servicesOwned) {
+      return null
+    }
+    const registered = registerAccDaemon(loginItems, daemon)
+    publishReport(readAccServiceStatus(loginItems, bundledAccServices(appPath, appId)))
+    return registered
+  }
   return {
     lifecycle,
     services,
+    registerRootd,
     stop: () => {
       stopped = true
       if (timer) {

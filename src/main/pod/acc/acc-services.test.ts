@@ -6,6 +6,7 @@ import {
   ACC_MENU_HELPER_ID,
   bundledAccServices,
   ensureAccServices,
+  registerAccDaemon,
   removeAccServices,
   type AccServiceStatus,
   type LoginItemApi
@@ -18,14 +19,18 @@ afterEach(() => {
   }
 })
 
-/** A Pod.app whose bundle carries `agents` and, optionally, the menu helper. */
-function podApp(agents: string[], helper = true): string {
+/** A Pod.app whose bundle carries `agents`, `daemons` and, optionally, the menu helper. */
+function podApp(agents: string[], helper = true, daemons: string[] = []): string {
   const root = mkdtempSync(join(tmpdir(), 'pod-acc-services-'))
   roots.push(root)
   const app = join(root, 'Pod.app')
   mkdirSync(join(app, 'Contents', 'Library', 'LaunchAgents'), { recursive: true })
   for (const name of agents) {
     writeFileSync(join(app, 'Contents', 'Library', 'LaunchAgents', name), '<plist/>')
+  }
+  mkdirSync(join(app, 'Contents', 'Library', 'LaunchDaemons'), { recursive: true })
+  for (const name of daemons) {
+    writeFileSync(join(app, 'Contents', 'Library', 'LaunchDaemons', name), '<plist/>')
   }
   if (helper) {
     mkdirSync(join(app, 'Contents', 'Library', 'LoginItems', 'Pod Menu.app'), { recursive: true })
@@ -68,6 +73,18 @@ describe('claude-acc SMAppService services', () => {
     ])
   })
 
+  it("lists the bundle's pod-rootd as a daemon", () => {
+    const app = podApp(['codes.pod.app.acc.tick.plist'], true, [
+      'codes.pod.app.rootd.plist',
+      'com.example.other.plist'
+    ])
+    expect(bundledAccServices(app, 'codes.pod.app')).toEqual([
+      { kind: 'agent', serviceName: 'codes.pod.app.acc.tick.plist' },
+      { kind: 'daemon', serviceName: 'codes.pod.app.rootd.plist' },
+      { kind: 'login-item', serviceName: ACC_MENU_HELPER_ID }
+    ])
+  })
+
   it('finds nothing in a Pod.app whose payload predates pod-acc-run', () => {
     expect(bundledAccServices(podApp([], false), 'codes.pod.app')).toEqual([])
     expect(bundledAccServices('/nonexistent/Pod.app', 'codes.pod.app')).toEqual([])
@@ -95,6 +112,30 @@ describe('claude-acc SMAppService services', () => {
       { openAtLogin: true, type: 'agentService', serviceName: 'codes.pod.app.acc.janitor.plist' },
       { openAtLogin: true, type: 'loginItemService', serviceName: ACC_MENU_HELPER_ID }
     ])
+  })
+
+  it('never registers a daemon on its own, only on an opt-in', () => {
+    const { api, set } = fakeLaunchd({ 'codes.pod.app.rootd.plist': 'not-registered' })
+    const rootd = { kind: 'daemon', serviceName: 'codes.pod.app.rootd.plist' } as const
+    expect(ensureAccServices(api, [rootd])).toEqual([{ service: rootd, status: 'not-registered' }])
+    expect(set).not.toHaveBeenCalled()
+    expect(registerAccDaemon(api, rootd)).toEqual({
+      service: rootd,
+      status: 'enabled',
+      registered: true
+    })
+    expect(set).toHaveBeenCalledWith({
+      openAtLogin: true,
+      type: 'daemonService',
+      serviceName: 'codes.pod.app.rootd.plist'
+    })
+  })
+
+  it('leaves a daemon that waits for approval to System Settings', () => {
+    const { api, set } = fakeLaunchd({ 'codes.pod.app.rootd.plist': 'requires-approval' })
+    const rootd = { kind: 'daemon', serviceName: 'codes.pod.app.rootd.plist' } as const
+    expect(registerAccDaemon(api, rootd).status).toBe('requires-approval')
+    expect(set).not.toHaveBeenCalled()
   })
 
   it('unregisters every service on removal', () => {
