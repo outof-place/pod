@@ -32,6 +32,7 @@ export function handleMultiplexInputFrame(
     if (!claimed || isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
       return 'applied'
     }
+    stream.outputBatcher.noteInput()
     const outcome = await sendTerminalStreamInput(runtime, {
       terminal: stream.terminal,
       text,
