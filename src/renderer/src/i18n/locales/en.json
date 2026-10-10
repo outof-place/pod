@@ -4228,7 +4228,8 @@
           },
           "usagePercentageLabel": {
             "used": "{{value0}}% used",
-            "remaining": "{{value0}}% left"
+            "remaining": "{{value0}}% left",
+            "bare": "{{value0}}%"
           },
           "UsagePercentageDisplayChangeNotice": {
             "title": "Usage now shows % used",
@@ -4329,6 +4330,10 @@
           "StatusBarUsageChangeNotices": {
             "compactTitle": "Usage display is now compact",
             "compactBody": "One headline metric per provider. Choose <detailed>Detailed</detailed> in the Usage menu to show more limits."
+          },
+          "usageUnitLabel": {
+            "used": "Used",
+            "remaining": "Remaining"
           }
         }
       },
@@ -19549,7 +19554,11 @@
       "signInAgain": "Sign in again",
       "usageSignInLabel": "Sign in again",
       "usageSignInMessage": "The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.",
-      "signIn": "Sign in"
+      "signIn": "Sign in",
+      "moreSignInOptions": "More sign-in options",
+      "copySignInLink": "Copy sign-in link instead",
+      "signInLinkCopied": "Sign-in link copied. Open it in a private window to sign in with a different account.",
+      "signInLinkCopyFailed": "Could not copy the link."
     },
     "managedData": {
       "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",
