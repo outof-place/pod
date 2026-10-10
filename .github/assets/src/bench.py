@@ -338,6 +338,13 @@ def chart(g: dict, summary: dict, theme: Theme, narrow: bool = False) -> Doc:
 
 
 ACC_PHASES = ("before", "after")
+# The user's own Claude Code notes are not a public source: such rows never reach the README.
+PRIVATE_SOURCE = re.compile(r"project memory|\.claude/", re.IGNORECASE)
+
+
+def private_source(m: dict) -> bool:
+    p = m.get("provenance") or {}
+    return bool(PRIVATE_SOURCE.search(str(p.get("source") or "")))
 
 
 def is_acc(m: dict) -> bool:
@@ -348,9 +355,15 @@ def acc_items(summary: dict) -> list[dict]:
     """claude-acc's rows as items (id minus .historical and .before/.after), in summary order; area is the metric's prefix."""
     comps = {c["candidate"]["id"]: c for c in summary.get("comparisons", [])}
     items: dict[str, dict] = {}
+    dropped = [m["id"] for m in summary.get("metrics", []) if is_acc(m) and private_source(m)]
+    if dropped:
+        print(f"claude-acc: left out {len(dropped)} rows sourced from private notes: {', '.join(dropped)}", file=sys.stderr)
     for m in summary.get("metrics", []):
-        if not is_acc(m):
+        if not is_acc(m) or m["id"] in dropped:
             continue
+        note = str((m.get("extra") or {}).get("note") or "")
+        if PRIVATE_SOURCE.search(note):
+            raise SystemExit(f"{m['id']}: its note cites private notes ({note!r}); fix it in pod-bench")
         parts = m["id"].split(".")
         phase = parts[-1] if parts[-1] in ACC_PHASES else None
         key = ".".join(p for p in parts[1:] if p != "historical" and p not in ACC_PHASES)
@@ -363,7 +376,7 @@ def acc_items(summary: dict) -> list[dict]:
              "better": m.get("better", "lower"), "rows": [], "comparisons": []},
         )
         it["rows"].append({**m, "phase": phase})
-        if m["id"] in comps:
+        if m["id"] in comps and comps[m["id"]]["baseline"]["id"] not in dropped:
             it["comparisons"].append(comps[m["id"]])
     for it in items.values():
         # Fresh rows first, then historical; before above after.
