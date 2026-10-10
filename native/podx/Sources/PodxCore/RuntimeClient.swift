@@ -85,8 +85,14 @@ public final class RuntimeClient {
     return response
   }
 
+  /// transport.sendRequest: the stripped envelope whether ok or not; throws transport errors.
+  public func send(_ metadata: RuntimeMetadata, _ method: String, _ params: JSONValue?, timeoutMs: Int) throws(CliError) -> JSONObject {
+    try sendRequest(metadata, method, params, timeoutMs, readOnly: true, fallbackOnConnectFailure: false)
+  }
+
   func sendRequest(
-    _ metadata: RuntimeMetadata, _ method: String, _ params: JSONValue?, _ timeoutMs: Int, readOnly: Bool
+    _ metadata: RuntimeMetadata, _ method: String, _ params: JSONValue?, _ timeoutMs: Int, readOnly: Bool,
+    fallbackOnConnectFailure: Bool = true
   ) throws(CliError) -> JSONObject {
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
     guard fd >= 0 else { throw sentMutation ? connectError() : .needsNode }
@@ -108,7 +114,11 @@ public final class RuntimeClient {
         connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
       }
     }
-    guard connected == 0 else { throw sentMutation ? connectError() : .needsNode }
+    guard connected == 0 else {
+      // Why: a sandbox denial gets Node's runtime_access_denied wording and pid check.
+      if errno == EPERM || errno == EACCES { throw .needsNode }
+      throw sentMutation || !fallbackOnConnectFailure ? connectError() : .needsNode
+    }
 
     let requestId = randomUUID()
     var request = JSONObject()
