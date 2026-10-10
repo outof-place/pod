@@ -55,6 +55,7 @@ import { STRUCTURED_AGENT_SESSION_AGENTS_METHODS } from './structured-agent-sess
 import { ARTIFACT_METHODS } from './artifacts'
 import { AGENT_HOOK_METHODS } from './agent-hooks'
 import { AGENT_LAUNCH_METHODS } from './agent-launch'
+import { POD_WORKSPACE_METHODS } from '../../../pod/workspace/pod-workspace-rpc-methods'
 import { WORKSPACE_LAYOUT_METHODS } from './workspace-layout'
 import { POD_ORBSTACK_METHODS } from '../../../pod/orbstack/pod-orbstack-rpc-methods'
 import { POD_TERMINAL_LANE_METHODS } from './pod-terminal-lane'
@@ -81,6 +82,8 @@ export const ALL_RPC_METHODS = [
   ...AGENT_LAUNCH_METHODS,
   // Fork-only (Pod): OrbStack machines and containers.
   ...POD_ORBSTACK_METHODS,
+  // Fork-only (Pod): Pod Workspace repos, git profile, tidy and adopt.
+  ...POD_WORKSPACE_METHODS,
   ...TERMINAL_METHODS,
   ...TERMINAL_ORPHAN_METHODS,
   ...BROWSER_CORE_METHODS,
