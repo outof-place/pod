@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { swapPodFontFaces } from '../build-plugins/pod-build-profile'
+import { prunePodManifest, swapPodFontFaces } from '../build-plugins/pod-build-profile'
 
 type Bundle = Record<string, { type: string; fileName: string; source?: string | Uint8Array }>
 
@@ -34,7 +34,9 @@ describe('pod-font-swaps', () => {
       'assets/Geist-Variable-AbC123.woff2': 'w',
       'assets/SymbolsNerdFontMono-Regular-x1.woff2': 's'
     })
-    swapPodFontFaces(bundle, GEIST_TO_SYSTEM)
+    expect(swapPodFontFaces(bundle, GEIST_TO_SYSTEM)).toEqual(
+      new Set(['assets/Geist-Variable-AbC123.woff2'])
+    )
 
     const css = cssOf(bundle, 'assets/index-1.css')
     expect(css).not.toMatch(/Geist/)
@@ -67,5 +69,29 @@ describe('pod-font-swaps', () => {
     expect(() => swapPodFontFaces(bundle, GEIST_TO_SYSTEM)).toThrow(
       /Geist-Variable-AbC123\.woff2 is not in the bundle/
     )
+  })
+
+  it('prunes the dropped file from the Vite manifest the web client projection reads', () => {
+    const dropped = new Set(['assets/Geist-Variable-AbC123.woff2'])
+    const manifest = {
+      '_I18nProvider.js': {
+        file: 'assets/I18nProvider.js',
+        css: ['assets/I18nProvider.css'],
+        assets: ['assets/Geist-Variable-AbC123.woff2', 'assets/SymbolsNerdFontMono-x1.woff2']
+      },
+      'src/assets/fonts/Geist-Variable.woff2': {
+        file: 'assets/Geist-Variable-AbC123.woff2',
+        src: 'src/assets/fonts/Geist-Variable.woff2'
+      },
+      'web-index.html': { file: 'web-index.html', isEntry: true }
+    }
+    expect(prunePodManifest(manifest, dropped)).toEqual({
+      '_I18nProvider.js': {
+        file: 'assets/I18nProvider.js',
+        css: ['assets/I18nProvider.css'],
+        assets: ['assets/SymbolsNerdFontMono-x1.woff2']
+      },
+      'web-index.html': { file: 'web-index.html', isEntry: true }
+    })
   })
 })
