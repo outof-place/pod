@@ -37,6 +37,7 @@ function setup(repos: Repo[]) {
   const readStatus = vi.fn(async () => emptyStatus({ checkedAt: clock }))
   const machines = {
     create: vi.fn(async () => ({ ok: true as const })),
+    createSandbox: vi.fn(async () => ({ ok: true as const })),
     remove: vi.fn(async () => ({ ok: true as const })),
     start: vi.fn(async () => ({ ok: true as const })),
     stop: vi.fn(async () => ({ ok: true as const })),
@@ -96,5 +97,23 @@ describe('createPodOrbstackService', () => {
     })
     expect(service.setDockerPin('repo::/', true)).toEqual({ ok: true })
     expect(registry.isDockerPinned('repo::/')).toBe(true)
+  })
+})
+
+describe('agent sandbox switch', () => {
+  it('turns on only for a worktree with a ready sandbox', () => {
+    const { service, registry } = setup([localRepo])
+    expect(service.setAgentSandbox('repo::/', true)).toMatchObject({ ok: false })
+    registry.upsert({
+      name: 'pod-root-1a2b3c4d-sbx',
+      worktreeId: 'repo::/',
+      worktreePath: '/',
+      createdAt: 0,
+      state: 'ready',
+      kind: 'sandbox'
+    })
+    expect(service.setAgentSandbox('repo::/', true)).toEqual({ ok: true })
+    expect(registry.isSandboxAgents('repo::/')).toBe(true)
+    expect(service.setAgentSandbox('repo::/', false)).toEqual({ ok: true })
   })
 })

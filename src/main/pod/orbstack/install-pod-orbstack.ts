@@ -1,6 +1,8 @@
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { Repo } from '../../../shared/repo-types'
+import { probeClaudeCliVersion } from '../../claude/claude-hook-event-versions'
+import { resolveClaudeCommand } from '../../codex-cli/command'
 import { isPodOrbstackEnabled } from './pod-orbstack-flag'
 import { createPodOrbstackMachines } from './pod-orbstack-machines'
 import { loadPodOrbstackRecipe } from './pod-orbstack-recipe'
@@ -11,6 +13,7 @@ import { setPodOrbstackTerminalResolver } from './pod-orbstack-terminal-override
 import {
   createOrbstackToolRunner,
   resolveOrbstackHomeOverride,
+  resolveOrbstackSkipAgentInstall,
   resolveOrbstackToolPaths,
   type OrbstackToolPaths
 } from './pod-orbstack-tools'
@@ -35,7 +38,9 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     run,
     registry,
     home,
-    loadRecipe: () => loadPodOrbstackRecipe(join(dataDir, 'recipe.json'))
+    loadRecipe: () => loadPodOrbstackRecipe(join(dataDir, 'recipe.json')),
+    hostClaudeVersion: () => probeClaudeCliVersion(resolveClaudeCommand()),
+    skipAgentInstall: resolveOrbstackSkipAgentInstall()
   })
   setPodOrbstackService(
     createPodOrbstackService({
@@ -58,16 +63,22 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   setPodOrbstackTerminalResolver((worktreeId) => {
     const entry = registry.findByWorktree(worktreeId)
     const machine = entry?.state === 'ready' ? entry.name : null
+    const sandboxEntry = registry.findByWorktree(worktreeId, 'sandbox')
+    const sandbox =
+      sandboxEntry?.state === 'ready'
+        ? { machine: sandboxEntry.name, agentsByDefault: registry.isSandboxAgents(worktreeId) }
+        : null
     const dockerPinned = registry.isDockerPinned(worktreeId)
-    if (!machine && !dockerPinned) {
+    if (!machine && !sandbox && !dockerPinned) {
       return null
     }
-    const orbPath = machine ? paths().orb : null
+    const orbPath = machine || sandbox ? paths().orb : null
     return {
       orbPath: orbPath ?? '',
       machine: orbPath ? machine : null,
       dockerPinned,
-      orbHome: home
+      orbHome: home,
+      sandbox: orbPath ? sandbox : null
     }
   })
 }

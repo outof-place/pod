@@ -10,16 +10,24 @@ const MachineEntrySchema = z.object({
   worktreePath: z.string().min(1),
   createdAt: z.number(),
   // Why keep creating: a crash mid-create must still let Pod delete what it started.
-  state: z.enum(['creating', 'ready'])
+  state: z.enum(['creating', 'ready']),
+  // shared: the worktree's terminal machine, all of /Users. sandbox: isolated, for agents.
+  kind: z.enum(['shared', 'sandbox']).default('shared'),
+  /** Claude Code version installed in a sandbox; matches the host's at provisioning. */
+  agentVersion: z.string().optional()
 })
 
 const RegistrySchema = z.object({
   version: z.literal(1),
   machines: z.array(MachineEntrySchema),
-  dockerPins: z.array(z.string())
+  dockerPins: z.array(z.string()),
+  /** Worktrees whose Claude launches run in their sandbox by default. */
+  sandboxAgents: z.array(z.string()).default([])
 })
 
+export type PodOrbstackMachineKind = z.infer<typeof MachineEntrySchema>['kind']
 export type PodOrbstackMachineEntry = z.infer<typeof MachineEntrySchema>
+type PodOrbstackMachineEntryInput = z.input<typeof MachineEntrySchema>
 type RegistryData = z.infer<typeof RegistrySchema>
 
 /** The only record of machines Pod created; anything not listed here is read-only to Pod. */
@@ -39,7 +47,9 @@ export class PodOrbstackRegistry {
       parsed = undefined
     }
     const result = RegistrySchema.safeParse(parsed)
-    this.data = result.success ? result.data : { version: 1, machines: [], dockerPins: [] }
+    this.data = result.success
+      ? result.data
+      : { version: 1, machines: [], dockerPins: [], sandboxAgents: [] }
     return this.data
   }
 
@@ -60,8 +70,15 @@ export class PodOrbstackRegistry {
     return this.load().machines.find((entry) => entry.name === name) ?? null
   }
 
-  findByWorktree(worktreeId: string): PodOrbstackMachineEntry | null {
-    return this.load().machines.find((entry) => entry.worktreeId === worktreeId) ?? null
+  findByWorktree(
+    worktreeId: string,
+    kind: PodOrbstackMachineKind = 'shared'
+  ): PodOrbstackMachineEntry | null {
+    return (
+      this.load().machines.find(
+        (entry) => entry.worktreeId === worktreeId && entry.kind === kind
+      ) ?? null
+    )
   }
 
   /** Pod may change a machine only if both the prefix and this registry say it is Pod's. */
@@ -69,7 +86,7 @@ export class PodOrbstackRegistry {
     return name.startsWith(POD_ORBSTACK_MACHINE_PREFIX) && this.findByName(name) !== null
   }
 
-  upsert(entry: PodOrbstackMachineEntry): void {
+  upsert(entry: PodOrbstackMachineEntryInput): void {
     const parsed = MachineEntrySchema.parse(entry)
     const data = this.load()
     data.machines = [...data.machines.filter((existing) => existing.name !== parsed.name), parsed]
@@ -90,6 +107,21 @@ export class PodOrbstackRegistry {
     const data = this.load()
     const others = data.dockerPins.filter((id) => id !== worktreeId)
     data.dockerPins = pinned ? [...others, worktreeId] : others
+    this.save()
+  }
+
+  sandboxAgents(): readonly string[] {
+    return this.load().sandboxAgents
+  }
+
+  isSandboxAgents(worktreeId: string): boolean {
+    return this.load().sandboxAgents.includes(worktreeId)
+  }
+
+  setSandboxAgents(worktreeId: string, enabled: boolean): void {
+    const data = this.load()
+    const others = data.sandboxAgents.filter((id) => id !== worktreeId)
+    data.sandboxAgents = enabled ? [...others, worktreeId] : others
     this.save()
   }
 }
