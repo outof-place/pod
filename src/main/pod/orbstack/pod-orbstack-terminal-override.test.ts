@@ -4,7 +4,8 @@ import {
   SANDBOX_FORWARDED_ENV,
   applyPodOrbstackTerminalOverride,
   setPodOrbstackTerminalResolver,
-  setPodSandboxRelayStarter
+  setPodSandboxRelayStarter,
+  withPodSandboxLaunchChoice
 } from './pod-orbstack-terminal-override'
 
 const ORB = '/Applications/OrbStack.app/Contents/MacOS/bin/orb'
@@ -176,5 +177,25 @@ describe('sandboxed Claude launches', () => {
     const forcedOff = claudeLaunch({ POD_ORBSTACK_SANDBOX: '0' })
     applyPodOrbstackTerminalOverride(forcedOff, plainRequest, forcedOff.command)
     expect(forcedOff.command).toBe("claude --model 'opus'")
+  })
+})
+
+describe('withPodSandboxLaunchChoice', () => {
+  it("carries only the caller's sandbox choice onto the startup plan's env", () => {
+    const plan = { CLAUDE_CODE_ENTRYPOINT: 'cli' }
+    expect(withPodSandboxLaunchChoice(plan, { POD_ORBSTACK_SANDBOX: '1', OTHER: 'x' })).toEqual({
+      CLAUDE_CODE_ENTRYPOINT: 'cli',
+      POD_ORBSTACK_SANDBOX: '1'
+    })
+    expect(withPodSandboxLaunchChoice(undefined, { POD_ORBSTACK_SANDBOX: '0' })).toEqual({
+      POD_ORBSTACK_SANDBOX: '0'
+    })
+  })
+
+  it('leaves the plan alone without a valid choice', () => {
+    const plan = { A: '1' }
+    expect(withPodSandboxLaunchChoice(plan, undefined)).toBe(plan)
+    expect(withPodSandboxLaunchChoice(plan, { POD_ORBSTACK_SANDBOX: 'yes' })).toBe(plan)
+    expect(withPodSandboxLaunchChoice(undefined, { OTHER: 'x' })).toBeUndefined()
   })
 })
