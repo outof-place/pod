@@ -19,9 +19,13 @@ const POD = parseProductIdentity(
 // Loads a stored profile the way persistence does: missing keys come from the defaults.
 function loadProfile(stored: Partial<GlobalSettings>): PersistedState['settings'] {
   const defaults = getDefaultPersistedState(homedir())
-  const settings: GlobalSettings = { ...defaults.settings }
-  delete settings.experimentalNativeTerminal
-  const parsed: PersistedState = { ...defaults, settings: { ...settings, ...stored } }
+  const settings: GlobalSettings = { ...defaults.settings, ...stored }
+  for (const key of ['experimentalNativeTerminal', 'terminalCursorBlink'] as const) {
+    if (!(key in stored)) {
+      Reflect.deleteProperty(settings, key)
+    }
+  }
+  const parsed: PersistedState = { ...defaults, settings }
   const noop = (): void => {}
   const terminal = prepareLoadedTerminalSettings(parsed, noop)
   const profile = prepareLoadedProfileSettings(parsed, defaults, noop)
@@ -31,8 +35,11 @@ function loadProfile(stored: Partial<GlobalSettings>): PersistedState['settings'
 describe('product setting defaults', () => {
   afterEach(() => setProductSettingDefaults({}))
 
-  it('turns the native terminal on only for a product build', () => {
-    expect(productSettingDefaults(POD)).toEqual({ experimentalNativeTerminal: true })
+  it('turns the native terminal on and cursor blink off only for a product build', () => {
+    expect(productSettingDefaults(POD)).toEqual({
+      experimentalNativeTerminal: true,
+      terminalCursorBlink: false
+    })
     expect(productSettingDefaults(null)).toEqual({})
   })
 
@@ -46,6 +53,15 @@ describe('product setting defaults', () => {
     setProductSettingDefaults(productSettingDefaults(POD))
     expect(getDefaultPersistedState(homedir()).settings.experimentalNativeTerminal).toBe(true)
     expect(loadProfile({}).experimentalNativeTerminal).toBe(true)
+  })
+
+  it('defaults cursor blink off in Pod only where the profile has no stored choice', () => {
+    setProductSettingDefaults(productSettingDefaults(POD))
+    expect(getDefaultPersistedState(homedir()).settings.terminalCursorBlink).toBe(false)
+    expect(loadProfile({}).terminalCursorBlink).toBe(false)
+    expect(loadProfile({ terminalCursorBlink: true }).terminalCursorBlink).toBe(true)
+    setProductSettingDefaults(productSettingDefaults(null))
+    expect(loadProfile({}).terminalCursorBlink).toBe(true)
   })
 
   it('keeps a stored choice in Pod, so an explicit opt-out stays off', () => {
