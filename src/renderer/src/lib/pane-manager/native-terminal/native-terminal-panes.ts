@@ -10,6 +10,7 @@ import {
   trackNativeTerminalFrame
 } from './native-terminal-frames'
 import { installNativeTerminalMirror, type NativeTerminalMirror } from './native-terminal-mirror'
+import { applyNativeTerminalGrid } from './native-terminal-grid'
 import { isNativeTerminalRequested } from './native-terminal-requested'
 import { createNativeTerminalSurface } from './native-terminal-surface-create'
 import { connectNativeTerminalSource } from './native-terminal-pty-source'
@@ -105,11 +106,7 @@ function handleEvent(event: NativeTerminalEvent): void {
       state.host.forwardInput(event.data)
       return
     case 'resize':
-      state.grid = { cols: event.cols, rows: event.rows }
-      // xterm's onResize forwards the grid to the PTY through the usual resize gates.
-      if (terminal.cols !== event.cols || terminal.rows !== event.rows) {
-        terminal.resize(event.cols, event.rows)
-      }
+      applyNativeTerminalGrid(terminal, state, event)
       return
     case 'focus':
       if (event.focused) {
