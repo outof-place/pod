@@ -6,7 +6,8 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { BENCH_ROOT } from './lib/bench-session.mjs'
+import os from 'node:os'
+import { BENCH_ROOT, publicPaths } from './lib/bench-session.mjs'
 
 const SCHEMA_VERSION = 2
 const METHODOLOGY = {
@@ -205,7 +206,42 @@ const summary = {
   metrics,
   comparisons
 }
-writeFileSync(path.join(dir, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`)
+// summary.json is published: no row may cite a private note, and no string may carry a local path.
+function publicSafetyProblems(value) {
+  const problems = []
+  const home = os.homedir()
+  const visit = (node, where) => {
+    if (typeof node === 'string') {
+      if (node.includes(home) || node.includes(home.replaceAll('/', '-'))) {
+        problems.push(`${where}: a local path`)
+      }
+    } else if (node && typeof node === 'object') {
+      for (const [key, child] of Object.entries(node)) {
+        visit(child, `${where}.${key}`)
+      }
+    }
+  }
+  visit(value, 'summary')
+  const LOCAL = /(^|[\s(])(~\/|\/Users\/|\/private\/|\/var\/folders\/)|\.claude\//
+  for (const [index, row] of [...value.metrics, ...value.comparisons].entries()) {
+    for (const text of [row.provenance?.source, row.provenance?.note, row.extra?.note]) {
+      if (typeof text === 'string' && (/memory/i.test(text) || LOCAL.test(text))) {
+        problems.push(
+          `row ${index} (${row.id ?? row.label}): source or note "${text.slice(0, 80)}" cites a private note or a local path`
+        )
+      }
+    }
+  }
+  return problems
+}
+
+const publicSummary = JSON.parse(JSON.stringify(summary, publicPaths))
+const problems = publicSafetyProblems(publicSummary)
+if (problems.length > 0) {
+  console.error(`summary.json not written: ${problems.length} problem(s)\n${problems.join('\n')}`)
+  process.exit(1)
+}
+writeFileSync(path.join(dir, 'summary.json'), `${JSON.stringify(publicSummary, null, 2)}\n`)
 console.log(
   `summary: ${metrics.length} metrics, ${comparisons.length} comparisons -> ${path.join(dir, 'summary.json')}`
 )

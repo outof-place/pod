@@ -160,6 +160,16 @@ export function resultDir() {
   return dir
 }
 
+const HOME_DIR = os.homedir()
+const MANGLED_HOME = HOME_DIR.replaceAll('/', '-')
+
+/** JSON replacer for files that get published: the user's home directory becomes `~`. */
+export function publicPaths(_key, value) {
+  return typeof value === 'string'
+    ? value.replaceAll(HOME_DIR, '~').replaceAll(MANGLED_HOME, '-~')
+    : value
+}
+
 /**
  * Writes results/<date>/<suite>.json. `metrics` are the headline rows summary.json collects:
  * { id, subject, metric, unit, better: 'lower'|'higher', stats, conditions }.
@@ -174,7 +184,7 @@ export function writeSuiteResult(suite, body) {
     aggregation: BENCHMARK_SAMPLE_AGGREGATION,
     ...body
   }
-  writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`)
+  writeFileSync(file, `${JSON.stringify(result, publicPaths, 2)}\n`)
   log(`wrote ${file}`)
   return file
 }
