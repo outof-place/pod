@@ -144,3 +144,82 @@ describe('leading-edge flush', () => {
     batcher.dispose()
   })
 })
+
+describe('Pod input flush', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    vi.stubEnv('ORCA_TERMINAL_OUTPUT_LEADING_EDGE', '1')
+    vi.stubEnv('POD_TERMINAL_INPUT_FLUSH', '1')
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllEnvs()
+  })
+
+  it('flushes a pending batch 1 ms after input and keeps 1 ms batches for 8 ms', () => {
+    const delivered: string[] = []
+    const batcher = createTerminalOutputBatcher((data) => delivered.push(data), {
+      fastAfterInput: true
+    })
+    batcher.push('a')
+    vi.advanceTimersByTime(1)
+    batcher.push('b')
+    batcher.noteInput()
+    vi.advanceTimersByTime(1)
+    expect(delivered).toEqual(['a', 'b'])
+    batcher.push('c')
+    vi.advanceTimersByTime(1)
+    expect(delivered).toEqual(['a', 'b', 'c'])
+    vi.advanceTimersByTime(8)
+    batcher.push('d')
+    batcher.push('e')
+    vi.advanceTimersByTime(4)
+    expect(delivered).toEqual(['a', 'b', 'c', 'd'])
+    batcher.push('f')
+    vi.advanceTimersByTime(1)
+    expect(delivered).toEqual(['a', 'b', 'c', 'd', 'ef'])
+    batcher.dispose()
+  })
+
+  it('ignores input for batchers that did not opt in, and with the kill switch', () => {
+    for (const [options, env] of [
+      [{}, '1'],
+      [{ fastAfterInput: true }, '0']
+    ] as const) {
+      vi.stubEnv('POD_TERMINAL_INPUT_FLUSH', env)
+      const delivered: string[] = []
+      const batcher = createTerminalOutputBatcher((data) => delivered.push(data), options)
+      batcher.push('a')
+      vi.advanceTimersByTime(1)
+      batcher.push('b')
+      batcher.noteInput()
+      vi.advanceTimersByTime(1)
+      expect(delivered).toEqual(['a'])
+      vi.advanceTimersByTime(4)
+      expect(delivered).toEqual(['a', 'b'])
+      batcher.dispose()
+    }
+  })
+
+  it('bounds frames per second for a held key repeating every 30 ms during a flood', () => {
+    const count = (fastAfterInput: boolean): number => {
+      let frames = 0
+      const batcher = createTerminalOutputBatcher(() => frames++, { fastAfterInput })
+      for (let ms = 0; ms < 3000; ms += 1) {
+        if (ms % 30 === 0) {
+          batcher.noteInput()
+        }
+        batcher.push('y\r\n')
+        vi.advanceTimersByTime(1)
+      }
+      batcher.dispose()
+      return frames / 3
+    }
+    const normal = count(false)
+    const fast = count(true)
+    expect(normal).toBeLessThanOrEqual(201)
+    // 8 one-ms batches after each key plus 5 ms batches for the other 22 ms: at most 14 frames per 30 ms.
+    expect(fast).toBeLessThanOrEqual(470)
+    expect(fast).toBeGreaterThan(normal)
+  })
+})

@@ -6,6 +6,7 @@ import {
 import { iterateTerminalOutputFrameChunks } from '../../terminal-output-frame-chunks'
 import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
 import { createTerminalOutputBatcher } from './terminal-output-batcher'
+import { isRuntimeLocalStreamConnectionId } from '../../../../../shared/runtime-local-stream-protocol'
 import { appendPendingMultiplexOutput } from './terminal-stream-replay'
 import { updateViewportForClient } from './terminal-viewport-update'
 import {
@@ -75,19 +76,22 @@ export async function initializeMultiplexStream(
     pendingOutputOverflowed: false,
     lastResizeCols: undefined,
     resizeGeneration: 0,
-    outputBatcher: createTerminalOutputBatcher((data, meta) => {
-      if (meta?.cwd !== undefined) {
-        state.sendFrame(
-          request.streamId,
-          TerminalStreamOpcode.Metadata,
-          encodeTerminalStreamJson({ cwd: meta.cwd }),
-          meta.seq
-        )
-      }
-      for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
-        state.queueOrSendOutput(stream, chunk)
-      }
-    }),
+    outputBatcher: createTerminalOutputBatcher(
+      (data, meta) => {
+        if (meta?.cwd !== undefined) {
+          state.sendFrame(
+            request.streamId,
+            TerminalStreamOpcode.Metadata,
+            encodeTerminalStreamJson({ cwd: meta.cwd }),
+            meta.seq
+          )
+        }
+        for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
+          state.queueOrSendOutput(stream, chunk)
+        }
+      },
+      { fastAfterInput: isRuntimeLocalStreamConnectionId(connectionId) }
+    ),
     unsubscribeData: () => {},
     unsubscribeResize: () => {},
     unsubscribeFit: () => {},
