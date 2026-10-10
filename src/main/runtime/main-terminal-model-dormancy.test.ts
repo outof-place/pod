@@ -201,6 +201,31 @@ describe('MainTerminalModelDormancy', () => {
     expect(dormancy.wasEverDormant('pty')).toBe(false)
   })
 
+  it('keeps a pinned PTY live, wakes it on pin, and restarts the grace period on release', () => {
+    const { state, dormancy, goDormant } = createHarness()
+    goDormant('pty')
+    const release = dormancy.pin('pty')
+    expect(state.materialized).toEqual(['pty'])
+    dormancy.seedSettled('pty', 0)
+    state.now += MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS * 2
+    expect(dormancy.onChunk('pty', 0)).toBe(false)
+    release()
+    release()
+    state.now += MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS - 1
+    expect(dormancy.onChunk('pty', 0)).toBe(false)
+    state.now += 1
+    expect(dormancy.onChunk('pty', 0)).toBe(true)
+  })
+
+  it('holds a pin across a PTY generation change', () => {
+    const { state, dormancy } = createHarness()
+    dormancy.pin('pty')
+    state.generation = 2
+    dormancy.onChunk('pty', 0)
+    state.now += MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS * 2
+    expect(dormancy.onChunk('pty', 0)).toBe(false)
+  })
+
   it('ignores demand for a PTY it never saw', () => {
     const { state, dormancy } = createHarness()
     dormancy.noteDemand('unknown')
