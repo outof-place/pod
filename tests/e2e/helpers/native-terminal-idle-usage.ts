@@ -199,6 +199,20 @@ export async function setTerminalMode(page: Page, mode: TerminalMode): Promise<v
   await enableNativeTerminal(page, mode === 'native')
 }
 
+// GPU memory the process owns but has not mapped, where Metal keeps its working pool.
+export function metalWorkingPoolMb(pid: number): number {
+  const report = memoryReport(pid).footprint ?? ''
+  const line = report
+    .split('\n')
+    .find((row) => row.endsWith('Owned physical footprint (unmapped) (graphics)'))
+  const dirty = line ? /^\s*([\d.]+) (B|KB|MB|GB)/.exec(line) : null
+  if (!dirty) {
+    return 0
+  }
+  const scale: Record<string, number> = { B: 1 / (1024 * 1024), KB: 1 / 1024, MB: 1, GB: 1024 }
+  return Number.parseFloat(dirty[1]) * (scale[dirty[2]] ?? 0)
+}
+
 // vmmap/footprint category summaries for one process; null when the tool cannot read it.
 export function memoryReport(pid: number): { vmmap: string | null; footprint: string | null } {
   const run = (command: string, args: string[]): string | null => {

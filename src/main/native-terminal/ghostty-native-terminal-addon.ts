@@ -100,6 +100,7 @@ export type GhosttyTerminalAddon = {
     ghosttyFocused: boolean
     ghosttyVisible: boolean
     presentedFrames: number
+    strayCursorTimers: number
   } | null
   debugScrollbarScroll: (surfaceId: number, fraction: number) => boolean
   debugProcessUsage: (pid: number) => NativeProcessUsage | null
