@@ -22,7 +22,9 @@ export function PodOrbstackSandboxRow({
   row: PodOrbstackWorktreeRow
   canCreate: boolean
 }): React.JSX.Element {
-  const ready = row.sandbox !== null && row.sandboxReady && !row.sandbox.missing
+  // Sandboxes from before --isolate-network reach the Mac's localhost; Pod no longer runs agents there.
+  const legacy = row.sandbox !== null && row.sandboxReady && !row.sandboxNetworkIsolated
+  const ready = row.sandbox !== null && row.sandboxReady && !row.sandbox.missing && !legacy
   return (
     <div
       data-testid="pod-orbstack-sandbox-row"
@@ -35,7 +37,14 @@ export function PodOrbstackSandboxRow({
             <SettingsBadge tone={ready ? 'accent' : 'muted'} className="font-mono">
               {row.sandbox.name}
             </SettingsBadge>
-            {row.sandboxAgentVersion ? (
+            {legacy ? (
+              <span className="truncate">
+                {translate(
+                  'podOrbstack.sandbox.legacy',
+                  'Not network-isolated. Delete and recreate it to use it.'
+                )}
+              </span>
+            ) : row.sandboxAgentVersion ? (
               <span className="truncate">
                 {translate('podOrbstack.sandbox.version', 'Claude Code {{version}}', {
                   version: row.sandboxAgentVersion
