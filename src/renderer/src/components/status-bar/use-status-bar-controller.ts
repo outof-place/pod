@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { POD_USAGE_POLLING } from '../../../../shared/product/features'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '../../store'
 import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
@@ -264,8 +265,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     handleRefresh,
     handleUsageDetails,
     handleUsageMenuOpenChange,
-    hasVisibleUsageMeters,
-    isEmptyUsageState,
+    hasVisibleUsageMeters: POD_USAGE_POLLING && hasVisibleUsageMeters,
+    isEmptyUsageState: POD_USAGE_POLLING && isEmptyUsageState,
     isRefreshing,
     leadingRef,
     menuOpen,
