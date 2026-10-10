@@ -36,36 +36,50 @@
     },
     {
       "branch": "perf/git-status-untracked-cache",
-      "upstream": "https://github.com/stablyai/orca/pull/26979"
+      "upstream": "https://github.com/stablyai/orca/pull/26979",
+      "squash": true,
+      "note": "squashed: maintainers merge Orca main into this PR branch"
     },
     {
       "branch": "perf/session-scanner-incremental",
-      "upstream": "https://github.com/stablyai/orca/pull/27009"
+      "upstream": "https://github.com/stablyai/orca/pull/27009",
+      "squash": true,
+      "note": "squashed: maintainers merge Orca main into this PR branch"
     },
     {
-      "branch": "perf/usage-store-offmain",
-      "upstream": "https://github.com/stablyai/orca/pull/26980"
+      "branch": "pod/session-scanner-fsevents",
+      "forkOnly": "session scanner FSEvents cache",
+      "base": "fa82f0c2575f00ced66c1f980b220e144bfa4abe",
+      "note": "0c8bb204a5: Neil’s watched tree cache (5bbb425641, bounded) layered back onto his bounded fresh discovery; macOS only, the fresh walk is the fallback"
     },
     {
       "branch": "perf/native-proc-info-darwin",
       "upstream": "https://github.com/stablyai/orca/pull/26985",
-      "note": "Adds a macOS native addon plus a beforePack guard"
+      "note": "Adds a macOS native addon plus a beforePack guard; squashed: maintainers merge Orca main into this PR branch",
+      "squash": true
+    },
+    {
+      "branch": "pod/proc-kernel-snapshot",
+      "forkOnly": "kernel process snapshot",
+      "base": "e528cd95638da408d4029920a9a705b588c46ef5",
+      "note": "9a202af064 + 9771e7d948: restores the kernel full-table snapshot, cheap reader, proc_tty_names.c, C-locale lstart, the snapshot worker and its orcad/knip registrations on top of Neil’s readProcessForegroundGroup; ps stays the fallback"
     },
     {
       "branch": "stack/ps-locale",
       "upstream": "https://github.com/stablyai/orca/pull/27005",
-      "base": "f3b5fba03f0609a37b898474237c23dee797c648",
-      "note": "fix/ps-locale-independent-start-time replayed onto perf/native-proc-info-darwin f3b5fba03f (imports merged); refresh when either changes"
-    },
-    {
-      "branch": "perf/daemon-binary-pty-frames",
-      "upstream": "https://github.com/stablyai/orca/pull/27006",
-      "note": "nt-perf main-feed builds on its DaemonEvent path"
+      "base": "9771e7d9489bc80fd022fd4c092934a674b768a5",
+      "note": "fix/ps-locale-independent-start-time replayed onto pod/proc-kernel-snapshot 9771e7d948 by orca-hotpaths (runProcess from @orca/process-host, nativeProcessTables, plus psLocaleEnvironment); refresh when either changes"
     },
     {
       "branch": "perf/pty-background-ack",
       "upstream": "https://github.com/stablyai/orca/pull/27033",
       "note": "sidecarOnly hidden delivery + receipt credit; nt-perf parse-once builds on it"
+    },
+    {
+      "branch": "perf/lazy-main-terminal-model",
+      "upstream": "https://github.com/stablyai/orca/pull/27086",
+      "base": "ec99e24f1c",
+      "note": "b4-perf; built on #27033. Ships only together with pod/native-model-consumer after the native terminal: without it a visible native pane freezes once main’s model goes dormant"
     },
     {
       "branch": "fix/xterm-empty-write-barrier",
@@ -87,25 +101,48 @@
     },
     {
       "branch": "pod/identity",
-      "forkOnly": "Pod identity: name, bundle id, icon, URL scheme and CLI name"
+      "forkOnly": "Pod identity: name, bundle id, icon, URL scheme and CLI name",
+      "base": "71bec057fd"
     },
     {
       "branch": "stack/native-terminal-on-proc-info",
       "upstream": "https://github.com/stablyai/orca/pull/26914",
-      "base": "f3b5fba03f0609a37b898474237c23dee797c648",
-      "note": "feat/native-ghostty-terminal 7d77474138 replayed onto perf/native-proc-info-darwin f3b5fba03f (package.json build steps merged; 7d77474138 drops both imports of the moved isRemoteRuntimePtyId); refresh when either changes"
+      "base": "4834f3cbc5",
+      "note": "feat/native-ghostty-terminal 7d77474138 squashed onto the stack after #26985 and #27086: package.json build chains carry both native helpers; maybe-hydrate and fresh-spawn-start take pod/native-model-consumer 8f92006a9c’s resolution. Refresh when either changes"
+    },
+    {
+      "branch": "pod/native-model-consumer",
+      "forkOnly": "Native feed holds main’s terminal model through #27086 dormancy",
+      "base": [
+        "7d77474138",
+        "ddaa5c6144"
+      ],
+      "note": "nt-input; only 7bd0fd98d0 replays. Must follow both the native terminal and #27086"
     },
     {
       "branch": "pod/libghostty-patched",
-      "forkOnly": "patched libghostty (cursor timer idle)",
-      "base": "05e297b33e",
-      "note": "nt-lean; one commit on feat/native-ghostty-terminal 05e297b33e pointing fetch-libghostty-macos.mjs at the patched GhosttyKit build; base excludes the native branch"
+      "forkOnly": "patched libghostty (cursor timer idle): fetch-libghostty-macos.mjs pins outof-place/libghostty-spm release upstream.35a81a980bb9+pod.1 (Lakr233 upstream.35a81a980bb9 + patch 0019, macOS slice only)",
+      "base": "05e297b33ebfc2415118ce182a98b12ba2cbff00",
+      "note": "one commit 2656902679 on feat/native-ghostty-terminal 05e297b33e; base excludes the native branch. Drop once Lakr233/libghostty-spm#76 ships in a Lakr233 release and the PR branch pins that"
     },
     {
       "branch": "stack/pod-overlay",
       "forkOnly": "Pod overlay: Stably-hosted services off, product name in UI copy",
       "base": "37eebe3860",
-      "note": "pod/overlay 4e08725204 replayed onto the stack; its bundled-plugins-only commit merged with #26975 (plugin-discovery host argument, locale keys). Refresh when pod/overlay changes, or rebase pod/overlay onto stack/plugins"
+      "note": "pod/overlay 0bcad4d75e replayed onto the stack; its bundled-plugins-only commit merged with #26975 (plugin-discovery host argument, locale keys). Refresh when pod/overlay changes, or rebase pod/overlay onto stack/plugins"
+    },
+    {
+      "branch": "i18n/main-process-dialogs",
+      "upstream": "https://github.com/stablyai/orca/pull/27065"
+    },
+    {
+      "branch": "i18n/native-notifications",
+      "upstream": "https://github.com/stablyai/orca/pull/27069",
+      "note": "stacked on #27065 (its first commit is fa6d779eb7)"
+    },
+    {
+      "branch": "i18n/renderer-first-run",
+      "upstream": "https://github.com/stablyai/orca/pull/27075"
     },
     {
       "branch": "pod/native-default",
@@ -139,8 +176,8 @@
     {
       "branch": "stack/pod-workspace",
       "forkOnly": "Pod workspace: ~/pod workspace root and clone default <root>/<owner>/<repo>, Time Machine/Spotlight/volume hygiene, Settings > Workspace health dashboard, workspace roots registered with Pod native search",
-      "base": "4e59f4d146",
-      "note": "pod/workspace ec516fb8df replayed onto main 3bad7ab9a7 plus pod/search-client d59253f754 (base 4e59f4d146 = that replay). Needs pod/search-client at d59253f754 or later earlier in the stack. The top commit afde803a0b (workspace roots and index status wired to pod/search-client) exists only on this copy; keep it when refreshing from pod/workspace"
+      "base": "82c74be7f6",
+      "note": "pod/workspace ec516fb8df plus the stack-only wiring commit afde803a0b, replayed onto the stack (its en.json keys appended after the i18n PRs’). Needs pod/search-client earlier in the stack. Keep afde803a0b when refreshing from pod/workspace"
     }
   ]
 }
