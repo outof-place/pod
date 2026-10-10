@@ -18,6 +18,7 @@ import {
   readActiveProfileId,
   readPersistedHttp1CompatibilityMode
 } from './http1-compatibility-profile-state'
+import { isPodUiHostLaunch } from '../pod/ui-host/pod-ui-host-launch'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
@@ -337,7 +338,12 @@ export function enableMainProcessGpuFeatures(): void {
   }
 
   // Fork-only A/B: ORCA_SKIA_GRAPHITE=1 keeps Graphite to re-test the stale-tile bug it was disabled for.
-  if (process.platform === 'darwin' && process.env.ORCA_SKIA_GRAPHITE !== '1') {
+  if (
+    process.platform === 'darwin' &&
+    process.env.ORCA_SKIA_GRAPHITE !== '1' &&
+    // Fork-only (Pod): one-app's browser panes need shared textures, which Ganesh turns off.
+    !isPodUiHostLaunch()
+  ) {
     // Why: Graphite can strand corrupt Metal tiles after idle; Ganesh preserves GPU compositing without the stale surface.
     // Reached on every macOS launch only because GPU fallback skips this function and is win32-only; if fallback ever
     // reaches macOS this must move out of this path or Macs silently lose the fix.
