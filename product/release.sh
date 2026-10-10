@@ -151,6 +151,11 @@ if [ -f config/scripts/fetch-claude-acc-payload.mjs ]; then
   log "fetch the claude-acc payload pinned in config/claude-acc-payload.json"
   node config/scripts/fetch-claude-acc-payload.mjs
 fi
+# the Python that runs it (claude-acc phase 2), pinned in config/pod-python.json; also a no-op then.
+if [ -f config/scripts/fetch-pod-python.mjs ]; then
+  log "fetch the Python pinned in config/pod-python.json"
+  node config/scripts/fetch-pod-python.mjs
+fi
 
 log "package, sign and notarize the app (electron-builder staples it)"
 rm -rf dist

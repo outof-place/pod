@@ -37,7 +37,7 @@ Changing a name is a one-line edit here; nothing else in the repo hard-codes the
   - It copies `identity.json` into `Contents/Resources/product-identity.json` and Orca's `LICENSE` into `ORCA-LICENSE.txt`, and writes `product-upstream.json` (the Orca tag and commit, from `upstream.json` or git).
   - It patches the bundled CLI launcher to the product's executable and profile, and adds it as `bin/<cliName>` next to `bin/orca`.
   - It renames the Computer Use helper to `computerUseDisplayName` before the helper is signed.
-  - With `config/pod-acc-extra-resources.cjs` in the stack, it ships the claude-acc payload and the distro plugins.
+  - With `config/pod-acc-extra-resources.cjs` in the stack, it ships the claude-acc payload, its Python and the distro plugins. A payload with pod-acc-run also gets its launchd plists and Pod Menu.app in Contents/Library, where SMAppService looks.
 - **Runtime:** `src/main/product-identity/product-identity.ts` reads the resource in packaged builds only, and refuses a malformed file.
   - Startup pins `userData` to `userDataName`.
   - It sets the pre-ready app name to `keychainName`, which names the keychain item.
