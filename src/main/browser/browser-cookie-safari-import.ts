@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { brandProductCopy } from '../product-identity/product-overlay'
 import type { BrowserCookieImportResult } from '../../shared/browser-workspace-types'
 import { decodeSafariBinaryCookies } from './browser-cookie-safari-parser'
 import { importValidatedCookies, cookieImportTarget } from './browser-cookie-import-pipeline'
@@ -26,8 +27,9 @@ export async function importCookiesFromSafari(
     if (isPermError) {
       return {
         ok: false,
-        reason:
+        reason: brandProductCopy(
           'macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.'
+        )
       }
     }
     return { ok: false, reason: 'Could not read Safari cookies.' }
