@@ -40,16 +40,31 @@ describe('createSandboxAccess', () => {
     setPodSandboxAnthropicCredentials({ mode: () => 'api-key', authHeaders: async () => ({}) })
     expect(access.start('pod-a-sbx', hookServer).vmEnv).toMatchObject({
       NODE_EXTRA_CA_CERTS: '/etc/pod-sandbox/anthropic-ca.pem',
-      ANTHROPIC_API_KEY: 'pod-sandbox-no-credential'
+      ANTHROPIC_API_KEY: expect.stringMatching(/^pod-sandbox-no-credential-[0-9a-f]{32}$/)
     })
     const caCert = ensured[0]?.routes.anthropic?.route.caCertPem
     expect(caCert).toContain('BEGIN CERTIFICATE')
 
     setPodSandboxAnthropicCredentials({ mode: () => 'oauth', authHeaders: async () => ({}) })
     const oauth = access.start('pod-a-sbx', hookServer).vmEnv
-    expect(oauth.CLAUDE_CODE_OAUTH_TOKEN).toBe('pod-sandbox-no-credential')
+    expect(oauth.CLAUDE_CODE_OAUTH_TOKEN).toMatch(/^pod-sandbox-no-credential-[0-9a-f]{32}$/)
     expect(oauth.ANTHROPIC_API_KEY).toBeUndefined()
     expect(ensured[1]?.routes.anthropic?.route.caCertPem).toBe(caCert)
+  })
+
+  it('gives each sandbox its own random placeholder, kept across launches, new after forget', () => {
+    const { relays } = fakeRelays()
+    const access = createSandboxAccess({ relays, readPrivacy: () => OPEN_PRIVACY })
+    setPodSandboxAnthropicCredentials({ mode: () => 'api-key', authHeaders: async () => ({}) })
+    const a = access.start('pod-a-sbx', hookServer).vmEnv
+    const b = access.start('pod-b-sbx', hookServer).vmEnv
+    expect(a.ANTHROPIC_API_KEY).not.toBe(b.ANTHROPIC_API_KEY)
+    expect(a.ORCA_AGENT_HOOK_TOKEN).not.toBe(b.ORCA_AGENT_HOOK_TOKEN)
+    expect(access.start('pod-a-sbx', hookServer).vmEnv.ANTHROPIC_API_KEY).toBe(a.ANTHROPIC_API_KEY)
+    access.forget('pod-a-sbx')
+    const again = access.start('pod-a-sbx', hookServer).vmEnv
+    expect(again.ANTHROPIC_API_KEY).not.toBe(a.ANTHROPIC_API_KEY)
+    expect(again.ORCA_AGENT_HOOK_TOKEN).not.toBe(a.ORCA_AGENT_HOOK_TOKEN)
   })
 
   it('binds the credential source to each launch and releases it with the sandbox', () => {
