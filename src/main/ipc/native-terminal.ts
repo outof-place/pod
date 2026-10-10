@@ -146,9 +146,9 @@ export function registerNativeTerminalHandlers(
       setSurfaceFrames(event.sender, frames.filter(isFrame))
     }
   })
-  ipcMain.on('nativeTerminal:focus', (event, surfaceId: unknown) => {
+  ipcMain.on('nativeTerminal:focus', (event, surfaceId: unknown, unlessMousePressed: unknown) => {
     if (isSurfaceId(surfaceId)) {
-      focusSurface(event.sender, surfaceId)
+      focusSurface(event.sender, surfaceId, unlessMousePressed === true)
     }
   })
   ipcMain.handle(
