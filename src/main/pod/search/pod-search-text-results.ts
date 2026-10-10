@@ -51,6 +51,38 @@ export function buildOgdSearchRequest(options: SearchOptions, root: string): Ogd
 }
 
 /**
+ * ogd's `ranges16` (search.ranges16): the byte ranges as UTF-16 offsets into the decoded line.
+ * Used only when it pairs one-to-one with `ranges` and stays inside the line; ogd omits it when
+ * an offset falls inside a character, and the byte ranges are decoded instead.
+ */
+function utf16Spans(
+  value: unknown,
+  count: number,
+  lineLength: number
+): { start: number; end: number }[] | null {
+  if (!Array.isArray(value) || count === 0 || value.length !== count) {
+    return null
+  }
+  const spans: { start: number; end: number }[] = []
+  for (const range of value) {
+    const [start, end]: unknown[] = Array.isArray(range) ? range : []
+    if (
+      !Number.isSafeInteger(start) ||
+      !Number.isSafeInteger(end) ||
+      typeof start !== 'number' ||
+      typeof end !== 'number' ||
+      start < 0 ||
+      end < start ||
+      end > lineLength
+    ) {
+      return null
+    }
+    spans.push({ start, end })
+  }
+  return spans
+}
+
+/**
  * Builds Orca's SearchResult from an ogd `search` reply in `search.full_lines` form: `text` is
  * the whole line, and for invalid UTF-8 base64 `bytes` carries it and `ranges` index those bytes,
  * so the line decodes exactly as ripgrep's JSON does. Null when a line was clipped.
@@ -105,7 +137,10 @@ export function ogdSearchReplyToResult(
     const { text: lineContent, readOffset } = decodeRipgrepLine(
       bytes === undefined ? { text } : { bytes }
     )
-    for (const sub of ripgrepMatchRanges(lineContent, submatches, readOffset, markTruncated)) {
+    const spans =
+      utf16Spans(match.ranges16, match.ranges.length, lineContent.length) ??
+      ripgrepMatchRanges(lineContent, submatches, readOffset, markTruncated)
+    for (const sub of spans) {
       const verdict = pushSearchMatch({
         fileResult,
         accumulator: acc,
