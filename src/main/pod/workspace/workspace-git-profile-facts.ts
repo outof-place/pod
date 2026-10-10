@@ -14,6 +14,7 @@ export const PROFILE_KEYS: readonly PodGitProfileKey[] = [
   'core.fsmonitor',
   'index.version',
   'checkout.workers',
+  'checkout.thresholdForParallelism',
   'fetch.writeCommitGraph',
   'maintenance.strategy',
   'maintenance.prefetch.enabled',
