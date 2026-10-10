@@ -35,8 +35,14 @@ const runtimeOwnedHiddenRendererPtys = new Set<string>()
 // Why: a PTY whose main model is being rebuilt from the daemon snapshot keeps feeding its
 // renderer, which answers its queries, until the model has caught up with the stream.
 const modelHandoffPtys = new Set<string>()
+// Why: main asked the daemon to answer while its own model is dormant, so the view keeps
+// answering until the daemon's in-order marker confirms.
+const daemonHandoffPtys = new Set<string>()
+// Why: set by the daemon's in-order marker; after a take-back the view waits for the next one.
+const daemonResponderConfirmedPtys = new Set<string>()
 const hiddenMarkListeners = new Set<(id: string) => void>()
-let modelHandoffChangeListener: ((id: string) => void) | null = null
+const hiddenUnmarkListeners = new Set<(id: string) => void>()
+let viewGateChangeListener: ((id: string) => void) | null = null
 
 let droppedHiddenDeliveryChars = 0
 let droppedHiddenDeliveryChunks = 0
@@ -66,6 +72,13 @@ export function markHiddenRendererPty(id: string): void {
 export function unmarkHiddenRendererPty(id: string): { droppedWhileHidden: boolean } {
   hiddenRendererPtys.delete(id)
   runtimeOwnedHiddenRendererPtys.delete(id)
+  for (const listener of hiddenUnmarkListeners) {
+    listener(id)
+  }
+  // Why: while the daemon still answers, the view stays gated; its marker consumes the latch.
+  if (daemonResponderConfirmedPtys.has(id)) {
+    return { droppedWhileHidden: false }
+  }
   const droppedWhileHidden = droppedSinceHiddenPtys.delete(id)
   return { droppedWhileHidden }
 }
@@ -87,6 +100,11 @@ export function registerHiddenRendererPtyMarkListener(listener: (id: string) => 
   hiddenMarkListeners.add(listener)
 }
 
+/** Runs inside every unmark, before the caller reads droppability. */
+export function registerHiddenRendererPtyUnmarkListener(listener: (id: string) => void): void {
+  hiddenUnmarkListeners.add(listener)
+}
+
 function notifyHiddenMark(id: string): void {
   for (const listener of hiddenMarkListeners) {
     listener(id)
@@ -102,15 +120,51 @@ export function setHiddenDeliveryModelHandoff(id: string, pending: boolean): voi
     modelHandoffPtys.delete(id)
   }
   if (changed) {
-    modelHandoffChangeListener?.(id)
+    viewGateChangeListener?.(id)
   }
 }
 
-/** Delivery re-evaluates queued bytes when a handoff ends and the gate starts dropping. */
-export function setHiddenDeliveryModelHandoffChangeListener(
+/** Keeps `id`'s view answering until the daemon confirms the delegation main requested. */
+export function setHiddenDeliveryDaemonHandoff(id: string, pending: boolean): void {
+  const changed = pending !== daemonHandoffPtys.has(id)
+  if (pending) {
+    daemonHandoffPtys.add(id)
+  } else {
+    daemonHandoffPtys.delete(id)
+  }
+  if (changed) {
+    viewGateChangeListener?.(id)
+  }
+}
+
+/** The daemon's in-order responder marker. Returns whether a released, visible view needs the
+ *  restore its unmark deferred. */
+export function setDaemonQueryResponderConfirmed(
+  id: string,
+  confirmed: boolean
+): { droppedWhileHidden: boolean } {
+  const changed = confirmed !== daemonResponderConfirmedPtys.has(id)
+  if (confirmed) {
+    daemonResponderConfirmedPtys.add(id)
+  } else {
+    daemonResponderConfirmedPtys.delete(id)
+  }
+  if (changed) {
+    viewGateChangeListener?.(id)
+  }
+  const released = changed && !confirmed && !hiddenRendererPtys.has(id)
+  return { droppedWhileHidden: released && droppedSinceHiddenPtys.delete(id) }
+}
+
+export function isDaemonQueryResponderConfirmed(id: string): boolean {
+  return daemonResponderConfirmedPtys.has(id)
+}
+
+/** Delivery re-evaluates queued bytes whenever the view gate flips without a mark. */
+export function setHiddenDeliveryViewGateChangeListener(
   listener: ((id: string) => void) | null
 ): void {
-  modelHandoffChangeListener = listener
+  viewGateChangeListener = listener
 }
 
 export function isRuntimeOwnedHiddenRendererPty(id: string): boolean {
@@ -133,15 +187,20 @@ export function setRendererPtyDeliveryInterest(id: string, interested: boolean):
 }
 
 /** Hidden for the view whether or not a sidecar holds interest: the view restores
- *  from the model on reveal, so main owns the PTY's query replies meanwhile. */
+ *  from the model on reveal, so main (or the daemon) owns the PTY's query replies meanwhile. */
 export function isHiddenRendererPtyViewGated(
   id: string,
   settings: HiddenPtyDeliveryGateSettings | null | undefined
 ): boolean {
+  // Why first: until the daemon's take-back marker, the view must not parse a byte it answers.
+  if (daemonResponderConfirmedPtys.has(id)) {
+    return true
+  }
   return (
     isHiddenPtyDeliveryGateEnabled(settings) &&
     hiddenRendererPtys.has(id) &&
-    !modelHandoffPtys.has(id)
+    !modelHandoffPtys.has(id) &&
+    !daemonHandoffPtys.has(id)
   )
 }
 
@@ -191,7 +250,10 @@ export function recordHiddenRendererPtyDataDrop(
     return { shouldEmitRestoreMarker: false }
   }
   droppedSinceHiddenPtys.add(id)
-  return { shouldEmitRestoreMarker: true }
+  // Why: a revealed view gated only until the daemon's take-back restores when that marker lands.
+  return {
+    shouldEmitRestoreMarker: hiddenRendererPtys.has(id) || !daemonResponderConfirmedPtys.has(id)
+  }
 }
 
 /** Renderer process replaced (reload / crash): its ref-counted interest
@@ -217,6 +279,8 @@ export function clearHiddenRendererPtyDeliveryState(id: string): void {
   deliveryInterestRendererPtys.delete(id)
   droppedSinceHiddenPtys.delete(id)
   modelHandoffPtys.delete(id)
+  daemonHandoffPtys.delete(id)
+  daemonResponderConfirmedPtys.delete(id)
 }
 
 export type HiddenRendererPtyDeliveryDebug = {
@@ -224,6 +288,7 @@ export type HiddenRendererPtyDeliveryDebug = {
   deliveryInterestPtyCount: number
   hiddenDeliveryDroppedChars: number
   hiddenDeliveryDroppedChunks: number
+  daemonQueryResponderPtyCount: number
 }
 
 export function getHiddenRendererPtyDeliveryDebug(): HiddenRendererPtyDeliveryDebug {
@@ -231,7 +296,8 @@ export function getHiddenRendererPtyDeliveryDebug(): HiddenRendererPtyDeliveryDe
     hiddenDeliveryGatedPtyCount: hiddenRendererPtys.size,
     deliveryInterestPtyCount: deliveryInterestRendererPtys.size,
     hiddenDeliveryDroppedChars: droppedHiddenDeliveryChars,
-    hiddenDeliveryDroppedChunks: droppedHiddenDeliveryChunks
+    hiddenDeliveryDroppedChunks: droppedHiddenDeliveryChunks,
+    daemonQueryResponderPtyCount: daemonResponderConfirmedPtys.size
   }
 }
 
@@ -247,7 +313,10 @@ export function _resetHiddenRendererPtyDeliveryGateForTest(): void {
   deliveryInterestRendererPtys.clear()
   droppedSinceHiddenPtys.clear()
   modelHandoffPtys.clear()
+  daemonHandoffPtys.clear()
+  daemonResponderConfirmedPtys.clear()
   hiddenMarkListeners.clear()
-  modelHandoffChangeListener = null
+  hiddenUnmarkListeners.clear()
+  viewGateChangeListener = null
   resetHiddenRendererPtyDeliveryDebugCounters()
 }

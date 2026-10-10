@@ -99,6 +99,37 @@ setTimeout(() => {
 `
 }
 
+// Why count replies: with the daemon answering a hidden pane, a second responder would show up
+// as a second CPR; the cursor row proves the daemon's model is exact.
+function hiddenDaemonQueryScript(runId: string, startDelayMs: number): string {
+  return `
+setTimeout(() => {
+  for (let i = 0; i < ${HIDDEN_LINES}; i++) process.stdout.write('DAEMON_LINE_${runId}_' + i + '\\r\\n')
+  const rows = process.stdout.rows
+  let reply = ''
+  process.stdin.setRawMode(true)
+  process.stdin.on('data', (chunk) => {
+    reply += chunk.toString('latin1')
+  })
+  process.stdout.write('\\x1b[6n')
+  setTimeout(() => {
+    process.stdin.setRawMode(false)
+    const replies = [...reply.matchAll(/\\x1b\\[(\\d+);(\\d+)R/g)]
+    const where = replies.length && Number(replies[0][1]) === rows ? 'BOTTOM' : 'WRONG'
+    process.stdout.write('DCPR_${runId}_' + where + '_COUNT' + replies.length + '\\r\\n')
+    process.exit(0)
+  }, 1500)
+}, ${startDelayMs})
+`
+}
+
+async function daemonQueryResponderPtyCount(page: Page): Promise<number> {
+  return page.evaluate(
+    async () =>
+      (await window.api.pty.getRendererDeliveryDebugSnapshot()).daemonQueryResponderPtyCount
+  )
+}
+
 async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((targetTabId) => {
     const store = window.__store
@@ -175,13 +206,20 @@ test.describe('Main terminal model dormancy', () => {
     expect(hiddenLines).toHaveLength(HIDDEN_LINES)
   })
 
-  for (const [name, floodLinesPerRound] of [
-    ['quiet', 0],
-    ['with output in flight', 200]
+  for (const [name, floodLinesPerRound, daemonAnswers] of [
+    ['quiet', 0, true],
+    ['with output in flight', 200, true],
+    ['quiet, main answers', 0, false],
+    ['with output in flight, main answers', 200, false]
   ] as const) {
     test(`a dormant pane hidden and revealed mid-query answers each query exactly once (${name})`, async ({
       orcaPage
     }) => {
+      if (!daemonAnswers) {
+        await orcaPage.evaluate(() =>
+          window.api.settings.set({ terminalDaemonQueryAuthority: false })
+        )
+      }
       test.setTimeout(180_000)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
@@ -220,4 +258,47 @@ test.describe('Main terminal model dormancy', () => {
       expect(content).toContain(`QR_${runId}_CPR${n}_BAD0_DA${n}_DSR${n}_END`)
     })
   }
+
+  test('a hidden terminal whose queries the daemon answers replies once and reveals intact', async ({
+    orcaPage
+  }) => {
+    test.setTimeout(180_000)
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+    const tabId = (await getActiveTabId(orcaPage))!
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const runId = randomUUID().slice(0, 8)
+    // Why past the grace period: main's model goes dormant while the daemon answers.
+    const startDelayMs = MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS + 2_500
+
+    const hidden = await runNodeScriptInTerminal(
+      orcaPage,
+      ptyId,
+      hiddenDaemonQueryScript(runId, startDelayMs)
+    )
+    const coverTabId = await createActiveTerminalTab(orcaPage, worktreeId)
+    await expect.poll(() => daemonQueryResponderPtyCount(orcaPage), { timeout: 10_000 }).toBe(1)
+    await orcaPage.waitForTimeout(startDelayMs + 2_500)
+
+    await activateTerminalTab(orcaPage, tabId)
+    await waitForTerminalOutput(orcaPage, `DCPR_${runId}_`, 30_000, CONTENT_CHAR_LIMIT)
+    hidden.cleanup()
+    // Why close the cover tab: it is hidden now, so the daemon may answer for it instead.
+    await orcaPage.evaluate((id) => window.__store?.getState().closeTab(id), coverTabId)
+    await expect.poll(() => daemonQueryResponderPtyCount(orcaPage), { timeout: 10_000 }).toBe(0)
+    const content = await orcaPage.evaluate(
+      ({ id, limit }) => {
+        const pane = window.__paneManagers?.get(id)?.getActivePane?.()
+        return pane?.serializeAddon?.serialize?.()?.slice(-limit) ?? ''
+      },
+      { id: tabId, limit: CONTENT_CHAR_LIMIT }
+    )
+    expect(content).toContain(`DCPR_${runId}_BOTTOM_COUNT1`)
+    const hiddenLines = content.match(new RegExp(`DAEMON_LINE_${runId}_\\d+`, 'g')) ?? []
+    expect(hiddenLines).toHaveLength(HIDDEN_LINES)
+  })
 })
