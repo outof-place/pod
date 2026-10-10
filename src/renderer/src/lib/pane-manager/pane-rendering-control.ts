@@ -1,4 +1,6 @@
+import type { Terminal } from '@xterm/xterm'
 import type { ManagedPaneInternal } from './pane-manager-types'
+import { markTerminalWebglSuspendedUnderNativeView } from './pane-webgl-native-suspension'
 import {
   resumeTerminalCursorBlink,
   suspendTerminalCursorBlink
@@ -45,6 +47,23 @@ export function setPaneGpuRenderingState(
   if (!pane.webglAddon) {
     attachWebgl(pane)
     safeFit(pane)
+  }
+}
+
+// Parse once: frees the WebGL context while a native view covers the pane; it comes back
+// before xterm shows again (unless the pane's rendering is suspended for another reason).
+export function setTerminalWebglSuspendedUnderNativeView(
+  terminal: Terminal,
+  suspended: boolean
+): void {
+  const pane = markTerminalWebglSuspendedUnderNativeView(terminal, suspended)
+  if (!pane) {
+    return
+  }
+  if (suspended) {
+    disposeWebgl(pane)
+  } else if (!pane.webglAttachmentDeferred) {
+    reattachWebglIfNeeded(pane)
   }
 }
 
