@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path'
 import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
 import type { PodClaudeAccConfig } from '../pod-distro-config'
-import { runAccLifecycle, type AccLifecycleOutcome } from './acc-lifecycle'
+import { automatedLaunchEnv, runAccLifecycle, type AccLifecycleOutcome } from './acc-lifecycle'
 import { isAccMenuHelperRunning } from './acc-menu-helper'
 
 // The helper starts and quits on its own (login item, setup restarting it): look again this often.
@@ -13,6 +13,11 @@ export type PodAccSupervisorOptions = {
   /** process.execPath of the running app: …/Pod.app/Contents/MacOS/Pod. */
   execPath: string
   home: string
+  /** os.userInfo().homedir: the account's home from getpwuid, never $HOME. */
+  accountHome: string | null
+  userDataPath: string
+  /** The product's default profile in accountHome; null for builds without a product identity. */
+  defaultUserDataPath: string | null
   platform: NodeJS.Platform
   env: NodeJS.ProcessEnv
   run: (spec: ProcessSpec) => Promise<ProcessResult>
@@ -36,6 +41,8 @@ function describe(outcome: AccLifecycleOutcome): string {
       return `claude-acc: ${d.action === 'up-to-date' ? d.version : ''} is installed`
     case 'busy':
       return 'claude-acc: another Pod is running setup'
+    case 'refused':
+      return `claude-acc: setup refused: ${outcome.message}`
     case 'dry-run':
       return `claude-acc: would run ${[outcome.spec.program, ...(outcome.spec.args ?? [])].join(' ')}`
     case 'installed':
@@ -53,9 +60,13 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     {
       platform: options.platform,
       home: options.home,
+      accountHome: options.accountHome,
+      userDataPath: options.userDataPath,
+      defaultUserDataPath: options.defaultUserDataPath,
       payloadDir: join(options.resourcesPath, options.config.payload),
       appPath: appBundlePath(options.execPath),
-      mode: options.env.POD_ACC_LIFECYCLE
+      mode: options.env.POD_ACC_LIFECYCLE,
+      automatedBy: automatedLaunchEnv(options.env)
     },
     options.run
   ).then((outcome) => {
