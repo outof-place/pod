@@ -4,6 +4,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { setDefaultCreateProjectParentOverride } from '../../ipc/repos/repo-creation-handlers'
+import { isPodNativeSearchEnabled } from '../search/pod-native-search-flag'
 import { isPodWorkspaceEnabled } from './pod-workspace-flag'
 import { workspaceCreateProjectParent } from './workspace-clone-destination'
 import { registerWorkspaceIpc } from './workspace-ipc'
@@ -30,6 +31,7 @@ import {
   readDesktopDocumentsSync,
   type DesktopDocumentsSync
 } from './workspace-root-validation'
+import { wireWorkspaceToPodSearch } from './workspace-search-wiring'
 import { createWorkspaceStatusService } from './workspace-status'
 import { createWorkspaceToolRunner } from './workspace-tool-runner'
 
@@ -106,6 +108,7 @@ export function installPodWorkspace(store: PodWorkspaceStore, runtime: PodWorksp
       isEnabled()
     )
   primeWorkspaceRoots(currentRoots())
+  wireWorkspaceToPodSearch(() => isPodNativeSearchEnabled(store.getSettings()))
   runtime.onClientEvent(
     (event) => {
       if (event.type === 'reposChanged') {
