@@ -26,6 +26,7 @@ import {
   runDeferredProfileImport,
   updateMigrationMarker
 } from './deferred-profile-import'
+import { SKIPPED_PAIRING_FILES } from './profile-clone'
 
 const LEGACY_SECRET = 'c2FsdHlzYWx0eXNhbHR5c2FsdA=='
 const DEAD_PID = 2_147_000_000
@@ -232,6 +233,35 @@ describe('migrateLegacyProfile', () => {
     expect(readFileSync(join(pod, 'Partitions/browser/Preferences'), 'utf8')).toBe('chromium')
     expect(existsSync(join(pod, 'Partitions/browser/Code Cache'))).toBe(false)
     expect(pendingDeferredImport(pod)).toBeNull()
+  })
+
+  it("never carries over the legacy app's phone pairings", async () => {
+    const legacy = join(root, 'orca')
+    await createLegacyProfile(legacy)
+    // Why each by name: a pairing file that drops off the skip list must fail here.
+    const pairing = [
+      'orca-devices.json',
+      'orca-e2ee-keypair.json',
+      'orca-relay-region-preference.json',
+      'mobile-notification-dismissals.json'
+    ]
+    expect([...SKIPPED_PAIRING_FILES].sort()).toEqual([...pairing].sort())
+    for (const name of pairing) {
+      writeFileSync(join(legacy, name), '{"paired":true}')
+    }
+    migrateLegacyProfile(baseOptions(null))
+    const pod = join(root, 'pod')
+    const pending = pendingDeferredImport(pod)
+    if (!pending) {
+      throw new Error('expected a pending deferred import')
+    }
+    await runDeferredProfileImport(pod, pending, () => {})
+
+    expect(readFileSync(join(pod, 'orca-data.json'), 'utf8')).toBe('{"repos":[]}')
+    for (const name of pairing) {
+      expect(existsSync(join(pod, name))).toBe(false)
+      expect(existsSync(join(legacy, name))).toBe(true)
+    }
   })
 
   it('only resumes deferred entries it knows, never a path from a tampered marker', async () => {
