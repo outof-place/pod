@@ -2,9 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HeadlessEmulator } from '../../daemon/headless-emulator'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
+  isHiddenRendererPtyViewGated,
   markHiddenRendererPty,
+  setDaemonQueryResponderConfirmed,
   setRendererPtyDeliveryInterest,
-  shouldDropHiddenRendererPtyData
+  shouldDropHiddenRendererPtyData,
+  unmarkHiddenRendererPty
 } from '../../ipc/pty-hidden-delivery-gate'
 import type { PtyProviderBufferSnapshot } from '../../providers/types'
 import type { RuntimePtyController } from '../runtime-pty-controller-contract'
@@ -228,5 +231,122 @@ describe('main terminal model dormancy', () => {
     now += MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS * 2
     await emit('later\r\n')
     expect(runtime.isMainTerminalModelDormant('pty-1')).toBe(false)
+  })
+})
+
+describe('daemon query responder delegation', () => {
+  beforeEach(() => {
+    _resetHiddenRendererPtyDeliveryGateForTest()
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    _resetHiddenRendererPtyDeliveryGateForTest()
+  })
+
+  function createDelegatingHarness(canDelegate: () => boolean = () => true) {
+    const requests: boolean[] = []
+    const harness = createHarness({
+      canDelegateDaemonQueryResponder: canDelegate,
+      setDaemonQueryResponder: (_ptyId, responder) => {
+        requests.push(responder)
+        return true
+      }
+    })
+    // Mirrors bind-listeners: the gate applies the in-order marker, then the runtime.
+    const marker = (responder: boolean): void => {
+      setDaemonQueryResponderConfirmed('pty-1', responder)
+      harness.runtime.noteDaemonQueryResponderMarker('pty-1', responder)
+    }
+    return { ...harness, requests, marker }
+  }
+
+  it("hands a hidden PTY's queries to the daemon, then lets main's model rest", async () => {
+    const { runtime, replies, requests, emit, marker } = createDelegatingHarness()
+    await emit('one\r\n')
+    markHiddenRendererPty('pty-1')
+    expect(requests).toEqual([true])
+    // Why: main's live model answers until the daemon's marker, so the view stays gated.
+    expect(shouldDropHiddenRendererPtyData('pty-1', undefined)).toBe(true)
+    await emit('\x1b[6n')
+    await runtime.serializeMainTerminalBuffer('pty-1')
+    expect(replies).toEqual(['\x1b[2;1R'])
+
+    marker(true)
+    await emit('\x1b[6n')
+    await runtime.serializeMainTerminalBuffer('pty-1')
+    expect(replies).toEqual(['\x1b[2;1R'])
+
+    now += MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS
+    await emit('quiet\r\n')
+    expect(runtime.isMainTerminalModelDormant('pty-1')).toBe(true)
+  })
+
+  it('answers from main again once the daemon lets go of a pane that stays hidden', async () => {
+    let eligible = true
+    const { runtime, replies, requests, emit, marker } = createDelegatingHarness(() => eligible)
+    await emit('one\r\n')
+    markHiddenRendererPty('pty-1')
+    marker(true)
+
+    eligible = false
+    // Why: the daemon answers until its marker, so this chunk is still its own.
+    await emit('\x1b[6n')
+    await runtime.serializeMainTerminalBuffer('pty-1')
+    expect(requests).toEqual([true, false])
+    expect(replies).toEqual([])
+
+    marker(false)
+    await emit('\x1b[6n')
+    await runtime.serializeMainTerminalBuffer('pty-1')
+    expect(replies).toEqual(['\x1b[2;1R'])
+  })
+
+  it("reveals a delegated pane after the daemon's take-back without waking main", async () => {
+    const { runtime, requests, snapshotReads, emit, goDormant, marker } = createDelegatingHarness()
+    await goDormant()
+    markHiddenRendererPty('pty-1')
+    expect(runtime.isMainTerminalModelDormant('pty-1')).toBe(true)
+    // Why: a dormant main cannot answer, so the view does until the daemon's marker.
+    expect(isHiddenRendererPtyViewGated('pty-1', undefined)).toBe(false)
+    marker(true)
+    expect(isHiddenRendererPtyViewGated('pty-1', undefined)).toBe(true)
+
+    unmarkHiddenRendererPty('pty-1')
+    expect(requests).toEqual([true, false])
+    expect(shouldDropHiddenRendererPtyData('pty-1', undefined)).toBe(true)
+    marker(false)
+    expect(shouldDropHiddenRendererPtyData('pty-1', undefined)).toBe(false)
+
+    await emit('visible\r\n')
+    expect(runtime.isMainTerminalModelDormant('pty-1')).toBe(true)
+    expect(snapshotReads.count).toBe(0)
+  })
+
+  it('takes the queries back for a model reader or a remote viewer', async () => {
+    const { runtime, requests, marker } = createDelegatingHarness()
+    markHiddenRendererPty('pty-1')
+    marker(true)
+    const release = runtime.acquireTerminalOutputReader('pty-1', { kind: 'model' })
+    expect(requests).toEqual([true, false])
+    release()
+    marker(false)
+
+    unmarkHiddenRendererPty('pty-1')
+    markHiddenRendererPty('pty-1')
+    expect(requests).toEqual([true, false, true])
+    const releaseViewer = runtime.registerRemoteTerminalViewSubscriber('pty-1')
+    expect(requests).toEqual([true, false, true, false])
+    releaseViewer()
+  })
+
+  it('keeps main answering a hidden pane whose daemon cannot take its queries', async () => {
+    const { runtime, replies, requests, emit } = createDelegatingHarness(() => false)
+    await emit('one\r\n')
+    markHiddenRendererPty('pty-1')
+    await emit('\x1b[6n')
+    await runtime.serializeMainTerminalBuffer('pty-1')
+    expect(requests).toEqual([])
+    expect(replies).toEqual(['\x1b[2;1R'])
   })
 })

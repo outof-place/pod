@@ -107,6 +107,10 @@ export class MainTerminalModelDormancy {
     }
   }
 
+  hasReaders(ptyId: string): boolean {
+    return this.pins.has(ptyId)
+  }
+
   /** A caller is seeding main's model itself; stop treating the PTY as dormant. */
   cancelDormancy(ptyId: string): void {
     const entry = this.currentEntry(ptyId)
