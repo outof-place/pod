@@ -5,6 +5,7 @@ import {
   PodOrbstackCreateParams,
   PodOrbstackDockerPinParams,
   PodOrbstackMachineParams,
+  PodOrbstackSandboxClaudeLoginParams,
   PodOrbstackWorktreeParams
 } from '../../../shared/rpc-contract/pod-orbstack-params'
 import { getPodOrbstackService, type PodOrbstackService } from './pod-orbstack-service'
@@ -84,5 +85,11 @@ export const POD_ORBSTACK_METHODS = [
     permission: 'host-admin',
     params: PodOrbstackAgentSandboxParams,
     handler: (params) => service().setAgentSandbox(params.worktreeId, params.enabled)
+  }),
+  defineMethod({
+    name: 'orbstack.setSandboxClaudeLogin',
+    permission: 'host-admin',
+    params: PodOrbstackSandboxClaudeLoginParams,
+    handler: (params) => service().setSandboxClaudeLogin(params.enabled)
   })
 ]

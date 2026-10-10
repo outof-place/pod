@@ -153,6 +153,7 @@ export async function readPodOrbstackStatus(deps: {
     machines: mergeMachines(listed, registry),
     containers,
     links: buildLinks(registry),
+    sandboxClaudeLogin: registry.sandboxClaudeLogin(),
     busyWorktreeIds: [...deps.busyWorktreeIds],
     errors,
     checkedAt: (deps.now ?? Date.now)()
