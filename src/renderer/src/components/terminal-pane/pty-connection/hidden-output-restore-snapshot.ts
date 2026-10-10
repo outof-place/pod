@@ -82,6 +82,11 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
     const rowsBeforeReplay = session.pane.terminal.rows
     const hasSnapshotDimensions = hasPositiveTerminalDimensions(snapshot.cols, snapshot.rows)
     let skippedAltFrame = false
+    // Why: the snapshot covers the queued writes it discards, so their CPR waits for its cursor.
+    let releaseDiscardedReplies = (): void => {}
+    const discardedRepliesReady = new Promise<void>((resolve) => {
+      releaseDiscardedReplies = resolve
+    })
     try {
       await session.structuralReplayCoordinator.run(
         async () => {
@@ -104,9 +109,12 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
             }
           }
           // Why salvage: the snapshot replaces these unparsed live bytes, but not their replies.
-          discardTerminalOutput(
-            session.pane.terminal,
-            session.salvageRendererQueriesFromDiscardedRestoreData
+          discardTerminalOutput(session.pane.terminal, (data) =>
+            session.salvageRendererQueriesFromDiscardedRestoreData(
+              data,
+              undefined,
+              discardedRepliesReady
+            )
           )
           if (
             hasSnapshotDimensions &&
@@ -180,6 +188,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
           session.recordRendererOrderedSeq(snapshot)
           recordTerminalOutput(session.pane.terminal)
           await waitForTerminalReplayWritesParsed(session.pane.terminal)
+          releaseDiscardedReplies()
           if (session.deps.isVisibleRef.current) {
             presentPaneViewportPreservingSynchronizedOutput(session.pane)
             recordTerminalFreezeBreadcrumb('stale-pixel-restore-present', {
@@ -265,6 +274,8 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
         }
       )
     } finally {
+      // Why also here: an aborted replay must not leave those replies unsent.
+      releaseDiscardedReplies()
       if (session.hiddenOutputSnapshotScrollRestore === scrollRestore) {
         session.hiddenOutputSnapshotScrollRestore = null
       }
