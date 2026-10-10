@@ -405,9 +405,9 @@ Both are written for publication, with two safeguards:
 | `hardware`, `machine`    | model, chip, cores, memory, macOS build, power source                                                            |
 | `methodology`            | this file's path and URL                                                                                         |
 | `maxLoad`, `aggregation` | the load gate; median = average of the middle pair, p95 = nearest rank                                           |
-| `run`                    | `run.json`: the Pod build, the main commit it came from, the search inputs' SHAs                                 |
+| `run`                    | `run.json`: the Pod build, the main commit and build profile it came from, the search inputs' SHAs               |
 | `podStack`               | `pod-stack.json` at that Pod commit (`origin/main` without run.json): the topic branches the benched Pod carries |
-| `caveats`                | caveats that apply to every row                                                                                  |
+| `caveats`                | caveats that apply to every row, including differing Electron versions and Pod's slim build profile              |
 | `groups`                 | `pod` (Pod vs Orca and other terminals) and `claude-acc`                                                         |
 | `suites.<name>`          | file, versions, config, `condition` (polling: `quiet` or `agent-heavy`, else null) and suite-wide caveats        |
 | `coming`                 | rows this run could not measure yet: `id`, `suite`, `subject`, `reason`, `status` `"coming"`; never a number     |
