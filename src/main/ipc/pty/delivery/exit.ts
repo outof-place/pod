@@ -93,7 +93,8 @@ export function preparePtyExitForRenderer(
             data: remaining.data,
             droppedOutput: true
           },
-          remaining.projectionAdmissionIds
+          remaining.projectionAdmissionIds,
+          remaining.viewGatedAtIngestion === true
         )
       } else {
         sendPtyDataToRenderer(
@@ -107,7 +108,8 @@ export function preparePtyExitForRenderer(
             remaining.rawLength,
             remaining.transformed
           ),
-          remaining.projectionAdmissionIds
+          remaining.projectionAdmissionIds,
+          remaining.viewGatedAtIngestion === true
         )
       }
     }
