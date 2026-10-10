@@ -17,7 +17,6 @@ function commandLine(initial: Record<string, string> = {}) {
 }
 
 const DEFAULT_CUTS: PodHeadlessHostCuts = {
-  dropWebSocket: true,
   releaseSpareRenderer: true,
   inProcessGpu: false,
   inProcessNetwork: false
