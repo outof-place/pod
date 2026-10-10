@@ -1,0 +1,52 @@
+{
+  "updated_at": 1760000000,
+  "host": { "ram_gb": 64 },
+  "memory": {
+    "level_pct": 72,
+    "available_gb": 19.0,
+    "free_for_admission_gb": 6.5,
+    "pressure": "normal"
+  },
+  "running": [
+    {
+      "id": "j-1760000000-ab12",
+      "kind": "test",
+      "label": "pnpm test",
+      "repo": "pod",
+      "agent": { "name": "b2", "worktree": "pod-acc" },
+      "where": "local",
+      "elapsed_s": 217,
+      "eta_s": 664,
+      "progress": 0.33,
+      "mem_now_gb": 5.8,
+      "mem_predicted_gb": 8.9
+    }
+  ],
+  "queue": [
+    {
+      "id": "j-1760000001-cd34",
+      "kind": "typecheck",
+      "label": "pnpm tc",
+      "repo": "pod",
+      "position": 1,
+      "waited_s": 233,
+      "reason": {
+        "code": "memory",
+        "need_gb": 23.4,
+        "free_gb": 19.0,
+        "text": "waiting for 23.4 GB, 19.0 free"
+      }
+    }
+  ],
+  "recent": [
+    {
+      "id": "j-1759999000-ef56",
+      "label": "go build ./...",
+      "where": "local",
+      "rc": 0,
+      "finished_at": 1759999500,
+      "wall_s": 41
+    }
+  ],
+  "today": { "jobs_local": 31, "jobs_depot": 2, "overtakes": 4 }
+}

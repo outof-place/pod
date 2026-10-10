@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "at": "2026-10-10T05:10:00.000Z",
+  "app": "/Applications/Pod.app",
+  "payload": "1.31.0",
+  "services": [
+    { "kind": "agent", "name": "codes.pod.app.acc.devguard.plist", "status": "enabled" },
+    { "kind": "agent", "name": "codes.pod.app.acc.tick.plist", "status": "enabled" },
+    { "kind": "login-item", "name": "com.filip.claude-acc.menubar", "status": "requires-approval" }
+  ]
+}

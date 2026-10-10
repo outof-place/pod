@@ -1,0 +1,49 @@
+{
+  "generated_at": 1760000000,
+  "active_email": "a@example.com",
+  "foreign_runtime": false,
+  "thresholds": { "session_left": 10, "weekly_left": 5 },
+  "forecast": { "weekly": { "rate": 2.5, "at_reset": 88, "switch_at": 1760050000 } },
+  "host": { "name": "Pod", "bundle_id": "codes.pod.app" },
+  "limit_pause": false,
+  "drain": false,
+  "accounts": [
+    {
+      "id": "1",
+      "email": "a@example.com",
+      "tier": "max 20x",
+      "active": true,
+      "last_resort": false,
+      "status": "ok",
+      "note": "",
+      "usable": true,
+      "session": { "used": 40, "resets_at": 1760010000 },
+      "weekly": { "used": 70, "resets_at": 1760400000 },
+      "data_age": 60,
+      "renews_at": 1762000000
+    },
+    {
+      "id": "2",
+      "email": "b@example.com",
+      "tier": "max 20x",
+      "active": false,
+      "last_resort": false,
+      "status": "ok",
+      "note": "",
+      "usable": true,
+      "queue": 1,
+      "session": { "used": 0, "resets_at": 1760012000 },
+      "weekly": { "used": 12, "resets_at": 1760300000 }
+    },
+    {
+      "id": "3",
+      "email": "c@example.com",
+      "tier": "max 5x",
+      "active": false,
+      "last_resort": true,
+      "status": "needs_login",
+      "note": "token expired",
+      "usable": false
+    }
+  ]
+}
