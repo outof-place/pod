@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createConnection, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -117,6 +117,7 @@ afterEach(() => {
     socket.destroy()
   }
   fire('will-quit')
+  rmSync(mocks.dir.path, { recursive: true, force: true })
   vi.clearAllMocks()
   vi.useRealTimers()
 })
