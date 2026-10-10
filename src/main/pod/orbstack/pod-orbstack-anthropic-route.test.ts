@@ -1,10 +1,12 @@
-import { createServer as createHttpsServer, request } from 'node:https'
+import { constants, createSecureServer, type Http2ServerResponse } from 'node:http2'
+import { request } from 'node:https'
 import type { IncomingHttpHeaders } from 'node:http'
 import { createServer, type AddressInfo, type Server } from 'node:net'
 import { gzipSync } from 'node:zlib'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createAnthropicRoute,
+  SandboxCredentialError,
   type SandboxAnthropicCredentials
 } from './pod-orbstack-anthropic-route'
 import type { SandboxPrivacy } from './pod-orbstack-privacy-env'
@@ -33,13 +35,14 @@ describe('anthropic-api route', () => {
 
   async function setup(
     credentials: SandboxAnthropicCredentials = apiKey,
-    privacy: SandboxPrivacy = { env: {}, telemetryOff: false, featureFlagsOff: false }
+    privacy: SandboxPrivacy = { env: {}, telemetryOff: false, featureFlagsOff: false },
+    respond?: (res: Http2ServerResponse) => void
   ) {
     // The stub API has its own CA, so the route verifies upstream as it would the real one.
     const upstreamCa = createSandboxCa('stub-upstream')
     const seen: Seen[] = []
-    const upstream = createHttpsServer(
-      { key: upstreamCa.leafKeyPem, cert: upstreamCa.leafCertPem },
+    const upstream = createSecureServer(
+      { allowHTTP1: true, key: upstreamCa.leafKeyPem, cert: upstreamCa.leafCertPem },
       (req, res) => {
         const chunks: Buffer[] = []
         req.on('data', (chunk: Buffer) => chunks.push(chunk))
@@ -50,6 +53,10 @@ describe('anthropic-api route', () => {
             headers: req.headers,
             body: Buffer.concat(chunks)
           })
+          if (respond) {
+            respond(res)
+            return
+          }
           res.writeHead(200, { 'content-type': 'text/event-stream', 'request-id': 'req_stub' })
           res.write('event: message_start\ndata: {}\n\n')
           setTimeout(() => res.end('event: message_stop\ndata: {}\n\n'), 50)
@@ -147,7 +154,7 @@ describe('anthropic-api route', () => {
     const [upstream] = seen
     expect(upstream?.url).toBe('/v1/messages?beta=true')
     expect(upstream?.headers).toMatchObject({
-      host: 'api.anthropic.com',
+      ':authority': 'api.anthropic.com',
       'x-api-key': 'stub-key-not-a-secret',
       'anthropic-version': '2023-06-01',
       'anthropic-beta': 'fine-grained-tool-streaming-2025-05-14',
@@ -202,6 +209,44 @@ describe('anthropic-api route', () => {
     const { call, seen } = await setup({ mode: () => 'api-key', authHeaders: async () => null })
     expect((await call({})).status).toBe(401)
     expect(seen).toEqual([])
+  })
+
+  it("refuses with the credential source's own message, never reaching the API", async () => {
+    const { call, seen } = await setup({
+      mode: () => 'oauth',
+      authHeaders: async () => {
+        throw new SandboxCredentialError('The Claude Code login on this Mac has expired.')
+      }
+    })
+    const reply = await call({})
+    expect(reply.status).toBe(401)
+    expect(JSON.parse(reply.body).error.message).toBe(
+      'The Claude Code login on this Mac has expired.'
+    )
+    expect(seen).toEqual([])
+  })
+
+  it('tells the credential source when the API refuses its token', async () => {
+    const rejected = vi.fn()
+    const { call } = await setup({ ...apiKey, rejected }, undefined, (res) => {
+      res.writeHead(401, { 'content-type': 'application/json' })
+      res.end('{"type":"error","error":{"type":"authentication_error","message":"expired"}}')
+    })
+    expect((await call({})).status).toBe(401)
+    expect(rejected).toHaveBeenCalledWith({ machine: 'pod-x-sbx' })
+  })
+
+  it('ends the sandbox response when the API breaks off mid-stream', async () => {
+    const { call } = await setup(apiKey, undefined, (res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' })
+      res.write('event: message_start\ndata: {}\n\n')
+      setTimeout(() => res.stream.close(constants.NGHTTP2_INTERNAL_ERROR), 20)
+    })
+    // Settles (either way) instead of hanging the VM's connection.
+    await call({}).then(
+      () => undefined,
+      () => undefined
+    )
   })
 
   it('refuses a TLS handshake for any other name', async () => {
