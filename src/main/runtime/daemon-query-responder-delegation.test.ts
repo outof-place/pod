@@ -13,6 +13,7 @@ function createDelegation() {
     eligible: true,
     sendOk: true,
     generation: 1,
+    caughtUp: true,
     sent: new Array<[string, boolean]>(),
     requested: new Map<string, boolean>(),
     reclaimed: new Array<string>()
@@ -28,7 +29,10 @@ function createDelegation() {
       return state.sendOk
     },
     setHandoffPending: (id, pending) => state.requested.set(id, pending),
-    reclaim: (id) => state.reclaimed.push(id)
+    reclaim: (id) => {
+      state.reclaimed.push(id)
+      return state.caughtUp
+    }
   }
   return { state, delegation: new DaemonQueryResponderDelegation(host) }
 }
@@ -153,5 +157,27 @@ describe('DaemonQueryResponderDelegation', () => {
     delegation.sync(PTY)
     expect(state.sent).toEqual([])
     expect(state.requested.has(PTY)).toBe(false)
+  })
+
+  it("keeps the daemon answering a hidden PTY until main's woken model has caught up", () => {
+    const { state, delegation } = createDelegation()
+    state.hidden.add(PTY)
+    delegation.sync(PTY)
+    delegation.noteMarker(PTY, true)
+    state.eligible = false
+    state.caughtUp = false
+
+    delegation.sync(PTY)
+    delegation.sync(PTY)
+    expect(state.sent).toEqual([[PTY, true]])
+    expect(state.reclaimed).toEqual([PTY, PTY])
+    expect(state.requested.get(PTY)).toBe(true)
+
+    state.caughtUp = true
+    delegation.sync(PTY)
+    expect(state.sent).toEqual([
+      [PTY, true],
+      [PTY, false]
+    ])
   })
 })
