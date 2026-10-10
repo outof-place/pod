@@ -27,6 +27,11 @@ export type NativeTerminalTheme = {
 export type NativeTerminalAppearance = {
   fontFamily: string
   fontSize: number
+  // xterm's fontWeight / fontWeightBold: a CSS weight number or 'normal' / 'bold'.
+  fontWeight?: number | string
+  fontWeightBold?: number | string
+  // The resolved terminal ligature setting; Ghostty draws ligatures unless told not to.
+  ligatures?: boolean
   lineHeight: number
   letterSpacing: number
   cursorStyle: 'block' | 'bar' | 'underline'
