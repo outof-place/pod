@@ -54,3 +54,4 @@ let NATIVE_HANDLERS: [String: Handler] = BROWSER_HANDLERS.merging(TERMINAL_HANDL
   .merging(WORKSPACE_HANDLERS) { a, _ in a }
   .merging(STATUS_HANDLERS) { a, _ in a }
   .merging(COMPUTER_HANDLERS) { a, _ in a }
+  .merging(BROWSER_EXTRA_HANDLERS) { a, _ in a }
