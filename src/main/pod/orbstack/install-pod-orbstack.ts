@@ -2,21 +2,22 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import type { Repo } from '../../../shared/repo-types'
 import { isPodOrbstackEnabled } from './pod-orbstack-flag'
-import { registerPodOrbstackIpc } from './pod-orbstack-ipc'
 import { createPodOrbstackMachines } from './pod-orbstack-machines'
 import { loadPodOrbstackRecipe } from './pod-orbstack-recipe'
 import { PodOrbstackRegistry } from './pod-orbstack-registry'
+import { createPodOrbstackService, setPodOrbstackService } from './pod-orbstack-service'
 import { readPodOrbstackStatus } from './pod-orbstack-status'
 import { setPodOrbstackTerminalResolver } from './pod-orbstack-terminal-override'
 import {
   createOrbstackToolRunner,
   resolveOrbstackHomeOverride,
-  resolveOrbstackToolPaths
+  resolveOrbstackToolPaths,
+  type OrbstackToolPaths
 } from './pod-orbstack-tools'
 
 let installed = false
 
-/** Idempotent. Registers IPC and the terminal resolver; nothing runs or reads disk until asked. */
+/** Idempotent. Backs the orbstack.* RPC methods and the terminal resolver; nothing runs until asked. */
 export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   if (installed) {
     return
@@ -26,7 +27,7 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   const dataDir = join(app.getPath('userData'), 'pod-orbstack')
   const registry = new PodOrbstackRegistry(join(dataDir, 'registry.json'))
   // Re-resolved per use: OrbStack can be installed or moved while Pod runs.
-  const paths = (): ReturnType<typeof resolveOrbstackToolPaths> => resolveOrbstackToolPaths()
+  const paths = (): OrbstackToolPaths => resolveOrbstackToolPaths()
   const home = resolveOrbstackHomeOverride()
   const run = createOrbstackToolRunner(paths, home)
   const machines = createPodOrbstackMachines({
@@ -36,21 +37,21 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     home,
     loadRecipe: () => loadPodOrbstackRecipe(join(dataDir, 'recipe.json'))
   })
-
-  registerPodOrbstackIpc({
-    isEnabled: () => enabled,
-    getRepos: () => store.getRepos(),
-    readStatus: () =>
-      readPodOrbstackStatus({
-        paths: paths(),
-        run,
-        registry,
-        busyWorktreeIds: machines.busyWorktreeIds()
-      }),
-    machines,
-    registry
-  })
-
+  setPodOrbstackService(
+    createPodOrbstackService({
+      enabled,
+      getRepos: () => store.getRepos(),
+      machines,
+      registry,
+      readStatus: () =>
+        readPodOrbstackStatus({
+          paths: paths(),
+          run,
+          registry,
+          busyWorktreeIds: machines.busyWorktreeIds()
+        })
+    })
+  )
   if (!enabled) {
     return
   }
