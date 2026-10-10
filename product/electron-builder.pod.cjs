@@ -47,6 +47,25 @@ function podAccMacExtraResources() {
     return []
   }
 }
+// PodNative, the native UI, nested as Contents/Helpers/PodNative.app; arrives with pod/native-app.
+const podNativeConfig = join(repoRoot, 'config', 'pod-native-extra-files.cjs')
+const podNative = existsSync(podNativeConfig) ? require(podNativeConfig) : null
+
+// Releases must ship PodNative (it throws without the fetched app); other builds carry on without.
+function podNativeMacExtraFiles() {
+  if (!podNative) {
+    return []
+  }
+  try {
+    return podNative.podNativeMacExtraFiles()
+  } catch (error) {
+    if (isRelease) {
+      throw error
+    }
+    console.warn(`[product] ${error.message}; this non-release build ships without PodNative`)
+    return []
+  }
+}
 const identity = JSON.parse(readFileSync(join(__dirname, 'identity.json'), 'utf8'))
 const arch = process.env.POD_ARCH || 'arm64'
 const isRelease = process.env.POD_RELEASE === '1'
@@ -174,7 +193,14 @@ module.exports = {
   },
   mac: {
     ...base.mac,
-    signIgnore: [...(base.mac.signIgnore ?? []), ...PRODUCT_SIGN_IGNORE],
+    // one key: a second signIgnore in this literal would silently replace the first
+    signIgnore: [
+      ...(base.mac.signIgnore ?? []),
+      ...PRODUCT_SIGN_IGNORE,
+      ...(podNative ? podNative.podNativeMacSignIgnore : [])
+    ],
+    // PodNative arrives signed and notarized; it goes where Apple puts helper apps
+    extraFiles: [...(base.mac.extraFiles ?? []), ...podNativeMacExtraFiles()],
     extendInfo: {
       ...productUsageDescriptions(base.mac.extendInfo),
       ClaudeAccHost: claudeAccHost()

@@ -152,6 +152,12 @@ if [ -f config/scripts/fetch-claude-acc-payload.mjs ]; then
   node config/scripts/fetch-claude-acc-payload.mjs
 fi
 
+# PodNative, the native UI, once the pod/native-app branch is in the stack; a no-op when fetched.
+if [ -f config/scripts/fetch-pod-native.mjs ]; then
+  log "fetch PodNative pinned in config/pod-native.json"
+  node config/scripts/fetch-pod-native.mjs
+fi
+
 log "package, sign and notarize the app (electron-builder staples it)"
 rm -rf dist
 POD_RELEASE=1 POD_VERSION="$version" POD_ARCH="$arch" with_timestamp_retry \
@@ -182,6 +188,11 @@ spctl -a -vv -t open --context context:primary-signature "$dmg"
 [ -f "$app/Contents/Resources/product-identity.json" ] || die "app lacks product-identity.json"
 node product/scripts/verify-claude-acc-host.mjs "$app"
 node product/scripts/verify-bundle-seal.mjs "$app"
+if [ -f config/scripts/fetch-pod-native.mjs ]; then
+  # the nested copy, as shipped: the pinned revision, Developer ID, timestamp, seal
+  [ -d "$app/Contents/Helpers/PodNative.app" ] || die "$app lacks Contents/Helpers/PodNative.app"
+  POD_NATIVE_APP_SOURCE="$app/Contents/Helpers/PodNative.app" node config/scripts/fetch-pod-native.mjs --check
+fi
 
 if [ "$publish" -eq 1 ]; then
   [ -n "$feed_repo" ] || die "identity.updateFeed is null; nothing to publish to"
