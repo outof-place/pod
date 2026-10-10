@@ -6,7 +6,8 @@
 #   bench/search/prepare.sh --out FILE [--og-sha SHA] [--og-features pcre2]
 #                           [--search-client-sha SHA] [--repo-source ~/.local/share/portivo-repo]
 #
-# - a clone of ~/Documents/pod-search at --og-sha, built with `cargo build --release --locked`;
+# - a clone of ~/Documents/pod-search at --og-sha, built as its README says: ogd and ogctl from the
+#   workspace, og (the ripgrep fork, binary `rg`) from third_party/ripgrep with --og-features;
 # - a worktree of this repo at --search-client-sha (pod/search-client) with node_modules and the
 #   E2E build, for its ogd parity test and pod-native-search spec;
 # - a fresh local clone of the Portivo mirror, the repo every search suite reads (never written).
@@ -44,7 +45,7 @@ scheduled() {
   fi
 }
 
-ogd="" ogctl="" og_dir=""
+ogd="" ogctl="" og="" og_dir=""
 if [ -n "$og_sha" ]; then
   og_dir="$base/pod-search-${og_sha:0:12}"
   if [ ! -d "$og_dir/.git" ]; then
@@ -53,10 +54,14 @@ if [ -n "$og_sha" ]; then
   git -C "$og_dir" checkout -q --detach "$og_sha"
   features=()
   [ -z "$og_features" ] || features=(--features "$og_features")
-  scheduled "$og_dir" "cargo build --release --locked ${features[*]}"
+  scheduled "$og_dir" "cargo build --release --locked -p ogd -p ogctl"
+  scheduled "$og_dir/third_party/ripgrep" "cargo build --release --locked ${features[*]}"
   ogd="$og_dir/target/release/ogd"
   ogctl="$og_dir/target/release/ogctl"
-  [ -x "$ogd" ] || { echo "no ogd after the build" >&2; exit 1; }
+  og="$og_dir/third_party/ripgrep/target/release/rg"
+  for binary in "$ogd" "$ogctl" "$og"; do
+    [ -x "$binary" ] || { echo "missing after the build: $binary" >&2; exit 1; }
+  done
 fi
 
 client_dir=""
@@ -82,11 +87,12 @@ search_repo_sha="$(git -C "$search_repo" rev-parse HEAD)"
 
 node -e '
   const [out, ...v] = process.argv.slice(1)
-  const [ogSha, ogFeatures, ogd, ogctl, clientSha, client, repo, repoSha, source] = v
+  const [ogSha, ogFeatures, ogd, ogctl, og, clientSha, client, repo, repoSha, source] = v
   require("fs").writeFileSync(out, JSON.stringify({
-    ogSha: ogSha || null, ogFeatures: (ogSha && ogFeatures) || null, ogd: ogd || null, ogctl: ogctl || null,
+    ogSha: ogSha || null, ogFeatures: (ogSha && ogFeatures) || null,
+    ogd: ogd || null, ogctl: ogctl || null, og: og || null,
     searchClientSha: clientSha || null, searchClient: client || null,
     searchRepo: repo, searchRepoSha: repoSha, searchRepoSource: source
   }, null, 2) + "\n")
-' "$out" "$og_sha" "$og_features" "$ogd" "$ogctl" "$client_sha" "$client_dir" "$search_repo" "$search_repo_sha" "$repo_source"
+' "$out" "$og_sha" "$og_features" "$ogd" "$ogctl" "$og" "$client_sha" "$client_dir" "$search_repo" "$search_repo_sha" "$repo_source"
 cat "$out"

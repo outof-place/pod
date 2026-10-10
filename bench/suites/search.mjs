@@ -3,11 +3,18 @@
 // agents searching in parallel). The OS file cache is warm (a warm-up round runs first).
 //
 //   node bench/suites/search.mjs [--repo DIR] [--rounds 5] [--engines rg,og] [--og BIN]
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { parseArgs } from 'node:util'
-import { collectSamples, commandVersion, log, writeSuiteResult } from '../lib/bench-session.mjs'
+import { parseArgs, promisify } from 'node:util'
+import {
+  collectSamples,
+  commandVersion,
+  log,
+  sleep,
+  writeSuiteResult
+} from '../lib/bench-session.mjs'
 import { summarize } from '../lib/sample-stats.mjs'
 
 const { values: options } = parseArgs({
@@ -16,10 +23,11 @@ const { values: options } = parseArgs({
     rounds: { type: 'string', default: '5' },
     engines: { type: 'string', default: 'rg' },
     rg: { type: 'string', default: 'rg' },
-    og: {
-      type: 'string',
-      default: path.join(os.homedir(), 'Documents/pod-search/target/release/og')
-    }
+    // og is pod-search's ripgrep fork (third_party/ripgrep, binary `rg`); ogd its index daemon.
+    og: { type: 'string' },
+    'og-sha': { type: 'string' },
+    ogd: { type: 'string' },
+    ogctl: { type: 'string' }
   }
 })
 const repo = options.repo
@@ -59,7 +67,48 @@ const ENGINES = {
     options.rg,
     ['--no-config', '-n', ...(regex ? [] : ['-F']), '-e', pattern, '.']
   ],
-  og: (pattern, regex) => [options.og, ['-n', ...(regex ? [] : ['-F']), '-e', pattern, '.']]
+  // The same arguments: og is a ripgrep fork with rg's argv and output.
+  og: (pattern, regex) => [
+    options.og,
+    ['--no-config', '-n', ...(regex ? [] : ['-F']), '-e', pattern, '.']
+  ]
+}
+
+const run = promisify(execFile)
+
+// og answers from a running ogd; this run gets its own daemon, socket and state, then stops it.
+let ogEnv = {}
+let ogStatus = null
+async function startOgd() {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'pod-bench-ogd-'))
+  ogEnv = {
+    POD_SEARCH_SOCKET: path.join(dir, 'ogd.sock'),
+    POD_SEARCH_STATE_DIR: path.join(dir, 'state')
+  }
+  const daemon = spawn(
+    options.ogd,
+    ['--socket', ogEnv.POD_SEARCH_SOCKET, '--state-dir', ogEnv.POD_SEARCH_STATE_DIR],
+    {
+      stdio: 'ignore'
+    }
+  )
+  for (let i = 0; i < 100 && !existsSync(ogEnv.POD_SEARCH_SOCKET); i += 1) {
+    await sleep(100)
+  }
+  await run(options.ogctl, ['register', '--wait', repo], {
+    env: { ...process.env, ...ogEnv },
+    timeout: 600_000
+  })
+  return { daemon, dir }
+}
+async function stopOgd(ogd) {
+  ogStatus = JSON.parse(
+    (await run(options.ogctl, ['status'], { env: { ...process.env, ...ogEnv } })).stdout
+  )
+  await run(options.ogctl, ['shutdown'], { env: { ...process.env, ...ogEnv } }).catch(() =>
+    ogd.daemon.kill('SIGTERM')
+  )
+  rmSync(ogd.dir, { recursive: true, force: true })
 }
 
 function search(engine, [pattern, regex]) {
@@ -69,7 +118,12 @@ function search(engine, [pattern, regex]) {
     execFile(
       program,
       args,
-      { cwd: repo, maxBuffer: 512 * 1024 * 1024, encoding: 'buffer' },
+      {
+        cwd: repo,
+        maxBuffer: 512 * 1024 * 1024,
+        encoding: 'buffer',
+        env: engine === 'og' ? { ...process.env, ...ogEnv } : process.env
+      },
       (error, stdout) => {
         const ms = Number(process.hrtime.bigint() - t0) / 1e6
         // Exit 1 = no match, which is a valid answer.
@@ -87,7 +141,11 @@ function search(engine, [pattern, regex]) {
 const engines = options.engines.split(',')
 const versions = { rg: commandVersion(options.rg) }
 if (engines.includes('og')) {
-  versions.og = commandVersion(options.og)
+  versions.og = {
+    version: commandVersion(options.og),
+    podSearchSha: options['og-sha'] ?? null,
+    binary: options.og
+  }
 }
 const { stdout: tracked } = await new Promise((resolve, reject) =>
   execFile('git', ['ls-files', '-z'], { cwd: repo, maxBuffer: 256 * 1024 * 1024 }, (error, out) =>
@@ -100,9 +158,11 @@ log('repo', JSON.stringify(repoFacts))
 const matchCounts = {}
 const samples = {}
 for (const engine of engines) {
+  const ogd = engine === 'og' ? await startOgd() : null
+  // Warm the file cache and the index.
   for (const query of QUERIES) {
     await search(engine, query)
-  } // warm the file cache and any index
+  }
   samples[engine] = await collectSamples({
     label: `search ${engine}`,
     count: rounds,
@@ -126,6 +186,9 @@ for (const engine of engines) {
       }
     }
   })
+  if (ogd) {
+    await stopOgd(ogd)
+  }
 }
 
 // Same answers? Compare per-query match-line counts between engines.
@@ -194,6 +257,7 @@ const comparisons = engines.includes('og')
     ]
   : []
 writeSuiteResult('search', {
+  ogdStatus: ogStatus,
   versions,
   repo: repoFacts,
   config: { rounds, queries: QUERIES, engines },
