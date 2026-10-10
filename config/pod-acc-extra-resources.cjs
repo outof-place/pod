@@ -43,4 +43,7 @@ const podAccFileExclusions = [
   '!resources/claude-acc.next/**'
 ]
 
-module.exports = { podAccMacExtraResources, podAccFileExclusions, NO_BYTECODE }
+// product/scripts/verify-bundle-seal.mjs runs these against a copy of the signed app
+const { podAccSealProbes } = require('./pod-acc-seal-probes.cjs')
+
+module.exports = { podAccMacExtraResources, podAccFileExclusions, podAccSealProbes, NO_BYTECODE }
