@@ -56,6 +56,11 @@ export POD_BENCH_POD_APP="$pod" POD_BENCH_ORCA_APP="$orca"
 export POD_BENCH_OUT="${POD_BENCH_OUT:-$here/results/$(date -u +%F)}"
 mkdir -p "$POD_BENCH_OUT"
 echo "==> results: $POD_BENCH_OUT"
+# The user's claude-acc install as it is now; every launch and every step is checked against it,
+# and a change stops the run (lib/acc-guard.mjs).
+export POD_BENCH_ACC_BASELINE="$POD_BENCH_OUT/acc-baseline.raw"
+node "$here/lib/acc-guard.mjs" --baseline "$POD_BENCH_ACC_BASELINE"
+acc_check() { node "$here/lib/acc-guard.mjs" --check "$POD_BENCH_ACC_BASELINE"; }
 echo "==> Pod:  $pod ($(plutil -extract CFBundleShortVersionString raw -o - "$pod/Contents/Info.plist"))"
 echo "==> Orca: $orca ($(plutil -extract CFBundleShortVersionString raw -o - "$orca/Contents/Info.plist"))"
 if [ -z "$pod_commit" ]; then
@@ -99,13 +104,17 @@ node -e '
     ogd: { suite: "ogd", subject: "Pod search on ogd", reason: "needs a bench-ready pod-search build and a pinned pod/search-client" }
   }
   const coming = comingList ? comingList.split(",").map((id) => ({ id, status: "coming", ...reasons[id] })) : []
-  fs.writeFileSync(out, JSON.stringify({ podApp, podCommit, podProfile, orcaApp, startedAt: new Date().toISOString(), search: JSON.parse(fs.readFileSync(inputs, "utf8")), coming }, null, 2) + "\n")
+  const home = require("os").homedir()
+  const publicPaths = (_key, value) => (typeof value === "string" ? value.replaceAll(home, "~") : value)
+  fs.writeFileSync(out, JSON.stringify({ podApp, podCommit, podProfile, orcaApp, startedAt: new Date().toISOString(), search: JSON.parse(fs.readFileSync(inputs, "utf8")), coming }, publicPaths, 2) + "\n")
 ' "$POD_BENCH_OUT/run.json" "$pod" "$pod_commit" "$pod_profile" "$orca" "$inputs" "$coming"
 
 node "$here/suites/preflight.mjs"
+acc_check
 run_suite() {
   echo "==> $*"
   node "$here/suites/$1.mjs" "${@:2}"
+  acc_check
   node "$here/summarize.mjs" "$POD_BENCH_OUT"
 }
 run_suite polling
@@ -125,6 +134,7 @@ run_suite panes
 run_suite throughput
 echo "==> claude-acc (historical + fresh)"
 node "$here/suites/claude-acc.mjs" --fresh
+acc_check
 node "$here/summarize.mjs" "$POD_BENCH_OUT"
 
 if [ "$visible" = 1 ]; then
@@ -144,6 +154,7 @@ if [ "$visible" = 1 ]; then
   fi
   echo "==> visible windows: latency and throughput (takes the desktop)"
   node "$here/suites/latency.mjs" --confirm-visible --throughput
+  acc_check
   node "$here/summarize.mjs" "$POD_BENCH_OUT"
 fi
 
