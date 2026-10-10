@@ -5,7 +5,7 @@
 //   the sandbox's own TLS endpoint in this process.
 import { randomBytes } from 'node:crypto'
 import { connect, type Socket } from 'node:net'
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { Readable, Writable } from 'node:stream'
 import type { AnthropicRoute } from './pod-orbstack-anthropic-route'
 import {
   decodeRelayFrames,
@@ -43,9 +43,22 @@ export type SandboxRelayHandle = {
   ready: Promise<boolean>
 }
 
+/**
+ * The VM half's process, as spawnProcess returns it with piped stdio.
+ * Why its own type: Orca allows child process modules only through its process-host package.
+ */
+export type RelayAgentProcess = {
+  stdin: Writable
+  stdout: Readable
+  stderr: Readable
+  on(event: 'exit', listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown
+  on(event: 'error', listener: (error: Error) => void): unknown
+  kill(): boolean
+}
+
 type RelayDeps = {
   /** Starts the VM half: `orb -m <machine> -u root python3 -I -c <agent> <spec>`. */
-  spawnAgent: (machine: string, args: readonly string[]) => ChildProcessWithoutNullStreams
+  spawnAgent: (machine: string, args: readonly string[]) => RelayAgentProcess
   connectHost?: (port: number) => Socket
   stateDir?: string
   /** The VM's hosts file and CA path; tests point them at a temp dir. */
@@ -65,7 +78,7 @@ function sameRoutes(a: SandboxRelayRoutes, b: SandboxRelayRoutes): boolean {
 }
 
 type Relay = {
-  child: ChildProcessWithoutNullStreams
+  child: RelayAgentProcess
   routes: SandboxRelayRoutes
   handle: SandboxRelayHandle
   exited: boolean
