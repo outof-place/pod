@@ -20,6 +20,7 @@ import type { UnixSocketStreamUpgrade } from '../rpc/unix-socket-stream-upgrade'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import { RUNTIME_RPC_REPLY_TOO_LARGE_CODE } from './runtime-rpc-reply-size-limit'
 import { RuntimeRpcWebSocketDispatch } from './runtime-rpc-websocket-dispatch'
+import { podTrace } from '../../../shared/pod-terminal-trace'
 
 type LocalStreamSession = {
   connection: UnixSocketStreamConnection
@@ -93,6 +94,7 @@ export class RuntimeRpcLocalStreamDispatch extends RuntimeRpcWebSocketDispatch {
         void this.trackClientRequest(() => this.handleLocalStreamText(session, text))
       },
       onBinary: (bytes) => {
+        podTrace('m.in', bytes.length)
         this.lastClientRequestAt = Date.now()
         this.binaryMessageRouter.dispatch(connectionId, bytes)
       },
