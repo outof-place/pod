@@ -40,6 +40,8 @@ struct SurfaceModel {
   bool closed = false;
   // A config of this surface's own (per-pane font size); null follows the app config.
   ghostty_config_t config = nullptr;
+  // Focus reports from a focus round trip of our own, which the PTY must not see.
+  std::atomic<int> swallowed_focus_reports{0};
 };
 
 // No C++ globals with dynamic constructors: Xcode's linker rejects them in this bundle.
@@ -303,10 +305,12 @@ bool WindowOnScreen(NSWindow* window) {
 // Between becomeFirstResponder and resignFirstResponder; AppKit still reports a resigning view
 // as the window's first responder.
 @property(nonatomic, readonly) BOOL keyboardFocused;
+@property(nonatomic, readonly) uint64_t strayCursorTimers;
 - (void)setOverlayHoles:(NSArray<NSValue*>*)holes;
 - (NSArray<NSValue*>*)overlayHoles;
 - (void)setGhosttyFocused:(BOOL)focused;
 - (void)syncGhosttyVisible;
+- (void)noteOutput;
 - (void)observePresentedFrames;
 - (void)stopObservingPresentedFrames;
 @end
@@ -340,6 +344,10 @@ bool WindowOnScreen(NSWindow* window) {
 @implementation OrcaGhosttySurfaceView {
   // The layer whose contents Ghostty swaps per presented frame.
   CALayer* _presentedLayer;
+  // For spotting Ghostty's cursor timer on an unfocused surface (see presentedFrame).
+  CFTimeInterval _lastOutputTime;
+  CFTimeInterval _lastUnfocusedFrameTime;
+  int _cursorCadenceFrames;
   NSMutableAttributedString* _markedText;
   NSMutableArray<NSString*>* _keyTextAccumulator;
   NSTrackingArea* _trackingArea;
@@ -363,6 +371,37 @@ bool WindowOnScreen(NSWindow* window) {
   if (_ghosttyFocused == focused || !self.surface) return;
   _ghosttyFocused = focused;
   ghostty_surface_set_focus(self.surface, focused);
+}
+
+- (void)noteOutput {
+  _lastOutputTime = CACurrentMediaTime();
+}
+
+// Ghostty can leave its 600 ms cursor timer running on a surface it was told is unfocused: an
+// output's reset_cursor_blink, drained in the same batch as the unfocus, turns the pending
+// cancel into a re-arm (libxev timer_reset). Two frames 600 ms apart with no output between
+// are that timer; another unfocus, sent while no output is in flight, cancels it.
+- (void)presentedFrame {
+  if (_ghosttyFocused || !_ghosttyVisible || !self.surface) {
+    _cursorCadenceFrames = 0;
+    return;
+  }
+  const CFTimeInterval now = CACurrentMediaTime();
+  const CFTimeInterval interval = now - _lastUnfocusedFrameTime;
+  const bool timerTick = interval > 0.5 && interval < 0.75 && _lastOutputTime < _lastUnfocusedFrameTime;
+  _cursorCadenceFrames = timerTick ? _cursorCadenceFrames + 1 : 0;
+  _lastUnfocusedFrameTime = now;
+  if (_cursorCadenceFrames < 2) return;
+  _cursorCadenceFrames = 0;
+  _strayCursorTimers++;
+  SurfaceModel* model = self.model;
+  model->swallowed_focus_reports.store(2);
+  ghostty_surface_set_focus(self.surface, true);
+  ghostty_surface_set_focus(self.surface, false);
+  // Without focus reporting on, Ghostty sends none to swallow.
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+    if (self.model == model) model->swallowed_focus_reports.store(0);
+  });
 }
 
 - (void)syncGhosttyVisible {
@@ -392,6 +431,7 @@ bool WindowOnScreen(NSWindow* window) {
   }
   _presentedFrames++;
   g_presented_frames++;
+  [self presentedFrame];
 }
 
 - (ghostty_surface_t)surface {
@@ -1744,9 +1784,19 @@ void OnCloseSurface(void*, bool) {
   // The daemon owns the process; closing a pane goes through Orca.
 }
 
+bool IsFocusReport(const uint8_t* bytes, size_t len) {
+  return len == 3 && bytes[0] == 0x1b && bytes[1] == '[' && (bytes[2] == 'I' || bytes[2] == 'O');
+}
+
 void OnReceiveBuffer(void* userdata, const uint8_t* bytes, size_t len) {
   auto* model = static_cast<SurfaceModel*>(userdata);
   if (model == nullptr || len == 0) return;
+  if (IsFocusReport(bytes, len)) {
+    int pending = model->swallowed_focus_reports.load();
+    while (pending > 0 && !model->swallowed_focus_reports.compare_exchange_weak(pending, pending - 1)) {
+    }
+    if (pending > 0) return;
+  }
   auto* event = new SurfaceEvent{SurfaceEventKind::Input};
   event->text.assign(reinterpret_cast<const char*>(bytes), len);
   Emit(model, event);
@@ -2093,6 +2143,7 @@ napi_value WriteOutput(napi_env env, napi_callback_info info) {
   void* data = nullptr;
   size_t len = 0;
   if (napi_get_buffer_info(env, argv[1], &data, &len) == napi_ok && len > 0) {
+    [view noteOutput];
     ghostty_surface_write_buffer_replay(view.model->surface, static_cast<const uint8_t*>(data), len);
   }
   return Undefined(env);
@@ -2391,6 +2442,7 @@ napi_value DebugState(napi_env env, napi_callback_info info) {
   napi_set_named_property(env, result, "ghosttyFocused", Bool(env, view.ghosttyFocused));
   napi_set_named_property(env, result, "ghosttyVisible", Bool(env, view.ghosttyVisible));
   napi_set_named_property(env, result, "presentedFrames", Number(env, view.presentedFrames));
+  napi_set_named_property(env, result, "strayCursorTimers", Number(env, view.strayCursorTimers));
   return result;
 }
 

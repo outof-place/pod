@@ -21,6 +21,8 @@ import {
   addTerminalPane,
   measureIdleWindow,
   memoryReport,
+  metalWorkingPoolMb,
+  nativeCounters,
   setTerminalMode,
   usageSnapshot,
   type IdleSample,
@@ -38,7 +40,8 @@ const PANE_STEPS = [1, 4, 8]
 const SETTLE_MS = 4_000
 const GATE_PANES = 4
 const GATE_IDLE_MS = 5_000
-const GATE_MAIN_MB_PER_PANE = 30
+const GATE_MAIN_MB_PER_PANE = 15
+const GATE_METAL_POOL_MB = 64
 const GATE_MAIN_WAKEUPS_PER_PANE = 5
 
 // Why: a hidden test window would otherwise be throttled like an occluded one, which a
@@ -170,33 +173,47 @@ test('idle native panes stay quiet and release what they do not draw', async ({
   electronApp
 }) => {
   test.setTimeout(5 * 60_000)
-  const xtermOnly = await usageSnapshot(electronApp)
   await openFirstPane(orcaPage, electronApp, 'native')
+  await orcaPage.waitForTimeout(SETTLE_MS)
+  const onePane = await mainProcessUsage(electronApp)
   for (let panes = 1; panes < GATE_PANES; panes += 1) {
     await addTerminalPane(orcaPage, electronApp, 'native', panes)
   }
   const surfaceIds = await nativeSurfaceIds(electronApp)
   expect(surfaceIds).toHaveLength(GATE_PANES)
-  // A hidden test app is never active, so no surface is Ghostty-focused.
-  for (const surfaceId of surfaceIds) {
-    expect(await nativeSurfaceField(electronApp, surfaceId, 'ghosttyFocused')).toBe(false)
-  }
   await orcaPage.waitForTimeout(SETTLE_MS)
+  // Why: under load a shell may still be drawing its first prompt; idle starts once none draws.
+  await waitForNoPresentedFrames(electronApp).catch(async (error: unknown) => {
+    for (const surfaceId of surfaceIds) {
+      const fields = ['presentedFrames', 'ghosttyFocused', 'ghosttyVisible', 'strayCursorTimers']
+      const state = await Promise.all(
+        fields.map(async (field) => nativeSurfaceField(electronApp, surfaceId, field))
+      )
+      console.log(
+        `surface ${surfaceId} still drawing? ${fields.map((f, i) => `${f}=${String(state[i])}`).join(' ')}`
+      )
+    }
+    throw error
+  })
 
+  const framesBefore = await presentedFramesBySurface(electronApp, surfaceIds)
   const idle = await measureIdleWindow(electronApp, orcaPage, GATE_PANES, GATE_IDLE_MS)
-  expect(idle.counters).toEqual({ ticksPerS: 0, setFramesPerS: 0, presentedFramesPerS: 0 })
-  // Why per pane over the xterm-only start: Metal's ~225 MB working pool stays resident while
-  // anything redraws within ~1 s, and every pane's swap chain and atlases come on top.
-  const mainBefore = xtermOnly.processes.find((process) => process.kind === 'main')
-  const mainNow = (await usageSnapshot(electronApp)).processes.find(
-    (process) => process.kind === 'main'
-  )
-  expect(mainBefore && mainNow).toBeTruthy()
+  const framesIdle = await presentedFramesBySurface(electronApp, surfaceIds)
+  expect(idle.counters?.ticksPerS).toBe(0)
+  expect(idle.counters?.setFramesPerS).toBe(0)
+  for (const surfaceId of surfaceIds) {
+    // A hidden test app is never active, so no surface is Ghostty-focused or blinks.
+    const focused = await nativeSurfaceField(electronApp, surfaceId, 'ghosttyFocused')
+    expect(focused, `surface ${surfaceId} Ghostty focus`).toBe(false)
+    const drawn = (framesIdle.get(surfaceId) ?? 0) - (framesBefore.get(surfaceId) ?? 0)
+    expect(drawn, `surface ${surfaceId} idle frames`).toBe(0)
+  }
+  const fourPanes = await mainProcessUsage(electronApp)
   const growthMbPerPane =
-    ((mainNow?.usage.footprint ?? 0) - (mainBefore?.usage.footprint ?? 0)) /
-    (1024 * 1024) /
-    GATE_PANES
+    (fourPanes.usage.footprint - onePane.usage.footprint) / (1024 * 1024) / (GATE_PANES - 1)
   expect(growthMbPerPane).toBeLessThan(GATE_MAIN_MB_PER_PANE)
+  // Why: Metal keeps a ~225 MB working pool resident while anything drew within ~1 s.
+  expect(metalWorkingPoolMb(fourPanes.pid)).toBeLessThan(GATE_METAL_POOL_MB)
   expect(idle.byKind.main.wakeupsPerS / GATE_PANES).toBeLessThan(GATE_MAIN_WAKEUPS_PER_PANE)
 
   // The keyboard owner of a key window blinks (redraws) on Ghostty's cursor timer; no other does.
@@ -204,11 +221,11 @@ test('idle native panes stay quiet and release what they do not draw', async ({
   await nativeTerminalDebug(electronApp, 'secureInput', [owner, true])
   await nativeTerminalDebug(electronApp, 'focus', [owner])
   await expect.poll(async () => nativeSurfaceField(electronApp, owner, 'ghosttyFocused')).toBe(true)
-  const framesBefore = await presentedFramesBySurface(electronApp, surfaceIds)
+  const framesFocused = await presentedFramesBySurface(electronApp, surfaceIds)
   await orcaPage.waitForTimeout(3_000)
-  const framesAfter = await presentedFramesBySurface(electronApp, surfaceIds)
+  const framesBlinking = await presentedFramesBySurface(electronApp, surfaceIds)
   for (const surfaceId of surfaceIds) {
-    const drawn = (framesAfter.get(surfaceId) ?? 0) - (framesBefore.get(surfaceId) ?? 0)
+    const drawn = (framesBlinking.get(surfaceId) ?? 0) - (framesFocused.get(surfaceId) ?? 0)
     expect(drawn, `surface ${surfaceId} frames`).toBeLessThanOrEqual(surfaceId === owner ? 8 : 0)
   }
   // Why one evaluate: AppKit still names a resigning view first responder, and no timer may
@@ -244,6 +261,33 @@ test('idle native panes stay quiet and release what they do not draw', async ({
     .toBeGreaterThan(occludedFrames)
   await expect.poll(async () => nativeScreenText(electronApp, id)).toContain('ORCA_OCCLUDED_42')
 })
+
+async function waitForNoPresentedFrames(app: ElectronApplication): Promise<void> {
+  const quiet = { frames: -1, since: 0 }
+  await expect
+    .poll(
+      async () => {
+        const frames = (await nativeCounters(app))?.presentedFrames ?? -1
+        if (frames !== quiet.frames) {
+          quiet.frames = frames
+          quiet.since = Date.now()
+        }
+        return Date.now() - quiet.since
+      },
+      { timeout: 30_000, intervals: [250] }
+    )
+    .toBeGreaterThan(2_000)
+}
+
+async function mainProcessUsage(
+  app: ElectronApplication
+): Promise<Awaited<ReturnType<typeof usageSnapshot>>['processes'][number]> {
+  const main = (await usageSnapshot(app)).processes.find((process) => process.kind === 'main')
+  if (!main) {
+    throw new Error('no main process usage')
+  }
+  return main
+}
 
 async function presentedFramesBySurface(
   app: ElectronApplication,
