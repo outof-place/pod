@@ -15,7 +15,7 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { BENCH_ROOT, TOOLS_BIN, sleep } from './bench-session.mjs'
+import { BENCH_ROOT, TOOLS_BIN, log, sleep } from './bench-session.mjs'
 
 const HOME = os.homedir()
 export const ORCA_APP = process.env.POD_BENCH_ORCA_APP ?? '/Applications/Orca.app'
@@ -267,15 +267,22 @@ export async function launchInstance(appPath, profile, { visible = false } = {})
 /** The instance's own CLI against its own profile; returns the parsed `result`. */
 export async function cli(instance, args, timeoutMs = 120_000) {
   assertIsolated(instance.profile)
-  const { stdout } = await run(instance.info.cli, [...args, '--json'], {
-    env: {
-      PATH: '/usr/bin:/bin',
-      HOME: instance.profile.home,
-      ORCA_USER_DATA_PATH: instance.profile.ud
-    },
-    timeout: timeoutMs,
-    maxBuffer: 64 * 1024 * 1024
-  })
+  let stdout
+  try {
+    ;({ stdout } = await run(instance.info.cli, [...args, '--json'], {
+      env: {
+        PATH: '/usr/bin:/bin',
+        HOME: instance.profile.home,
+        ORCA_USER_DATA_PATH: instance.profile.ud
+      },
+      timeout: timeoutMs,
+      maxBuffer: 64 * 1024 * 1024
+    }))
+  } catch (error) {
+    // A failing --json call prints its reason on stdout; keep it in the error.
+    const output = `${error.stdout ?? ''}${error.stderr ?? ''}`.trim().slice(0, 600)
+    throw new Error(`orca ${args.join(' ')} (exit ${error.code}): ${output}`)
+  }
   const parsed = JSON.parse(stdout)
   if (!parsed.ok) {
     throw new Error(`orca ${args.join(' ')}: ${stdout.slice(0, 400)}`)
@@ -300,14 +307,26 @@ export async function waitForRuntime(instance, timeoutMs = 120_000) {
 export async function openTerminal(instance) {
   await waitForRuntime(instance)
   await cli(instance, ['repo', 'add', '--path', instance.profile.repo])
-  const created = await cli(instance, [
-    'terminal',
-    'create',
-    '--worktree',
-    `path:${instance.profile.repo}`,
-    '--focus'
-  ])
-  return created.terminal.handle
+  // The app may still be scanning the repo it just added; untimed setup, so wait it out.
+  const deadline = Date.now() + 30_000
+  for (;;) {
+    try {
+      const created = await cli(instance, [
+        'terminal',
+        'create',
+        '--worktree',
+        `path:${instance.profile.repo}`,
+        '--focus'
+      ])
+      return created.terminal.handle
+    } catch (error) {
+      if (Date.now() > deadline) {
+        throw error
+      }
+      log(`terminal create not ready yet: ${error.message.slice(0, 300)}`)
+      await sleep(500)
+    }
+  }
 }
 
 export async function waitForPrompts(profile, count, timeoutMs = 60_000) {
