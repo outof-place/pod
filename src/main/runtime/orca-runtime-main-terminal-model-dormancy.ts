@@ -36,8 +36,10 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
 
   /** Per chunk in onPtyData, before reply ownership is captured; true when main skips its model. */
   protected syncMainTerminalModelDemand(ptyId: string, chunkStartSeq: number): boolean {
+    const skipModel = this.mainTerminalModelDormancy.onChunk(ptyId, chunkStartSeq)
+    // Why after: a rebuild that caught up on this chunk lets a pending take-back go now.
     this.daemonQueryResponderDelegation.sync(ptyId)
-    return this.mainTerminalModelDormancy.onChunk(ptyId, chunkStartSeq)
+    return skipModel
   }
 
   /** The daemon's in-order responder marker; the delivery gate has already applied it. */
@@ -123,7 +125,13 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
           ptyId,
           pending && this.mainTerminalModelDormancy.isDormant(ptyId)
         ),
-      reclaim: (ptyId) => this.mainTerminalModelDormancy.noteDemand(ptyId)
+      reclaim: (ptyId) => {
+        this.mainTerminalModelDormancy.noteDemand(ptyId)
+        return (
+          this.hasRemoteTerminalViewSubscriber(ptyId) ||
+          this.mainTerminalModelDormancy.isCaughtUp(ptyId)
+        )
+      }
     })
   }
 
