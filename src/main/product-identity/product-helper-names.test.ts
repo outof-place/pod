@@ -21,7 +21,8 @@ import {
   productHelperName,
   productHelperNameTable,
   productHelperPath,
-  productHelperPatterns
+  productHelperPatterns,
+  productProcessName
 } from './product-helper-names'
 import { resolveMacOSComputerUseExecutablePath } from '../computer/macos-native-provider-paths'
 
@@ -70,6 +71,7 @@ describe('helper names without a product identity', () => {
       'Grant Accessibility to Orca Computer Use'
     )
     expect(computerUseAppNotFound()).toBe('Orca Computer Use.app was not found')
+    expect(productProcessName('orca-tcc-login')).toBe('orca-tcc-login')
   })
 })
 
@@ -141,6 +143,11 @@ describe('helper names in a product', () => {
       'Drag "Pod Computer Use" into the list'
     )
     expect(computerUseAppNotFound()).toBe('Pod Computer Use.app was not found')
+  })
+
+  it('labels the terminal login trampoline after the product', () => {
+    identity.current = pod()
+    expect(productProcessName('orca-tcc-login')).toBe('pod-tcc-login')
   })
 })
 

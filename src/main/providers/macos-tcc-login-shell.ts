@@ -1,4 +1,5 @@
 import { runProcess } from '@orca/process-host'
+import { productProcessName } from '../product-identity/product-helper-names'
 import { existsSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { basename } from 'node:path'
@@ -371,7 +372,7 @@ export function wrapShellSpawnForMacosTccAttribution(
       '-p',
       '-c',
       trampoline,
-      'orca-tcc-login',
+      productProcessName('orca-tcc-login'),
       shellEnvValue,
       file,
       ...args
