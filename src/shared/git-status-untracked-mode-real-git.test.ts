@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcess } from './child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { StatusPorcelainParser } from './git-status-porcelain-parser'
 import { GitStatusUntrackedMode, type GitStatusStdoutStream } from './git-status-untracked-mode'
 
