@@ -152,6 +152,8 @@ export const ptySessionControlApi = {
   setHiddenRendererPty: (id: string, hidden: boolean): void => {
     ipcRenderer.send('pty:setHiddenRendererPty', { id, hidden })
   },
+  setRendererPtyViewFedElsewhere: (id: string, fedElsewhere: boolean): Promise<void> =>
+    ipcRenderer.invoke('pty:setRendererPtyViewFedElsewhere', { id, fedElsewhere }),
   setPtyDeliveryInterest: (id: string, interested: boolean): void => {
     ipcRenderer.send('pty:setPtyDeliveryInterest', { id, interested })
   },
