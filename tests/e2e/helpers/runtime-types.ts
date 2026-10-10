@@ -31,7 +31,11 @@ export type ManagedPaneHandle = ManagedPane & ManagedPaneInternal
 export type PaneManagerLike = {
   getActivePane(): ManagedPaneHandle | null
   getPanes(limit?: number): ManagedPaneHandle[]
-  splitPane(paneId: number, direction: 'vertical' | 'horizontal'): ManagedPaneHandle | null
+  splitPane(
+    paneId: number,
+    direction: 'vertical' | 'horizontal',
+    opts?: { cwd?: string }
+  ): ManagedPaneHandle | null
   closePane(paneId: number): void
   movePane: PaneManager['movePane']
   setActivePane(paneId: number, opts?: { focus?: boolean }): void
