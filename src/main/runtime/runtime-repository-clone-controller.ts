@@ -25,7 +25,7 @@ import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { applyRepoPerformanceConfigOnAdd } from '../git/repo-performance-config'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
-import { localCloneOptions } from '../ipc/repos/repo-clone-options'
+import { localCloneAdded, localCloneOptions } from '../ipc/repos/repo-clone-options'
 
 type RuntimeRepositoryCloneDependencies = {
   getStore: () => RuntimeStore | null
@@ -195,6 +195,7 @@ export class RuntimeRepositoryCloneController {
     store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(store, repo)
     applyRepoPerformanceConfigOnAdd(repo)
+    await localCloneAdded(repo)
     invalidateAuthorizedRootsCache()
     this.invalidate(repo.id)
     return store.getRepo(repo.id) ?? repo
