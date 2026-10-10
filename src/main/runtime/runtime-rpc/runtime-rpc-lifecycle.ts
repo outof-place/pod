@@ -9,7 +9,7 @@ import type { DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { UnpairedDeviceAuthThrottle } from '../rpc/unpaired-device-auth-throttle'
 import { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
-import { RuntimeRpcWebSocketDispatch } from './runtime-rpc-websocket-dispatch'
+import { RuntimeRpcLocalStreamDispatch } from './runtime-rpc-local-stream-dispatch'
 import {
   formatWsEndpoint,
   WS_BIND_HOST_ALL_INTERFACES,
@@ -21,7 +21,7 @@ import {
 } from './runtime-rpc-socket-metadata'
 import { errorMessage } from '../../../shared/error-message'
 
-export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
+export class RuntimeRpcLifecycle extends RuntimeRpcLocalStreamDispatch {
   async start(): Promise<void> {
     if (this.activeTransports.length > 0) {
       return
@@ -66,6 +66,8 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           reply(JSON.stringify(this.buildError(id, 'internal_error', message)))
         })
     })
+
+    socketTransport.onStreamUpgrade((msg, upgrade) => this.handleLocalStreamUpgrade(msg, upgrade))
 
     await socketTransport.start()
 
