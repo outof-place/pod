@@ -57,16 +57,18 @@ Set `POD_SIGN_IDENTITY`, or `NOTARY_PROFILE` / `APPLE_API_KEY` (+`_ID`, `_ISSUER
 
 electron-builder would give every nested executable Electron's entitlements (JIT, unsigned executable memory, DYLD variables, Apple events, camera, microphone, location, USB, Bluetooth). `mac.sign` instead signs each one with only what it needs (`product/entitlements-policy.cjs`, plists in `product/entitlements/`):
 
-| Executable                                                 | Entitlements                          |
-| ---------------------------------------------------------- | ------------------------------------- |
-| The app and Electron's helper apps                         | the config's set                      |
-| Pod Menu (dictation records the microphone)                | `device.audio-input`                  |
-| serve-sim's camera helper (host camera into the simulator) | `device.camera`                       |
-| The embedded Python (CPython's JIT)                        | `cs.allow-unsigned-executable-memory` |
-| pod-agent-launcher, node-pty's spawn-helper (exec shims)   | `cs.allow-dyld-environment-variables` |
-| Everything else: Computer Use, rg, the claude-acc tools    | none                                  |
+| Executable                                                 | Entitlements                              |
+| ---------------------------------------------------------- | ----------------------------------------- |
+| The app and Electron's helper apps (Pod profile)           | `product/entitlements/electron-pod.plist` |
+| Pod Menu (dictation records the microphone)                | `device.audio-input`                      |
+| serve-sim's camera helper (host camera into the simulator) | `device.camera`                           |
+| The embedded Python (CPython's JIT)                        | `cs.allow-unsigned-executable-memory`     |
+| pod-agent-launcher (the agent shim)                        | `cs.allow-dyld-environment-variables`     |
+| Everything else: Computer Use, rg, the claude-acc tools    | none                                      |
 
-Accessibility, Screen Recording and Input Monitoring are privacy grants, not entitlements. Without `allow-dyld-environment-variables`, dyld strips `DYLD_*` from a hardened process's environment, so a shim would hide the user's variables from the agent it starts. `release.sh` fails when any executable or bundle carries a key outside its rule (`product/scripts/verify-entitlements.mjs`). Entitlements are not part of the designated requirement, so changing them keeps existing privacy grants.
+The Pod profile's app set keeps JIT, unsigned executable memory, Apple events, microphone and camera (browser panes pass both through to pages after the macOS prompt) and USB (security keys for WebAuthn). It drops location (browser panes deny geolocation), Bluetooth (no Web Bluetooth chooser) and DYLD variables. `POD_BUILD_PROFILE=orca` keeps upstream's `resources/build/entitlements.mac.plist`.
+
+Accessibility, Screen Recording and Input Monitoring are privacy grants, not entitlements. Without `allow-dyld-environment-variables`, dyld strips `DYLD_*` from a hardened process's environment: the agent shim keeps it so an agent still sees what the user's shell rc exported. Terminals need none, because `/usr/bin/login` and `/bin/bash` strip them anyway. `release.sh` fails when any executable or bundle carries a key outside its rule (`product/scripts/verify-entitlements.mjs`). Entitlements are not part of the designated requirement, so changing them keeps existing privacy grants.
 
 ## CI (later)
 
