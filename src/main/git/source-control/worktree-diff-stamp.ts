@@ -2,6 +2,7 @@ import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
 import type { GitRuntimeOptions } from '../git-runtime-options'
+import { readReftableHeadStamp, REFTABLE_HEAD_PLACEHOLDER } from '../reftable-stack-reader'
 import { resolveGitDir } from './resolve-git-dir'
 
 /**
@@ -135,6 +136,10 @@ async function readHeadComponent(gitDir: string): Promise<StampComponent | null>
     return null
   }
   const commonDir = commonDirEntry ? path.resolve(gitDir, commonDirEntry) : gitDir
+  if (head === REFTABLE_HEAD_PLACEHOLDER) {
+    const stacks = await readReftableHeadStamp(gitDir, commonDir)
+    return { text: JSON.stringify([head, 'reftable', stacks]), mtimeMs: Number.NEGATIVE_INFINITY }
+  }
   const refName = head.match(/^ref:\s*(.+?)\s*$/)?.[1]
   if (!refName || !isSafeRefName(refName)) {
     // Detached HEAD already holds the object id; an unrecognized HEAD is covered by its own text.
