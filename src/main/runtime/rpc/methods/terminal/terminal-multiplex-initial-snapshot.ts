@@ -3,6 +3,7 @@ import {
   serializeBudgetedMobileSnapshot
 } from './terminal-snapshot-publication'
 import { getOutputAfterSnapshotSeq } from './terminal-stream-replay'
+import { answerQueriesCoveredBySnapshot } from './terminal-snapshot-covered-queries'
 import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
 import {
   isMultiplexStreamAttached,
@@ -136,6 +137,7 @@ export async function publishMultiplexInitialSnapshot(
   stream.buffering = false
   const pendingOutput = stream.pendingOutput.splice(0)
   if (!initialOutputOverflowed) {
+    answerQueriesCoveredBySnapshot(runtime, stream, pendingOutput, snapshotOutputSeq)
     for (const chunk of pendingOutput) {
       const uncovered = getOutputAfterSnapshotSeq(chunk, snapshotOutputSeq)
       if (uncovered) {
