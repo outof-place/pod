@@ -1,4 +1,5 @@
 import { app, nativeTheme } from 'electron'
+import { sweepAgentBrowserOrphansAtStartup } from './pod-startup-policy'
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { is } from '@electron-toolkit/utils'
@@ -64,7 +65,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   })
   runtime.setAgentBrowserBridge(state.agentBrowserBridge)
   // Why: daemons a crashed or SIGKILL'd previous run left behind answer to nobody; nothing else reclaims them.
-  void state.agentBrowserBridge.sweepOrphanedSessions()
+  sweepAgentBrowserOrphansAtStartup(state.agentBrowserBridge)
   const browserClientAutomationDispatcher = new RpcDispatcher({ runtime })
   configureBrowserClientPageAutomationRuntime({
     browserManager,
