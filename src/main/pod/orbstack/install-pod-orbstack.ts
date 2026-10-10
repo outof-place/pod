@@ -20,7 +20,12 @@ import { setPodSandboxAnthropicCredentials } from './pod-orbstack-anthropic-rout
 import { createSandboxAccess } from './pod-orbstack-sandbox-access'
 import { createPodOrbstackTemplates } from './pod-orbstack-templates'
 import { createPodOrbstackEvents } from './pod-orbstack-events'
-import { createPodOrbstackDiskSizes, createPodOrbstackStats } from './pod-orbstack-stats'
+import {
+  CGROUP_FILES,
+  createPodOrbstackDiskSizes,
+  createPodOrbstackStats
+} from './pod-orbstack-stats'
+import { createStatsReaders } from './pod-orbstack-stats-readers'
 import { readPodOrbstackStatus } from './pod-orbstack-status'
 import {
   setPodOrbstackTerminalResolver,
@@ -113,11 +118,24 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
       ? async () => null
       : async () => releases.prepare(await probeClaudeCliVersion(resolveClaudeCommand()))
   })
+  const readers = createStatsReaders({
+    spawn: (machine, args) =>
+      spawnProcess({
+        program: paths().orb ?? 'orb',
+        args: ['-m', machine, ...args],
+        ...(home ? { env: { ...process.env, HOME: home } } : {})
+      }),
+    files: CGROUP_FILES,
+    timeoutMs: 3_000,
+    idleMs: 15_000
+  })
+  app.on('will-quit', () => readers.closeAll())
   const stats = createPodOrbstackStats({
     run,
     podMachines: () => registry.machines().map((entry) => entry.name),
     busyMachines: () => machines.busyMachines(),
-    diskSizes
+    diskSizes,
+    readers
   })
   const service = createPodOrbstackService({
     enabled,
@@ -140,7 +158,10 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     onChanged: () => events.changed(),
     subscribe: (emit) => events.subscribe(emit)
   })
-  changed = () => service.invalidate()
+  changed = () => {
+    service.invalidate()
+    stats.invalidate()
+  }
   setPodOrbstackService(service)
   if (!enabled) {
     return
