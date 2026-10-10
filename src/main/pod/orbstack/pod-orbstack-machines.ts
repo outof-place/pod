@@ -29,6 +29,8 @@ type MachineDeps = {
   prepareClaudeRelease?: () => Promise<SandboxClaudeRelease | null>
   provision?: typeof provisionSandbox
   resolveMounts?: typeof resolveSandboxMounts
+  /** Stops anything Pod runs against a sandbox (its relay) before the machine goes. */
+  onSandboxRemoved?: (name: string) => void
   now?: () => number
 }
 
@@ -184,6 +186,9 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
       const refusal = guardOwned(entry.name)
       if (refusal) {
         return { ok: false, error: refusal }
+      }
+      if (kind === 'sandbox') {
+        deps.onSandboxRemoved?.(entry.name)
       }
       if (await machineExists(entry.name)) {
         const result = await deleteMachine(entry.name)
