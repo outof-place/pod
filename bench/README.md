@@ -74,6 +74,24 @@ Support/orca`). Every Orca or Pod instance gets:
   `terminal send`.
 - cleanup afterwards: every process whose argv names the profile is killed (the terminal daemon
   and its shells), and the profile is deleted.
+- `POD_ACC_LIFECYCLE=off` in every launch's environment, the app's and its CLI's. When it starts,
+  the packaged Pod installs claude-acc by running the bundled `setup.sh`
+  (`src/main/pod/acc/acc-lifecycle.ts`). That script reloads launchd jobs in the user's real
+  `gui/<uid>` domain, whatever `HOME` is, so an isolated profile does not contain it. `off` skips
+  it, and a launch without that value refuses to start.
+
+`lib/acc-guard.mjs` then proves the user's claude-acc install was not touched:
+
+- At the start of a run it records three things: the `com.filip.claude-acc*` plists (mtime and
+  size), `~/.local/share/claude-acc/owner.json`, and every loaded `com.filip.claude-acc*` job's
+  plist path, program and arguments.
+- It compares against that record after each app launch, after each close and after each suite.
+  The comparison covers the loaded jobs because a `setup.sh` under a temporary `HOME` would load
+  that `HOME`'s plists and leave the real files' mtimes unchanged.
+- While an instance runs, it polls once a second for a claude-acc `setup.sh` process.
+- Any change, or any such process, stops the run at once (exit 70). The instances are killed and
+  the reason is written to `acc-guard-tripped.raw`.
+- `node --test bench/lib/acc-guard.test.mjs` covers it.
 
 ## Benchmarks
 
