@@ -23,7 +23,9 @@ export function applyAppIcon(value: unknown): void {
   if (image.isEmpty()) {
     return
   }
-  if (process.platform === 'darwin') {
+  // Why packaged builds skip it: the Dock renders the bundle's Icon Composer icon in
+  // the user's appearance (dark, clear, tinted); setIcon would pin one flat PNG over it.
+  if (process.platform === 'darwin' && !app.isPackaged) {
     app.dock?.setIcon(image)
   }
   for (const window of BrowserWindow.getAllWindows()) {
