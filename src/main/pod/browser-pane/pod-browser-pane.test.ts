@@ -38,6 +38,9 @@ class FakeWebContents extends EventEmitter {
   findInPage = vi.fn()
   stopFindInPage = vi.fn()
   focus = vi.fn()
+  executeJavaScriptInIsolatedWorld = vi.fn(
+    async (_world: number, _sources: { code: string }[]) => {}
+  )
 }
 
 class FakeWindow {
@@ -269,6 +272,37 @@ describe('PodBrowserPaneController', () => {
       active: 1,
       final: true
     })
+  })
+
+  it("shows an attached page's select menus, but none while an agent drives it", () => {
+    const { panes, wc, sent } = setup()
+    wc.emit('dom-ready')
+    const code = String(wc.executeJavaScriptInIsolatedWorld.mock.calls[0]?.[1]?.[0]?.code ?? '')
+    const nonce = /pod-select " \+ "([0-9a-f]{32})"/.exec(code)?.[1]
+    const line = `\u0000pod-select ${nonce} ${JSON.stringify({ menuId: 1, x: 1, y: 2, width: 3, height: 4, items: [] })}`
+    wc.emit('console-message', { message: line })
+    expect(sent).toEqual([])
+    panes.handle(attach)
+    wc.emit('console-message', { message: line })
+    expect(sent).toContainEqual({
+      type: 'browserPopupMenu',
+      pageId: 'page-1',
+      menuId: 1,
+      x: 1,
+      y: 2,
+      width: 3,
+      height: 4,
+      items: []
+    })
+    sent.length = 0
+    panes.noteAgentCommand(wc.id)
+    sent.length = 0
+    wc.emit('console-message', { message: line })
+    expect(sent).toEqual([])
+    panes.handle({ type: 'browserPopupChoose', pageId: 'page-1', menuId: 1, index: 0 })
+    expect(wc.executeJavaScriptInIsolatedWorld).toHaveBeenLastCalledWith(1987, [
+      { code: 'globalThis.__podSelectChoose?.(1, 0)' }
+    ])
   })
 
   it("shows an agent's command as driving for three seconds", () => {
