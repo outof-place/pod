@@ -4,6 +4,7 @@ import type { PodClaudeAccConfig } from '../pod-distro-config'
 import {
   ACC_STATE_DIR,
   automatedLaunchEnv,
+  readOwnerRecord,
   runAccLifecycle,
   type AccLifecycleOutcome
 } from './acc-lifecycle'
@@ -42,6 +43,8 @@ export type PodAccSupervisorOptions = {
   setTrayYield: (helperRunning: () => boolean) => void
   syncTray: () => void
   log: (message: string) => void
+  /** How often to look at the menu helper and owner.json; tests shorten it. */
+  probeMs?: number
 }
 
 /** `/Applications/Pod.app/Contents/MacOS/Pod` → `/Applications/Pod.app`. */
@@ -101,32 +104,41 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     }
     return outcome
   })
-  // Only once setup.sh made this account Pod's: every lifecycle guard applies to launchd too.
-  const services = lifecycle.then((outcome) => {
+  // Ensured this session: a later handback (owner.json naming another owner) removes them again.
+  let servicesOwned = false
+  const applyServices = (mode: 'ensure' | 'remove', payload: string | null): AccServiceReport[] => {
     const { loginItems, appId } = options
-    const handedBack =
-      outcome.decision.action === 'skip' && outcome.decision.reason === 'handed-back'
-    const owned = outcome.status === 'installed' || outcome.status === 'up-to-date'
-    if (!loginItems || !appId || (!owned && !handedBack)) {
+    if (!loginItems || !appId) {
       return []
     }
-    const bundled = bundledAccServices(appBundlePath(options.execPath), appId)
-    // handed back: launchd would otherwise keep running Pod's copies next to the new owner's jobs
-    const reports = handedBack
-      ? removeAccServices(loginItems, bundled)
-      : ensureAccServices(loginItems, bundled)
+    const bundled = bundledAccServices(appPath, appId)
+    const reports =
+      mode === 'ensure'
+        ? ensureAccServices(loginItems, bundled)
+        : removeAccServices(loginItems, bundled)
+    servicesOwned = mode === 'ensure'
     for (const report of reports) {
       if (report.registered || report.status !== 'enabled') {
         options.log(`claude-acc: ${report.service.serviceName} ${report.status}`)
       }
     }
     writeAccServicesReport(options.home, {
-      app: appBundlePath(options.execPath),
-      payload: outcome.decision.action === 'skip' ? null : outcome.decision.version,
+      app: appPath,
+      payload,
       services: reports,
       at: new Date()
     })
     return reports
+  }
+  // Only once setup.sh made this account Pod's: every lifecycle guard applies to launchd too.
+  const services = lifecycle.then((outcome) => {
+    const d = outcome.decision
+    if (d.action === 'skip') {
+      // handed back: launchd would otherwise keep running Pod's copies next to the new owner's jobs
+      return d.reason === 'handed-back' ? applyServices('remove', null) : []
+    }
+    const owned = outcome.status === 'installed' || outcome.status === 'up-to-date'
+    return owned ? applyServices('ensure', d.version) : []
   })
   let helperRunning = false
   let stopped = false
@@ -137,10 +149,17 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
       helperRunning = running
       options.syncTray()
     }
+    const owner = servicesOwned ? readOwnerRecord(options.home) : null
+    if (!stopped && owner && owner.owner !== 'pod') {
+      options.log(`claude-acc: handed to ${owner.owner}, removing Pod's services`)
+      applyServices('remove', null)
+    }
   }
   void probe()
   const timer =
-    options.platform === 'darwin' ? setInterval(() => void probe(), HELPER_PROBE_MS) : null
+    options.platform === 'darwin'
+      ? setInterval(() => void probe(), options.probeMs ?? HELPER_PROBE_MS)
+      : null
   timer?.unref?.()
   // after setup restarted the helper, look at once instead of waiting a whole probe interval
   void lifecycle.then(() => probe())
