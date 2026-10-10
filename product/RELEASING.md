@@ -41,8 +41,8 @@ Set `POD_SIGN_IDENTITY`, or `NOTARY_PROFILE` / `APPLE_API_KEY` (+`_ID`, `_ISSUER
 1. Checks that the identity is a Developer ID in the keychain, then makes a test signature (keychain access and Apple's timestamp server).
 2. Builds the JS, mobile web bundle and native helpers. The helpers get the product's identifiers: `<appId>.computer-use` and the notification helper's `--bundle-id`.
 3. Fetches the claude-acc payload pinned in `config/claude-acc-payload.json` into `resources/claude-acc`, when the stack has that script. This also runs with `--skip-build`.
-4. Runs electron-builder with `product/electron-builder.pod.cjs` (`POD_RELEASE=1`, `ORCA_MAC_RELEASE=1`). That signs every nested binary with hardened runtime and a timestamp, then notarizes and staples the app.
-5. Submits the DMG with `notarytool submit --wait` and staples it.
+4. Runs electron-builder with `product/electron-builder.pod.cjs` (`POD_RELEASE=1`, `ORCA_MAC_RELEASE=1`). Before any signing, `afterPack` fails the build when app.asar is over 400 MB or packs a `dist`, `dist-*`, `test-results`, `playwright-report` or hidden folder (`product/release-bundle-gate.cjs`). Then it signs every nested binary with hardened runtime and a timestamp, notarizes and staples the app.
+5. Fails when the DMG is over 350 MB, then submits it with `notarytool submit --wait` and staples it.
 6. Re-hashes `latest-mac.yml`, since stapling changed the DMG.
 7. Gates on Gatekeeper:
    - `codesign --verify --deep --strict` passes, and the team is `75Y2KR6P5W`;
@@ -74,6 +74,7 @@ Both certificates belong to team `75Y2KR6P5W`. The updater's designated-requirem
 
 ## Notes
 
+- **Keep release outputs out of the worktree:** electron-builder packs the repository root into app.asar, minus upstream's denylist and `dist/`. Move an older `dist/` outside the checkout before the next release, never beside it. On 2026-10-10 two parked `dist-*` folders grew app.asar from 140 MB to 2.5 GB; the bundle gate now stops that.
 - **Release repo:** `identity.updateFeed` (`outof-place/pod`) must stay public, so electron-updater can read releases without a token.
 - **Updating from a local build:** installed copies update only from builds that satisfy the running app's designated requirement. An Apple Development–signed local build therefore cannot auto-update to a Developer ID release; install the first release DMG by hand.
 - **Homebrew:** for the outof-place/homebrew-tap cask, take `sha256` from `shasum -a 256 dist/Pod-<version>-arm64.dmg`. `auto_updates true` keeps brew from fighting the in-app updater.
