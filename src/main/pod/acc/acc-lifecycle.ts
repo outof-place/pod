@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
 
 /**
@@ -19,8 +19,29 @@ const STALE_LOCK_MS = 10 * 60_000
 
 export type AccOwnerRecord = { owner: string; version: string | null; app: string | null }
 
+// Harness launches (E2E, bench, background) run with a throwaway HOME or profile, and setup.sh
+// re-points the account's real launchd jobs (gui/<uid>) at whatever HOME it gets.
+export const AUTOMATED_LAUNCH_ENV = [
+  'ORCA_E2E_USER_DATA_DIR',
+  'ORCA_E2E_HEADLESS',
+  'ORCA_BACKGROUND_LAUNCH'
+] as const
+
+/** The first harness variable set in `env`, or null for a launch by the user. */
+export function automatedLaunchEnv(env: NodeJS.ProcessEnv): string | null {
+  return AUTOMATED_LAUNCH_ENV.find((name) => Boolean(env[name])) ?? null
+}
+
+export type AccLifecycleSkipReason =
+  | 'not-darwin'
+  | 'no-payload'
+  | 'disabled'
+  | 'automated-launch'
+  | 'home-override'
+  | 'custom-profile'
+
 export type AccLifecycleDecision =
-  | { action: 'skip'; reason: 'not-darwin' | 'no-payload' | 'disabled' }
+  | { action: 'skip'; reason: AccLifecycleSkipReason }
   | { action: 'up-to-date'; version: string }
   | {
       action: 'install'
@@ -31,13 +52,30 @@ export type AccLifecycleDecision =
 
 export type AccLifecycleInput = {
   platform: NodeJS.Platform
+  /** HOME of this process: where owner.json is read. */
   home: string
+  /** The account's home from the user database (getpwuid), which a HOME override cannot move. */
+  accountHome: string | null
+  /** This Pod's profile, and the product's default one: only the default profile installs. */
+  userDataPath: string
+  defaultUserDataPath: string | null
   /** Contents/Resources/<payload> of the running Pod.app. */
   payloadDir: string
   /** The running Pod.app, recorded in owner.json. */
   appPath: string
-  /** `POD_ACC_LIFECYCLE`: unset = install, `dry-run` = decide and report only, `off` = skip. */
+  /** `POD_ACC_LIFECYCLE`: unset = install, `dry-run` = decide and report only, `off` or `0` = skip. */
   mode?: string
+  /** From automatedLaunchEnv: the harness variable that launched this Pod. */
+  automatedBy?: string | null
+}
+
+function isOff(mode: string | undefined): boolean {
+  return mode === 'off' || mode === '0'
+}
+
+/** Whether HOME is the account's own home, so setup.sh's launchctl calls target the right files. */
+function isAccountHome(input: AccLifecycleInput): boolean {
+  return input.accountHome !== null && resolve(input.home) === resolve(input.accountHome)
 }
 
 export function readPayloadVersion(payloadDir: string): string | null {
@@ -74,8 +112,20 @@ export function decideAccLifecycle(input: AccLifecycleInput): AccLifecycleDecisi
   if (input.platform !== 'darwin') {
     return { action: 'skip', reason: 'not-darwin' }
   }
-  if (input.mode === 'off') {
+  if (isOff(input.mode)) {
     return { action: 'skip', reason: 'disabled' }
+  }
+  if (input.automatedBy) {
+    return { action: 'skip', reason: 'automated-launch' }
+  }
+  if (!isAccountHome(input)) {
+    return { action: 'skip', reason: 'home-override' }
+  }
+  if (
+    input.defaultUserDataPath === null ||
+    resolve(input.userDataPath) !== resolve(input.defaultUserDataPath)
+  ) {
+    return { action: 'skip', reason: 'custom-profile' }
   }
   const version = readPayloadVersion(input.payloadDir)
   if (!version || !existsSync(join(input.payloadDir, 'setup.sh'))) {
@@ -127,8 +177,24 @@ export function accSetupSpec(input: AccLifecycleInput): ProcessSpec {
   }
 }
 
+/**
+ * Checked at the spawn itself, behind decideAccLifecycle: setup.sh runs launchctl bootout/bootstrap
+ * in the account's gui/<uid> domain, so it may only ever see the account's own HOME.
+ */
+export function setupHomeRefusal(input: AccLifecycleInput, spec: ProcessSpec): string | null {
+  const specHome = spec.env?.HOME
+  if (input.accountHome === null) {
+    return 'the account home is unknown'
+  }
+  if (!isAccountHome(input) || !specHome || resolve(specHome) !== resolve(input.accountHome)) {
+    return `HOME ${specHome ?? '(unset)'} is not the account home ${input.accountHome}`
+  }
+  return null
+}
+
 export type AccLifecycleOutcome =
   | { status: 'skipped' | 'up-to-date' | 'busy'; decision: AccLifecycleDecision }
+  | { status: 'refused'; decision: AccLifecycleDecision; message: string }
   | { status: 'dry-run'; decision: AccLifecycleDecision; spec: ProcessSpec }
   | {
       status: 'installed' | 'failed'
@@ -178,6 +244,10 @@ export async function runAccLifecycle(
   const spec = accSetupSpec(input)
   if (input.mode === 'dry-run') {
     return { status: 'dry-run', decision, spec }
+  }
+  const refusal = setupHomeRefusal(input, spec)
+  if (refusal) {
+    return { status: 'refused', decision, message: refusal }
   }
   const lock = takeLock(input.home)
   if (!lock) {
