@@ -12,7 +12,9 @@ import {
   xtermScreenTransform
 } from './helpers/native-terminal-debug'
 import {
+  removeDialog,
   setNativeTerminalParseOnce,
+  showDialogOverPane,
   splitParseOncePane
 } from './helpers/native-terminal-parse-once'
 import { expectNativeScreenMatchesXterm } from './helpers/native-terminal-screens'
@@ -30,7 +32,6 @@ import { nodeTerminalCommand } from './terminal-node-command'
 // Parse once: while a main-fed native view covers its pane, the pane's xterm takes no PTY
 // bytes; main's model answers the PTY's queries, and xterm catches up before it shows again.
 
-const DIALOG_ID = 'e2e-parse-once-dialog'
 const CONTROL = 1 << 18
 const KEY_C = 0x08
 const KEY_ESCAPE = 0x35
@@ -63,29 +64,6 @@ async function splitDetachedPane(
   // xterm leaves the byte stream together with its paint, once the view presented over it.
   await expect.poll(async () => xtermScreenTransform(page, pane.ptyId)).not.toBe('')
   return pane
-}
-
-function showDialogOverPane(page: Page, ptyId: string): Promise<void> {
-  return page.evaluate(
-    ({ id, dialogId }) => {
-      const box = document
-        .querySelector(`.pane[data-pty-id="${id}"] .xterm-container`)
-        ?.getBoundingClientRect()
-      if (!box) {
-        throw new Error(`no terminal box for PTY ${id}`)
-      }
-      const dialog = document.createElement('div')
-      dialog.id = dialogId
-      dialog.setAttribute('role', 'dialog')
-      dialog.style.cssText = `position:fixed;left:${box.left + 40}px;top:${box.top + 40}px;width:200px;height:120px;background:#fff;z-index:9999`
-      document.body.appendChild(dialog)
-    },
-    { id: ptyId, dialogId: DIALOG_ID }
-  )
-}
-
-function removeDialog(page: Page): Promise<void> {
-  return page.evaluate((dialogId) => document.getElementById(dialogId)?.remove(), DIALOG_ID)
 }
 
 function paneUsesWebgl(page: Page, ptyId: string): Promise<boolean> {
