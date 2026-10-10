@@ -223,7 +223,9 @@ describe('one router decision for every Claude launch', () => {
       'runtime/structured-agent-session-runtime.ts': 'passes the resolver through',
       'runtime/structured-agent-runtime-registrations.ts': 'passes the resolver through',
       'runtime/structured-agent-model-catalog-discovery.ts': 'model listing on the routed chat env',
-      'runtime/orca-runtime-get-worktree-ps.ts': 'wires the routed chat resolver'
+      'runtime/orca-runtime-get-worktree-ps.ts': 'wires the routed chat resolver',
+      // Pod: no launch; the Mac's Claude version picks the Claude installed in OrbStack sandboxes.
+      'pod/orbstack/install-pod-orbstack.ts': 'Pod: a `--version` probe only'
     }
     const found = mainSourceFiles().filter((file) =>
       spawning.test(readFileSync(join(mainRoot, file), 'utf8'))
