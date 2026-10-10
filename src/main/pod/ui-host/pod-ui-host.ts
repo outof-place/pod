@@ -2,7 +2,7 @@
 // asks for fallback surfaces, forwards what macOS opened that only this runtime handles, and quits
 // Pod through it. This runtime tells it when Pod should quit, what the Dock badge says and when to
 // come forward.
-import { existsSync, statSync } from 'node:fs'
+import { appendFileSync, existsSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { app, powerMonitor, shell } from 'electron'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
@@ -11,7 +11,10 @@ import { productUrlSchemes } from '../../product-identity/product-identity'
 import { readRuntimeMetadata } from '../../runtime/runtime-metadata'
 import { openSettingsFromSystemMenu } from '../../startup/main-window-actions'
 import { mainProcessState as state } from '../../startup/main-process-state'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { isBackgroundLaunch } from '../../window/foreground-activation-policy'
+import { installPodBrowserPanes } from '../browser-pane/pod-browser-pane-host'
+import type { PodBrowserPaneController } from '../browser-pane/pod-browser-pane'
 import { loadPodPeerVerifier, podPeerIdentityAddonPath } from './pod-peer-identity'
 import { setPodUiHostSink } from './pod-ui-host-bridge'
 import { isPodUiHostLaunch, podUiHostOuterApp, POD_UI_HOST_SWITCH } from './pod-ui-host-launch'
@@ -94,7 +97,9 @@ export function admitSecondInstance(
 }
 
 /** Starts the control socket in a one-app launch; a no-op in every other launch. */
-export function installPodUiHost(): void {
+export function installPodUiHost(
+  runtime: Pick<OrcaRuntimeService, 'setOffscreenBrowserBackend'>
+): void {
   if (installed || !isPodUiHostLaunch()) {
     return
   }
@@ -103,20 +108,32 @@ export function installPodUiHost(): void {
   let quitAskedByUi = false
   let systemShutdown = false
   let forwardingSecondInstance = false
-  const log = (message: string): void => console.log(`[pod] ${message}`)
+  // POD_UI_HOST_LOG=<file>: a runtime LaunchServices started has no stdout; E2Es read this instead.
+  const logFile = process.env.POD_UI_HOST_LOG
+  const log = (message: string): void => {
+    console.log(`[pod] ${message}`)
+    if (logFile) {
+      try {
+        appendFileSync(logFile, `${new Date().toISOString()} ${message}\n`)
+      } catch {
+        // A log that can't be written is no reason to stop.
+      }
+    }
+  }
   const clearGrace = (): void => {
     if (graceTimer) {
       clearTimeout(graceTimer)
       graceTimer = null
     }
   }
-  const verifyPeer = loadPodPeerVerifier(
-    podPeerIdentityAddonPath({
-      resourcesPath: typeof process.resourcesPath === 'string' ? process.resourcesPath : null,
-      appPath: app.getAppPath(),
-      isPackaged: app.isPackaged
-    })
-  )
+  const addonPath = podPeerIdentityAddonPath({
+    resourcesPath: typeof process.resourcesPath === 'string' ? process.resourcesPath : null,
+    appPath: app.getAppPath(),
+    isPackaged: app.isPackaged
+  })
+  const verifyPeer = loadPodPeerVerifier(addonPath)
+  // Set below, once the server exists: the panes answer through it.
+  let panes: PodBrowserPaneController | null = null
   if (!verifyPeer) {
     log('ui-host: no peer identity check (addon missing); the control socket admits no one')
   }
@@ -147,9 +164,11 @@ export function installPodUiHost(): void {
       const visible = openSurface({ type: 'openSurface', surface: 'window' })
       server.send({ type: 'surfaceShown', surface: 'window', visible })
     },
+    onBrowser: (message) => panes?.handle(message),
     onQuit: ({ reason, confirmed, version }) => {
       log(`ui-host: PodNative asked to quit (${reason}${confirmed ? ', confirmed' : ''})`)
       if (version < 2) {
+        panes?.reset()
         quitAskedByUi = true
         state.isQuitting = true
         app.quit()
@@ -158,6 +177,8 @@ export function installPodUiHost(): void {
       void quitFlow.request(reason, confirmed)
     },
     onUiPresence: (attached) => {
+      // A new PodNative hands over its own receiver; a gone one takes nothing with it.
+      panes?.reset()
       clearGrace()
       if (attached || state.isQuitting) {
         return
@@ -178,6 +199,7 @@ export function installPodUiHost(): void {
     assess: () => assessRendererQuit(state.mainWindow),
     runningAgents: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0,
     commit: () => {
+      panes?.reset()
       quitAskedByUi = true
       state.isQuitting = true
       server.noteQuitCommitted()
@@ -192,6 +214,12 @@ export function installPodUiHost(): void {
     log
   })
   setPodUiHostSink(server)
+  panes = installPodBrowserPanes({
+    runtime,
+    addonPath,
+    send: (message) => server.send(message),
+    log
+  })
   powerMonitor.on('shutdown', () => {
     systemShutdown = true
   })
