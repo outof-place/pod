@@ -64,7 +64,8 @@ const mocks = vi.hoisted(() => {
       isPackaged: false
     },
     state,
-    openSettings: vi.fn()
+    openSettings: vi.fn(),
+    panes: { handle: vi.fn(), reset: vi.fn() }
   }
 })
 
@@ -88,6 +89,9 @@ vi.mock('../../product-identity/product-identity', () => ({ productUrlSchemes: (
 vi.mock('./pod-peer-identity', () => ({
   loadPodPeerVerifier: () => () => ({ ok: true, pid: 7 }),
   podPeerIdentityAddonPath: () => '/addon'
+}))
+vi.mock('../browser-pane/pod-browser-pane-host', () => ({
+  installPodBrowserPanes: () => mocks.panes
 }))
 vi.mock('./pod-ui-host-launch', () => ({
   isPodUiHostLaunch: () => true,
@@ -134,7 +138,7 @@ function send(client: Client, message: unknown): void {
 async function install(): Promise<void> {
   vi.resetModules()
   const { installPodUiHost } = await import('./pod-ui-host')
-  installPodUiHost()
+  installPodUiHost({ setOffscreenBrowserBackend: vi.fn() })
 }
 
 // The renderer's answer to main's quit question (use-pod-ui-host-quit-assess.ts).
