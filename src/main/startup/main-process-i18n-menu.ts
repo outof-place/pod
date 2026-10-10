@@ -18,6 +18,7 @@ import {
 } from './main-window-actions'
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { logStartupMilestone } from './startup-diagnostics'
+import { installPodNativeDockMenu } from '../pod/native-app/pod-native-app'
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   const store = state.store
@@ -98,4 +99,6 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
     },
     getKeybindings: () => state.keybindings?.getOverrides()
   })
+  // Pod: the Dock icon's menu opens the nested native UI; a no-op for upstream builds.
+  installPodNativeDockMenu()
 }

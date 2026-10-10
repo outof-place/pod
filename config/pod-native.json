@@ -1,0 +1,9 @@
+{
+  "//": "The PodNative.app Pod nests as Contents/Helpers/PodNative.app: a release asset of outof-place/pod-native's scripts/release-app.sh (Developer ID signed, hardened runtime, notarized), which prints this pin. Bump tag, asset, sha256 and revision together; config/scripts/fetch-pod-native.mjs refuses a download or an app that does not match.",
+  "repository": "outof-place/pod-native",
+  "tag": "build-37",
+  "asset": "PodNative-0.0.1-37.zip",
+  "sha256": "94fe04c6a576ed97730dbdc43ddbcbd14fe7598322d245fe174aceeb17fe6c04",
+  "revision": "d0fe499b5418f85e103a40a5aae79f742c7a3136",
+  "teamId": "75Y2KR6P5W"
+}
