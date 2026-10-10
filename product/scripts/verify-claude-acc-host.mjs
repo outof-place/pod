@@ -7,7 +7,7 @@
 // orcahost.py defaults to the payload in the app (Resources/claude-acc), then the repo's
 // resources/claude-acc; without one, only the Info.plist half runs.
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -77,7 +77,8 @@ export function verifyClaudeAccHost(app, { orcahost = findOrcahost(app), home = 
   return { problems, resolved }
 }
 
-if (process.argv[1] === import.meta.filename) {
+// Why realpath: run through a symlinked path (/tmp), a plain compare skips the check and exits 0.
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(import.meta.filename)) {
   const [app, orcahost] = process.argv.slice(2)
   if (!app) {
     console.error('usage: verify-claude-acc-host.mjs <App.app> [orcahost.py]')
