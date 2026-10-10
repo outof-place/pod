@@ -1,0 +1,202 @@
+// Pod's indexed search (ogd from pod-search) against ripgrep, through the two harnesses of the
+// pod/search-client branch, at the SHAs bench/search/prepare.sh pinned:
+//   engine  src/main/pod/search/ogd-ripgrep-parity.real-ogd.test.ts: each query through ogd and
+//           through Orca's bundled rg, median of ORCA_OGD_PARITY_RUNS, and a result diff;
+//   in-app  tests/e2e/pod-native-search.spec.ts: headless Pod UI, quick-open and text search from
+//           the request to the first result row, rg vs ogd, gitignored shown and hidden.
+// Each harness runs --invocations times (each gated on load); a row's samples are its medians.
+//
+//   node bench/suites/ogd.mjs --inputs search-inputs.json [--invocations 5]
+import { spawn } from 'node:child_process'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { parseArgs } from 'node:util'
+import { collectSamples, log, writeSuiteResult } from '../lib/bench-session.mjs'
+import { summarize } from '../lib/sample-stats.mjs'
+
+const { values: options } = parseArgs({
+  options: {
+    inputs: { type: 'string' },
+    invocations: { type: 'string', default: '5' },
+    'parity-runs': { type: 'string', default: '5' }
+  }
+})
+const inputs = JSON.parse(readFileSync(options.inputs, 'utf8'))
+if (!inputs.ogd || !inputs.searchClient) {
+  throw new Error(
+    'search inputs need ogd and searchClient (bench/search/prepare.sh --og-sha --search-client-sha)'
+  )
+}
+const invocations = Number(options.invocations)
+
+function runIn(cwd, command, args, env) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      cwd,
+      env: { ...process.env, ...env },
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    let output = ''
+    child.stdout.on('data', (chunk) => (output += chunk))
+    child.stderr.on('data', (chunk) => (output += chunk))
+    child.on('close', (code) => resolve({ code, output }))
+  })
+}
+
+// The spec prints `[pod-native-search] {...}` with indented JSON; take the balanced object.
+function markedJson(output, marker) {
+  const start = output.indexOf(`${marker} {`)
+  if (start === -1) {
+    return null
+  }
+  let depth = 0
+  const from = start + marker.length + 1
+  for (let i = from; i < output.length; i += 1) {
+    if (output[i] === '{') {
+      depth += 1
+    } else if (output[i] === '}') {
+      depth -= 1
+      if (depth === 0) {
+        return JSON.parse(output.slice(from, i + 1))
+      }
+    }
+  }
+  return null
+}
+
+const metrics = []
+const comparisons = []
+const slug = (text) =>
+  text
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase()
+
+// ---------- engine level ----------
+const parity = await collectSamples({
+  label: 'ogd engine parity',
+  count: invocations,
+  measure: async () => {
+    const report = path.join(os.tmpdir(), `pod-bench-ogd-parity-${process.pid}-${Date.now()}.json`)
+    const { code, output } = await runIn(
+      inputs.searchClient,
+      'pnpm',
+      ['test', 'src/main/pod/search/ogd-ripgrep-parity.real-ogd.test.ts'],
+      {
+        ORCA_E2E_OGD_BIN: inputs.ogd,
+        ORCA_OGD_PARITY_REPO: inputs.searchRepo,
+        ORCA_OGD_PARITY_RUNS: options['parity-runs'],
+        ORCA_OGD_PARITY_REPORT: report
+      }
+    )
+    if (!existsSync(report)) {
+      throw new Error(`parity test wrote no report (exit ${code}): ${output.slice(-2000)}`)
+    }
+    const result = JSON.parse(readFileSync(report, 'utf8'))
+    rmSync(report)
+    return { exit: code, rg: result.rg, mismatches: result.mismatches, timings: result.timings }
+  }
+})
+const rgVersion = parity.find((sample) => sample.rg)?.rg ?? 'rg'
+const mismatched = parity.some((sample) => Object.keys(sample.mismatches ?? {}).length > 0)
+for (const label of Object.keys(parity[0]?.timings ?? {})) {
+  const id = `ogd.engine.${slug(label)}`
+  const conditions = `engine level, ${options['parity-runs']} runs per invocation, ${invocations} invocations, ${inputs.searchRepo} at ${inputs.searchRepoSha.slice(0, 9)}`
+  const caveats = mismatched
+    ? ['The parity check found differing results in at least one invocation (see ogd.json).']
+    : []
+  for (const engine of ['rg', 'ogd']) {
+    metrics.push({
+      id: `${id}.${engine}`,
+      subject:
+        engine === 'rg'
+          ? `${rgVersion} (Orca's bundled ripgrep)`
+          : `ogd (pod-search ${inputs.ogSha.slice(0, 9)})`,
+      metric: `indexed search vs ripgrep: ${label}`,
+      unit: 'ms',
+      better: 'lower',
+      stats: summarize(
+        parity.map((sample) => sample.timings[label]?.[engine]),
+        'ms'
+      ),
+      conditions,
+      caveats,
+      branch: 'pod/search-client'
+    })
+  }
+  comparisons.push({ baseline: `${id}.rg`, candidate: `${id}.ogd`, label: `engine: ${label}` })
+}
+
+// ---------- in app ----------
+const app = await collectSamples({
+  label: 'ogd in-app search',
+  count: invocations,
+  measure: async () => {
+    const { code, output } = await runIn(
+      inputs.searchClient,
+      'pnpm',
+      ['run', 'test:e2e', 'tests/e2e/pod-native-search.spec.ts', '--workers=1'],
+      {
+        ORCA_BACKGROUND_LAUNCH: '1',
+        ORCA_E2E_OGD_BIN: inputs.ogd,
+        ORCA_E2E_OGD_REPO: inputs.searchRepo,
+        SKIP_BUILD: '1'
+      }
+    )
+    const result = markedJson(output, '[pod-native-search]')
+    if (!result) {
+      throw new Error(`pod-native-search printed no timings (exit ${code}): ${output.slice(-2000)}`)
+    }
+    return { exit: code, features: result.features, timings: result.timings }
+  }
+})
+const appLabels = Object.keys(app[0]?.timings ?? {})
+// Keys look like `<mode> quick open "<q>"` or `<mode> search "<q>"`, mode rg|ogd (+ gitignored shown).
+for (const label of appLabels.filter((key) => key.startsWith('rg'))) {
+  const rest = label.replace(/^rg/, '')
+  const ogdLabel = `ogd${rest}`
+  const id = `ogd.app.${slug(rest)}`
+  for (const [engine, key] of [
+    ['rg', label],
+    ['ogd', ogdLabel]
+  ]) {
+    metrics.push({
+      id: `${id}.${engine}`,
+      subject:
+        engine === 'rg'
+          ? "Pod UI on ripgrep (Orca's search path)"
+          : `Pod UI on ogd (pod-search ${inputs.ogSha.slice(0, 9)})`,
+      metric: `in-app search, request to first result row:${rest}`,
+      unit: 'ms',
+      better: 'lower',
+      stats: summarize(
+        app.map((sample) => sample.timings[key]),
+        'ms'
+      ),
+      conditions: `headless Electron from pod/search-client ${inputs.searchClientSha.slice(0, 9)}, median of 5 per invocation, ${invocations} invocations`,
+      branch: 'pod/search-client'
+    })
+  }
+  comparisons.push({ baseline: `${id}.rg`, candidate: `${id}.ogd`, label: `in app:${rest}` })
+}
+
+log(`ogd: ${metrics.length} rows`)
+writeSuiteResult('ogd', {
+  caveats: [
+    'ripgrep here is the one Orca bundles (what Orca users get); og forks rg 15.2.0. The index is built and warm before timing starts; indexing time is not in these numbers.',
+    'The in-app rows come from a headless E2E build of pod/search-client, not from the signed Pod build.'
+  ],
+  versions: {
+    ogSha: inputs.ogSha,
+    ogFeatures: inputs.ogFeatures,
+    searchClientSha: inputs.searchClientSha,
+    searchRepoSha: inputs.searchRepoSha,
+    rg: rgVersion,
+    ogdFeatures: app[0]?.features ?? null
+  },
+  config: { invocations, parityRuns: Number(options['parity-runs']), inputs },
+  metrics,
+  comparisons,
+  samples: { parity, app }
+})

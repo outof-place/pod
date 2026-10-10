@@ -926,9 +926,7 @@
         "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 43140b3",
         "note": "Evidence, not a win: the eviction setting changes nothing, both start at 1.2 GB."
       },
-      "caveats": [
-        "Context for a design choice, not a claude-acc improvement."
-      ]
+      "caveats": ["Context for a design choice, not a claude-acc improvement."]
     },
     {
       "id": "claude-acc.devguard.eviction.historical.after",
@@ -956,9 +954,7 @@
         "source": "outof-place/claude-acc README.md, section Numbers and the feature sections (origin/main c5e9367, 2026-10-10), added in commit 43140b3",
         "note": "Evidence, not a win: the eviction setting changes nothing, both start at 1.2 GB."
       },
-      "caveats": [
-        "Context for a design choice, not a claude-acc improvement."
-      ]
+      "caveats": ["Context for a design choice, not a claude-acc improvement."]
     },
     {
       "id": "claude-acc.devguard.pass-cpu.historical.before",
