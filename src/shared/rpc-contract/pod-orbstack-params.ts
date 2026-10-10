@@ -24,3 +24,5 @@ export const PodOrbstackDockerPinParams = z
 export const PodOrbstackAgentSandboxParams = z
   .object({ worktreeId: WorktreeId, enabled: z.boolean() })
   .strict()
+
+export const PodOrbstackSandboxClaudeLoginParams = z.object({ enabled: z.boolean() }).strict()
