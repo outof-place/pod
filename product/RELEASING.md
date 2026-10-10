@@ -53,6 +53,21 @@ Set `POD_SIGN_IDENTITY`, or `NOTARY_PROFILE` / `APPLE_API_KEY` (+`_ID`, `_ISSUER
    - Nothing the app runs writes into its own bundle: on a temporary copy, the claude-acc layer's script probes (`podAccSealProbes`) run, then no new `__pycache__`/`.pyc` may exist and `codesign --verify --deep --strict` must pass (`product/scripts/verify-bundle-seal.mjs`). An app with `Resources/claude-acc` fails when no probe ran.
 8. With `--publish` only: uploads the DMG, zip, zip blockmap and `latest-mac.yml` with `gh release create`.
 
+## Entitlements
+
+electron-builder would give every nested executable Electron's entitlements (JIT, unsigned executable memory, DYLD variables, Apple events, camera, microphone, location, USB, Bluetooth). `mac.sign` instead signs each one with only what it needs (`product/entitlements-policy.cjs`, plists in `product/entitlements/`):
+
+| Executable                                                 | Entitlements                          |
+| ---------------------------------------------------------- | ------------------------------------- |
+| The app and Electron's helper apps                         | the config's set                      |
+| Pod Menu (dictation records the microphone)                | `device.audio-input`                  |
+| serve-sim's camera helper (host camera into the simulator) | `device.camera`                       |
+| The embedded Python (CPython's JIT)                        | `cs.allow-unsigned-executable-memory` |
+| pod-agent-launcher, node-pty's spawn-helper (exec shims)   | `cs.allow-dyld-environment-variables` |
+| Everything else: Computer Use, rg, the claude-acc tools    | none                                  |
+
+Accessibility, Screen Recording and Input Monitoring are privacy grants, not entitlements. Without `allow-dyld-environment-variables`, dyld strips `DYLD_*` from a hardened process's environment, so a shim would hide the user's variables from the agent it starts. `release.sh` fails when any executable or bundle carries a key outside its rule (`product/scripts/verify-entitlements.mjs`). Entitlements are not part of the designated requirement, so changing them keeps existing privacy grants.
+
 ## CI (later)
 
 The Developer ID key cannot leave the release Mac, so the workflow needs a **second** Developer ID Application certificate, created for CI by the account holder:
