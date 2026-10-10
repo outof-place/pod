@@ -12,7 +12,10 @@ import { loadPodOrbstackRecipe } from './pod-orbstack-recipe'
 import { PodOrbstackRegistry } from './pod-orbstack-registry'
 import { createPodOrbstackService, setPodOrbstackService } from './pod-orbstack-service'
 import { createSandboxRelays } from './pod-orbstack-relay'
-import { createClaudeOAuthSandboxCredentials } from './pod-orbstack-anthropic-oauth'
+import {
+  createClaudeOAuthSandboxCredentials,
+  sandboxClaudeLoginAllowed
+} from './pod-orbstack-anthropic-oauth'
 import { setPodSandboxAnthropicCredentials } from './pod-orbstack-anthropic-route'
 import { createSandboxAccess } from './pod-orbstack-sandbox-access'
 import { readPodOrbstackStatus } from './pod-orbstack-status'
@@ -60,12 +63,14 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   })
   // Memory only: a restart mints fresh tokens and CAs on the next launch; quitting drops them all.
   const e2eAnthropic = resolveOrbstackE2eAnthropic()
-  // The user chose OAuth for sandboxed agents: the Mac's own Claude Code login, never refreshed.
-  // POD_SANDBOX_ANTHROPIC=off keeps the route closed; E2E runs never get a real login.
+  // Sandboxed agents can use the Mac's own Claude Code login (opt-in), never refreshed. The switch
+  // is read per launch and request; POD_SANDBOX_ANTHROPIC=off is a hard off; E2E runs never get it.
   if (e2eAnthropic) {
     setPodSandboxAnthropicCredentials(e2eAnthropic.credentials)
-  } else if (!process.env.ORCA_E2E_USER_DATA_DIR && process.env.POD_SANDBOX_ANTHROPIC !== 'off') {
-    setPodSandboxAnthropicCredentials(createClaudeOAuthSandboxCredentials())
+  } else if (!process.env.ORCA_E2E_USER_DATA_DIR) {
+    setPodSandboxAnthropicCredentials(
+      createClaudeOAuthSandboxCredentials({ allowed: () => sandboxClaudeLoginAllowed(registry) })
+    )
   }
   const access = createSandboxAccess({
     relays,
