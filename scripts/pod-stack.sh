@@ -62,6 +62,7 @@ Manifest:
   merged. Use it for a pull request branch that maintainers update by merging Orca main into it:
   the merges hold conflict resolutions that a commit-by-commit replay would lose.
   "note" is free text for people and is ignored.
+  A top-level "generated" list adds codemod layers on top of the stack; see scripts/pod-generated.sh.
 
 Commits are deduplicated by patch id against everything stacked so far. A topic branch that
 still carries an older copy of an earlier entry's commits replays only its own commits. If an old
@@ -495,6 +496,13 @@ if [ "$uncovered" -eq 1 ]; then
 fi
 printf '  every pinned entry contains its branch tip\n'
 
+# Generated layers (manifest "generated", scripts/pod-generated.sh) run last, on the whole stack.
+if [ -f "$root/scripts/pod-generated.sh" ]; then
+  before=$tip
+  tip=$(bash "$root/scripts/pod-generated.sh" --manifest "$manifest" "$tip")
+  picked_total=$((picked_total + $(git rev-list --count "$before..$tip")))
+fi
+
 if [ "$pinned" -eq 0 ]; then
   printf '\nWarning: no stacked commit owns upstream.json, so the result does not record its Orca base.\n'
 fi
@@ -514,6 +522,8 @@ if [ -n "$old" ]; then
     # A commit that only re-pins upstream.json is replaced by the new pin, not lost.
     while read -r mark commit; do
       [ "$mark" = + ] || continue
+      # A generated layer is rebuilt by every run, not carried over.
+      [ -z "$(git log -1 --format='%(trailers:key=Pod-Generated,valueonly)' "$commit")" ] || continue
       [ "$(git diff-tree --no-commit-id --name-only -r "$commit^" "$commit")" = upstream.json ] && continue
       dropped="$dropped$(short "$commit") $(git log -1 --format=%s "$commit")"$'\n'
     done < <(git cherry "$tip" "$old" "$old_base")
