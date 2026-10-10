@@ -327,6 +327,42 @@ describe('Pod search provider: text search', () => {
     expect(await budget.searchText({ options, rootPath: repo, resultRootPath: repo })).toBeNull()
   })
 
+  it('takes UTF-16 columns from ranges16 and decodes the byte ranges when it is unusable', async () => {
+    const text = 'const ż = useEffect(() => {'
+    const start = Buffer.byteLength('const ż = ')
+    const columns = async (ranges16: unknown) => {
+      const search = await searchProvider(() =>
+        reply([{ path: 'a.ts', line: 1, text, ranges: [[start, start + 9]], ranges16 }])
+      )
+      const result = await search.searchText({ options, rootPath: repo, resultRootPath: repo })
+      await mock?.close()
+      ogd?.close()
+      return result?.files[0]?.matches.map((match) => [match.column, match.matchLength])
+    }
+    expect(await columns([[10, 19]])).toEqual([[11, 9]])
+    // Out of the line, the wrong count, or absent: the byte ranges answer, with the same columns.
+    expect(await columns([[10, 999]])).toEqual([[11, 9]])
+    expect(
+      await columns([
+        [10, 19],
+        [20, 21]
+      ])
+    ).toEqual([[11, 9]])
+    expect(await columns(undefined)).toEqual([[11, 9]])
+  })
+
+  it('serves a line on ranges16 alone when its byte ranges cannot be placed', async () => {
+    const search = await searchProvider(() =>
+      reply([{ path: 'a.ts', line: 1, text: 'abc', ranges: [[5000, 5003]], ranges16: [[0, 3]] }])
+    )
+    expect(
+      await search.searchText({ options, rootPath: repo, resultRootPath: repo })
+    ).toMatchObject({
+      totalMatches: 1,
+      truncated: false
+    })
+  })
+
   it('marks the result truncated when a range lies outside its line', async () => {
     const search = await searchProvider(() =>
       reply([{ path: 'a.ts', line: 1, text: 'abc', ranges: [[5000, 5009]] }])
