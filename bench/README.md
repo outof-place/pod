@@ -208,7 +208,8 @@ same number of matching lines per query, and any disagreement is recorded. The e
   time.
 - **In app** (`tests/e2e/pod-native-search.spec.ts`): headless Pod UI. It times quick open and
   text search from the request to the first result row, on rg and on ogd, with gitignored files
-  shown and hidden.
+  shown and hidden. Its text queries use the parity test's options, so the same run's
+  `fallbacks` show which ones Pod answered from rg; those have no in-app ogd row.
 
 Both harnesses register the repo with ogd and wait for the index before timing starts, so indexing
 time is not in the numbers. `search/prepare.sh` builds the binaries from a pinned pod-search SHA,
