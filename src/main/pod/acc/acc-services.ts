@@ -7,7 +7,7 @@ import { ACC_MENU_HELPER_APP, ACC_STATE_DIR } from './acc-lifecycle'
  * Contents/Library/LaunchAgents/<appId>.acc.<job>.plist (its BundleProgram is the payload's
  * pod-acc-run), the helper is Contents/Library/LoginItems/Pod Menu.app. launchd lists them under
  * Pod in Login Items and runs them from the app, instead of plists in ~/Library/LaunchAgents.
- * pod-rootd, the root helper, is Contents/Library/LaunchDaemons/<appId>.rootd.plist (acc-rootd.ts).
+ * pod-rootd, the root helper, is none of them: the user installs it from its package (acc-rootd.ts).
  */
 
 // Keeps the bundle id ClaudeAcc had, so its Microphone and Accessibility grants stay valid.
@@ -16,7 +16,6 @@ export const ACC_MENU_HELPER_ID = 'com.filip.claude-acc.menubar'
 export type AccServiceStatus = Electron.LoginItemSettings['status']
 export type AccService =
   | { kind: 'agent'; serviceName: string }
-  | { kind: 'daemon'; serviceName: string }
   | { kind: 'login-item'; serviceName: string }
 export type LoginItemApi = Pick<Electron.App, 'getLoginItemSettings' | 'setLoginItemSettings'>
 
@@ -29,7 +28,6 @@ export type AccServiceReport = {
 
 const ELECTRON_TYPES = {
   agent: 'agentService',
-  daemon: 'daemonService',
   'login-item': 'loginItemService'
 } as const
 
@@ -51,13 +49,10 @@ export function bundledAccServices(appPath: string, appId: string): AccService[]
   const agents = bundledPlists(join(library, 'LaunchAgents'), `${appId}.acc.`).map(
     (serviceName): AccService => ({ kind: 'agent', serviceName })
   )
-  const daemons = bundledPlists(join(library, 'LaunchDaemons'), `${appId}.`).map(
-    (serviceName): AccService => ({ kind: 'daemon', serviceName })
-  )
   const helper = join(library, 'LoginItems', ACC_MENU_HELPER_APP)
   return existsSync(helper)
-    ? [...agents, ...daemons, { kind: 'login-item', serviceName: ACC_MENU_HELPER_ID }]
-    : [...agents, ...daemons]
+    ? [...agents, { kind: 'login-item', serviceName: ACC_MENU_HELPER_ID }]
+    : agents
 }
 
 export function readAccServiceStatus(
@@ -86,24 +81,13 @@ function registerAccService(api: LoginItemApi, service: AccService): AccServiceR
 /**
  * Registers every agent and login item launchd does not run yet. One the user switched off in
  * Login Items reads requires-approval and is left alone: Pod asks, it does not override the user.
- * Daemons are only read: they need an admin's approval, so registerAccDaemon waits for an opt-in.
  */
 export function ensureAccServices(api: LoginItemApi, services: AccService[]): AccServiceReport[] {
   return readAccServiceStatus(api, services).map((report) =>
-    report.status === 'enabled' ||
-    report.status === 'requires-approval' ||
-    report.service.kind === 'daemon'
+    report.status === 'enabled' || report.status === 'requires-approval'
       ? report
       : registerAccService(api, report.service)
   )
-}
-
-/** For a root feature the user turned on: requires-approval until an admin approves it. */
-export function registerAccDaemon(api: LoginItemApi, service: AccService): AccServiceReport {
-  const [report] = readAccServiceStatus(api, [service])
-  return report.status === 'enabled' || report.status === 'requires-approval'
-    ? report
-    : registerAccService(api, service)
 }
 
 /** For handing claude-acc back or removing Pod: deleting Pod.app alone leaves its agents registered. */
@@ -132,7 +116,9 @@ export function writeAccServicesReport(
     payload: string | null
     services: AccServiceReport[]
     at: Date
-    rootdRequest?: { at: number; outcome: string } | null
+    /** pod-rootd, while Pod ships its package and owns claude-acc. */
+    rootd?: { name: string; status: AccServiceStatus } | null
+    rootdRequest?: { at: number; outcome: string; step?: string } | null
   }
 ): void {
   const dir = join(home, ACC_STATE_DIR)
@@ -142,9 +128,9 @@ export function writeAccServicesReport(
     at: report.at.toISOString(),
     app: report.app,
     payload: report.payload,
-    services: report.services.filter(({ service }) => service.kind !== 'daemon').map(entry),
+    services: report.services.map(entry),
     // a key of its own: AccKit before 0.4.0 fails on an unknown kind in services
-    daemons: report.services.filter(({ service }) => service.kind === 'daemon').map(entry),
+    daemons: report.rootd ? [{ kind: 'daemon', ...report.rootd }] : [],
     // the last root helper request from the panel, so it stops waiting (acc-rootd.ts)
     ...(report.rootdRequest ? { rootdRequest: report.rootdRequest } : {})
   }

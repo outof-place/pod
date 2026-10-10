@@ -1,4 +1,4 @@
-import { watch, type FSWatcher } from 'node:fs'
+import { existsSync, watch, type FSWatcher } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
 import type { PodClaudeAccConfig } from '../pod-distro-config'
@@ -14,7 +14,6 @@ import {
   bundledAccServices,
   ensureAccServices,
   readAccServiceStatus,
-  registerAccDaemon,
   removeAccServices,
   writeAccServicesReport,
   type AccServiceReport,
@@ -22,11 +21,16 @@ import {
 } from './acc-services'
 import { isAccMenuHelperRunning, restartAccMenuHelper } from './acc-menu-helper'
 import {
+  ACC_ROOTD_PACKAGE,
   ACC_ROOTD_REQUEST,
+  ACC_ROOTD_STEP_STATUS,
   accRootdServiceName,
-  restoreAccRootDefaults,
+  answerAccRootdRequest,
+  readAccRootdStep,
   takeAccRootdRequest,
-  type AccRootdRequestOutcome
+  type AccRootdAnswerTools,
+  type AccRootdRequestOutcome,
+  type AccRootdStep
 } from './acc-rootd'
 
 // The helper starts and quits on its own (login item, setup restarting it): look again this often.
@@ -56,8 +60,9 @@ export type PodAccSupervisorOptions = {
   /** How often to look at the menu helper and owner.json; tests shorten it. */
   probeMs?: number
   now?: () => Date
-  /** Pod's own confirmation before pod-rootd is registered; without one, a request is declined. */
-  confirmRootd?: () => Promise<boolean>
+  /** Pod's own yes before Installer or Login Items opens; without one, a request is declined. */
+  confirmRootd?: AccRootdAnswerTools['confirm']
+  openPath?: AccRootdAnswerTools['openPath']
 }
 
 /** `/Applications/Pod.app/Contents/MacOS/Pod` → `/Applications/Pod.app`. */
@@ -89,8 +94,6 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
   stop: () => void
   lifecycle: Promise<AccLifecycleOutcome>
   services: Promise<AccServiceReport[]>
-  /** The opt-in for a root feature; null while Pod does not own claude-acc or ships no pod-rootd. */
-  registerRootd: () => Promise<AccServiceReport | null>
 } {
   const payloadDir = join(options.resourcesPath, options.config.payload)
   const lifecycle = runAccLifecycle(
@@ -115,6 +118,18 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
   let servicesOwned = false
   let payloadVersion: string | null = null
   let rootdRequest: AccRootdRequestOutcome | null = null
+  // pod-rootd is the user's to install or switch off, outside Pod: each probe asks pod-rootctl again
+  const rootdPackage = join(payloadDir, ACC_ROOTD_PACKAGE)
+  let rootdStep: AccRootdStep | null = null
+  const readRootdStep = (): Promise<AccRootdStep | null> =>
+    existsSync(rootdPackage) ? readAccRootdStep(options.run, payloadDir) : Promise.resolve(null)
+  const rootdEntry = () =>
+    servicesOwned && options.appId && existsSync(rootdPackage)
+      ? {
+          name: accRootdServiceName(options.appId),
+          status: rootdStep ? ACC_ROOTD_STEP_STATUS[rootdStep] : ('not-found' as const)
+        }
+      : null
   const publishReport = (reports: AccServiceReport[]): AccServiceReport[] => {
     for (const r of reports) {
       if (r.registered || r.status !== 'enabled') {
@@ -126,9 +141,16 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
       payload: payloadVersion,
       services: reports,
       at: new Date(),
+      rootd: rootdEntry(),
       rootdRequest
     })
     return reports
+  }
+  const republish = (): void => {
+    const { loginItems, appId } = options
+    if (loginItems && appId) {
+      publishReport(readAccServiceStatus(loginItems, bundledAccServices(appPath, appId)))
+    }
   }
   const ensureServices = (payload: string): AccServiceReport[] => {
     const { loginItems, appId } = options
@@ -146,25 +168,9 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     }
     servicesOwned = false
     payloadVersion = null
+    // pod-rootd stays: the user installed it, and only its own uninstall removes it (tier B, never Pod's)
     const bundled = bundledAccServices(appPath, appId)
-    const running = readAccServiceStatus(loginItems, bundled).filter(
-      (r) => r.service.kind === 'daemon' && r.status === 'enabled'
-    )
-    let keep: string[] = []
-    if (running.length > 0) {
-      const restored = await restoreAccRootDefaults(options.run, payloadDir).catch(() => null)
-      if (restored?.code !== 0) {
-        // unregistered, it could never undo them: the next launch's handback pass tries again
-        options.log(
-          `claude-acc: pod-rootctl restore failed (${restored ? `exit ${restored.code}` : 'did not run'}), pod-rootd stays registered`
-        )
-        keep = running.map((r) => r.service.serviceName)
-      }
-    }
-    removeAccServices(
-      loginItems,
-      bundled.filter((service) => !keep.includes(service.serviceName))
-    )
+    removeAccServices(loginItems, bundled)
     return publishReport(readAccServiceStatus(loginItems, bundled))
   }
   // Only once setup.sh made this account Pod's: every lifecycle guard applies to launchd too.
@@ -178,6 +184,7 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     if (!owned) {
       return []
     }
+    rootdStep = await readRootdStep()
     const reports = ensureServices(d.version)
     // setup.sh just installed a new payload: a helper launchd already ran keeps the old binary
     const helper = reports.find((report) => report.service.kind === 'login-item')
@@ -191,20 +198,12 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     return reports
   })
   let stopped = false
-  const registerRootd = async (): Promise<AccServiceReport | null> => {
-    await services
-    const { loginItems, appId } = options
-    const daemon = appId
-      ? bundledAccServices(appPath, appId).find(
-          (service) => service.serviceName === accRootdServiceName(appId)
-        )
-      : undefined
-    if (!loginItems || !appId || !daemon || !servicesOwned) {
-      return null
+  const refreshRootd = async (): Promise<void> => {
+    const step = servicesOwned ? await readRootdStep() : null
+    if (servicesOwned && step !== rootdStep) {
+      rootdStep = step
+      republish()
     }
-    const registered = registerAccDaemon(loginItems, daemon)
-    publishReport(readAccServiceStatus(loginItems, bundledAccServices(appPath, appId)))
-    return registered
   }
   // AccServicesView's "Enable root helper…" leaves a request in $STATE: the only way to it
   let requestWatcher: FSWatcher | null = null
@@ -223,20 +222,21 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
         options.log(`claude-acc: ignored a pod-rootd request (${request.reason})`)
         return
       }
-      options.log('claude-acc: pod-rootd requested in the panel, asking to confirm')
-      const confirmed = (await options.confirmRootd?.().catch(() => false)) ?? false
-      const registered = confirmed ? await registerRootd() : null
-      rootdRequest = {
-        at: request.at,
-        outcome: !confirmed ? 'declined' : registered ? 'registered' : 'unavailable'
-      }
+      options.log('claude-acc: pod-rootd requested in the panel')
+      const answer = existsSync(rootdPackage)
+        ? await answerAccRootdRequest({
+            run: options.run,
+            payloadDir,
+            confirm: options.confirmRootd,
+            openPath: options.openPath
+          })
+        : { outcome: 'unavailable' as const }
+      rootdRequest = { at: request.at, ...answer }
       options.log(
-        `claude-acc: pod-rootd request ${rootdRequest.outcome}${registered ? ` (${registered.status})` : ''}`
+        `claude-acc: pod-rootd request ${answer.outcome}${answer.step ? ` (${answer.step})` : ''}`
       )
-      const { loginItems, appId } = options
-      if (loginItems && appId) {
-        publishReport(readAccServiceStatus(loginItems, bundledAccServices(appPath, appId)))
-      }
+      rootdStep = await readRootdStep()
+      republish()
     } finally {
       requestBusy = false
     }
@@ -272,6 +272,7 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     }
     if (!stopped) {
       await takeRootdRequest()
+      await refreshRootd()
     }
   }
   void probe()
@@ -285,7 +286,6 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
   return {
     lifecycle,
     services,
-    registerRootd,
     stop: () => {
       stopped = true
       requestWatcher?.close()

@@ -16,7 +16,10 @@ afterEach(() => {
   }
 })
 
-/** An installed Pod (payload 1.31.0, owner.json saying pod) whose bundle carries one agent. */
+/**
+ * An installed Pod (payload 1.31.0, owner.json saying pod) whose bundle carries one agent and, with
+ * `rootd`, pod-rootctl and pod-rootd's package in its payload.
+ */
 function installedPod(owner = 'pod', ownedVersion = '1.31.0', { rootd = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'pod-acc-supervisor-'))
   roots.push(root)
@@ -32,8 +35,8 @@ function installedPod(owner = 'pod', ownedVersion = '1.31.0', { rootd = false } 
     ''
   )
   if (rootd) {
-    mkdirSync(join(app, 'Contents', 'Library', 'LaunchDaemons'), { recursive: true })
-    writeFileSync(join(app, 'Contents', 'Library', 'LaunchDaemons', ROOTD), '')
+    writeFileSync(join(payload, 'pod-rootctl'), '')
+    writeFileSync(join(payload, 'pod-rootd.pkg'), '')
   }
   mkdirSync(join(home, ACC_STATE_DIR), { recursive: true })
   writeFileSync(
@@ -90,6 +93,23 @@ function statefulLoginItems(
 
 function result(code: number): ProcessResult {
   return { code, signal: null, stdout: '', stderr: '', timedOut: false }
+}
+
+/** pod-rootctl: `service status --json` prints `step()` (exit 69 for none); `calls` logs its args. */
+function fakeRootctl(resourcesPath: string, step: () => string | null, calls: string[] = []) {
+  const ctl = join(resourcesPath, 'claude-acc', 'pod-rootctl')
+  return vi.fn(async (spec: ProcessSpec): Promise<ProcessResult> => {
+    if (spec.program !== ctl) {
+      return result(1)
+    }
+    const args = (spec.args ?? []).join(' ')
+    calls.push(args)
+    if (args !== 'service status --json') {
+      return result(0)
+    }
+    const now = step()
+    return now ? { ...result(0), stdout: `{"step": "${now}"}\n` } : result(69)
+  })
 }
 
 const ACCOUNT = {
@@ -320,58 +340,17 @@ describe('claude-acc supervisor', () => {
     }
   )
 
-  it.each([
-    ['unregisters', 0],
-    ['keeps', 1]
-  ] as const)(
-    '%s an enabled pod-rootd on handback once pod-rootctl restore exits %i',
-    async (_verb, restoreCode) => {
-      const pod = installedPod('brew', '1.31.0', { rootd: true })
-      const events: string[] = []
-      const loginItems = statefulLoginItems({ [ROOTD]: 'enabled' }, events)
-      const ctl = join(pod.resourcesPath, 'claude-acc', 'pod-rootctl')
-      const run = vi.fn(async (spec: ProcessSpec) => {
-        if (spec.program === ctl) {
-          events.push(`${spec.program} ${(spec.args ?? []).join(' ')}`)
-          return result(restoreCode)
-        }
-        return result(1)
-      })
-      const log = vi.fn()
-      const supervisor = startPodAccSupervisor({
-        config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
-        ...pod,
-        platform: 'darwin',
-        env: {},
-        run,
-        loginItems: loginItems.api,
-        appId: 'codes.pod.app',
-        setTrayYield: () => {},
-        syncTray: () => {},
-        log
-      })
-      await supervisor.services
-      expect(events[0]).toBe(`${ctl} restore`)
-      expect(events.includes(`unregister ${ROOTD}`)).toBe(restoreCode === 0)
-      expect(events).toContain('unregister codes.pod.app.acc.tick.plist')
-      if (restoreCode !== 0) {
-        expect(log).toHaveBeenCalledWith(
-          'claude-acc: pod-rootctl restore failed (exit 1), pod-rootd stays registered'
-        )
-      }
-      supervisor.stop()
-    }
-  )
-
-  it('registers pod-rootd only on the opt-in, and reports it under daemons', async () => {
-    const pod = installedPod('pod', '1.31.0', { rootd: true })
-    const loginItems = statefulLoginItems({})
+  it('leaves an installed pod-rootd alone on handback: no restore, nothing unregistered', async () => {
+    const pod = installedPod('brew', '1.31.0', { rootd: true })
+    const events: string[] = []
+    const loginItems = statefulLoginItems({ [ROOTD]: 'enabled' }, events)
+    const calls: string[] = []
     const supervisor = startPodAccSupervisor({
       config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
       ...pod,
       platform: 'darwin',
       env: {},
-      run: vi.fn(async () => result(1)),
+      run: fakeRootctl(pod.resourcesPath, () => 'ready', calls),
       loginItems: loginItems.api,
       appId: 'codes.pod.app',
       setTrayYield: () => {},
@@ -379,55 +358,76 @@ describe('claude-acc supervisor', () => {
       log: () => {}
     })
     await supervisor.services
-    const daemonCalls = () =>
-      loginItems.set.mock.calls.filter(([settings]) => settings.type === 'daemonService')
-    expect(daemonCalls()).toEqual([])
+    expect(events).toEqual(['unregister codes.pod.app.acc.tick.plist'])
+    expect(calls).toEqual([])
+    const report = JSON.parse(
+      readFileSync(join(pod.home, ACC_STATE_DIR, ACC_SERVICES_REPORT), 'utf8')
+    )
+    // not Pod's install any more: the panel offers no root helper through it
+    expect(report.daemons).toEqual([])
+    supervisor.stop()
+  })
+
+  it('reports pod-rootd from pod-rootctl under daemons and registers nothing', async () => {
+    const pod = installedPod('pod', '1.31.0', { rootd: true })
+    const loginItems = statefulLoginItems({})
+    let step = 'install'
+    const supervisor = startPodAccSupervisor({
+      config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
+      ...pod,
+      platform: 'darwin',
+      env: {},
+      run: fakeRootctl(pod.resourcesPath, () => step),
+      loginItems: loginItems.api,
+      appId: 'codes.pod.app',
+      setTrayYield: () => {},
+      syncTray: () => {},
+      log: () => {},
+      probeMs: 10
+    })
+    await supervisor.services
     const readReport = () =>
       JSON.parse(readFileSync(join(pod.home, ACC_STATE_DIR, ACC_SERVICES_REPORT), 'utf8'))
     expect(readReport()).toMatchObject({
-      services: [
-        {
-          kind: 'agent',
-          name: 'codes.pod.app.acc.tick.plist',
-          status: 'enabled'
-        }
-      ],
+      services: [{ kind: 'agent', name: 'codes.pod.app.acc.tick.plist', status: 'enabled' }],
       daemons: [{ kind: 'daemon', name: ROOTD, status: 'not-registered' }]
     })
-    await expect(supervisor.registerRootd()).resolves.toMatchObject({
-      status: 'enabled',
-      registered: true
-    })
-    expect(daemonCalls()).toEqual([
-      [{ openAtLogin: true, type: 'daemonService', serviceName: ROOTD }]
-    ])
-    expect(readReport().daemons).toEqual([{ kind: 'daemon', name: ROOTD, status: 'enabled' }])
+    // the user ran the package, then switched it off in Login Items: each probe asks again
+    step = 'ready'
+    await vi.waitFor(() =>
+      expect(readReport().daemons).toEqual([{ kind: 'daemon', name: ROOTD, status: 'enabled' }])
+    )
+    step = 'approve'
+    await vi.waitFor(() => expect(readReport().daemons[0].status).toBe('requires-approval'))
+    expect(loginItems.set.mock.calls.map(([settings]) => settings.type)).toEqual(['agentService'])
     supervisor.stop()
   })
 
   it.each([
-    ['registers', true],
+    ['opens', true],
     ['leaves', false]
   ] as const)(
-    "%s pod-rootd when the panel's Enable root helper… asks and Pod's dialog answers %s",
+    "%s pod-rootd's package when the panel's Enable root helper… asks and Pod's dialog answers %s",
     async (_verb, confirmed) => {
       const pod = installedPod('pod', '1.31.0', { rootd: true })
       const loginItems = statefulLoginItems({})
       const log = vi.fn()
       const confirmRootd = vi.fn(async () => confirmed)
+      const openPath = vi.fn(async () => '')
       const supervisor = startPodAccSupervisor({
         config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
         ...pod,
         platform: 'darwin',
         env: {},
-        run: vi.fn(async () => result(1)),
+        run: fakeRootctl(pod.resourcesPath, () => 'install'),
         loginItems: loginItems.api,
         appId: 'codes.pod.app',
         setTrayYield: () => {},
         syncTray: () => {},
         log,
         probeMs: 10,
-        confirmRootd
+        confirmRootd,
+        openPath
       })
       await supervisor.services
       const at = Date.now() / 1000
@@ -436,40 +436,45 @@ describe('claude-acc supervisor', () => {
       const report = () =>
         JSON.parse(readFileSync(join(pod.home, ACC_STATE_DIR, ACC_SERVICES_REPORT), 'utf8'))
       await vi.waitFor(() => expect(report().rootdRequest?.at).toBe(at))
-      expect(confirmRootd).toHaveBeenCalledOnce()
+      expect(confirmRootd).toHaveBeenCalledExactlyOnceWith('install')
       expect(existsSync(request)).toBe(false)
-      expect(report().rootdRequest.outcome).toBe(confirmed ? 'registered' : 'declined')
-      expect(
-        loginItems.set.mock.calls.some(([settings]) => settings.type === 'daemonService')
-      ).toBe(confirmed)
-      expect(log).toHaveBeenCalledWith(
-        'claude-acc: pod-rootd requested in the panel, asking to confirm'
+      expect(report().rootdRequest).toEqual({
+        at,
+        outcome: confirmed ? 'registered' : 'declined',
+        step: 'install'
+      })
+      expect(openPath.mock.calls).toEqual(
+        confirmed ? [[join(pod.resourcesPath, 'claude-acc', 'pod-rootd.pkg')]] : []
       )
+      expect(loginItems.set.mock.calls.map(([settings]) => settings.type)).toEqual(['agentService'])
+      expect(log).toHaveBeenCalledWith('claude-acc: pod-rootd requested in the panel')
       expect(log).toHaveBeenCalledWith(
-        confirmed
-          ? 'claude-acc: pod-rootd request registered (enabled)'
-          : 'claude-acc: pod-rootd request declined'
+        `claude-acc: pod-rootd request ${confirmed ? 'registered' : 'declined'} (install)`
       )
       supervisor.stop()
     }
   )
 
-  it('declines a pod-rootd request when Pod has no way to ask', async () => {
-    const pod = installedPod('pod', '1.31.0', { rootd: true })
-    const loginItems = statefulLoginItems({})
+  it.each([
+    ['declines it when Pod has no way to ask', true, 'declined'],
+    ['answers unavailable when Pod ships no package', false, 'unavailable']
+  ] as const)('a pod-rootd request: %s', async (_name, rootd, outcome) => {
+    const pod = installedPod('pod', '1.31.0', { rootd })
     const log = vi.fn()
+    const openPath = vi.fn(async () => '')
     const supervisor = startPodAccSupervisor({
       config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
       ...pod,
       platform: 'darwin',
       env: {},
-      run: vi.fn(async () => result(1)),
-      loginItems: loginItems.api,
+      run: fakeRootctl(pod.resourcesPath, () => 'install'),
+      loginItems: statefulLoginItems({}).api,
       appId: 'codes.pod.app',
       setTrayYield: () => {},
       syncTray: () => {},
       log,
-      probeMs: 10
+      probeMs: 10,
+      openPath
     })
     await supervisor.services
     const request = join(pod.home, ACC_STATE_DIR, 'pod-rootd-request.json')
@@ -477,36 +482,39 @@ describe('claude-acc supervisor', () => {
       mode: 0o600
     })
     await vi.waitFor(() =>
-      expect(log).toHaveBeenCalledWith('claude-acc: pod-rootd request declined')
+      expect(log).toHaveBeenCalledWith(
+        `claude-acc: pod-rootd request ${outcome}${rootd ? ' (install)' : ''}`
+      )
     )
     expect(existsSync(request)).toBe(false)
-    expect(loginItems.set.mock.calls.some(([settings]) => settings.type === 'daemonService')).toBe(
-      false
-    )
+    expect(openPath).not.toHaveBeenCalled()
     supervisor.stop()
   })
 
-  it('offers no pod-rootd opt-in once claude-acc was handed back', async () => {
+  it('takes no pod-rootd request once claude-acc was handed back', async () => {
     const pod = installedPod('brew', '1.31.0', { rootd: true })
-    const loginItems = statefulLoginItems({})
+    const confirmRootd = vi.fn(async () => true)
     const supervisor = startPodAccSupervisor({
       config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
       ...pod,
       platform: 'darwin',
       env: {},
-      run: vi.fn(async () => result(1)),
-      loginItems: loginItems.api,
+      run: fakeRootctl(pod.resourcesPath, () => 'install'),
+      loginItems: statefulLoginItems({}).api,
       appId: 'codes.pod.app',
       setTrayYield: () => {},
       syncTray: () => {},
-      log: () => {}
+      log: () => {},
+      probeMs: 10,
+      confirmRootd
     })
     const request = join(pod.home, ACC_STATE_DIR, 'pod-rootd-request.json')
     writeFileSync(request, JSON.stringify({ action: 'enable', at: Date.now() / 1000 }), {
       mode: 0o600
     })
-    await expect(supervisor.registerRootd()).resolves.toBeNull()
-    expect(loginItems.set).not.toHaveBeenCalledWith(expect.objectContaining({ openAtLogin: true }))
+    await supervisor.services
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(confirmRootd).not.toHaveBeenCalled()
     // not Pod's install any more: the request is not Pod's to take
     expect(existsSync(request)).toBe(true)
     supervisor.stop()

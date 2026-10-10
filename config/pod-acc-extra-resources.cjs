@@ -12,8 +12,6 @@ const DISTRO_PLUGINS = join(__dirname, '..', 'resources', 'plugins', 'distro')
 // payload v2 (claude-acc with pod-acc-run): launchd plists and the menu helper for SMAppService
 const AGENTS = 'LaunchAgents'
 const HELPER = 'Pod Menu.app'
-// pod-rootd's daemonService plist, in payloads that ship the root helper
-const DAEMONS = 'LaunchDaemons'
 
 // Bytecode never ships with claude-acc: a cache Python wrote in a checkout would be sealed into
 // the app as is (src/main/pod/acc/acc-bundle-seal.test.ts). The Python's own stdlib .pyc stay:
@@ -48,14 +46,7 @@ function podAccMacExtraResources({
       from: payloadDir,
       to: 'claude-acc',
       // a v2 payload's launchd plists and helper live in Contents/Library (podAccMacExtraFiles)
-      filter: [
-        '**/*',
-        '!.payload-source.json',
-        `!${AGENTS}/**`,
-        `!${DAEMONS}/**`,
-        `!${HELPER}/**`,
-        ...NO_BYTECODE
-      ]
+      filter: ['**/*', '!.payload-source.json', `!${AGENTS}/**`, `!${HELPER}/**`, ...NO_BYTECODE]
     },
     { from: pythonDir, to: 'python', filter: ['**/*', '!.payload-source.json'] },
     { from: distroPlugins, to: 'plugins/distro' }
@@ -64,20 +55,17 @@ function podAccMacExtraResources({
 
 /**
  * For mac extraFiles (relative to Contents): SMAppService only registers agents from
- * Contents/Library/LaunchAgents, daemons from Contents/Library/LaunchDaemons and login items
- * from Contents/Library/LoginItems (src/main/pod/acc/acc-services.ts). Empty for payloads that
- * predate pod-acc-run.
+ * Contents/Library/LaunchAgents and login items from Contents/Library/LoginItems
+ * (src/main/pod/acc/acc-services.ts). pod-rootd is not one: its package stays in
+ * Resources/claude-acc and installs it in /Library (src/main/pod/acc/acc-rootd.ts). Empty for
+ * payloads that predate pod-acc-run.
  */
 function podAccMacExtraFiles({ payloadDir = PAYLOAD } = {}) {
   if (!existsSync(join(payloadDir, 'pod-acc-run'))) {
     return []
   }
-  const daemons = existsSync(join(payloadDir, DAEMONS))
-    ? [{ from: join(payloadDir, DAEMONS), to: `Library/${DAEMONS}`, filter: ['*.plist'] }]
-    : []
   return [
     { from: join(payloadDir, AGENTS), to: `Library/${AGENTS}`, filter: ['*.plist'] },
-    ...daemons,
     { from: join(payloadDir, HELPER), to: `Library/LoginItems/${HELPER}` }
   ]
 }

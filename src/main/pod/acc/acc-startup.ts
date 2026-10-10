@@ -1,6 +1,6 @@
 import { userInfo } from 'node:os'
 import { join } from 'node:path'
-import { app, dialog } from 'electron'
+import { app, dialog, shell } from 'electron'
 import { runProcess } from '../../../shared/child-process/run-process'
 import { getProductIdentity } from '../../product-identity/product-identity'
 import { setMacTrayYield } from '../../tray/system-tray'
@@ -8,7 +8,7 @@ import { syncMacMenuBarIcon } from '../../startup/main-window-actions'
 import { mainProcessState as state } from '../../startup/main-process-state'
 import { isBackgroundLaunch } from '../../window/foreground-activation-policy'
 import { getPodDistroConfig } from '../pod-distro-config'
-import { ACC_ROOTD_CONFIRM_DIALOG } from './acc-rootd'
+import { accRootdConfirmDialog } from './acc-rootd'
 import { startPodAccSupervisor } from './acc-supervisor'
 
 let started = false
@@ -22,14 +22,14 @@ function accountHome(): string | null {
   }
 }
 
-/** Asks before pod-rootd is registered, in front: the request came from Pod Menu, another app. */
-async function confirmRootd(): Promise<boolean> {
+/** Asks in front before Installer or Login Items opens: the request came from another app (Pod Menu). */
+async function confirmRootd(step: 'install' | 'approve'): Promise<boolean> {
   // an automated run never shows a window, and has no user to answer
   if (isBackgroundLaunch()) {
     return false
   }
   app.focus({ steal: true })
-  const { response } = await dialog.showMessageBox(ACC_ROOTD_CONFIRM_DIALOG)
+  const { response } = await dialog.showMessageBox(accRootdConfirmDialog(step))
   return response === 0
 }
 
@@ -64,7 +64,9 @@ export function startPodAccFromStartup(): void {
       }
     },
     log: (message) => console.log(`[pod] ${message}`),
-    confirmRootd
+    confirmRootd,
+    // Installer checks the package's signature and notarization and asks an administrator
+    openPath: (path) => shell.openPath(path)
   })
   app.once('will-quit', () => supervisor.stop())
 }

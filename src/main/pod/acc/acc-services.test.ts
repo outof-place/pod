@@ -6,7 +6,6 @@ import {
   ACC_MENU_HELPER_ID,
   bundledAccServices,
   ensureAccServices,
-  registerAccDaemon,
   removeAccServices,
   type AccServiceStatus,
   type LoginItemApi
@@ -73,14 +72,10 @@ describe('claude-acc SMAppService services', () => {
     ])
   })
 
-  it("lists the bundle's pod-rootd as a daemon", () => {
-    const app = podApp(['codes.pod.app.acc.tick.plist'], true, [
-      'codes.pod.app.rootd.plist',
-      'com.example.other.plist'
-    ])
+  it('never takes a daemon plist in the bundle for a service: pod-rootd comes from its package', () => {
+    const app = podApp(['codes.pod.app.acc.tick.plist'], true, ['codes.pod.app.rootd.plist'])
     expect(bundledAccServices(app, 'codes.pod.app')).toEqual([
       { kind: 'agent', serviceName: 'codes.pod.app.acc.tick.plist' },
-      { kind: 'daemon', serviceName: 'codes.pod.app.rootd.plist' },
       { kind: 'login-item', serviceName: ACC_MENU_HELPER_ID }
     ])
   })
@@ -112,30 +107,6 @@ describe('claude-acc SMAppService services', () => {
       { openAtLogin: true, type: 'agentService', serviceName: 'codes.pod.app.acc.janitor.plist' },
       { openAtLogin: true, type: 'loginItemService', serviceName: ACC_MENU_HELPER_ID }
     ])
-  })
-
-  it('never registers a daemon on its own, only on an opt-in', () => {
-    const { api, set } = fakeLaunchd({ 'codes.pod.app.rootd.plist': 'not-registered' })
-    const rootd = { kind: 'daemon', serviceName: 'codes.pod.app.rootd.plist' } as const
-    expect(ensureAccServices(api, [rootd])).toEqual([{ service: rootd, status: 'not-registered' }])
-    expect(set).not.toHaveBeenCalled()
-    expect(registerAccDaemon(api, rootd)).toEqual({
-      service: rootd,
-      status: 'enabled',
-      registered: true
-    })
-    expect(set).toHaveBeenCalledWith({
-      openAtLogin: true,
-      type: 'daemonService',
-      serviceName: 'codes.pod.app.rootd.plist'
-    })
-  })
-
-  it('leaves a daemon that waits for approval to System Settings', () => {
-    const { api, set } = fakeLaunchd({ 'codes.pod.app.rootd.plist': 'requires-approval' })
-    const rootd = { kind: 'daemon', serviceName: 'codes.pod.app.rootd.plist' } as const
-    expect(registerAccDaemon(api, rootd).status).toBe('requires-approval')
-    expect(set).not.toHaveBeenCalled()
   })
 
   it('unregisters every service on removal', () => {
