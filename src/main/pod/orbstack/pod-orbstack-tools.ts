@@ -1,7 +1,8 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '../../../shared/child-process/run-process'
+import type { SandboxAnthropicCredentials } from './pod-orbstack-anthropic-route'
 
 export type OrbstackTool = 'orb' | 'orbctl' | 'docker'
 
@@ -32,6 +33,28 @@ export const POD_ORBSTACK_E2E_SKIP_AGENT_INSTALL_ENV = 'POD_E2E_ORBSTACK_SKIP_AG
 
 export function resolveOrbstackSkipAgentInstall(env: NodeJS.ProcessEnv = process.env): boolean {
   return Boolean(env.ORCA_E2E_USER_DATA_DIR) && env[POD_ORBSTACK_E2E_SKIP_AGENT_INSTALL_ENV] === '1'
+}
+
+/**
+ * E2E only: the sandbox's anthropic-api route goes to a stub API (`host:port`, with the stub's CA
+ * file) under a fake key, so no run touches the real API or a real credential.
+ */
+export function resolveOrbstackE2eAnthropic(env: NodeJS.ProcessEnv = process.env): {
+  upstream: { host: string; port: number; ca: string }
+  credentials: SandboxAnthropicCredentials
+} | null {
+  const target = /^([\w.-]+):(\d+)$/.exec(env.POD_E2E_ANTHROPIC_UPSTREAM ?? '')
+  const caFile = env.POD_E2E_ANTHROPIC_UPSTREAM_CA
+  if (!env.ORCA_E2E_USER_DATA_DIR || !target || !caFile) {
+    return null
+  }
+  return {
+    upstream: { host: target[1] ?? '', port: Number(target[2]), ca: readFileSync(caFile, 'utf8') },
+    credentials: {
+      mode: () => 'api-key',
+      authHeaders: async () => ({ 'x-api-key': 'pod-e2e-stub-key' })
+    }
+  }
 }
 
 /** HOME for orb, orbctl and docker; null keeps the inherited one. */
