@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo } from 'react'
+import { POD_DASHBOARD_POPOUT, POD_TASKS } from '../../../../shared/product/features'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
@@ -56,7 +57,8 @@ function Sidebar({
   const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const settings = useAppStore((s) => s.settings)
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
-  const showAgentDashboard = settings?.experimentalAgentDashboardPopout === true
+  const showAgentDashboard =
+    POD_DASHBOARD_POPOUT && settings?.experimentalAgentDashboardPopout === true
   const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
   const agentReadFilter = useAppStore((s) => s.agentsReadFilter)
@@ -261,7 +263,7 @@ function Sidebar({
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
         {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}
       </React.Suspense>
-      {sidebarOpen ? (
+      {POD_TASKS && sidebarOpen ? (
         <WorkspaceKanbanDrawer
           leftSidebarStyle={leftSidebarStyle}
           open={workspaceBoardRenderedOpen}
