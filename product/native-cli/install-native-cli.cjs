@@ -1,10 +1,12 @@
-// Builds the native `podx` front (native/podx) into Contents/Resources/bin as `<cliName>`, with `orca`
-// linked to it, and keeps the patched bash launcher as `podx-node`: the native binary execs it for
-// every command it does not port and when POD_NATIVE_CLI=0. electron-builder signs the binary.
+// Builds the native `podx` front (native/podx) into Contents/Resources/bin as `<cliName>`, links `orca`
+// to it where the tree still ships `orca`, and keeps the patched bash launcher as `podx-node`: the
+// native binary execs it for every command it does not port and when POD_NATIVE_CLI=0.
+// electron-builder signs the binary.
 const { execFileSync } = require('node:child_process')
 const {
   chmodSync,
   copyFileSync,
+  existsSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -28,6 +30,17 @@ function assertIdentityInSync(identity) {
     if (!source.includes(line)) {
       throw new Error(`product: native/podx ProductIdentity.swift must declare ${line}`)
     }
+  }
+  // Why: pod-decouple renames ORCA_* env names in native/ too; the binary must read what the launcher sets.
+  const runtime = readFileSync(
+    join(PACKAGE_DIR, 'Sources', 'PodxCore', 'RuntimeClient.swift'),
+    'utf8'
+  )
+  const userDataEnv = `${identity.envPrefix ?? 'ORCA_'}USER_DATA_PATH`
+  if (!runtime.includes(`"${userDataEnv}"`)) {
+    throw new Error(
+      `product: native/podx does not read ${userDataEnv}; rerun pod-decouple over native/`
+    )
   }
 }
 
@@ -55,9 +68,12 @@ function installNativeCli(resourcesDir, arch, identity) {
   renameSync(nativePath, join(binDir, NODE_LAUNCHER))
   copyFileSync(join(builtDir, 'podx'), nativePath)
   chmodSync(nativePath, 0o755)
+  // Why: a decoupled tree ships <cliName> alone; only a tree that still has `orca` keeps it.
   const orcaPath = join(binDir, 'orca')
-  rmSync(orcaPath, { force: true })
-  symlinkSync(identity.cliName, orcaPath)
+  if (identity.cliName !== 'orca' && existsSync(orcaPath)) {
+    rmSync(orcaPath, { force: true })
+    symlinkSync(identity.cliName, orcaPath)
+  }
 
   if (process.arch === (cpu === 'x86_64' ? 'x64' : 'arm64')) {
     // Why: --version runs natively, so a binary that cannot find the bundled CLI fails the build.
