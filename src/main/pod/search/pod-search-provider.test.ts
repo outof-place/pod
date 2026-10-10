@@ -241,6 +241,7 @@ describe('Pod search provider: text search', () => {
       hidden: true,
       globs: ['!.git'],
       max_filesize: 5 * 1024 * 1024,
+      max_line_bytes: 8 * 1024 * 1024,
       max_matches: 2000,
       barrier: true
     })
@@ -301,6 +302,29 @@ describe('Pod search provider: text search', () => {
       reply([{ path: 'huge.js', line: 1, text: 'useEffect', clipped: true, ranges: [[0, 9]] }])
     )
     expect(await clipped.searchText({ options, rootPath: repo, resultRootPath: repo })).toBeNull()
+  })
+
+  it('keeps a page ogd capped at max_matches, and falls back when its reply budget ran out', async () => {
+    const line = {
+      path: 'a.ts',
+      line: 1,
+      text: 'useEffect useEffect',
+      ranges: [
+        [0, 9],
+        [10, 19]
+      ]
+    }
+    const capped = await searchProvider(() => ({ message: { matches: [line], truncated: true } }))
+    const page = await capped.searchText({
+      options: { ...options, maxResults: 2 },
+      rootPath: repo,
+      resultRootPath: repo
+    })
+    expect(page).toMatchObject({ totalMatches: 2, truncated: true })
+    await mock?.close()
+    ogd?.close()
+    const budget = await searchProvider(() => ({ message: { matches: [line], truncated: true } }))
+    expect(await budget.searchText({ options, rootPath: repo, resultRootPath: repo })).toBeNull()
   })
 
   it('marks the result truncated when a range lies outside its line', async () => {
