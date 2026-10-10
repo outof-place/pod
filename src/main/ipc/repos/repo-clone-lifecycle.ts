@@ -27,7 +27,7 @@ import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { runWithClonePathLock } from './clone-path-lock'
 import { abortActiveRemoteClone, cloneRemoteRepo } from './remote-repo-clone'
-import { localCloneOptions } from './repo-clone-options'
+import { localCloneAdded, localCloneOptions } from './repo-clone-options'
 
 type ActiveCloneMetadata = {
   path: string
@@ -301,6 +301,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
           store.addRepo(repo)
           await prepareLocalWorktreeRootForRepo(store, repo)
           applyRepoPerformanceConfigOnAdd(repo)
+          await localCloneAdded(repo)
           invalidateAuthorizedRootsCache()
           notifyReposChanged(mainWindow)
           emitRepoAdded('clone_url', false, true)
