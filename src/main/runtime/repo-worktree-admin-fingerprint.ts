@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { resolveGitCommonDirectory } from '../../shared/git-common-directory'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import { readReftableHeadStamp, REFTABLE_HEAD_PLACEHOLDER } from '../git/reftable-stack-reader'
 
 // NUL can appear in neither a path nor a Git ref, so field boundaries stay unambiguous.
 const FIELD_SEPARATOR = '\u0000'
@@ -18,7 +19,7 @@ const LINKED_WORKTREE_PROBE_CONCURRENCY = 8
  * Git repo, unreadable layout, permission error) and callers must fall back to a real scan.
  *
  * Not covered: sparse-checkout pattern edits, and a tip moved through a ref store this cannot read
- * exactly (packed refs, the reftable backend), which fall back to a coarser mtime + size stamp.
+ * exactly (packed refs), which falls back to a coarser mtime + size stamp.
  * Callers bound both with a periodic unconditional rescan.
  */
 export async function readRepoWorktreeAdminFingerprint(repoPath: string): Promise<string | null> {
@@ -75,6 +76,9 @@ async function readHeadStamp(commonDir: string, headDir: string): Promise<string
   const head = await readTrimmedFile(path.join(headDir, 'HEAD'))
   if (!head) {
     return MISSING
+  }
+  if (head === REFTABLE_HEAD_PLACEHOLDER) {
+    return [head, await readReftableHeadStamp(headDir, commonDir)].join(FIELD_SEPARATOR)
   }
   const refName = head.match(/^ref:\s*(.+?)\s*$/)?.[1]
   if (!refName || !isSafeRefName(refName)) {
