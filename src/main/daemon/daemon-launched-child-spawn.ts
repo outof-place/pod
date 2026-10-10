@@ -3,6 +3,7 @@ import { spawnProcess } from '@orca/process-host'
 import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { removeChromiumDisabledSessionBus } from '../pty/chromium-session-bus-env'
+import { daemonAppPolicyLaunch } from './daemon-app-scheduling-policy'
 import { buildDurableDaemonScopeCommand } from './daemon-cgroup-scope'
 import { daemonLogArgs } from './daemon-launch-paths'
 
@@ -76,6 +77,11 @@ export function spawnDaemonChildProcess(
     cwd: userDataPath,
     detached: true,
     stdio: ['ignore', 'ignore', 'pipe', 'ipc']
+  }
+  // Pod: the same command line under the app scheduling policy on macOS.
+  const appPolicy = useDurableScope ? null : daemonAppPolicyLaunch(forkEntryPath, scriptArgs)
+  if (appPolicy) {
+    return spawnProcess({ ...childOptions, ...appPolicy, env: daemonEnv })
   }
   if (!useDurableScope) {
     return forkProcess({
