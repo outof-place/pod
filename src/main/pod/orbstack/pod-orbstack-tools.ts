@@ -17,7 +17,7 @@ export type OrbstackToolResult = {
 export type OrbstackToolRunner = (
   tool: OrbstackTool,
   args: readonly string[],
-  options?: { timeoutMs?: number }
+  options?: { timeoutMs?: number; input?: string }
 ) => Promise<OrbstackToolResult>
 
 const DEFAULT_TIMEOUT_MS = 15_000
@@ -26,6 +26,13 @@ export const POD_ORBSTACK_E2E_TOOL_DIR_ENV = 'POD_E2E_ORBSTACK_TOOL_DIR'
 // Why: E2E profiles get a long temp HOME, and orb's socket path under it passes the 104-byte
 // limit, so OrbStack reads as stopped. A real-OrbStack E2E names the account home here.
 export const POD_ORBSTACK_E2E_HOME_ENV = 'POD_E2E_ORBSTACK_HOME'
+
+// E2E only: skip the Claude Code download when a spec runs a stand-in agent in the sandbox.
+export const POD_ORBSTACK_E2E_SKIP_AGENT_INSTALL_ENV = 'POD_E2E_ORBSTACK_SKIP_AGENT_INSTALL'
+
+export function resolveOrbstackSkipAgentInstall(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(env.ORCA_E2E_USER_DATA_DIR) && env[POD_ORBSTACK_E2E_SKIP_AGENT_INSTALL_ENV] === '1'
+}
 
 /** HOME for orb, orbctl and docker; null keeps the inherited one. */
 export function resolveOrbstackHomeOverride(env: NodeJS.ProcessEnv = process.env): string | null {
@@ -82,6 +89,7 @@ export function createOrbstackToolRunner(
         args,
         ...(home ? { env: { ...process.env, HOME: home } } : {}),
         timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        ...(options?.input !== undefined ? { input: options.input } : {}),
         maxOutputBytes: 4 * 1024 * 1024
       })
       return {
