@@ -4,7 +4,15 @@
 // Usage: node native/podx/parity/run-parity.mjs [--podx <bin>] [--cli <out/cli/index.js>]
 //          [--node <node>] [--argv-file <json array of argv arrays>] [--filter <substring>]
 import { fork, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { buildCases } from './cases.mjs'
@@ -54,7 +62,30 @@ if (argvFile) {
 
 const UUID = /"id": "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"/g
 const UUID_VALUE = /"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"/g
-const normalize = (text) => text.replace(UUID, '"id": "<uuid>"')
+const ANY_UUID = /[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/g
+const ISO_TIME = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g
+const normalize = (text) =>
+  text
+    .replace(UUID, '"id": "<uuid>"')
+    .replace(ANY_UUID, '<uuid>')
+    .replace(ISO_TIME, '<time>')
+    .replaceAll(path.join(dir, 'shots-node'), '<shots>')
+    .replaceAll(path.join(dir, 'shots-podx'), '<shots>')
+
+// Screenshot files a computer --json run exported, by normalized name and content.
+function listShots(shotsDir) {
+  try {
+    return readdirSync(shotsDir)
+      .filter((name) => name !== '.last-cleanup')
+      .sort()
+      .map(
+        (name) => `${normalize(name)}:${readFileSync(path.join(shotsDir, name)).toString('base64')}`
+      )
+      .join(',')
+  } catch {
+    return ''
+  }
+}
 
 function sortKeys(value) {
   if (Array.isArray(value)) {
@@ -92,12 +123,14 @@ async function runOne(kind, testCase) {
   )
   writeFileSync(path.join(dir, 'requests.jsonl'), '')
   writeFileSync(fallbackLog, '')
+  rmSync(path.join(dir, `shots-${kind}`), { recursive: true, force: true })
   await reset()
   const userData = testCase.userData ? writeUserData(testCase) : dir
   const env = {
     PATH: process.env.PATH,
     HOME: process.env.HOME,
     ORCA_USER_DATA_PATH: userData,
+    ORCA_COMPUTER_SCREENSHOT_TMPDIR: path.join(dir, `shots-${kind}`),
     POD_NATIVE_CLI_NODE: nodeWrapper,
     POD_NATIVE_CLI_NODE_ENTRY: cli,
     ...testCase.env
@@ -122,6 +155,7 @@ async function runOne(kind, testCase) {
     status: r.status,
     requests,
     fellBack: readFileSync(fallbackLog, 'utf8').length > 0,
+    shots: listShots(path.join(dir, `shots-${kind}`)),
     ms
   }
 }
@@ -151,6 +185,9 @@ for (const testCase of cases) {
   }
   if (a.stderr !== b.stderr) {
     diffs.push(['stderr', a.stderr, b.stderr])
+  }
+  if (a.shots !== b.shots) {
+    diffs.push(['screenshot files', a.shots.slice(0, 200), b.shots.slice(0, 200)])
   }
   if (a.status !== b.status) {
     diffs.push(['exit', String(a.status), String(b.status)])
