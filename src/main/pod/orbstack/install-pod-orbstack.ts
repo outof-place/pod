@@ -12,7 +12,8 @@ import { loadPodOrbstackRecipe } from './pod-orbstack-recipe'
 import { PodOrbstackRegistry } from './pod-orbstack-registry'
 import { createPodOrbstackService, setPodOrbstackService } from './pod-orbstack-service'
 import { createSandboxRelays } from './pod-orbstack-relay'
-import { createSandboxHookTokens } from './pod-orbstack-sandbox-tokens'
+import { setPodSandboxAnthropicCredentials } from './pod-orbstack-anthropic-route'
+import { createSandboxAccess } from './pod-orbstack-sandbox-access'
 import { readPodOrbstackStatus } from './pod-orbstack-status'
 import {
   setPodOrbstackTerminalResolver,
@@ -20,6 +21,7 @@ import {
 } from './pod-orbstack-terminal-override'
 import {
   createOrbstackToolRunner,
+  resolveOrbstackE2eAnthropic,
   resolveOrbstackHomeOverride,
   resolveOrbstackSkipAgentInstall,
   resolveOrbstackToolPaths,
@@ -55,8 +57,16 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
       }),
     log: (message) => console.warn(`[pod-orbstack] ${message}`)
   })
-  // Memory only: a restart mints fresh tokens on the next launch, and quitting revokes them all.
-  const hookTokens = createSandboxHookTokens()
+  // Memory only: a restart mints fresh tokens and CAs on the next launch; quitting drops them all.
+  const e2eAnthropic = resolveOrbstackE2eAnthropic()
+  if (e2eAnthropic) {
+    setPodSandboxAnthropicCredentials(e2eAnthropic.credentials)
+  }
+  const access = createSandboxAccess({
+    relays,
+    upstream: e2eAnthropic?.upstream,
+    log: (message) => console.warn(`[pod-orbstack] ${message}`)
+  })
   app.on('will-quit', () => relays.stopAll())
   const machines = createPodOrbstackMachines({
     paths,
@@ -64,11 +74,8 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     registry,
     home,
     loadRecipe: () => loadPodOrbstackRecipe(join(dataDir, 'recipe.json')),
-    onSandboxCreated: (name) => void hookTokens.tokenFor(name),
-    onSandboxRemoved: (name) => {
-      relays.stop(name)
-      hookTokens.revokeMachine(name)
-    },
+    onSandboxCreated: (name) => access.created(name),
+    onSandboxRemoved: (name) => access.forget(name),
     prepareClaudeRelease: resolveOrbstackSkipAgentInstall()
       ? async () => null
       : async () => releases.prepare(await probeClaudeCliVersion(resolveClaudeCommand()))
@@ -93,14 +100,7 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   }
   setPodSandboxRelayStarter((machine, hookServer) => {
     try {
-      const sandboxToken = hookTokens.tokenFor(machine)
-      const { nonce } = relays.ensure(machine, {
-        vmPort: hookServer.port,
-        hostPort: hookServer.port,
-        hookToken: hookServer.token,
-        authorize: (token) => hookTokens.authorizes(machine, token)
-      })
-      return { nonce, sandboxToken }
+      return access.start(machine, hookServer)
     } catch (error) {
       console.warn('[pod-orbstack] could not start the sandbox relay:', error)
       return null
