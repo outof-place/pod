@@ -93,12 +93,15 @@ function productUsageDescriptions(extendInfo) {
   )
 }
 
-// claude-acc (orcahost.py) reads this to find the product's names. Only what differs from Orca:
-// the Claude accounts' keychain service, ~/.orca/agent-hooks and the data files stay shared.
+// claude-acc (orcahost.py) reads this to find the product's names: profile, CLI, managed hook
+// scripts and the env prefix terminals see. Claude profiles' Keychain items are named after
+// their folders under userData, so they need no entry of their own.
 function claudeAccHost() {
   return {
     userData: `~/Library/Application Support/${identity.userDataName}`,
-    cli: identity.cliName
+    cli: identity.cliName,
+    ...(identity.homeDirName ? { hooksDir: `~/${identity.homeDirName}/agent-hooks` } : {}),
+    ...(identity.envPrefix ? { envPrefix: identity.envPrefix } : {})
   }
 }
 
