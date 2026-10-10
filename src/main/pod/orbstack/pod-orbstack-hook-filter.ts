@@ -1,5 +1,6 @@
 // Fork-only (Pod): what the sandbox relay lets through to the Mac. One Claude hook post per
 // connection, with the sandbox's own token swapped for the hook server's; anything else is refused.
+import type { PodOrbstackRelayRefusal } from '../../../shared/pod-orbstack-types'
 
 export const SANDBOX_HOOK_PATH = '/hook/claude'
 export const SANDBOX_HOOK_TOKEN_HEADER = 'x-orca-agent-hook-token'
@@ -19,10 +20,27 @@ const DROPPED_HEADERS = new Set([
   'proxy-connection'
 ])
 
+/** The request line as the relay log may show it: Pod's own words, never the VM's text. */
+export type HookRequestLabel = { method: string; path: string }
+
 export type HookRequestVerdict =
   | { kind: 'incomplete'; expectContinue: boolean }
-  | { kind: 'reject'; status: 400 | 403 | 405 | 411 | 413 | 431 }
+  | {
+      kind: 'reject'
+      status: 400 | 403 | 405 | 411 | 413 | 431
+      reason: PodOrbstackRelayRefusal
+      label: HookRequestLabel
+    }
   | { kind: 'forward'; request: Buffer }
+
+const KNOWN_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
+
+/** A method for the relay log: a standard one as is, anything else as OTHER. */
+export function relayLogMethod(method: string | undefined): string {
+  return method && KNOWN_METHODS.has(method) ? method : 'OTHER'
+}
+
+const UNKNOWN: HookRequestLabel = { method: '-', path: '-' }
 
 const REASONS: Record<number, string> = {
   400: 'Bad Request',
@@ -52,11 +70,11 @@ export function readHookRequest(
   const headEnd = buffered.indexOf(HEAD_END)
   if (headEnd === -1) {
     return buffered.length > MAX_HEAD_BYTES
-      ? { kind: 'reject', status: 431 }
+      ? { kind: 'reject', status: 431, reason: 'size', label: UNKNOWN }
       : { kind: 'incomplete', expectContinue: false }
   }
   if (headEnd > MAX_HEAD_BYTES) {
-    return { kind: 'reject', status: 431 }
+    return { kind: 'reject', status: 431, reason: 'size', label: UNKNOWN }
   }
   const [requestLine = '', ...lines] = buffered
     .subarray(0, headEnd)
@@ -64,20 +82,24 @@ export function readHookRequest(
     .split('\r\n')
   const request = /^([A-Z]+) (\S+) HTTP\/1\.[01]$/.exec(requestLine)
   if (!request) {
-    return { kind: 'reject', status: 400 }
+    return { kind: 'reject', status: 400, reason: 'malformed', label: UNKNOWN }
+  }
+  const label: HookRequestLabel = {
+    method: relayLogMethod(request[1]),
+    path: request[2] === SANDBOX_HOOK_PATH ? SANDBOX_HOOK_PATH : '-'
   }
   if (request[1] !== 'POST') {
-    return { kind: 'reject', status: 405 }
+    return { kind: 'reject', status: 405, reason: 'method', label }
   }
   if (request[2] !== SANDBOX_HOOK_PATH) {
-    return { kind: 'reject', status: 403 }
+    return { kind: 'reject', status: 403, reason: 'path', label }
   }
   const kept: string[] = []
   const seen = new Map<string, string[]>()
   for (const line of lines) {
     const colon = line.indexOf(':')
     if (colon <= 0 || /[\0\r\n]/.test(line)) {
-      return { kind: 'reject', status: 400 }
+      return { kind: 'reject', status: 400, reason: 'malformed', label }
     }
     const name = line.slice(0, colon).trim().toLowerCase()
     const value = line.slice(colon + 1).trim()
@@ -87,19 +109,19 @@ export function readHookRequest(
     }
   }
   if (seen.has('transfer-encoding')) {
-    return { kind: 'reject', status: 411 }
+    return { kind: 'reject', status: 411, reason: 'malformed', label }
   }
   const tokens = seen.get(SANDBOX_HOOK_TOKEN_HEADER) ?? []
   if (tokens.length !== 1 || !auth.authorize(tokens[0] ?? '')) {
-    return { kind: 'reject', status: 403 }
+    return { kind: 'reject', status: 403, reason: 'token', label }
   }
   const lengths = seen.get('content-length') ?? ['0']
   if (lengths.length !== 1 || !/^\d{1,8}$/.test(lengths[0] ?? '')) {
-    return { kind: 'reject', status: 400 }
+    return { kind: 'reject', status: 400, reason: 'malformed', label }
   }
   const length = Number(lengths[0])
   if (length > MAX_BODY_BYTES) {
-    return { kind: 'reject', status: 413 }
+    return { kind: 'reject', status: 413, reason: 'size', label }
   }
   const bodyStart = headEnd + HEAD_END.length
   if (buffered.length - bodyStart < length) {
