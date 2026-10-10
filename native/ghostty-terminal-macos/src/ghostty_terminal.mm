@@ -380,7 +380,8 @@ bool WindowOnScreen(NSWindow* window) {
 // Ghostty can leave its 600 ms cursor timer running on a surface it was told is unfocused: an
 // output's reset_cursor_blink, drained in the same batch as the unfocus, turns the pending
 // cancel into a re-arm (libxev timer_reset). Two frames 600 ms apart with no output between
-// are that timer; another unfocus, sent while no output is in flight, cancels it.
+// are that timer (the window allows for a loaded main thread); another unfocus, sent while no
+// output is in flight, cancels it.
 - (void)presentedFrame {
   if (_ghosttyFocused || !_ghosttyVisible || !self.surface) {
     _cursorCadenceFrames = 0;
@@ -388,7 +389,7 @@ bool WindowOnScreen(NSWindow* window) {
   }
   const CFTimeInterval now = CACurrentMediaTime();
   const CFTimeInterval interval = now - _lastUnfocusedFrameTime;
-  const bool timerTick = interval > 0.5 && interval < 0.75 && _lastOutputTime < _lastUnfocusedFrameTime;
+  const bool timerTick = interval > 0.4 && interval < 1.5 && _lastOutputTime < _lastUnfocusedFrameTime;
   _cursorCadenceFrames = timerTick ? _cursorCadenceFrames + 1 : 0;
   _lastUnfocusedFrameTime = now;
   if (_cursorCadenceFrames < 2) return;
