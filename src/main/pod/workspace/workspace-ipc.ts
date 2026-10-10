@@ -69,17 +69,24 @@ export function registerWorkspaceIpc(deps: WorkspaceIpcDeps): void {
 
   ipcMain.handle(
     POD_WORKSPACE_IPC.cloneDestination,
-    async (_event, url: unknown): Promise<string | null> => {
-      if (!deps.isEnabled() || typeof url !== 'string') {
-        return null
-      }
-      const validation = await validateWorkspaceRoot(deps.getRootSetting(), deps.validation)
-      // Why null on a refused root: Orca's own default is better than a clone into iCloud.
-      if (hasBlockingRootIssue(validation) || !validation.root) {
-        return null
-      }
-      // Before a URL is typed the field shows the root itself.
-      return url.trim() ? workspaceCloneParent(validation.root, url) : validation.root
-    }
+    async (_event, url: unknown): Promise<string | null> =>
+      typeof url === 'string' ? resolveWorkspaceCloneDestination(deps, url) : null
   )
+}
+
+/** Parent folder a clone of `url` goes to; null leaves Orca's own default in place. */
+export async function resolveWorkspaceCloneDestination(
+  deps: Pick<WorkspaceIpcDeps, 'isEnabled' | 'getRootSetting' | 'validation'>,
+  url: string
+): Promise<string | null> {
+  if (!deps.isEnabled()) {
+    return null
+  }
+  const validation = await validateWorkspaceRoot(deps.getRootSetting(), deps.validation)
+  // Why null on a refused root: Orca's own default is better than a clone into iCloud.
+  if (hasBlockingRootIssue(validation) || !validation.root) {
+    return null
+  }
+  // Before a URL is typed the field shows the root itself.
+  return url.trim() ? workspaceCloneParent(validation.root, url) : validation.root
 }
