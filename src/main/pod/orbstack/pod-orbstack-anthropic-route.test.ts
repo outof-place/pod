@@ -7,6 +7,7 @@ import {
   createAnthropicRoute,
   type SandboxAnthropicCredentials
 } from './pod-orbstack-anthropic-route'
+import type { SandboxPrivacy } from './pod-orbstack-privacy-env'
 import { createSandboxCa } from './pod-orbstack-sandbox-ca'
 
 type Seen = { method?: string; url?: string; headers: IncomingHttpHeaders; body: Buffer }
@@ -30,7 +31,10 @@ describe('anthropic-api route', () => {
     }
   })
 
-  async function setup(credentials: SandboxAnthropicCredentials = apiKey) {
+  async function setup(
+    credentials: SandboxAnthropicCredentials = apiKey,
+    privacy: SandboxPrivacy = { env: {}, telemetryOff: false, featureFlagsOff: false }
+  ) {
     // The stub API has its own CA, so the route verifies upstream as it would the real one.
     const upstreamCa = createSandboxCa('stub-upstream')
     const seen: Seen[] = []
@@ -60,6 +64,7 @@ describe('anthropic-api route', () => {
       ca,
       credentials: () => credentials,
       upstream: { host: '127.0.0.1', port: upstreamPort, ca: upstreamCa.caCertPem },
+      privacy: () => privacy,
       log: (message) => refused.push(message)
     })
     // Stands in for the relay: each TCP connection is one VM connection to 127.0.0.1:443.
@@ -169,6 +174,28 @@ describe('anthropic-api route', () => {
     }
     expect(seen).toEqual([])
     expect(refused).toContain('refused GET /api/oauth/profile')
+  })
+
+  it('forwards telemetry and flag fetches while the Mac allows them', async () => {
+    const { call, seen } = await setup()
+    expect((await call({ path: '/api/event_logging/v2/batch' })).status).toBe(200)
+    expect((await call({ path: '/api/eval/sdk-abc' })).status).toBe(200)
+    expect(seen.map((request) => request.url)).toEqual([
+      '/api/event_logging/v2/batch',
+      '/api/eval/sdk-abc'
+    ])
+  })
+
+  it('refuses telemetry and flag fetches for a sandbox whose Mac turned them off', async () => {
+    const { call, seen } = await setup(apiKey, {
+      env: { DISABLE_TELEMETRY: '1' },
+      telemetryOff: true,
+      featureFlagsOff: true
+    })
+    expect((await call({ path: '/api/event_logging/v2/batch' })).status).toBe(403)
+    expect((await call({ path: '/api/eval/sdk-abc' })).status).toBe(403)
+    expect((await call({})).status).toBe(200)
+    expect(seen.map((request) => request.url)).toEqual(['/v1/messages?beta=true'])
   })
 
   it('answers 401 while the credential source has nothing for this sandbox', async () => {
