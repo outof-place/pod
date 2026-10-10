@@ -8,120 +8,17 @@
  * program reads. Before the fix a hide flip dropped the queued query (no reply) and a
  * reveal flip handed the view a query main had already answered (two replies).
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
+import { waitForActiveTerminalManager, waitForActivePanePtyId } from './helpers/terminal'
 import {
-  waitForActiveTerminalManager,
-  waitForActivePanePtyId,
-  execInTerminal
-} from './helpers/terminal'
-
-const PROGRAM = `
-const fs = require('fs')
-const [out, ready, go1, stop1, sent1, go2, sent2] = process.argv.slice(2)
-let replies = ''
-const record = () => fs.writeFileSync(out, JSON.stringify({
-  cpr: (replies.match(/\\x1b\\[\\d+;\\d+R/g) || []).length,
-  da1: (replies.match(/\\x1b\\[\\?[\\d;]*c/g) || []).length
-}))
-process.stdin.setRawMode(true)
-process.stdin.on('data', (data) => { replies += data.toString('latin1'); record() })
-record()
-const whenExists = (file) => new Promise((resolve) => {
-  const wait = setInterval(() => { if (fs.existsSync(file)) { clearInterval(wait); resolve() } }, 20)
-})
-// Paced filler while stop1 is absent: slow enough that the queue behind the held window
-// stays far below the size at which main pauses the PTY. sent1 marks each idle period.
-let idle = false
-const fill = () => {
-  if (fs.existsSync(stop1)) {
-    if (!idle) fs.writeFileSync(sent1, '1')
-    idle = true
-    setTimeout(fill, 20)
-    return
-  }
-  idle = false
-  process.stdout.write(('x'.repeat(99) + '\\n').repeat(80), () => setTimeout(fill, 20))
-}
-fs.writeFileSync(ready, '1')
-whenExists(go1).then(fill)
-whenExists(go2).then(() => process.stdout.write('query:\\x1b[6n\\x1b[c\\n', () => {
-  fs.writeFileSync(sent2, '1')
-  setTimeout(() => process.exit(0), 120000)
-}))
-`
-
-type Replies = { cpr: number; da1: number }
-
-async function waitForFile(file: string, timeoutMs: number): Promise<void> {
-  const deadline = Date.now() + timeoutMs
-  while (!existsSync(file)) {
-    if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for ${file}`)
-    }
-    await new Promise((resolve) => setTimeout(resolve, 25))
-  }
-}
-
-function readReplies(file: string): Replies {
-  const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'))
-  if (
-    typeof parsed === 'object' &&
-    parsed !== null &&
-    'cpr' in parsed &&
-    typeof parsed.cpr === 'number' &&
-    'da1' in parsed &&
-    typeof parsed.da1 === 'number'
-  ) {
-    return { cpr: parsed.cpr, da1: parsed.da1 }
-  }
-  throw new Error(`unreadable reply counts in ${file}`)
-}
-
-async function setPageHidden(page: Page, hidden: boolean): Promise<void> {
-  await page.evaluate((nextHidden) => {
-    if (nextHidden) {
-      Object.defineProperty(document, 'visibilityState', {
-        get: () => 'hidden',
-        configurable: true
-      })
-    } else {
-      // Drop the instance shadow so the prototype getter (real state) rules again.
-      Reflect.deleteProperty(document, 'visibilityState')
-    }
-    document.dispatchEvent(new Event('visibilitychange'))
-  }, hidden)
-  await expect
-    .poll(
-      async () =>
-        (await page.evaluate(() => window.api.pty.getRendererDeliveryDebugSnapshot()))
-          .hiddenDeliveryGatedPtyCount,
-      { timeout: 15_000 }
-    )
-    .toBe(hidden ? 1 : 0)
-}
-
-async function setAckGate(page: Page, ptyId: string | null): Promise<void> {
-  await page.evaluate((id) => {
-    const gate: unknown = Reflect.get(window, '__terminalPtyAckGate')
-    const method = id ? 'hold' : 'release'
-    const call: unknown = typeof gate === 'object' && gate ? Reflect.get(gate, method) : null
-    if (typeof gate !== 'object' || !gate || typeof call !== 'function') {
-      throw new Error('terminal PTY ACK gate is unavailable')
-    }
-    Reflect.apply(call, gate, id ? [[id]] : [])
-  }, ptyId)
-}
-
-// Queued behind the held window, not just batched: the window is full and bytes still wait.
-async function isOutputQueuedBehindWindow(page: Page): Promise<boolean> {
-  const debug = await page.evaluate(() => window.api.pty.getRendererDeliveryDebugSnapshot())
-  return debug.pendingChars > 0 && debug.maxRendererInFlightCharsByPty >= 512 * 1024
-}
+  hidePage,
+  readReplies,
+  revealPage,
+  setAckGate,
+  startQueryFlipProgram
+} from './helpers/terminal-query-flip-probe'
 
 async function startProgram(page: Page): Promise<{
   ptyId: string
@@ -133,38 +30,7 @@ async function startProgram(page: Page): Promise<{
   await ensureTerminalVisible(page)
   await waitForActiveTerminalManager(page)
   const ptyId = await waitForActivePanePtyId(page)
-  const dir = mkdtempSync(path.join(tmpdir(), 'orca-query-flip-'))
-  const file = (name: string): string => path.join(dir, name)
-  writeFileSync(file('program.cjs'), PROGRAM)
-  const args = ['out', 'ready', 'go1', 'stop1', 'sent1', 'go2', 'sent2'].map(file).join(' ')
-  await execInTerminal(page, ptyId, `node ${file('program.cjs')} ${args}`)
-  await waitForFile(file('ready'), 30_000)
-  return {
-    ptyId,
-    out: file('out'),
-    go: async (phase) => {
-      writeFileSync(file(`go${phase}`), '1')
-      // An active pane's window is larger, so batching can look queued: stop, then confirm.
-      for (let attempt = 0; phase === 1 && attempt < 10; attempt++) {
-        await expect
-          .poll(() => isOutputQueuedBehindWindow(page), { intervals: [50], timeout: 30_000 })
-          .toBe(true)
-        writeFileSync(file('stop1'), '1')
-        await waitForFile(file('sent1'), 30_000)
-        await new Promise((resolve) => setTimeout(resolve, 300))
-        if (await isOutputQueuedBehindWindow(page)) {
-          return
-        }
-        rmSync(file('sent1'))
-        rmSync(file('stop1'))
-      }
-      if (phase === 2) {
-        await waitForFile(file('sent2'), 30_000)
-        await new Promise((resolve) => setTimeout(resolve, 300))
-      }
-      expect(await isOutputQueuedBehindWindow(page)).toBe(true)
-    }
-  }
+  return { ptyId, ...(await startQueryFlipProgram(page, ptyId)) }
 }
 
 test.describe('terminal query replies across a visibility flip', () => {
@@ -185,7 +51,7 @@ test.describe('terminal query replies across a visibility flip', () => {
     await program.go(1)
     await program.go(2)
 
-    await setPageHidden(orcaPage, true)
+    await hidePage(orcaPage)
     await setAckGate(orcaPage, null)
 
     await expect
@@ -205,13 +71,13 @@ test.describe('terminal query replies across a visibility flip', () => {
 
     // A sidecar keeps the hidden bytes queued instead of dropped.
     await orcaPage.evaluate((id) => window.api.pty.setPtyDeliveryInterest(id, true), program.ptyId)
-    await setPageHidden(orcaPage, true)
+    await hidePage(orcaPage)
     await program.go(2)
     await expect
       .poll(() => readReplies(program.out), { timeout: 15_000 })
       .toEqual({ cpr: 1, da1: 1 })
 
-    await setPageHidden(orcaPage, false)
+    await revealPage(orcaPage)
     await setAckGate(orcaPage, null)
     await orcaPage.evaluate((id) => window.api.pty.setPtyDeliveryInterest(id, false), program.ptyId)
 
