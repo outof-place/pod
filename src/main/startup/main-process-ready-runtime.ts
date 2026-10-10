@@ -38,6 +38,7 @@ import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from '../work
 import { loadWorktreeRemovalRecordsForStore } from './worktree-removal-records-load'
 import { runAfterFirstWindowShown } from './first-window-deferral'
 import { logStartupMilestone } from './startup-diagnostics'
+import { schedulePodHeadlessSpareRendererRelease } from '../pod/headless-host/headless-host-spare-renderer'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
 import { startPodAccFromStartup } from '../pod/acc/acc-startup'
@@ -171,4 +172,6 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     }
   })
   logStartupMilestone('services-initialized')
+  // Fork-only (Pod): no-op outside the headless host.
+  schedulePodHeadlessSpareRendererRelease()
 }
