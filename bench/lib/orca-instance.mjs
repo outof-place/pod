@@ -89,8 +89,8 @@ export function describeApp(appPath) {
       `${real}/Contents/Frameworks/Electron Framework.framework/Resources/Info.plist`,
       'CFBundleVersion'
     ),
-    // Pod renames the CLI (product/identity.json cliName).
-    cli: ['orca', 'podx']
+    // Pod renames the CLI (product/identity.json cliName); since pod/decouple it ships only podx.
+    cli: ['podx', 'orca']
       .map((name) => `${real}/Contents/Resources/bin/${name}`)
       .find((candidate) => existsSync(candidate))
   }
@@ -294,7 +294,9 @@ export async function cli(instance, args, timeoutMs = 120_000) {
       env: {
         PATH: '/usr/bin:/bin',
         HOME: instance.profile.home,
+        // Orca's CLI reads ORCA_USER_DATA_PATH; Pod's reads POD_USER_DATA_PATH since pod/decouple.
         ORCA_USER_DATA_PATH: instance.profile.ud,
+        POD_USER_DATA_PATH: instance.profile.ud,
         ...ACC_OFF_ENV
       },
       timeout: timeoutMs,
