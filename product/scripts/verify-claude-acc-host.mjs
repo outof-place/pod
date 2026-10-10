@@ -12,7 +12,6 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 const repoRoot = join(import.meta.dirname, '..', '..')
-const ORCA_CLAUDE_SERVICE = 'Orca Claude Code Managed Credentials'
 
 function readIdentity() {
   return JSON.parse(readFileSync(join(repoRoot, 'product', 'identity.json'), 'utf8'))
@@ -50,10 +49,17 @@ export function verifyClaudeAccHost(app, { orcahost = findOrcahost(app), home = 
     `~/Library/Application Support/${identity.userDataName}`
   )
   expect(problems, 'ClaudeAccHost.cli', declared.cli, identity.cliName)
+  const hooks = identity.homeDirName ? `${identity.homeDirName}/agent-hooks` : null
+  if (hooks) {
+    expect(problems, 'ClaudeAccHost.hooksDir', declared.hooksDir, `~/${hooks}`)
+  }
+  if (identity.envPrefix) {
+    expect(problems, 'ClaudeAccHost.envPrefix', declared.envPrefix, identity.envPrefix)
+  }
   if (!orcahost) {
     return { problems, resolved: null }
   }
-  // A clean env: inside a host terminal ORCA_USER_DATA_PATH would point the runtime file elsewhere.
+  // A clean env: inside a host terminal the user-data variable would point the runtime file elsewhere.
   const resolved = JSON.parse(
     execFileSync('python3', ['-I', orcahost], {
       encoding: 'utf8',
@@ -71,8 +77,11 @@ export function verifyClaudeAccHost(app, { orcahost = findOrcahost(app), home = 
   expect(problems, 'orcahost executable', resolved.executable, identity.displayName)
   expect(problems, 'orcahost user_data', resolved.user_data, userData)
   expect(problems, 'orcahost cli', resolved.cli, identity.cliName)
-  expect(problems, 'orcahost keychain_service', resolved.keychain_service, ORCA_CLAUDE_SERVICE)
-  expect(problems, 'orcahost hooks', resolved.hooks, '.orca/agent-hooks')
+  // Why fail on an older claude-acc: it would watch the legacy hook folder and env names.
+  expect(problems, 'orcahost hooks', resolved.hooks, hooks ?? '.orca/agent-hooks')
+  if (identity.envPrefix) {
+    expect(problems, 'orcahost env_prefix', resolved.env_prefix, identity.envPrefix)
+  }
   expect(problems, 'orcahost runtime', resolved.runtime, join(userData, 'orca-runtime.json'))
   return { problems, resolved }
 }

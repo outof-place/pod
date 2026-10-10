@@ -7,7 +7,7 @@
 //   POD_RELEASE=1 dmg + zip, notarized (with ORCA_MAC_RELEASE=1 for upstream's strict signing);
 //                 otherwise a signed but unnotarized .app (`dir`) for local installs
 const { execFileSync } = require('node:child_process')
-const { copyFileSync, existsSync, readFileSync, writeFileSync } = require('node:fs')
+const { existsSync, readFileSync, unlinkSync, writeFileSync } = require('node:fs')
 const { join } = require('node:path')
 // Why destructure: drop every non-mac platform and target section of the upstream config.
 const {
@@ -48,25 +48,31 @@ const version = process.env.POD_VERSION || base.extraMetadata?.version
 
 const CLI_LAUNCHER_ANCHOR = 'ELECTRON="$CONTENTS/MacOS/Orca"'
 
-// The bundled `orca` launcher hard-codes Orca's executable and the CLI defaults to Orca's profile.
-// Pod terminals keep `orca` on PATH for agents and skills; `<cliName>` sits next to it for users.
+// The bundled launcher hard-codes Orca's executable and the CLI defaults to Orca's profile. It
+// ships as `<cliName>` only. Its env prefix is whatever the tree's launcher uses: POD_ once
+// pod-decouple has run (an assembled main), ORCA_ on a bare product branch.
 function installCliLaunchers(resourcesDir, executableName) {
   const launcherPath = join(resourcesDir, 'bin', 'orca')
   const text = readFileSync(launcherPath, 'utf8')
   if (!text.includes(CLI_LAUNCHER_ANCHOR)) {
     throw new Error(`product: ${launcherPath} no longer contains ${CLI_LAUNCHER_ANCHOR}`)
   }
+  const prefix =
+    identity.envPrefix && text.includes(`${identity.envPrefix}NODE_OPTIONS`)
+      ? identity.envPrefix
+      : 'ORCA_'
   const patched = text.replace(
     CLI_LAUNCHER_ANCHOR,
     [
       `ELECTRON="$CONTENTS/MacOS/${executableName}"`,
-      `export ORCA_USER_DATA_PATH="\${ORCA_USER_DATA_PATH:-$HOME/Library/Application Support/${identity.userDataName}}"`
+      `export ${prefix}USER_DATA_PATH="\${${prefix}USER_DATA_PATH:-$HOME/Library/Application Support/${identity.userDataName}}"`
     ].join('\n')
   )
-  writeFileSync(launcherPath, patched)
   const productLauncher = join(resourcesDir, 'bin', identity.cliName)
-  copyFileSync(launcherPath, productLauncher)
+  writeFileSync(productLauncher, patched)
   execFileSync('chmod', ['755', productLauncher])
+  // Why drop it: a bare `orca` would be Orca's name for Pod's CLI.
+  unlinkSync(launcherPath)
 }
 
 // TCC lists the helper by its bundle name and shows its usage strings; the .app path stays what
@@ -95,12 +101,15 @@ function productUsageDescriptions(extendInfo) {
   )
 }
 
-// claude-acc (orcahost.py) reads this to find the product's names. Only what differs from Orca:
-// the Claude accounts' keychain service, ~/.orca/agent-hooks and the data files stay shared.
+// claude-acc (orcahost.py) reads this to find the product's names: profile, CLI, managed hook
+// scripts and the env prefix terminals see. Claude profiles' Keychain items are named after
+// their folders under userData, so they need no entry of their own.
 function claudeAccHost() {
   return {
     userData: `~/Library/Application Support/${identity.userDataName}`,
-    cli: identity.cliName
+    cli: identity.cliName,
+    ...(identity.homeDirName ? { hooksDir: `~/${identity.homeDirName}/agent-hooks` } : {}),
+    ...(identity.envPrefix ? { envPrefix: identity.envPrefix } : {})
   }
 }
 
