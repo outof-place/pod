@@ -259,6 +259,10 @@ Anything generic goes to Orca as a pull request first. Status updates live:
 | [#27020](https://github.com/stablyai/orca/pull/27020) | Flag merged, stale-agent, prunable and stray worktree folders | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27020?label=) |
 | [#27028](https://github.com/stablyai/orca/pull/27028) | Opt-in recommended Git performance settings for large repositories | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27028?label=) |
 | [#27033](https://github.com/stablyai/orca/pull/27033) | Send hidden sidecar bytes past the view, so throttled renderers can't pace agents | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27033?label=) |
+| [#27039](https://github.com/stablyai/orca/pull/27039) | Never replace a newer build's managed agent-hook script | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27039?label=) |
+| [#27051](https://github.com/stablyai/orca/pull/27051) | Keep the Vercel skill recipe working with an empty `vercel_args` on macOS's bash 3.2 | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27051?label=) |
+| [#27053](https://github.com/stablyai/orca/pull/27053) | Pin the sqlite3 prompt in the daemon's exec-replaced shell test | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27053?label=) |
+| [#27065](https://github.com/stablyai/orca/pull/27065) | Translate the main process's startup and recovery dialogs | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27065?label=) |
 
 All of them: [pull requests from outof-place on stablyai/orca](https://github.com/stablyai/orca/pulls?q=is%3Apr+author%3Aoutof-place).
 
