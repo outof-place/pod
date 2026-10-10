@@ -11,12 +11,21 @@ import type { JournalWriteBody } from './journal-write-queue'
  *  nothing can interleave inside the transaction. */
 export type JournalRowTransactionHook = (db: Database.Database, row: JournalRow) => void
 
-/** An operation's ledger answer, committed with the journal write that makes it true: `write` runs
+/** An operation's receipt, committed with the journal write that makes it true: `write` runs
  *  inside that transaction on the same connection, `committed` synchronously right after its
  *  COMMIT and never after a rollback. */
 export type JournalOperationReceipt = {
-  write: (db: Database.Database) => void
+  write: (db: Database.Database, row?: JournalRow) => void
   committed: () => void
+}
+
+export function composeJournalOperationReceipts(
+  ...receipts: JournalOperationReceipt[]
+): JournalOperationReceipt {
+  return {
+    write: (db, row) => receipts.forEach((receipt) => receipt.write(db, row)),
+    committed: () => receipts.forEach((receipt) => receipt.committed())
+  }
 }
 
 export type JournalRowWriterDeps = {
@@ -55,7 +64,7 @@ export class JournalRowWriter {
         this.deps.database().transaction((db) => {
           insertJournalRow(db, this.deps.sessionId, row)
           hook?.(db, row)
-          receipt?.write(db)
+          receipt?.write(db, row)
           this.runBookkeeping(db, row)
         })
       } catch (error) {
