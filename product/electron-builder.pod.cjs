@@ -20,7 +20,11 @@ const {
   ...base
 } = require('../config/electron-builder.config.cjs')
 
-const { assertAppAsar, PRODUCT_FILE_EXCLUSIONS } = require('./release-bundle-gate.cjs')
+const {
+  assertAppAsar,
+  PRODUCT_FILE_EXCLUSIONS,
+  PRODUCT_SIGN_IGNORE
+} = require('./release-bundle-gate.cjs')
 
 const repoRoot = join(__dirname, '..')
 // claude-acc payload and distro plugins (identity.claudeAcc); the file arrives with the pod/acc branch.
@@ -170,6 +174,7 @@ module.exports = {
   },
   mac: {
     ...base.mac,
+    signIgnore: [...(base.mac.signIgnore ?? []), ...PRODUCT_SIGN_IGNORE],
     extendInfo: {
       ...productUsageDescriptions(base.mac.extendInfo),
       ClaudeAccHost: claudeAccHost()
