@@ -54,8 +54,8 @@ Manifest:
   Each entry needs exactly one of "upstream" or "forkOnly". "base" is optional: a ref, or a list
   of refs, whose commits are excluded, for a topic branch cut from something other than Orca main.
   "ref" is optional: a commit to stack instead of the branch tip, to pin a snapshot.
-  "hold" (a reason) marks a "ref" kept behind its branch on purpose: the coverage check reports it
-  instead of failing.
+  "hold" (a reason) marks a "ref" kept behind its branch, or a copy kept behind its source, on
+  purpose: the coverage check reports it instead of failing.
   "source" names the branch a stack/* copy was replayed from; "sourceSince" (a commit) limits the
   check to the source commits after it, for a copy that squashed the earlier ones.
   "squash": true stacks the branch as one commit, its net change since the Orca main it last
@@ -481,6 +481,10 @@ while IFS=$'\t' read -r c_index c_topic c_ref c_pin c_src c_since c_hold; do
     grep -q "^$k " "$tmp/commit-keys" && continue
     p=$(patch_id "$commit")
     [ -n "$p" ] && grep -q "^$p " "$tmp/patch-ids" && continue
+    if [ "$c_hold" != - ]; then
+      printf '  ~ entry %d (%s) held without %s %s from %s\n' "$c_index" "$c_topic" "$(short "$commit")" "$(git log -1 --format=%s "$commit")" "$c_src"
+      continue
+    fi
     printf '  ! entry %d (%s) lacks %s %s from its source %s\n' "$c_index" "$c_topic" "$(short "$commit")" "$(git log -1 --format=%s "$commit")" "$c_src"
     missing=1
   done
@@ -494,7 +498,7 @@ if [ "$uncovered" -eq 1 ]; then
   printf '\nNothing was changed: a listed branch is not fully in the result. Refresh the pin or the copy.\n' >&2
   exit 4
 fi
-printf '  every pinned entry contains its branch tip\n'
+printf '  every pinned entry contains its branch tip or is held\n'
 
 # Generated layers (manifest "generated", scripts/pod-generated.sh) run last, on the whole stack.
 if [ -f "$root/scripts/pod-generated.sh" ]; then
