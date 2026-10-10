@@ -63,6 +63,8 @@ type IdlePollEntry = {
   waiter: TerminalWaiter
   foregroundPollInFlight: boolean
   screenReadInFlight: boolean
+  /** A recheck arrived while a screen read was in flight, so that read's verdict is stale. */
+  recheckQueued: boolean
 } & ({ kind: 'leaf'; leaf: RuntimeLeafRecord } | { kind: 'pty'; pty: RuntimePtyWorktreeRecord })
 
 /** One reading of a waiter's pane, and the results it would settle with. */
@@ -74,7 +76,11 @@ type IdlePollSample = {
   isQuiet(lane: QuietForegroundLane): boolean
 }
 
-const IDLE_ENTRY_FLAGS = { foregroundPollInFlight: false, screenReadInFlight: false }
+const IDLE_ENTRY_FLAGS = {
+  foregroundPollInFlight: false,
+  screenReadInFlight: false,
+  recheckQueued: false
+}
 
 export class RuntimeTerminalIdlePolls {
   private readonly entries = new Set<IdlePollEntry>()
@@ -89,6 +95,23 @@ export class RuntimeTerminalIdlePolls {
 
   startPty(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord, verdict?: TuiIdleVerdict): void {
     this.start({ kind: 'pty', waiter, pty, ...IDLE_ENTRY_FLAGS }, verdict)
+  }
+
+  /** Checks this PTY's waiters now, not a sweep later: the screen they lacked can be read. */
+  recheckPty(ptyId: string): void {
+    for (const entry of Array.from(this.entries)) {
+      const entryPtyId =
+        entry.kind === 'pty' ? entry.pty.ptyId : this.deps.getLiveLeaf(entry.leaf).ptyId
+      if (entryPtyId !== ptyId) {
+        continue
+      }
+      // Why queue: a read in flight awaited the same rebuild, but sampled before it landed.
+      if (entry.screenReadInFlight) {
+        entry.recheckQueued = true
+      } else {
+        void this.tick(entry)
+      }
+    }
   }
 
   /** Test/diagnostic seam: live sweep handles, which must stay at most one. */
@@ -201,6 +224,11 @@ export class RuntimeTerminalIdlePolls {
       }
       if (screenBlockedReason) {
         this.settle(entry, sample.blocked(screenBlockedReason))
+        return
+      }
+      if (entry.recheckQueued) {
+        entry.recheckQueued = false
+        void this.tick(entry)
         return
       }
       if (verdict.kind === 'ready-weak') {
