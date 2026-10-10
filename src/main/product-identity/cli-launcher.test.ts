@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -62,8 +63,21 @@ describe.skipIf(process.platform === 'win32')('Pod CLI launcher', () => {
     )
 
     const plain = join(root, 'Plain.app')
-    expect(run(join(bundle(plain, 'Pod'), 'orca'))).toContain(
+    expect(run(join(bundle(plain, 'Pod'), 'podx'))).toContain(
       `ran ${plain}/Contents/MacOS/Pod with`
+    )
+  })
+
+  it('ships the CLI under its product name only, with the env prefix the tree uses', () => {
+    const bin = bundle(join(root, 'Named.app'), 'Pod')
+    expect(existsSync(join(bin, 'orca'))).toBe(false)
+    expect(readFileSync(join(bin, 'podx'), 'utf8')).toContain('export ORCA_USER_DATA_PATH=')
+    if (typeof patchCliLauncher !== 'function') {
+      throw new Error('install-cli-launchers.cjs exports no patchCliLauncher')
+    }
+    const decoupled = readFileSync(UPSTREAM_LAUNCHER, 'utf8').replaceAll('ORCA_', 'POD_')
+    expect(patchCliLauncher(decoupled, 'Pod', 'Pod', 'POD_')).toContain(
+      'export POD_USER_DATA_PATH="${POD_USER_DATA_PATH:-$HOME/Library/Application Support/Pod}"'
     )
   })
 
