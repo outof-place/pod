@@ -86,6 +86,7 @@ export type GhosttyTerminalAddon = {
     surfaceId: number,
     paths: string[]
   ) => { destination: string; operation: number } | null
+  debugDropOutcome: () => { performed: boolean; updates: number; operation: number } | null
   debugScreenText: (surfaceId: number) => string | null
   debugSnapshot: (surfaceId: number) => Buffer | null
   debugState: (surfaceId: number) => {

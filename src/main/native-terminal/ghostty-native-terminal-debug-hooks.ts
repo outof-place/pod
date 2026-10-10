@@ -36,6 +36,7 @@ export function installGhosttyDebugHooks(sources: DebugHookSources): void {
       modifiersChanged: (surfaceId: number, keyCode: number, modifierFlags: number) =>
         addon()?.debugModifiersChanged(surfaceId, keyCode, modifierFlags),
       drop: (surfaceId: number, paths: string[]) => addon()?.debugDrop(surfaceId, paths) ?? null,
+      dropOutcome: () => addon()?.debugDropOutcome() ?? null,
       flags: (surfaceId: number, keyCode: number, modifierFlags: number) =>
         addon()?.debugFlags(surfaceId, keyCode, modifierFlags),
       insertText: (surfaceId: number, text: string) => addon()?.debugInsertText(surfaceId, text),
