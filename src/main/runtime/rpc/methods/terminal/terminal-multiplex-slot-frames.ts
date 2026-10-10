@@ -25,6 +25,7 @@ import {
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream, TerminalViewportClient } from './terminal-stream-types'
+import { settlePodLaneFence } from '../../../pod-lane/pod-terminal-lanes'
 
 function decodeViewportFrame(
   payload: TerminalStreamFrame['payload']
@@ -98,6 +99,9 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
         stream.ackPendingOutputOverflowed = false
       }
       return
+    }
+    if (frame.opcode === TerminalStreamOpcode.Resize) {
+      settlePodLaneFence(stream, frame.seq)
     }
     if (frame.opcode === TerminalStreamOpcode.Resize && stream.client) {
       const viewport = decodeViewportFrame(frame.payload)
