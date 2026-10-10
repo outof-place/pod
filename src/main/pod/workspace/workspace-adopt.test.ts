@@ -41,8 +41,11 @@ describe('workspace adopt (real git)', () => {
     })
 
   it('moves the repo to <root>/<owner>/<repo>, keeps the old path working and undoes it', async () => {
-    const linked = join(fx.root, 'app-feature')
-    await fx.git(repo, 'worktree', 'add', '-q', '-b', 'feature', linked)
+    // One worktree in Pod's sibling layout (moves along), one elsewhere (stays, gets repaired).
+    const sibling = join(`${repo}.worktrees`, 'feature')
+    const linked = join(fx.root, 'app-elsewhere')
+    await fx.git(repo, 'worktree', 'add', '-q', '-b', 'feature', sibling)
+    await fx.git(repo, 'worktree', 'add', '-q', '-b', 'elsewhere', linked)
     const claude = join(fx.home, '.claude', 'projects', claudeProjectKey(repo))
     mkdirSync(claude, { recursive: true })
     writeFileSync(join(claude, 'session.jsonl'), '{}\n')
@@ -50,7 +53,13 @@ describe('workspace adopt (real git)', () => {
     const service = adopt()
     const plan = await service.plan('repo-1')
     const target = join(podRoot, 'acme', 'app')
-    expect(plan).toMatchObject({ from: repo, to: target, blockers: [], linkedWorktrees: [linked] })
+    expect(plan).toMatchObject({
+      from: repo,
+      to: target,
+      blockers: [],
+      linkedWorktrees: expect.arrayContaining([sibling, linked]),
+      worktreesDir: `${repo}.worktrees`
+    })
     expect(plan.claudeProjectDir).toBe(claude)
 
     const record = await service.apply('repo-1')
@@ -59,6 +68,9 @@ describe('workspace adopt (real git)', () => {
     // git follows the move in the linked worktree, not just through the symlink.
     expect(await fx.git(linked, 'rev-parse', '--git-common-dir')).toContain(target)
     expect(await fx.git(linked, 'status', '--porcelain')).toBe('')
+    expect(readlinkSync(`${repo}.worktrees`)).toBe(`${target}.worktrees`)
+    expect(await fx.git(join(`${target}.worktrees`, 'feature'), 'status', '--porcelain')).toBe('')
+    expect(await fx.git(target, 'worktree', 'list', '--porcelain')).not.toContain('prunable')
     expect(
       existsSync(join(fx.home, '.claude', 'projects', claudeProjectKey(target), 'session.jsonl'))
     ).toBe(true)
@@ -68,6 +80,8 @@ describe('workspace adopt (real git)', () => {
     expect(lstatSync(repo).isDirectory()).toBe(true)
     expect(existsSync(target)).toBe(false)
     expect(await fx.git(linked, 'rev-parse', '--git-common-dir')).toContain(repo)
+    expect(lstatSync(`${repo}.worktrees`).isDirectory()).toBe(true)
+    expect(await fx.git(repo, 'worktree', 'list', '--porcelain')).not.toContain('prunable')
     expect(lstatSync(claude).isDirectory()).toBe(true)
   })
 
