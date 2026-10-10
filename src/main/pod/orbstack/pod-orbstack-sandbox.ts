@@ -17,8 +17,6 @@ import {
 } from './pod-orbstack-claude-release'
 import type { OrbstackToolResult, OrbstackToolRunner } from './pod-orbstack-tools'
 
-/** What a sandbox reaches the Mac's loopback as (probed on OrbStack 2.2.3, isolated machines too). */
-export const SANDBOX_HOST_ALIAS = 'host.orb.internal'
 // Why managed: Claude merges it over user settings, so the agent's own config cannot drop Pod's hooks.
 const MANAGED_SETTINGS_PATH = '/etc/claude-code/managed-settings.json'
 const LONG_STEP_MS = 10 * 60_000
@@ -46,16 +44,9 @@ install -m 755 "$dir/claude" "$HOME/.local/share/claude/versions/$version"
 ln -sfn "$HOME/.local/share/claude/versions/$version" "$HOME/.local/bin/claude"
 `
 
-/** Orca's generated POSIX hook script, posting to the Mac through OrbStack's host alias. */
+/** Orca's own POSIX hook script, unchanged: the relay serves the hook port on the VM's 127.0.0.1. */
 export function buildSandboxHookScript(): string {
-  const script = getManagedScript('posix')
-  const next = script
-    .replaceAll('http://127.0.0.1:', `http://${SANDBOX_HOST_ALIAS}:`)
-    .replaceAll('--noproxy "127.0.0.1"', `--noproxy "${SANDBOX_HOST_ALIAS}"`)
-  if (next === script || next.includes('127.0.0.1')) {
-    throw new Error('The Claude hook script changed how it reaches the hook server.')
-  }
-  return next
+  return getManagedScript('posix')
 }
 
 export function buildSandboxManagedSettings(claudeVersion: string | null): string {
@@ -138,7 +129,16 @@ export async function provisionSandbox(args: {
     }
     return result.stdout
   }
-  await step('orb create', ['create', '--isolated', ...mountArgs, 'ubuntu:24.04', name])
+  // Why --isolate-network: the Mac, its LAN and other machines become unreachable (the internet stays);
+  // the sandbox relay is then its only way to the Mac.
+  await step('orb create', [
+    'create',
+    '--isolated',
+    '--isolate-network',
+    ...mountArgs,
+    'ubuntu:24.04',
+    name
+  ])
   await step('install git', [
     'run',
     '-m',

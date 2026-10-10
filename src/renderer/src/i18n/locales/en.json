@@ -19698,7 +19698,7 @@
       "create": "Create agent sandbox",
       "agents": "Run Claude in the sandbox",
       "agentsLabel": "Run Claude launches of {{name}} in its OrbStack sandbox",
-      "limitation": "Agent sandboxes see only their worktree, but they can still reach every service on this Mac that listens on localhost. Do not count on them to shield local servers or databases."
+      "boundary": "Agent sandboxes see only their worktree and reach this Mac only through Pod for agent status. They can still reach the internet, so code in the worktree can leave the Mac."
     },
     "worktrees": {
       "busy": "Working…",
