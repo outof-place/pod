@@ -8,6 +8,10 @@ const { join } = require('node:path')
 const PAYLOAD = join(__dirname, '..', 'resources', 'claude-acc')
 const DISTRO_PLUGINS = join(__dirname, '..', 'resources', 'plugins', 'distro')
 
+// Bytecode never ships: a cache Python wrote in a checkout would be sealed into the app as is,
+// and the folder invites the next run to write there (src/main/pod/acc/acc-bundle-seal.test.ts).
+const NO_BYTECODE = ['!**/__pycache__', '!**/__pycache__/**', '!**/*.pyc']
+
 /** Throws when the payload is missing, so a Pod release cannot ship without claude-acc. */
 function podAccMacExtraResources({ payloadDir = PAYLOAD, distroPlugins = DISTRO_PLUGINS } = {}) {
   // from 1.31 the menu helper ships as Pod Menu.app (src/main/pod/acc/acc-lifecycle.ts)
@@ -20,7 +24,11 @@ function podAccMacExtraResources({ payloadDir = PAYLOAD, distroPlugins = DISTRO_
     }
   }
   return [
-    { from: payloadDir, to: 'claude-acc', filter: ['**/*', '!.payload-source.json'] },
+    {
+      from: payloadDir,
+      to: 'claude-acc',
+      filter: ['**/*', '!.payload-source.json', ...NO_BYTECODE]
+    },
     { from: distroPlugins, to: 'plugins/distro' }
   ]
 }
@@ -33,4 +41,4 @@ const podAccFileExclusions = [
   '!resources/claude-acc.next/**'
 ]
 
-module.exports = { podAccMacExtraResources, podAccFileExclusions }
+module.exports = { podAccMacExtraResources, podAccFileExclusions, NO_BYTECODE }
