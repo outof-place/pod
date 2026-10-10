@@ -1,33 +1,40 @@
 import { statSync } from 'node:fs'
 import type { MessageBoxOptions, MessageBoxReturnValue } from 'electron'
-import { translateMain } from '../../i18n/main-i18n'
 import { getActiveProfileStateLocation } from './profile-state-active-location'
 import { profileStateDatabaseFiles } from './profile-state-storage-classification'
+
+// Why injected: profile-state tests run under Bun, where main-i18n (Electron, renderer catalogs) must not load.
+export type ProfileStateDialogTranslate = (
+  key: string,
+  englishFallback: string,
+  options?: { time: string }
+) => string
 
 export type ProfileStateStartupRecoveryDialogDeps = {
   message: string
   recoveryCommand?: string
   showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
   copyToClipboard: (text: string) => Promise<void>
+  translate: ProfileStateDialogTranslate
 }
 
 /** Present the only safe desktop recovery action without changing the failed authority. */
 export async function presentProfileStateStartupRecoveryDialog(
   deps: ProfileStateStartupRecoveryDialogDeps
 ): Promise<void> {
-  const quit = translateMain('profileState.startupRecovery.quitButton', 'Quit')
+  const quit = deps.translate('profileState.startupRecovery.quitButton', 'Quit')
   const buttons = deps.recoveryCommand
     ? [
-        translateMain('profileState.startupRecovery.copyCommandButton', 'Copy recovery command'),
+        deps.translate('profileState.startupRecovery.copyCommandButton', 'Copy recovery command'),
         quit
       ]
     : [quit]
   const nextStep = deps.recoveryCommand
-    ? translateMain(
+    ? deps.translate(
         'profileState.startupRecovery.copyCommandDetail',
         'Copy the recovery command, then run it after Orca closes.'
       )
-    : translateMain(
+    : deps.translate(
         'profileState.startupRecovery.quitDetail',
         'Quit Orca and resolve the profile-state authority before retrying.'
       )
@@ -37,11 +44,11 @@ export async function presentProfileStateStartupRecoveryDialog(
     buttons,
     defaultId: buttons.length - 1,
     cancelId: buttons.length - 1,
-    title: translateMain(
+    title: deps.translate(
       'profileState.startupRecovery.title',
       'Orca profile state cannot be opened'
     ),
-    message: translateMain(
+    message: deps.translate(
       'profileState.startupRecovery.message',
       'Orca cannot safely open this profile.'
     ),
@@ -59,6 +66,7 @@ export type ProfileStateCopyChoiceDialogDeps = {
   jsonSavedAt?: Date
   formatTime?: (time: Date) => string
   showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
+  translate: ProfileStateDialogTranslate
 }
 
 /** Best-effort save times; SQLite's latest commit may live only in its WAL, and -shm changes on every open. */
@@ -99,39 +107,39 @@ export async function chooseProfileStateCopy(
   const savedAt = (time: Date | undefined): string =>
     time === undefined
       ? ''
-      : ` ${translateMain('profileState.copyChoice.lastSaved', 'Last saved {{time}}.', { time: format(time) })}`
+      : ` ${deps.translate('profileState.copyChoice.lastSaved', 'Last saved {{time}}.', { time: format(time) })}`
   const { response } = await deps.showMessageBox({
     type: 'warning',
     buttons: [
-      translateMain('profileState.copyChoice.useSqliteButton', 'Use SQLite (Recommended)'),
-      translateMain('profileState.copyChoice.useJsonButton', 'Use JSON'),
-      translateMain('profileState.copyChoice.quitButton', 'Quit')
+      deps.translate('profileState.copyChoice.useSqliteButton', 'Use SQLite (Recommended)'),
+      deps.translate('profileState.copyChoice.useJsonButton', 'Use JSON'),
+      deps.translate('profileState.copyChoice.quitButton', 'Quit')
     ],
     defaultId: 0,
     cancelId: 2,
     noLink: true,
-    title: translateMain('profileState.copyChoice.title', 'Choose profile state'),
-    message: translateMain(
+    title: deps.translate('profileState.copyChoice.title', 'Choose profile state'),
+    message: deps.translate(
       'profileState.copyChoice.message',
       'This profile has two saved copies that don’t match.'
     ),
     detail: [
-      translateMain(
+      deps.translate(
         'profileState.copyChoice.cause',
         'This usually happens after opening the profile in an older version of Orca.'
       ),
       '',
-      translateMain(
+      deps.translate(
         'profileState.copyChoice.sqliteOption',
         'SQLite: what this version of Orca saved. Changes made in the older version are discarded.'
       ) + savedAt(deps.sqliteSavedAt),
       '',
-      translateMain(
+      deps.translate(
         'profileState.copyChoice.jsonOption',
         'JSON: includes changes made in the older version. Changes this version saved since then are discarded.'
       ) + savedAt(deps.jsonSavedAt),
       '',
-      translateMain(
+      deps.translate(
         'profileState.copyChoice.archiveNote',
         'Orca archives both copies before switching, then restarts.'
       )
