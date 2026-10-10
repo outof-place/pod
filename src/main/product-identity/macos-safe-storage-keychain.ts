@@ -14,7 +14,9 @@ function assertQuotable(values: readonly string[]): void {
 }
 
 /** `security` CLI access to the login keychain, or to `keychainPath` (tests use a scratch keychain). */
-export function createMacSafeStorageKeychain(keychainPath?: string): SafeStorageKeychainPort {
+export function createMacSafeStorageKeychain(
+  keychainPath?: string
+): SafeStorageKeychainPort & { deleteItem(service: string, account: string): boolean } {
   const keychainArgs = keychainPath ? [keychainPath] : []
   const hasItem = (service: string, account: string): boolean => {
     // Without -w this reads attributes only, which never prompts.
@@ -50,6 +52,14 @@ export function createMacSafeStorageKeychain(keychainPath?: string): SafeStorage
       if (result.code !== 0 || result.timedOut || !hasItem(service, account)) {
         throw new Error(`could not create keychain item "${service}": ${result.stderr.trim()}`)
       }
+    },
+    deleteItem(service, account) {
+      const result = runProcessSync({
+        program: SECURITY,
+        args: ['delete-generic-password', '-s', service, '-a', account, ...keychainArgs],
+        timeoutMs: CONSENT_TIMEOUT_MS
+      })
+      return result.code === 0 && !result.timedOut && !hasItem(service, account)
     }
   }
 }

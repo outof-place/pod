@@ -43,7 +43,13 @@ describe('product identity', () => {
       updateFeed: { provider: 'github', owner: 'outof-place', repo: 'pod' },
       stablyServices: false,
       computerUseDisplayName: 'Pod Computer Use',
-      legacyProfile: { userDataName: 'orca', keychainName: 'orca' }
+      homeDirName: '.pod',
+      envPrefix: 'POD_',
+      legacyProfile: {
+        userDataName: 'orca',
+        keychainName: 'orca',
+        homeDirName: '.orca'
+      }
     })
   })
 
@@ -57,6 +63,10 @@ describe('product identity', () => {
     expect(() => parseProductIdentity(withBadScheme)).toThrow(/protocols/)
     const withPathEscape = { ...Object(repoIdentity), userDataName: '../orca' }
     expect(() => parseProductIdentity(withPathEscape)).toThrow(/userDataName/)
+    const withHomeEscape = { ...Object(repoIdentity), homeDirName: '../.pod' }
+    expect(() => parseProductIdentity(withHomeEscape)).toThrow(/homeDirName/)
+    const withBadPrefix = { ...Object(repoIdentity), envPrefix: 'pod' }
+    expect(() => parseProductIdentity(withBadPrefix)).toThrow(/envPrefix/)
     const withBadFeed = { ...Object(repoIdentity), updateFeed: { provider: 'generic' } }
     expect(() => parseProductIdentity(withBadFeed)).toThrow(/updateFeed/)
   })

@@ -213,11 +213,16 @@ export function configureDevUserDataPath(isDev: boolean, isServeMode = false): b
     mkdirSync(e2eHomeDir, { recursive: true, mode: 0o700 })
     app.setPath('home', e2eHomeDir)
     app.setPath('userData', e2eConfig.userDataDir)
-    // Why: the product import's E2E reads a disposable legacy profile, never the user's.
+    // Why: a product E2E reads a disposable legacy profile, never the user's, and imports it only
+    // when the spec provides one.
     const scratchLegacyUserData = process.env.POD_E2E_LEGACY_USER_DATA_DIR
-    const e2eProduct = scratchLegacyUserData ? getProductIdentity() : null
-    return e2eProduct && scratchLegacyUserData
-      ? runProductFirstRun(e2eProduct, { legacyUserData: scratchLegacyUserData, keychain: null })
+    const e2eProduct = getProductIdentity()
+    return e2eProduct
+      ? runProductFirstRun(e2eProduct, {
+          legacyUserData: scratchLegacyUserData ?? join(e2eConfig.userDataDir, 'no-legacy-profile'),
+          keychain: null,
+          importLegacyProfile: scratchLegacyUserData !== undefined
+        })
       : true
   }
 

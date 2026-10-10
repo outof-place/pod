@@ -11,7 +11,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
 import { createAppMenuQuitItem } from './app-menu-quit-item'
 import { createAppWindowMenu } from './app-menu-window'
-import { areStablyServicesEnabled } from '../product-identity/product-overlay'
+import { areStablyServicesEnabled, productMenuItems } from '../product-identity/product-overlay'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -158,7 +158,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     submenu: [
       { role: 'about' },
       checkForUpdatesItem,
-      settingsItem,
+      ...productMenuItems(settingsItem),
       { type: 'separator' },
       { role: 'services' },
       { type: 'separator' },

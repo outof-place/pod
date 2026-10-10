@@ -1,8 +1,14 @@
+import { existsSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, shell } from 'electron'
 import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS } from '../daemon/daemon-protocol-version'
+import { getMainE2EConfig } from '../e2e-config'
 import { setAppBundleId } from '../../shared/app-identity'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import { claudeProfileKeychainServices } from '../claude-accounts/claude-profile-keychain-services'
+import { getKeychainUser } from '../claude-accounts/keychain'
+import { listClaudeProfileIds, moveClaudeProfileCredentials } from './claude-credentials-move'
 import {
   pendingDeferredImport,
   readMigrationMarker,
@@ -11,11 +17,23 @@ import {
 } from './deferred-profile-import'
 import { openImportProgressWindow } from './import-progress-window'
 import { offerLegacyDaemonHandover } from './legacy-daemon-handover-prompt'
-import { migrateLegacyProfile, type SafeStorageKeychainPort } from './legacy-profile-migration'
+import { moveLegacyHome } from './legacy-home-move'
+import {
+  legacyImportRequestPath,
+  setProfileAside,
+  takeLegacyImportRequest
+} from './legacy-import-request'
+import {
+  liveSingletonOwner,
+  migrateLegacyProfile,
+  type SafeStorageKeychainPort
+} from './legacy-profile-migration'
 import { createMacSafeStorageKeychain } from './macos-safe-storage-keychain'
 import { getProductIdentity, type ProductIdentity } from './product-identity'
 
 const PRIVACY_SETTINGS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy'
+// One-time record in userData: the imported Claude profiles' sign-ins moved (or there were none).
+const CLAUDE_CREDENTIALS_MOVE_RECORD = 'product-claude-credentials-move.json'
 
 /** `/Applications/Pod.app/Contents/MacOS/Pod` → `/Applications/Pod.app`. */
 export function appBundlePathFromExecPath(execPath: string): string | null {
@@ -39,23 +57,80 @@ export function applyProductIdentityPreReady(
 }
 
 /**
- * The synchronous half of the first-launch import (state, keychain). Returns false when startup
- * must stop: the legacy app is still running, so its databases cannot be copied consistently.
- * `scratch` points an E2E run at a disposable legacy profile and keeps it off the login keychain.
+ * Pre-ready product setup: the profile import ("Import from Orca…" restarts into it; never on its
+ * own), then the one-time move of the legacy home folder. Returns false when startup must stop.
+ * `scratch` points an E2E run at a disposable legacy profile (imported when asked) and keeps the
+ * login keychain out of it.
  */
 export function runProductFirstRun(
   identity: ProductIdentity,
-  scratch: { legacyUserData: string; keychain: SafeStorageKeychainPort | null } | null = null
+  scratch: {
+    legacyUserData: string
+    keychain: SafeStorageKeychainPort | null
+    importLegacyProfile: boolean
+  } | null = null
 ): boolean {
-  if (!identity.legacyProfile) {
+  const legacy = identity.legacyProfile
+  if (!legacy) {
     return true
+  }
+  const appData = app.getPath('appData')
+  const legacyUserData = scratch?.legacyUserData ?? join(appData, legacy.userDataName)
+  const requested = scratch
+    ? scratch.importLegacyProfile
+    : takeLegacyImportRequest(legacyImportRequestPath(appData, identity.userDataName)) !== null
+  if (requested && !importLegacyProfile(identity, legacyUserData, scratch)) {
+    return false
+  }
+  if (legacy.homeDirName && identity.homeDirName) {
+    try {
+      const result = moveLegacyHome({
+        home: homedir(),
+        legacyHomeDirName: legacy.homeDirName,
+        productHomeDirName: identity.homeDirName,
+        productUserData: app.getPath('userData'),
+        legacyAppPid: liveSingletonOwner(legacyUserData)
+      })
+      console.log(`[product-decouple] home folder: ${JSON.stringify(result)}`)
+    } catch (error) {
+      // Why continue: the move records itself only when it finishes, so the next launch retries.
+      console.error('[product-decouple] home folder move failed', error)
+    }
+  }
+  return true
+}
+
+function importLegacyProfile(
+  identity: ProductIdentity,
+  legacyUserData: string,
+  scratch: { keychain: SafeStorageKeychainPort | null } | null
+): boolean {
+  const legacyPid = liveSingletonOwner(legacyUserData)
+  if (legacyPid !== null) {
+    dialog.showErrorBox(
+      `${identity.displayName} can't import your Orca profile yet`,
+      `Orca is running (pid ${legacyPid}). Quit Orca, then choose Import from Orca… again.`
+    )
+    return true
+  }
+  const appData = app.getPath('appData')
+  if (!scratch) {
+    const ownPid = liveSingletonOwner(app.getPath('userData'))
+    if (ownPid !== null && ownPid !== process.pid) {
+      dialog.showErrorBox(
+        `${identity.displayName} can't import your Orca profile yet`,
+        `Another ${identity.displayName} process (pid ${ownPid}) is using the profile. Quit it, then choose Import from Orca… again.`
+      )
+      return true
+    }
+    const aside = setProfileAside(appData, identity.userDataName, new Date())
+    console.log(`[product-migration] previous profile kept at ${aside ?? '(none)'}`)
   }
   const started = performance.now()
   const result = migrateLegacyProfile({
-    legacyUserData:
-      scratch?.legacyUserData ?? join(app.getPath('appData'), identity.legacyProfile.userDataName),
+    legacyUserData,
     productUserData: app.getPath('userData'),
-    legacyKeychainName: identity.legacyProfile.keychainName,
+    legacyKeychainName: identity.legacyProfile?.keychainName ?? identity.keychainName,
     productKeychainName: identity.keychainName,
     trustedAppPath: appBundlePathFromExecPath(process.execPath),
     keychain: scratch
@@ -73,7 +148,7 @@ export function runProductFirstRun(
     dialog.showErrorBox(
       `${identity.displayName} can't import your Orca profile yet`,
       result.reason === 'legacy-app-running'
-        ? `Orca is running (pid ${result.pid}). Quit Orca, then open ${identity.displayName} again.\n\n${identity.displayName} copies your Orca workspaces and settings on its first launch. Orca itself is left unchanged, and you can open it again right after.`
+        ? `Orca is running (pid ${result.pid}). Quit Orca, then choose Import from Orca… again.`
         : `Another ${identity.displayName} process (pid ${result.pid}) is importing the Orca profile. Wait for it to finish, then try again.`
     )
     app.exit(0)
@@ -111,6 +186,7 @@ export async function completeProductImportBeforeWindows(): Promise<void> {
       progressWindow?.close()
     }
   }
+  moveClaudeCredentialsOnce(identity, userData)
   try {
     await offerLegacyDaemonHandover(identity, userData)
   } catch (error) {
@@ -121,6 +197,41 @@ export async function completeProductImportBeforeWindows(): Promise<void> {
   // Why from the marker: a background launch defers the notice to the next interactive one.
   if (marker?.permissionsNoticeShown === false && !isBackgroundLaunch()) {
     void showImportNotice(identity, marker)
+  }
+}
+
+function moveClaudeCredentialsOnce(identity: ProductIdentity, userData: string): void {
+  const legacy = identity.legacyProfile
+  const recordPath = join(userData, CLAUDE_CREDENTIALS_MOVE_RECORD)
+  // Why never under E2E: the login keychain holds the user's real accounts.
+  if (
+    process.platform !== 'darwin' ||
+    getMainE2EConfig().userDataDir ||
+    !legacy ||
+    existsSync(recordPath)
+  ) {
+    return
+  }
+  const legacyUserData = join(app.getPath('appData'), legacy.userDataName)
+  try {
+    const profiles = listClaudeProfileIds(userData).map((id) => ({
+      id,
+      legacyServices: claudeProfileKeychainServices(legacyUserData, id).spellings,
+      productService: claudeProfileKeychainServices(userData, id).canonical
+    }))
+    const result = moveClaudeProfileCredentials({
+      profiles,
+      keychainAccount: getKeychainUser(),
+      trustedAppPath: appBundlePathFromExecPath(process.execPath),
+      legacyAppPid: liveSingletonOwner(legacyUserData),
+      keychain: createMacSafeStorageKeychain()
+    })
+    console.log(`[product-decouple] Claude sign-ins: ${JSON.stringify(result)}`)
+    if (result.status !== 'deferred') {
+      writeFileSync(recordPath, `${JSON.stringify({ at: new Date().toISOString(), result })}\n`)
+    }
+  } catch (error) {
+    console.error('[product-decouple] Claude sign-in move failed', error)
   }
 }
 

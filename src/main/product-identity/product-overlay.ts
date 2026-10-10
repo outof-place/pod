@@ -67,3 +67,5 @@ export function productUiIdentityArguments(): string[] {
   const identity = getProductUiIdentity()
   return identity ? [formatProductUiIdentityArgument(identity)] : []
 }
+
+export { productMenuItems } from './product-app-menu'

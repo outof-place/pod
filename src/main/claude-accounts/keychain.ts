@@ -24,7 +24,7 @@ export async function readActiveClaudeKeychainCredentialsStrict(
 const KEYCHAIN_ACCOUNT_PATTERN = /^[a-zA-Z0-9._-]+$/
 const CLAUDE_CODE_FALLBACK_USER = 'claude-code-user'
 
-function getKeychainUser(): string {
+export function getKeychainUser(): string {
   // Why: Claude Code 2.1+ rejects $USER outside [a-zA-Z0-9._-] (SSO names like
   // first@example.com) and stores the item under claude-code-user (#12857).
   let user: string
