@@ -7,7 +7,7 @@ Each sandbox is named `pod-<worktree>-<hash>-sbx`. Pod creates and deletes only 
 ## What the sandbox sees
 
 - **Files:** only the worktree, plus its shared git directory when the worktree is linked (`git rev-parse --git-common-dir`). Both are mounted at the same paths as on the Mac, read-write. The rest of your home folder, other repositories and `~/.claude` stay outside.
-- **Credentials:** none are copied in. That covers the setup-token, `apiKeyHelper`, `ANTHROPIC_API_KEY` and the Mac's `~/.claude.json`. The sandbox gets its own `~/.claude.json`, which trusts only the mounted worktree path.
+- **Credentials:** none are copied in. That covers the setup-token, `apiKeyHelper`, `ANTHROPIC_API_KEY` and the Mac's `~/.claude.json`. The sandbox gets its own `~/.claude.json`, which trusts only the mounted worktree path. When a credential source is on, Claude Code's API calls get the credential on the Mac (see the `anthropic-api` route below).
 - **Network:** the sandbox is created with `orb create --isolate-network`. It reaches the internet, but not the Mac, the LAN or other OrbStack machines.
 - **Hooks:** Pod's managed Claude hooks go in `/etc/claude-code/managed-settings.json`. They post agent status to `127.0.0.1:<hook port>` inside the VM. The sandbox relay (below) carries those posts to Pod's hook server.
 
@@ -31,6 +31,28 @@ The sandbox token has 32 random bytes and lives only in Pod's memory. It is neve
 - The VM gets it as `ORCA_AGENT_HOOK_TOKEN`. The hook server's own token never enters the VM.
 
 The relay process ends when the sandbox is deleted, when Pod quits, or when the VM stops. A Pod crash closes the relay's stdin, which ends it too. The real-OrbStack tests check that no `orb` process for the machine survives a delete.
+
+## The `anthropic-api` route
+
+This second route kind lets the sandbox's Claude Code use a credential that never enters the VM. Claude Code still talks to `https://api.anthropic.com` as it does on the Mac: no `ANTHROPIC_BASE_URL`, no proxy variable. The route is off while the credential source is the stub, which is all Pod ships until you choose between an API key and an OAuth login.
+
+While a source is on:
+
+1. The relay pins `api.anthropic.com` to `127.0.0.1` and `::1` in the VM's `/etc/hosts`, inside a marked block, and listens on port 443 on both loopbacks. All other hosts still resolve and connect directly over the VM's internet.
+2. Pod makes a CA for the sandbox, in memory only. The CA may sign only `api.anthropic.com` (a critical name constraint). It signs exactly one leaf certificate for that name, and its private key is discarded as soon as it has. The VM gets only the CA certificate, at `/etc/pod-sandbox/anthropic-ca.pem`.
+3. The agent's launch sets `NODE_EXTRA_CA_CERTS` to that file. It also sets a placeholder credential: `ANTHROPIC_API_KEY`, or `CLAUDE_CODE_OAUTH_TOKEN` for an OAuth source. The placeholder works against nothing.
+4. On the Mac, TLS ends in Pod's own process: there is no listening port. Any server name other than `api.anthropic.com` fails the handshake.
+5. Pod forwards only the endpoints Claude Code uses: `/v1/messages`, token counting, models, its server-managed settings and policy limits, feature flags, bootstrap config, telemetry, the MCP registry, and the `/api/hello` warm-up. Paths with dot segments, empty segments or escapes are refused, and so is anything else, with a 403.
+6. Pod drops the VM's `Authorization`, `x-api-key`, `Cookie` and proxy headers, adds the credential source's headers, and sends the request to the real `api.anthropic.com:443` with normal certificate verification. Responses stream back unchanged, including SSE.
+
+The CA, its leaf and the route die with the sandbox. A relay that starts without the route removes the pin and the CA file, and so does a relay that exits.
+
+This was verified with a real request:
+
+- Claude Code 2.1.287's native binary, in a sandbox, against a stub API on the Mac. The stub has its own CA, and no real token was used.
+- Without `NODE_EXTRA_CA_CERTS`, Claude Code refused the Mac's certificate and nothing reached the stub.
+- With it, the answer came through, and the stub saw only Pod's key. So Claude Code does not pin certificates.
+- In interactive mode, Claude Code asks once per sandbox to approve a custom API key.
 
 ## How Claude Code gets in
 
