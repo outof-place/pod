@@ -15,6 +15,7 @@ export type PodGitProfileKey =
   | 'core.fsmonitor'
   | 'index.version'
   | 'checkout.workers'
+  | 'checkout.thresholdForParallelism'
   | 'fetch.writeCommitGraph'
   | 'maintenance.strategy'
   | 'maintenance.prefetch.enabled'
@@ -102,6 +103,16 @@ function wantedKeys(facts: PodGitProfileFacts): { entry: Wanted; skip: PodGitPro
       entry: {
         key: 'checkout.workers',
         value: '0',
+        when: () => (atLeast(facts.gitVersion, 2, 32) ? 'always' : null)
+      },
+      skip: 'git-too-old'
+    },
+    {
+      // Why: workers pay off on a whole checkout (worktree add, 35k files: 3.8 → 2.4 s) but a
+      // branch switch of 785 files took 0.7 → 1.3 s with them; only big checkouts go parallel.
+      entry: {
+        key: 'checkout.thresholdForParallelism',
+        value: '4000',
         when: () => (atLeast(facts.gitVersion, 2, 32) ? 'always' : null)
       },
       skip: 'git-too-old'
