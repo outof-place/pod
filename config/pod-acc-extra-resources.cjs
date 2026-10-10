@@ -10,7 +10,9 @@ const DISTRO_PLUGINS = join(__dirname, '..', 'resources', 'plugins', 'distro')
 
 /** Throws when the payload is missing, so a Pod release cannot ship without claude-acc. */
 function podAccMacExtraResources({ payloadDir = PAYLOAD, distroPlugins = DISTRO_PLUGINS } = {}) {
-  for (const name of ['VERSION', 'setup.sh', 'Claude Acc.app']) {
+  // from 1.31 the menu helper ships as Pod Menu.app (src/main/pod/acc/acc-lifecycle.ts)
+  const helper = existsSync(join(payloadDir, 'Pod Menu.app')) ? 'Pod Menu.app' : 'Claude Acc.app'
+  for (const name of ['VERSION', 'setup.sh', helper]) {
     if (!existsSync(join(payloadDir, name))) {
       throw new Error(
         `claude-acc payload missing (${join(payloadDir, name)}): run node config/scripts/fetch-claude-acc-payload.mjs`
