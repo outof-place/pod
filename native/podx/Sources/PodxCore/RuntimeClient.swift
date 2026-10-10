@@ -209,10 +209,12 @@ public final class RuntimeClient {
       guard let meta = object["_meta"]?.objectValue, case .string(let runtimeId)? = meta["runtimeId"] else {
         throw invalidFrame()
       }
+      // Why: zod's z.unknown() still requires the key, so a success frame without result is invalid.
+      guard let result = object["result"] else { throw invalidFrame() }
       var out = JSONObject()
       out.set("id", .string(id))
       out.set("ok", .bool(true))
-      if let result = object["result"] { out.set("result", result) }
+      out.set("result", result)
       out.set("_meta", .object(JSONObject([(JSONString("runtimeId"), .string(runtimeId))])))
       return out
     case .bool(false)?:
