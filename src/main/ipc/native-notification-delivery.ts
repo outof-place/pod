@@ -19,6 +19,7 @@ import {
 import { recordNotificationDeliveryOutcome } from './notification-permission-probe'
 import { getTrustedUIRendererWindow } from './ui'
 import { brandNotificationCopy } from '../product-identity/product-overlay'
+import { forwardPodUiHostNotificationClick } from '../pod/ui-host/pod-ui-host-window'
 
 export function deliverNativeNotification(
   args: NotificationDispatchRequest,
@@ -91,7 +92,13 @@ export function deliverNativeNotification(
       if (!win || win.isDestroyed()) {
         return
       }
-      if (process.platform === 'darwin' && !isBackgroundLaunch()) {
+      // Fork-only (Pod): one-app mode shows the tab in PodNative; the hidden window still gets the
+      // focus below, which acks the notification.
+      const shownInPodNative = forwardPodUiHostNotificationClick({
+        worktreeId,
+        ...(paneTarget ? { tabId: paneTarget.tabId, leafId: paneTarget.leafId } : {})
+      })
+      if (process.platform === 'darwin' && !isBackgroundLaunch() && !shownInPodNative) {
         app.focus({ steal: true })
       }
       safelyRevealWindow(win)
