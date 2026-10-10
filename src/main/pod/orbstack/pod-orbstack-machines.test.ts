@@ -121,3 +121,76 @@ describe.skipIf(process.platform === 'win32')('Pod OrbStack machines', () => {
     expect([first.ok, second.ok].sort()).toEqual([false, true])
   })
 })
+
+describe.skipIf(process.platform === 'win32')('Pod OrbStack agent sandboxes', () => {
+  function sandboxSetup(provision: () => Promise<{ agentVersion: string | null }>) {
+    const base = setup()
+    const paths = () => ({
+      appInstalled: true,
+      orb: join(base.state, '..', 'bin', 'orb'),
+      orbctl: null,
+      docker: null
+    })
+    const machines = createPodOrbstackMachines({
+      paths,
+      run: createOrbstackToolRunner(paths),
+      registry: base.registry,
+      loadRecipe: () => POD_ORBSTACK_BUILTIN_RECIPE,
+      hostClaudeVersion: async () => '2.1.295',
+      resolveMounts: async (path) => [path],
+      provision: async (args) => {
+        // Stand-in for the real steps: the fake orb only needs the machine to exist.
+        writeFileSync(join(base.state, args.name), '')
+        return provision()
+      }
+    })
+    return {
+      ...base,
+      machines,
+      name: podOrbstackMachineName(base.target.worktreeId, base.target.worktreePath, 'sandbox')
+    }
+  }
+
+  it('records a ready sandbox with the installed Claude version and deletes it by kind', async () => {
+    const { machines, registry, state, target, name } = sandboxSetup(async () => ({
+      agentVersion: '2.1.295'
+    }))
+    expect(name).toMatch(/-sbx$/)
+    expect(await machines.createSandbox(target)).toEqual({ ok: true })
+    expect(registry.findByWorktree(target.worktreeId, 'sandbox')).toMatchObject({
+      name,
+      state: 'ready',
+      kind: 'sandbox',
+      agentVersion: '2.1.295'
+    })
+    expect(registry.findByWorktree(target.worktreeId)).toBeNull()
+    registry.setSandboxAgents(target.worktreeId, true)
+
+    expect(await machines.remove(target.worktreeId, 'sandbox')).toEqual({ ok: true })
+    expect(existsSync(join(state, name))).toBe(false)
+    expect(registry.isSandboxAgents(target.worktreeId)).toBe(false)
+  })
+
+  it('deletes the half-built sandbox and forgets it when provisioning fails', async () => {
+    const { machines, registry, state, target, name } = sandboxSetup(async () => {
+      throw new Error('install Claude Code: curl: (6) Could not resolve host')
+    })
+    const result = await machines.createSandbox(target)
+    expect(result).toEqual({
+      ok: false,
+      error: 'install Claude Code: curl: (6) Could not resolve host'
+    })
+    expect(existsSync(join(state, name))).toBe(false)
+    expect(registry.machines()).toEqual([])
+  })
+
+  it('leaves an existing machine with the sandbox name alone', async () => {
+    const { machines, registry, state, target, name } = sandboxSetup(async () => ({
+      agentVersion: null
+    }))
+    writeFileSync(join(state, name), '')
+    expect(await machines.createSandbox(target)).toMatchObject({ ok: false })
+    expect(existsSync(join(state, name))).toBe(true)
+    expect(registry.machines()).toEqual([])
+  })
+})
