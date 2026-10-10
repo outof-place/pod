@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { sendToPodUi } from '../pod/ui-host/pod-ui-host-bridge'
 
 let unreadCount = 0
 
@@ -9,6 +10,8 @@ function applyDockBadge(): void {
 
   const label = unreadCount === 0 ? '' : unreadCount > 99 ? '99+' : String(unreadCount)
   app.dock?.setBadge(label)
+  // Fork-only (Pod): a one-app runtime has no Dock tile; PodNative's tile shows the count.
+  sendToPodUi({ type: 'badge', label })
 }
 
 export function setUnreadDockBadgeCount(count: number): void {
