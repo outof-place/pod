@@ -1,4 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { POD_EMULATOR } from '../../../shared/product/features'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { AppState } from '@/store/types'
@@ -43,7 +44,9 @@ export function resolveClientCreationActionPolicy(args: {
         state: 'enabled',
         provider: browserStreamingAvailable ? 'paired-runtime' : 'local-client'
       },
-      'mobile-emulator': { state: 'enabled', provider: 'local-client' }
+      'mobile-emulator': POD_EMULATOR
+        ? { state: 'enabled', provider: 'local-client' }
+        : { state: 'hidden', reason: MOBILE_EMULATOR_UNAVAILABLE_MESSAGE }
     }
   }
 

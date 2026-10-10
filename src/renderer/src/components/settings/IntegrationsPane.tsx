@@ -5,6 +5,7 @@ import {
   GitHubIntegrationCard,
   GitLabIntegrationCard
 } from './source-control-integration-cards'
+import { POD_JIRA, POD_LINEAR } from '../../../../shared/product/features'
 import { JiraIntegrationCard, LinearIntegrationCard } from './task-tracker-integration-cards'
 import { useIntegrationProviderStatusRefresh } from './use-integration-provider-status-refresh'
 import { translate } from '@/i18n/i18n'
@@ -49,8 +50,8 @@ export function IntegrationsPane(): React.JSX.Element {
           </p>
         </div>
         <div className="space-y-3">
-          <LinearIntegrationCard />
-          <JiraIntegrationCard />
+          {POD_LINEAR ? <LinearIntegrationCard /> : null}
+          {POD_JIRA ? <JiraIntegrationCard /> : null}
         </div>
       </section>
     </div>
