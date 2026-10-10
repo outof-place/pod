@@ -57,6 +57,17 @@ export function resolveOrbstackE2eAnthropic(env: NodeJS.ProcessEnv = process.env
   }
 }
 
+/**
+ * Template clones (pod-orbstack-templates.ts). `POD_ORBSTACK_TEMPLATES=0` turns them off; E2E
+ * profiles opt in with `POD_E2E_ORBSTACK_TEMPLATES=1`, since a template outlives its profile.
+ */
+export function resolveOrbstackTemplatesEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.POD_ORBSTACK_TEMPLATES === '0') {
+    return false
+  }
+  return !env.ORCA_E2E_USER_DATA_DIR || env.POD_E2E_ORBSTACK_TEMPLATES === '1'
+}
+
 /** HOME for orb, orbctl and docker; null keeps the inherited one. */
 export function resolveOrbstackHomeOverride(env: NodeJS.ProcessEnv = process.env): string | null {
   return (env.ORCA_E2E_USER_DATA_DIR && env[POD_ORBSTACK_E2E_HOME_ENV]) || null
