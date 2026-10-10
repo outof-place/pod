@@ -74,11 +74,22 @@ export type PodOrbstackWorktreeLink = {
   sandboxNetworkIsolated?: boolean
 }
 
+/** A stopped machine new Pod machines are cloned from; not tied to a worktree. */
+export type PodOrbstackTemplateInfo = {
+  name: string
+  kind: PodOrbstackMachineKind
+  state: 'creating' | 'ready' | 'missing'
+  /** Claude Code version a sandbox template holds. */
+  agentVersion: string | null
+}
+
 export type PodOrbstackStatus = {
   install: PodOrbstackInstall
   service: PodOrbstackServiceState
   dockerContext: PodOrbstackDockerContext
   machines: PodOrbstackMachine[]
+  /** Optional: runtimes before templates do not send it. */
+  templates?: PodOrbstackTemplateInfo[]
   containers: PodOrbstackContainer[]
   links: PodOrbstackWorktreeLink[]
   /** Sandboxed agents may use this Mac's Claude Code login (opt-in). */
