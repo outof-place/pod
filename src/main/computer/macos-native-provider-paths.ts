@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { productHelperPath } from '../product-identity/product-helper-names'
 import { join, resolve } from 'node:path'
 
 export function resolveMacOSComputerUseAppPath(): string | null {
@@ -7,7 +8,7 @@ export function resolveMacOSComputerUseAppPath(): string | null {
     return override
   }
 
-  const packaged = [join(process.resourcesPath ?? '', 'Orca Computer Use.app')]
+  const packaged = [productHelperPath(join(process.resourcesPath ?? '', 'Orca Computer Use.app'))]
   const dev = [
     join(process.cwd(), 'native/computer-use-macos/.build/release/Orca Computer Use.app'),
     resolve(__dirname, '../../native/computer-use-macos/.build/release/Orca Computer Use.app')
@@ -22,6 +23,8 @@ export function resolveMacOSComputerUseExecutablePath(): string | null {
   if (!appPath) {
     return null
   }
-  const executablePath = join(appPath, 'Contents', 'MacOS', 'orca-computer-use-macos')
+  const executablePath = productHelperPath(
+    join(appPath, 'Contents', 'MacOS', 'orca-computer-use-macos')
+  )
   return existsSync(executablePath) ? executablePath : null
 }
