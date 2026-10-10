@@ -1,4 +1,5 @@
 import type { NativeChatComposerInput } from './native-chat-composer-input'
+import { POD_DICTATION } from '../../../../shared/product/features'
 import { useCallback, useState, type RefObject } from 'react'
 import { useAppStore } from '../../store'
 import { dispatchDictationControl } from '../dictation/dictation-control-events'
@@ -30,7 +31,7 @@ export function useNativeChatDictation(textareaRef: RefObject<NativeChatComposer
     dispatchDictationControl('stop')
   }, [])
   return {
-    dictationDisabled: voiceSettings?.enabled !== true || !voiceSettings.sttModel,
+    dictationDisabled: !POD_DICTATION || voiceSettings?.enabled !== true || !voiceSettings.sttModel,
     isDictating:
       dictationPressed ||
       dictationState === 'starting' ||
