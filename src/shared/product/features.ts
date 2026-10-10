@@ -11,6 +11,18 @@
 export const POD_FEATURE_IDS = [
   'featurePromos',
   'uiLocales',
+  'mobileWebClient',
+  'dictation',
+  'windowsSshHosts',
+  'usagePolling',
+  'emulator',
+  'linear',
+  'jira',
+  'tasks',
+  'dashboardPopout',
+  'startupBrowserSweep',
+  'tccPromptWatch',
+  'startupHangWatchdog',
   'nonMacPayloads',
   'cloudSources'
 ] as const
@@ -26,8 +38,18 @@ type PodPackagingCut = {
   readonly excludeFiles?: readonly string[]
   /** `from` paths whose extraResources entries the macOS app drops. */
   readonly dropExtraResources?: readonly string[]
+  /** `to` paths whose extraResources entries the macOS app drops. */
+  readonly dropExtraResourcesTo?: readonly string[]
   /** Exclusion filters added to the extraResources entry copied from the key path. */
   readonly filterExtraResources?: Readonly<Record<string, readonly string[]>>
+  /** Roots removed from the packaged runtime node_modules closure. */
+  readonly dropRuntimePackageRoots?: readonly string[]
+  /** Bundled ripgrep platforms the macOS app does not ship. */
+  readonly dropRipgrepPlatforms?: readonly string[]
+  /** Electron (Chromium) locales the app keeps. */
+  readonly electronLanguages?: readonly string[]
+  /** The app ships no mobile web bundle, so packaging does not require one to be built. */
+  readonly skipMobileWebBundleAssert?: boolean
 }
 
 type PodFeature = {
@@ -51,7 +73,68 @@ export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
   uiLocales: {
     pod: false,
     reason: 'Pod is English-only: no es/fr/ja/ko/zh catalogs, no language picker, en at startup',
+    packaging: { electronLanguages: ['en'] },
     stubModules: [/\/src\/renderer\/src\/i18n\/locales\/(?:es|fr|ja|ko|zh)\.json$/]
+  },
+  mobileWebClient: {
+    pod: false,
+    reason:
+      "Orca Mobile and the browser web client pair through Stably's apps; desktops pair over WebSocket",
+    packaging: {
+      excludeFiles: ['!out/web{,/**/*}', '!out/mobile-web{,/**/*}'],
+      skipMobileWebBundleAssert: true
+    },
+    settingsSections: ['mobile']
+  },
+  dictation: {
+    pod: false,
+    reason: 'claude-acc owns dictation; drops the sherpa-onnx speech runtime',
+    packaging: { dropExtraResources: ['node_modules/sherpa-onnx-darwin-${arch}'] },
+    settingsSections: ['voice']
+  },
+  windowsSshHosts: {
+    pod: false,
+    reason: 'No SSH to Windows hosts: the win32 relay and ripgrep stay out of the macOS app',
+    packaging: {
+      dropRipgrepPlatforms: ['win32-x64', 'win32-arm64'],
+      filterExtraResources: { 'out/relay': ['!win32-*{,/**/*}'] }
+    }
+  },
+  usagePolling: {
+    pod: false,
+    reason: 'claude-acc owns quotas: no rate-limit probes spawning claude/agy, no usage scans',
+    settingsSections: ['stats']
+  },
+  emulator: {
+    pod: false,
+    reason: 'No iOS simulator panes; drops serve-sim',
+    packaging: { dropExtraResourcesTo: ['node_modules/serve-sim', 'node_modules/sonner'] },
+    settingsSections: ['mobile-emulator']
+  },
+  linear: {
+    pod: false,
+    reason: 'No Linear integration; drops @linear/sdk',
+    packaging: { dropRuntimePackageRoots: ['@linear/sdk'] },
+    settingsSections: ['linear']
+  },
+  jira: { pod: false, reason: 'No Jira integration' },
+  tasks: {
+    pod: false,
+    reason: 'No tasks page or workspace board',
+    settingsSections: ['tasks']
+  },
+  dashboardPopout: { pod: false, reason: 'No experimental agent dashboard pop-out' },
+  startupBrowserSweep: {
+    pod: false,
+    reason: 'agent-browser orphan sweep runs on first agent-browser use, not at every startup'
+  },
+  tccPromptWatch: {
+    pod: false,
+    reason: 'No permanent `log stream` for the Full Disk Access hint'
+  },
+  startupHangWatchdog: {
+    pod: false,
+    reason: 'The main-thread hang watchdog starts after the first window is shown'
   },
   nonMacPayloads: {
     pod: false,
@@ -79,12 +162,42 @@ export const POD_FEATURE_PROMOS: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.featurePromos
 export const POD_UI_LOCALES: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.uiLocales
+export const POD_DICTATION: boolean =
+  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.dictation
+export const POD_USAGE_POLLING: boolean =
+  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.usagePolling
+export const POD_EMULATOR: boolean =
+  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.emulator
+export const POD_LINEAR: boolean =
+  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.linear
+export const POD_JIRA: boolean = typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.jira
+export const POD_TASKS: boolean = typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.tasks
+export const POD_DASHBOARD_POPOUT: boolean =
+  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.dashboardPopout
+export const POD_STARTUP_BROWSER_SWEEP: boolean =
+  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.startupBrowserSweep
+export const POD_TCC_PROMPT_WATCH: boolean =
+  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.tccPromptWatch
+export const POD_STARTUP_HANG_WATCHDOG: boolean =
+  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.startupHangWatchdog
 
 export function podFeatureFlags(profile: PodBuildProfile): PodFeatureFlags {
   const on = (id: PodFeatureId): boolean => profile === 'orca' || POD_FEATURES[id].pod
   return {
     featurePromos: on('featurePromos'),
     uiLocales: on('uiLocales'),
+    mobileWebClient: on('mobileWebClient'),
+    dictation: on('dictation'),
+    windowsSshHosts: on('windowsSshHosts'),
+    usagePolling: on('usagePolling'),
+    emulator: on('emulator'),
+    linear: on('linear'),
+    jira: on('jira'),
+    tasks: on('tasks'),
+    dashboardPopout: on('dashboardPopout'),
+    startupBrowserSweep: on('startupBrowserSweep'),
+    tccPromptWatch: on('tccPromptWatch'),
+    startupHangWatchdog: on('startupHangWatchdog'),
     nonMacPayloads: on('nonMacPayloads'),
     cloudSources: on('cloudSources')
   }
