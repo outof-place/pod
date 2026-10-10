@@ -515,5 +515,21 @@
  "methodology": {
   "path": "bench/README.md",
   "url": "https://example.invalid/FAKE-methodology"
- }
+ },
+ "coming": [
+  {
+   "id": "search.single.og",
+   "status": "coming",
+   "suite": "search",
+   "subject": "FAKE og",
+   "reason": "FAKE reason: no runnable CLI yet."
+  },
+  {
+   "id": "claude-acc.fake.coming",
+   "status": "coming",
+   "suite": "claude-acc",
+   "subject": "FAKE acc item",
+   "reason": null
+  }
+ ]
 }
