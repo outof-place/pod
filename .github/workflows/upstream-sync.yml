@@ -366,6 +366,12 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+      # The product packaging tests load the release config, which ships this pinned payload.
+      - name: Fetch the claude-acc payload
+        run: |
+          if [ -f config/scripts/fetch-claude-acc-payload.mjs ]; then
+            node config/scripts/fetch-claude-acc-payload.mjs
+          fi
       # ORCA_BALANCE_UNIT_SHARDS selects Orca's CI file list, which leaves out the cross-version
       # harness (its own job below) and the live-shell tests Orca runs elsewhere.
       # One retry: a few grammar-loading tests time out under full-suite load.
