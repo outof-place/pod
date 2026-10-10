@@ -176,4 +176,29 @@ describe('native terminal PTY feed', () => {
     chain.flush()
     expect(live.parsed).toEqual(['NOTICE'])
   })
+
+  it('keeps main’s model live while a surface is bound, and lets it go on unbind', () => {
+    const live = model('SCREEN')
+    const released: string[] = []
+    const acquired: string[] = []
+    const chain = {
+      ...runtime(live),
+      acquireTerminalOutputReader: (ptyId: string, reader: { kind: 'model' }) => {
+        acquired.push(`${ptyId}:${reader.kind}`)
+        return () => released.push(ptyId)
+      }
+    }
+    bindNativeTerminalPty(1, 'pty-a', chain)
+    bindNativeTerminalPty(2, 'pty-a', chain)
+    expect(acquired).toEqual(['pty-a:model', 'pty-a:model'])
+    // Rebinding a surface to another PTY lets the old one go first.
+    bindNativeTerminalPty(1, 'pty-b', chain)
+    expect(released).toEqual(['pty-a'])
+    unbindNativeTerminalSurface(2)
+    forgetNativeTerminalSurface(1)
+    expect(released).toEqual(['pty-a', 'pty-a', 'pty-b'])
+    // A release runs once, however the surface goes away.
+    forgetNativeTerminalSurface(1)
+    expect(released).toHaveLength(3)
+  })
 })
