@@ -5,8 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
 import {
   ACC_STATE_DIR,
+  AUTOMATED_LAUNCH_ENV,
+  accSetupSpec,
+  automatedLaunchEnv,
   decideAccLifecycle,
   runAccLifecycle,
+  setupHomeRefusal,
   type AccLifecycleInput
 } from './acc-lifecycle'
 
@@ -29,7 +33,16 @@ function fixture(
   if (options.owner) {
     writeFileSync(join(home, ACC_STATE_DIR, 'owner.json'), JSON.stringify(options.owner))
   }
-  return { platform: 'darwin', home, payloadDir, appPath: APP }
+  const profile = join(home, 'Library/Application Support/Pod')
+  return {
+    platform: 'darwin',
+    home,
+    accountHome: home,
+    userDataPath: profile,
+    defaultUserDataPath: profile,
+    payloadDir,
+    appPath: APP
+  }
 }
 
 /** A setup.sh that does what the real one does on success: writes owner.json. */
@@ -65,9 +78,68 @@ afterEach(() => {
 describe('claude-acc lifecycle', () => {
   it.each([
     ['not darwin', { platform: 'linux' as const }, { action: 'skip', reason: 'not-darwin' }],
-    ['turned off', { mode: 'off' }, { action: 'skip', reason: 'disabled' }]
+    ['turned off', { mode: 'off' }, { action: 'skip', reason: 'disabled' }],
+    ['turned off with 0', { mode: '0' }, { action: 'skip', reason: 'disabled' }],
+    [
+      'a harness launched Pod',
+      { automatedBy: 'ORCA_E2E_HEADLESS' },
+      { action: 'skip', reason: 'automated-launch' }
+    ],
+    [
+      'HOME is not the account home',
+      { accountHome: '/Users/the-real-account' },
+      { action: 'skip', reason: 'home-override' }
+    ],
+    [
+      'the account home is unknown',
+      { accountHome: null },
+      { action: 'skip', reason: 'home-override' }
+    ],
+    [
+      'Pod runs another profile',
+      { userDataPath: '/private/tmp/bench/userData' },
+      { action: 'skip', reason: 'custom-profile' }
+    ],
+    [
+      'the build has no default profile',
+      { defaultUserDataPath: null },
+      { action: 'skip', reason: 'custom-profile' }
+    ]
   ])('skips when %s', (_name, override, expected) => {
+    // no owner.json: each of these would otherwise be a first install
     expect(decideAccLifecycle({ ...fixture(), ...override })).toEqual(expected)
+  })
+
+  it.each(AUTOMATED_LAUNCH_ENV)('treats %s as a harness launch', (name) => {
+    expect(automatedLaunchEnv({ [name]: '1' })).toBe(name)
+  })
+
+  it('treats a plain or empty environment as a user launch', () => {
+    expect(automatedLaunchEnv({})).toBeNull()
+    expect(automatedLaunchEnv({ ORCA_BACKGROUND_LAUNCH: '' })).toBeNull()
+  })
+
+  it('refuses at the spawn a setup.sh whose HOME is not the account home', () => {
+    const input = fixture()
+    expect(setupHomeRefusal(input, accSetupSpec(input))).toBeNull()
+    const foreign = { ...accSetupSpec(input), env: { HOME: '/private/tmp/bench-home' } }
+    expect(setupHomeRefusal(input, foreign)).toContain('/private/tmp/bench-home')
+    expect(
+      setupHomeRefusal({ ...input, accountHome: '/Users/other' }, accSetupSpec(input))
+    ).toContain('not the account home')
+    expect(setupHomeRefusal({ ...input, accountHome: null }, accSetupSpec(input))).toBe(
+      'the account home is unknown'
+    )
+  })
+
+  it('never runs setup.sh from a throwaway HOME', async () => {
+    const input = { ...fixture(), accountHome: '/Users/the-real-account' }
+    const run = fakeSetup(input)
+    await expect(runAccLifecycle(input, run)).resolves.toMatchObject({
+      status: 'skipped',
+      decision: { action: 'skip', reason: 'home-override' }
+    })
+    expect(run).not.toHaveBeenCalled()
   })
 
   it('skips without a payload', () => {
