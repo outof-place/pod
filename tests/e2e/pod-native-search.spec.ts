@@ -9,6 +9,11 @@ import {
   OGD_FRAME_JSON,
   OgdFrameDecoder
 } from '../../src/main/pod/search/ogd-frame-codec'
+import {
+  OGD_FEATURE_FUZZY_GLOBS,
+  OGD_FEATURE_FUZZY_IGNORED,
+  OGD_TEXT_SEARCH_FEATURES
+} from '../../src/main/pod/search/ogd-feature-gates'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
@@ -195,9 +200,7 @@ test('local quick open and file search are answered by ogd, and match ripgrep', 
   const answers: Record<string, Awaited<ReturnType<typeof textSearch>>> = {}
 
   // What the client will hand to ogd; everything else must stay on ripgrep.
-  const servesSearch = ['search.full_lines', 'search.max_filesize'].every((feature) =>
-    daemonFeatures.includes(feature)
-  )
+  const servesSearch = OGD_TEXT_SEARCH_FEATURES.every((feature) => daemonFeatures.includes(feature))
   for (const [mode, engine, ignored] of [
     ['rg (gitignored shown)', 'rg', true],
     ['ogd (gitignored shown)', 'ogd', true],
@@ -224,7 +227,10 @@ test('local quick open and file search are answered by ogd, and match ripgrep', 
     }
     const ops = proxiedOps().slice(opsBefore)
     if (engine === 'ogd') {
-      const servesPaths = !ignored || daemonFeatures.includes('fuzzy.ignored')
+      const servesPaths =
+        !ignored ||
+        (daemonFeatures.includes(OGD_FEATURE_FUZZY_IGNORED) &&
+          daemonFeatures.includes(OGD_FEATURE_FUZZY_GLOBS))
       expect(ops.includes('fuzzy')).toBe(servesPaths)
       expect(ops.includes('search')).toBe(servesSearch)
     } else {
