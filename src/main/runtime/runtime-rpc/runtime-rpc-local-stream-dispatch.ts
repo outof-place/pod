@@ -11,6 +11,7 @@ import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { errorMessage } from '../../../shared/error-message'
 import type { RpcRequest } from '../rpc/core'
 import { errorResponse, successResponse } from '../rpc/errors'
+import { LOCAL_CLI_RPC_CALLER } from '../rpc/rpc-caller-identity'
 import { OWNER_RPC_CALLER_SCOPE } from '../rpc/rpc-caller-scope'
 import { parseRuntimeClientCapabilities } from '../rpc/runtime-client-capabilities'
 import type { UnixSocketStreamConnection } from '../rpc/unix-socket-stream-connection'
@@ -177,6 +178,8 @@ export class RuntimeRpcLocalStreamDispatch extends RuntimeRpcWebSocketDispatch {
         connectionId,
         clientId: connectionId,
         clientKind: 'runtime',
+        // Why: the upgrade proved the same owner token a unary call does, so it is the same caller.
+        caller: LOCAL_CLI_RPC_CALLER,
         callerScope: OWNER_RPC_CALLER_SCOPE,
         clientCapabilities: session.clientCapabilities,
         signal: controller.signal,
