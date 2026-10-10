@@ -1,0 +1,152 @@
+{
+  "residue": "(?<![\\w.-])\\.orca(?=[/\\\\'\\\"`]|$)",
+  "rules": [
+    {
+      "id": "home-join",
+      "stage": "pre-env",
+      "why": "per-user state under the home directory (credentials, keybindings, hook lock, agent-teams bin)",
+      "files": "^(?!src/main/orcad/orcad-app-paths\\.ts$)(src/(main|cli|shared|preload)|tests)/",
+      "find": "((?:^|[^\\w.])(?:path(?:Win32|Posix)\\.)?join\\(\\s*(?:homedir\\(\\)|home|homePath|homeDir|homeDirectory|runtimeHomePath|linuxRuntimeHome)\\s*,\\s*)'\\.orca'",
+      "replace": "$1'.pod'",
+      "applied": "join\\(\\s*(?:homedir\\(\\)|home|homePath|homeDir|homeDirectory|runtimeHomePath|linuxRuntimeHome)\\s*,\\s*'\\.pod'"
+    },
+    {
+      "id": "hook-dir-join",
+      "stage": "pre-env",
+      "why": "managed hook scripts on remote hosts, joined segment by segment",
+      "files": "^(src/main|tests)/",
+      "find": "'\\.orca',(\\s*)'agent-hooks'",
+      "replace": "'.pod',$1'agent-hooks'",
+      "applied": "'\\.pod',\\s*'agent-hooks'"
+    },
+    {
+      "id": "hook-dir",
+      "stage": "pre-env",
+      "why": "managed hook script paths baked into agent configs (local, WSL, remote)",
+      "files": "^(src|tests)/",
+      "find": "/\\.orca/agent-hooks(?=[/'\\\"`$\\s]|$)",
+      "replace": "/.pod/agent-hooks",
+      "applied": "/\\.pod/agent-hooks"
+    },
+    {
+      "id": "hook-dir-windows",
+      "stage": "pre-env",
+      "why": "the same paths in Windows and PowerShell forms",
+      "files": "^(src|tests)/",
+      "find": "\\.orca(\\\\+)agent-hooks",
+      "replace": ".pod$1agent-hooks",
+      "applied": "\\.pod\\\\+agent-hooks"
+    },
+    {
+      "id": "keybindings-file",
+      "stage": "pre-env",
+      "why": "~/.orca/keybindings.json spelled as a full path",
+      "files": "^(src|tests)/",
+      "find": "\\.orca((?:[/\\\\]+|',\\s*')keybindings\\.json)",
+      "replace": ".pod$1",
+      "applied": "\\.pod(?:[/\\\\]+|',\\s*')keybindings\\.json"
+    },
+    {
+      "id": "hook-runtime-home-listing",
+      "stage": "pre-env",
+      "why": "the folders a hook install creates in a scratch home",
+      "files": "^src/main/agent-hooks/managed-hook-runtime\\.test\\.ts$",
+      "find": "'\\.orca'",
+      "replace": "'.pod'",
+      "applied": "'\\.pod'"
+    },
+    {
+      "id": "hook-install-lock-test",
+      "stage": "pre-env",
+      "why": "the managed hook install lock under the home folder, as the Codex backfill test spells it",
+      "files": "^src/main/codex/codex-state-db-backfill-recovery\\.test\\.ts$",
+      "find": "'\\.orca'",
+      "replace": "'.pod'",
+      "applied": "'\\.pod'"
+    },
+    {
+      "id": "skip-orca-hook-digest-pin",
+      "stage": "pre-env",
+      "why": "the pin holds the bytes Orca's installers write; Pod's differ by design (paths, POD_ names)",
+      "files": "^src/main/agent-hooks/managed-hook-script-refresh\\.test\\.ts$",
+      "find": "it\\.skipIf\\(process\\.platform === 'win32'\\)\\((\\s*'pins the generation to the bytes the installers write')",
+      "replace": "it.skip($1",
+      "applied": "it\\.skip\\(\\s*'pins the generation to the bytes the installers write'"
+    },
+    {
+      "id": "skip-real-codex-interrupt-hashes",
+      "stage": "pre-env",
+      "why": "fixtures are hashes real Codex computed for Orca's Interrupt hook command; Pod's command differs",
+      "files": "^src/main/codex/codex-interrupt-hook-trust\\.test\\.ts$",
+      "find": "^describe\\('the managed Codex Interrupt hook'",
+      "flags": "gm",
+      "replace": "describe.skip('the managed Codex Interrupt hook'",
+      "applied": "describe\\.skip\\('the managed Codex Interrupt hook'"
+    },
+    {
+      "id": "tilde-home",
+      "stage": "pre-env",
+      "why": "~/.orca named in UI text, help and comments",
+      "files": "^(?!src/main/ssh/orcad-update-plan\\.ts$|src/shared/product-name-branding\\.ts$)(src|tests|skills|skill-guides|skill-stubs|resources)/",
+      "find": "~/\\.orca(?=[/\\s'\\\"`),.:;]|$)",
+      "flags": "gm",
+      "replace": "~/.pod",
+      "applied": "~/\\.pod"
+    },
+    {
+      "id": "bundled-cli-launcher",
+      "stage": "pre-env",
+      "why": "Resources/bin carries the product CLI name only, never an `orca` alias (tests, with no identity, keep `orca`)",
+      "files": "^src/main/(cli/bundled-cli-launcher-path|runtime/claude-agent-teams-shim-env)\\.ts$",
+      "find": "(join\\((?:process\\.)?resourcesPath,\\s*'bin',\\s*)'orca'\\)",
+      "replace": "$1getProductIdentity()?.cliName ?? 'orca')",
+      "applied": "'bin',\\s*getProductIdentity\\(\\)\\?\\.cliName \\?\\? 'orca'\\)"
+    },
+    {
+      "id": "bundled-cli-launcher-import",
+      "stage": "pre-env",
+      "why": "the identity lookup the launcher path needs",
+      "files": "^src/main/cli/bundled-cli-launcher-path\\.ts$",
+      "find": "^(import \\{ join \\} from 'node:path'\\n)",
+      "flags": "m",
+      "replace": "$1import { getProductIdentity } from '../product-identity/product-identity'\n",
+      "unless": "import { getProductIdentity } from '../product-identity/product-identity'"
+    },
+    {
+      "id": "agent-teams-launcher-import",
+      "stage": "pre-env",
+      "why": "the identity lookup the Agent Teams shim's launcher path needs",
+      "files": "^src/main/runtime/claude-agent-teams-shim-env\\.ts$",
+      "find": "^(import \\{ resolvePathEnvKey \\} from '\\.\\./pty/windows-path-segment-merge'\\n)",
+      "flags": "m",
+      "replace": "$1import { getProductIdentity } from '../product-identity/product-identity'\n",
+      "unless": "import { getProductIdentity } from '../product-identity/product-identity'"
+    },
+    {
+      "id": "local-cli-command",
+      "stage": "post-env",
+      "why": "local terminals name the CLI, so agents and skills never fall back to a bare `orca`",
+      "files": "^src/main/ipc/pty/host-env/assembly\\.ts$",
+      "find": "( +)delete baseEnv\\.POD_CLI_COMMAND\\n(\\s*\\}\\n\\s*prependOrcaCliDirToChildPath)",
+      "replace": "$1if (opts.isPackaged && process.platform === 'darwin') {\n$1  // Why: Pod ships only `podx`; agents and skills must not fall back to a bare `orca`.\n$1  baseEnv.POD_CLI_COMMAND = 'podx'\n$1} else {\n$1  delete baseEnv.POD_CLI_COMMAND\n$1}\n$2",
+      "applied": "baseEnv\\.POD_CLI_COMMAND = 'podx'"
+    }
+  ],
+  "keep": [
+    {
+      "why": "repository folder `.orca/` (orca.yaml contract, shared with Orca users)",
+      "files": "^src/",
+      "line": "\\.orca[/\\\\]+(issue-command|drops|browser-downloads|templates|worktrees|ワークツリー)|\\.orca\\\\n|\\^\\\\\\.orca|ORCA_DIR = '\\.orca'|joinWorktreeRelativePath\\([^)]*'\\.orca'\\)|\\.orca/ is reserved|(exclude|for) \\.orca\\b|`\\.orca` is in `\\.gitignore`"
+    },
+    {
+      "why": "remote orcad state root and relay state (cross-version remote runtime; not this layer)",
+      "files": "^src/(relay/|main/ssh/orcad-(remote-context|update-plan)\\.ts$|main/orcad/orcad-app-paths\\.ts$)",
+      "line": "\\.orca"
+    },
+    {
+      "why": "branding rewrite comment about the paths it leaves alone",
+      "files": "^src/shared/product-name-branding\\.ts$",
+      "line": "~/\\.orca"
+    }
+  ]
+}
