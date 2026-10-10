@@ -2,6 +2,7 @@ import { dirname, join } from 'node:path'
 import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
 import type { PodClaudeAccConfig } from '../pod-distro-config'
 import {
+  ACC_MENU_HELPER_APP,
   automatedLaunchEnv,
   readOwnerRecord,
   runAccLifecycle,
@@ -15,7 +16,7 @@ import {
   type AccServiceReport,
   type LoginItemApi
 } from './acc-services'
-import { isAccMenuHelperRunning } from './acc-menu-helper'
+import { isAccMenuHelperRunning, restartAccMenuHelper } from './acc-menu-helper'
 
 // The helper starts and quits on its own (login item, setup restarting it): look again this often.
 const HELPER_PROBE_MS = 30_000
@@ -120,14 +121,27 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     return reports
   }
   // Only once setup.sh made this account Pod's: every lifecycle guard applies to launchd too.
-  const services = lifecycle.then((outcome) => {
+  const services = lifecycle.then(async (outcome) => {
     const d = outcome.decision
     if (d.action === 'skip') {
       // handed back: launchd would otherwise keep running Pod's copies next to the new owner's jobs
       return d.reason === 'handed-back' ? applyServices('remove', null) : []
     }
     const owned = outcome.status === 'installed' || outcome.status === 'up-to-date'
-    return owned ? applyServices('ensure', d.version) : []
+    if (!owned) {
+      return []
+    }
+    const reports = applyServices('ensure', d.version)
+    // setup.sh just installed a new payload: a helper launchd already ran keeps the old binary
+    const helper = reports.find((report) => report.service.kind === 'login-item')
+    if (outcome.status === 'installed' && helper?.status === 'enabled' && !helper.registered) {
+      await restartAccMenuHelper(
+        options.run,
+        join(appPath, 'Contents', 'Library', 'LoginItems', ACC_MENU_HELPER_APP)
+      )
+      options.log('claude-acc: restarted the menu helper on the new payload')
+    }
+    return reports
   })
   let helperRunning = false
   let stopped = false
