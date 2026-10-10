@@ -75,7 +75,13 @@ run_suite() {
 run_suite polling
 run_suite polling --extra-ptys 80
 run_suite git-status
-run_suite search --repo "$search_repo"
+if [ -n "$og_sha" ]; then
+  field() { node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[process.argv[2]]' "$inputs" "$1"; }
+  run_suite search --repo "$search_repo" --engines rg,og --og "$(field og)" --ogd "$(field ogd)" \
+    --ogctl "$(field ogctl)" --og-sha "$og_sha"
+else
+  run_suite search --repo "$search_repo"
+fi
 if [ -n "$og_sha" ] && [ -n "$client_sha" ]; then
   run_suite ogd --inputs "$inputs"
 fi
