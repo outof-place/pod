@@ -3,6 +3,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Socket } from 'node:net'
+import type { PodBrowserFrames } from '../browser-pane/pod-browser-pane'
 
 export const POD_PEER_IDENTITY_RESOURCE_PATH = join('native', 'pod-peer-identity.node')
 export const POD_PEER_IDENTITY_BUILD_PATH = join(
@@ -32,14 +33,38 @@ function isPeerIdentityAddon(value: unknown): value is PeerIdentityAddon {
   )
 }
 
-function loadAddon(path: string): PeerIdentityAddon | null {
+function loadModule(path: string): unknown {
   try {
     const module = { exports: {} }
     process.dlopen(module, path)
-    return isPeerIdentityAddon(module.exports) ? module.exports : null
+    return module.exports
   } catch {
     return null
   }
+}
+
+function loadAddon(path: string): PeerIdentityAddon | null {
+  const exports = loadModule(path)
+  return isPeerIdentityAddon(exports) ? exports : null
+}
+
+function isBrowserFrames(value: unknown): value is PodBrowserFrames {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'browserConnect' in value &&
+    typeof value.browserConnect === 'function' &&
+    'browserDisconnect' in value &&
+    typeof value.browserDisconnect === 'function' &&
+    'browserSend' in value &&
+    typeof value.browserSend === 'function'
+  )
+}
+
+/** The browser pane's frame sender, which rides in the same addon; null when it is missing. */
+export function loadPodBrowserFrames(addonPath: string): PodBrowserFrames | null {
+  const exports = existsSync(addonPath) ? loadModule(addonPath) : null
+  return isBrowserFrames(exports) ? exports : null
 }
 
 /** The descriptor under a connected net.Socket (libuv's pipe handle); null when there is none. */
