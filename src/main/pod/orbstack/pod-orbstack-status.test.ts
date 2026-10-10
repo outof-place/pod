@@ -116,4 +116,40 @@ describe('readPodOrbstackStatus', () => {
       'orbctl version'
     ])
   })
+
+  it('skips docker with containers: false and lists templates apart, with their disk size', async () => {
+    const calls: string[] = []
+    const status = await readPodOrbstackStatus({
+      paths,
+      run: fakeRunner('Running', calls),
+      registry: registry(),
+      templates: [
+        {
+          name: 'dev',
+          kind: 'sandbox',
+          key: 'k',
+          createdAt: 1,
+          state: 'ready',
+          agentVersion: '2.1.296'
+        }
+      ],
+      templatesEnabled: true,
+      diskSizes: async () => 694636544,
+      containers: false,
+      busyWorktreeIds: []
+    })
+    expect(calls.some((call) => call.includes(' ps ') || call.includes(' stats '))).toBe(false)
+    expect(status.containers).toEqual([])
+    expect(status.templatesEnabled).toBe(true)
+    expect(status.templates).toEqual([
+      {
+        name: 'dev',
+        kind: 'sandbox',
+        state: 'ready',
+        agentVersion: '2.1.296',
+        diskBytes: 694636544
+      }
+    ])
+    expect(status.machines.map((machine) => machine.name)).toEqual(['pod-web-1a2b3c4d'])
+  })
 })

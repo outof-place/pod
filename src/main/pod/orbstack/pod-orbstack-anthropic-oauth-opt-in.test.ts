@@ -62,7 +62,7 @@ describe("sandbox use of this Mac's Claude Code login", () => {
     registry.setSandboxClaudeLogin(true)
     const { vmEnv } = access.start('pod-a-sbx', hookServer)
     expect(ensured[0]?.anthropic).not.toBeNull()
-    expect(vmEnv.CLAUDE_CODE_OAUTH_TOKEN).toBe('pod-sandbox-no-credential')
+    expect(vmEnv.CLAUDE_CODE_OAUTH_TOKEN).toMatch(/^pod-sandbox-no-credential-[0-9a-f]{32}$/)
     expect(await source.authHeaders({ machine: 'pod-a-sbx' })).toEqual({
       authorization: 'Bearer fake-oauth-token'
     })
