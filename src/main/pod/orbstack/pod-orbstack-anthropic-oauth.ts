@@ -23,13 +23,23 @@ export { SandboxCredentialError }
 /** The login a Mac launch would use: the routed account's folder, else the System default. */
 export type ClaudeLoginTarget = { account: 'profile' | 'system'; configDir: string | null }
 
+/**
+ * The router's routed folder: null for System default, throws for a missing folder.
+ * Why both names: Orca #26801 renamed selectedHome to routedHome; this branch's base predates it.
+ */
+type ClaudeHomeRouter = { routedHome?(): string | null; selectedHome?(): string | null }
+
+function routedHomeOf(router: ClaudeHomeRouter): string | null {
+  return router.routedHome ? router.routedHome() : (router.selectedHome?.() ?? null)
+}
+
 export function resolveMacClaudeLoginTarget(
-  deps: { router?: { selectedHome(): string | null } | null; env?: NodeJS.ProcessEnv } = {}
+  deps: { router?: ClaudeHomeRouter | null; env?: NodeJS.ProcessEnv } = {}
 ): ClaudeLoginTarget {
   const router = deps.router === undefined ? getClaudeProfileRouter() : deps.router
   let home: string | null
   try {
-    home = router?.selectedHome() ?? null
+    home = router ? routedHomeOf(router) : null
   } catch (error) {
     // A Mac launch refuses a missing account folder too; falling back would run another account.
     throw new SandboxCredentialError(
