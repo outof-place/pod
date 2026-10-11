@@ -42,7 +42,7 @@ export function attachMultiplexQueryResponder(
 }
 
 /** Pushes this stream's share of a chunk: as it is for the responder, without queries for any
- *  other view. The choice is made per chunk, so each query reaches exactly one view. */
+ *  other view. Each query goes to the view that was responder at its first byte. */
 export function pushMultiplexStreamOutput(
   stream: QueryResponderStream,
   data: string,
@@ -54,28 +54,16 @@ export function pushMultiplexStreamOutput(
     stream.outputBatcher.push(data, meta)
     return
   }
-  if (isTerminalQueryResponder(responder.ptyId, responder.key)) {
-    const held = responder.stripper.takeHeld()
-    if (held) {
-      // Why the seq: the held bytes end where this chunk starts; a seq-less span reads as a gap to viewers.
-      const heldSeq =
-        typeof meta?.seq === 'number' ? meta.seq - (meta.rawLength ?? data.length) : undefined
-      stream.outputBatcher.push(held, {
-        rawLength: 0,
-        transformed: true,
-        ...(heldSeq === undefined ? {} : { seq: heldSeq })
-      })
-    }
+  const responding = isTerminalQueryResponder(responder.ptyId, responder.key)
+  if (responding) {
     recordForwardedQueries(responder, data)
+  }
+  const share = responder.stripper.process(data, responding)
+  if (share === data) {
     stream.outputBatcher.push(data, meta)
     return
   }
-  const stripped = responder.stripper.strip(data)
-  if (stripped === data) {
-    stream.outputBatcher.push(data, meta)
-    return
-  }
-  stream.outputBatcher.push(stripped, {
+  stream.outputBatcher.push(share, {
     ...meta,
     rawLength: meta?.rawLength ?? data.length,
     transformed: true
