@@ -136,17 +136,18 @@ describe('Pod input flush for local-stream multiplex viewers', () => {
     await type(local, 'k')
     await type(mobileTyping, 'm')
     await vi.advanceTimersByTimeAsync(1)
+    // The local viewer takes the leading edge and the 1 ms input flush; WebSocket viewers neither.
     expect(local.outputs()).toEqual(['a', 'b'])
-    expect(mobile.outputs()).toEqual(['a'])
-    expect(mobileTyping.outputs()).toEqual(['a'])
+    expect(mobile.outputs()).toEqual([])
+    expect(mobileTyping.outputs()).toEqual([])
 
     // Within the window the local viewer's next batch also uses the short timer.
     emit('c')
     await vi.advanceTimersByTimeAsync(1)
     expect(local.outputs()).toEqual(['a', 'b', 'c'])
     await vi.advanceTimersByTimeAsync(5)
-    expect(mobile.outputs()).toEqual(['a', 'bc'])
-    expect(mobileTyping.outputs()).toEqual(['a', 'bc'])
+    expect(mobile.outputs()).toEqual(['abc'])
+    expect(mobileTyping.outputs()).toEqual(['abc'])
   })
 
   it('keeps the 5 ms timer for local viewers with POD_TERMINAL_INPUT_FLUSH=0', async () => {
