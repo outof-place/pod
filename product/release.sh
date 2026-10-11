@@ -64,6 +64,7 @@ team_id="${team_id%)}"
 
 . "$repo_root/product/notary-credentials.sh"
 pod_notary_credentials "$DEFAULT_NOTARY_PROFILE"
+pod_notary_preflight
 
 # Apple's timestamp service fails now and then mid-signing ("The timestamp service is not
 # available", "A timestamp was expected but was not found"). Reruns only that failure: 3 attempts,
