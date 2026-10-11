@@ -6,6 +6,31 @@ import {
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
 
 describe('terminal vertical-control scanning', () => {
+  it('scans retained CSI parameters once while normalizing', () => {
+    const input = `\x1b[${'1;'.repeat(2048)}A`
+    const charCodeAt = vi.spyOn(String.prototype, 'charCodeAt')
+    let normalized: ReturnType<typeof normalizeTerminalChunk>
+    let inspections: number
+    try {
+      normalized = normalizeTerminalChunk(input)
+      inspections = charCodeAt.mock.calls.length
+    } finally {
+      charCodeAt.mockRestore()
+    }
+
+    expect(normalized).toEqual({ text: input, pendingAnsi: '' })
+    expect(inspections).toBeLessThanOrEqual(input.length + 8)
+  })
+
+  it('preserves printable spans and carried controls across chunk boundaries', () => {
+    const first = normalizeTerminalChunk('漢\ud800\x1b[31m字\t\r\n\x00a\x1b[2')
+    expect(first).toEqual({ text: '漢\ud800字\t\na', pendingAnsi: '\x1b[2' })
+    expect(normalizeTerminalChunk('K\udfff😀\b\r\x7f\x9fend', first.pendingAnsi)).toEqual({
+      text: '\x1b[2K\udfff😀\b\rend',
+      pendingAnsi: ''
+    })
+  })
+
   it.each([
     ['plain', 'log output '.repeat(8192), false],
     ['nonvertical CSI', `\x1b[31m${'log output '.repeat(8192)}\x1b[0m`, false],
