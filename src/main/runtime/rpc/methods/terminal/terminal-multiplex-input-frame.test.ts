@@ -115,7 +115,9 @@ describe('unsequenced multiplex input', () => {
 
     // Interleaved as frames from three panes arrive on one connection.
     for (let frame = 0; frame < 5; frame += 1) {
-      streams.forEach((stream, index) => input(state, ledger, stream, framesByStream[index]![frame]!))
+      streams.forEach((stream, index) =>
+        input(state, ledger, stream, framesByStream[index]![frame]!)
+      )
     }
     const total = framesByStream.reduce((sum, frames) => sum + frames.join('').length, 0)
     await vi.waitFor(() =>
