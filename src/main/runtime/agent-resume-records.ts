@@ -132,6 +132,28 @@ export function resolvePaneAgentResume(args: {
   return live ? fromRow(live) : null
 }
 
+/** The agent a pane last ran when no resume identity is left for it: the session is not
+ *  resumable here (another host, unusable id), as opposed to an agent that exited on its own. */
+export function paneAgentWithoutResume(args: {
+  record: SleepingAgentSessionRecord | undefined
+  rows: readonly AgentStatusIpcPayload[]
+}): string | null {
+  const recordIdentity = args.record
+    ? resumableIdentity(args.record.agent, args.record.providerSession)
+    : null
+  if (args.record && !(recordIdentity && sessionEndedUnderShell(args.rows, recordIdentity))) {
+    return args.record.agent
+  }
+  const ranAgent = args.rows.find(
+    (row) =>
+      !row.providerSessionOnly &&
+      !row.structuredHost &&
+      row.agentType !== undefined &&
+      row.agentType !== 'unknown'
+  )
+  return ranAgent?.agentType ?? null
+}
+
 /** The `live` anchor a status row stands for, or null when it names nothing resumable. */
 export function liveAgentResumeRecord(args: {
   row: AgentStatusIpcPayload
