@@ -95,6 +95,16 @@ export const ptySessionControlApi = {
     ipcRenderer.on('pty:writeUnavailable', handler)
     return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
   },
+  onQueryResponder: (
+    callback: (payload: { id: string; answers: boolean }) => void
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: { id: string; answers: boolean }
+    ): void => callback(payload)
+    ipcRenderer.on('pty:queryResponder', handler)
+    return () => ipcRenderer.removeListener('pty:queryResponder', handler)
+  },
   resize: (id: string, cols: number, rows: number): void => {
     ipcRenderer.send('pty:resize', { id, cols, rows })
   },
