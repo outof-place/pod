@@ -80,6 +80,21 @@ describe('terminal multiplex: queries in output the initial snapshot covers', ()
     await attach.close()
   })
 
+  it('hands them over in the order the output sent them', async () => {
+    const attach = attachWithOutputDuringSnapshot({ modelHeldAuthority: true })
+    await attach.waitForSubscribe()
+    // A cursor-position query, then a color query, then DA1 as the "all replies are in" sentinel.
+    attach.emit('\x1b[6n\x1b]11;?\x07\x1b[c', { seq: 18, rawLength: 14 })
+    await attach.resolveSnapshot({ data: 'snapshot', cols: 120, rows: 40, seq: 20 })
+    await attach.waitForSubscribed()
+
+    expect(attach.answerTerminalQueriesFromModel).toHaveBeenCalledWith(
+      'pty-1',
+      '\x1b[6n\x1b]11;?\x07\x1b[c'
+    )
+    await attach.close()
+  })
+
   it('leaves them alone when another view already held the authority', async () => {
     const attach = attachWithOutputDuringSnapshot({ modelHeldAuthority: false })
     await attach.waitForSubscribe()
