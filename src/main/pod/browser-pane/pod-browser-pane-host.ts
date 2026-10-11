@@ -8,6 +8,7 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { mainProcessState as state } from '../../startup/main-process-state'
 import { isBackgroundLaunch } from '../../window/foreground-activation-policy'
 import { loadPodBrowserFrames } from '../ui-host/pod-peer-identity'
+import { addPodCdpProxySink } from '../browser/cdp-proxy-hooks'
 import { setPodBrowserPaneHooks } from './pod-browser-pane-hooks'
 import type { PodBrowserPaneServerMessage } from './pod-browser-pane-protocol'
 import { PodBrowserPaneController } from './pod-browser-pane'
@@ -45,6 +46,8 @@ export function installPodBrowserPanes(options: {
   if (downloads && process.env.ORCA_E2E_USER_DATA_DIR) {
     app.setPath('downloads', downloads)
   }
+  // An agent's CDP through the proxy drives the page as its bridge commands do.
+  addPodCdpProxySink({ request: (webContentsId) => panes.noteAgentCommand(webContentsId) })
   setPodBrowserPaneHooks({
     agentCommand: (webContentsId) => panes.noteAgentCommand(webContentsId),
     download: (event) => panes.noteDownload(event)
