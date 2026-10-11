@@ -20040,6 +20040,9 @@
       "description": "Restarting stops every running container and machine on this Mac, not only Pod's: {{containers}} containers and {{machines}} machines run now. Containers set to restart come back on their own; terminals and agents in a machine end.",
       "confirm": "Restart OrbStack",
       "action": "Restart OrbStack…"
+    },
+    "churn": {
+      "warning": "Pod made {{count}} machines since OrbStack started. OrbStack keeps the address of each deleted machine for about a day, so new machines may soon get none until those expire or OrbStack is updated."
     }
   }
 }
