@@ -62,6 +62,12 @@ export function isPodOrbstackTemplateName(name: string): boolean {
   return TEMPLATE_PATTERN.test(name)
 }
 
+/** Keys that differ only in the Claude Code version: such a template can be updated in place. */
+function sameBuild(a: string, b: string): boolean {
+  const base = (key: string) => key.replace(/\|claude=[^|]*\|/, '|')
+  return base(a) === base(b)
+}
+
 function detail(result: OrbstackToolResult): string {
   return result.timedOut ? 'timed out' : result.stderr.trim().split('\n').at(-1) || 'failed'
 }
@@ -70,6 +76,9 @@ function detail(result: OrbstackToolResult): string {
 export type PodOrbstackTemplateProvisioner = (
   name: string
 ) => Promise<{ agentVersion: string | null }>
+
+/** Brings an older template, already renamed to `name`, to the new key; returns its Claude version. */
+export type PodOrbstackTemplateUpdater = PodOrbstackTemplateProvisioner
 
 export function createPodOrbstackTemplates(deps: {
   run: OrbstackToolRunner
@@ -81,6 +90,11 @@ export function createPodOrbstackTemplates(deps: {
 }) {
   let data: z.infer<typeof FileSchema> | null = null
   const building = new Map<string, Promise<PodOrbstackTemplate | null>>()
+  // `orb clone` calls reading each template: a rename or delete waits for them (~30 ms each).
+  const clones = new Map<string, Set<Promise<unknown>>>()
+  const clonesOf = (name: string) =>
+    Promise.allSettled(clones.get(name) ?? new Set<Promise<unknown>>())
+  const claimed = new Set<string>()
 
   const load = (): z.infer<typeof FileSchema> => {
     if (!data) {
@@ -143,10 +157,42 @@ export function createPodOrbstackTemplates(deps: {
     return null
   }
 
+  /**
+   * Renames an older template of the kind to `name`. Why: the machine keeps its address, while a new
+   * one takes a fresh address and OrbStack 2.2.3 holds a deleted machine's for about a day (#2688).
+   */
+  const adopt = async (kind: PodOrbstackTemplateKind, key: string, name: string) => {
+    const previous = load().templates.find(
+      (t) =>
+        t.kind === kind &&
+        t.state === 'ready' &&
+        t.key !== key &&
+        sameBuild(t.key, key) &&
+        !claimed.has(t.name)
+    )
+    if (!previous) {
+      return false
+    }
+    claimed.add(previous.name)
+    try {
+      await clonesOf(previous.name)
+      const renamed = await deps.run('orb', ['rename', previous.name, name], { timeoutMs: STEP_MS })
+      if (renamed.code !== 0) {
+        deps.log?.(`could not rename template ${previous.name}: ${detail(renamed)}`)
+        return false
+      }
+      drop(previous.name)
+      return true
+    } finally {
+      claimed.delete(previous.name)
+    }
+  }
+
   const buildOnce = async (
     kind: PodOrbstackTemplateKind,
     key: string,
-    provision: PodOrbstackTemplateProvisioner
+    provision: PodOrbstackTemplateProvisioner,
+    update?: PodOrbstackTemplateUpdater
   ): Promise<PodOrbstackTemplate | null> => {
     const name = podOrbstackTemplateName(kind, key)
     // A machine with this name Pod did not record is not Pod's: leave it alone.
@@ -165,7 +211,8 @@ export function createPodOrbstackTemplates(deps: {
     }
     put(entry)
     try {
-      const { agentVersion } = await provision(name)
+      const { agentVersion } =
+        update && (await adopt(kind, key, name)) ? await update(name) : await provision(name)
       const sealed = await deps.run('orb', [
         'run',
         '-m',
@@ -187,6 +234,7 @@ export function createPodOrbstackTemplates(deps: {
       put(ready)
       // Clones do not depend on their template, so older templates of this kind can go.
       for (const stale of load().templates.filter((t) => t.kind === kind && t.key !== key)) {
+        await clonesOf(stale.name)
         await remove(stale.name)
       }
       return ready
@@ -199,18 +247,22 @@ export function createPodOrbstackTemplates(deps: {
     }
   }
 
-  /** Builds the template for `key` once; concurrent callers share the build. */
+  /**
+   * Builds the template for `key` once; concurrent callers share the build. With `update`, an older
+   * template that differs only in its Claude Code version is updated in place instead.
+   */
   const build = (
     kind: PodOrbstackTemplateKind,
     key: string,
-    provision: PodOrbstackTemplateProvisioner
+    provision: PodOrbstackTemplateProvisioner,
+    update?: PodOrbstackTemplateUpdater
   ): Promise<PodOrbstackTemplate | null> => {
     if (!load().enabled) {
       return Promise.resolve(null)
     }
     const pending =
       building.get(key) ??
-      buildOnce(kind, key, provision).finally(() => {
+      buildOnce(kind, key, provision, update).finally(() => {
         building.delete(key)
       })
     building.set(key, pending)
@@ -235,7 +287,17 @@ export function createPodOrbstackTemplates(deps: {
     if (mounts.some((path) => path.includes(':') || path.includes(','))) {
       throw new Error('OrbStack cannot share a folder whose path contains ":" or ",".')
     }
-    await step('orb clone', 'orb', ['clone', template.name, name])
+    const cloned = step('orb clone', 'orb', ['clone', template.name, name])
+    const reading = clones.get(template.name) ?? new Set<Promise<unknown>>()
+    clones.set(template.name, reading.add(cloned))
+    try {
+      await cloned
+    } finally {
+      reading.delete(cloned)
+      if (reading.size === 0) {
+        clones.delete(template.name)
+      }
+    }
     const [first, ...rest] = mounts
     if (first) {
       await step('set mounts', 'orbctl', [
@@ -258,6 +320,7 @@ export function createPodOrbstackTemplates(deps: {
 
   const deleteAll = async (): Promise<void> => {
     for (const entry of load().templates) {
+      await clonesOf(entry.name)
       await remove(entry.name)
     }
   }
