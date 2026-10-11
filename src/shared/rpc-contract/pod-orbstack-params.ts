@@ -40,3 +40,6 @@ export const PodOrbstackUnsubscribeParams = z
   .strict()
 
 export const PodOrbstackTemplatesParams = z.object({ enabled: z.boolean() }).strict()
+
+/** A restart is the user's own act; a client that can't say so is refused. */
+export const PodOrbstackRestartParams = z.object({ reason: z.literal('user') }).strict()
