@@ -204,6 +204,18 @@ export const POD_SETTINGS_FIELDS = {
     'Scrollback lines'
   ),
   terminalScopeHistoryByWorktree: row(z.boolean(), 'Shell history per worktree'),
+  floatingTerminalEnabled: row(
+    z.boolean(),
+    'Floating terminal',
+    'A terminal outside any worktree, over the whole workspace.'
+  ),
+  // Why the description: settings:set's sanitizer keeps only '', '~' or a folder the main-process
+  // picker trusted (floatingTerminalTrustedCwds); any other path is written as ''.
+  floatingTerminalCwd: row(
+    z.string().max(4096),
+    'Floating terminal folder',
+    'Empty or ~ is your home folder. Another folder works once picked with Choose… in Classic Settings; a typed path is cleared.'
+  ),
   // A JSON object's keys have no order a client keeps; propertyOrder carries the rows'.
   notifications: NotificationsSchema.meta({
     title: 'Notifications',
