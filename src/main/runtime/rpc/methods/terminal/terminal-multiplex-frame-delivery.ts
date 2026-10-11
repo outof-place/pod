@@ -34,9 +34,14 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
         : opcode === TerminalStreamOpcode.Output || opcode === TerminalStreamOpcode.OutputSpan
           ? 0
           : state.cursor++
+    const frame = encodeTerminalStreamFrame({ opcode, streamId, seq: resolvedSeq, payload })
+    if (!state.admitStreamFrame(streamId, opcode, frame.byteLength)) {
+      onRejected?.()
+      return false
+    }
     let sent: boolean | void
     try {
-      sent = sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: resolvedSeq, payload }))
+      sent = sendBinary(frame)
     } catch {
       onRejected?.()
       state.closeMultiplex()
