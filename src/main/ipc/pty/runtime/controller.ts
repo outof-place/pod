@@ -34,6 +34,7 @@ import {
   listProcessesFromRuntimeController,
   listProcessesWithHostScopeFromRuntimeController
 } from './inventory-operations'
+import { registerPodTerminalProcesses } from '../../../pod/terminal-processes/pod-terminal-processes'
 
 export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): void {
   const { runtime, adoptStablePane, requestSerializedBuffer } = deps
@@ -99,4 +100,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     getSize: (ptyId) => getSizeFromRuntimeController(ptyId),
     resize: (ptyId, cols, rows) => resizePtyFromRuntimeController(ptyId, cols, rows)
   })
+  // Fork-only (Pod): `terminal.processes` reads the same inventory, only when a client asks.
+  registerPodTerminalProcesses((hostId, opts) =>
+    listProcessesFromRuntimeController(deps, hostId, opts)
+  )
 }
