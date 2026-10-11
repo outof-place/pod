@@ -26,6 +26,7 @@ import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
 } from './dev-education-suppression'
+import { isPodUiHostLaunch } from '../pod/ui-host/pod-ui-host-launch'
 import {
   applyBrowserSessionProxies,
   setBrowserNetworkProxySettingsResolver
@@ -253,7 +254,10 @@ export async function initializeReadyFoundation(): Promise<void> {
     }
   })
   applyAppIcon(store.getSettings().appIcon)
-  if (shouldSuppressDevEducation({ isDev: is.dev })) {
+  // Fork-only (Pod): a one-app runtime's window is hidden or a fallback, so its first-run overlays
+  // (onboarding, tours, tips) would never be seen and keep a hidden window compositing; PodNative
+  // runs Pod's first run.
+  if (shouldSuppressDevEducation({ isDev: is.dev }) || isPodUiHostLaunch()) {
     suppressDevEducationForStore(store)
   }
   // Why: the partition installer reads the proxy through this resolver, so register it before sessions materialize.
