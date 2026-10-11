@@ -53,6 +53,10 @@ export type PtySpawnResult = {
     value: number
     generation: 'continued' | 'reset'
   }
+  /** Set when the snapshot was taken after the attach (a reattach's durable overlay drains
+   *  output first): the provider sequence the stream starts from, so bytes that reached main
+   *  in between are counted once. */
+  providerAttachSequence?: number
   /** Kitty keyboard flags persisted in the daemon snapshot, threaded so the
    *  re-seeded runtime emulator answers hidden `CSI ? u` with the real flags
    *  (terminal-query-authority.md §kitty). Renderers re-assert them in their

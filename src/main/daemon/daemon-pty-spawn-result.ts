@@ -299,6 +299,9 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
           }
         : {}),
       ...(reattachProviderSequence ? { providerSequence: reattachProviderSequence } : {}),
+      ...(providerSequence && reattachProviderSequence?.value !== providerSequence.value
+        ? { providerAttachSequence: providerSequence.value }
+        : {}),
       ...(kittyKeyboardFlags !== undefined
         ? { snapshotKittyKeyboardFlags: kittyKeyboardFlags }
         : {}),
