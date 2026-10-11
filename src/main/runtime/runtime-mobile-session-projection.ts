@@ -289,7 +289,7 @@ export function projectRuntimeMobileSessionTabs(
     const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
       ? { agentStatus: clientStatusFields as AgentStatusEntry }
       : {}
-    const agentResume = host.getAgentResume?.(`${tab.parentTabId}:${tab.leafId}`)
+    const agentResume = host.getAgentResume?.(paneKey, snapshot.worktree, !terminalHandle)
     tabs.push({
       type: 'terminal',
       id: tab.id,
