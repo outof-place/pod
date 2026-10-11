@@ -21,6 +21,7 @@ import { ClientHostedBrowserRowPublisher } from './client-hosted-browser-row-pub
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
+import { openPodHeadlessEditorTab } from '../pod/ui-host/pod-headless-editor-tabs'
 
 export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
   protected readonly fileCommands = new RuntimeFileCommands({
@@ -46,6 +47,10 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
     openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation) => {
       if (!this.notifier?.openFile) {
+        // Fork-only (Pod): the headless one-app runtime keeps the tab in its own session.
+        if (openPodHeadlessEditorTab(this, worktreeId, filePath, relativePath, navigation)) {
+          return
+        }
         throw new Error('renderer_unavailable')
       }
       this.notifier.openFile(worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation)
