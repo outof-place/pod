@@ -77,6 +77,7 @@ beforeEach(() => {
   setProcessProp('platform', 'darwin')
   setProcessProp('execPath', fixture.execPath)
   tools.calls = []
+  tools.copyDelayMs = 0
   tools.lsofStdout = ''
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'info').mockImplementation(() => {})
