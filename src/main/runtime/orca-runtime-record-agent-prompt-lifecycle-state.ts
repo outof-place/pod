@@ -109,7 +109,8 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
   synchronizePtyOutputSequenceFromProvider(
     ptyId: string,
     providerSequence: { value: number; generation: 'continued' | 'reset' },
-    runtimeSequenceAtSpawnStart = 0
+    runtimeSequenceAtSpawnStart = 0,
+    providerAttachSequence?: number
   ): number {
     if (
       !Number.isFinite(providerSequence.value) ||
@@ -151,12 +152,23 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
       }
     }
 
+    // Why the attach point: bytes main got since the attach may sit inside a later snapshot's
+    // sequence too; counting them on top of it puts main ahead of every provider snapshot.
+    const attachBaseline =
+      providerSequence.generation === 'continued' &&
+      !wasInitialized &&
+      providerAttachSequence !== undefined &&
+      Number.isFinite(providerAttachSequence) &&
+      providerAttachSequence >= 0 &&
+      providerAttachSequence <= baseline
+        ? providerOffset + Math.floor(providerAttachSequence)
+        : null
     const synchronizedSequence =
       providerSequence.generation === 'reset'
         ? currentSequence
         : wasInitialized
           ? currentSequence
-          : providerBaseline + postSpawnSequence
+          : (attachBaseline ?? providerBaseline) + postSpawnSequence
     this.ptyOutputSequenceById.set(ptyId, synchronizedSequence)
     this.providerSequenceInitializedPtys.add(ptyId)
     this.providerSequenceOffsetByPtyId.set(ptyId, providerOffset)
@@ -185,7 +197,10 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
         headless.outputSequence = synchronizedSequence
       })
     }
-    return synchronizedSequence
+    // The snapshot's own boundary when it ends past what main has counted.
+    return attachBaseline === null
+      ? synchronizedSequence
+      : Math.max(synchronizedSequence, providerBaseline)
   }
 
   subscribeToTerminalData(
