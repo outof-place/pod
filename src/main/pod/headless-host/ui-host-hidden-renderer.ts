@@ -73,16 +73,33 @@ export function holdPodUiHostWindowAwakeAtStartup(window: BrowserWindow): void {
   )
 }
 
+// Why: an awake renderer handles a send and publishes its result (a tab, a focus) well within this.
+export const SEND_WAKE_MS = 3_000
+
+// Background refreshes nobody waits on; waking for each would undo the hidden start.
+export const SEND_WAKE_EXEMPT: ReadonlySet<string> = new Set([
+  'automationsChanged',
+  'worktreesChanged',
+  'worktreeBaseStatus',
+  'worktreeRemoteBranchConflict',
+  'reposChanged',
+  'browserDriverChanged',
+  'browserRemoteViewersChanged',
+  'clientHostedBrowserRowsChanged'
+])
+
 /**
- * Wakes a hidden window for each runtime request it awaits: a notifier method that returns a
- * promise holds a lease until it settles (after 5 min hidden a terminal create took 2.2 s, not
- * 0.1 s). Sends that return nothing stay asleep. Returns `notifier`, wrapped in place.
+ * Wakes a hidden window for each runtime request: a notifier method that returns a promise holds a
+ * lease until it settles (after 5 min hidden a terminal create took 2.2 s, not 0.1 s); any other
+ * send holds one for SEND_WAKE_MS (a files.open tab never showed), except SEND_WAKE_EXEMPT.
+ * Returns `notifier`, wrapped in place.
  */
-export function leaseAwaitedRendererRequests<T extends object>(
+export function leaseRendererRequests<T extends object>(
   target: RendererPublicationThrottleTarget,
   notifier: T,
   enabled: boolean,
-  leases: Leases = rendererPublicationThrottle
+  leases: Leases = rendererPublicationThrottle,
+  sendWakeMs: number = SEND_WAKE_MS
 ): T {
   if (!enabled) {
     return notifier
@@ -92,11 +109,22 @@ export function leaseAwaitedRendererRequests<T extends object>(
     if (typeof method !== 'function') {
       continue
     }
+    const wakesForSends = !SEND_WAKE_EXEMPT.has(key)
     Reflect.set(notifier, key, (...args: unknown[]) => {
-      const result: unknown = Reflect.apply(method, notifier, args)
+      // Why before the call: the renderer must be awake when the message lands.
+      const release = wakesForSends ? leases.acquire(target) : null
+      let result: unknown
+      try {
+        result = Reflect.apply(method, notifier, args)
+      } catch (error) {
+        release?.()
+        throw error
+      }
       if (result instanceof Promise) {
-        const release = leases.acquire(target)
-        result.then(release, release)
+        const releaseRequest = release ?? leases.acquire(target)
+        result.then(releaseRequest, releaseRequest)
+      } else if (release) {
+        setTimeout(release, sendWakeMs)
       }
       return result
     })
@@ -104,7 +132,7 @@ export function leaseAwaitedRendererRequests<T extends object>(
   return notifier
 }
 
-/** leaseAwaitedRendererRequests for the one-app main window's runtime notifier. */
+/** leaseRendererRequests for the one-app main window's runtime notifier. */
 export function podUiHostLeasedNotifier<T extends object>(window: BrowserWindow, notifier: T): T {
-  return leaseAwaitedRendererRequests(window.webContents, notifier, podUiHostWindowStartsHidden())
+  return leaseRendererRequests(window.webContents, notifier, podUiHostWindowStartsHidden())
 }
