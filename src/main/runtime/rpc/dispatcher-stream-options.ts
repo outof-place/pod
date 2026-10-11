@@ -17,6 +17,7 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'updateClientCapabilities'
   | 'pairing'
   | 'sendBinary'
+  | 'binaryBackpressure'
   | 'registerBinaryStreamHandler'
   | 'registerBinaryMessageHandler'
 > & {
@@ -49,6 +50,7 @@ export function rpcContextFromTransport(
     authenticatedCallerFingerprint: options?.authenticatedCallerFingerprint,
     pairing: options?.pairing,
     sendBinary: options?.sendBinary,
+    binaryBackpressure: options?.binaryBackpressure,
     registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
     registerBinaryMessageHandler: options?.registerBinaryMessageHandler,
     orchestrationCaller
