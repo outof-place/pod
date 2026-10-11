@@ -5,10 +5,20 @@ import {
   rendererPublicationThrottle,
   type RendererPublicationThrottleTarget
 } from '../../window/renderer-publication-throttle'
+import { addPodCdpProxySink } from '../browser/cdp-proxy-hooks'
+import { isPodUiHostLaunch } from '../ui-host/pod-ui-host-launch'
+import { isPodHeadlessHost } from './headless-host-mode'
 
 // Why: agent-browser waits on frames and timers between commands; a page that went back to sleep
 // between two commands would stall the next one's actionability checks.
 export const GUEST_ACTIVITY_WAKE_MS = 10_000
+// Why a cap: a CDP command whose reply never comes (its page died mid-call) must not pin a page awake.
+export const CDP_COMMAND_WAKE_CAP_MS = 5 * 60_000
+
+/** A launch whose pages no one looks at by default: the serve headless host, or the one-app runtime. */
+export function isPodWindowlessHost(): boolean {
+  return isPodHeadlessHost() || isPodUiHostLaunch()
+}
 
 export type GuestPageSleepTarget = RendererPublicationThrottleTarget & {
   id: number
@@ -53,6 +63,30 @@ export class GuestPageSleep {
     return guest ? this.leases.acquire(guest.target) : () => {}
   }
 
+  /** Holds the guest awake while a command runs; the release starts the after-command window. */
+  beginCommand(guestId: number): () => void {
+    const release = this.wake(guestId)
+    let ended = false
+    return () => {
+      if (ended) {
+        return
+      }
+      ended = true
+      // Why activity first: its lease is taken before the command's is dropped, so no sleep between.
+      this.noteActivity(guestId)
+      release()
+    }
+  }
+
+  async whileAwake<T>(guestId: number, run: () => Promise<T>): Promise<T> {
+    const end = this.beginCommand(guestId)
+    try {
+      return await run()
+    } finally {
+      end()
+    }
+  }
+
   /** A command reached the guest: it stays awake until GUEST_ACTIVITY_WAKE_MS after the last one. */
   noteActivity(guestId: number): void {
     const guest = this.guests.get(guestId)
@@ -86,4 +120,76 @@ export class GuestPageSleep {
     // Why release on destroy: the throttle keys leases by target and would keep this one forever.
     this.endActivity(guest)
   }
+}
+
+export const podGuestPageSleep = new GuestPageSleep()
+
+/**
+ * Puts a browsing guest to sleep in a windowless host. Offscreen-rendered pages are left alone:
+ * the pane that shows one starts and stops its painting.
+ */
+export function trackPodGuestPageSleep(
+  guest: GuestPageSleepTarget & { isOffscreen?: () => boolean },
+  sleep: GuestPageSleep = podGuestPageSleep,
+  windowless: boolean = isPodWindowlessHost()
+): void {
+  if (windowless && guest.isOffscreen?.() !== true) {
+    installPodCdpCommandWakes()
+    sleep.track(guest)
+  }
+}
+
+/** The serve headless host's page windows start hidden, or throttling could never hide them. */
+export function podOffscreenPageWindowOptions(windowless: boolean = isPodWindowlessHost()): {
+  paintWhenInitiallyHidden?: boolean
+} {
+  return windowless ? { paintWhenInitiallyHidden: false } : {}
+}
+
+/** Keeps a page awake from each agent CDP request until its reply (sinks of cdp-proxy-hooks.ts). */
+export class PodCdpCommandWakes {
+  private readonly inFlight = new Map<
+    string,
+    { end: () => void; cap: ReturnType<typeof setTimeout> }
+  >()
+
+  constructor(private readonly sleep: GuestPageSleep = podGuestPageSleep) {}
+
+  request(guestId: number, clientId: number): void {
+    // Why: a reused id means its old reply is never coming.
+    this.reply(guestId, clientId)
+    if (!this.sleep.isTracked(guestId)) {
+      return
+    }
+    // Why the cap also covers a client that left mid-command: the proxy reports no disconnects.
+    const cap = setTimeout(() => this.reply(guestId, clientId), CDP_COMMAND_WAKE_CAP_MS)
+    cap.unref?.()
+    this.inFlight.set(`${guestId}:${clientId}`, { end: this.sleep.beginCommand(guestId), cap })
+  }
+
+  reply(guestId: number, clientId: number): void {
+    const key = `${guestId}:${clientId}`
+    const command = this.inFlight.get(key)
+    if (!command) {
+      return
+    }
+    this.inFlight.delete(key)
+    clearTimeout(command.cap)
+    command.end()
+  }
+}
+
+let cdpCommandWakesInstalled = false
+
+/** Hears the agent CDP proxy once page sleep has a page to keep awake. */
+function installPodCdpCommandWakes(): void {
+  if (cdpCommandWakesInstalled) {
+    return
+  }
+  cdpCommandWakesInstalled = true
+  const wakes = new PodCdpCommandWakes()
+  addPodCdpProxySink({
+    request: (guestId, clientId) => wakes.request(guestId, clientId),
+    reply: (guestId, clientId) => wakes.reply(guestId, clientId)
+  })
 }
