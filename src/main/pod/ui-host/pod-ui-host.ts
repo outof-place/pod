@@ -38,6 +38,10 @@ import {
   type PodUiHostSecondInstance
 } from './pod-ui-host-protocol'
 import { PodUiHostServer } from './pod-ui-host-server'
+import {
+  podUiHostSurfaceNavigation,
+  sendPodUiHostSurfaceNavigation
+} from './pod-ui-host-surface-navigation'
 
 // Long enough for "Pod quit unexpectedly" → Reopen to find this runtime still up.
 const NO_UI_GRACE_MS = 60_000
@@ -54,6 +58,7 @@ function readToken(): string | null {
 
 function openSurface(request: PodUiHostOpenSurface): boolean {
   const window = state.mainWindow
+  const navigation = podUiHostSurfaceNavigation(request)
   if (request.surface === 'settings') {
     // Also opens the window when a renderer recovery left none.
     openSettingsFromSystemMenu()
@@ -69,6 +74,7 @@ function openSurface(request: PodUiHostOpenSurface): boolean {
       window.webContents.send('ui:focusTerminal', { tabId, worktreeId })
     }
   }
+  sendPodUiHostSurfaceNavigation(state.mainWindow, navigation)
   const target = state.mainWindow
   // Why: automated launches never take the screen (AGENTS.md); the request is still navigated.
   if (!target || target.isDestroyed() || isBackgroundLaunch()) {
