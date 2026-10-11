@@ -9,6 +9,7 @@ import type {
 import type { Repo } from '../../../shared/repo-types'
 import type { PodOrbstackMachines } from './pod-orbstack-machines'
 import type { PodOrbstackRegistry } from './pod-orbstack-registry'
+import { explainPodOrbstackFailure } from './pod-orbstack-errors'
 import { resolveLocalWorktreeTarget } from './pod-orbstack-worktree-target'
 
 /** The one OrbStack API: runtime RPC methods wrap it for the renderer, the CLI and the native shell. */
@@ -29,6 +30,8 @@ export type PodOrbstackService = {
   setAgentSandbox(worktreeId: string, enabled: boolean): PodOrbstackActionResult
   setSandboxClaudeLogin(enabled: boolean): PodOrbstackActionResult
   setTemplates(enabled: boolean): Promise<PodOrbstackActionResult>
+  /** `orbctl stop` + `orbctl start`: stops every running container and machine on the Mac. */
+  restart(): Promise<PodOrbstackActionResult>
   /** Drops the cached status and tells subscribers something moved. */
   invalidate(): void
   /** Starts an event stream: the relay log so far, then every event. */
@@ -49,6 +52,7 @@ export function createPodOrbstackService(deps: {
   readStatus: (options: { containers: boolean }) => Promise<PodOrbstackStatus>
   readStats?: (names?: readonly string[]) => Promise<PodOrbstackStats>
   setTemplates?: (enabled: boolean) => Promise<void>
+  restart?: () => Promise<PodOrbstackActionResult>
   /** Every mutation and registry or template change: `orbstack.subscribe` sends `changed`. */
   onChanged?: () => void
   subscribe?: PodOrbstackService['subscribe']
@@ -94,13 +98,15 @@ export function createPodOrbstackService(deps: {
         return { ok: false, error: resolved }
       }
       return invalidate(
-        await (kind === 'sandbox'
-          ? deps.machines.createSandbox(resolved)
-          : deps.machines.create(resolved))
+        explainPodOrbstackFailure(
+          await (kind === 'sandbox'
+            ? deps.machines.createSandbox(resolved)
+            : deps.machines.create(resolved))
+        )
       )
     },
     remove: async (worktreeId, kind) => invalidate(await deps.machines.remove(worktreeId, kind)),
-    start: async (name) => invalidate(await deps.machines.start(name)),
+    start: async (name) => invalidate(explainPodOrbstackFailure(await deps.machines.start(name))),
     stop: async (name) => invalidate(await deps.machines.stop(name)),
     setDockerPin: (worktreeId, pinned) => {
       const resolved = target(worktreeId)
@@ -128,6 +134,10 @@ export function createPodOrbstackService(deps: {
       await deps.setTemplates(enabled)
       return invalidate({ ok: true })
     },
+    restart: async () =>
+      deps.restart
+        ? invalidate(await deps.restart())
+        : { ok: false, error: 'Pod cannot restart OrbStack here.' },
     invalidate: changed,
     subscribe: (emit) => deps.subscribe?.(emit) ?? { seed: [], stop: () => undefined }
   }
