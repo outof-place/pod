@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   holdWindowAwakeAtStartup,
-  leaseAwaitedRendererRequests,
+  leaseRendererRequests,
+  SEND_WAKE_MS,
   podUiHostMainWindowOptions,
   STARTUP_AWAKE_AFTER_LOAD_MS
 } from './ui-host-hidden-renderer'
@@ -79,7 +80,14 @@ describe('holdWindowAwakeAtStartup', () => {
   })
 })
 
-describe('leaseAwaitedRendererRequests', () => {
+describe('leaseRendererRequests', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   const target = {
     setBackgroundThrottling: vi.fn(),
     capturePage: vi.fn(() => Promise.resolve(null))
@@ -90,7 +98,7 @@ describe('leaseAwaitedRendererRequests', () => {
     const leases = { acquire: vi.fn(() => release) }
     let finish: () => void = () => {}
     let fail: (error: Error) => void = () => {}
-    const notifier = leaseAwaitedRendererRequests(
+    const notifier = leaseRendererRequests(
       target,
       {
         closeTab: (id: string) =>
@@ -107,6 +115,7 @@ describe('leaseAwaitedRendererRequests', () => {
     )
     const closed = notifier.closeTab('t1')
     expect(leases.acquire).toHaveBeenCalledWith(target)
+    vi.advanceTimersByTime(SEND_WAKE_MS * 2)
     expect(release).not.toHaveBeenCalled()
     finish()
     await expect(closed).resolves.toBe('t1')
@@ -118,15 +127,53 @@ describe('leaseAwaitedRendererRequests', () => {
     expect(release).toHaveBeenCalledTimes(2)
   })
 
-  it('leaves plain sends asleep, and every other launch unwrapped', () => {
+  it('wakes the window for a send and lets it sleep again after the wake window', () => {
+    const order: string[] = []
+    const leases = {
+      acquire: vi.fn(() => {
+        order.push('acquire')
+        return () => order.push('release')
+      })
+    }
+    const notifier = leaseRendererRequests(
+      target,
+      { openFile: () => void order.push('send') },
+      true,
+      leases
+    )
+    notifier.openFile()
+    expect(order).toEqual(['acquire', 'send'])
+    vi.advanceTimersByTime(SEND_WAKE_MS - 1)
+    expect(order).toEqual(['acquire', 'send'])
+    vi.advanceTimersByTime(1)
+    expect(order).toEqual(['acquire', 'send', 'release'])
+  })
+
+  it('releases when a send throws', () => {
+    const release = vi.fn()
+    const notifier = leaseRendererRequests(
+      target,
+      {
+        openFile: () => {
+          throw new Error('window gone')
+        }
+      },
+      true,
+      { acquire: () => release }
+    )
+    expect(() => notifier.openFile()).toThrow('window gone')
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves background refreshes asleep, and every other launch unwrapped', () => {
     const leases = { acquire: vi.fn(() => () => {}) }
-    const send = vi.fn(() => undefined)
-    const notifier = leaseAwaitedRendererRequests(target, { send }, true, leases)
-    notifier.send()
-    expect(send).toHaveBeenCalledTimes(1)
+    const worktreesChanged = vi.fn(() => undefined)
+    const notifier = leaseRendererRequests(target, { worktreesChanged }, true, leases)
+    notifier.worktreesChanged()
+    expect(worktreesChanged).toHaveBeenCalledTimes(1)
     expect(leases.acquire).not.toHaveBeenCalled()
 
-    const plain = { send }
-    expect(leaseAwaitedRendererRequests(target, plain, false, leases).send).toBe(send)
+    const plain = { openFile: worktreesChanged }
+    expect(leaseRendererRequests(target, plain, false, leases).openFile).toBe(worktreesChanged)
   })
 })
