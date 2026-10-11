@@ -7,6 +7,7 @@ import type { BrowserBackend, BrowserBackendCreateTab } from './browser-backend'
 import type { BrowserManager } from './browser-manager'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
 import { browserSessionRegistry } from './browser-session-registry'
+import { podOffscreenPageWindowOptions } from '../pod/headless-host/guest-page-sleep'
 
 // Why: headless orca serve has no renderer window to host a <webview>, so each
 // browser page is backed by a main-process offscreen BrowserWindow. The window
@@ -54,6 +55,8 @@ export class OffscreenBrowserBackend implements BrowserBackend {
 
     const win = new BrowserWindow({
       show: false,
+      // Fork-only (Pod): in the headless host a page starts hidden, so it can sleep until needed.
+      ...podOffscreenPageWindowOptions(),
       width: DEFAULT_VIEWPORT_WIDTH,
       height: DEFAULT_VIEWPORT_HEIGHT,
       webPreferences: {

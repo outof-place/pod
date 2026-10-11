@@ -5,6 +5,7 @@ import {
 } from './browser-manager-types'
 import { BrowserManagerGuestCleanup } from './browser-manager-guest-cleanup'
 import { installDocPreviewGuestPolicy } from './doc-preview-guest-policy'
+import { trackPodGuestPageSleep } from '../pod/headless-host/guest-page-sleep'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
   attachGuestPolicies(
@@ -29,6 +30,8 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     const disposeDetachTracking = this.trackDebuggerDetachForCdpOverrides(guest)
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
+    // Fork-only (Pod): a windowless host lets the page sleep instead, waking it per capture or command.
+    trackPodGuestPageSleep(guest)
     const disposePopupPolicy = this.installGuestPopupPolicy(guest)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
 
