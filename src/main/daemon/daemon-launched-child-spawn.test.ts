@@ -1,3 +1,4 @@
+import type * as Fs from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnDaemonChildProcess } from './daemon-launched-child-spawn'
 
@@ -8,6 +9,14 @@ vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getVersion: () => '1.0.0' })
 }))
 vi.mock('./daemon-launch-paths', () => ({ daemonLogArgs: () => [] }))
+// Why: the policy test models a Mac on every host; Linux runners have no /usr/sbin/taskpolicy.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof Fs>()
+  return {
+    ...actual,
+    existsSync: (path: string) => path === '/usr/sbin/taskpolicy' || actual.existsSync(path)
+  }
+})
 
 const options = {
   entryPath: '/app/daemon-entry.js',
