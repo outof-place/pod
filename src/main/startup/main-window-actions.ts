@@ -24,6 +24,7 @@ import {
 } from '../window/renderer-recovery-prompt'
 import { probeRendererLaunchCapacity } from '../window/renderer-launch-failure-probe'
 import { isPodUiHostLaunch } from '../pod/ui-host/pod-ui-host-launch'
+import { requestPodHeadlessQuit } from '../pod/ui-host/pod-ui-host-window'
 
 // The window module injects this callback to avoid a cycle between actions and lifecycle code.
 let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
@@ -72,6 +73,10 @@ export function openSettingsFromSystemMenu(): void {
  * signals, supervisor stops and update installs still quit through app.quit().
  */
 export function quitFromUserCommand(): void {
+  // Fork-only (Pod): the headless one-app runtime quits as a whole, through PodNative.
+  if (requestPodHeadlessQuit()) {
+    return
+  }
   if (state.isServeMode) {
     // Why not getAllWindows(): offscreen browser-automation windows belong to the runtime.
     for (const window of [state.mainWindow, getDashboardPopoutWindow()]) {
