@@ -32,11 +32,19 @@ describe('Pod terminal processes', () => {
       },
       { id: 'wt2@@b', cwd: '/w2', title: 'shell' }
     ])
-    const rows = await listPodTerminalProcesses(source, () => 1_000)
+    const rows = await listPodTerminalProcesses(source, new Map(), () => 1_000)
     expect(source).toHaveBeenCalledWith('local', { deadlineMs: 3_000 })
     expect(rows).toEqual([
       { ptyId: 'wt1@@a', worktreeId: 'repo::/w1', handle: 'term_a', shellPid: 4242 },
       { ptyId: 'wt2@@b' }
+    ])
+    // A headless runtime's `serve-…` PTY names no worktree: the runtime's records place it.
+    const serve = vi.fn<PodPtyProcessList>(async () => [
+      { id: 'serve-1', rootProcessId: 5, cwd: '/w3', title: 'shell' }
+    ])
+    const placements = new Map([['serve-1', { worktreeId: 'repo::/w3', handle: 'term_s' }]])
+    expect(await listPodTerminalProcesses(serve, placements)).toEqual([
+      { ptyId: 'serve-1', worktreeId: 'repo::/w3', handle: 'term_s', shellPid: 5 }
     ])
     // Nothing until main installed the controller.
     await expect(listPodTerminalProcesses(null)).rejects.toThrow(/not available yet/)
