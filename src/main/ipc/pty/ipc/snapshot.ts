@@ -52,16 +52,20 @@ export function installPtySnapshotIpcHandlers(deps: {
       try {
         const runtimeSeqBeforeSnapshot = runtime.getPtyOutputSequence(args.id)
         const providerSnapshotRequired = providerSnapshotRequiredPtys.has(args.id)
-        // Why: a model rebuilt after dormancy holds only a bounded seed; the daemon has full depth.
+        // Why: a model rebuilt after dormancy may hold less than the daemon (a failed seed keeps a
+        // suffix), so the daemon is the full-depth source.
+        const dormancyRebuilt =
+          !providerSnapshotRequired && runtime.prefersProviderRecoverySnapshot(args.id)
         const providerSnapshot = providerSnapshotRequired
           ? await tryGetProviderForPty(args.id)?.getBufferSnapshot?.(args.id, {
               scrollbackRows
             })
-          : runtime.prefersProviderRecoverySnapshot(args.id)
+          : dormancyRebuilt
             ? await runtime.serializeProviderRecoveryBuffer(args.id, { scrollbackRows })
             : null
-        // Why: after a data gap main holds only the retained tail; returning it as a full snapshot would erase older scrollback.
-        if (providerSnapshotRequired && !providerSnapshot) {
+        // Why: after a data gap or a dormancy rebuild main may hold only a tail; returning it as a
+        // full snapshot would erase older scrollback.
+        if ((providerSnapshotRequired || dormancyRebuilt) && !providerSnapshot) {
           return null
         }
         const snapshot =
