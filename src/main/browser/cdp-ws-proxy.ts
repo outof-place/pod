@@ -9,6 +9,7 @@ import { CdpPageNavigationCommands } from './cdp-page-navigation-commands'
 import { CdpDomFocusReplay } from './cdp-dom-focus-replay'
 import { CdpPageCaptureCommands } from './cdp-page-capture-commands'
 import type { CapturePaintHold } from './cdp-screenshot'
+import { notePodAgentBrowserCommand } from '../pod/browser-pane/pod-browser-pane-hooks'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -74,6 +75,8 @@ export class CdpWsProxy {
         this.closeClient()
         this.client = ws
         const onMessage = (data: WebSocket.RawData): void => {
+          // Fork-only (Pod): an agent's CDP wakes a one-app page nobody sees (a no-op elsewhere).
+          notePodAgentBrowserCommand(this.webContents.id)
           this.handleClientMessage(ws, data.toString())
         }
         const onClose = (): void => {

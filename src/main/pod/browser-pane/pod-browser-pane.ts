@@ -15,6 +15,10 @@ import { navigatePanePage } from './pod-browser-pane-navigation'
 import { PaneSelectMenus } from './pod-browser-pane-select'
 import { PaneFramePump, type PodBrowserFrames } from './pod-browser-pane-frames'
 const PANE_FRAME_RATE = 60
+// A page nobody sees and no agent drives. Why 10: a rate change waits for the next tick, so a
+// pane coming back (or an agent's screenshot) waits ≤100 ms; an animated page costs 13 ms/s here
+// against 67 at 60 fps (1 fps: 1.7 ms/s but up to a second's wait). Measured on Electron 45.
+const UNSEEN_FRAME_RATE = 10
 // How long after an agent's last command its page still reads as driven.
 const AGENT_DRIVING_MS = 3_000
 
@@ -72,6 +76,7 @@ export class PodBrowserPaneController {
     }
     this.pages.set(pageId, page)
     wc.stopPainting()
+    wc.setFrameRate(UNSEEN_FRAME_RATE)
     wc.on('paint', (event) => this.frames.paint(page, event.texture))
     wc.on('cursor-changed', (_event, cursor) => {
       if (page.token !== null) {
@@ -118,10 +123,12 @@ export class PodBrowserPaneController {
       }
       page.agentTimer = setTimeout(() => {
         page.agentTimer = null
+        this.pace(page)
         this.sendState(pageId)
       }, AGENT_DRIVING_MS)
       page.agentTimer.unref?.()
       if (!wasDriving) {
+        this.pace(page)
         this.sendState(pageId)
       }
       return
@@ -226,12 +233,23 @@ export class PodBrowserPaneController {
   // Why: the only paint switch for offscreen pages; b4-perf's page sleep leaves them alone.
   private show(page: Page, visible: boolean): void {
     page.visible = visible
+    if (page.wc.isDestroyed()) {
+      return
+    }
+    this.pace(page)
     if (visible) {
-      page.wc.setFrameRate(PANE_FRAME_RATE)
       page.wc.startPainting()
       page.wc.invalidate()
-    } else if (!page.wc.isDestroyed()) {
+    } else {
       page.wc.stopPainting()
+    }
+  }
+
+  // Why an agent counts: rAF-polled waits (Playwright's default) would crawl at one frame a second.
+  private pace(page: Page): void {
+    const seen = (page.token !== null && page.visible) || Date.now() < page.agentDrivingUntil
+    if (!page.wc.isDestroyed()) {
+      page.wc.setFrameRate(seen ? PANE_FRAME_RATE : UNSEEN_FRAME_RATE)
     }
   }
 
