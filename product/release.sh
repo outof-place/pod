@@ -161,6 +161,10 @@ app="dist/mac-$arch/$display_name.app"
 dmg="dist/$display_name-$version-$arch.dmg"
 zip="dist/$display_name-$version-$arch-mac.zip"
 for f in "$app" "$dmg" "$zip" dist/latest-mac.yml; do [ -e "$f" ] || die "missing build output $f"; done
+assets=("$dmg" "$zip" dist/latest-mac.yml)
+[ -f "$zip.blockmap" ] && assets+=("$zip.blockmap")
+# One updater per release: latest-mac.yml for a classic app, appcast.xml for one-app.
+node product/release-feed-gate.cjs "$app_id" "$app" "${assets[@]}"
 
 node product/release-bundle-gate.cjs --dmg "$dmg"
 
@@ -187,8 +191,6 @@ node product/scripts/verify-entitlements.mjs "$app"
 if [ "$publish" -eq 1 ]; then
   [ -n "$feed_repo" ] || die "identity.updateFeed is null; nothing to publish to"
   log "publish GitHub release v$version to $feed_repo"
-  assets=("$dmg" "$zip" dist/latest-mac.yml)
-  [ -f "$zip.blockmap" ] && assets+=("$zip.blockmap")
   gh release create "v$version" "${assets[@]}" --repo "$feed_repo" \
     --title "$display_name $version" --notes "$display_name $version, built on Orca (MIT)."
 fi
