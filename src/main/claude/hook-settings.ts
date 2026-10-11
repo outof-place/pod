@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { basename, extname, join, win32 } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
@@ -149,6 +150,10 @@ export function hasSameManagedHookInvocation(
   )
 }
 
+function isSameAsyncHook(actual: HookCommandConfig, expected: HookCommandConfig): boolean {
+  return actual.async === true && hasSameManagedHookInvocation(actual, expected)
+}
+
 export function getRemoteManagedCommand(scriptPath: string): string {
   return getManagedCommand(scriptPath, { neutralJsonWhenMissing: true })
 }
@@ -164,8 +169,26 @@ export function applyManagedHooks(
 
   for (const event of plan.install) {
     const current = nextHooks[event.eventName]
-    const cleaned = Array.isArray(current) ? removeManagedCommands(current, isManagedCommand) : []
-    const definition: HookDefinition = { ...event.definition, hooks: [hook] }
+    const definitions = Array.isArray(current) ? current : []
+    const cleaned = removeManagedCommands(definitions, isManagedCommand)
+    const runsAsync =
+      event.async ?? definitions.some((d) => (d.hooks ?? []).some((h) => isSameAsyncHook(h, hook)))
+    const definition: HookDefinition = {
+      ...event.definition,
+      hooks: [runsAsync ? { ...hook, async: true } : hook]
+    }
+    // Why: rewriting an entry that already says this moves it to the end and rewrites settings.json,
+    // which every live Claude session reloads.
+    const same = definitions.find((d) => isDeepStrictEqual(d, definition))
+    if (
+      same &&
+      isDeepStrictEqual(
+        cleaned,
+        definitions.filter((d) => d !== same)
+      )
+    ) {
+      continue
+    }
     nextHooks[event.eventName] = [...cleaned, definition]
   }
 
