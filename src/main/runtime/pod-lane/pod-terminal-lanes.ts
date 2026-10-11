@@ -152,8 +152,10 @@ export function handlePodLaneEvent(event: PodLaneEvent): void {
     if (
       !isMultiplexStreamAttached(state, stream) ||
       stream.buffering ||
+      stream.outputPaused ||
       stream.ackPendingOutputOverflowed ||
-      stream.ackRecoverySnapshotInFlight
+      stream.ackRecoverySnapshotInFlight ||
+      stream.ackRecoveryHistoryOwed
     ) {
       endLane(lane, 'stream-not-live')
       return
