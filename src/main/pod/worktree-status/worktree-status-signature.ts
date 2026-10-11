@@ -1,7 +1,10 @@
 // Fork-only (Pod): what in the hook status store can move a worktree's worktree.ps ranking.
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-freshness'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
-import type { RuntimeWorktreePsSummary } from '../../../shared/runtime-types'
+import type {
+  RuntimeWorktreeAgentRow,
+  RuntimeWorktreePsSummary
+} from '../../../shared/runtime-types'
 
 export type PodStatusRow = Pick<
   AgentStatusIpcPayload,
@@ -68,8 +71,86 @@ export function podNextDecayAt(rows: readonly PodStatusRow[], now: number): numb
   return next
 }
 
-export type PodWorktreeRank = Pick<RuntimeWorktreePsSummary, 'status' | 'workingMode'>
+export type PodWorktreeRank = Pick<RuntimeWorktreePsSummary, 'status' | 'workingMode'> &
+  Partial<Pick<RuntimeWorktreePsSummary, 'agents'>>
 
 export function podRankKey(row: PodWorktreeRank): string {
   return `${row.status}\u0000${row.workingMode ?? ''}`
+}
+
+/** The hook store fields an agent row on a worktree card shows, for `worktreeStatus.agents`. */
+export type PodAgentStatusRow = PodStatusRow &
+  Partial<
+    Pick<
+      AgentStatusIpcPayload,
+      | 'stateStartedAt'
+      | 'agentType'
+      | 'prompt'
+      | 'toolName'
+      | 'toolInput'
+      | 'lastAssistantMessage'
+      | 'interrupted'
+      | 'mainAgent'
+    >
+  >
+
+// A row's clock moves the key once a minute at most: enough for a reader's 30-minute decay.
+const AGENT_ROW_CLOCK_MS = 60_000
+
+/**
+ * What the agent rows show, for subscribers that asked for them: the ranking fields plus the
+ * prompt, the tool, the last message, the verdict and the row's clock by the minute. A tool update
+ * moves it; only `worktreeStatus.agents` subscribers read for that.
+ */
+export function podAgentRowsSignature(rows: readonly PodAgentStatusRow[], now: number): string {
+  return rows
+    .map((row) =>
+      JSON.stringify([
+        row.paneKey,
+        row.worktreeId ?? '',
+        row.state,
+        row.workingMode ?? '',
+        row.stateStartedAt ?? 0,
+        row.agentType ?? '',
+        row.prompt ?? '',
+        row.toolName ?? '',
+        row.toolInput ?? '',
+        row.lastAssistantMessage ?? '',
+        row.interrupted === true,
+        row.mainAgent ?? null,
+        row.restoredUnconfirmed === true,
+        rowCounts(row, now),
+        Math.floor(observedAt(row) / AGENT_ROW_CLOCK_MS)
+      ])
+    )
+    .sort()
+    .join('\u0001')
+}
+
+/** A worktree's agent rows as worktree.ps sends them, keyed for the same comparison. */
+export function podAgentRowsKey(agents: readonly RuntimeWorktreeAgentRow[] | undefined): string {
+  return (agents ?? [])
+    .map((agent) =>
+      JSON.stringify([
+        agent.paneKey,
+        agent.parentPaneKey,
+        agent.state,
+        agent.workingMode ?? '',
+        agent.agentType,
+        agent.prompt,
+        agent.taskTitle,
+        agent.displayName,
+        agent.lastAssistantMessage,
+        agent.toolName,
+        agent.toolInput,
+        agent.interrupted,
+        agent.mainAgent ?? null,
+        agent.stateStartedAt,
+        agent.restoredUnconfirmed === true,
+        agent.structuredHostOwned === true,
+        Math.floor(agent.updatedAt / AGENT_ROW_CLOCK_MS)
+      ])
+    )
+    .sort()
+    .join('\u0001')
 }
