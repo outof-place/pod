@@ -35,5 +35,6 @@ export const podOrbstackRpc = {
     call(POD_ORBSTACK_RPC.stop, { name }),
   pinDocker: (worktreeId: string, pinned: boolean): Promise<PodOrbstackActionResult> =>
     call(POD_ORBSTACK_RPC.pinDocker, { worktreeId, pinned }),
-  restart: (): Promise<PodOrbstackActionResult> => call(POD_ORBSTACK_RPC.restart)
+  restart: (): Promise<PodOrbstackActionResult> =>
+    call(POD_ORBSTACK_RPC.restart, { reason: 'user' })
 }
