@@ -73,10 +73,30 @@ describe("Orca's Claude status hooks in the background", () => {
     expect(managedAsync(install(plain, '2.1.296')).PostToolUse).toBe(true)
   })
 
-  it('keeps whatever async is written when the version is unknown', () => {
+  it('never strips an async already written, whatever the version', () => {
     const withAsync = install({ hooks: {} }, '2.1.296')
-    expect(managedAsync(install(withAsync, undefined)).PostToolUse).toBe(true)
+    for (const version of [undefined, '2.1.18', '1.0.64']) {
+      expect(managedAsync(install(withAsync, version)).PostToolUse, String(version)).toBe(true)
+    }
+    // claude-acc's perf keep marks Orca's entries async on any Claude: an old one leaves them be
+    const marked = withAsyncEverywhere(install({ hooks: {} }, '2.1.18'))
+    expect(JSON.stringify(install(marked, '2.1.18'))).toBe(JSON.stringify(marked))
     const without = install({ hooks: {} }, '2.1.18')
     expect(managedAsync(install(without, undefined)).PostToolUse).toBe(false)
   })
 })
+
+function withAsyncEverywhere(config: HooksConfig): HooksConfig {
+  return {
+    ...config,
+    hooks: Object.fromEntries(
+      Object.entries(config.hooks ?? {}).map(([event, definitions]) => [
+        event,
+        definitions.map((definition) => ({
+          ...definition,
+          hooks: (definition.hooks ?? []).map((hook) => ({ ...hook, async: true }))
+        }))
+      ])
+    )
+  }
+}
