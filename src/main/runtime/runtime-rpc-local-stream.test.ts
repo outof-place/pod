@@ -15,7 +15,14 @@ import {
   encodeTerminalStreamText
 } from '../../shared/terminal-stream-protocol'
 import { sendRequest } from './runtime-rpc-test-harness'
-import { openLocalStreamTestClient } from './runtime-rpc-local-stream-test-harness'
+import {
+  openLocalStreamTestClient,
+  type LocalStreamTestClient
+} from './runtime-rpc-local-stream-test-harness'
+import {
+  MAX_RUNTIME_LOCAL_STREAM_CONNECTIONS,
+  RUNTIME_LOCAL_STREAM_LIMIT_CODE
+} from './runtime-rpc/runtime-rpc-local-stream-dispatch'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import type { WorkspaceCreatorProvenance } from '../../shared/worktree/types'
 
@@ -71,6 +78,40 @@ describe('OrcaRuntimeRpcServer local stream transport', () => {
   })
   afterEach(() => {
     vi.unstubAllEnvs()
+  })
+
+  it('refuses a stream past its own cap, and takes one again once a stream closes', async () => {
+    const { server, endpoint, authToken } = await startServer()
+    const clients: LocalStreamTestClient[] = []
+    try {
+      for (let index = 0; index < MAX_RUNTIME_LOCAL_STREAM_CONNECTIONS; index += 1) {
+        const client = await openLocalStreamTestClient(endpoint, authToken)
+        clients.push(client)
+        expect(client.upgradeResponse).toMatchObject({ ok: true })
+      }
+      const refused = await openLocalStreamTestClient(endpoint, authToken)
+      clients.push(refused)
+      expect(refused.upgradeResponse).toMatchObject({
+        ok: false,
+        error: { code: RUNTIME_LOCAL_STREAM_LIMIT_CODE }
+      })
+      // Streams take no request slot: a unary call still goes through.
+      await expect(
+        sendRequest(endpoint, { id: 'cli', authToken, method: 'status.get' })
+      ).resolves.toMatchObject({ ok: true })
+      clients[0]?.close()
+      await clients[0]?.closed
+      await vi.waitFor(async () => {
+        const again = await openLocalStreamTestClient(endpoint, authToken)
+        clients.push(again)
+        expect(again.upgradeResponse).toMatchObject({ ok: true })
+      })
+    } finally {
+      for (const client of clients) {
+        client.close()
+      }
+      await server.stop()
+    }
   })
 
   it('upgrades an owner connection and serves requests on it while unary calls keep working', async () => {
