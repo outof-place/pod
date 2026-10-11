@@ -172,6 +172,9 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     })
     .optional(),
   viewMode: z.enum(['terminal', 'chat']).optional(),
+  // Why: the view that will show this terminal takes the kitty keyboard protocol, so the PTY's
+  // startup responder answers an agent's `CSI ? u` before any view attaches (terminal.create's flag).
+  terminalKittyKeyboardProtocol: z.boolean().optional(),
   activate: z.boolean().optional(),
   select: z.boolean().optional(),
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),

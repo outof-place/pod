@@ -73,6 +73,9 @@ export const SESSION_TAB_METHODS = [
         ...(params.launchToken ? { launchToken: params.launchToken } : {}),
         ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
         ...(params.viewMode ? { viewMode: params.viewMode } : {}),
+        ...(params.terminalKittyKeyboardProtocol === true
+          ? { terminalKittyKeyboardProtocol: true }
+          : {}),
         activate: params.activate,
         select: params.select,
         clientNavigationId: pairedDeviceId,

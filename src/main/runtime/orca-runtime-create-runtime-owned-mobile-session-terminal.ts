@@ -58,6 +58,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       createMutation?: { clientIdentity: string; id: string }
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
+      terminalKittyKeyboardProtocol?: boolean
       targetGroupId?: string
       supportsSplitGroupPlacement?: boolean
       launchConfig?: SleepingAgentLaunchConfig
@@ -118,6 +119,9 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
           ? { resumeProviderSession: opts.resumeProviderSession }
           : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+        ...(opts.terminalKittyKeyboardProtocol === true
+          ? { terminalKittyKeyboardProtocol: true }
+          : {}),
         startupCommandDelivery: opts.startupCommandDelivery,
         ...(opts.identity
           ? {

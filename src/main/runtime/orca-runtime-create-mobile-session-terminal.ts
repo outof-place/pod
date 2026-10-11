@@ -25,6 +25,7 @@ export class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRuntimeWithC
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
+      terminalKittyKeyboardProtocol?: boolean
       activate?: boolean
       select?: boolean
       clientNavigationId?: string

@@ -33,6 +33,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
+      terminalKittyKeyboardProtocol?: boolean
       activate?: boolean
       clientNavigationId?: string
       clientMutationId?: string
@@ -86,6 +87,9 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
           },
           createMutation: { clientIdentity, id: opts.clientMutationId },
           viewMode: opts.viewMode,
+          ...(opts.terminalKittyKeyboardProtocol === true
+            ? { terminalKittyKeyboardProtocol: true }
+            : {}),
           targetGroupId: opts.targetGroupId,
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
           signal: opts.signal
@@ -106,6 +110,9 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           launchAgent: startupCommand.launchAgent,
           viewMode: opts.viewMode,
+          ...(opts.terminalKittyKeyboardProtocol === true
+            ? { terminalKittyKeyboardProtocol: true }
+            : {}),
           targetGroupId: opts.targetGroupId,
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
           launchConfig: startupCommand.launchConfig,
@@ -234,6 +241,9 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
             identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
             launchAgent: startupCommand.launchAgent,
             viewMode: opts.viewMode,
+            ...(opts.terminalKittyKeyboardProtocol === true
+              ? { terminalKittyKeyboardProtocol: true }
+              : {}),
             targetGroupId: opts.targetGroupId,
             supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
             launchConfig: startupCommand.launchConfig,
