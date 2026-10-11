@@ -13,6 +13,7 @@ import type { PodLaneRequest } from '../../daemon/pod-lane/pod-lane-requests'
 import { isTerminalInputLockedForClient } from '../rpc/methods/terminal/terminal-input-delivery'
 import {
   isMultiplexStreamAttached,
+  type MultiplexSnapshotRequest,
   type TerminalMultiplexConnection
 } from '../rpc/methods/terminal/terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from '../rpc/methods/terminal/terminal-stream-types'
@@ -35,7 +36,14 @@ type Lane = {
   control: PodLaneControl
   muted: boolean
   releaseDriver: () => void
+  /** Main asked the daemon to end a muted lane; the stream stays off until the detach marker. */
+  revokeTimer: ReturnType<typeof setTimeout> | null
+  /** The snapshot the detach marker brings: a viewer's request, or the default. */
+  snapshotRequest: MultiplexSnapshotRequest
 }
+
+// Why a bound: a daemon that never sends the detach marker must not keep the stream off.
+const POD_LANE_REVOKE_SETTLE_MS = 2000
 
 const connections = new Map<string, TerminalMultiplexConnection>()
 const lanes = new Map<string, Lane>()
@@ -87,6 +95,10 @@ export async function grantPodTerminalLane(
   const previous = laneByStream.get(stream)
   if (previous) {
     endLane(previous, 'replaced')
+    // Why: a muted stream comes back at its own lane's detach marker, never at a newer lane's grant.
+    if (previous.muted) {
+      throw new Error('pod_lane_busy')
+    }
   }
   const inputOpen = !isTerminalInputLockedForClient(state.runtime, stream.ptyId, stream.client)
   const granted = parseGrant(
@@ -106,7 +118,9 @@ export async function grantPodTerminalLane(
     stream,
     control,
     muted: false,
-    releaseDriver: () => {}
+    releaseDriver: () => {},
+    revokeTimer: null,
+    snapshotRequest: {}
   }
   lane.releaseDriver = state.runtime.subscribeToDriverChanges(stream.ptyId, () => {
     const open = !isTerminalInputLockedForClient(state.runtime, lane.ptyId, stream.client)
@@ -134,7 +148,13 @@ export function handlePodLaneEvent(event: PodLaneEvent): void {
   }
   const { state, stream } = lane
   if (event.phase === 'attached') {
-    if (!isMultiplexStreamAttached(state, stream) || stream.buffering) {
+    // Why the ack state: a recovery snapshot would land after the switch, where it no longer matches the screen.
+    if (
+      !isMultiplexStreamAttached(state, stream) ||
+      stream.buffering ||
+      stream.ackPendingOutputOverflowed ||
+      stream.ackRecoverySnapshotInFlight
+    ) {
       endLane(lane, 'stream-not-live')
       return
     }
@@ -143,7 +163,32 @@ export function handlePodLaneEvent(event: PodLaneEvent): void {
     lane.muted = true
     return
   }
-  forget(lane)
+  streamBack(lane, event.reason)
+}
+
+/**
+ * A snapshot that replaces the screen, asked for while a lane feeds it: main's model is behind or
+ * ahead of the lane's bytes, so the lane ends first and its detach marker brings the snapshot.
+ */
+export function deferSnapshotToPodLane(
+  stream: TerminalMultiplexStream,
+  request: MultiplexSnapshotRequest
+): boolean {
+  const lane = laneByStream.get(stream)
+  if (!lane?.muted || typeof request.requestId === 'number') {
+    return false
+  }
+  lane.snapshotRequest = request
+  endLane(lane, 'snapshot-requested')
+  return true
+}
+
+/** The stream takes over at the lane's end in byte order: the detach marker, then a snapshot. */
+function streamBack(lane: Lane, reason: string | undefined): void {
+  if (!forget(lane)) {
+    return
+  }
+  const { state, stream } = lane
   if (!lane.muted || !isMultiplexStreamAttached(state, stream)) {
     return
   }
@@ -157,8 +202,8 @@ export function handlePodLaneEvent(event: PodLaneEvent): void {
     TerminalStreamOpcode.Metadata,
     laneMarker(lane.laneId, 'detached').bytes
   )
-  if (event.reason !== 'exited') {
-    void state.sendRequestedSnapshot(stream, {})
+  if (reason !== 'exited') {
+    void state.sendRequestedSnapshot(stream, lane.snapshotRequest)
   }
 }
 
@@ -178,9 +223,23 @@ export function settlePodLaneFence(stream: TerminalMultiplexStream, fence: numbe
 }
 
 function endLane(lane: Lane, reason: string): void {
-  if (forget(lane)) {
-    void lane.control(lane.ptyId, 'podLaneRevoke', { laneId: lane.laneId, reason }).catch(() => {})
+  if (lanes.get(lane.laneId) !== lane || lane.revokeTimer) {
+    return
   }
+  // Why: the viewer has the lane's bytes up to wherever the daemon stops it; unmuting here would send
+  // the bytes in between twice, and the daemon's detach marker (with its snapshot) would go unheard.
+  if (lane.muted && reason !== 'stream-detached') {
+    lane.revokeTimer = setTimeout(
+      () => streamBack(lane, 'revoke-timeout'),
+      POD_LANE_REVOKE_SETTLE_MS
+    )
+    void lane.control(lane.ptyId, 'podLaneRevoke', { laneId: lane.laneId, reason }).catch(() => {
+      streamBack(lane, 'revoke-failed')
+    })
+    return
+  }
+  forget(lane)
+  void lane.control(lane.ptyId, 'podLaneRevoke', { laneId: lane.laneId, reason }).catch(() => {})
 }
 
 function forget(lane: Lane): boolean {
@@ -188,6 +247,10 @@ function forget(lane: Lane): boolean {
     return false
   }
   lanes.delete(lane.laneId)
+  if (lane.revokeTimer) {
+    clearTimeout(lane.revokeTimer)
+    lane.revokeTimer = null
+  }
   if (laneByStream.get(lane.stream) === lane) {
     laneByStream.delete(lane.stream)
   }
