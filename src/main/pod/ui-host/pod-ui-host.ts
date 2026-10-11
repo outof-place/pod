@@ -28,6 +28,7 @@ import {
   POD_UI_HOST_SWITCH
 } from './pod-ui-host-launch'
 import { PodUiHostLazyWindow } from './pod-ui-host-lazy-window'
+import { installPodHeadlessAgentStatus } from './pod-headless-agent-status'
 import { PodUiHostQuitFlow } from './pod-ui-host-quit'
 import { assessRendererQuit, commitRendererQuit } from './pod-ui-host-quit-renderer'
 import {
@@ -240,6 +241,7 @@ export function installPodUiHost(
     : null
   const showSurface = (request: PodUiHostOpenSurface): void =>
     lazyWindow ? lazyWindow.request(request) : present(request)
+  const uninstallAgentStatus = lazyWindow ? installPodHeadlessAgentStatus() : null
   setPodUiHostSink(server)
   panes = installPodBrowserPanes({
     runtime,
@@ -269,6 +271,7 @@ export function installPodUiHost(
   app.once('will-quit', () => {
     clearGrace()
     lazyWindow?.dispose()
+    uninstallAgentStatus?.()
     setPodUiHostSink(null)
     // Why: a committed quit keeps its connection for the heartbeat through teardown (up to 20 s).
     if (quitFlow.isCommitted) {
