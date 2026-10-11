@@ -1,4 +1,4 @@
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import type { SafeStorageKeychainPort } from './legacy-profile-migration'
 
 const SECURITY = '/usr/bin/security'
