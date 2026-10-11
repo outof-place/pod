@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { runProcessSync } from '@orca/process-host'
 import type { SafeStorageKeychainPort } from './legacy-profile-migration'
 
@@ -18,7 +19,14 @@ export function createMacSafeStorageKeychain(
   keychainPath?: string
 ): SafeStorageKeychainPort & { deleteItem(service: string, account: string): boolean } {
   const keychainArgs = keychainPath ? [keychainPath] : []
+  // Why: `security` given a keychain path that doesn't exist acts on login.keychain-db instead.
+  const requireKeychain = (): void => {
+    if (keychainPath && !existsSync(keychainPath)) {
+      throw new Error(`keychain ${keychainPath} does not exist`)
+    }
+  }
   const hasItem = (service: string, account: string): boolean => {
+    requireKeychain()
     // Without -w this reads attributes only, which never prompts.
     const result = runProcessSync({
       program: SECURITY,
@@ -30,6 +38,7 @@ export function createMacSafeStorageKeychain(
   return {
     hasItem,
     readSecret(service, account) {
+      requireKeychain()
       const result = runProcessSync({
         program: SECURITY,
         args: ['find-generic-password', '-s', service, '-a', account, '-w', ...keychainArgs],
@@ -38,6 +47,7 @@ export function createMacSafeStorageKeychain(
       return result.code === 0 && !result.timedOut ? result.stdout.trim() : null
     },
     writeSecret(service, account, secret, trustedAppPath) {
+      requireKeychain()
       assertQuotable([service, account, secret, trustedAppPath ?? '', keychainPath ?? ''])
       const trusted = trustedAppPath ? ` -T "${trustedAppPath}"` : ''
       const keychain = keychainPath ? ` "${keychainPath}"` : ''
@@ -54,6 +64,11 @@ export function createMacSafeStorageKeychain(
       }
     },
     deleteItem(service, account) {
+      requireKeychain()
+      // Why: without -s or -a, delete-generic-password deletes the first item it finds.
+      if (!service || !account) {
+        throw new Error('deleting a keychain item needs both a service and an account')
+      }
       const result = runProcessSync({
         program: SECURITY,
         args: ['delete-generic-password', '-s', service, '-a', account, ...keychainArgs],
