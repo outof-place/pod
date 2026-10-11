@@ -4,6 +4,7 @@ import type { RuntimeWorktreePsResult } from '../../../shared/runtime-types'
 import {
   installPodWorktreeStatus,
   isPodWorktreeStatusEventEnabled,
+  podWorktreeStatusReadyFields,
   subscribePodWorktreeStatus,
   uninstallPodWorktreeStatusForTests
 } from './install-pod-worktree-status'
@@ -47,6 +48,13 @@ describe('PodClientEventsSubscribeParams', () => {
     expect(
       PodClientEventsSubscribeParams.parse({ worktreeStatus: { limit: 10_000 }, other: 1 })
     ).toEqual({ worktreeStatus: { limit: 10_000 } })
+    expect(
+      PodClientEventsSubscribeParams.parse({ worktreeStatus: { limit: 10_000, agents: true } })
+    ).toEqual({ worktreeStatus: { limit: 10_000, agents: true } })
+    // A malformed `agents` costs only itself.
+    expect(
+      PodClientEventsSubscribeParams.parse({ worktreeStatus: { limit: 10_000, agents: 'yes' } })
+    ).toEqual({ worktreeStatus: { limit: 10_000 } })
   })
 })
 
@@ -75,5 +83,22 @@ describe('subscribePodWorktreeStatus', () => {
     expect(store.subscribeStatusRowMutations).toHaveBeenCalledTimes(1)
     await vi.waitFor(() => expect(context.runtime.getWorktreePs).toHaveBeenCalledWith(10_000, true))
     stop?.()
+  })
+
+  it('names in the ready frame what it honours: the push, and the agent rows when asked', () => {
+    installPodWorktreeStatus(makeStore(), true)
+    const context = makeContext()
+    const plain = { worktreeStatus: true as const }
+    const withAgents = { worktreeStatus: { limit: 10_000, agents: true as const } }
+    const stopPlain = subscribePodWorktreeStatus(plain, context, vi.fn())
+    const stopAgents = subscribePodWorktreeStatus(withAgents, context, vi.fn())
+    expect(podWorktreeStatusReadyFields(plain, stopPlain)).toEqual({ worktreeStatus: true })
+    expect(podWorktreeStatusReadyFields(withAgents, stopAgents)).toEqual({
+      worktreeStatus: true,
+      worktreeStatusAgents: true
+    })
+    expect(podWorktreeStatusReadyFields(withAgents, null)).toEqual({})
+    stopPlain?.()
+    stopAgents?.()
   })
 })
