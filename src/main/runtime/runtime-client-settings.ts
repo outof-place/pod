@@ -23,6 +23,10 @@ import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-t
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
+import {
+  podClientSettingsExtras,
+  type PodClientSettingsExtras
+} from '../pod/settings/pod-client-settings-extras'
 import type { RuntimeStore } from './runtime-store-contract'
 
 export type RuntimeClientSettings = Pick<
@@ -58,7 +62,7 @@ export type RuntimeClientSettings = Pick<
   experimentalStructuredNativeChat?: boolean
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
   sourceControlAi: RuntimeClientSourceControlAi
-}
+} & PodClientSettingsExtras
 
 /** The saved per-action launch recipes (agent, prompt template, agent args), already migrated. */
 export type RuntimeClientSourceControlAi = { actions: SourceControlAiActionDefaults }
@@ -143,6 +147,7 @@ export class RuntimeClientSettingsController {
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
+      ...podClientSettingsExtras(settings, projectSourceControlLaunchRecipes(settings)),
       hostSettingOverrides: Object.fromEntries(
         [
           ...getHostDisplayLabelOverrides({ hostSettingOverrides: settings.hostSettingOverrides })
