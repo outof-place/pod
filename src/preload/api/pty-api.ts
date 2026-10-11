@@ -93,6 +93,8 @@ export type PtyApi = {
     options?: { requireWriteSettlement?: true }
   ) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
+  /** Whether this window answers a PTY's terminal queries; another view may be elected. */
+  onQueryResponder?: (callback: (payload: { id: string; answers: boolean }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void
   reportGeometry: (id: string, cols: number, rows: number) => void
