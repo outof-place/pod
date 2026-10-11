@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PodOrbstackEvent, PodOrbstackStatus } from '../../../shared/pod-orbstack-types'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../../runtime/rpc/core'
+import { denyRpcMethodForCaller } from '../../runtime/rpc/rpc-caller-scope'
 import { POD_ORBSTACK_METHODS } from './pod-orbstack-rpc-methods'
 import { setPodOrbstackService, type PodOrbstackService } from './pod-orbstack-service'
 
@@ -149,6 +150,28 @@ describe('orbstack.* RPC methods', () => {
     expect(() => call('orbstack.start', { name: '' })).toThrow()
     expect(() => call('orbstack.pinDocker', { worktreeId: 'r::/x', pinned: 'yes' })).toThrow()
     expect(() => call('orbstack.delete', { worktreeId: 'r::/x', extra: 1 })).toThrow()
+  })
+
+  it("restarts only on the user's word, and never for a phone or an SSH host", async () => {
+    const service = fakeService(true)
+    setPodOrbstackService(service)
+    expect(() => call('orbstack.restart')).toThrow()
+    expect(() => call('orbstack.restart', { reason: 'agent' })).toThrow()
+    expect(service.restart).not.toHaveBeenCalled()
+    await call('orbstack.restart', { reason: 'user' })
+    expect(service.restart).toHaveBeenCalledOnce()
+    expect(method('orbstack.restart').permission).toBe('host-admin')
+    expect(
+      denyRpcMethodForCaller({ kind: 'mobile' }, 'orbstack.restart', 'host-admin')
+    ).not.toBeNull()
+    expect(
+      denyRpcMethodForCaller(
+        { kind: 'ssh-bridge', targetId: 't', remoteCliControl: true },
+        'orbstack.restart',
+        'host-admin'
+      )
+    ).not.toBeNull()
+    expect(denyRpcMethodForCaller({ kind: 'owner' }, 'orbstack.restart', 'host-admin')).toBeNull()
   })
 
   it('passes the status, stats and templates params through', async () => {
