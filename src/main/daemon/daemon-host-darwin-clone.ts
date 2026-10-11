@@ -1,15 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import {
-  constants as fsConstants,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  statfsSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -17,6 +7,7 @@ import { removeHostTree } from '../host-tree-removal'
 import type { RelocatedDaemonHost } from './daemon-host-relocation'
 import { daemonHostStagingName } from './daemon-host-reclaim'
 import { reportDaemonHost } from './daemon-host-darwin-report'
+import { freeBytes, volumeCanClone } from './daemon-host-darwin-volume'
 import {
   CODE_RESOURCES_REL,
   DARWIN_HOST_MARKER_NAME,
@@ -173,18 +164,6 @@ export function darwinDaemonHostNeedsClone(entryPath: string): boolean {
   }
 }
 
-// Why a probe: `cp -c` silently falls back to a byte copy, which needs the free-space check.
-function volumeCanClone(sourceFile: string, stagingDir: string): boolean {
-  const probe = join(stagingDir, '.clone-probe')
-  try {
-    copyFileSync(sourceFile, probe, fsConstants.COPYFILE_FICLONE_FORCE)
-    unlinkSync(probe)
-    return true
-  } catch {
-    return false
-  }
-}
-
 function firstLine(text: string): string {
   return text.trim().split('\n')[0] ?? ''
 }
@@ -229,11 +208,10 @@ async function cloneDarwinDaemonHost(
     reportDaemonHost('bundle', `cannot create ${versionRoot}; forking from the app bundle`, error)
     return null
   }
-  const cloned = volumeCanClone(join(source.bundleDir, INFO_PLIST_REL), staging)
+  const cloned = await volumeCanClone(join(source.bundleDir, INFO_PLIST_REL), staging)
   if (!cloned) {
     const { bytes } = await darwinTreeStamp(source.bundleDir)
-    const { bavail, bsize } = statfsSync(versionRoot)
-    const free = Number(bavail) * Number(bsize)
+    const free = freeBytes(versionRoot)
     if (free < bytes + FULL_COPY_HEADROOM_BYTES) {
       reportDaemonHost(
         'bundle',
