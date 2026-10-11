@@ -391,4 +391,23 @@ describe('PodBrowserPaneController', () => {
     panes.noteAgentCommand(999)
     expect(sent).toHaveLength(2)
   })
+
+  it('ticks a page nobody sees at 10 fps, and at 60 while it shows or an agent drives it', () => {
+    vi.useFakeTimers()
+    const { panes, wc } = setup()
+    const rate = (): unknown => wc.setFrameRate.mock.calls.at(-1)?.[0]
+    expect(rate()).toBe(10)
+    panes.noteAgentCommand(wc.id)
+    expect(rate()).toBe(60)
+    vi.advanceTimersByTime(3_000)
+    expect(rate()).toBe(10)
+    panes.handle(attach)
+    expect(rate()).toBe(60)
+    panes.handle({ type: 'browserPane', pageId: 'page-1', visible: false })
+    expect(rate()).toBe(10)
+    panes.handle({ type: 'browserPane', pageId: 'page-1', visible: true })
+    expect(rate()).toBe(60)
+    panes.handle({ type: 'browserDetach', pageId: 'page-1' })
+    expect(rate()).toBe(10)
+  })
 })
