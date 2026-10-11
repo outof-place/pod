@@ -117,7 +117,7 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
   protected async serializeProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
-    wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
+    wait: { timeoutMs?: number; retireOnTimeout?: boolean; fresh?: boolean } = {}
   ): Promise<PtyProviderBufferSnapshot | null> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
@@ -126,6 +126,7 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
       return null
     }
     if (
+      wait.fresh ||
       !acquisition ||
       acquisition.generation !== generation ||
       acquisition.scrollbackRows < scrollbackRows
