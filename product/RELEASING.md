@@ -60,14 +60,14 @@ Set `POD_SIGN_IDENTITY`, or `NOTARY_PROFILE` / `APPLE_API_KEY` (+`_ID`, `_ISSUER
 
 electron-builder would give every nested executable Electron's entitlements (JIT, unsigned executable memory, DYLD variables, Apple events, camera, microphone, location, USB, Bluetooth). `mac.sign` instead signs each one with only what it needs (`product/entitlements-policy.cjs`, plists in `product/entitlements/`):
 
-| Executable                                                 | Entitlements                              |
-| ---------------------------------------------------------- | ----------------------------------------- |
-| The app and Electron's helper apps (Pod profile)           | `product/entitlements/electron-pod.plist` |
-| Pod Menu (dictation records the microphone)                | `device.audio-input`                      |
-| serve-sim's camera helper (host camera into the simulator) | `device.camera`                           |
-| The embedded Python (CPython's JIT)                        | `cs.allow-unsigned-executable-memory`     |
-| pod-agent-launcher (the agent shim)                        | `cs.allow-dyld-environment-variables`     |
-| Everything else: Computer Use, rg, the claude-acc tools    | none                                      |
+| Executable                                                              | Entitlements                              |
+| ----------------------------------------------------------------------- | ----------------------------------------- |
+| The app and Electron's helper apps (Pod profile)                        | `product/entitlements/electron-pod.plist` |
+| Pod Menu (dictation records the microphone)                             | `device.audio-input`                      |
+| serve-sim's camera helper (host camera into the simulator)              | `device.camera`                           |
+| The embedded Python (CPython's JIT)                                     | `cs.allow-unsigned-executable-memory`     |
+| pod-agent-launcher (the agent shim)                                     | `cs.allow-dyld-environment-variables`     |
+| Everything else: Computer Use, rg, the claude-acc tools, pod-agent-hook | none                                      |
 
 The Pod profile's app set keeps JIT, unsigned executable memory, Apple events, microphone and camera (browser panes pass both through to pages after the macOS prompt) and USB (security keys for WebAuthn). It drops location (browser panes deny geolocation), Bluetooth (no Web Bluetooth chooser) and DYLD variables. `POD_BUILD_PROFILE=orca` keeps upstream's `resources/build/entitlements.mac.plist`.
 
