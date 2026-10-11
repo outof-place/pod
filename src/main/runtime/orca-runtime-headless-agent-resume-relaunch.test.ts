@@ -88,7 +88,8 @@ function makeRuntime(opts: {
   )
   const runtime = new OrcaRuntimeService(runtimeStore, undefined, {
     getAgentProviderSessionRowsForPane: (paneKey) => rows.filter((row) => row.paneKey === paneKey),
-    getAgentProviderSessionSnapshot: () => rows
+    getAgentProviderSessionSnapshot: () => rows,
+    getAgentStatusSnapshot: () => rows
   })
   const spawn = vi.fn().mockResolvedValue({ id: LIVE_PTY_ID })
   runtime.setPtyController({
@@ -183,6 +184,18 @@ describe('headless agent resume across a host restart', () => {
     const live = await listedPane(runtime)
     expect(live).toMatchObject({ agentStatus: { state: 'waiting' } })
     expect(live).not.toMatchObject({ agentStatus: { beforeRestart: true } })
+  })
+
+  it('lists the kept agent in worktree.ps with its marked state', async () => {
+    const { runtime, setRows } = makeRuntime({})
+    await openPane(runtime, 'user')
+    setRows([claudeRow({ restoredUnconfirmed: true })])
+
+    const ps = await runtime.getWorktreePs()
+
+    expect(ps.worktrees.find((row) => row.worktreeId === TEST_WORKTREE_ID)?.agents).toEqual([
+      expect.objectContaining({ paneKey: PANE_KEY, state: 'waiting', beforeRestart: true })
+    ])
   })
 
   it("confirms a kept agent's old state on its screen when the tab is shown", async () => {
