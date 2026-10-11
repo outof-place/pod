@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => {
     sent,
     attached: { value: true },
     uiHost: { value: true },
-    headless: { value: true }
+    headless: { value: true },
+    rearm: vi.fn()
   }
 })
 
@@ -22,6 +23,9 @@ vi.mock('./pod-ui-host-bridge', () => ({
     mocks.sent.push(message)
     return mocks.attached.value
   }
+}))
+vi.mock('./pod-headless-worktree-watch', () => ({
+  rearmPodHeadlessWorktreeWatch: mocks.rearm
 }))
 vi.mock('./pod-ui-host-launch', () => ({
   isPodUiHostLaunch: () => mocks.uiHost.value,
@@ -64,6 +68,7 @@ describe('the headless one-app window', () => {
     })
     expect(mocks.app.hide).toHaveBeenCalled()
     expect(mocks.sent).toEqual([{ type: 'surfaceHidden' }])
+    expect(mocks.rearm).toHaveBeenCalledOnce()
   })
 
   it('asks PodNative to quit Pod on a user Quit, while one is attached', () => {
@@ -86,6 +91,7 @@ describe('the hidden-window one-app runtime', () => {
     expect(window.hide).toHaveBeenCalled()
     notePodHeadlessWindowClosed(runtime)
     expect(runtime.syncWindowGraph).not.toHaveBeenCalled()
+    expect(mocks.rearm).not.toHaveBeenCalled()
     expect(requestPodHeadlessQuit()).toBe(false)
   })
 })
