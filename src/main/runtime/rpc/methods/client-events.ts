@@ -2,6 +2,8 @@ import { getRegisteredSshState, listRegisteredSshTargets } from '../../../ssh/ss
 import { getPublicSshState } from '../../public-ssh-state'
 import { defineMethod, defineStreamingMethod } from '../core'
 import { ClientEventsUnsubscribeParams } from '../../../../shared/rpc-contract/client-events-params'
+import { PodClientEventsSubscribeParams } from '../../../../shared/rpc-contract/pod-client-events-params'
+import { subscribePodWorktreeStatus } from '../../../pod/worktree-status/install-pod-worktree-status'
 
 let clientEventSubscriptionSeq = 0
 
@@ -9,8 +11,10 @@ export const CLIENT_EVENT_METHODS = [
   defineStreamingMethod({
     name: 'runtime.clientEvents.subscribe',
     permission: 'workspace',
-    params: null,
-    handler: async (_params, { runtime, connectionId, clientKind }, emit) => {
+    // Fork-only (Pod): upstream takes null; Pod's schema drops anything malformed, so nobody is refused.
+    params: PodClientEventsSubscribeParams,
+    handler: async (params, context, emit) => {
+      const { runtime, connectionId, clientKind } = context
       await new Promise<void>((resolve) => {
         // Why: mobile discards terminalSideEffects; excluding it stops the
         // per-OSC batch frames from crossing the relay.
@@ -21,12 +25,15 @@ export const CLIENT_EVENT_METHODS = [
           { consumesTerminalSideEffects: clientKind !== 'mobile' }
         )
 
+        // Fork-only (Pod): opt-in worktreeStatusChanged; null without Pod's identity or the opt-in.
+        const stopPodWorktreeStatus = subscribePodWorktreeStatus(params, context, emit)
         const seq = ++clientEventSubscriptionSeq
         const subscriptionId = `runtime-client-events-${connectionId ?? 'inproc'}-${seq}`
         runtime.registerSubscriptionCleanup(
           subscriptionId,
           () => {
             unsubscribe()
+            stopPodWorktreeStatus?.()
             emit({ type: 'end' })
             resolve()
           },
@@ -46,7 +53,12 @@ export const CLIENT_EVENT_METHODS = [
           return state ? [{ targetId: target.id, state }] : []
         })
         // Why: attaching the listener before snapshotting closes the reload gap without exposing HUB-private target configuration.
-        emit({ type: 'ready', subscriptionId, snapshot: { sshStates } })
+        emit({
+          type: 'ready',
+          subscriptionId,
+          snapshot: { sshStates },
+          ...(stopPodWorktreeStatus ? { worktreeStatus: true } : {})
+        })
       })
     }
   }),
