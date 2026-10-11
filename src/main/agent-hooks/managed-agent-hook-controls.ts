@@ -10,7 +10,7 @@ import {
   isAgentStatusHooksEnabledForAgent
 } from '../../shared/agent-status-hooks-setting'
 import { probeClaudeCliVersion } from '../claude/claude-hook-event-versions'
-import { podHookWriteBlockNow } from '../pod/instance/pod-instance'
+import { podHookWriteBlockNow } from '../pod/instance/pod-hook-write-block'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
@@ -148,7 +148,7 @@ export async function installManagedAgentHooks(
   settings: ManagedHookSettings = null,
   options: InstallOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
-  // Pod: only the user's own instance writes the hook files every live session reads (pod-instance.ts)
+  // Pod: only the user's own instance writes the hook files every live session reads (pod-hook-write-block.ts)
   const blocked = podHookWriteBlockNow()
   if (blocked) {
     return selectedInstallers(options).map(([agent]) => podBlockedStatus(agent, blocked))
