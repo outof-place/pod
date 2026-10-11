@@ -161,16 +161,28 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
           !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
       if (shouldMaterializePendingTerminal) {
+        const paneKey = `${tab.parentTabId}:${tab.leafId}`
+        const joined = this.joinPaneMaterialization(worktreeId, paneKey)
+        if (joined) {
+          // Why: a second open waits for the start already running; two spawns could start two agents.
+          await joined
+          return this.applyMobileSessionTabNavigation(
+            this.getMobileSessionTabsForWorktree(worktreeId),
+            tab.id,
+            navigation,
+            opts.clientNavigationId
+          )
+        }
+        const finishMaterialization = this.beginPaneMaterialization(worktreeId, paneKey)
         const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
         const targetGroupId = snapshot?.tabGroups?.find((group) =>
           group.tabOrder.includes(tab.parentTabId)
         )?.id
         // Why: a pane restored after a daemon loss or woken from sleep re-enters its agent's
         // session, as the renderer's cold restore does, instead of coming back as a shell.
-        const agentResume = await this.resolvePaneAgentResumeStartup(
-          worktreeId,
-          `${tab.parentTabId}:${tab.leafId}`
-        ).catch(() => null)
+        const agentResume = await this.resolvePaneAgentResumeStartup(worktreeId, paneKey).catch(
+          () => null
+        )
         // Why: a pending agent tab may exist without its startup command ever
         // having been delivered (the create's renderer stalled, #7587), so a
         // bare materialize would put a plain shell under the agent icon.
@@ -178,7 +190,7 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         // commands when attaching to live sessions, so this cannot double-launch.
         let agentStartup: Awaited<
           ReturnType<OrcaRuntimeService['resolveMobileSessionTerminalCommand']>
-        > = agentResume ?? {}
+        > = agentResume?.startup ?? {}
         if (!agentResume && tab.launchAgent) {
           try {
             const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
@@ -202,8 +214,10 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
             env: agentStartup.env,
             startupCommandDelivery: agentStartup.startupCommandDelivery,
             launchConfig: agentStartup.launchConfig,
-            launchAgent: agentResume?.agent ?? tab.launchAgent,
-            ...(agentResume ? { resumeProviderSession: agentResume.providerSession } : {}),
+            launchAgent: agentResume ? agentResume.startup?.agent : tab.launchAgent,
+            ...(agentResume?.startup
+              ? { resumeProviderSession: agentResume.startup.providerSession }
+              : {}),
             targetGroupId,
             ...(automatic ? { refuseSleptWorktree: true } : {})
           })
@@ -223,10 +237,10 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
             this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, { force: true })
           }
           throw err
+        } finally {
+          finishMaterialization()
         }
-        if (agentResume?.record) {
-          this.consumeAgentResumeRecord(worktreeId, agentResume.record)
-        }
+        this.settlePaneAgentResume(worktreeId, paneKey, agentResume)
         return this.applyMobileSessionTabNavigation(
           this.getMobileSessionTabsForWorktree(worktreeId),
           tab.id,
