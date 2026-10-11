@@ -101,6 +101,154 @@ describe('Pod OrbStack templates', () => {
     ).toEqual([shared?.name, fresh?.name].sort())
   })
 
+  it('updates the older template in place for a new Claude Code: same machine, same address', async () => {
+    const { orb, templates, provision } = setup()
+    const shared = await templates.build(
+      'shared',
+      podOrbstackTemplateKey('shared', null),
+      provision
+    )
+    const old = await templates.build(
+      'sandbox',
+      podOrbstackTemplateKey('sandbox', '2.1.295'),
+      provision
+    )
+    const address = orb.machines.get(old?.name ?? '')?.address
+    const taken = orb.addressesTaken()
+    orb.calls.length = 0
+    const update = vi.fn(async (name: string) => {
+      await orb.run('orb', ['start', name])
+      return { agentVersion: '2.1.296' }
+    })
+    const key = podOrbstackTemplateKey('sandbox', '2.1.296')
+    const fresh = await templates.build('sandbox', key, provision, update)
+
+    expect(fresh).toMatchObject({ key, state: 'ready', agentVersion: '2.1.296' })
+    expect(update).toHaveBeenCalledWith(fresh?.name)
+    expect(provision).toHaveBeenCalledTimes(2)
+    expect(orb.calls.filter((call) => call[1] === 'rename')).toEqual([
+      ['orb', 'rename', old?.name, fresh?.name]
+    ])
+    expect(orb.calls.map((call) => call[1])).not.toContain('create')
+    expect(orb.calls.map((call) => call[1])).not.toContain('delete')
+    expect(orb.machines.has(old?.name ?? '')).toBe(false)
+    expect(orb.machines.get(fresh?.name ?? '')).toMatchObject({ address, running: false })
+    expect(orb.addressesTaken()).toBe(taken)
+    // Sealed again: the template booted for the update and minted a machine-id.
+    expect(orb.calls.some((call) => call.includes(SEAL_TEMPLATE))).toBe(true)
+    expect(
+      templates
+        .list()
+        .map((entry) => entry.name)
+        .sort()
+    ).toEqual([shared?.name, fresh?.name].sort())
+  })
+
+  it('builds fresh when the rename or the update fails, and never renames a template in use', async () => {
+    const { orb, templates, provision } = setup()
+    const old = await templates.build(
+      'sandbox',
+      podOrbstackTemplateKey('sandbox', '2.1.295'),
+      provision
+    )
+    const update = vi.fn(async () => ({ agentVersion: '2.1.296' }))
+    orb.failures.set('rename', 'busy')
+    const fresh = await templates.build(
+      'sandbox',
+      podOrbstackTemplateKey('sandbox', '2.1.296'),
+      provision,
+      update
+    )
+    orb.failures.delete('rename')
+    expect(update).not.toHaveBeenCalled()
+    expect(provision).toHaveBeenCalledTimes(2)
+    expect(fresh).toMatchObject({ state: 'ready' })
+    expect(orb.machines.has(old?.name ?? '')).toBe(false)
+
+    // The update itself fails: the renamed machine goes, and the caller builds the full way.
+    const broken = await templates.build(
+      'sandbox',
+      podOrbstackTemplateKey('sandbox', '2.1.297'),
+      provision,
+      async () => {
+        throw new Error('verify Claude Code: bad signature')
+      }
+    )
+    expect(broken).toBeNull()
+    expect(orb.machines.size).toBe(0)
+    expect(templates.list()).toEqual([])
+  })
+
+  it('renames or deletes a template only after the clones reading it end', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'pod-orbstack-templates-'))
+    roots.push(root)
+    const orb = createFakeOrb()
+    let release = (): void => undefined
+    let gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const templates = createPodOrbstackTemplates({
+      file: join(root, 'templates.json'),
+      run: async (tool, args, options) => {
+        if (args[0] === 'clone') {
+          await gate
+        }
+        return orb.run(tool, args, options)
+      }
+    })
+    const provision = async (name: string) => {
+      await orb.run('orb', ['create', '--isolated', 'ubuntu:24.04', name])
+      return { agentVersion: null }
+    }
+    const old = await templates.build(
+      'sandbox',
+      podOrbstackTemplateKey('sandbox', '2.1.295'),
+      provision
+    )
+    if (!old) {
+      throw new Error('no template')
+    }
+    const cloning = templates.clone(old, 'pod-web-12345678-sbx', [])
+    const update = vi.fn(async () => ({ agentVersion: '2.1.296' }))
+    const fresh = templates.build(
+      'sandbox',
+      podOrbstackTemplateKey('sandbox', '2.1.296'),
+      provision,
+      update
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    release()
+    await Promise.all([cloning, fresh])
+    expect(update).toHaveBeenCalledTimes(1)
+    const verbs = orb.calls.map((call) => call[1])
+    expect(verbs.indexOf('clone')).toBeLessThan(verbs.indexOf('rename'))
+    expect(orb.machines.get('pod-web-12345678-sbx')).toBeDefined()
+
+    // Without an update path the older template is deleted, again only after its clone.
+    orb.calls.length = 0
+    const current = await templates.find(podOrbstackTemplateKey('sandbox', '2.1.296'))
+    if (!current) {
+      throw new Error('no template')
+    }
+    let releaseAgain = (): void => undefined
+    const heldAgain = new Promise<void>((resolve) => {
+      releaseAgain = resolve
+    })
+    gate = heldAgain
+    const second = templates.clone(current, 'pod-api-12345678-sbx', [])
+    const rebuilt = templates.build(
+      'sandbox',
+      podOrbstackTemplateKey('sandbox', '2.1.297'),
+      provision
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    releaseAgain()
+    await Promise.all([second, rebuilt])
+    const after = orb.calls.map((call) => call[1])
+    expect(after.indexOf('clone')).toBeLessThan(after.indexOf('delete'))
+    expect(orb.machines.get('pod-api-12345678-sbx')).toBeDefined()
+  })
+
   it('never builds over or deletes a machine it did not record', async () => {
     const { orb, templates, provision } = setup()
     const key = podOrbstackTemplateKey('sandbox', '2.1.296')
