@@ -68,6 +68,7 @@ export function installMultiplexCleanup(state: TerminalMultiplexConnection): voi
       return
     }
     state.closed = true
+    state.releaseLinkBackpressure()
     signal?.removeEventListener('abort', state.cancelAllPendingPtyWaits)
     state.cancelAllPendingPtyWaits()
     const remoteDesktopKeysByPty = new Map<string, string[]>()
