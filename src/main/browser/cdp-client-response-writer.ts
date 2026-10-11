@@ -15,7 +15,11 @@ export class CdpClientResponseWriter {
     { queue: WsOutboundBackpressureQueue<string>; onClose: () => void }
   >()
 
-  constructor(private readonly getClient: () => WebSocket | null) {}
+  constructor(
+    private readonly getClient: () => WebSocket | null,
+    // Fork-only (Pod): told each replied request id (src/main/pod/browser/cdp-proxy-hooks.ts).
+    private readonly onReply?: (clientId: number) => void
+  ) {}
 
   send(payload: unknown, client = this.getClient()): void {
     const responsePayload = client ? this.addResponseSessionId(payload, client) : payload
@@ -63,6 +67,7 @@ export class CdpClientResponseWriter {
     if (typeof clientId !== 'number') {
       return payload
     }
+    this.onReply?.(clientId)
     const responseSessionIds = this.responseSessionIdsByClient.get(client)
     const sessionId = responseSessionIds?.get(clientId)
     responseSessionIds?.delete(clientId)
