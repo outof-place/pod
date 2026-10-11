@@ -18,6 +18,8 @@ import { registerRendererDocumentNavigation } from './renderer-document-navigati
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
+import type { RuntimeNotifier } from '../runtime/runtime-notifier-contract'
+import { podUiHostLeasedNotifier } from '../pod/headless-host/ui-host-hidden-renderer'
 
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
@@ -36,7 +38,7 @@ export function registerRuntimeWindowLifecycle(
     onFailure: (reason) => runtime.markGraphReloadFailed(mainWindow.id, reason)
   })
   const send = rendererNotifications.send
-  runtime.setNotifier({
+  const notifier: RuntimeNotifier = {
     worktreesChanged: (repoId, renamed) => {
       // Why: clear scan caches before the renderer handles this event, so it can't read stale TTL entries after a mutation.
       runWorktreeChangeInvalidators(repoId)
@@ -222,7 +224,9 @@ export function registerRuntimeWindowLifecycle(
     browserRemoteViewersChanged: (browserPageId, hasRemoteViewers) =>
       send('runtime:browserRemoteViewersChanged', { browserPageId, hasRemoteViewers }),
     clientHostedBrowserRowsChanged: (event) => send('runtime:clientHostedBrowserRowsChanged', event)
-  })
+  }
+  // Fork-only (Pod): a hidden one-app window wakes for each request the runtime awaits from it.
+  runtime.setNotifier(podUiHostLeasedNotifier(mainWindow, notifier))
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
     const fence = runtime.markRendererReloading(mainWindow.id)
