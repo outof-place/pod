@@ -22,6 +22,7 @@ import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
 import { openPodHeadlessEditorTab } from '../pod/ui-host/pod-headless-editor-tabs'
+import { openPodHeadlessDiffTab } from '../pod/ui-host/pod-headless-diff-tabs'
 
 export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
   protected readonly fileCommands = new RuntimeFileCommands({
@@ -57,6 +58,10 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
     },
     openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation) => {
       if (!this.notifier?.openDiff) {
+        // Fork-only (Pod): the headless one-app runtime keeps diff tabs in memory.
+        if (openPodHeadlessDiffTab(this, worktreeId, filePath, relativePath, staged, navigation)) {
+          return
+        }
         throw new Error('renderer_unavailable')
       }
       this.notifier.openDiff(
