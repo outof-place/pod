@@ -42,6 +42,8 @@ printf '%s  %s\\n' "$checksum" "$dir/claude" | sha256sum --check --quiet --stric
 mkdir -p "$HOME/.local/share/claude/versions" "$HOME/.local/bin"
 install -m 755 "$dir/claude" "$HOME/.local/share/claude/versions/$version"
 ln -sfn "$HOME/.local/share/claude/versions/$version" "$HOME/.local/bin/claude"
+# An updated template keeps only the version it now runs.
+find "$HOME/.local/share/claude/versions" -mindepth 1 -maxdepth 1 ! -name "$version" -exec rm -f {} +
 `
 
 /** Orca's own POSIX hook script, unchanged: the relay serves the hook port on the VM's 127.0.0.1. */
@@ -176,55 +178,68 @@ export async function provisionSandboxBase(args: {
     '-c',
     'command -v git >/dev/null || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git; }'
   ])
-  let agentVersion: string | null = null
   const { release } = args
-  if (release) {
-    args.onStep?.('Installing Claude Code')
-    await step('copy Claude Code', [
-      'push',
-      '-m',
-      name,
-      ...SANDBOX_RELEASE_FILES.map((file) => join(release.dir, file)),
-      `${RELEASE_DIR_IN_VM}/`
-    ])
-    await step('verify Claude Code', [
-      'run',
-      '-m',
-      name,
-      'bash',
-      '-c',
-      VERIFY_AND_INSTALL_CLAUDE,
-      'pod-verify-claude',
-      release.version,
-      release.platform,
-      CLAUDE_RELEASE_KEY_FINGERPRINT,
-      RELEASE_DIR_IN_VM
-    ])
-    // orb push writes as root, so only root can clear the copy.
-    await step('clean up Claude Code copy', [
-      'run',
-      '-m',
-      name,
-      '-u',
-      'root',
-      'rm',
-      '-rf',
-      RELEASE_DIR_IN_VM
-    ])
-    const version = await step('claude --version', [
-      'run',
-      '-m',
-      name,
-      'bash',
-      '-lc',
-      '"$HOME/.local/bin/claude" --version'
-    ])
-    agentVersion = /\d+\.\d+\.\d+/.exec(version)?.[0] ?? null
-    if (agentVersion !== release.version) {
-      throw new Error(`claude --version: expected ${release.version}, got ${version.trim()}`)
-    }
+  return {
+    agentVersion: release
+      ? await installSandboxClaude({ run, name, release, onStep: args.onStep })
+      : null
   }
-  return { agentVersion }
+}
+
+/** Pushes the cached release, verifies and installs it in the VM; returns the version it runs. */
+export async function installSandboxClaude(args: {
+  run: OrbstackToolRunner
+  name: string
+  release: SandboxClaudeRelease
+  onStep?: (step: string) => void
+}): Promise<string> {
+  const { name, release } = args
+  const step = stepRunner(args.run)
+  args.onStep?.('Installing Claude Code')
+  await step('copy Claude Code', [
+    'push',
+    '-m',
+    name,
+    ...SANDBOX_RELEASE_FILES.map((file) => join(release.dir, file)),
+    `${RELEASE_DIR_IN_VM}/`
+  ])
+  await step('verify Claude Code', [
+    'run',
+    '-m',
+    name,
+    'bash',
+    '-c',
+    VERIFY_AND_INSTALL_CLAUDE,
+    'pod-verify-claude',
+    release.version,
+    release.platform,
+    CLAUDE_RELEASE_KEY_FINGERPRINT,
+    RELEASE_DIR_IN_VM
+  ])
+  // orb push writes as root, so only root can clear the copy.
+  await step('clean up Claude Code copy', [
+    'run',
+    '-m',
+    name,
+    '-u',
+    'root',
+    'rm',
+    '-rf',
+    RELEASE_DIR_IN_VM
+  ])
+  const version = await step('claude --version', [
+    'run',
+    '-m',
+    name,
+    'bash',
+    '-lc',
+    '"$HOME/.local/bin/claude" --version'
+  ])
+  const agentVersion = /\d+\.\d+\.\d+/.exec(version)?.[0] ?? null
+  if (agentVersion !== release.version) {
+    throw new Error(`claude --version: expected ${release.version}, got ${version.trim()}`)
+  }
+  return agentVersion
 }
 
 /**
