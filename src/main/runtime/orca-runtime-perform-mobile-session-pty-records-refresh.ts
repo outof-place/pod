@@ -240,13 +240,26 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         } finally {
           finishMaterialization()
         }
-        this.settlePaneAgentResume(worktreeId, paneKey, agentResume)
+        this.settlePaneAgentResume(
+          worktreeId,
+          paneKey,
+          agentResume ??
+            this.restartedPaneAgentPlan(
+              tab.launchAgent,
+              Boolean(agentStartup.command),
+              Boolean(sessionId)
+            )
+        )
         return this.applyMobileSessionTabNavigation(
           this.getMobileSessionTabsForWorktree(worktreeId),
           tab.id,
           navigation,
           opts.clientNavigationId
         )
+      }
+      if (publicTab?.type === 'terminal' && publicTab.status === 'ready') {
+        // Pod: a shown agent that outlived the host's restart has its old state checked on screen.
+        void this.confirmAgentStateBeforeRestart(worktreeId, `${tab.parentTabId}:${tab.leafId}`)
       }
       const callerSnapshot = this.getMobileSessionTabsForWorktree(
         worktreeId,
