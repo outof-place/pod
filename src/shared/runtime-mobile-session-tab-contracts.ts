@@ -21,6 +21,8 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */
   turnCompletedAt?: number
   launchAgent?: TuiAgent
+  /** Set when the host last started this pane: its agent resumed, or could not be. */
+  agentResume?: RuntimeMobileSessionAgentResume
   startupCwd?: string
   parentLayout?: TerminalLayoutSnapshot
   color?: string | null
@@ -29,6 +31,11 @@ export type RuntimeMobileSessionTerminalTab = {
   launchDraft?: string
   launchDraftCreatedAt?: number
   isActive: boolean
+}
+
+export type RuntimeMobileSessionAgentResume = {
+  agent: string
+  outcome: 'resumed' | 'unavailable'
 }
 
 export type RuntimeMobileTerminalTheme = {
