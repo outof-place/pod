@@ -77,12 +77,14 @@ export class UnixSocketStreamConnection {
     if (!this.isOpen) {
       return
     }
-    if (this.socket.writableLength > this.maxBufferedBytes) {
+    const frame = encodeRuntimeLocalStreamFrame(RuntimeLocalStreamFrameKind.Text, text)
+    // Why the frame too: one large reply would otherwise queue past the ceiling it guards.
+    if (this.socket.writableLength + frame.length > this.maxBufferedBytes) {
       // Why: a reply cannot be dropped silently; closing lets the client resync from fresh requests.
       this.close()
       return
     }
-    this.socket.write(encodeRuntimeLocalStreamFrame(RuntimeLocalStreamFrameKind.Text, text))
+    this.socket.write(frame)
   }
 
   // Why: false means "discarded" to terminal multiplexing, which then closes and resnapshots; kernel
