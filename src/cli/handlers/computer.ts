@@ -8,7 +8,7 @@ import type {
 import type { CommandHandler } from '../dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
-import { productHelperCopy } from '../../main/product-identity/product-helper-names'
+import { cliProductHelperCopy } from '../product-cli-branding'
 import {
   formatComputerAction,
   formatGetAppState,
@@ -54,7 +54,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
         return 'Computer-use permission setup is only required on macOS.'
       }
       const firstLine = value.launchedHelper
-        ? productHelperCopy('Opened Orca Computer Use permission setup.')
+        ? cliProductHelperCopy('Opened Orca Computer Use permission setup.')
         : 'Computer Use permissions checked.'
       return [
         firstLine,
@@ -64,7 +64,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
           ? `Next: ${value.nextStep}`
           : 'Computer Use permissions are already granted.',
         value.launchedHelper
-          ? productHelperCopy(
+          ? cliProductHelperCopy(
               'Use the Allow buttons or drag "Orca Computer Use" into the macOS permission list.'
             )
           : null
