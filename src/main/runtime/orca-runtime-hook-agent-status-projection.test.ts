@@ -230,7 +230,10 @@ describe('headless hook agent-status projection (#11761)', () => {
   // no receiver was up, so its recent `receivedAt` proves nothing. Publishing it would
   // resurrect the question card on every restart, with no agent left to answer it.
   it('refuses a hydrated unconfirmed row while keeping its resume identity', async () => {
+    // Pod: its headless restart layer shows this row marked (agent-resume-relaunch tests); off here.
+    vi.stubEnv('ORCA_HEADLESS_AGENT_RESUME', '0')
     const agentStatus = await projectAgentStatus([hookRow({ restoredUnconfirmed: true })])
+    vi.unstubAllEnvs()
 
     expect(agentStatus).toEqual(
       expect.objectContaining({ state: 'done', prompt: '', providerSession: PROVIDER_SESSION })
