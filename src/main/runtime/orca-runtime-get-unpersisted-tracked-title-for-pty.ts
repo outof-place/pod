@@ -35,7 +35,7 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
     return { ...snapshot, lastTitle: tracked }
   }
 
-  /** Decorative comparison key: only recognized agent titles fold leading spinner frames. */
+  /** Decorative comparison key: only recognized agent titles fold spinner frames. */
   protected makeDecorativeTitleGateKey(rawTitle: string, normalizedTitle: string): string {
     return getDecorativeTitleGateKey(rawTitle, normalizedTitle)
   }
