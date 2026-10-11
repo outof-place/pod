@@ -9,4 +9,8 @@ export type PodUiHostApi = {
   surfaceReady: () => void
   /** Where in a surface PodNative asked for; returns the unsubscribe. */
   onSurfaceNavigate: (navigate: (navigation: PodUiHostSurfaceNavigation) => void) => () => void
+  /** Before Close Terminals stops this window's panes: the worktree is going to sleep. */
+  beginRuntimeSleep: (worktreeId: string) => void
+  /** After: the runtime sleeps the worktree's PTYs no pane here bound, and holds it asleep. */
+  sleepRuntimeTerminals: (worktreeId: string) => Promise<void>
 }
