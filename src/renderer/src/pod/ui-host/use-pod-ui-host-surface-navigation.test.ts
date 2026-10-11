@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import { applyPodUiHostSurfaceNavigation } from './use-pod-ui-host-surface-navigation'
 
@@ -11,7 +12,16 @@ function store() {
     setSelectedAutomationId: vi.fn(),
     openSkillsPage: vi.fn(),
     openArtifactsPage: vi.fn(),
-    openSpacePage: vi.fn()
+    openSpacePage: vi.fn(),
+    activeModal: 'none' as const,
+    activeView: 'terminal' as const,
+    taskPageData: {},
+    openModal: vi.fn(),
+    openTaskPage: vi.fn(),
+    setSidebarOpen: vi.fn(),
+    showRightSidebarSearch: vi.fn(),
+    setRightSidebarOpen: vi.fn(),
+    setRightSidebarTab: vi.fn()
   }
 }
 
@@ -62,5 +72,38 @@ describe('applyPodUiHostSurfaceNavigation', () => {
     expect(app.openActivityPage).toHaveBeenCalledOnce()
     applyPodUiHostSurfaceNavigation({ surface: 'window', section: 'unknown' }, app)
     expect(app.openSettingsPage).not.toHaveBeenCalled()
+    expect(app.setRightSidebarTab).not.toHaveBeenCalled()
+  })
+
+  it('opens the right sidebar at the panel named, and search in it', () => {
+    const app = store()
+    applyPodUiHostSurfaceNavigation({ surface: 'window', section: 'source-control' }, app)
+    expect(app.setRightSidebarOpen).toHaveBeenCalledWith(true)
+    expect(app.setRightSidebarTab).toHaveBeenCalledWith('source-control')
+    applyPodUiHostSurfaceNavigation({ surface: 'window', section: 'ports' }, app)
+    expect(app.setRightSidebarTab).toHaveBeenLastCalledWith('ports')
+    applyPodUiHostSurfaceNavigation({ surface: 'window', section: 'search' }, app)
+    expect(app.showRightSidebarSearch).toHaveBeenCalledOnce()
+  })
+
+  it("opens Pod's composer, Add Project, the board, the quick commands and tasks", () => {
+    const app = store()
+    applyPodUiHostSurfaceNavigation({ surface: 'window', section: 'new-workspace' }, app)
+    expect(app.openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      telemetrySource: 'shortcut'
+    })
+    applyPodUiHostSurfaceNavigation({ surface: 'window', section: 'add-project' }, app)
+    expect(app.openModal).toHaveBeenLastCalledWith('add-repo')
+    const board = vi.fn()
+    const quickCommands = vi.fn()
+    window.addEventListener('orca:toggle-workspace-board', board)
+    window.addEventListener('orca:toggleQuickCommandsMenu', quickCommands)
+    applyPodUiHostSurfaceNavigation({ surface: 'window', section: 'workspace-board' }, app)
+    expect(app.setSidebarOpen).toHaveBeenCalledWith(true)
+    expect(board).toHaveBeenCalledOnce()
+    applyPodUiHostSurfaceNavigation({ surface: 'window', section: 'quick-commands' }, app)
+    expect(quickCommands).toHaveBeenCalledOnce()
+    applyPodUiHostSurfaceNavigation({ surface: 'window', section: 'tasks' }, app)
+    expect(app.openTaskPage).toHaveBeenCalledOnce()
   })
 })
