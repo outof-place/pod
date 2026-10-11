@@ -35,7 +35,13 @@ export type RuntimeMobileSessionTerminalTab = {
 
 export type RuntimeMobileSessionAgentResume = {
   agent: string
-  outcome: 'resumed' | 'unavailable'
+  /** `pending`: the pane waits for its tab's activation to resume the agent. `kept`: the agent ran on
+   *  through the host's restart. `restarted`: a fresh session, the old one could not be found. */
+  outcome: 'resumed' | 'unavailable' | 'pending' | 'kept' | 'restarted'
+  /** `pending`/`kept`: the agent's state when the host went down, not yet seen since. */
+  stateBeforeRestart?: 'working' | 'waiting' | 'blocked'
+  /** `kept`: the screen at the tab's activation still shows that state. */
+  confirmed?: true
 }
 
 export type RuntimeMobileTerminalTheme = {
