@@ -1,5 +1,6 @@
 import type { RpcRequest } from '../rpc/core'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address'
+import { POD_ORBSTACK_LONG_METHODS } from '../../pod/orbstack/pod-orbstack-long-calls'
 
 export const KEEPALIVE_INTERVAL_MS = 10_000
 
@@ -51,6 +52,10 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
     typeof request.params.to === 'string' &&
     request.params.to.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
   ) {
+    return 'wait'
+  }
+  // Fork-only (Pod): OrbStack machine changes run past the 30 s idle timer.
+  if (POD_ORBSTACK_LONG_METHODS.has(request.method)) {
     return 'wait'
   }
   if (request.method === 'browser.clientHost.attach') {
