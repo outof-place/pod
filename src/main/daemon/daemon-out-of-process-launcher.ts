@@ -15,7 +15,7 @@ import {
 } from './daemon-launched-child'
 import { getDaemonEntryPath, probeDaemonSocket as probeSocket } from './daemon-launch-paths'
 import { materializeRelocatedDaemonHost, pruneDaemonHostStaging } from './daemon-host-relocation'
-import { materializeDarwinDaemonHost } from './daemon-host-darwin-clone'
+import { darwinDaemonHostForSpawn } from './daemon-host-darwin-spawn'
 import { DAEMON_RECOVERY_BUDGET_MS, daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
 import {
@@ -126,7 +126,7 @@ export function createOutOfProcessLauncher(
       // On macOS packaged, an APFS clone of the bundle outlives the in-place update that deletes it.
       const relocatedHost =
         process.platform === 'darwin'
-          ? await materializeDarwinDaemonHost(entryPath)
+          ? await darwinDaemonHostForSpawn(entryPath)
           : materializeRelocatedDaemonHost()
       pruneDaemonHostStaging()
       // Fork the relocated entry when available; otherwise the install-dir entry.
