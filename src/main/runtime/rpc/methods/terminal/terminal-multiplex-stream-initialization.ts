@@ -91,7 +91,10 @@ export async function initializeMultiplexStream(
           state.queueOrSendOutput(stream, chunk)
         }
       },
-      { fastAfterInput: isRuntimeLocalStreamConnectionId(connectionId) }
+      {
+        fastAfterInput: isRuntimeLocalStreamConnectionId(connectionId),
+        leadingEdge: isRuntimeLocalStreamConnectionId(connectionId)
+      }
     ),
     unsubscribeData: () => {},
     unsubscribeResize: () => {},
