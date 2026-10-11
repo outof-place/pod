@@ -28,6 +28,7 @@ import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refre
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
 import { usePodUiHostQuitAssess } from '../pod/ui-host/use-pod-ui-host-quit-assess'
 import { usePodUiHostSurfaceReady } from '../pod/ui-host/use-pod-ui-host-surface-ready'
+import { usePodUiHostSurfaceNavigation } from '../pod/ui-host/use-pod-ui-host-surface-navigation'
 
 /**
  * App-level subscriptions that must outlive any individual surface. Each one is here because
@@ -53,6 +54,7 @@ export function useAppShellServices(): void {
   // Fork-only (Pod): one-app's quit asks here what quitting would lose; a lazy window says it's ready.
   usePodUiHostQuitAssess()
   usePodUiHostSurfaceReady(workspaceSessionReady)
+  usePodUiHostSurfaceNavigation()
   useRemoteRuntimeRecoveryTriggers()
   useVisibleReviewRefreshReporting()
   useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })
