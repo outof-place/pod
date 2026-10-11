@@ -15,6 +15,7 @@
 # Signs inside out: the nested runtime's top level again (its Info.plist changed; nested code keeps
 # electron-builder's signatures), then the outer last, each with the entitlements it already had.
 # Notarizes and staples the outer, then the DMG, zips the stapled app and runs release.sh's gates.
+# The outer side (PodNative, Sparkle) may carry no entitlements: PodNative is not sandboxed.
 # Never publish latest-mac.yml for a one-app build: electron-updater is off in that layout.
 #
 # Signing and notarization: POD_SIGN_IDENTITY, NOTARY_PROFILE (default pod-notary), or
@@ -43,7 +44,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --runtime) runtime="${2:?--runtime needs a path}"; shift 2 ;;
     --out) out="${2:?--out needs a path}"; shift 2 ;;
-    -h | --help) sed -n '2,21p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,22p' "$0"; exit 0 ;;
     -*) die "unknown option $1" ;;
     *)
       if [ -z "$version" ]; then version="${1#v}"
@@ -173,7 +174,7 @@ xcrun notarytool submit "$dmg" "${notary_args[@]}" --wait
 xcrun stapler staple "$dmg"
 ditto -c -k --keepParent "$app" "$zip"
 
-log "verify (Gatekeeper and release.sh's bundle gates on the nested runtime)"
+log "verify (Gatekeeper, release.sh's bundle gates on the nested runtime, no outer entitlements)"
 codesign --verify --deep --strict --verbose=2 "$app"
 signature="$(codesign -dv "$app" 2>&1)"
 grep -Fqx "TeamIdentifier=$team_id" <<<"$signature" || die "$app is not signed by team $team_id"
@@ -192,4 +193,5 @@ node -e "require('./product/release-bundle-gate.cjs').assertAppAsar(process.argv
 node product/scripts/verify-claude-acc-host.mjs "$nested"
 node product/scripts/verify-bundle-seal.mjs "$nested"
 node product/scripts/verify-entitlements.mjs "$nested"
+node product/scripts/verify-entitlements.mjs --outer "$app" "$NESTED_PATH"
 log "done: $app, $dmg, $zip"
