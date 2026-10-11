@@ -43,9 +43,12 @@ function logDaemonMilestone(event: string, details: Record<string, unknown> = {}
   }
 }
 
+/** `isQuitting`: whether the host's quit is under way (main's, injected: this module runs in orcad too). */
+export type DaemonProviderInitOptions = DaemonLaunchPolicy & { isQuitting?: () => boolean }
+
 export async function initDaemonPtyProvider(
   signal?: AbortSignal,
-  options: DaemonLaunchPolicy = {}
+  options: DaemonProviderInitOptions = {}
 ): Promise<void> {
   logDaemonMilestone('daemon-init-start')
   // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init that deterministically outlasts the first-window timeout.
@@ -64,7 +67,7 @@ export async function initDaemonPtyProvider(
   const info = await newSpawner.ensureRunning()
   // Why: reclaim superseded daemon-host copies on EVERY launch (spawns are rare), keeping current + live-daemon-pinned versions.
   pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
-  scheduleDarwinDaemonHostMaintenance(runtimeDir, getDaemonEntryPath())
+  scheduleDarwinDaemonHostMaintenance(runtimeDir, getDaemonEntryPath(), options.isQuitting)
   const launchMode = newSpawner.getHandle()?.mode
   logDaemonMilestone('daemon-current-ready')
   if (signal?.aborted) {
