@@ -7,6 +7,10 @@ import { createUnresolvedOwnerPtyTransport } from '../unresolved-owner-pty-trans
 import { recordTerminalTabParkedOnUnresolvedHost } from '@/lib/parked-terminal-host-hydration'
 import { getFitOverrideForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
+import {
+  ensurePtyQueryResponderSubscription,
+  isPtyQueryAnsweredElsewhere
+} from '../pty-query-responder-state'
 import { isPaneReplaying } from '../replay-guard'
 import { registerUndeliverableWriteHandler } from '@/lib/pane-manager/terminal-write-pipeline-health'
 import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
@@ -55,9 +59,10 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       : session.runtimeEnvironmentId
         ? createRemoteRuntimePtyTransport(session.runtimeEnvironmentId, session.transportOptions)
         : createIpcPtyTransport(session.transportOptions)
+  ensurePtyQueryResponderSubscription()
   session.canSendDesktopQueryReply = (): boolean => {
     const ptyId = session.transport.getPtyId()
-    return !ptyId || !isPtyLocked(ptyId)
+    return !ptyId || (!isPtyLocked(ptyId) && !isPtyQueryAnsweredElsewhere(ptyId))
   }
   // Why: parser/capability handlers bypass the ordinary onData guard. Keep
   // desktop silent while the elected mobile xterm owns query replies.
