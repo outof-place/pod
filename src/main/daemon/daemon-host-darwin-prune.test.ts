@@ -4,6 +4,7 @@ import os from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  BACKGROUND_WORK_WAIT,
   ENTRY_REL,
   buildBundleFixture,
   fakeTool,
@@ -157,7 +158,10 @@ describe('scheduleDarwinDaemonHostMaintenance', () => {
     } finally {
       vi.useRealTimers()
     }
-    await vi.waitFor(() => expect(darwinDaemonHostNeedsClone(entryPath)).toBe(false))
+    await vi.waitFor(
+      () => expect(darwinDaemonHostNeedsClone(entryPath)).toBe(false),
+      BACKGROUND_WORK_WAIT
+    )
     expect(existsSync(old)).toBe(false)
   })
 
@@ -172,7 +176,10 @@ describe('scheduleDarwinDaemonHostMaintenance', () => {
     } finally {
       vi.useRealTimers()
     }
-    await vi.waitFor(() => expect(darwinDaemonHostNeedsClone(entryPath)).toBe(false))
+    await vi.waitFor(
+      () => expect(darwinDaemonHostNeedsClone(entryPath)).toBe(false),
+      BACKGROUND_WORK_WAIT
+    )
     const wrapped = tools.calls.filter((call) => call.program === '/usr/sbin/taskpolicy')
     if (existsSync('/usr/sbin/taskpolicy')) {
       expect(wrapped.map((call) => call.args.slice(0, 2))).toEqual(
