@@ -203,7 +203,10 @@ module.exports = {
     icon: 'resources/icon-source/icon.icon',
     extendInfo: {
       ...productUsageDescriptions(base.mac.extendInfo),
-      ClaudeAccHost: claudeAccHost()
+      ClaudeAccHost: claudeAccHost(),
+      // PodNative starts this runtime as its headless host (`--serve --pod-headless-host`) only
+      // when it lists `headless` here (pod/one-app-headless; PodNative's OneAppRuntimeMode).
+      PodUIHostFeatures: ['headless']
     },
     hardenedRuntime: true,
     // Least-privilege entitlements per nested executable instead of Electron's set for all of them.
