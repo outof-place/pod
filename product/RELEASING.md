@@ -108,6 +108,26 @@ Quit Pod first, and check it is really gone: `pgrep -f '/Contents/MacOS/Pod$'` a
 
 Never keep built `.app` copies where LaunchServices, Spotlight or the Dock can find them (Desktop, Downloads, an indexed archive folder): `open -b` and the Dock may pick a stale one. Archive folders get a `.metadata_never_index` file, and a stray copy is unregistered with `lsregister -u <path>`.
 
+## One-app assembly
+
+From v6, the Pod.app users install is PodNative (`codes.pod.native`) with the Electron runtime nested inside it at `Contents/Helpers/Pod Runtime.app` (`codes.pod.app`, no Dock tile). PodNative answers `pod://` and opens the documents. `release.sh` builds and notarizes the runtime, then `product/assemble-one-app.sh` wraps it:
+
+```sh
+product/release.sh 0.1.0                              # the runtime; never --publish here
+product/assemble-one-app.sh 0.1.0 <PodNative.app>     # dist/one-app: Pod.app, DMG, zip
+```
+
+`assemble-one-app.sh` does the following:
+
+1. Checks both inputs: bundle id, version, `codesign --verify --deep --strict`, team and hardened runtime.
+2. Copies PodNative and nests the runtime. Removes the runtime's stapled ticket and clears xattrs (an APFS clone keeps quarantine).
+3. Moves the URL types, document types and UT type declarations to the outer app, and marks the runtime `LSUIElement`.
+4. Re-signs the runtime's top level, then signs the outer last without `--deep`. Each keeps the entitlements it was built with.
+5. Notarizes and staples the app. Then it builds the DMG, signs it, checks its size, notarizes and staples it, and zips the stapled app.
+6. Runs `release.sh`'s gates. Gatekeeper checks the outer app and the DMG. The runtime gets the asar, claude-acc host, bundle seal and entitlements checks.
+
+Publish only the DMG and the zip. A one-app build has no `latest-mac.yml`, because electron-updater is off in that layout. To check that Pod has quit before a manual install, also run `pgrep -f '/Contents/MacOS/PodNative$'` and `lsappinfo find bundleid=codes.pod.native`. The Homebrew cask's `binary` becomes `#{appdir}/Pod.app/Contents/Helpers/Pod Runtime.app/Contents/Resources/bin/podx`.
+
 ## Notes
 
 - **Keep release outputs out of the worktree:** electron-builder packs the repository root into app.asar, minus upstream's denylist and `dist/`. Move an older `dist/` outside the checkout before the next release, never beside it. On 2026-10-10 two parked `dist-*` folders grew app.asar from 140 MB to 2.5 GB; the bundle gate now stops that.
