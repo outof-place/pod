@@ -2,7 +2,8 @@ import type {
   PodOrbstackTemplateInfo,
   PodOrbstackMachine,
   PodOrbstackStatus,
-  PodOrbstackWorktreeLink
+  PodOrbstackWorktreeLink,
+  PodOrbstackChurn
 } from '../../../shared/pod-orbstack-types'
 import {
   DOCKER_PS_FORMAT,
@@ -101,6 +102,7 @@ export async function readPodOrbstackStatus(deps: {
   /** False skips `docker ps` and `docker stats` (a native client that shows machines only). */
   containers?: boolean
   busyWorktreeIds: readonly string[]
+  churn?: PodOrbstackChurn
   now?: () => number
 }): Promise<PodOrbstackStatus> {
   const { paths, run, registry } = deps
@@ -181,6 +183,7 @@ export async function readPodOrbstackStatus(deps: {
     sandboxClaudeLogin: registry.sandboxClaudeLogin(),
     busyWorktreeIds: [...deps.busyWorktreeIds],
     errors,
-    checkedAt: (deps.now ?? Date.now)()
+    checkedAt: (deps.now ?? Date.now)(),
+    ...(deps.churn ? { churn: deps.churn } : {})
   }
 }
