@@ -59,6 +59,26 @@ describe('UnixSocketStreamConnection buffered-bytes ceiling', () => {
   })
 })
 
+describe('UnixSocketStreamConnection bulk headroom', () => {
+  it('refuses bulk below the ceiling, keeping a reserve for control frames, and reports drains', () => {
+    const ceiling = 1024
+    const socket = new CountingSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the connection uses only write, writableLength, writable, destroyed, destroy and the close and drain events.
+    const connection = new UnixSocketStreamConnection(socket as unknown as Socket, ceiling)
+    expect(connection.canAcceptBulk(ceiling - ceiling / 8 - 5)).toBe(true)
+    expect(connection.canAcceptBulk(ceiling - ceiling / 8)).toBe(false)
+    expect(connection.sendBinary(new Uint8Array(ceiling - 5))).toBe(true)
+    let drains = 0
+    const unsubscribe = connection.onDrain(() => {
+      drains += 1
+    })
+    socket.emit('drain')
+    unsubscribe()
+    socket.emit('drain')
+    expect(drains).toBe(1)
+  })
+})
+
 describe('UnixSocketTransport request slots', () => {
   const sockets: Socket[] = []
   let transport: UnixSocketTransport | null = null
