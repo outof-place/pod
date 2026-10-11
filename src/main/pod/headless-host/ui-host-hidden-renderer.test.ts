@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   holdWindowAwakeAtStartup,
+  leaseAwaitedRendererRequests,
   podUiHostMainWindowOptions,
   STARTUP_AWAKE_AFTER_LOAD_MS
 } from './ui-host-hidden-renderer'
@@ -75,5 +76,57 @@ describe('holdWindowAwakeAtStartup', () => {
     holdWindowAwakeAtStartup(window.target, window.lifecycle, false, leases)
     expect(leases.acquire).not.toHaveBeenCalled()
     expect(window.lifecycle.onFirstLoad).not.toHaveBeenCalled()
+  })
+})
+
+describe('leaseAwaitedRendererRequests', () => {
+  const target = {
+    setBackgroundThrottling: vi.fn(),
+    capturePage: vi.fn(() => Promise.resolve(null))
+  }
+
+  it('holds a lease while an awaited request is pending, through success and failure', async () => {
+    const release = vi.fn()
+    const leases = { acquire: vi.fn(() => release) }
+    let finish: () => void = () => {}
+    let fail: (error: Error) => void = () => {}
+    const notifier = leaseAwaitedRendererRequests(
+      target,
+      {
+        closeTab: (id: string) =>
+          new Promise<string>((resolve) => {
+            finish = () => resolve(id)
+          }),
+        readTab: () =>
+          new Promise<void>((_resolve, reject) => {
+            fail = reject
+          })
+      },
+      true,
+      leases
+    )
+    const closed = notifier.closeTab('t1')
+    expect(leases.acquire).toHaveBeenCalledWith(target)
+    expect(release).not.toHaveBeenCalled()
+    finish()
+    await expect(closed).resolves.toBe('t1')
+    expect(release).toHaveBeenCalledTimes(1)
+
+    const read = notifier.readTab()
+    fail(new Error('gone'))
+    await expect(read).rejects.toThrow('gone')
+    expect(release).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves plain sends asleep, and every other launch unwrapped', () => {
+    const leases = { acquire: vi.fn(() => () => {}) }
+    const send = vi.fn(() => undefined)
+    const notifier = leaseAwaitedRendererRequests(target, { send }, true, leases)
+    notifier.send()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(leases.acquire).not.toHaveBeenCalled()
+
+    const plain = { send }
+    expect(leaseAwaitedRendererRequests(target, plain, false, leases).send).toBe(send)
   })
 })
