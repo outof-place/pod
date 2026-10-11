@@ -11,7 +11,7 @@ export function daemonHostStagingName(writerPid: number, nonce: string): string 
 }
 
 // Unparseable names (pre-pid layout) have no identifiable writer and are kept.
-function stagingWriterVerdict(name: string): ProcessLivenessVerdict {
+export function stagingWriterVerdict(name: string): ProcessLivenessVerdict {
   const match = /^\.staging-(\d+)-[0-9a-f]+$/.exec(name)
   const pid = match ? Number(match[1]) : Number.NaN
   if (!Number.isSafeInteger(pid) || pid <= 0) {
