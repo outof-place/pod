@@ -64,6 +64,11 @@ export function createMacSafeStorageKeychain(
       }
     },
     deleteItem(service, account) {
+      requireKeychain()
+      // Why: without -s or -a, delete-generic-password deletes the first item it finds.
+      if (!service || !account) {
+        throw new Error('deleting a keychain item needs both a service and an account')
+      }
       const result = runProcessSync({
         program: SECURITY,
         args: ['delete-generic-password', '-s', service, '-a', account, ...keychainArgs],
