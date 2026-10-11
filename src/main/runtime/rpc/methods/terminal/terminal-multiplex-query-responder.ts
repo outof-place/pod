@@ -57,7 +57,14 @@ export function pushMultiplexStreamOutput(
   if (isTerminalQueryResponder(responder.ptyId, responder.key)) {
     const held = responder.stripper.takeHeld()
     if (held) {
-      stream.outputBatcher.push(held, { rawLength: 0, transformed: true })
+      // Why the seq: the held bytes end where this chunk starts; a seq-less span reads as a gap to viewers.
+      const heldSeq =
+        typeof meta?.seq === 'number' ? meta.seq - (meta.rawLength ?? data.length) : undefined
+      stream.outputBatcher.push(held, {
+        rawLength: 0,
+        transformed: true,
+        ...(heldSeq === undefined ? {} : { seq: heldSeq })
+      })
     }
     recordForwardedQueries(responder, data)
     stream.outputBatcher.push(data, meta)
