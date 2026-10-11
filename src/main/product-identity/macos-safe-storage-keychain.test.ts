@@ -6,6 +6,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createMacSafeStorageKeychain } from './macos-safe-storage-keychain'
 
 const SECRET = 'c2FsdHlzYWx0eXNhbHR5c2FsdA=='
+const SECURITY = '/usr/bin/security'
+
+/** The quoted keychain paths `security default-keychain` / `list-keychains` print. */
+function keychainPaths(output: string): string[] {
+  return [...output.matchAll(/"([^"]+)"/g)].map((match) => match[1])
+}
 
 // Real `/usr/bin/security` against a scratch keychain: items created by `security` itself trust it,
 // so nothing prompts, and the login keychain is never touched.
@@ -16,8 +22,17 @@ describe.skipIf(process.platform !== 'darwin' || process.env.POD_REAL_KEYCHAIN_T
   () => {
     let dir: string
     let keychainPath: string
+    // Why: create-keychain and delete-keychain change the user's default keychain and search list.
+    let defaultKeychain: string[] = []
+    let searchList: string[] = []
 
     beforeAll(() => {
+      defaultKeychain = keychainPaths(
+        execFileSync(SECURITY, ['default-keychain', '-d', 'user'], { encoding: 'utf8' })
+      )
+      searchList = keychainPaths(
+        execFileSync(SECURITY, ['list-keychains', '-d', 'user'], { encoding: 'utf8' })
+      )
       dir = realpathSync(mkdtempSync(join(tmpdir(), 'pod-keychain-')))
       keychainPath = join(dir, 'scratch.keychain-db')
       execFileSync('/usr/bin/security', ['create-keychain', '-p', 'scratch', keychainPath])
@@ -36,9 +51,16 @@ describe.skipIf(process.platform !== 'darwin' || process.env.POD_REAL_KEYCHAIN_T
 
     afterAll(() => {
       try {
-        execFileSync('/usr/bin/security', ['delete-keychain', keychainPath])
+        execFileSync(SECURITY, ['delete-keychain', keychainPath])
       } finally {
         rmSync(dir, { recursive: true, force: true })
+        // An empty list would clear the search list: restore only what was read.
+        if (searchList.length > 0) {
+          execFileSync(SECURITY, ['list-keychains', '-d', 'user', '-s', ...searchList])
+        }
+        if (defaultKeychain.length === 1) {
+          execFileSync(SECURITY, ['default-keychain', '-d', 'user', '-s', defaultKeychain[0]])
+        }
       }
     })
 
