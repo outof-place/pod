@@ -8,6 +8,7 @@ import {
   encodePodUiHostServerMessage,
   parsePodUiHostClientLine,
   POD_UI_HOST_MAX_LINE_BYTES,
+  POD_UI_HOST_MIN_PROTOCOL_VERSION,
   POD_UI_HOST_PROTOCOL_VERSION,
   type PodUiHostOpenSurface,
   type PodUiHostQuitReason,
@@ -28,7 +29,8 @@ export type PodUiHostServerOptions = {
   pid: number
   onOpenSurface: (request: PodUiHostOpenSurface) => void
   onSecondInstance: (request: PodUiHostSecondInstance) => void
-  onQuit: (reason: PodUiHostQuitReason) => void
+  /** `version`: the asking PodNative's protocol version; below 2 it expects no answer. */
+  onQuit: (request: { reason: PodUiHostQuitReason; confirmed: boolean; version: number }) => void
   /** A UI attached (true), or the attached one went away without asking to quit (false). */
   onUiPresence: (attached: boolean) => void
   log: (message: string) => void
@@ -74,6 +76,7 @@ function preparePrivateDirectory(directory: string): string | null {
 export class PodUiHostServer {
   private server: Server | null = null
   private ui: Socket | null = null
+  private uiVersion = 0
   private readonly quitting = new WeakSet<Socket>()
 
   constructor(private readonly options: PodUiHostServerOptions) {}
@@ -122,9 +125,28 @@ export class PodUiHostServer {
     return true
   }
 
+  /** The attached PodNative's quit committed: its going away is no crash. */
+  noteQuitCommitted(): void {
+    if (this.ui) {
+      this.quitting.add(this.ui)
+    }
+  }
+
+  /** A committed quit was vetoed: the attached PodNative going away is a crash again. */
+  noteQuitAborted(): void {
+    if (this.ui) {
+      this.quitting.delete(this.ui)
+    }
+  }
+
   close(): void {
     this.ui?.destroy()
     this.ui = null
+    this.stopListening()
+  }
+
+  /** No new connections; the attached PodNative stays connected until this process exits. */
+  stopListening(): void {
     this.server?.close()
     if (this.server) {
       removeStaleSocket(this.options.socketPath)
@@ -189,7 +211,8 @@ export class PodUiHostServer {
     const message = parsePodUiHostClientLine(line)
     if (
       message?.type !== 'hello' ||
-      message.v !== POD_UI_HOST_PROTOCOL_VERSION ||
+      message.v < POD_UI_HOST_MIN_PROTOCOL_VERSION ||
+      message.v > POD_UI_HOST_PROTOCOL_VERSION ||
       !tokensMatch(this.options.readToken(), message.token)
     ) {
       this.options.log('ui-host: refused a connection without a valid hello')
@@ -197,12 +220,14 @@ export class PodUiHostServer {
     }
     const previous = this.ui
     this.ui = socket
+    this.uiVersion = message.v
     // Why: the replaced UI is not "gone"; its close must not start the no-UI grace.
     previous?.destroy()
     socket.write(
       encodePodUiHostServerMessage({
         type: 'welcome',
-        v: POD_UI_HOST_PROTOCOL_VERSION,
+        // The version this connection speaks: the client's own.
+        v: message.v,
         pid: this.options.pid
       })
     )
@@ -227,8 +252,15 @@ export class PodUiHostServer {
     } else if (message.type === 'secondInstance') {
       this.options.onSecondInstance(message)
     } else {
-      this.quitting.add(socket)
-      this.options.onQuit(message.reason)
+      // Version 2 may answer needsConfirmation; its quit commits later (noteQuitCommitted).
+      if (this.uiVersion < 2) {
+        this.quitting.add(socket)
+      }
+      this.options.onQuit({
+        reason: message.reason,
+        confirmed: message.confirmed === true,
+        version: this.uiVersion
+      })
     }
   }
 }
