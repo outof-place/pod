@@ -7,6 +7,7 @@ import { setMacTrayYield } from '../../tray/system-tray'
 import { syncMacMenuBarIcon } from '../../startup/main-window-actions'
 import { mainProcessState as state } from '../../startup/main-process-state'
 import { getPodDistroConfig } from '../pod-distro-config'
+import { isPodHeadlessUiHost } from '../ui-host/pod-ui-host-launch'
 import { startPodAccSupervisor } from './acc-supervisor'
 
 let started = false
@@ -23,7 +24,13 @@ function accountHome(): string | null {
 /** Electron wiring for the supervisor; a no-op in builds whose identity has no claude-acc section. */
 export function startPodAccFromStartup(): void {
   const config = getPodDistroConfig().claudeAcc
-  if (started || !config || process.platform !== 'darwin' || state.isServeMode) {
+  // The headless one-app runtime is Pod's app runtime, not a `serve` host: it runs claude-acc.
+  if (
+    started ||
+    !config ||
+    process.platform !== 'darwin' ||
+    (state.isServeMode && !isPodHeadlessUiHost())
+  ) {
     return
   }
   started = true
