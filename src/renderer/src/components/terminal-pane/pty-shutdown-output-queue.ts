@@ -8,6 +8,7 @@ const COMPACTION_MIN_HEAD_CHUNKS = 64
 export type PtyShutdownOutputEvent =
   | { kind: 'data'; data: string; meta?: PtyDataMeta }
   | { kind: 'replay'; data: string }
+  | { kind: 'sidecars'; data: string }
 
 type PtyShutdownOutputChunk = {
   events: (PtyShutdownOutputEvent | undefined)[]
