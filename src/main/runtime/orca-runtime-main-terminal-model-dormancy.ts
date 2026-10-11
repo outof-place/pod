@@ -74,9 +74,14 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
     return this.mainTerminalModelDormancy.isDormant(ptyId)
   }
 
-  /** Whether main's model is dormant or still being rebuilt, so it does not show the screen yet. */
+  /** Whether main's model is dormant, still being rebuilt, or left partial by a failed seed that
+   *  nothing has replaced since, so it does not show the screen yet. */
   isMainTerminalModelCatchingUp(ptyId: string): boolean {
-    return !this.mainTerminalModelDormancy.isCaughtUp(ptyId)
+    return (
+      !this.mainTerminalModelDormancy.isCaughtUp(ptyId) ||
+      (this.mainTerminalModelDormancy.hasFailedSeed(ptyId) &&
+        this.providerSnapshotPreferredPtys.has(ptyId))
+    )
   }
 
   /** A model rebuilt after dormancy holds only a bounded seed, so full-depth hidden-output
@@ -231,8 +236,8 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
         // renderer on the next byte, as for any PTY whose history arrived late.
         this.headlessHydrationState.delete(ptyId)
         this.mainTerminalModelDormancy.seedFailed(ptyId)
-        // Why re-offer: the seed timeout bounds how long tui-idle holds for this screen; past
-        // it, waits evaluate without one, as for any partial model.
+        // Why re-offer: the wait stays held on this screen (a partial model proves nothing), and
+        // its polls retry the seed after the dormancy backoff.
         recordMainTerminalModelSeedFailure()
         this.terminalIdlePolls.recheckPty(ptyId)
         return
@@ -258,10 +263,15 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
     owns: () => boolean
   ): Promise<number | null> {
     try {
+      // Why fresh on a retry: the request that timed out may never answer, and one that answers
+      // late predates bytes this model already took.
       const snapshot = await this.serializeProviderTerminalBuffer(
         ptyId,
         { scrollbackRows: DORMANT_MODEL_SEED_SCROLLBACK_ROWS },
-        { timeoutMs: DORMANT_MODEL_SEED_TIMEOUT_MS }
+        {
+          timeoutMs: DORMANT_MODEL_SEED_TIMEOUT_MS,
+          fresh: this.mainTerminalModelDormancy.hasFailedSeed(ptyId)
+        }
       )
       // Why: a snapshot behind bytes main already ingested would need them replayed, and a
       // dormant main kept none.
