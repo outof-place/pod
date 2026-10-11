@@ -39,7 +39,8 @@ export const POD_SETTINGS_METHODS = [
     params: PodSettingsSetParams,
     handler: (params) => service().set(params.values, params.baseRevision)
   }),
-  // Why a stream of its own: the snapshot comes first, then only changed fields, coalesced.
+  // Why a stream of its own: the snapshot comes first, then only changed fields, coalesced; a read
+  // that fails is an `error` frame, and the stream goes on.
   defineStreamingMethod({
     name: 'podSettings.subscribe',
     permission: 'host-admin',
@@ -47,8 +48,9 @@ export const POD_SETTINGS_METHODS = [
     handler: async (_params, { runtime, connectionId }, emit) => {
       const settings = service()
       await new Promise<void>((resolve) => {
-        const { snapshot, unsubscribe } = settings.subscribe((change) =>
-          emit({ type: 'changed', ...change })
+        const { snapshot, unsubscribe } = settings.subscribe(
+          (change) => emit({ type: 'changed', ...change }),
+          (message) => emit({ type: 'error', message })
         )
         const subscriptionId = `${subscriptionPrefix(connectionId)}${++subscriptionSeq}`
         runtime.registerSubscriptionCleanup(
