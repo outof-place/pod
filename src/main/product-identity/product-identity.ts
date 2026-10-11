@@ -38,6 +38,8 @@ const PACKAGE_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/
 const REVERSE_DNS = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/
 const URL_SCHEME = /^[a-z][a-z0-9+.-]{0,31}$/
 const GITHUB_NAME = /^[A-Za-z0-9_.-]{1,100}$/
+// Commands other tools own on the user's PATH: CocoaPods' `pod`, upstream Orca's own CLI names.
+const RESERVED_CLI_NAMES = new Set(['pod', 'orca', 'orca-dev', 'orca-ide'])
 
 function field(record: object, key: string): unknown {
   return Reflect.get(record, key)
@@ -58,6 +60,14 @@ function optionalString(record: object, key: string, pattern?: RegExp): string |
   return field(record, key) === undefined || field(record, key) === null
     ? null
     : requireString(record, key, pattern)
+}
+
+function parseCliName(record: object): string {
+  const cliName = requireString(record, 'cliName', PATH_SEGMENT)
+  if (RESERVED_CLI_NAMES.has(cliName.toLowerCase())) {
+    throw new Error(`product identity: "cliName" "${cliName}" belongs to another tool`)
+  }
+  return cliName
 }
 
 function parseUpdateFeed(value: unknown): ProductUpdateFeed | null {
@@ -114,7 +124,7 @@ export function parseProductIdentity(value: unknown): ProductIdentity {
     displayName: requireString(value, 'displayName', PATH_SEGMENT),
     appId: requireString(value, 'appId', REVERSE_DNS),
     packageName: optionalString(value, 'packageName', PACKAGE_NAME) ?? userDataName.toLowerCase(),
-    cliName: requireString(value, 'cliName', PATH_SEGMENT),
+    cliName: parseCliName(value),
     userDataName,
     keychainName: requireString(value, 'keychainName', PATH_SEGMENT),
     protocols: [...protocols],
@@ -195,6 +205,13 @@ export function getProductUpstream(): ProductUpstream | null {
   } catch {
     return null
   }
+}
+
+/** A product build registers its CLI only from Settings › CLI, never on its own at launch. */
+export function allowsCliAutoInstall(
+  identity: ProductIdentity | null = getProductIdentity()
+): boolean {
+  return identity === null
 }
 
 /** URL schemes this build registers with the OS. */
