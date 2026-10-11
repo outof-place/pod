@@ -6,13 +6,41 @@ import {
   PodWorktreeStatusHub,
   type PodWorktreeStatusRead
 } from './worktree-status-hub'
-import type { PodStatusRow } from './worktree-status-signature'
+import type { RuntimeWorktreeAgentRow } from '../../../shared/runtime-types'
+import type { PodAgentStatusRow, PodStatusRow } from './worktree-status-signature'
 
-function row(paneKey: string, state: PodStatusRow['state'], extra: Partial<PodStatusRow> = {}) {
+function row(
+  paneKey: string,
+  state: PodStatusRow['state'],
+  extra: Partial<PodAgentStatusRow> = {}
+): PodAgentStatusRow {
   return { paneKey, worktreeId: 'wt-a', state, receivedAt: Date.now(), ...extra }
 }
 
-function makeStore(initial: PodStatusRow[] = []) {
+function agentRow(
+  paneKey: string,
+  state: RuntimeWorktreeAgentRow['state'],
+  extra: Partial<RuntimeWorktreeAgentRow> = {}
+): RuntimeWorktreeAgentRow {
+  return {
+    paneKey,
+    parentPaneKey: null,
+    state,
+    agentType: 'claude',
+    prompt: '',
+    taskTitle: null,
+    displayName: null,
+    lastAssistantMessage: null,
+    toolName: null,
+    toolInput: null,
+    interrupted: false,
+    stateStartedAt: 1,
+    updatedAt: 1,
+    ...extra
+  }
+}
+
+function makeStore(initial: PodAgentStatusRow[] = []) {
   let rows = initial
   const mutations = new Set<() => void>()
   const freshness = new Set<() => void>()
@@ -30,11 +58,11 @@ function makeStore(initial: PodStatusRow[] = []) {
   return {
     store,
     listenerCount: () => mutations.size + freshness.size,
-    write(next: PodStatusRow[]) {
+    write(next: PodAgentStatusRow[]) {
       rows = next
       mutations.forEach((listener) => listener())
     },
-    renew(next: PodStatusRow[]) {
+    renew(next: PodAgentStatusRow[]) {
       rows = next
       freshness.forEach((listener) => listener())
     }
@@ -134,6 +162,87 @@ describe('PodWorktreeStatusHub', () => {
     harness.renew([{ ...rows[0], receivedAt: Date.now() }])
     await vi.advanceTimersByTimeAsync(POD_WORKTREE_STATUS_COALESCE_MS * 2)
     expect(read).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads for an agent row only for subscribers that asked for agents, and names the worktree', async () => {
+    const working = row('p1', 'working', { prompt: 'Fix the login test', toolName: 'Bash' })
+    const waiting = row('p2', 'waiting', { prompt: 'Write the notes' })
+    const harness = makeStore([working, waiting])
+    const hub = new PodWorktreeStatusHub(harness.store)
+    const rank = 'permission' as const
+    const rankOnly = makeReader(['s1', [{ worktreeId: 'wt-a', status: rank }]])
+    const rankEvents: PodWorktreeStatusChangedEvent[] = []
+    hub.subscribe(rankOnly, (event) => rankEvents.push(event))
+    const agents = makeReader(
+      [
+        's1',
+        [
+          {
+            worktreeId: 'wt-a',
+            status: rank,
+            agents: [agentRow('p1', 'working'), agentRow('p2', 'waiting')]
+          }
+        ]
+      ],
+      [
+        's2',
+        [
+          {
+            worktreeId: 'wt-a',
+            status: rank,
+            agents: [agentRow('p1', 'working', { toolName: 'Edit' }), agentRow('p2', 'waiting')]
+          }
+        ]
+      ],
+      [
+        's3',
+        [
+          {
+            worktreeId: 'wt-a',
+            status: rank,
+            agents: [
+              agentRow('p1', 'done', { lastAssistantMessage: 'All green.' }),
+              agentRow('p2', 'waiting')
+            ]
+          }
+        ]
+      ]
+    )
+    const agentEvents: PodWorktreeStatusChangedEvent[] = []
+    hub.subscribe(agents, (event) => agentEvents.push(event), undefined, { agents: true })
+    await settle()
+
+    // A tool update moves no ranking field: only the agents subscriber reads, and hears of it.
+    harness.write([{ ...working, toolName: 'Edit' }, waiting])
+    await vi.advanceTimersByTimeAsync(POD_WORKTREE_STATUS_COALESCE_MS)
+    expect(rankOnly).toHaveBeenCalledTimes(1)
+    expect(agents).toHaveBeenCalledTimes(2)
+    expect(agentEvents).toEqual([
+      { type: 'worktreeStatusChanged', worktreeId: 'wt-a', snapshotId: 's2', status: rank }
+    ])
+
+    // One agent finishes while the other still waits: the ranking stays, so a ranking subscriber
+    // reads (the state moved) but hears nothing; the agents subscriber hears of it.
+    harness.write([{ ...working, state: 'done', lastAssistantMessage: 'All green.' }, waiting])
+    await vi.advanceTimersByTimeAsync(POD_WORKTREE_STATUS_COALESCE_MS)
+    expect(rankOnly).toHaveBeenCalledTimes(2)
+    expect(rankEvents).toEqual([])
+    expect(agentEvents.map((event) => event.snapshotId)).toEqual(['s2', 's3'])
+  })
+
+  it('stops measuring agent rows when the last subscriber that asked for them leaves', async () => {
+    const working = row('p1', 'working', { toolName: 'Bash' })
+    const harness = makeStore([working])
+    const hub = new PodWorktreeStatusHub(harness.store)
+    const rankOnly = makeReader(['s1', []])
+    hub.subscribe(rankOnly, vi.fn())
+    const stopAgents = hub.subscribe(makeReader(['s1', []]), vi.fn(), undefined, { agents: true })
+    await settle()
+    stopAgents()
+
+    harness.write([{ ...working, toolName: 'Edit' }])
+    await vi.advanceTimersByTimeAsync(POD_WORKTREE_STATUS_COALESCE_MS * 2)
+    expect(rankOnly).toHaveBeenCalledTimes(1)
   })
 
   it('carries the working mode', async () => {
