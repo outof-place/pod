@@ -1,12 +1,12 @@
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
-import { runProcess } from '@orca/process-host'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { removeHostTree } from '../host-tree-removal'
 import type { RelocatedDaemonHost } from './daemon-host-relocation'
 import { daemonHostStagingName } from './daemon-host-reclaim'
 import { reportDaemonHost } from './daemon-host-darwin-report'
+import { runHostTool, type HostToolMode } from './daemon-host-darwin-tools'
 import { freeBytes, volumeCanClone } from './daemon-host-darwin-volume'
 import {
   CODE_RESOURCES_REL,
@@ -169,13 +169,12 @@ function firstLine(text: string): string {
 }
 
 /** `chmod -R u+w` first: a clone keeps read-only dirs from the bundle, which block unlinking. */
-export async function removeDarwinDaemonHostTree(dir: string): Promise<boolean> {
+export async function removeDarwinDaemonHostTree(
+  dir: string,
+  mode: HostToolMode = {}
+): Promise<boolean> {
   try {
-    await runProcess({
-      program: '/bin/chmod',
-      args: ['-R', 'u+w', dir],
-      timeoutMs: 30_000
-    })
+    await runHostTool('/bin/chmod', ['-R', 'u+w', dir], 30_000, mode)
     await removeHostTree(dir)
     return true
   } catch {
@@ -183,9 +182,9 @@ export async function removeDarwinDaemonHostTree(dir: string): Promise<boolean> 
   }
 }
 
-async function removeStaging(staging: string): Promise<void> {
+async function removeStaging(staging: string, mode: HostToolMode): Promise<void> {
   // A failed removal is retried by the prune once this writer has exited.
-  await removeDarwinDaemonHostTree(staging)
+  await removeDarwinDaemonHostTree(staging, { background: mode.background })
 }
 
 async function cloneDarwinDaemonHost(
@@ -193,7 +192,8 @@ async function cloneDarwinDaemonHost(
   versionRoot: string,
   source: DarwinBundleSource,
   version: string,
-  fingerprint: string
+  fingerprint: string,
+  mode: HostToolMode
 ): Promise<RelocatedDaemonHost | null> {
   const startedAt = Date.now()
   const nonce = randomBytes(6).toString('hex')
@@ -217,7 +217,7 @@ async function cloneDarwinDaemonHost(
         'bundle',
         `volume cannot clone and has ${Math.round(free / 1024 ** 2)} MB free for a ${Math.round(bytes / 1024 ** 2)} MB copy; forking from the app bundle`
       )
-      await removeStaging(staging)
+      await removeStaging(staging, mode)
       return null
     }
     reportDaemonHost(
@@ -226,26 +226,33 @@ async function cloneDarwinDaemonHost(
     )
   }
   const bundleDir = join(staging, cloneDirName(source.bundleName))
-  const copy = await runProcess({
-    program: '/bin/cp',
-    args: ['-c', '-R', source.bundleDir, bundleDir],
-    timeoutMs: COPY_TIMEOUT_MS
-  })
+  const copy = await runHostTool(
+    '/bin/cp',
+    ['-c', '-R', source.bundleDir, bundleDir],
+    COPY_TIMEOUT_MS,
+    mode
+  )
   const copiedAt = Date.now()
   const verify =
-    copy.code === 0
-      ? await runProcess({
-          program: '/usr/bin/codesign',
-          args: ['--verify', '--strict', '--deep', bundleDir],
-          timeoutMs: VERIFY_TIMEOUT_MS
-        })
+    copy.code === 0 && !mode.signal?.aborted
+      ? await runHostTool(
+          '/usr/bin/codesign',
+          ['--verify', '--strict', '--deep', bundleDir],
+          VERIFY_TIMEOUT_MS,
+          mode
+        )
       : null
+  if (mode.signal?.aborted) {
+    // The app is quitting: the next launch clones again.
+    await removeStaging(staging, mode)
+    return null
+  }
   if (!verify || verify.code !== 0) {
     const failure = verify
       ? `failed seal verification (${firstLine(verify.stderr)})`
       : `could not be copied (${firstLine(copy.stderr) || `exit ${copy.code}`})`
     reportDaemonHost('bundle', `${source.bundleName} ${failure}; forking from the app bundle`)
-    await removeStaging(staging)
+    await removeStaging(staging, mode)
     return null
   }
   try {
@@ -273,7 +280,7 @@ async function cloneDarwinDaemonHost(
     return hostPaths(buildDir, marker)
   } catch (error) {
     reportDaemonHost('bundle', `cannot publish ${staging}; forking from the app bundle`, error)
-    await removeStaging(staging)
+    await removeStaging(staging, mode)
     return null
   }
 }
@@ -282,7 +289,8 @@ let inflight: Promise<RelocatedDaemonHost | null> | null = null
 
 /** Verified clone to fork the daemon from, cloned on first use; null forks from the bundle. */
 export function materializeDarwinDaemonHost(
-  entryPath: string
+  entryPath: string,
+  mode: HostToolMode = {}
 ): Promise<RelocatedDaemonHost | null> {
   inflight ??= (async () => {
     const source = collectDarwinBundleSource(entryPath)
@@ -296,7 +304,7 @@ export function materializeDarwinDaemonHost(
       const versionRoot = join(root, version)
       return (
         (await findDarwinDaemonHost(versionRoot, source, version, fingerprint)) ??
-        (await cloneDarwinDaemonHost(root, versionRoot, source, version, fingerprint))
+        (await cloneDarwinDaemonHost(root, versionRoot, source, version, fingerprint, mode))
       )
     } catch (error) {
       reportDaemonHost('bundle', 'relocation failed; forking from the app bundle', error)
