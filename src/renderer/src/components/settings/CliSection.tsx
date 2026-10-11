@@ -51,7 +51,8 @@ function getRevealLabel(platform: string): string {
 
 function getInstallDescription(platform: string): string {
   if (platform === 'darwin') {
-    return 'Register `orca` in /usr/local/bin.'
+    // Fork-only (Pod): the product's command name, as the status itself reports it.
+    return `Register \`${getFallbackCommandName(platform)}\` in /usr/local/bin.`
   }
   if (platform === 'linux') {
     return 'Register `orca-ide` in ~/.local/bin.'
