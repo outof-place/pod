@@ -1,4 +1,4 @@
-import { ptyDataSidecars } from './pty-shutdown-data-suspension'
+import { bufferPtyShutdownSidecarData, ptyDataSidecars } from './pty-shutdown-data-suspension'
 import { recordPtyDataReceived } from './terminal-delivery-watchdog'
 import { ackPtyData } from './terminal-pty-ack-gate'
 
@@ -18,7 +18,10 @@ export function deliverPtyDataToSidecars(ptyId: string, data: string): void {
 export function deliverSidecarOnlyPtyData(ptyId: string, data: string, chars: number): void {
   recordPtyDataReceived(ptyId, chars)
   try {
-    deliverPtyDataToSidecars(ptyId, data)
+    // Why: teardown output is speculative until the shutdown commits; hold it like view bytes.
+    if (!bufferPtyShutdownSidecarData(ptyId, data)) {
+      deliverPtyDataToSidecars(ptyId, data)
+    }
   } finally {
     // Why finally: a throwing sidecar would leave this credit in flight for good and stall the PTY.
     ackPtyData(ptyId, chars)
