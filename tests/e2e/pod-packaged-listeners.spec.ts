@@ -65,11 +65,12 @@ for (const launch of LAUNCHES) {
       inheritedEnv,
       launchEnv: { NODE_ENV: 'production' },
       // Why: the bundled claude-acc setup.sh runs launchctl against the real gui/<uid> domain.
-      // Why the CLI path: serve installs the CLI into /usr/local/bin, which this account can write.
+      // Why the CLI path: before pod/identity a9534ba7c8, serve installed `podx` into /usr/local/bin,
+      // which this account can write.
       extraEnv: {
         ORCA_BACKGROUND_LAUNCH: '1',
         POD_ACC_LIFECYCLE: 'off',
-        ORCA_CLI_INSTALL_PATH: path.join(root, 'bin', 'pod')
+        ORCA_CLI_INSTALL_PATH: path.join(root, 'bin', 'podx')
       },
       userDataDir
     })
