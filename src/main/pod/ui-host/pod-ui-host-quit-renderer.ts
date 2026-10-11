@@ -2,6 +2,7 @@
 // (src/shared/pod-ui-host-quit.ts; the renderer answers in src/renderer/src/pod/ui-host).
 import { ipcMain, type BrowserWindow, type IpcMainEvent } from 'electron'
 import { POD_UI_HOST_QUIT_IPC, PodUiHostQuitBlockers } from '../../../shared/pod-ui-host-quit'
+import { rendererPublicationThrottle } from '../../window/renderer-publication-throttle'
 
 // Why: the renderer caps its remote-work probe at 1.5 s; a renderer silent past this is hung.
 const ASSESS_TIMEOUT_MS = 3_000
@@ -20,8 +21,12 @@ export function assessRendererQuit(
     return Promise.resolve(null)
   }
   const requestId = ++nextRequestId
+  // Why a lease: a hidden renderer's timers are throttled (to once a minute after 5 min), and the
+  // remote-work probe runs on them; unthrottled, it answers inside the cap.
+  const release = rendererPublicationThrottle.acquire(webContents)
   return new Promise((resolve) => {
     const finish = (blockers: PodUiHostQuitBlockers | null): void => {
+      release()
       clearTimeout(timer)
       ipcMain.removeListener(POD_UI_HOST_QUIT_IPC.assessed, onAssessed)
       resolve(blockers)
