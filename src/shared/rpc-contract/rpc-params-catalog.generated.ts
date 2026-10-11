@@ -433,6 +433,7 @@ import {
   PluginsPanelActionParams
 } from './plugins-params'
 import { PodClientEventsSubscribeParams } from './pod-client-events-params'
+import { PodComputerActionsUnsubscribeParams } from './pod-computer-actions-params'
 import {
   PodOrbstackAgentSandboxParams,
   PodOrbstackCreateParams,
@@ -805,6 +806,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'clipboard.commitImageUpload': CommitImageUpload,
   'clipboard.saveImageAsTempFile': SaveImageAsTempFile,
   'clipboard.startImageUpload': StartImageUpload,
+  'computer.actions': null,
   'computer.capabilities': ComputerCapabilitiesParams,
   'computer.click': Click,
   'computer.drag': DragOfComputerSchemasParams,
@@ -820,6 +822,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.scroll': ScrollOfComputerSchemasParams,
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
+  'computer.unsubscribeActions': PodComputerActionsUnsubscribeParams,
   'diagnostics.memory': null,
   'emulator.attach': AttachParamsOfEmulatorParams,
   'emulator.availability': EmulatorAvailabilityParams,
