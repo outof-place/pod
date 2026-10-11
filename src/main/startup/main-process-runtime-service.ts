@@ -188,7 +188,12 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Why: no renderer keeps the live resume anchors under serve, so the host does.
     agentHookServer.subscribeStatusRowMutations(({ after }) => {
       if (after) {
-        runtime.syncHeadlessAgentResumeAnchor(after.paneKey)
+        runtime.noteHeadlessAgentStatus(after.paneKey)
+      }
+    })
+    agentHookServer.subscribeEnrichedStatus((enriched) => {
+      if (enriched.agentPresence?.ended && enriched.providerSession) {
+        runtime.noteHeadlessAgentSessionEnded(enriched.paneKey, enriched.providerSession.id)
       }
     })
   }
