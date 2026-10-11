@@ -175,15 +175,17 @@ describe('headless agent resume across a host restart', () => {
 
     expect(await listedPane(runtime)).toMatchObject({
       status: 'ready',
-      agentResume: { agent: 'claude', outcome: 'kept', stateBeforeRestart: 'waiting' }
+      agentStatus: { state: 'waiting', agentType: 'claude', beforeRestart: true }
     })
 
-    setRows([claudeRow()])
+    setRows([claudeRow({ receivedAt: Date.now(), stateStartedAt: Date.now() })])
     runtime.noteHeadlessAgentStatus(PANE_KEY)
-    expect(await listedPane(runtime)).not.toHaveProperty('agentResume')
+    const live = await listedPane(runtime)
+    expect(live).toMatchObject({ agentStatus: { state: 'waiting' } })
+    expect(live).not.toMatchObject({ agentStatus: { beforeRestart: true } })
   })
 
-  it("checks a kept agent's old state on its screen when the tab is shown", async () => {
+  it("confirms a kept agent's old state on its screen when the tab is shown", async () => {
     const { runtime, setRows } = makeRuntime({})
     await openPane(runtime, 'user')
     setRows([claudeRow({ restoredUnconfirmed: true })])
@@ -193,10 +195,9 @@ describe('headless agent resume across a host restart', () => {
     await openPane(runtime, 'automatic')
 
     await vi.waitFor(async () =>
-      expect(await listedPane(runtime)).toMatchObject({
-        agentResume: { outcome: 'kept', stateBeforeRestart: 'waiting', confirmed: true }
-      })
+      expect(await listedPane(runtime)).toMatchObject({ agentStatus: { state: 'waiting' } })
     )
+    expect(await listedPane(runtime)).not.toMatchObject({ agentStatus: { beforeRestart: true } })
   })
 
   it("retires a kept agent's old state when its screen shows it ready", async () => {
@@ -208,8 +209,9 @@ describe('headless agent resume across a host restart', () => {
     await openPane(runtime, 'user')
 
     await vi.waitFor(async () =>
-      expect(await listedPane(runtime)).not.toHaveProperty('agentResume')
+      expect(await listedPane(runtime)).not.toMatchObject({ agentStatus: { state: 'working' } })
     )
+    expect(await listedPane(runtime)).not.toMatchObject({ agentStatus: { beforeRestart: true } })
   })
 
   it('shows nothing of the sort while a window owns the session', async () => {
