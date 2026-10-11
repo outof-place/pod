@@ -3,6 +3,7 @@
 // it to this user, and the upgrade itself required the owner token.
 import type { Socket } from 'node:net'
 import {
+  RUNTIME_LOCAL_STREAM_HEADER_BYTES,
   RUNTIME_LOCAL_STREAM_MAX_INBOUND_FRAME_BYTES,
   RUNTIME_LOCAL_STREAM_MAX_OUTBOUND_FRAME_BYTES,
   RuntimeLocalStreamFrameKind,
@@ -47,6 +48,14 @@ export class UnixSocketStreamConnection {
     return !this.closed && !this.socket.destroyed && this.socket.writable
   }
 
+  /** Largest payload one frame may carry: it must fit the buffered ceiling on an idle socket. */
+  get maxPayloadBytes(): number {
+    return Math.min(
+      RUNTIME_LOCAL_STREAM_MAX_OUTBOUND_FRAME_BYTES,
+      this.maxBufferedBytes - RUNTIME_LOCAL_STREAM_HEADER_BYTES
+    )
+  }
+
   // Why: frames that arrived with the upgrade line wait here until the dispatcher has bound its handlers.
   bind(handlers: UnixSocketStreamConnectionHandlers): void {
     this.handlers = handlers
@@ -89,10 +98,11 @@ export class UnixSocketStreamConnection {
   // Why: false means "discarded" to terminal multiplexing, which then closes and resnapshots; kernel
   // backpressure alone is not a discard, so frames queue until the buffered ceiling.
   sendBinary(bytes: Uint8Array<ArrayBufferLike>): boolean {
-    if (!this.isOpen || bytes.length > RUNTIME_LOCAL_STREAM_MAX_OUTBOUND_FRAME_BYTES) {
+    if (!this.isOpen || bytes.length > this.maxPayloadBytes) {
       return false
     }
-    if (this.socket.writableLength + bytes.length > this.maxBufferedBytes) {
+    const frameBytes = RUNTIME_LOCAL_STREAM_HEADER_BYTES + bytes.length
+    if (this.socket.writableLength + frameBytes > this.maxBufferedBytes) {
       return false
     }
     this.socket.write(encodeRuntimeLocalStreamFrame(RuntimeLocalStreamFrameKind.Binary, bytes))
