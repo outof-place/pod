@@ -184,6 +184,14 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
   )
+  if (state.isServeMode) {
+    // Why: no renderer keeps the live resume anchors under serve, so the host does.
+    agentHookServer.subscribeStatusRowMutations(({ after }) => {
+      if (after) {
+        runtime.syncHeadlessAgentResumeAnchor(after.paneKey)
+      }
+    })
+  }
   // Why before anything can attach: a client host that reattaches to a restarted runtime is only
   // handed its pages back if the runtime found them first.
   runtime.rehydrateClientHostedBrowserPages()
