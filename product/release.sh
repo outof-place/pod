@@ -6,7 +6,8 @@
 #   product/release.sh <version> [--publish] [--skip-build]
 #
 #   <version>     semver without "v" (the git tag is v<version>)
-#   --publish     create the GitHub release v<version> in identity.updateFeed's repo (needs gh auth)
+#   --publish     create the GitHub release v<version> in identity.updateFeed's repo (needs gh auth;
+#                 this classic app only with POD_CLASSIC_RELEASE=1: one-app releases come from assembly)
 #   --skip-build  reuse out/ and the native helpers from a previous run; package/notarize only
 #
 # Signing:      POD_SIGN_IDENTITY (default: outofplace's Developer ID, whose key lives only in
@@ -35,12 +36,16 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --publish) publish=1; shift ;;
     --skip-build) skip_build=1; shift ;;
-    -h | --help) sed -n '2,19p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,20p' "$0"; exit 0 ;;
     -*) die "unknown option $1" ;;
     *) [ -z "$version" ] || die "one version only"; version="${1#v}"; shift ;;
   esac
 done
 [ -n "$version" ] || die "usage: product/release.sh <version> [--publish]"
+# Since v6 Pod.app is one-app: a classic release would become releases/latest without appcast.xml,
+# so one-app installs would lose Sparkle's feed and classic installs would see latest-mac.yml again.
+[ "$publish" -eq 0 ] || [ "${POD_CLASSIC_RELEASE:-0}" = 1 ] ||
+  die "--publish of a classic release needs POD_CLASSIC_RELEASE=1 (one-app releases publish from their assembly)"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || die "version '$version' is not semver"
 [ "$(uname -s)" = Darwin ] || die "macOS only"
 
