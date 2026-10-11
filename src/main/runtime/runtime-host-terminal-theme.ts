@@ -1,4 +1,6 @@
 import type { RuntimeMobileTerminalTheme } from '../../shared/runtime-mobile-session-tab-contracts'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import { resolveConfiguredTerminalColors } from '../../shared/terminal-theme-selection'
 import {
   resolveRuntimeTerminalTheme,
   RUNTIME_TERMINAL_THEME_SETTING_KEYS,
@@ -11,6 +13,19 @@ let systemPrefersDark: () => boolean = () => true
 
 export function setHostSystemPrefersDark(read: () => boolean): void {
   systemPrefersDark = read
+}
+
+export function hostSystemPrefersDark(): boolean {
+  return systemPrefersDark()
+}
+
+/** The colours a query gets with no viewer connected: the host's own theme, opaque. */
+export function hostViewerColors(
+  settings: Partial<RuntimeTerminalThemeSettings> | null | undefined
+): TerminalOscColorQueryReplyColors | null {
+  return hasThemeSettings(settings)
+    ? resolveConfiguredTerminalColors(settings, systemPrefersDark())
+    : null
 }
 
 function hasThemeSettings(
