@@ -36,13 +36,9 @@ function normalizeDecorativeAgentTitleText(title: string): string {
   let pendingWhitespace = false
   for (let index = 0; index < title.length; index += 1) {
     const code = title.charCodeAt(index)
-    if (
-      normalized.length === 0 &&
-      (isDecorativeTitleWhitespace(code) || isSpinnerFrameGlyph(code))
-    ) {
-      continue
-    }
-    if (isDecorativeTitleWhitespace(code)) {
+    // Why: a frame folds like whitespace wherever it sits. Codex repeats its frame inside the
+    // title (`⠙ renaming... ⠙ | scratch`), so every frame would otherwise read as a new title.
+    if (isDecorativeTitleWhitespace(code) || isSpinnerFrameGlyph(code)) {
       pendingWhitespace = normalized.length > 0
       continue
     }
