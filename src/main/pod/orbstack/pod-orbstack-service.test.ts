@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PodOrbstackStatus } from '../../../shared/pod-orbstack-types'
+import type { PodOrbstackActionResult, PodOrbstackStatus } from '../../../shared/pod-orbstack-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { PodOrbstackMachines } from './pod-orbstack-machines'
 import { PodOrbstackRegistry } from './pod-orbstack-registry'
@@ -38,9 +38,9 @@ function setup(repos: Repo[]) {
   const readStatus = vi.fn(async () => emptyStatus({ checkedAt: clock }))
   const machines = {
     create: vi.fn(async () => ({ ok: true as const })),
-    createSandbox: vi.fn(async () => ({ ok: true as const })),
+    createSandbox: vi.fn(async (): Promise<PodOrbstackActionResult> => ({ ok: true })),
     remove: vi.fn(async () => ({ ok: true as const })),
-    start: vi.fn(async () => ({ ok: true as const })),
+    start: vi.fn(async (): Promise<PodOrbstackActionResult> => ({ ok: true })),
     stop: vi.fn(async () => ({ ok: true as const })),
     busyWorktreeIds: () => [],
     busyMachines: () => [],
@@ -106,11 +106,11 @@ describe('createPodOrbstackService', () => {
     const { service, machines } = setup([localRepo])
     const raw =
       "orb clone: [-32098] start 'pod-vm-1': machine didn't start in 30s (missing IP address)"
-    machines.createSandbox.mockResolvedValueOnce({ ok: false, error: raw } as never)
+    machines.createSandbox.mockResolvedValueOnce({ ok: false, error: raw })
     expect(
       await service.create({ worktreeId: 'repo::/', displayName: 'root', kind: 'sandbox' })
     ).toMatchObject({ ok: false, reason: 'out-of-addresses', detail: raw })
-    machines.start.mockResolvedValueOnce({ ok: false, error: raw } as never)
+    machines.start.mockResolvedValueOnce({ ok: false, error: raw })
     expect(await service.start('pod-vm-1')).toMatchObject({ reason: 'out-of-addresses' })
     expect(await service.restart()).toMatchObject({ ok: false })
   })
