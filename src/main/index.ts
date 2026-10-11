@@ -6,6 +6,7 @@ import { installProductSettingDefaults } from './product-identity/product-settin
 import { brandProductCopy } from './product-identity/product-overlay'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch } from './window/foreground-activation-policy'
+import { isPodHeadlessUiHost } from './pod/ui-host/pod-ui-host-launch'
 import {
   focusExistingWindow as focusExistingWindowAction,
   setMainWindowOpener
@@ -48,7 +49,8 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
   })
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
   // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
-  if (!shouldActivateDesktopForSecondInstance(argv)) {
+  // Fork-only (Pod): the headless one-app runtime opens one only for a surface PodNative asks for.
+  if (!shouldActivateDesktopForSecondInstance(argv) || isPodHeadlessUiHost()) {
     return
   }
   state.desktopActivationGate?.requestActivation()
