@@ -54,7 +54,7 @@ pod_notary_credentials() {
 pod_notary_diagnostics() {
   {
     echo "notarization diagnostics:"
-    echo "  default-keychain: $(security default-keychain 2>&1 | tr -s ' ')"
+    echo "  default-keychain -d user: $(security default-keychain -d user 2>&1 | tr -s ' ')"
     echo "  list-keychains -d user:"
     security list-keychains -d user 2>&1 | sed 's/^/  /'
     echo "  environment:"
@@ -68,7 +68,7 @@ pod_notary_preflight() {
   local home expected actual err
   home="$(pod_account_home)"
   expected="${home:-$HOME}/Library/Keychains/login.keychain-db"
-  actual="$(security default-keychain 2>/dev/null | sed -n 's/^[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p')"
+  actual="$(security default-keychain -d user 2>/dev/null | sed -n 's/^[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p')"
   echo "default keychain: ${actual:-unknown}"
   if [ "$actual" != "$expected" ]; then
     pod_notary_diagnostics
