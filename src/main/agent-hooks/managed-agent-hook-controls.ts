@@ -10,6 +10,7 @@ import {
   isAgentStatusHooksEnabledForAgent
 } from '../../shared/agent-status-hooks-setting'
 import { probeClaudeCliVersion } from '../claude/claude-hook-event-versions'
+import { podHookWriteBlockNow } from '../pod/instance/pod-instance'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
@@ -90,6 +91,14 @@ function skippedStatus(
   }
 }
 
+function podBlockedStatus(agent: AgentHookTarget, reason: string): AgentHookInstallStatus {
+  return skippedStatus(
+    agent,
+    'hooks_disabled',
+    `Left to the user's own Pod: this instance is ${reason}.`
+  )
+}
+
 function selectedInstallers(options: InstallOptions): readonly ManagedAgentHookInstaller[] {
   if (!options.agents) {
     return MANAGED_AGENT_HOOK_INSTALLERS
@@ -139,6 +148,11 @@ export async function installManagedAgentHooks(
   settings: ManagedHookSettings = null,
   options: InstallOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
+  // Pod: only the user's own instance writes the hook files every live session reads (pod-instance.ts)
+  const blocked = podHookWriteBlockNow()
+  if (blocked) {
+    return selectedInstallers(options).map(([agent]) => podBlockedStatus(agent, blocked))
+  }
   await refreshExistingManagedScripts(options)
   const installers = selectedInstallers(options)
   const disabled = new Set(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))
@@ -207,9 +221,14 @@ export async function removeManagedAgentHooks(
   options: RemoveOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
   const allowed = options.agents ? new Set(options.agents) : null
+  const blocked = podHookWriteBlockNow()
   const results: AgentHookInstallStatus[] = []
   for (const [agent, remove] of MANAGED_AGENT_HOOK_REMOVERS) {
     if (allowed !== null && !allowed.has(agent)) {
+      continue
+    }
+    if (blocked) {
+      results.push(podBlockedStatus(agent, blocked))
       continue
     }
     try {
@@ -225,10 +244,14 @@ export async function removeManagedAgentHooksAsync(
   options: RemoveOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
   const allowed = options.agents ? new Set(options.agents) : null
+  const blocked = podHookWriteBlockNow()
   return await Promise.all(
     MANAGED_AGENT_HOOK_ASYNC_REMOVERS.filter(
       ([agent]) => allowed === null || allowed.has(agent)
     ).map(async ([agent, remove]) => {
+      if (blocked) {
+        return podBlockedStatus(agent, blocked)
+      }
       try {
         return await remove()
       } catch (error) {

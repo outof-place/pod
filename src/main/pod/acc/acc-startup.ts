@@ -1,4 +1,3 @@
-import { userInfo } from 'node:os'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { runProcess } from '../../../shared/child-process/run-process'
@@ -8,18 +7,10 @@ import { syncMacMenuBarIcon } from '../../startup/main-window-actions'
 import { mainProcessState as state } from '../../startup/main-process-state'
 import { getPodDistroConfig } from '../pod-distro-config'
 import { isPodHeadlessUiHost } from '../ui-host/pod-ui-host-launch'
+import { accountHome } from '../instance/pod-instance'
 import { startPodAccSupervisor } from './acc-supervisor'
 
 let started = false
-
-/** getpwuid's home for this uid: unlike app.getPath('home'), a HOME override does not move it. */
-function accountHome(): string | null {
-  try {
-    return userInfo().homedir || null
-  } catch {
-    return null
-  }
-}
 
 /** Electron wiring for the supervisor; a no-op in builds whose identity has no claude-acc section. */
 export function startPodAccFromStartup(): void {
