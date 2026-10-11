@@ -20,6 +20,8 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'binaryBackpressure'
   | 'registerBinaryStreamHandler'
   | 'registerBinaryMessageHandler'
+  // Fork-only (Pod)
+  | 'podNativePeer'
 > & {
   /** What the transport proved the caller may do; absent means this host's owner. */
   callerScope?: RpcCallerScope
@@ -53,6 +55,8 @@ export function rpcContextFromTransport(
     binaryBackpressure: options?.binaryBackpressure,
     registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
     registerBinaryMessageHandler: options?.registerBinaryMessageHandler,
-    orchestrationCaller
+    orchestrationCaller,
+    // Fork-only (Pod)
+    podNativePeer: options?.podNativePeer
   }
 }
