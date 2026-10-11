@@ -17,6 +17,10 @@ export function deliverPtyDataToSidecars(ptyId: string, data: string): void {
  *  sends them only for raw-byte sidecars. Credit on receipt: a throttled view must not pace the PTY. */
 export function deliverSidecarOnlyPtyData(ptyId: string, data: string, chars: number): void {
   recordPtyDataReceived(ptyId, chars)
-  deliverPtyDataToSidecars(ptyId, data)
-  ackPtyData(ptyId, chars)
+  try {
+    deliverPtyDataToSidecars(ptyId, data)
+  } finally {
+    // Why finally: a throwing sidecar would leave this credit in flight for good and stall the PTY.
+    ackPtyData(ptyId, chars)
+  }
 }
