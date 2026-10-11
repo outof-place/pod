@@ -2,6 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createConnection, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Tab } from '../../../shared/tab-types'
+import type { PodUiHostSessionSource } from './pod-ui-host-surface-tab'
 
 const mocks = vi.hoisted(() => {
   const handlers = new Map<string, ((...args: unknown[]) => void)[]>()
@@ -141,10 +143,10 @@ function send(client: Client, message: unknown): void {
   client.socket.write(`${JSON.stringify(message)}\n`)
 }
 
-async function install(): Promise<void> {
+async function install(sessions?: PodUiHostSessionSource): Promise<void> {
   vi.resetModules()
   const { installPodUiHost } = await import('./pod-ui-host')
-  installPodUiHost({ setOffscreenBrowserBackend: vi.fn() })
+  installPodUiHost({ setOffscreenBrowserBackend: vi.fn() }, sessions)
 }
 
 // The renderer's answer to main's quit question (use-pod-ui-host-quit-assess.ts).
@@ -202,6 +204,44 @@ describe('installPodUiHost', () => {
     })
     expect(mocks.app.show).toHaveBeenCalled()
     expect(mocks.window.show).toHaveBeenCalled()
+  })
+
+  it("focuses a file's tab through the editor route", async () => {
+    const file: Tab = {
+      id: '/w/a.ts',
+      entityId: '/w/a.ts',
+      groupId: 'group-1',
+      worktreeId: 'repo-1::/w',
+      contentType: 'editor',
+      label: 'a.ts',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }
+    await install({
+      getWorkspaceSessionHostIds: () => ['local'],
+      getWorkspaceSession: () => ({ unifiedTabs: { 'repo-1::/w': [file] } })
+    })
+    const client = await attach()
+    send(client, {
+      type: 'openSurface',
+      surface: 'window',
+      worktreeId: 'repo-1::/w',
+      tabId: '/w/a.ts'
+    })
+    await vi.waitFor(() =>
+      expect(client.lines.some((line) => line.includes('surfaceShown'))).toBe(true)
+    )
+    expect(mocks.window.webContents.send).toHaveBeenCalledWith('ui:focusEditorTab', {
+      tabId: '/w/a.ts',
+      worktreeId: 'repo-1::/w',
+      userInitiated: true
+    })
+    expect(mocks.window.webContents.send).not.toHaveBeenCalledWith(
+      'ui:focusTerminal',
+      expect.anything()
+    )
   })
 
   it('navigates but never takes the screen in a background launch', async () => {
