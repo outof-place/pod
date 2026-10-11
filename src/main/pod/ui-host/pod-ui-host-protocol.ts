@@ -40,13 +40,21 @@ const Quit = z
   })
   .strict()
 
+const SurfaceName = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/)
+
 // A surface PodNative has no native view for yet: the hidden window shows, at the worktree if given.
+// Feature `surfaceSection`: where in it (pod-ui-host-surface.ts PodUiHostSurfaceNavigation).
 const OpenSurface = z
   .object({
     type: z.literal('openSurface'),
     surface: z.enum(['window', 'settings']),
     worktreeId: z.string().max(MAX_FORWARDED_LENGTH).optional(),
-    tabId: z.string().max(MAX_FORWARDED_LENGTH).optional()
+    tabId: z.string().max(MAX_FORWARDED_LENGTH).optional(),
+    section: SurfaceName.optional(),
+    repoId: z.string().max(MAX_FORWARDED_LENGTH).optional(),
+    hostId: z.string().max(MAX_FORWARDED_LENGTH).optional(),
+    item: z.string().max(MAX_FORWARDED_LENGTH).optional(),
+    intent: SurfaceName.optional()
   })
   .strict()
 
@@ -73,7 +81,8 @@ export type PodUiHostQuitReason = z.infer<typeof Quit>['reason']
 
 // What a welcome's `features` may name beyond the base verbs; PodNative sends only what it lists.
 // `headless`: no classic window posts agent notifications or sets the Dock badge; PodNative does.
-export const POD_UI_HOST_FEATURES = ['browser', 'headless'] as const
+// `surfaceSection`: openSurface takes a section; an older runtime refuses the unknown keys.
+export const POD_UI_HOST_FEATURES = ['browser', 'headless', 'surfaceSection'] as const
 
 export type PodUiHostServerMessage =
   | { type: 'welcome'; v: number; pid: number; features: readonly string[] }
