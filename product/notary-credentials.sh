@@ -11,8 +11,10 @@
 
 # The account's home from the user database: shells with an overridden HOME (schedulers, E2E
 # profiles) once made the credentials look gone.
+# Empty when there is no user database (Linux CI) or dscl fails; callers fall back to HOME. Why `|| true`:
+# under errexit and pipefail a failing dscl would end the sourcing script without a word.
 pod_account_home() {
-  dscl . -read "/Users/$(id -un)" NFSHomeDirectory 2>/dev/null | sed -n 's/^NFSHomeDirectory: //p'
+  dscl . -read "/Users/$(id -un)" NFSHomeDirectory 2>/dev/null | sed -n 's/^NFSHomeDirectory: //p' || true
 }
 
 pod_notary_credentials() {
