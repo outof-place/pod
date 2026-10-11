@@ -30,7 +30,19 @@ out=${3:?usage: sparkle-appcast.sh <archive> <tag> <out dir>}
 mkdir -p "$out"
 
 work=$(mktemp -d /tmp/pod-appcast.XXXXXX)
-trap '/usr/bin/trash "$work" 2>/dev/null || true' EXIT
+# generate_appcast keeps each archive it extracts in the account's caches for later runs (a whole
+# Pod.app); this run's entries go again.
+cache=$HOME/Library/Caches/Sparkle_generate_appcast
+if [ -d "$cache" ]; then cached_before=$(ls "$cache"); else cached_before=none; fi
+drop_cache() {
+  [ -d "$cache" ] || return 0
+  if [ "$cached_before" = none ]; then /usr/bin/trash "$cache" 2>/dev/null || true; return 0; fi
+  local entry
+  for entry in $(ls "$cache"); do
+    grep -qxF "$entry" <<<"$cached_before" || /usr/bin/trash "$cache/$entry" 2>/dev/null || true
+  done
+}
+trap 'drop_cache; /usr/bin/trash "$work" 2>/dev/null || true' EXIT
 curl -fsSL -o "$work/sparkle.tar.xz" \
   "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
 [ "$(shasum -a 256 "$work/sparkle.tar.xz" | cut -d' ' -f1)" = "$SPARKLE_SHA256" ] \
