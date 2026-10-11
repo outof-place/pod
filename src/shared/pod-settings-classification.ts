@@ -70,6 +70,7 @@ export const POD_SETTINGS_HIDDEN = {
   terminalHiddenDeliveryGate: 'kill-switch',
   terminalModelQueryAuthority: 'kill-switch',
   terminalMainModelDormancy: 'kill-switch',
+  podTerminalMainModelDormancy: 'kill-switch',
   terminalDaemonQueryAuthority: 'kill-switch',
   agentStateRulesLiveUpdates: 'kill-switch',
   codexTerminalServerIsolation: 'kill-switch',
