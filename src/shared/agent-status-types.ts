@@ -163,6 +163,9 @@ export type AgentStatusEntry = {
    *  the transition may have been missed while no receiver was up, so freshness gates
    *  treat the row as stale immediately. Cleared by any accepted live event. */
   restoredUnconfirmed?: boolean
+  /** Pod: a headless host's projection of a state hydrated from disk after a restart, not yet seen
+   *  again; clients mark it and post nothing for it. */
+  beforeRestart?: true
 } & AgentStatusRowFacets
 
 // ─── Agent status payload shape (what hook receivers send via IPC) ──────────
