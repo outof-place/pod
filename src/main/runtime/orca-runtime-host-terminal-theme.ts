@@ -13,7 +13,7 @@ export class OrcaRuntimeWithHostTerminalTheme extends OrcaRuntimeWithScheduleMob
 
   /** The theme for terminal tabs no renderer themed (a headless host has no renderer). */
   protected getHostTerminalTheme(): RuntimeMobileTerminalTheme | undefined {
-    return resolveHostTerminalTheme(this.store?.getSettings())
+    return resolveHostTerminalTheme(this.store?.getSettings?.())
   }
 
   /** A renderer themes its terminal tabs; a headless host has none, so main fills the theme in. */
@@ -38,7 +38,7 @@ export class OrcaRuntimeWithHostTerminalTheme extends OrcaRuntimeWithScheduleMob
   /** Settings or the system appearance moved: snapshots that carry the host's theme go out again,
    *  and a colour query with no viewer connected answers the new theme. */
   refreshHostTerminalTheme(): void {
-    const colors = hostViewerColors(this.store?.getSettings())
+    const colors = hostViewerColors(this.store?.getSettings?.())
     if (colors) {
       seedTerminalViewerColors(colors)
     }
