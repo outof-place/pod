@@ -49,10 +49,10 @@ export function answerQueriesCoveredBySnapshot(
   if (!covered.includes('\x1b')) {
     return
   }
-  const queries = extractHiddenStartupRendererQueryData(covered, '')
-  const queryData =
-    queries.statelessQueryData + queries.statefulQueryData + queries.oscColorQueryData
-  if (queryData.length > 0) {
-    runtime.answerTerminalQueriesFromModel(stream.ptyId, queryData)
+  // In output order: a program that sends DA1 after another query reads DA1's reply as "the
+  // other one is unsupported" when it arrives first.
+  const { orderedQueryData } = extractHiddenStartupRendererQueryData(covered, '')
+  if (orderedQueryData.length > 0) {
+    runtime.answerTerminalQueriesFromModel(stream.ptyId, orderedQueryData)
   }
 }
