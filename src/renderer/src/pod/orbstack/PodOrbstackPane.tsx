@@ -140,6 +140,15 @@ export function PodOrbstackPane(): React.JSX.Element {
         />
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
         {status ? <StatusSummary status={status} /> : null}
+        {status?.churn && status.churn.creates >= status.churn.warnAt ? (
+          <p className="text-xs text-muted-foreground" data-testid="pod-orbstack-churn">
+            {translate(
+              'podOrbstack.churn.warning',
+              'Pod made {{count}} machines since OrbStack started. OrbStack keeps the address of each deleted machine for about a day, so new machines may soon get none until those expire or OrbStack is updated.',
+              { count: status.churn.creates }
+            )}
+          </p>
+        ) : null}
         {status?.errors.map((message) => (
           <p key={message} className="font-mono text-xs text-muted-foreground">
             {message}

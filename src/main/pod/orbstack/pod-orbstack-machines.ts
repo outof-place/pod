@@ -35,6 +35,8 @@ type MachineDeps = {
   registry: PodOrbstackRegistry
   loadRecipe: () => OrcaVmRecipe
   runRecipe?: typeof runEphemeralVmRecipeStart
+  /** A machine the recipe asks OrbStack for (the recipe runs orb itself, not through `run`). */
+  onRecipeCreate?: () => void
   /** HOME for the recipe's orb calls; null keeps the inherited one. */
   home?: string | null
   /** The release of the Mac's Claude Code version a new sandbox installs; null skips Claude (E2E). */
@@ -152,6 +154,7 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
         }
       }
       onStep('Running the recipe')
+      deps.onRecipeCreate?.()
       const start = await runRecipe({
         recipe,
         repoPath: target.worktreePath,
