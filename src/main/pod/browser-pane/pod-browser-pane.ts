@@ -1,8 +1,8 @@
 // Fork-only (Pod): one-app's browser panes. In one-app, browser pages are offscreen WebContents with
 // shared textures (the offscreen backend, set up by installPodBrowserPanes); PodNative attaches a
-// native pane to one, and while it is attached its frames go to PodNative as IOSurfaces over Mach
-// and its state, cursor and find results over the control socket. A page nobody shows does not
-// paint; agents still drive and capture it over CDP.
+// native pane to one, and while it is attached and on screen its frames go to PodNative as
+// IOSurfaces over Mach, its state, cursor and find results over the control socket. A page nobody
+// sees does not paint; agents still drive and capture it over CDP (a capture needs no painting).
 import type { BrowserWindow, WebContents } from 'electron'
 import type {
   PodBrowserPaneClientMessage,
@@ -13,33 +13,17 @@ import type { PodBrowserDownloadEvent } from './pod-browser-pane-hooks'
 import { PaneInputState } from './pod-browser-pane-input'
 import { navigatePanePage } from './pod-browser-pane-navigation'
 import { PaneSelectMenus } from './pod-browser-pane-select'
-
-// The device scale offscreen pages render at: Retina pixels on every Mac display Pod targets.
-export const POD_BROWSER_PANE_SCALE = 2
+import { PaneFramePump, type PodBrowserFrames } from './pod-browser-pane-frames'
 const PANE_FRAME_RATE = 60
 // How long after an agent's last command its page still reads as driven.
 const AGENT_DRIVING_MS = 3_000
-
-export type PodBrowserFrames = {
-  browserConnect: (service: string) => boolean
-  browserDisconnect: () => boolean
-  browserSend: (
-    ioSurface: Buffer,
-    frame: {
-      seq: number
-      token: number
-      widget: number
-      popupX: number
-      popupY: number
-      scaleX100: number
-    }
-  ) => { ok: boolean; ns: number }
-}
 
 type Page = {
   win: BrowserWindow
   wc: WebContents
   token: number | null
+  // An attached pane off screen (browserPane visible false) keeps its token but doesn't paint.
+  visible: boolean
   seq: number
   input: PaneInputState
   select: PaneSelectMenus
@@ -47,15 +31,10 @@ type Page = {
   agentTimer: ReturnType<typeof setTimeout> | null
 }
 
-export type PodBrowserPaneStats = { framesSent: number; sendFailures: number; sendNs: number }
-
 export class PodBrowserPaneController {
   private readonly pages = new Map<string, Page>()
-  private connected = false
   private readonly downloads = new PaneDownloads()
-  // Attached paints in a row with no shared texture: Ganesh (disable-skia-graphite) turns them off.
-  private texturelessPaints = 0
-  readonly stats: PodBrowserPaneStats = { framesSent: 0, sendFailures: 0, sendNs: 0 }
+  private readonly frames: PaneFramePump
 
   constructor(
     private readonly deps: {
@@ -64,7 +43,13 @@ export class PodBrowserPaneController {
       openDevTools: (wc: WebContents) => void
       log: (message: string) => void
     }
-  ) {}
+  ) {
+    this.frames = new PaneFramePump(deps.frames, deps.log)
+  }
+
+  get stats(): PaneFramePump['stats'] {
+    return this.frames.stats
+  }
 
   /** An offscreen page the backend made: it waits, not painting, until a pane attaches. */
   trackPage(pageId: string, win: BrowserWindow): void {
@@ -73,6 +58,7 @@ export class PodBrowserPaneController {
       win,
       wc,
       token: null,
+      visible: false,
       seq: 0,
       input: new PaneInputState(),
       // Why not while an agent drives: its clicks on a select must not open a menu on the screen.
@@ -86,7 +72,7 @@ export class PodBrowserPaneController {
     }
     this.pages.set(pageId, page)
     wc.stopPainting()
-    wc.on('paint', (event) => this.paint(page, event.texture))
+    wc.on('paint', (event) => this.frames.paint(page, event.texture))
     wc.on('cursor-changed', (_event, cursor) => {
       if (page.token !== null) {
         this.deps.send({ type: 'browserCursor', pageId, cursor })
@@ -104,15 +90,11 @@ export class PodBrowserPaneController {
       }
     })
     const state = (): void => this.sendState(pageId)
-    for (const event of [
-      'did-start-loading',
-      'did-stop-loading',
-      'did-navigate',
-      'did-navigate-in-page',
-      'page-title-updated'
-    ] as const) {
-      wc.on(event as 'did-start-loading', state)
-    }
+    wc.on('did-start-loading', state)
+    wc.on('did-stop-loading', state)
+    wc.on('did-navigate', state)
+    wc.on('did-navigate-in-page', state)
+    wc.on('page-title-updated', state)
     wc.once('destroyed', () => {
       if (page.agentTimer) {
         clearTimeout(page.agentTimer)
@@ -158,23 +140,14 @@ export class PodBrowserPaneController {
     if (message.type === 'browserRendezvous') {
       // A PodNative that just connected learns what downloaded meanwhile.
       this.downloads.all().forEach((record) => this.deps.send(record))
-      this.connected = this.deps.frames?.browserConnect(message.service) ?? false
-      this.deps.log(
-        this.connected
-          ? 'browser-pane: frames go to PodNative'
-          : 'browser-pane: PodNative has no frame receiver under that name'
-      )
+      this.frames.connect(message.service)
       return
     }
     const page = this.pages.get(message.pageId)
     if (!page || page.wc.isDestroyed()) {
-      if (message.type === 'browserAttach') {
+      if (message.type === 'browserAttach' || message.type === 'browserPane') {
         // A page the classic window hosts (a <webview>), or one already gone.
-        this.deps.send({
-          type: 'browserAttachFailed',
-          pageId: message.pageId,
-          reason: 'no offscreen page with that id'
-        })
+        this.refuse(message.pageId, 'no offscreen page with that id')
       }
       return
     }
@@ -186,13 +159,21 @@ export class PodBrowserPaneController {
         page.token = message.token
         page.input.reset()
         this.resize(page, message.width, message.height)
-        wc.setFrameRate(PANE_FRAME_RATE)
-        wc.startPainting()
-        wc.invalidate()
+        this.show(page, true)
         this.sendState(message.pageId)
         return
       case 'browserDetach':
         this.detach(page)
+        return
+      case 'browserPane':
+        if (message.rendezvous && message.rendezvous !== this.frames.service) {
+          this.frames.connect(message.rendezvous)
+        }
+        if (page.token === null) {
+          this.refuse(message.pageId, 'no pane is attached to that page')
+        } else if (page.visible !== message.visible) {
+          this.show(page, message.visible)
+        }
         return
       case 'browserResize':
         this.resize(page, message.width, message.height)
@@ -235,16 +216,29 @@ export class PodBrowserPaneController {
     for (const page of this.pages.values()) {
       this.detach(page)
     }
-    this.deps.frames?.browserDisconnect()
-    this.connected = false
+    this.frames.disconnect()
+  }
+
+  private refuse(pageId: string, reason: string): void {
+    this.deps.send({ type: 'browserAttachFailed', pageId, reason })
+  }
+
+  // Why: the only paint switch for offscreen pages; b4-perf's page sleep leaves them alone.
+  private show(page: Page, visible: boolean): void {
+    page.visible = visible
+    if (visible) {
+      page.wc.setFrameRate(PANE_FRAME_RATE)
+      page.wc.startPainting()
+      page.wc.invalidate()
+    } else if (!page.wc.isDestroyed()) {
+      page.wc.stopPainting()
+    }
   }
 
   private detach(page: Page): void {
     page.token = null
     page.input.reset()
-    if (!page.wc.isDestroyed()) {
-      page.wc.stopPainting()
-    }
+    this.show(page, false)
   }
 
   private resize(page: Page, width: number, height: number): void {
@@ -270,50 +264,5 @@ export class PodBrowserPaneController {
       canGoForward: wc.navigationHistory.canGoForward(),
       agentDriving: Date.now() < page.agentDrivingUntil
     })
-  }
-
-  private paint(page: Page, texture: Electron.OffscreenSharedTexture | undefined): void {
-    if (!texture) {
-      if (page.token !== null && ++this.texturelessPaints === 30) {
-        this.deps.log('browser-pane: paints come without shared textures; the pane stays blank')
-      }
-      return
-    }
-    this.texturelessPaints = 0
-    try {
-      const frames = this.deps.frames
-      if (page.token === null || !this.connected || !frames) {
-        return
-      }
-      const info = texture.textureInfo
-      const ioSurface = info.handle.ioSurface
-      if (!ioSurface) {
-        return
-      }
-      page.seq += 1
-      const result = frames.browserSend(ioSurface, {
-        seq: page.seq,
-        token: page.token,
-        widget: info.widgetType === 'popup' ? 1 : 0,
-        popupX: Math.round(info.contentRect?.x ?? 0),
-        popupY: Math.round(info.contentRect?.y ?? 0),
-        scaleX100: POD_BROWSER_PANE_SCALE * 100
-      })
-      this.stats.sendNs += result.ns
-      if (result.ok) {
-        this.stats.framesSent += 1
-        if (this.stats.framesSent === 1) {
-          this.deps.log('browser-pane: first frame sent')
-        }
-      } else {
-        this.stats.sendFailures += 1
-        if (this.stats.sendFailures === 1) {
-          this.deps.log('browser-pane: a frame could not be sent')
-        }
-      }
-    } finally {
-      // Why at once: Chromium's pool is two surfaces; PodNative maps its own reference.
-      texture.release()
-    }
   }
 }
