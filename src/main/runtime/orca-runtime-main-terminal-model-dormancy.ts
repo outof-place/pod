@@ -5,6 +5,7 @@ import {
   isDaemonQueryResponderConfirmed,
   isHiddenRendererPty,
   isHiddenRendererPtyViewGated,
+  isRendererPtyViewKeptForScrollback,
   registerHiddenRendererPtyMarkListener,
   registerHiddenRendererPtyUnmarkListener,
   recordMainTerminalModelSeedFailure,
@@ -150,6 +151,8 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
       settings?.terminalDaemonQueryAuthority !== false &&
       isTerminalModelQueryAuthorityEnabled(settings) &&
       isHiddenRendererPty(ptyId) &&
+      // Why: a daemon responder gates the view, which must keep parsing to keep its history.
+      !isRendererPtyViewKeptForScrollback(ptyId, settings) &&
       !this.hasRemoteTerminalViewSubscriber(ptyId) &&
       !this.mainTerminalModelDormancy.hasReaders(ptyId) &&
       this.canMainTerminalModelRest(ptyId) &&
