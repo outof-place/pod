@@ -1,4 +1,3 @@
-import { X509Certificate } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -6,7 +5,8 @@ import { join } from 'node:path'
 import { connect, createServer, type TLSSocket } from 'node:tls'
 import type { AddressInfo } from 'node:net'
 import { describe, expect, it } from 'vitest'
-import { createSandboxCa, createSandboxCas } from './pod-orbstack-sandbox-ca'
+import { randomBytes, X509Certificate } from 'node:crypto'
+import { createSandboxCa, createSandboxCas, integer } from './pod-orbstack-sandbox-ca'
 
 function handshake(
   ca: ReturnType<typeof createSandboxCa>,
@@ -32,6 +32,22 @@ function handshake(
     })
   })
 }
+
+describe('DER integers', () => {
+  it('stay minimal for any serial, so OpenSSL never reads illegal padding', () => {
+    const hex = (bytes: number[]) => integer(Buffer.from(bytes)).toString('hex')
+    expect(hex([0x00, 0x12])).toBe('020112')
+    expect(hex([0x00, 0x00, 0x85])).toBe('02020085')
+    expect(hex([0x85])).toBe('02020085')
+    expect(hex([0x00])).toBe('020100')
+    expect(hex([])).toBe('020100')
+    for (let round = 0; round < 4000; round += 1) {
+      const content = integer(randomBytes(16)).subarray(2)
+      const padded = content.length > 1 && content[0] === 0 && ((content[1] ?? 0) & 0x80) === 0
+      expect(padded).toBe(false)
+    }
+  })
+})
 
 describe('createSandboxCa', () => {
   it('issues a CA limited to api.anthropic.com and one leaf for that name', () => {
