@@ -10,6 +10,7 @@ import {
   removeDarwinDaemonHostTree
 } from './daemon-host-darwin-clone'
 import { stagingWriterVerdict } from './daemon-host-reclaim'
+import { reportDaemonHost } from './daemon-host-darwin-report'
 import {
   collectPinnedDaemonVersions,
   type PinnedDaemonVersionsEvidence
@@ -87,7 +88,7 @@ export async function pruneDarwinDaemonHosts(
       continue
     }
     if (evidence.status === 'unverifiable') {
-      console.warn(`[daemon] daemon-host: keeping ${versionDir}: ${evidence.reason}`)
+      reportDaemonHost('kept', `keeping ${versionDir}: ${evidence.reason}`)
       continue
     }
     // A complete pid-record listing with no record for this version proves no daemon owns it.
@@ -95,11 +96,11 @@ export async function pruneDarwinDaemonHosts(
       continue
     }
     if (await anyProcessRunsFrom(versionExecutables(versionDir))) {
-      console.warn(`[daemon] daemon-host: keeping ${versionDir}: a process still runs from it`)
+      reportDaemonHost('kept', `keeping ${versionDir}: a process still runs from it`)
       continue
     }
     if (await removeDarwinDaemonHostTree(versionDir)) {
-      console.info(`[daemon] daemon-host: reclaimed ${versionDir}`)
+      reportDaemonHost('reclaimed', `reclaimed ${versionDir}`)
     }
   }
 }
@@ -115,7 +116,7 @@ async function runDarwinDaemonHostMaintenance(
       await materializeDarwinDaemonHost(entryPath)
     }
   } catch (error) {
-    console.warn('[daemon] daemon-host: maintenance failed', error)
+    reportDaemonHost('failed', 'maintenance failed', error)
   }
 }
 
