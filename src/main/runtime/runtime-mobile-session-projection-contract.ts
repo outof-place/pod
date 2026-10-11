@@ -7,6 +7,7 @@ import type {
   RuntimeMobileSessionTerminalTab,
   RuntimeSyncedTab
 } from '../../shared/runtime-types'
+import type { RuntimeMobileSessionAgentResume } from '../../shared/runtime-mobile-session-tab-contracts'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
@@ -33,6 +34,7 @@ export type RuntimeMobileSessionProjectionHost = {
     getRows: (paneKey: string, terminalHandle: string | null) => AgentStatusIpcPayload[]
   ): RuntimeAgentRowSnapshot | null
   getTrackedTitle(ptyId: string | null): string | null
+  getAgentResume?(paneKey: string): RuntimeMobileSessionAgentResume | undefined
   /** Display-only clear of a PTY's native title; every title/status read here is display. */
   getTitleDisplayClear(ptyId: string | null): TitleDisplayClear | null
   issuePtyHandle(pty: RuntimePtyWorktreeRecord): string
