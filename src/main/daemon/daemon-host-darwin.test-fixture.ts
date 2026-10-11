@@ -13,7 +13,10 @@ export const ENTRY_REL = join(
   'daemon-entry.js'
 )
 
+const willQuit: (() => void)[] = []
+
 export const hostApp = {
+  willQuit,
   isPackaged: true,
   userDataPath: '',
   appPath: '',
@@ -26,7 +29,9 @@ export function installHostApp(): void {
     getAppPath: () => hostApp.appPath,
     getVersion: () => hostApp.version,
     isPackaged: () => hostApp.isPackaged,
-    onWillQuit: () => {},
+    onWillQuit: (handler) => {
+      hostApp.willQuit.push(handler)
+    },
     exit: () => {},
     getAppMetrics: () => []
   }
@@ -87,6 +92,11 @@ const ok: ProcessResult = {
 
 /** Stand-ins for cp, codesign, chmod and lsof, so the suite runs on every CI host. */
 export async function fakeTool(state: ToolState, spec: ProcessSpec): Promise<ProcessResult> {
+  if (spec.program === '/usr/sbin/taskpolicy' && spec.args?.[0] === '-b') {
+    state.calls.push({ program: spec.program, args: spec.args })
+    const [, program, ...rest] = spec.args
+    return fakeTool(state, { ...spec, program: program ?? '', args: rest })
+  }
   const args = spec.args ?? []
   state.calls.push({ program: spec.program, args })
   switch (spec.program) {
