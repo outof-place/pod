@@ -88,8 +88,8 @@ describe('PodSettingsService secrets', () => {
     for (const key of POD_SETTINGS_SECRET_KEYS) {
       await expect(service.set({ [key]: 'x' }, revision)).rejects.toThrow(PodSettingsRefusedError)
     }
-    await expect(service.set({ pluginConsents: {} }, revision)).rejects.toThrow(
-      PodSettingsRefusedError
+    await expect(service.set({ pluginConsents: {}, terminalFontSze: 3 }, revision)).rejects.toThrow(
+      'podSettings.set refuses unknown keys: pluginConsents, terminalFontSze'
     )
     await expect(service.set({ terminalFontSize: 'big' }, revision)).rejects.toThrow(
       PodSettingsRefusedError
@@ -116,6 +116,7 @@ describe('PodSettingsService.set', () => {
     expect(result).toMatchObject({
       ok: false,
       reason: 'conflict',
+      conflictingKeys: ['terminalFontSize'],
       values: { terminalFontSize: 18 }
     })
     expect(result.revision).toBe(service.get().revision)
@@ -127,6 +128,34 @@ describe('PodSettingsService.set', () => {
     const stale = service.get().revision
     store.update({ theme: 'dark' }, false)
     expect((await service.set({ theme: 'light' }, stale)).ok).toBe(false)
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it('writes a key nobody else changed, whatever else moved since the revision', async () => {
+    const { service, store, write } = setup()
+    const base = service.get().revision
+    store.update({ terminalFontSize: 18 })
+    const result = await service.set({ theme: 'dark' }, base)
+    expect(result).toMatchObject({ ok: true, values: { theme: 'dark', terminalFontSize: 18 } })
+    expect(write).toHaveBeenCalledWith({ theme: 'dark' })
+  })
+
+  it('compares only the written fields of an object', async () => {
+    const { service, store, write } = setup()
+    const base = service.get().revision
+    const notifications = store.getSettings().notifications
+    store.update({ notifications: { ...notifications, enabled: false } })
+    expect((await service.set({ notifications: { terminalBell: false } }, base)).ok).toBe(true)
+    store.update({ notifications: { ...store.getSettings().notifications, terminalBell: true } })
+    const clash = await service.set({ notifications: { terminalBell: false } }, base)
+    expect(clash).toMatchObject({ ok: false, conflictingKeys: ['notifications'] })
+    expect(write).toHaveBeenCalledTimes(1)
+  })
+
+  it('counts a revision it never handed out as everything changed', async () => {
+    const { service, write } = setup()
+    const result = await service.set({ theme: 'dark', terminalFontSize: 15 }, 'not-a-revision')
+    expect(result).toMatchObject({ ok: false, conflictingKeys: ['theme', 'terminalFontSize'] })
     expect(write).not.toHaveBeenCalled()
   })
 
@@ -180,6 +209,27 @@ describe('PodSettingsService.subscribe', () => {
     expect(changes[0].revision).toBe(service.get().revision)
     unsubscribe()
     expect(store.listenerCount()).toBe(0)
+  })
+
+  it('reports a failed read and keeps following', () => {
+    const { service, store } = setup()
+    const changes: PodSettingsChange[] = []
+    const errors: string[] = []
+    service.subscribe(
+      (change) => changes.push(change),
+      (message) => errors.push(message)
+    )
+    const read = store.getSettings
+    store.getSettings = () => {
+      throw new Error('profile unreadable')
+    }
+    store.update({ terminalFontSize: 19 })
+    vi.advanceTimersByTime(POD_SETTINGS_COALESCE_MS)
+    expect(errors).toEqual(['profile unreadable'])
+    store.getSettings = read
+    store.update({ terminalFontSize: 20 })
+    vi.advanceTimersByTime(POD_SETTINGS_COALESCE_MS)
+    expect(changes.map((change) => change.values.terminalFontSize)).toEqual([20])
   })
 
   it('emits nothing when only secret or hidden keys change', () => {
