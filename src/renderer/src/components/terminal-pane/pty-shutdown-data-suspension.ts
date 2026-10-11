@@ -97,6 +97,11 @@ export function bufferPtyShutdownData(ptyId: string, data: string, meta?: PtyDat
   return bufferPtyShutdownOutput(ptyId, { kind: 'data', data, meta })
 }
 
+/** Holds bytes main sent for sidecars only; a rollback hands them to sidecars, never the view. */
+export function bufferPtyShutdownSidecarData(ptyId: string, data: string): boolean {
+  return bufferPtyShutdownOutput(ptyId, { kind: 'sidecars', data })
+}
+
 function bufferPtyShutdownOutput(ptyId: string, event: PtyShutdownOutputEvent): boolean {
   const pending = pendingPtyHandlerShutdowns.get(ptyId)
   if (!pending) {
@@ -189,7 +194,9 @@ function deliverShutdownEvent(
     replayHandler(event.data)
     return
   }
-  dataHandler(event.data, event.meta)
+  if (event.kind === 'data') {
+    dataHandler(event.data, event.meta)
+  }
   for (const sidecar of Array.from(ptyDataSidecars.get(ptyId) ?? [])) {
     sidecar(event.data)
   }
