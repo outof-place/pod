@@ -40,6 +40,7 @@ import {
 } from '../../shared/computer-awake-mode'
 import { resolveAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
 import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
+import { podSettingsWritePath } from '../pod/settings/pod-settings-writer'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -124,7 +125,7 @@ export function registerSettingsHandlers(
     event.returnValue = readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
   })
 
-  ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
+  const writeSettings = async (args: Partial<GlobalSettings>, originWebContentsId?: number) => {
     const sanitizedArgs = sanitizeRendererSettingsUpdate(args)
     // Why: connection/navigation code receives the generic settings writer; the
     // durable server preference has a dedicated Advanced-control boundary.
@@ -201,7 +202,7 @@ export function registerSettingsHandlers(
     const before = store.getSettings()
     const updateOptions = {
       notifyListeners: true,
-      originWebContentsId: event.sender.id
+      originWebContentsId
     }
     const result =
       'alwaysForceDeleteWorktrees' in sanitizedArgs
@@ -303,7 +304,9 @@ export function registerSettingsHandlers(
     }
 
     return result
-  })
+  }
+  // Fork-only (Pod): the same listener, with its write path handed to podSettings.set.
+  ipcMain.handle('settings:set', podSettingsWritePath(writeSettings))
 
   ipcMain.handle(
     'settings:set-active-runtime-environment-preference',
