@@ -40,6 +40,18 @@ describe('agent decorative title signatures', () => {
     expect(getDecorativeTitleGateKey(next, next)).toBe(getDecorativeTitleGateKey(first, first))
   })
 
+  it('keeps braille inside a title that is not a copy of the leading frame', () => {
+    expect(
+      isDecorativeAgentTitleFrameChange('\u280b Codex \u2801 task', '\u280b Codex \u2803 task')
+    ).toBe(false)
+    expect(
+      isDecorativeAgentTitleFrameChange(
+        '\u2819 renaming\u2819... | scratch',
+        '\u2839 renaming\u2839... | scratch'
+      )
+    ).toBe(false)
+  })
+
   it('folds Claude Code quarter-circle frames', () => {
     expect(
       isDecorativeAgentTitleFrameChange('\u25d0 Fix the login test', '\u25d3 Fix the login test')
