@@ -3,7 +3,10 @@ import { getPublicSshState } from '../../public-ssh-state'
 import { defineMethod, defineStreamingMethod } from '../core'
 import { ClientEventsUnsubscribeParams } from '../../../../shared/rpc-contract/client-events-params'
 import { PodClientEventsSubscribeParams } from '../../../../shared/rpc-contract/pod-client-events-params'
-import { subscribePodWorktreeStatus } from '../../../pod/worktree-status/install-pod-worktree-status'
+import {
+  podWorktreeStatusReadyFields,
+  subscribePodWorktreeStatus
+} from '../../../pod/worktree-status/install-pod-worktree-status'
 
 let clientEventSubscriptionSeq = 0
 
@@ -57,7 +60,7 @@ export const CLIENT_EVENT_METHODS = [
           type: 'ready',
           subscriptionId,
           snapshot: { sshStates },
-          ...(stopPodWorktreeStatus ? { worktreeStatus: true } : {})
+          ...podWorktreeStatusReadyFields(params, stopPodWorktreeStatus)
         })
       })
     }
