@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  allowsCliAutoInstall,
   parseProductIdentity,
   PRODUCT_IDENTITY_RESOURCE,
   readProductIdentity
@@ -45,6 +46,17 @@ describe('product identity', () => {
       computerUseDisplayName: 'Pod Computer Use',
       legacyProfile: { userDataName: 'orca', keychainName: 'orca' }
     })
+  })
+
+  it('refuses a CLI name another tool owns on PATH', () => {
+    for (const cliName of ['pod', 'Pod', 'orca', 'orca-dev', 'orca-ide']) {
+      expect(() => parseProductIdentity({ ...Object(repoIdentity), cliName })).toThrow(/cliName/)
+    }
+  })
+
+  it('never registers the CLI at launch in a product build', () => {
+    expect(allowsCliAutoInstall(parseProductIdentity(repoIdentity))).toBe(false)
+    expect(allowsCliAutoInstall(null)).toBe(true)
   })
 
   it('is absent, not an error, when the build ships no identity', () => {
