@@ -325,8 +325,8 @@
     {
       "branch": "pod/agent-turbo",
       "forkOnly": "agent CLIs at app priority",
-      "base": "6edfc6c8e1",
-      "note": "r-hw-perf; one commit on main 6edfc6c8e1: the Swift pod-agent-launcher installed into Contents/Resources/bin with claude/codex symlinks; kill switch POD_AGENT_TURBO=0"
+      "base": "a9534ba7c8c889e153c760b0b3f4eac601eea4ce",
+      "note": "r-hw-perf; one commit, restacked by b2 onto pod/identity a9534ba7c8 (gated keychain test): the Swift pod-agent-launcher installed into Contents/Resources/bin with claude/codex symlinks; kill switch POD_AGENT_TURBO=0"
     },
     {
       "branch": "pod/native-cli",
