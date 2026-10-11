@@ -11,6 +11,7 @@ import { prepareLoadedProfileSettings } from '../persistence/loading-store/prepa
 import { prepareLoadedTerminalSettings } from '../persistence/loading-store/prepare-loaded-terminal-settings'
 import { parseProductIdentity } from './product-identity'
 import { productSettingDefaults } from './product-setting-defaults'
+import { isMainTerminalModelDormancyEnabled } from '../pod/pod-terminal-model-dormancy'
 
 const POD = parseProductIdentity(
   JSON.parse(readFileSync(join(process.cwd(), 'product', 'identity.json'), 'utf8'))
@@ -20,7 +21,11 @@ const POD = parseProductIdentity(
 function loadProfile(stored: Partial<GlobalSettings>): PersistedState['settings'] {
   const defaults = getDefaultPersistedState(homedir())
   const settings: GlobalSettings = { ...defaults.settings, ...stored }
-  for (const key of ['experimentalNativeTerminal', 'terminalCursorBlink'] as const) {
+  for (const key of [
+    'experimentalNativeTerminal',
+    'terminalCursorBlink',
+    'podTerminalMainModelDormancy'
+  ] as const) {
     if (!(key in stored)) {
       Reflect.deleteProperty(settings, key)
     }
@@ -38,7 +43,8 @@ describe('product setting defaults', () => {
   it('turns the native terminal on and cursor blink off only for a product build', () => {
     expect(productSettingDefaults(POD)).toEqual({
       experimentalNativeTerminal: true,
-      terminalCursorBlink: false
+      terminalCursorBlink: false,
+      podTerminalMainModelDormancy: false
     })
     expect(productSettingDefaults(null)).toEqual({})
   })
@@ -62,6 +68,22 @@ describe('product setting defaults', () => {
     expect(loadProfile({ terminalCursorBlink: true }).terminalCursorBlink).toBe(true)
     setProductSettingDefaults(productSettingDefaults(null))
     expect(loadProfile({}).terminalCursorBlink).toBe(true)
+  })
+
+  // Why: earlier Pod builds stored Orca's old default `terminalMainModelDormancy: true`.
+  it("keeps main's terminal model live in Pod, even where a profile stored Orca's default on", () => {
+    setProductSettingDefaults(productSettingDefaults(POD))
+    const loaded = loadProfile({ terminalMainModelDormancy: true })
+    expect(loaded.podTerminalMainModelDormancy).toBe(false)
+    expect(isMainTerminalModelDormancyEnabled(loaded)).toBe(false)
+    expect(
+      isMainTerminalModelDormancyEnabled(loadProfile({ podTerminalMainModelDormancy: true }))
+    ).toBe(true)
+    setProductSettingDefaults(productSettingDefaults(null))
+    expect(isMainTerminalModelDormancyEnabled(loadProfile({}))).toBe(true)
+    expect(
+      isMainTerminalModelDormancyEnabled(loadProfile({ terminalMainModelDormancy: false }))
+    ).toBe(false)
   })
 
   it('keeps a stored choice in Pod, so an explicit opt-out stays off', () => {
