@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { isPodUiHostLaunch } from '../pod/ui-host/pod-ui-host-launch'
 import type { NativeTerminalAppearance } from '../../shared/native-terminal-appearance'
 import type { NativeTerminalFrame } from '../../shared/native-terminal-ipc'
 import { isNativeTerminalForwardedChord } from '../../shared/native-terminal-forwarded-chords'
@@ -108,7 +109,11 @@ export function registerNativeTerminalHandlers(
   for (const channel of SEND_CHANNELS) {
     ipcMain.removeAllListeners(channel)
   }
-  ipcMain.handle('nativeTerminal:isSupported', (): boolean => isNativeTerminalSupported())
+  // Fork-only (Pod): one-app's hidden window draws no Ghostty views (PodNative draws terminals).
+  ipcMain.handle(
+    'nativeTerminal:isSupported',
+    (): boolean => !isPodUiHostLaunch() && isNativeTerminalSupported()
+  )
   ipcMain.handle(
     'nativeTerminal:create',
     (event, appearance: unknown, zoomFactor: unknown, label: unknown): number | null => {
