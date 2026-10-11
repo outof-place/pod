@@ -170,7 +170,6 @@ export const POD_SETTINGS_HIDDEN = {
   editorAutoSaveDelayMs: 'electron-ui',
   editorMinimapEnabled: 'electron-ui',
   editorFontFamily: 'electron-ui',
-  editorWordWrap: 'electron-ui',
   richMarkdownSpellcheckEnabled: 'electron-ui',
   markdownReviewToolsEnabled: 'electron-ui',
   primarySelectionMiddleClickPaste: 'electron-ui',
