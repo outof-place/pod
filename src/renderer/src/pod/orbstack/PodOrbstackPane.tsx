@@ -5,6 +5,7 @@ import type {
   PodOrbstackStatus
 } from '../../../../shared/pod-orbstack-types'
 import { Button } from '@/components/ui/button'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { SettingsBadge, SettingsSubsectionHeader } from '@/components/settings/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -67,6 +68,26 @@ export function PodOrbstackPane(): React.JSX.Element {
   const [pendingMachine, setPendingMachine] = useState<string | null>(null)
   const [pendingWorktrees, setPendingWorktrees] = useState<ReadonlySet<string>>(new Set())
   const [claudeLoginBusy, setClaudeLoginBusy] = useState(false)
+  const confirm = useConfirmationDialog()
+  // Why it asks with counts: a restart stops every running container and machine on the Mac.
+  const restartOrbstack = (): void => {
+    const containers = status?.containers.filter((item) => item.state === 'running').length ?? 0
+    const machines = status?.machines.filter((item) => item.state === 'running').length ?? 0
+    void confirm({
+      title: translate('podOrbstack.restart.title', 'Restart OrbStack?'),
+      description: translate(
+        'podOrbstack.restart.description',
+        "Restarting stops every running container and machine on this Mac, not only Pod's: {{containers}} containers and {{machines}} machines run now. Containers set to restart come back on their own; agents in a sandbox lose their connection.",
+        { containers: String(containers), machines: String(machines) }
+      ),
+      confirmLabel: translate('podOrbstack.restart.confirm', 'Restart OrbStack'),
+      confirmVariant: 'destructive'
+    }).then((confirmed) => {
+      if (confirmed) {
+        void runPodOrbstackAction(() => podOrbstackRpc.restart(), refresh)
+      }
+    })
+  }
   const rows = useMemo(
     () =>
       (status ? buildPodOrbstackWorktreeRows(repos, worktreesByRepo, status) : []).map((row) =>
@@ -86,7 +107,7 @@ export function PodOrbstackPane(): React.JSX.Element {
     action: () => Promise<PodOrbstackActionResult>
   ): void => {
     setPendingWorktrees((current) => new Set([...current, worktreeId]))
-    void runPodOrbstackAction(action, refresh).finally(() =>
+    void runPodOrbstackAction(action, refresh, restartOrbstack).finally(() =>
       setPendingWorktrees((current) => new Set([...current].filter((id) => id !== worktreeId)))
     )
   }
@@ -178,7 +199,8 @@ export function PodOrbstackPane(): React.JSX.Element {
               void runPodOrbstackAction(
                 () =>
                   running ? podOrbstackRpc.startMachine(name) : podOrbstackRpc.stopMachine(name),
-                refresh
+                refresh,
+                restartOrbstack
               ).finally(() => setPendingMachine(null))
             }}
           />

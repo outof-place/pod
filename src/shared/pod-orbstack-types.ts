@@ -159,7 +159,12 @@ export type PodOrbstackEvent =
   | { type: 'relay'; rows: PodOrbstackRelayRow[] }
   | { type: 'end' }
 
-export type PodOrbstackActionResult = { ok: true } | { ok: false; error: string }
+/** `out-of-addresses`: OrbStack gave a new machine no IP; the client offers to restart it. */
+export type PodOrbstackFailureReason = 'out-of-addresses'
+
+export type PodOrbstackActionResult =
+  | { ok: true }
+  | { ok: false; error: string; reason?: PodOrbstackFailureReason; detail?: string }
 
 /** Runtime RPC method names: the renderer section and the native shell call the same API. */
 export const POD_ORBSTACK_RPC = {
@@ -175,6 +180,7 @@ export const POD_ORBSTACK_RPC = {
   setAgentSandbox: 'orbstack.setAgentSandbox',
   setSandboxClaudeLogin: 'orbstack.setSandboxClaudeLogin',
   setTemplates: 'orbstack.setTemplates',
+  restart: 'orbstack.restart',
   stats: 'orbstack.stats',
   subscribe: 'orbstack.subscribe',
   unsubscribe: 'orbstack.unsubscribe'
