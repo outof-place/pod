@@ -136,7 +136,8 @@ export async function attachPtyFromRuntimeController(
       deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
         ptyId,
         attachResult.providerSequence,
-        sequenceBeforeProviderAttach
+        sequenceBeforeProviderAttach,
+        attachResult.providerAttachSequence
       )
     }
     return true
