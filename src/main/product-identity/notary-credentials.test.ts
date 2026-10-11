@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -76,5 +76,87 @@ describe('notarization credentials', () => {
     expect(resolve(appStoreConnect(['KX7Q6Y844C'], 'not-an-id'))).toMatch(
       /^DIE .*issuer is not an App Store Connect issuer id$/
     )
+  })
+})
+
+// Stubs on PATH: the preflight never reaches the real `security`, notarytool or user database.
+const STUBS: Record<string, string> = {
+  dscl: 'echo "NFSHomeDirectory: $FAKE_HOME"',
+  security: [
+    'case "$1" in',
+    '  default-keychain) echo "    \\"$FAKE_DEFAULT\\"" ;;',
+    '  list-keychains) echo "    \\"$FAKE_DEFAULT\\""; echo "    \\"/Library/Keychains/System.keychain\\"" ;;',
+    '  *) echo "unexpected security $*" >&2; exit 9 ;;',
+    'esac'
+  ].join('\n'),
+  xcrun:
+    'echo "$*" > "$XCRUN_ARGS"\nif [ -n "${XCRUN_FAIL:-}" ]; then echo "$XCRUN_FAIL" >&2; exit 1; fi'
+}
+
+const PREFLIGHT = [
+  'set -euo pipefail',
+  'die() { echo "DIE $*"; exit 3; }',
+  '. "$1"',
+  'pod_notary_credentials pod-notary',
+  'pod_notary_preflight',
+  'echo PASSED'
+].join('\n')
+
+function preflight(defaultKeychain: string, env: Record<string, string> = {}) {
+  const asc = appStoreConnect(['KX7Q6Y844C'], ISSUER)
+  const bin = join(asc, 'bin')
+  mkdirSync(bin)
+  for (const [name, body] of Object.entries(STUBS)) {
+    writeFileSync(join(bin, name), `#!/bin/bash\n${body}\n`, { mode: 0o755 })
+  }
+  const xcrunArgs = join(asc, 'xcrun-args')
+  const result = spawnSync('/bin/bash', ['-c', PREFLIGHT, 'preflight', script], {
+    encoding: 'utf8',
+    env: {
+      PATH: `${bin}:/usr/bin:/bin`,
+      HOME: '/fake/home',
+      FAKE_HOME: '/fake/home',
+      FAKE_DEFAULT: defaultKeychain,
+      XCRUN_ARGS: xcrunArgs,
+      POD_APPSTORECONNECT_DIR: asc,
+      ...env
+    }
+  })
+  return {
+    asc,
+    output: `${result.stdout}${result.stderr}`,
+    xcrun: existsSync(xcrunArgs) ? readFileSync(xcrunArgs, 'utf8').trim() : null
+  }
+}
+
+describe('notarization preflight', () => {
+  const login = '/fake/home/Library/Keychains/login.keychain-db'
+
+  it('passes with the login keychain and asks notarytool with exactly the chosen credentials', () => {
+    const { asc, output, xcrun } = preflight(login)
+    expect(output).toContain(`default keychain: ${login}`)
+    expect(output).toContain('notarytool history OK')
+    expect(output).toContain('PASSED')
+    expect(xcrun).toBe(
+      `notarytool history --key ${asc}/private_keys/AuthKey_KX7Q6Y844C.p8 --key-id KX7Q6Y844C --issuer ${ISSUER}`
+    )
+  })
+
+  it('stops on another default keychain before calling notarytool, with diagnostics', () => {
+    const { output, xcrun } = preflight('/tmp/scratch.keychain-db')
+    expect(output).toContain(`DIE the default keychain is /tmp/scratch.keychain-db, not ${login}`)
+    expect(output).toContain('list-keychains -d user:')
+    expect(output).toContain('/Library/Keychains/System.keychain')
+    expect(output).toMatch(/^ {4}HOME=\/fake\/home$/m)
+    expect(output).not.toContain('PASSED')
+    expect(xcrun).toBeNull()
+  })
+
+  it('stops when notarytool refuses the credentials, with its message and diagnostics', () => {
+    const { output } = preflight(login, { XCRUN_FAIL: 'Error: No Keychain password item found' })
+    expect(output).toContain('notarytool: Error: No Keychain password item found')
+    expect(output).toContain('DIE notarytool history failed with the chosen credentials')
+    expect(output).toContain('list-keychains -d user:')
+    expect(output).not.toContain('PASSED')
   })
 })
