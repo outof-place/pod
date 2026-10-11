@@ -13,6 +13,13 @@ export const ENTRY_REL = join(
   'daemon-entry.js'
 )
 
+// For waits on clone or maintenance work a test does not await: it copies a real fixture bundle,
+// which takes seconds on a slow CI runner (vi.waitFor's default 1 s timed out on Linux).
+export const BACKGROUND_WORK_WAIT: { timeout: number; interval: number } = {
+  timeout: 20_000,
+  interval: 50
+}
+
 const willQuit: (() => void)[] = []
 
 export const hostApp = {
