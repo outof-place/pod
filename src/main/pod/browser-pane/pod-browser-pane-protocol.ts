@@ -36,6 +36,17 @@ const Attach = z
 
 const Detach = z.object({ type: z.literal('browserDetach'), pageId: PageId }).strict()
 
+// Protocol version 3: an attached pane went on or off screen (its tab, window or app hidden). Only
+// visible panes stream; `rendezvous` names PodNative's frame receiver when it changed.
+const Pane = z
+  .object({
+    type: z.literal('browserPane'),
+    pageId: PageId,
+    visible: z.boolean(),
+    rendezvous: z.string().regex(POD_BROWSER_RENDEZVOUS_PATTERN).optional()
+  })
+  .strict()
+
 const Resize = z
   .object({
     type: z.literal('browserResize'),
@@ -144,6 +155,7 @@ export const POD_BROWSER_PANE_CLIENT_MESSAGES = [
   Rendezvous,
   Attach,
   Detach,
+  Pane,
   Resize,
   Input,
   Navigate,
@@ -158,6 +170,7 @@ export type PodBrowserPaneClientMessage =
   | z.infer<typeof Rendezvous>
   | z.infer<typeof Attach>
   | z.infer<typeof Detach>
+  | z.infer<typeof Pane>
   | z.infer<typeof Resize>
   | z.infer<typeof Input>
   | z.infer<typeof Navigate>

@@ -1,16 +1,17 @@
-// Fork-only (Pod): the one-app control channel between PodNative and this runtime, version 2.
+// Fork-only (Pod): the one-app control channel between PodNative and this runtime, version 3.
 // NDJSON on a 0600 unix socket in a 0700 directory of the profile. A connection is admitted only
 // from PodNative signed by Pod's team (audit token) and only after a `hello` carrying the
 // runtime's authToken from orca-runtime.json. The verbs are fixed; anything else is refused.
 // PodNative's side mirrors these shapes (PodRuntime/UIHostChannel.swift in outof-place/pod-native).
 // Version 2 answers a quit: `quitting` and a heartbeat until exit, or `needsConfirmation`.
+// Version 3 adds browserPane: which attached browser panes are on screen.
 import { z } from 'zod'
 import {
   POD_BROWSER_PANE_CLIENT_MESSAGES,
   type PodBrowserPaneServerMessage
 } from '../browser-pane/pod-browser-pane-protocol'
 
-export const POD_UI_HOST_PROTOCOL_VERSION = 2
+export const POD_UI_HOST_PROTOCOL_VERSION = 3
 // The oldest PodNative still admitted; its quit gets no answer (the version 1 behaviour).
 export const POD_UI_HOST_MIN_PROTOCOL_VERSION = 1
 export const POD_UI_HOST_DIRECTORY_NAME = 'pod-ui-host'
