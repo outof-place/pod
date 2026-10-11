@@ -39,6 +39,7 @@ import { logStartupMilestone } from './startup-diagnostics'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
 import { startPodAccFromStartup } from '../pod/acc/acc-startup'
+import { installPodHookWriteGate } from '../pod/instance/pod-instance'
 
 // Headless serve never opens a window, so the sweep still has to run off a timer there.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -120,6 +121,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
       return state.codexRuntimeHome.resolveHostCodexHomePathForLaunchReadOnly()
     }
   })
+  // Pod: the full check of which instance may write the user-global agent hook files
+  installPodHookWriteGate()
   const startupManagedHookSettings = store.getSettings()
   const shouldReconcileStartupManagedHooks =
     shouldInstallManagedHooks(is.dev) &&
