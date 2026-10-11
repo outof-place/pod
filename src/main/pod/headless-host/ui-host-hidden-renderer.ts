@@ -23,6 +23,11 @@ export function podUiHostMainWindowOptions(
     : {}
 }
 
+/** True when the one-app main window starts hidden (podUiHostMainWindowOptions applies). */
+export function podUiHostWindowStartsHidden(): boolean {
+  return Object.keys(podUiHostMainWindowOptions()).length > 0
+}
+
 type StartupLifecycle = {
   onFirstLoad: (listener: () => void) => void
   onDestroyed: (listener: () => void) => void
@@ -64,6 +69,42 @@ export function holdPodUiHostWindowAwakeAtStartup(window: BrowserWindow): void {
       onFirstLoad: (listener) => webContents.once('did-finish-load', listener),
       onDestroyed: (listener) => webContents.once('destroyed', listener)
     },
-    Object.keys(podUiHostMainWindowOptions()).length > 0
+    podUiHostWindowStartsHidden()
   )
+}
+
+/**
+ * Wakes a hidden window for each runtime request it awaits: a notifier method that returns a
+ * promise holds a lease until it settles (after 5 min hidden a terminal create took 2.2 s, not
+ * 0.1 s). Sends that return nothing stay asleep. Returns `notifier`, wrapped in place.
+ */
+export function leaseAwaitedRendererRequests<T extends object>(
+  target: RendererPublicationThrottleTarget,
+  notifier: T,
+  enabled: boolean,
+  leases: Leases = rendererPublicationThrottle
+): T {
+  if (!enabled) {
+    return notifier
+  }
+  for (const key of Object.keys(notifier)) {
+    const method: unknown = Reflect.get(notifier, key)
+    if (typeof method !== 'function') {
+      continue
+    }
+    Reflect.set(notifier, key, (...args: unknown[]) => {
+      const result: unknown = Reflect.apply(method, notifier, args)
+      if (result instanceof Promise) {
+        const release = leases.acquire(target)
+        result.then(release, release)
+      }
+      return result
+    })
+  }
+  return notifier
+}
+
+/** leaseAwaitedRendererRequests for the one-app main window's runtime notifier. */
+export function podUiHostLeasedNotifier<T extends object>(window: BrowserWindow, notifier: T): T {
+  return leaseAwaitedRendererRequests(window.webContents, notifier, podUiHostWindowStartsHidden())
 }
