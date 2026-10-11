@@ -126,6 +126,7 @@ export type RuntimeStore = {
     terminalModelQueryAuthority?: GlobalSettings['terminalModelQueryAuthority']
     terminalMainModelDormancy?: GlobalSettings['terminalMainModelDormancy']
     terminalDaemonQueryAuthority?: GlobalSettings['terminalDaemonQueryAuthority']
+    podTerminalMainModelDormancy?: GlobalSettings['podTerminalMainModelDormancy']
     worktreeVisibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
     hostSettingOverrides?: GlobalSettings['hostSettingOverrides']
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
