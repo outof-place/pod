@@ -10,6 +10,8 @@ export type PodGlobalSettings = {
   thirdPartyPluginsEnabled?: boolean
   /** Experimental (Pod): answer local quick open and file search from the ogd index daemon. */
   experimentalPodNativeSearch?: boolean
+  /** Fork-only (Pod): lets main's terminal model go dormant; Pod builds default it off. */
+  podTerminalMainModelDormancy?: boolean
 }
 
 /** What GlobalSettings extends: Orca's native chat settings plus Pod's keys. */
