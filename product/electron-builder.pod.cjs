@@ -7,10 +7,11 @@
 //   POD_RELEASE=1 dmg + zip, notarized (with ORCA_MAC_RELEASE=1 for upstream's strict signing);
 //                 otherwise a signed but unnotarized .app (`dir`) for local installs
 const { execFileSync } = require('node:child_process')
-const { copyFileSync, existsSync, readFileSync, writeFileSync } = require('node:fs')
+const { existsSync, readFileSync, writeFileSync } = require('node:fs')
 const { join } = require('node:path')
 const { Arch } = require('electron-builder')
 const { installAgentLauncher } = require('./agent-launcher/install-agent-launcher.cjs')
+const { installCliLaunchers } = require('./cli-launchers/install-cli-launchers.cjs')
 const { installNativeCli } = require('./native-cli/install-native-cli.cjs')
 const helperNames = require('./helper-names.cjs')
 // Built by config/scripts/build-pod-peer-identity-macos.mjs (release.sh).
@@ -62,29 +63,6 @@ const identity = JSON.parse(readFileSync(join(__dirname, 'identity.json'), 'utf8
 const arch = process.env.POD_ARCH || 'arm64'
 const isRelease = process.env.POD_RELEASE === '1'
 const version = process.env.POD_VERSION || base.extraMetadata?.version
-
-const CLI_LAUNCHER_ANCHOR = 'ELECTRON="$CONTENTS/MacOS/Orca"'
-
-// The bundled `orca` launcher hard-codes Orca's executable and the CLI defaults to Orca's profile.
-// Pod terminals keep `orca` on PATH for agents and skills; `<cliName>` sits next to it for users.
-function installCliLaunchers(resourcesDir, executableName) {
-  const launcherPath = join(resourcesDir, 'bin', 'orca')
-  const text = readFileSync(launcherPath, 'utf8')
-  if (!text.includes(CLI_LAUNCHER_ANCHOR)) {
-    throw new Error(`product: ${launcherPath} no longer contains ${CLI_LAUNCHER_ANCHOR}`)
-  }
-  const patched = text.replace(
-    CLI_LAUNCHER_ANCHOR,
-    [
-      `ELECTRON="$CONTENTS/MacOS/${executableName}"`,
-      `export ORCA_USER_DATA_PATH="\${ORCA_USER_DATA_PATH:-$HOME/Library/Application Support/${identity.userDataName}}"`
-    ].join('\n')
-  )
-  writeFileSync(launcherPath, patched)
-  const productLauncher = join(resourcesDir, 'bin', identity.cliName)
-  copyFileSync(launcherPath, productLauncher)
-  execFileSync('chmod', ['755', productLauncher])
-}
 
 // TCC lists the helper by its bundle name and shows its usage strings; the .app path stays what
 // upstream code resolves. Runs before upstream's afterPack signs the helper.
@@ -186,7 +164,7 @@ module.exports = {
     helperNames.renameComputerUseExecutable(resourcesDir, identity)
     await base.afterPack(context)
     helperNames.renameSignedHelpers(resourcesDir, identity)
-    installCliLaunchers(resourcesDir, context.packager.appInfo.productFilename)
+    installCliLaunchers(resourcesDir, context.packager.appInfo.productFilename, identity)
     installNativeCli(resourcesDir, Arch[context.arch], identity)
     installAgentLauncher(resourcesDir, Arch[context.arch])
     writeFileSync(
