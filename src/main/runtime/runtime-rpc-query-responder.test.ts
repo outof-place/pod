@@ -206,7 +206,7 @@ describe('one query responder among several terminal views', () => {
     }
   })
 
-  it('gives the part of a query a view held back the seq where it ended, once the view answers', async () => {
+  it('leaves a query torn across chunks with the view that got its start', async () => {
     const { runtime, server, endpoint, authToken, handle } = await startServer()
     const first = await attachViewer(endpoint, authToken, handle, 'first')
     const second = await attachViewer(endpoint, authToken, handle, 'second')
@@ -214,20 +214,24 @@ describe('one query responder among several terminal views', () => {
       const lead = 'x'.repeat(100)
       runtime.onPtyData(PTY, `${lead}\x1b[`, 1)
       await vi.waitFor(() => expect(second.output()).toContain(lead))
+      // The second view takes the keyboard while the query is half out.
       second.send(TerminalStreamOpcode.Input, encodeTerminalStreamText('k'))
       await new Promise((resolve) => setTimeout(resolve, 50))
       runtime.onPtyData(PTY, '6nb\r\n', 2)
-      await vi.waitFor(() => expect(second.output()).toContain(`${lead}${CPR}b`))
-      const held = second.client.binaryFrames
+      await vi.waitFor(() => expect(second.output()).toContain(`${lead}b\r\n`))
+      await vi.waitFor(() => expect(first.output()).toContain(`${lead}${CPR}b`))
+      expect(second.output()).not.toContain(CPR)
+      // A viewer checks each output frame's seq for gaps; none may carry the control-frame cursor.
+      const seqs = second.client.binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
-        .find(
+        .filter(
           (frame) =>
             frame?.streamId === 7 &&
-            frame.opcode === TerminalStreamOpcode.OutputSpan &&
-            SpanPayload.parse(decodeTerminalStreamJson<unknown>(frame.payload)).data === '\x1b['
+            (frame.opcode === TerminalStreamOpcode.Output ||
+              frame.opcode === TerminalStreamOpcode.OutputSpan)
         )
-      // A viewer checks each output frame's seq for gaps; the held bytes end at the first chunk's end.
-      expect(held?.seq).toBe(lead.length + 2)
+        .map((frame) => frame?.seq)
+      expect(seqs).toEqual([lead.length + 2, lead.length + 7])
     } finally {
       first.client.close()
       second.client.close()
