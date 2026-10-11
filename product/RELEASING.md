@@ -119,7 +119,7 @@ product/assemble-one-app.sh 0.1.0 <PodNative.app>     # dist/one-app: Pod.app, D
 
 `assemble-one-app.sh` does the following:
 
-1. Checks both inputs: bundle id, version, `codesign --verify --deep --strict`, team and hardened runtime.
+1. Checks both inputs: bundle id, version, `codesign --verify --deep --strict`, team and hardened runtime. The runtime must speak ui-host protocol 2, which PodNative's safe quit needs: the checkout declares it and app.asar carries its messages (`product/scripts/verify-ui-host-protocol.mjs`).
 2. Copies PodNative and nests the runtime. Removes the runtime's stapled ticket and clears xattrs (an APFS clone keeps quarantine).
 3. Moves the URL types, document types and UT type declarations to the outer app, and marks the runtime `LSUIElement`.
 4. Re-signs the runtime's top level, then signs the outer last without `--deep`. Each keeps the entitlements it was built with.

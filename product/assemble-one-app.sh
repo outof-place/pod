@@ -95,6 +95,8 @@ check_input() {
 check_input "$runtime" "$app_id"
 check_input "$native" "$NATIVE_APP_ID"
 [ -d "$runtime/Contents/Frameworks" ] || die "$runtime is not an Electron runtime"
+# PodNative's safe quit needs ui-host protocol 2; a version 1 runtime makes it fall back.
+node product/scripts/verify-ui-host-protocol.mjs "$runtime"
 
 scratch="$(mktemp -d -t pod-one-app)"
 trap 'rm -rf "$scratch"' EXIT
