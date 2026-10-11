@@ -9,6 +9,7 @@ import type { Tab } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { HeadlessEditorRetirementHost } from '../../runtime/mobile-session-editor-projection'
 import { isMobileMarkdownPath } from '../../runtime/runtime-file-command-host'
+import { deactivatePodHeadlessDiffTabs } from './pod-headless-diff-tabs'
 import { isPodHeadlessUiHost } from './pod-ui-host-launch'
 
 type EditorFile = { filePath: string; relativePath: string }
@@ -118,6 +119,9 @@ export function openPodHeadlessEditorTab(
   // `caller` leaves the active tab alone. Otherwise the tab becomes the worktree's active one, as a
   // window would show it, without taking the screen (a window doesn't either).
   const toHost = navigationTargetsHost(navigation ?? 'all')
+  if (toHost) {
+    deactivatePodHeadlessDiffTabs(worktreeId)
+  }
   host.setWorkspaceSessionForWorktree(
     worktreeId,
     addHeadlessEditorTab(session, worktreeId, { filePath, relativePath }, toHost, now)
