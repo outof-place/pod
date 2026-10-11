@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { runProcess } from '../../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type { SandboxAnthropicCredentials } from './pod-orbstack-anthropic-route'
 
 export type OrbstackTool = 'orb' | 'orbctl' | 'docker'
