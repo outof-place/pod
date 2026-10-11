@@ -354,9 +354,7 @@
       "base": "57e357f35925de869dd8ee8df5d67275e2d45499",
       "source": "pod/naming",
       "sourceSince": "525a5850e67fd00e6b85b725ec4fcfe9df4cea4f",
-      "ref": "3f3474d5662f6dd78fa09ed39719c6108326b006",
-      "note": "pod/naming 7fac8733bb replayed without phase2: helper-names require next to installNativeCli; + b7185e8276 (CLI helper copy without main's module)",
-      "hold": "v6.0.2: pod/naming 759801b532 (CliSection fallback copy) goes into v6.0.3"
+      "note": "pod/naming 7fac8733bb replayed without phase2: helper-names require next to installNativeCli; + b7185e8276 (CLI helper copy without main's module); + 759801b532 (CliSection fallback copy)"
     },
     {
       "branch": "stack/pod-one-app",
@@ -364,7 +362,7 @@
       "base": "36d08e91be2bf5d58557d9b375ef1a9668f6e6b5",
       "source": "pod/one-app",
       "sourceSince": "525a5850e67fd00e6b85b725ec4fcfe9df4cea4f",
-      "note": "pod/one-app bf0d308217 replayed without phase2, plus the tsconfig.tc.web.json fix; + 9768d37c22 safe quit (ui-host protocol v2)"
+      "note": "pod/one-app bf0d308217 replayed without phase2, plus the tsconfig.tc.web.json fix; + 9768d37c22 safe quit (ui-host protocol v2); + 8c68b70eda c636d57d39 (no Ghostty views in the hidden window, unthrottled quit assessment) + 6e3e223f7d (one-app skips the classic first-run overlays)"
     },
     {
       "branch": "pod/headless-host",
@@ -388,7 +386,9 @@
       "branch": "pod/one-app-release",
       "forkOnly": "one-app release assembly script and docs",
       "base": "a081f1458f4a9de4a25bb2cd07c44031d4ef7a53",
-      "note": "nt-packaging; product/assemble-one-app.sh, verify-entitlements --outer, RELEASING.md section; no app code"
+      "ref": "1866f01c7c59c0ae61aafdc9946577b0cf99f231",
+      "note": "nt-packaging; product/assemble-one-app.sh, verify-entitlements --outer, RELEASING.md section; no app code",
+      "hold": "v6.0.3: the CI-green tree has 1866f01c7c; d8a62b2868 (notary key on disk) waits for the next cut"
     }
   ],
   "generated": [
