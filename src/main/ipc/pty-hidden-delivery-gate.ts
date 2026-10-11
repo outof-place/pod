@@ -15,11 +15,13 @@ import {
   clearRendererPtyViewFedElsewhere,
   isRendererPtyViewFedElsewhere
 } from './pty-view-fed-elsewhere-state'
+import { exceedsMainTerminalModelScrollback } from './pty-hidden-delivery-scrollback'
 
 export type HiddenPtyDeliveryGateSettings = Pick<
   GlobalSettings,
   'terminalMainSideEffectAuthority' | 'terminalHiddenDeliveryGate'
->
+> &
+  Partial<Pick<GlobalSettings, 'terminalScrollbackRows'>>
 
 const hiddenRendererPtys = new Set<string>()
 // Why: sidecar consumers (paste-draft pacing, background agent launches,
@@ -191,8 +193,9 @@ export function setRendererPtyDeliveryInterest(id: string, interested: boolean):
   }
 }
 
-/** Hidden for the view whether or not a sidecar holds interest: the view restores
- *  from the model on reveal, so main (or the daemon) owns the PTY's query replies meanwhile. */
+/** Hidden for the view whether or not a sidecar holds interest, unless that pane's scrollback
+ *  outgrows main's model: the view restores from the model on reveal, so main (or the daemon)
+ *  owns the PTY's query replies meanwhile. */
 export function isHiddenRendererPtyViewGated(
   id: string,
   settings: HiddenPtyDeliveryGateSettings | null | undefined
@@ -205,8 +208,18 @@ export function isHiddenRendererPtyViewGated(
     isHiddenPtyDeliveryGateEnabled(settings) &&
     hiddenRendererPtys.has(id) &&
     !modelHandoffPtys.has(id) &&
-    !daemonHandoffPtys.has(id)
+    !daemonHandoffPtys.has(id) &&
+    !isRendererPtyViewKeptForScrollback(id, settings)
   )
+}
+
+/** A sidecar-watched pane deeper than main's model keeps parsing while hidden: a reveal
+ *  restored from that model would cut the history its own xterm keeps. */
+export function isRendererPtyViewKeptForScrollback(
+  id: string,
+  settings: HiddenPtyDeliveryGateSettings | null | undefined
+): boolean {
+  return deliveryInterestRendererPtys.has(id) && exceedsMainTerminalModelScrollback(settings)
 }
 
 /** How main delivers a PTY chunk to the renderer; the one owner of that decision:
