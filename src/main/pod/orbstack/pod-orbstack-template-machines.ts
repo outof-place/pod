@@ -6,7 +6,11 @@ import type { PodOrbstackMachineKind } from '../../../shared/pod-orbstack-types'
 import { parseOrbctlStatus } from './pod-orbstack-inventory'
 import { POD_ORBSTACK_BUILTIN_RECIPE } from './pod-orbstack-recipe'
 import type { SandboxClaudeRelease } from './pod-orbstack-claude-release'
-import { provisionSandboxBase, provisionSandboxWorktree } from './pod-orbstack-sandbox'
+import {
+  installSandboxClaude,
+  provisionSandboxBase,
+  provisionSandboxWorktree
+} from './pod-orbstack-sandbox'
 import {
   podOrbstackTemplateKey,
   type PodOrbstackTemplate,
@@ -42,9 +46,38 @@ export async function sandboxTemplate(
     return ready
   }
   onStep?.('Building the template')
-  return templates.build('sandbox', key, (name) =>
-    provisionSandboxBase({ run, name, mounts: [], release, onStep })
+  return templates.build(
+    'sandbox',
+    key,
+    (name) => provisionSandboxBase({ run, name, mounts: [], release, onStep }),
+    release ? (name) => updateSandboxTemplate({ run, name, release, onStep }) : undefined
   )
+}
+
+/** The older sandbox template, renamed to `name`: still isolated, now with `release` only. */
+async function updateSandboxTemplate(args: {
+  run: OrbstackToolRunner
+  name: string
+  release: SandboxClaudeRelease
+  onStep?: (step: string) => void
+}): Promise<{ agentVersion: string | null }> {
+  args.onStep?.('Updating the template')
+  await orbStep(args.run, 'orb start', ['start', args.name])
+  await assertIsolated(args.run, args.name, 'The template')
+  return { agentVersion: await installSandboxClaude(args) }
+}
+
+async function assertIsolated(run: OrbstackToolRunner, name: string, what: string): Promise<void> {
+  const info = MachineIsolationSchema.safeParse(
+    JSON.parse(await orbStep(run, 'orb info', ['info', name, '--format', 'json']))
+  )
+  if (
+    !info.success ||
+    !info.data.record.config.isolated ||
+    !info.data.record.config.isolate_network
+  ) {
+    throw new Error(`${what} ${name} did not keep its network isolation.`)
+  }
 }
 
 /** The plain machine the built-in recipe makes: Ubuntu with git, sharing /Users. */
@@ -92,17 +125,8 @@ export async function cloneSandbox(args: {
   const { run, name, mounts, template } = args
   args.onStep?.('Cloning the template')
   await args.templates.clone(template, name, mounts)
-  const info = MachineIsolationSchema.safeParse(
-    JSON.parse(await orbStep(run, 'orb info', ['info', name, '--format', 'json']))
-  )
   // The template was made isolated; a clone that is not must never run an agent.
-  if (
-    !info.success ||
-    !info.data.record.config.isolated ||
-    !info.data.record.config.isolate_network
-  ) {
-    throw new Error(`${name} did not keep the template's network isolation.`)
-  }
+  await assertIsolated(run, name, 'The clone')
   args.onStep?.('Setting up the worktree')
   await provisionSandboxWorktree({ run, name, mounts, agentVersion: template.agentVersion })
   return { agentVersion: template.agentVersion }
