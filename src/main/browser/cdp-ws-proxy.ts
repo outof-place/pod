@@ -9,7 +9,7 @@ import { CdpPageNavigationCommands } from './cdp-page-navigation-commands'
 import { CdpDomFocusReplay } from './cdp-dom-focus-replay'
 import { CdpPageCaptureCommands } from './cdp-page-capture-commands'
 import type { CapturePaintHold } from './cdp-screenshot'
-import { notePodAgentBrowserCommand } from '../pod/browser-pane/pod-browser-pane-hooks'
+import { podCdpProxyReply, podCdpProxyRequest } from '../pod/browser/cdp-proxy-hooks'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -17,7 +17,11 @@ export class CdpWsProxy {
   private client: WebSocket | null = null
   private detachClientListeners: (() => void) | null = null
   private port = 0
-  private readonly responder = new CdpClientResponseWriter(() => this.client)
+  // Fork-only (Pod): each reply reaches Pod's CDP proxy sinks (cdp-proxy-hooks.ts).
+  private readonly responder = new CdpClientResponseWriter(
+    () => this.client,
+    (clientId) => podCdpProxyReply(this.webContents.id, clientId)
+  )
   private readonly sessions = new CdpSyntheticSessionRegistry()
   private readonly discovery: CdpTargetDiscovery
   private readonly debuggerChannel: CdpDebuggerChannel
@@ -75,8 +79,6 @@ export class CdpWsProxy {
         this.closeClient()
         this.client = ws
         const onMessage = (data: WebSocket.RawData): void => {
-          // Fork-only (Pod): an agent's CDP wakes a one-app page nobody sees (a no-op elsewhere).
-          notePodAgentBrowserCommand(this.webContents.id)
           this.handleClientMessage(ws, data.toString())
         }
         const onClose = (): void => {
@@ -158,6 +160,8 @@ export class CdpWsProxy {
       return
     }
     const clientId = msg.id
+    // Fork-only (Pod): each request reaches Pod's CDP proxy sinks (cdp-proxy-hooks.ts).
+    podCdpProxyRequest(this.webContents.id, clientId)
     this.responder.recordRequestSessionId(client, clientId, msg)
 
     if (this.discovery.handleCommand(client, clientId, msg)) {
