@@ -12,6 +12,10 @@ export const MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS = 5_000
 // Why: bytes the snapshot counted can still be in flight on the stream socket; the gate
 // stays open until they arrive, but a stalled stream must not keep it open forever.
 export const MAIN_TERMINAL_MODEL_HANDOFF_CATCH_UP_MS = 2_000
+// Why a retry: a failed seed leaves a partial model whose screen proves nothing, so screen readers
+// keep waiting for one; demand retries the seed after this, doubled per failure up to the cap.
+export const MAIN_TERMINAL_MODEL_RESEED_AFTER_MS = 1_000
+export const MAIN_TERMINAL_MODEL_RESEED_MAX_MS = 10_000
 
 export type MainTerminalModelDormancyHost = {
   now(): number
@@ -35,6 +39,10 @@ type DormancyEntry = {
   dormant: boolean
   everDormant: boolean
   pinnedLive: boolean
+  /** Seeds failed since the last one that landed; while > 0 main's screen is a partial suffix. */
+  seedFailures: number
+  /** When demand may retry the seed; null while one is in flight or none failed. */
+  reseedAt: number | null
   lastDemandAt: number
   handoff: Handoff | null
 }
@@ -84,6 +92,9 @@ export class MainTerminalModelDormancy {
     entry.lastDemandAt = this.host.now()
     if (entry.dormant) {
       this.wake(ptyId, entry)
+    } else if (entry.reseedAt !== null && !entry.handoff && entry.lastDemandAt >= entry.reseedAt) {
+      entry.reseedAt = null
+      this.startSeed(ptyId, entry)
     }
   }
 
@@ -117,6 +128,11 @@ export class MainTerminalModelDormancy {
     return !entry || (!entry.dormant && entry.handoff === null)
   }
 
+  /** The last seed failed and none landed since: main's model holds only what came after it. */
+  hasFailedSeed(ptyId: string): boolean {
+    return (this.currentEntry(ptyId)?.seedFailures ?? 0) > 0
+  }
+
   /** A caller is seeding main's model itself; stop treating the PTY as dormant. */
   cancelDormancy(ptyId: string): void {
     const entry = this.currentEntry(ptyId)
@@ -143,6 +159,12 @@ export class MainTerminalModelDormancy {
       return
     }
     handoff.seedSeq = seedSeq
+    // Why: a seed that lands after failed ones makes the model whole again, so it may rest.
+    if (entry.seedFailures > 0) {
+      entry.seedFailures = 0
+      entry.reseedAt = null
+      entry.pinnedLive = false
+    }
     if (this.host.outputSequence(ptyId) >= seedSeq) {
       this.finishHandoff(ptyId, entry)
       return
@@ -155,13 +177,20 @@ export class MainTerminalModelDormancy {
     handoff.timer.unref?.()
   }
 
-  /** Keeps main's model live for the rest of this PTY generation. */
+  /** Keeps main's model live until a later seed lands; demand retries it after a backoff. */
   seedFailed(ptyId: string): void {
     const entry = this.currentEntry(ptyId)
     if (!entry) {
       return
     }
     entry.pinnedLive = true
+    entry.seedFailures += 1
+    entry.reseedAt =
+      this.host.now() +
+      Math.min(
+        MAIN_TERMINAL_MODEL_RESEED_AFTER_MS * 2 ** (entry.seedFailures - 1),
+        MAIN_TERMINAL_MODEL_RESEED_MAX_MS
+      )
     if (entry.handoff) {
       this.finishHandoff(ptyId, entry)
     }
@@ -181,6 +210,10 @@ export class MainTerminalModelDormancy {
   private wake(ptyId: string, entry: DormancyEntry): void {
     entry.dormant = false
     entry.lastDemandAt = this.host.now()
+    this.startSeed(ptyId, entry)
+  }
+
+  private startSeed(ptyId: string, entry: DormancyEntry): void {
     if (!entry.handoff) {
       entry.handoff = { seedSeq: null, timer: null }
       this.host.setHandoffPending(ptyId, true)
@@ -222,6 +255,8 @@ export class MainTerminalModelDormancy {
       dormant: false,
       everDormant: false,
       pinnedLive: false,
+      seedFailures: 0,
+      reseedAt: null,
       lastDemandAt: this.host.now(),
       handoff: null
     }
