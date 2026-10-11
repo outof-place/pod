@@ -299,11 +299,12 @@ describe('terminal multiplex RPC', () => {
       const snapshotStartFrame = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)
+      // Pod: the snapshot is rewrapped to the grid the viewer subscribed with, which seeds it there.
       expect(
         snapshotStartFrame && decodeTerminalStreamJson(snapshotStartFrame.payload)
       ).toMatchObject({
-        cols: 120,
-        rows: 40
+        cols: 300,
+        rows: 150
       })
 
       const frameCountBeforeSnapshotRequest = binaryFrames.length
