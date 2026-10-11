@@ -35,7 +35,7 @@ Changing a name is a one-line edit here; nothing else in the repo hard-codes the
   - It sets `extraMetadata.name` to `packageName`, and keeps `orcaOfficialUpdates: false`.
   - It sets the `github` publish provider, which writes `app-update.yml` and `latest-mac.yml`.
   - It copies `identity.json` into `Contents/Resources/product-identity.json` and Orca's `LICENSE` into `ORCA-LICENSE.txt`, and writes `product-upstream.json` (the Orca tag and commit, from `upstream.json` or git).
-  - It patches the bundled CLI launcher to the product's executable and profile, and adds it as `bin/<cliName>` next to `bin/orca`.
+  - It patches the bundled CLI launcher to the product's executable and profile, and adds it as `bin/<cliName>` next to `bin/orca` (`cli-launchers/install-cli-launchers.cjs`). The launcher finds its bundle as the innermost `.app` around its `bin/`, so the one-app runtime nested in Pod.app runs its own executable; upstream's rule takes the first `.app` in the path.
   - It renames the Computer Use helper to `computerUseDisplayName` before the helper is signed.
   - `product/helper-names.cjs` renames the helper files too: `<computerUseDisplayName>.app` with a `<packageName>-computer-use-macos` executable, and `Contents/MacOS/<packageName>-notification-status` and `-keyboard-layout`. Bundle ids and designated requirements stay, so privacy grants carry over. Runtime lookups follow through `src/main/product-identity/product-helper-names.ts`.
   - afterPack fails when an app, process or permission-prompt name still says Orca. Check an installed build without launching it: `node product/helper-names.cjs --check /Applications/Pod.app`.
