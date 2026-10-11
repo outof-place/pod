@@ -100,6 +100,10 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
           'terminalScrollbackRows',
           'terminalScopeHistoryByWorktree'
         ]
+      },
+      {
+        title: 'Floating terminal',
+        keys: ['floatingTerminalEnabled', 'floatingTerminalCwd']
       }
     ]
   },
