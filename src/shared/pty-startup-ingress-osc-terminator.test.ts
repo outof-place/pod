@@ -43,6 +43,21 @@ describe('a BEL that ends an OSC string after a reply', () => {
     ingress.drainAndClose()
   })
 
+  it('passes a sixteen-colour palette read, each query answered before the next, with no hold', () => {
+    vi.useFakeTimers()
+    for (const terminator of ['\x07', '\x1b\\']) {
+      const { ingress, emissions } = harness()
+      for (let index = 0; index < 16; index += 1) {
+        const query = `\x1b]4;${index};?${terminator}`
+        ingress.accept(query)
+        // Why no timer advance: the budget is zero hold; each query reaches the viewer in its own read.
+        expect(visible(emissions).endsWith(query)).toBe(true)
+        expect(ingress.answerLiveQueryReply(`\x1b]4;${index};rgb:0000/0000/0000\x1b\\`)).toBe(true)
+      }
+      ingress.drainAndClose()
+    }
+  })
+
   it('still holds a bare BEL, which can open the readline echo, and swallows that echo', () => {
     vi.useFakeTimers()
     const { ingress, emissions } = harness()
