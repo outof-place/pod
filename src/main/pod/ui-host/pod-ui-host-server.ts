@@ -237,7 +237,8 @@ export class PodUiHostServer {
         pid: this.options.pid,
         features: [
           ...(this.options.onBrowser ? ['browser'] : []),
-          ...(this.options.headless ? ['headless'] : [])
+          ...(this.options.headless ? ['headless'] : []),
+          'surfaceSection'
         ]
       })
     )
