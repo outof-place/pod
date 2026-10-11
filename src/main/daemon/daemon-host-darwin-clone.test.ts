@@ -21,6 +21,7 @@ vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(async (spec) => fakeTool(tools, spec))
 }))
 
+import { darwinDaemonHostForSpawn } from './daemon-host-darwin-spawn'
 import {
   DARWIN_HOST_MARKER_NAME,
   readDarwinDaemonHostMarker
@@ -66,6 +67,7 @@ beforeEach(() => {
   setProcessProp('platform', 'darwin')
   setProcessProp('execPath', fixture.execPath)
   tools.calls = []
+  tools.copyDelayMs = 0
   tools.codesignCode = 0
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'info').mockImplementation(() => {})
@@ -164,5 +166,15 @@ describe('materializeDarwinDaemonHost', () => {
     const bundle = dirname(dirname(dirname(host!.execPath)))
     expect(existsSync(join(dirname(bundle), DARWIN_HOST_MARKER_NAME))).toBe(true)
     expect(existsSync(join(bundle, DARWIN_HOST_MARKER_NAME))).toBe(false)
+  })
+})
+
+describe('darwinDaemonHostForSpawn', () => {
+  it('forks this daemon from the bundle when the clone outlasts the budget, and keeps cloning', async () => {
+    tools.copyDelayMs = 200
+    expect(await darwinDaemonHostForSpawn(entryPath, 20)).toBeNull()
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('no clone within 20 ms'))
+    await vi.waitFor(() => expect(darwinDaemonHostNeedsClone(entryPath)).toBe(false))
+    expect(await darwinDaemonHostForSpawn(entryPath, 20)).not.toBeNull()
   })
 })
