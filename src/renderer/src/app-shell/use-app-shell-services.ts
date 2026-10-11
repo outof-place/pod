@@ -27,6 +27,7 @@ import { useVisibleReviewRefreshReporting } from './use-visible-review-refresh-r
 import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
 import { usePodUiHostQuitAssess } from '../pod/ui-host/use-pod-ui-host-quit-assess'
+import { usePodUiHostSurfaceReady } from '../pod/ui-host/use-pod-ui-host-surface-ready'
 
 /**
  * App-level subscriptions that must outlive any individual surface. Each one is here because
@@ -49,8 +50,9 @@ export function useAppShellServices(): void {
   // Subscribe to IPC push events
   useIpcEvents()
   useProfileStateSaveDelayNotice()
-  // Fork-only (Pod): one-app's quit asks here what quitting would lose.
+  // Fork-only (Pod): one-app's quit asks here what quitting would lose; a lazy window says it's ready.
   usePodUiHostQuitAssess()
+  usePodUiHostSurfaceReady(workspaceSessionReady)
   useRemoteRuntimeRecoveryTriggers()
   useVisibleReviewRefreshReporting()
   useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })
