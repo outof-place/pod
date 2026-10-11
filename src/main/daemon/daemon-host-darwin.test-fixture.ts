@@ -71,6 +71,7 @@ export type ToolState = {
   calls: { program: string; args: readonly string[] }[]
   codesignCode: number
   lsofStdout: string
+  copyDelayMs?: number
 }
 
 const ok: ProcessResult = {
@@ -82,11 +83,12 @@ const ok: ProcessResult = {
 }
 
 /** Stand-ins for cp, codesign, chmod and lsof, so the suite runs on every CI host. */
-export function fakeTool(state: ToolState, spec: ProcessSpec): ProcessResult {
+export async function fakeTool(state: ToolState, spec: ProcessSpec): Promise<ProcessResult> {
   const args = spec.args ?? []
   state.calls.push({ program: spec.program, args })
   switch (spec.program) {
     case '/bin/cp':
+      await new Promise((resolve) => setTimeout(resolve, state.copyDelayMs ?? 0))
       cpSync(args[2], args[3], { recursive: true, verbatimSymlinks: true })
       return ok
     case '/usr/bin/codesign':
