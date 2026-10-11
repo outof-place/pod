@@ -14,6 +14,8 @@ import { podTrace } from '../../../shared/pod-terminal-trace'
 
 // Why: same per-socket ceiling as the encrypted mobile channel; a stalled reader must not grow main's heap.
 export const UNIX_SOCKET_STREAM_MAX_BUFFERED_BYTES = 32 * 1024 * 1024
+// Why: bulk terminal frames stop this far below the ceiling, so replies and control frames still fit.
+export const UNIX_SOCKET_STREAM_CONTROL_RESERVE_BYTES = 4 * 1024 * 1024
 
 export type UnixSocketStreamConnectionHandlers = {
   onText: (text: string) => void
@@ -109,6 +111,22 @@ export class UnixSocketStreamConnection {
     podTrace('m.out', bytes.length)
     this.socket.write(encodeRuntimeLocalStreamFrame(RuntimeLocalStreamFrameKind.Binary, bytes))
     return true
+  }
+
+  canAcceptBulk(frameBytes: number): boolean {
+    const reserve = Math.min(UNIX_SOCKET_STREAM_CONTROL_RESERVE_BYTES, this.maxBufferedBytes / 8)
+    return (
+      this.isOpen &&
+      this.socket.writableLength + RUNTIME_LOCAL_STREAM_HEADER_BYTES + frameBytes <=
+        this.maxBufferedBytes - reserve
+    )
+  }
+
+  onDrain(listener: () => void): () => void {
+    this.socket.on('drain', listener)
+    return () => {
+      this.socket.off('drain', listener)
+    }
   }
 
   close(): void {
