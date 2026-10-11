@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const runProcessSync = vi.hoisted(() =>
   vi.fn(() => ({ code: 0, stdout: '', stderr: '', timedOut: false }))
 )
-vi.mock('../../shared/child-process/run-process', () => ({ runProcessSync }))
+vi.mock('@orca/process-host', () => ({ runProcessSync }))
 
 const { createMacSafeStorageKeychain } = await import('./macos-safe-storage-keychain')
 
