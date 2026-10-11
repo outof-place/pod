@@ -16,10 +16,12 @@ async function createQuietAgentPane(
   agent: TuiAgent,
   output: string,
   size = SIZE,
-  /** Delays the daemon snapshot; 'never' leaves it unanswered, so the seed times out. */
-  snapshotDelayMs: number | 'never' = 0
+  /** Delays the daemon snapshot; 'never' leaves it unanswered, so the seed times out;
+   *  'fails-once' leaves only the first one unanswered, so a retried seed lands. */
+  snapshotDelayMs: number | 'never' | 'fails-once' = 0
 ) {
   const daemon = new FakeDaemonModel(size)
+  let snapshots = 0
   const pane = await createTranscriptPane({
     paneTitle: 'Terminal',
     foregroundProcess: null,
@@ -27,11 +29,15 @@ async function createQuietAgentPane(
     size,
     data: '',
     settledDaemonSnapshot: () =>
-      snapshotDelayMs === 'never'
+      snapshotDelayMs === 'never' || (snapshotDelayMs === 'fails-once' && snapshots++ === 0)
         ? new Promise<never>(() => {})
-        : snapshotDelayMs > 0
-          ? new Promise((resolve) => setTimeout(() => resolve(daemon.snapshot()), snapshotDelayMs))
-          : daemon.snapshot()
+        : snapshotDelayMs === 'fails-once'
+          ? daemon.snapshot()
+          : snapshotDelayMs > 0
+            ? new Promise((resolve) =>
+                setTimeout(() => resolve(daemon.snapshot()), snapshotDelayMs)
+              )
+            : daemon.snapshot()
   })
   // Why only Date: emulator writes settle on real timers; the quiet period is measured by Date.now.
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -163,16 +169,44 @@ describe("main's terminal model for an agent pane", () => {
     await expect(waitForIdleFromNow(pane, 6_000)).rejects.toThrow(/timeout/)
   }, 15_000)
 
+  it('does not report a busy Antigravity pane idle while its rebuild keeps failing', async () => {
+    // Why: a failed seed leaves a partial model, so the busy screen must still veto the text.
+    const pane = await createQuietAgentPane(
+      'antigravity',
+      readRuntimeFixture('antigravity-1-2-14-busy-streaming'),
+      CODEX_SIZE,
+      'never'
+    )
+    expect(pane.runtime.isMainTerminalModelDormant(TRANSCRIPT_PANE_PTY_ID)).toBe(true)
+    await expect(waitForIdleFromNow(pane, 6_000)).rejects.toThrow(/timeout/)
+  }, 15_000)
+
   it.each([
     ['a ready screen', () => readRuntimeFixture('codex-0157-plain-ready')],
     ['a name-only title', () => NAME_ONLY_TITLE_OUTPUT]
   ])(
-    'does not hold a wait on %s past the seed timeout when the rebuild never lands',
-    async (_label, output) => {
+    'holds a wait on %s while the rebuild keeps failing, and retries it',
+    async (_l, output) => {
       const pane = await createQuietAgentPane('codex', output(), CODEX_SIZE, 'never')
-      expect(pane.runtime.isMainTerminalModelDormant(TRANSCRIPT_PANE_PTY_ID)).toBe(true)
       const failuresBefore = getHiddenRendererPtyDeliveryDebug().mainTerminalModelSeedFailureCount
-      // Why quiet first: the seed timeout, not the quiet window, is then all the wait holds for.
+      await expect(waitForIdleFromNow(pane, 10_000)).rejects.toThrow(/timeout/)
+      // Each poll after the backoff retries the seed: 2 s timeout, then 1 s, 2 s, 4 s apart.
+      expect(
+        getHiddenRendererPtyDeliveryDebug().mainTerminalModelSeedFailureCount - failuresBefore
+      ).toBeGreaterThanOrEqual(2)
+    },
+    20_000
+  )
+
+  it.each([
+    ['a ready screen', () => readRuntimeFixture('codex-0157-plain-ready')],
+    ['a name-only title', () => NAME_ONLY_TITLE_OUTPUT]
+  ])(
+    'settles a wait on %s once a retried rebuild lands',
+    async (_label, output) => {
+      const pane = await createQuietAgentPane('codex', output(), CODEX_SIZE, 'fails-once')
+      expect(pane.runtime.isMainTerminalModelDormant(TRANSCRIPT_PANE_PTY_ID)).toBe(true)
+      // Why quiet first: the seed, not the quiet window, is then all the wait holds for.
       vi.useFakeTimers({
         toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
         now: Date.now() + MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS
@@ -188,11 +222,8 @@ describe("main's terminal model for an agent pane", () => {
       void waiting.catch(() => {})
       await vi.advanceTimersByTimeAsync(10_000)
       await expect(waiting).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
-      // The bound: the 2 s seed timeout, whose failure re-checks the wait without a screen.
-      expect(settledAt - startedAt).toBeLessThanOrEqual(2_000)
-      expect(getHiddenRendererPtyDeliveryDebug().mainTerminalModelSeedFailureCount).toBe(
-        failuresBefore + 1
-      )
+      // The 2 s seed timeout, the 1 s backoff, and the next poll (every 2 s) that retries.
+      expect(settledAt - startedAt).toBeLessThanOrEqual(5_000)
     },
     20_000
   )
