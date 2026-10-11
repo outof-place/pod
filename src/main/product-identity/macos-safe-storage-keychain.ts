@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { runProcessSync } from '../../shared/child-process/run-process'
 import type { SafeStorageKeychainPort } from './legacy-profile-migration'
 
@@ -16,7 +17,14 @@ function assertQuotable(values: readonly string[]): void {
 /** `security` CLI access to the login keychain, or to `keychainPath` (tests use a scratch keychain). */
 export function createMacSafeStorageKeychain(keychainPath?: string): SafeStorageKeychainPort {
   const keychainArgs = keychainPath ? [keychainPath] : []
+  // Why: `security` given a keychain path that doesn't exist acts on login.keychain-db instead.
+  const requireKeychain = (): void => {
+    if (keychainPath && !existsSync(keychainPath)) {
+      throw new Error(`keychain ${keychainPath} does not exist`)
+    }
+  }
   const hasItem = (service: string, account: string): boolean => {
+    requireKeychain()
     // Without -w this reads attributes only, which never prompts.
     const result = runProcessSync({
       program: SECURITY,
@@ -28,6 +36,7 @@ export function createMacSafeStorageKeychain(keychainPath?: string): SafeStorage
   return {
     hasItem,
     readSecret(service, account) {
+      requireKeychain()
       const result = runProcessSync({
         program: SECURITY,
         args: ['find-generic-password', '-s', service, '-a', account, '-w', ...keychainArgs],
@@ -36,6 +45,7 @@ export function createMacSafeStorageKeychain(keychainPath?: string): SafeStorage
       return result.code === 0 && !result.timedOut ? result.stdout.trim() : null
     },
     writeSecret(service, account, secret, trustedAppPath) {
+      requireKeychain()
       assertQuotable([service, account, secret, trustedAppPath ?? '', keychainPath ?? ''])
       const trusted = trustedAppPath ? ` -T "${trustedAppPath}"` : ''
       const keychain = keychainPath ? ` "${keychainPath}"` : ''
