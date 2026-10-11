@@ -77,7 +77,7 @@ export function PodOrbstackPane(): React.JSX.Element {
       title: translate('podOrbstack.restart.title', 'Restart OrbStack?'),
       description: translate(
         'podOrbstack.restart.description',
-        "Restarting stops every running container and machine on this Mac, not only Pod's: {{containers}} containers and {{machines}} machines run now. Containers set to restart come back on their own; agents in a sandbox lose their connection.",
+        "Restarting stops every running container and machine on this Mac, not only Pod's: {{containers}} containers and {{machines}} machines run now. Containers set to restart come back on their own; terminals and agents in a machine end.",
         { containers: String(containers), machines: String(machines) }
       ),
       confirmLabel: translate('podOrbstack.restart.confirm', 'Restart OrbStack'),
