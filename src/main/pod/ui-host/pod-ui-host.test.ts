@@ -204,6 +204,32 @@ describe('installPodUiHost', () => {
     expect(mocks.window.show).toHaveBeenCalled()
   })
 
+  it('opens the asked section of the window or of Settings', async () => {
+    await install()
+    const client = await attach()
+    send(client, {
+      type: 'openSurface',
+      surface: 'window',
+      worktreeId: 'repo-1::/w',
+      section: 'source-control'
+    })
+    await vi.waitFor(() =>
+      expect(mocks.window.webContents.send).toHaveBeenCalledWith('pod:uiHostSurface:openSection', {
+        surface: 'window',
+        section: 'source-control',
+        worktreeId: 'repo-1::/w'
+      })
+    )
+    send(client, { type: 'openSurface', surface: 'settings', section: 'terminal' })
+    await vi.waitFor(() =>
+      expect(mocks.window.webContents.send).toHaveBeenCalledWith('pod:uiHostSurface:openSection', {
+        surface: 'settings',
+        section: 'terminal'
+      })
+    )
+    expect(mocks.openSettings).toHaveBeenCalled()
+  })
+
   it('navigates but never takes the screen in a background launch', async () => {
     vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
     await install()

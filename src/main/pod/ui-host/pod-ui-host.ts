@@ -29,6 +29,10 @@ import {
 } from './pod-ui-host-launch'
 import { PodUiHostLazyWindow } from './pod-ui-host-lazy-window'
 import { installPodHeadlessAgentStatus } from './pod-headless-agent-status'
+import {
+  POD_UI_HOST_SURFACE_IPC,
+  type PodUiHostSectionRequest
+} from '../../../shared/pod-ui-host-surface'
 import { PodUiHostQuitFlow } from './pod-ui-host-quit'
 import { assessRendererQuit, commitRendererQuit } from './pod-ui-host-quit-renderer'
 import {
@@ -70,6 +74,14 @@ function openSurface(request: PodUiHostOpenSurface): boolean {
     }
   }
   const target = state.mainWindow
+  if (request.section && target && !target.isDestroyed()) {
+    const section: PodUiHostSectionRequest = {
+      surface: request.surface,
+      section: request.section,
+      ...(request.worktreeId ? { worktreeId: request.worktreeId } : {})
+    }
+    target.webContents.send(POD_UI_HOST_SURFACE_IPC.openSection, section)
+  }
   // Why: automated launches never take the screen (AGENTS.md); the request is still navigated.
   if (!target || target.isDestroyed() || isBackgroundLaunch()) {
     return false

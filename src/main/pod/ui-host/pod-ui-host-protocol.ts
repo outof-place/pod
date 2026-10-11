@@ -5,6 +5,7 @@
 // PodNative's side mirrors these shapes (PodRuntime/UIHostChannel.swift in outof-place/pod-native).
 // Version 2 answers a quit: `quitting` and a heartbeat until exit, or `needsConfirmation`.
 // Version 3 adds browserPane: which attached browser panes are on screen.
+// A welcome naming `sections` admits openSurface's `section`: a view of the window or a Settings pane.
 import { z } from 'zod'
 import {
   POD_BROWSER_PANE_CLIENT_MESSAGES,
@@ -40,13 +41,18 @@ const Quit = z
   })
   .strict()
 
-// A surface PodNative has no native view for yet: the hidden window shows, at the worktree if given.
+// A surface PodNative has no native view for yet: the hidden window shows, at the worktree if given,
+// and at `section` when named (POD_UI_HOST_WINDOW_SECTIONS, or a Settings pane id).
 const OpenSurface = z
   .object({
     type: z.literal('openSurface'),
     surface: z.enum(['window', 'settings']),
     worktreeId: z.string().max(MAX_FORWARDED_LENGTH).optional(),
-    tabId: z.string().max(MAX_FORWARDED_LENGTH).optional()
+    tabId: z.string().max(MAX_FORWARDED_LENGTH).optional(),
+    section: z
+      .string()
+      .regex(/^[a-z][a-z0-9-]{0,63}$/)
+      .optional()
   })
   .strict()
 
@@ -73,7 +79,8 @@ export type PodUiHostQuitReason = z.infer<typeof Quit>['reason']
 
 // What a welcome's `features` may name beyond the base verbs; PodNative sends only what it lists.
 // `headless`: no classic window posts agent notifications or sets the Dock badge; PodNative does.
-export const POD_UI_HOST_FEATURES = ['browser', 'headless'] as const
+// `sections`: openSurface may carry a `section`.
+export const POD_UI_HOST_FEATURES = ['browser', 'headless', 'sections'] as const
 
 export type PodUiHostServerMessage =
   | { type: 'welcome'; v: number; pid: number; features: readonly string[] }

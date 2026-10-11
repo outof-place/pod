@@ -26,6 +26,7 @@ import { useCodexSharedSettingsNotice } from '../components/terminal-pane/codex-
 import { useVisibleReviewRefreshReporting } from './use-visible-review-refresh-reporting'
 import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
+import { usePodUiHostOpenSection } from '../pod/ui-host/use-pod-ui-host-open-section'
 import { usePodUiHostQuitAssess } from '../pod/ui-host/use-pod-ui-host-quit-assess'
 import { usePodUiHostSurfaceReady } from '../pod/ui-host/use-pod-ui-host-surface-ready'
 
@@ -52,6 +53,7 @@ export function useAppShellServices(): void {
   useProfileStateSaveDelayNotice()
   // Fork-only (Pod): one-app's quit asks here what quitting would lose; a lazy window says it's ready.
   usePodUiHostQuitAssess()
+  usePodUiHostOpenSection()
   usePodUiHostSurfaceReady(workspaceSessionReady)
   useRemoteRuntimeRecoveryTriggers()
   useVisibleReviewRefreshReporting()
