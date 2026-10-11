@@ -7,6 +7,7 @@ import type {
   TerminalOutputMeta
 } from '../../terminal-output-frame-chunks'
 import type { TerminalOutputBatcher } from './terminal-output-batcher'
+import type { MultiplexQueryResponder } from './terminal-multiplex-query-responder'
 
 export type SnapshotFrameOptions = {
   kind: 'scrollback' | 'resized'
@@ -80,6 +81,8 @@ export type TerminalMultiplexStream = {
   /** Main's model answered this PTY's queries when the stream took reply authority, so queries in
    *  output its initial snapshot covers are main's to answer (terminal-snapshot-covered-queries.ts). */
   modelHeldQueryAuthority: boolean
+  /** This stream's place in the PTY's query-responder election; null until it registers. */
+  queryResponder: MultiplexQueryResponder | null
   registeredRemoteDesktopDriver: boolean
   remoteDesktopSubscriptionKey: string
   pendingRemoteDesktopViewport: { cols: number; rows: number } | null
