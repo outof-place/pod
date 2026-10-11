@@ -3,8 +3,9 @@ import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payloa
 import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
 import {
   checkStateBeforeRestartOnScreen,
-  keptPaneAgentResume,
-  pendingPaneAgentResume
+  agentStatusBeforeRestart,
+  pendingPaneAgentResume,
+  restoredAgentRowBeforeRestart
 } from './agent-resume-before-restart'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
@@ -72,19 +73,33 @@ describe('pendingPaneAgentResume', () => {
   })
 })
 
-describe('keptPaneAgentResume', () => {
+describe('restoredAgentRowBeforeRestart', () => {
   it('reads only a restored, unconfirmed state that was not done', () => {
-    expect(
-      keptPaneAgentResume([row({ state: 'working', restoredUnconfirmed: true })], undefined)
-    ).toEqual({ agent: 'claude', outcome: 'kept', stateBeforeRestart: 'working' })
-    expect(keptPaneAgentResume([row({ state: 'working' })], undefined)).toBe(undefined)
-    expect(keptPaneAgentResume([row({ restoredUnconfirmed: true })], undefined)).toBe(undefined)
+    const restored = row({ state: 'working', restoredUnconfirmed: true })
+    expect(restoredAgentRowBeforeRestart([restored])).toEqual({ row: restored, state: 'working' })
+    expect(restoredAgentRowBeforeRestart([row({ state: 'working' })])).toBe(undefined)
+    expect(restoredAgentRowBeforeRestart([row({ restoredUnconfirmed: true })])).toBe(undefined)
   })
+})
 
-  it('follows the screen check', () => {
-    const restored = [row({ state: 'waiting', restoredUnconfirmed: true })]
-    expect(keptPaneAgentResume(restored, 'confirmed')).toMatchObject({ confirmed: true })
-    expect(keptPaneAgentResume(restored, 'stale')).toBe(undefined)
+describe('agentStatusBeforeRestart', () => {
+  it('shows the restored state, marked until confirmed', () => {
+    const restored = row({ state: 'waiting', restoredUnconfirmed: true, receivedAt: 5 })
+    const current = {
+      state: 'done' as const,
+      prompt: '',
+      updatedAt: 1,
+      stateStartedAt: 1,
+      paneKey: PANE_KEY,
+      stateHistory: []
+    }
+    expect(agentStatusBeforeRestart(current, restored, false)).toMatchObject({
+      state: 'waiting',
+      updatedAt: 5,
+      agentType: 'claude',
+      beforeRestart: true
+    })
+    expect(agentStatusBeforeRestart(undefined, restored, true)).not.toHaveProperty('beforeRestart')
   })
 })
 
