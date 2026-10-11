@@ -25,6 +25,7 @@ import {
 export { getManagedScript }
 import { getManagedStatusLineScript } from './statusline-script'
 import { refuseProfileAtDefaultHome } from './claude-profile-hook-target'
+import { podManagedClaudeHook } from '../pod/agent-hook/pod-agent-hook-native'
 import {
   applyManagedHooks,
   applyManagedStatusLine,
@@ -32,7 +33,6 @@ import {
   getManagedScriptFileName,
   getConfigPath,
   getManagedCommand,
-  getManagedLifecycleHook,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
@@ -122,7 +122,7 @@ export class ClaudeHookService {
     }
 
     // Why: report partial registration instead of a false installed state.
-    const expectedHook = getManagedLifecycleHook(scriptPath, this.options.settings)
+    const expectedHook = podManagedClaudeHook(this.options, scriptPath, options, false)
     const missing: string[] = []
     let presentCount = 0
     for (const event of this.managedHookPlan(options).install) {
@@ -186,7 +186,7 @@ export class ClaudeHookService {
       }
     }
 
-    const hook = getManagedLifecycleHook(scriptPath, this.options.settings)
+    const hook = podManagedClaudeHook(this.options, scriptPath, options, true)
     const plan = this.managedHookPlan(options)
     let nextConfig = applyManagedHooks(
       config,
