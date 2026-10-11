@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 // Read-only: Pod's entries in Background Task Management (System Settings > Login Items), from
-// `sfltool dumpbtm` (no root needed). Run it before and after an install, a move to one-app or
-// an update, to catch a second "Pod" or an entry for a bundle that is gone. It never changes BTM:
-// a stale entry can't be removed without `sfltool resetbtm`, which wipes everyone's.
+// `sfltool dumpbtm`. Run it before and after an install, a move to one-app or an update, to catch
+// a second "Pod" or an entry for a bundle that is gone. It never changes BTM: a stale entry can't
+// be removed without `sfltool resetbtm`, which wipes everyone's.
 //
-//   node config/scripts/pod-btm-entries.mjs                  list
-//   node config/scripts/pod-btm-entries.mjs --save before.json
-//   node config/scripts/pod-btm-entries.mjs --compare before.json
+// `sfltool dumpbtm` is NOT root-free: on macOS 27 authd puts an admin authorization dialog on the
+// user's screen (2026-10-11, it also blocked a packaging smoke). So this script runs it only for a
+// person at a terminal who passes --i-will-authorize; automation and tests read a saved dump.
+//
+//   node config/scripts/pod-btm-entries.mjs --i-will-authorize                 list
+//   node config/scripts/pod-btm-entries.mjs --i-will-authorize --save before.json
+//   node config/scripts/pod-btm-entries.mjs --i-will-authorize --compare before.json
+//   node config/scripts/pod-btm-entries.mjs --dump dumpbtm.txt [--save … | --compare …]
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -90,11 +95,34 @@ function line(r) {
   return `${r.Type ?? '?'} | ${r.Name ?? '?'} | ${r.Identifier ?? '?'} | ${r.URL ?? ''} | ${r.Disposition ?? ''}`
 }
 
+/** Why `sfltool` must not run now, or null: only with the flag, from a terminal a person sits at. */
+export function sfltoolRefusal(args, interactive) {
+  if (!args.includes('--i-will-authorize')) {
+    return 'sfltool dumpbtm asks for an admin password on screen: pass --i-will-authorize, or --dump FILE'
+  }
+  return interactive
+    ? null
+    : 'sfltool dumpbtm needs a person at a terminal (stdin and stdout are not a TTY)'
+}
+
+function readDump(args) {
+  const dump = args.indexOf('--dump')
+  if (dump !== -1) {
+    return readFileSync(args[dump + 1], 'utf8')
+  }
+  const refusal = sfltoolRefusal(args, Boolean(process.stdin.isTTY && process.stdout.isTTY))
+  if (refusal) {
+    console.error(refusal)
+    return null
+  }
+  return execFileSync('/usr/bin/sfltool', ['dumpbtm'], { encoding: 'utf8', maxBuffer: 64 << 20 })
+}
+
 function main(args) {
-  const dump = execFileSync('/usr/bin/sfltool', ['dumpbtm'], {
-    encoding: 'utf8',
-    maxBuffer: 64 << 20
-  })
+  const dump = readDump(args)
+  if (dump === null) {
+    return 2
+  }
   const entries = podEntries(parseBtmDump(dump))
   const save = args.indexOf('--save')
   if (save !== -1) {

@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { compareBtm, localPath, parseBtmDump, podEntries } from './pod-btm-entries.mjs'
+import {
+  compareBtm,
+  localPath,
+  parseBtmDump,
+  podEntries,
+  sfltoolRefusal
+} from './pod-btm-entries.mjs'
 
-// The shape of `sfltool dumpbtm` on macOS 27, with made-up records.
+// The shape of `sfltool dumpbtm` on macOS 27, with made-up records. Never run sfltool here: it
+// puts an admin authorization dialog on the user's screen.
 const record = (n, fields) =>
   [` #${n}:`, ...Object.entries(fields).map(([k, v]) => `${k.padStart(21)}: ${v}`), ''].join('\n')
 
@@ -98,5 +105,11 @@ describe('Pod in BTM', () => {
     expect(localPath('file:///Applications/Pod%20Runtime.app/', 501, '/Users/me')).toBe(
       '/Applications/Pod Runtime.app/'
     )
+  })
+
+  it('runs sfltool only for a person at a terminal who says they will authorize', () => {
+    expect(sfltoolRefusal(['--save', 'before.json'], true)).toMatch(/--i-will-authorize/)
+    expect(sfltoolRefusal(['--i-will-authorize'], false)).toMatch(/TTY/)
+    expect(sfltoolRefusal(['--i-will-authorize', '--compare', 'before.json'], true)).toBeNull()
   })
 })
