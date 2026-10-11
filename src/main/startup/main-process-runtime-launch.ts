@@ -11,6 +11,7 @@ import { registerMobileHandlers } from '../ipc/mobile'
 import { getLocalPtyProvider, registerHeadlessPtyRuntime } from '../ipc/pty'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { publishHeadlessRuntimeGraph } from '../runtime/headless-runtime-graph'
+import { podBrowserPanesHostBrowserTabs } from '../pod/browser-pane/pod-browser-pane-hooks'
 import { OffscreenBrowserBackend } from '../browser/offscreen-browser-backend'
 import { browserManager } from '../browser/browser-manager'
 import { getDesktopRelayStatus, publishDesktopRelayStatus } from './main-process-relay-status'
@@ -151,7 +152,8 @@ async function launchServeMode(
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
   // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
-  if (state.headlessBrowserDisplayAvailable) {
+  // Fork-only (Pod): one-app's browser panes installed their own offscreen backend already.
+  if (state.headlessBrowserDisplayAvailable && !podBrowserPanesHostBrowserTabs()) {
     runtime.setOffscreenBrowserBackend(
       new OffscreenBrowserBackend(browserManager, {
         getAgentBrowserBridge: () => state.agentBrowserBridge
