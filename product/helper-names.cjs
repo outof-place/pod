@@ -1,7 +1,8 @@
 // Renames Orca's bundled macOS helpers after the product: Finder and Privacy & Security list the
 // Computer Use helper by its file name, Activity Monitor lists the Contents/MacOS helpers by theirs.
 // Bundle ids and designated requirements stay, so the helpers keep their privacy grants. Runtime
-// lookups follow through src/main/product-identity/product-helper-names.ts (same table).
+// lookups follow through src/main/product-identity/product-helper-names.ts (same table, in
+// src/shared/product-helper-names.ts).
 //
 //   node product/helper-names.cjs --check <Product.app>   lists every Orca name a user can see
 const { execFileSync } = require('node:child_process')
