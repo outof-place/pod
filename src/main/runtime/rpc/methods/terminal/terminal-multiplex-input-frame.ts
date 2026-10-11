@@ -9,6 +9,7 @@ import type {
 } from './terminal-input-sequence-ledger'
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+import { noteMultiplexStreamInput } from './terminal-multiplex-query-responder'
 
 // Why: a large write yields between its 16 KiB chunks, so without a tail a later frame lands inside
 // it (a paste's ESC[201~ ahead of its tail, which a shell runs as typed lines). The ledger orders sequenced input.
@@ -22,6 +23,9 @@ export function handleMultiplexInputFrame(
 ): void {
   const { runtime } = state
   const text = decodeTerminalStreamText(frame.payload)
+  if (text && stream.queryResponder) {
+    noteMultiplexStreamInput(stream.queryResponder, text)
+  }
   // Mobile already has the higher-priority floor, so a rejected desktop claim must not suppress later phone input.
   const inputClaimTail = stream.isMobile ? Promise.resolve(true) : stream.desktopClaimTail
   const inputSessionId = frame.seq > 0 ? stream.inputSessionId : null
