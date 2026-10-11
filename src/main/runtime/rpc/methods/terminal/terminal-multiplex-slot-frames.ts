@@ -10,6 +10,7 @@ import {
 } from './stream-schemas'
 import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
 import { handleMultiplexInputFrame } from './terminal-multiplex-input-frame'
+import { noteMultiplexStreamClaim } from './terminal-multiplex-query-responder'
 import {
   getOutputAfterSnapshotSeq,
   normalizeMultiplexSnapshotScrollbackRows
@@ -130,6 +131,9 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       const viewport = decodeViewportFrame(frame.payload)
       if (!viewport) {
         return
+      }
+      if (stream.queryResponder) {
+        noteMultiplexStreamClaim(stream.queryResponder)
       }
       stream.registeredRemoteDesktopDriver = true
       const claim = () =>
