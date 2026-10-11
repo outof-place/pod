@@ -11,6 +11,7 @@ import {
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+import { reflowSnapshotForViewer } from './terminal-snapshot-viewer-reflow'
 
 export type MultiplexPublishedInitialState = {
   isMobile: boolean
@@ -49,6 +50,11 @@ export async function publishMultiplexInitialSnapshot(
       stream.pendingOutputBytes = 0
       stream.pendingOutputOverflowed = false
     }
+  }
+  // Why: a desktop viewer seeds the snapshot at its own grid (mobile gets its own restream).
+  serialized = await reflowSnapshotForViewer(serialized, isMobile ? undefined : request.viewport)
+  if (!isMultiplexStreamAttached(state, stream)) {
+    return null
   }
   const size = runtime.getTerminalSize(ptyId)
   const displayMode = runtime.getMobileDisplayMode(ptyId)
