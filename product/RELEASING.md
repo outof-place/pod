@@ -6,22 +6,25 @@ For now, releases are cut **locally** with `product/release.sh` on the Mac that 
 
 ## Signing setup (done)
 
-| What                    | Value                                                                                            |
-| ----------------------- | ------------------------------------------------------------------------------------------------ |
-| Signing identity        | `Developer ID Application: OUTOFPLACE POLAND SP. Z O.O (75Y2KR6P5W)`, `release.sh`'s default     |
-| Certificate SHA-1       | `1DDF17FA620DE903DB70A05871EA26FD3F62C9EE`                                                       |
-| Private key             | Login keychain of the release Mac, **not exportable**                                            |
-| Notary credentials      | notarytool keychain profile `pod-notary`, `release.sh`'s default                                 |
-| Alternative credentials | App Store Connect API key `KX7Q6Y844C` (`~/.appstoreconnect/private_keys/AuthKey_KX7Q6Y844C.p8`) |
+| What                 | Value                                                                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signing identity     | `Developer ID Application: OUTOFPLACE POLAND SP. Z O.O (75Y2KR6P5W)`, `release.sh`'s default                                                                  |
+| Certificate SHA-1    | `1DDF17FA620DE903DB70A05871EA26FD3F62C9EE`                                                                                                                    |
+| Private key          | Login keychain of the release Mac, **not exportable**                                                                                                         |
+| Notary credentials   | App Store Connect API key `KX7Q6Y844C`: `~/.appstoreconnect/private_keys/AuthKey_KX7Q6Y844C.p8` and its issuer id in `~/.appstoreconnect/issuer`, the default |
+| Fallback credentials | notarytool keychain profile `pod-notary`, used when `~/.appstoreconnect` has no issuer                                                                        |
+
+`product/notary-credentials.sh` picks the credentials for `release.sh` and `assemble-one-app.sh`. Explicit variables win, then the key on disk, then the profile. The key on disk is the default because the `pod-notary` keychain item vanished twice. The scripts read `~` from the user database, not `HOME`, so a shell with an overridden HOME still finds the key.
 
 Check both before a release:
 
 ```sh
 security find-identity -v -p codesigning | grep "Developer ID Application"
-xcrun notarytool history --keychain-profile pod-notary
+xcrun notarytool history --key ~/.appstoreconnect/private_keys/AuthKey_KX7Q6Y844C.p8 \
+  --key-id KX7Q6Y844C --issuer "$(cat ~/.appstoreconnect/issuer)"
 ```
 
-To recreate the notary profile, run `xcrun notarytool store-credentials pod-notary` with either `--apple-id <email> --team-id 75Y2KR6P5W --password <app-specific password>` or `--key <.p8> --key-id <KEYID> --issuer <issuer uuid>`.
+To recreate the fallback profile, run `xcrun notarytool store-credentials pod-notary` with either `--apple-id <email> --team-id 75Y2KR6P5W --password <app-specific password>` or `--key <.p8> --key-id <KEYID> --issuer <issuer uuid>`.
 
 The first signature after a keychain change can raise a keychain prompt for the key. `release.sh` makes a test signature before it builds anything. If the test signature waits more than 60 s, the script stops and asks you to allow access (**Always Allow**), so a release never hangs halfway.
 
