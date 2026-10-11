@@ -28,6 +28,7 @@
     "../src/main/agent-hooks/local-agent-cli-presence.ts",
     "../src/main/agent-hooks/managed-toml-ownership.ts",
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",
+    "../src/main/pod/instance/pod-hook-write-block.ts",
     "../src/main/agent-hooks/managed-agent-hook-registry.ts",
     "../src/main/agent-hooks/managed-hook-script-refresh.ts",
     "../src/main/agent-hooks/managed-hooks-json-events.ts",

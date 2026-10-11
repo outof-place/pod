@@ -1,6 +1,10 @@
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { podHookWriteBlock, type PodInstanceInput } from './pod-instance'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  podHookWriteBlock,
+  podHookWriteBlockNow,
+  type PodInstanceInput
+} from './pod-hook-write-block'
 
 const account = '/Users/someone'
 const profile = join(account, 'Library', 'Application Support', 'Pod')
@@ -11,7 +15,8 @@ function input(overrides: Partial<PodInstanceInput> = {}): PodInstanceInput {
     userDataPath: profile,
     defaultUserDataPath: profile,
     argv: ['/Applications/Pod.app/Contents/MacOS/Pod'],
-    env: {},
+    automated: false,
+    e2e: false,
     hookHome: account,
     accountHome: account,
     ...overrides
@@ -30,10 +35,7 @@ describe('which Pod may write the user-global hook files', () => {
   })
 
   it('not a harness launch, a runtime host or a test keychain', () => {
-    expect(podHookWriteBlock(input({ env: { ORCA_BACKGROUND_LAUNCH: '1' } }))).toBe(
-      'automated-launch'
-    )
-    expect(podHookWriteBlock(input({ env: { POD_E2E_HEADLESS: '1' } }))).toBe('automated-launch')
+    expect(podHookWriteBlock(input({ automated: true }))).toBe('automated-launch')
     expect(podHookWriteBlock(input({ argv: ['Pod', '--serve'] }))).toBe('serve')
     expect(podHookWriteBlock(input({ argv: ['Pod', '--pod-headless-host'] }))).toBe('headless-host')
     expect(
@@ -47,10 +49,23 @@ describe('which Pod may write the user-global hook files', () => {
   })
 
   it('E2E only inside its disposable home', () => {
-    const e2e = { ORCA_E2E_USER_DATA_DIR: '/tmp/e2e/user-data' }
     expect(
-      podHookWriteBlock(input({ packaged: false, env: e2e, hookHome: '/tmp/e2e/user-data/home' }))
+      podHookWriteBlock(input({ packaged: false, e2e: true, hookHome: '/tmp/e2e/user-data/home' }))
     ).toBeNull()
-    expect(podHookWriteBlock(input({ packaged: false, env: e2e }))).toBe('e2e-outside-its-home')
+    expect(podHookWriteBlock(input({ packaged: false, e2e: true }))).toBe('e2e-outside-its-home')
+  })
+})
+
+describe('outside Electron (the CLI), before main installs its check', () => {
+  const argv = process.argv
+  afterEach(() => {
+    process.argv = argv
+  })
+
+  it('only the launch flags count', () => {
+    process.argv = ['node', 'orca', 'hooks', 'install']
+    expect(podHookWriteBlockNow()).toBeNull()
+    process.argv = ['node', 'orcad', '--serve']
+    expect(podHookWriteBlockNow()).toBe('serve')
   })
 })
