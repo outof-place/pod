@@ -37,6 +37,8 @@ export type PodUiHostServerOptions = {
   onBrowser?: (message: PodBrowserPaneClientMessage) => void
   /** A UI attached (true), or the attached one went away without asking to quit (false). */
   onUiPresence: (attached: boolean) => void
+  /** The headless one-app runtime: the welcome names `headless`. */
+  headless?: boolean
   log: (message: string) => void
 }
 
@@ -233,7 +235,10 @@ export class PodUiHostServer {
         // The version this connection speaks: the client's own.
         v: message.v,
         pid: this.options.pid,
-        features: this.options.onBrowser ? ['browser'] : []
+        features: [
+          ...(this.options.onBrowser ? ['browser'] : []),
+          ...(this.options.headless ? ['headless'] : [])
+        ]
       })
     )
     this.options.log(`ui-host: PodNative ${message.pid} attached`)
