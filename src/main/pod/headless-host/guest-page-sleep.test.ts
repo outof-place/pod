@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RendererPublicationThrottle } from '../../window/renderer-publication-throttle'
 import {
+  CDP_COMMAND_WAKE_CAP_MS,
   GUEST_ACTIVITY_WAKE_MS,
   GuestPageSleep,
+  PodCdpCommandWakes,
+  podOffscreenPageWindowOptions,
+  trackPodGuestPageSleep,
   type GuestPageSleepTarget
 } from './guest-page-sleep'
 
@@ -135,5 +139,78 @@ describe('GuestPageSleep', () => {
 
     expect(guest.throttling).toEqual([])
     expect(sleep.isTracked(guest.id)).toBe(false)
+  })
+
+  it('holds a page awake for the whole command, then for the window after it', async () => {
+    const sleep = new GuestPageSleep(new RendererPublicationThrottle())
+    const guest = createGuest()
+    sleep.track(guest)
+    let finish!: () => void
+
+    const running = sleep.whileAwake(
+      guest.id,
+      () => new Promise<void>((resolve) => (finish = resolve))
+    )
+    // Why: a wait longer than the activity window must not see its page fall asleep under it.
+    vi.advanceTimersByTime(GUEST_ACTIVITY_WAKE_MS * 3)
+    expect(sleeping(guest)).toBe(false)
+    finish()
+    await running
+    expect(sleeping(guest)).toBe(false)
+    vi.advanceTimersByTime(GUEST_ACTIVITY_WAKE_MS)
+    expect(sleeping(guest)).toBe(true)
+  })
+
+  it('keeps a CDP page awake from each request until its reply', () => {
+    const sleep = new GuestPageSleep(new RendererPublicationThrottle())
+    const guest = createGuest()
+    sleep.track(guest)
+    const wakes = new PodCdpCommandWakes(() => guest.id, sleep)
+
+    wakes.request(1)
+    wakes.request(2)
+    vi.advanceTimersByTime(GUEST_ACTIVITY_WAKE_MS * 3)
+    wakes.reply(1)
+    vi.advanceTimersByTime(GUEST_ACTIVITY_WAKE_MS)
+    expect(sleeping(guest)).toBe(false)
+    wakes.reply(2)
+    wakes.reply(2)
+    vi.advanceTimersByTime(GUEST_ACTIVITY_WAKE_MS)
+    expect(sleeping(guest)).toBe(true)
+  })
+
+  it('lets a CDP page sleep when its client leaves or a reply never comes', () => {
+    const sleep = new GuestPageSleep(new RendererPublicationThrottle())
+    const guest = createGuest()
+    sleep.track(guest)
+    const wakes = new PodCdpCommandWakes(() => guest.id, sleep)
+
+    wakes.request(1)
+    wakes.clear()
+    vi.advanceTimersByTime(GUEST_ACTIVITY_WAKE_MS)
+    expect(sleeping(guest)).toBe(true)
+
+    wakes.request(2)
+    vi.advanceTimersByTime(CDP_COMMAND_WAKE_CAP_MS + GUEST_ACTIVITY_WAKE_MS)
+    expect(sleeping(guest)).toBe(true)
+  })
+
+  it('tracks only non-offscreen guests, and only in a windowless host', () => {
+    const sleep = new GuestPageSleep(new RendererPublicationThrottle())
+    const webview = createGuest(1)
+    const paneSurface = Object.assign(createGuest(2), { isOffscreen: () => true })
+    const desktopGuest = createGuest(3)
+
+    trackPodGuestPageSleep(webview, sleep, true)
+    trackPodGuestPageSleep(paneSurface, sleep, true)
+    trackPodGuestPageSleep(desktopGuest, sleep, false)
+
+    expect([1, 2, 3].map((id) => sleep.isTracked(id))).toEqual([true, false, false])
+    expect(paneSurface.throttling).toEqual([])
+  })
+
+  it('starts serve page windows hidden only in a windowless host', () => {
+    expect(podOffscreenPageWindowOptions(true)).toEqual({ paintWhenInitiallyHidden: false })
+    expect(podOffscreenPageWindowOptions(false)).toEqual({})
   })
 })

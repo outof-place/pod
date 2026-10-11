@@ -5,10 +5,19 @@ import {
   rendererPublicationThrottle,
   type RendererPublicationThrottleTarget
 } from '../../window/renderer-publication-throttle'
+import { isPodUiHostLaunch } from '../ui-host/pod-ui-host-launch'
+import { isPodHeadlessHost } from './headless-host-mode'
 
 // Why: agent-browser waits on frames and timers between commands; a page that went back to sleep
 // between two commands would stall the next one's actionability checks.
 export const GUEST_ACTIVITY_WAKE_MS = 10_000
+// Why a cap: a CDP command whose reply never comes (its page died mid-call) must not pin a page awake.
+export const CDP_COMMAND_WAKE_CAP_MS = 5 * 60_000
+
+/** A launch whose pages no one looks at by default: the serve headless host, or the one-app runtime. */
+export function isPodWindowlessHost(): boolean {
+  return isPodHeadlessHost() || isPodUiHostLaunch()
+}
 
 export type GuestPageSleepTarget = RendererPublicationThrottleTarget & {
   id: number
@@ -53,6 +62,30 @@ export class GuestPageSleep {
     return guest ? this.leases.acquire(guest.target) : () => {}
   }
 
+  /** Holds the guest awake while a command runs; the release starts the after-command window. */
+  beginCommand(guestId: number): () => void {
+    const release = this.wake(guestId)
+    let ended = false
+    return () => {
+      if (ended) {
+        return
+      }
+      ended = true
+      // Why activity first: its lease is taken before the command's is dropped, so no sleep between.
+      this.noteActivity(guestId)
+      release()
+    }
+  }
+
+  async whileAwake<T>(guestId: number, run: () => Promise<T>): Promise<T> {
+    const end = this.beginCommand(guestId)
+    try {
+      return await run()
+    } finally {
+      end()
+    }
+  }
+
   /** A command reached the guest: it stays awake until GUEST_ACTIVITY_WAKE_MS after the last one. */
   noteActivity(guestId: number): void {
     const guest = this.guests.get(guestId)
@@ -85,5 +118,70 @@ export class GuestPageSleep {
     this.guests.delete(guestId)
     // Why release on destroy: the throttle keys leases by target and would keep this one forever.
     this.endActivity(guest)
+  }
+}
+
+export const podGuestPageSleep = new GuestPageSleep()
+
+/**
+ * Puts a browsing guest to sleep in a windowless host. Offscreen-rendered pages are left alone:
+ * the pane that shows one starts and stops its painting.
+ */
+export function trackPodGuestPageSleep(
+  guest: GuestPageSleepTarget & { isOffscreen?: () => boolean },
+  sleep: GuestPageSleep = podGuestPageSleep,
+  windowless: boolean = isPodWindowlessHost()
+): void {
+  if (windowless && guest.isOffscreen?.() !== true) {
+    sleep.track(guest)
+  }
+}
+
+/** The serve headless host's page windows start hidden, or throttling could never hide them. */
+export function podOffscreenPageWindowOptions(windowless: boolean = isPodWindowlessHost()): {
+  paintWhenInitiallyHidden?: boolean
+} {
+  return windowless ? { paintWhenInitiallyHidden: false } : {}
+}
+
+/** Keeps a CDP proxy's page awake from each client request until its reply. */
+export class PodCdpCommandWakes {
+  private readonly inFlight = new Map<
+    number,
+    { end: () => void; cap: ReturnType<typeof setTimeout> }
+  >()
+
+  constructor(
+    private readonly guestId: () => number,
+    private readonly sleep: GuestPageSleep = podGuestPageSleep
+  ) {}
+
+  request(clientId: number): void {
+    // Why: a reused id means its old reply is never coming.
+    this.reply(clientId)
+    const guestId = this.guestId()
+    if (!this.sleep.isTracked(guestId)) {
+      return
+    }
+    const cap = setTimeout(() => this.reply(clientId), CDP_COMMAND_WAKE_CAP_MS)
+    cap.unref?.()
+    this.inFlight.set(clientId, { end: this.sleep.beginCommand(guestId), cap })
+  }
+
+  reply(clientId: number): void {
+    const command = this.inFlight.get(clientId)
+    if (!command) {
+      return
+    }
+    this.inFlight.delete(clientId)
+    clearTimeout(command.cap)
+    command.end()
+  }
+
+  /** The client went away: none of its replies will come. */
+  clear(): void {
+    for (const clientId of this.inFlight.keys()) {
+      this.reply(clientId)
+    }
   }
 }
