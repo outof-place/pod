@@ -20,6 +20,8 @@ import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import { RUNTIME_RPC_REPLY_TOO_LARGE_CODE } from './runtime-rpc-reply-size-limit'
 import { RuntimeRpcWebSocketDispatch } from './runtime-rpc-websocket-dispatch'
 import { podTrace } from '../../../shared/pod-terminal-trace'
+import { podNativePeerCheck } from '../../pod/rpc/pod-native-peer'
+import type { PodPeerCheck } from '../../pod/ui-host/pod-peer-identity'
 
 // Why a cap of its own: streams leave the socket's request slots, and a native client needs one.
 export const MAX_RUNTIME_LOCAL_STREAM_CONNECTIONS = 4
@@ -30,6 +32,8 @@ type LocalStreamSession = {
   connectionId: string
   clientCapabilities: readonly RuntimeCapability[]
   dispatches: Set<AbortController>
+  // Fork-only (Pod)
+  podNativePeer: (() => PodPeerCheck) | null
 }
 
 export class RuntimeRpcLocalStreamDispatch extends RuntimeRpcWebSocketDispatch {
@@ -103,7 +107,8 @@ export class RuntimeRpcLocalStreamDispatch extends RuntimeRpcWebSocketDispatch {
       connection,
       connectionId,
       clientCapabilities: parseRuntimeClientCapabilities(params.data.clientCapabilities),
-      dispatches: new Set()
+      dispatches: new Set(),
+      podNativePeer: podNativePeerCheck(connection.podPeerSocket)
     }
     this.localStreamConnections.add(connection)
     connection.bind({
@@ -209,7 +214,9 @@ export class RuntimeRpcLocalStreamDispatch extends RuntimeRpcWebSocketDispatch {
         registerBinaryStreamHandler: (streamId, handler) =>
           this.registerBinaryStreamHandler(connectionId, streamId, handler),
         registerBinaryMessageHandler: (handler) =>
-          this.registerBinaryMessageHandler(connectionId, handler)
+          this.registerBinaryMessageHandler(connectionId, handler),
+        // Fork-only (Pod)
+        ...(session.podNativePeer ? { podNativePeer: session.podNativePeer } : {})
       })
     } catch (error) {
       // Why: a throw past the dispatcher must still settle this id; the stream stays usable for others.
