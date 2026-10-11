@@ -11,6 +11,7 @@ const { existsSync, readFileSync, writeFileSync } = require('node:fs')
 const { join } = require('node:path')
 const { Arch } = require('electron-builder')
 const { installAgentLauncher } = require('./agent-launcher/install-agent-launcher.cjs')
+const { installAgentHook } = require('./agent-hook/install-agent-hook.cjs')
 const { installCliLaunchers } = require('./cli-launchers/install-cli-launchers.cjs')
 const { installNativeCli } = require('./native-cli/install-native-cli.cjs')
 const helperNames = require('./helper-names.cjs')
@@ -167,6 +168,7 @@ module.exports = {
     installCliLaunchers(resourcesDir, context.packager.appInfo.productFilename, identity)
     installNativeCli(resourcesDir, Arch[context.arch], identity)
     installAgentLauncher(resourcesDir, Arch[context.arch])
+    installAgentHook(resourcesDir, Arch[context.arch])
     writeFileSync(
       join(resourcesDir, 'product-upstream.json'),
       `${JSON.stringify(readOrcaUpstream())}\n`
