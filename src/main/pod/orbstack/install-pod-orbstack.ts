@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { spawnProcess } from '../../../shared/child-process/run-process'
@@ -11,6 +12,11 @@ import { createPodOrbstackMachines } from './pod-orbstack-machines'
 import { loadPodOrbstackRecipe } from './pod-orbstack-recipe'
 import { PodOrbstackRegistry } from './pod-orbstack-registry'
 import { restartPodOrbstack } from './pod-orbstack-restart'
+import {
+  countMachineCreates,
+  createPodOrbstackChurn,
+  orbstackBootMarker
+} from './pod-orbstack-churn'
 import { createPodOrbstackService, setPodOrbstackService } from './pod-orbstack-service'
 import { createSandboxRelays } from './pod-orbstack-relay'
 import {
@@ -61,7 +67,11 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   // Re-resolved per use: OrbStack can be installed or moved while Pod runs.
   const paths = (): OrbstackToolPaths => resolveOrbstackToolPaths()
   const home = resolveOrbstackHomeOverride()
-  const run = createOrbstackToolRunner(paths, home)
+  const churn = createPodOrbstackChurn({
+    file: join(dataDir, 'churn.json'),
+    bootMarker: () => orbstackBootMarker(home ?? homedir())
+  })
+  const run = countMachineCreates(createOrbstackToolRunner(paths, home), churn)
   const releases = createClaudeReleaseCache({
     root: join(dataDir, 'claude-releases'),
     fetcher: (url, init) => getMainHttpClient().fetch(url, init),
@@ -110,6 +120,7 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     registry,
     home,
     loadRecipe: () => loadPodOrbstackRecipe(join(dataDir, 'recipe.json')),
+    onRecipeCreate: () => churn.count(),
     onSandboxCreated: (name) => access.created(name),
     onSandboxRemoved: (name) => access.forget(name),
     ...(templatesAllowed ? { templates } : {}),
@@ -152,7 +163,8 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
         templatesEnabled: templatesAllowed && templates.enabled(),
         diskSizes,
         containers,
-        busyWorktreeIds: machines.busyWorktreeIds()
+        busyWorktreeIds: machines.busyWorktreeIds(),
+        churn: churn.snapshot()
       }),
     readStats: (names) => stats.read(names),
     ...(templatesAllowed ? { setTemplates: (on: boolean) => templates.setEnabled(on) } : {}),
