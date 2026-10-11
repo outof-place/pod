@@ -17,11 +17,17 @@ const tools = vi.hoisted((): ToolState => ({
   lsofStdout: ''
 }))
 
+vi.mock('./daemon-host-darwin-volume', async (importOriginal) => ({
+  ...(await importOriginal<typeof VolumeModule>()),
+  freeBytes: () => tools.freeBytes ?? Number.MAX_SAFE_INTEGER
+}))
+
 vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(async (spec) => fakeTool(tools, spec))
 }))
 
 import { darwinDaemonHostForSpawn } from './daemon-host-darwin-spawn'
+import type * as VolumeModule from './daemon-host-darwin-volume'
 import {
   DARWIN_HOST_MARKER_NAME,
   readDarwinDaemonHostMarker
@@ -68,6 +74,8 @@ beforeEach(() => {
   setProcessProp('execPath', fixture.execPath)
   tools.calls = []
   tools.copyDelayMs = 0
+  tools.volumeType = 'apfs'
+  tools.freeBytes = undefined
   tools.codesignCode = 0
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'info').mockImplementation(() => {})
@@ -146,6 +154,32 @@ describe('materializeDarwinDaemonHost', () => {
     const second = await materializeDarwinDaemonHost(entryPath)
     expect(second!.execPath).not.toBe(first!.execPath)
     expect(readdirSync(versionRoot()).filter((name) => name.startsWith('build-'))).toHaveLength(2)
+  })
+
+  it('records a clone on APFS and a full copy elsewhere', async () => {
+    const cloned = await materializeDarwinDaemonHost(entryPath)
+    expect(
+      readDarwinDaemonHostMarker(dirname(dirname(dirname(dirname(cloned!.execPath)))))?.cloned
+    ).toBe(true)
+    tools.volumeType = 'hfs'
+    writeFileSync(join(bundleDir, 'Contents', 'Info.plist'), '<plist>v2</plist>')
+    const copied = await materializeDarwinDaemonHost(entryPath)
+    expect(
+      readDarwinDaemonHostMarker(dirname(dirname(dirname(dirname(copied!.execPath)))))?.cloned
+    ).toBe(false)
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('volume cannot clone; making a full')
+    )
+  })
+
+  it('forks from the bundle when a full copy would not leave the headroom', async () => {
+    tools.volumeType = 'hfs'
+    tools.freeBytes = 4096
+    expect(await materializeDarwinDaemonHost(entryPath)).toBeNull()
+    expect(toolCalls('/bin/cp')).toBe(0)
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('forking from the app bundle')
+    )
   })
 
   it('fails open with a log line when the clone does not verify', async () => {
