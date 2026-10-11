@@ -1,3 +1,8 @@
+import {
+  installRendererQueryResponder,
+  sendRendererQueryResponder,
+  setRendererQueryResponderVisible
+} from '../renderer-query-responder'
 import { getPtyIpc } from '../../pty-host-bindings'
 import type {
   PtyDeliveryWriteOff,
@@ -32,6 +37,7 @@ import { isMainWindowPtyIpcEvent } from './write-input'
 import type { PtyIpcSession } from '../session'
 
 export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
+  installRendererQueryResponder((id, answers) => sendRendererQueryResponder(session, id, answers))
   const ipcMain = getPtyIpc()
   const { runtime, mainWindow } = session
 
@@ -224,6 +230,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     } else {
       visibleRendererPtys.delete(args.id)
     }
+    setRendererQueryResponderVisible(args.id, args.visible === true)
     session.syncPtyBackgroundedDelivery(args.id, 'visibility-report')
   })
 
