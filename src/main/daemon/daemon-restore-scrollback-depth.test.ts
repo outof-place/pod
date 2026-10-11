@@ -811,6 +811,10 @@ describe('STA-4091 previously recoverable restore depth', () => {
       const current = await adapter.getBufferSnapshot(id, { scrollbackRows: 24 })
       expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
       expect(reattach.providerSequence?.value).toBe(current?.seq)
+      // The stream started at the attach, before the drained line: main counts that line once.
+      expect(reattach.providerAttachSequence).toBe(
+        (current?.seq ?? 0) - `${FRESH_AFTER_CHECKPOINT}\r\n`.length
+      )
     })
   })
 })
