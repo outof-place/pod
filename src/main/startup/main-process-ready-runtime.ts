@@ -44,6 +44,7 @@ import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-re
 import { startPodAccFromStartup } from '../pod/acc/acc-startup'
 import { installPodWorkspace } from '../pod/workspace/install-pod-workspace'
 import { installPodUiHost } from '../pod/ui-host/pod-ui-host'
+import { installPodUiHostSleep } from '../pod/ui-host/pod-ui-host-sleep'
 import { installPodHeadlessWindowServices } from '../pod/ui-host/pod-headless-window-services'
 import { installPodWorktreeStatus } from '../pod/worktree-status/install-pod-worktree-status'
 import { agentHookServer } from '../agent-hooks/server'
@@ -72,6 +73,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   installPodSettings(store, state.agentAwakeService ?? undefined)
   // Fork-only (Pod): the one-app control socket; a no-op unless PodNative launched this runtime.
   installPodUiHost(runtime, store)
+  // Fork-only (Pod): Close Terminals in the one-app window also sleeps the runtime's own PTYs.
+  installPodUiHostSleep(runtime)
   // Fork-only (Pod): window-armed services without a window; a no-op unless the runtime is headless.
   installPodHeadlessWindowServices(store, runtime)
   // Fork-only (Pod): worktreeStatusChanged for clients that opt in; listens to nothing until one does.

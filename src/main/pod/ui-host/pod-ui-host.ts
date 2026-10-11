@@ -2,7 +2,7 @@
 // asks for fallback surfaces, forwards what macOS opened that only this runtime handles, and quits
 // Pod through it. This runtime tells it when Pod should quit, what the Dock badge says and when to
 // come forward.
-import { appendFileSync, existsSync, statSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { app, powerMonitor, shell } from 'electron'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
@@ -27,6 +27,7 @@ import {
   podUiHostOuterApp,
   POD_UI_HOST_SWITCH
 } from './pod-ui-host-launch'
+import { podUiHostLog } from './pod-ui-host-log'
 import { PodUiHostLazyWindow } from './pod-ui-host-lazy-window'
 import { installPodHeadlessAgentStatus } from './pod-headless-agent-status'
 import { PodUiHostQuitFlow } from './pod-ui-host-quit'
@@ -136,18 +137,7 @@ export function installPodUiHost(
   let quitAskedByUi = false
   let systemShutdown = false
   let forwardingSecondInstance = false
-  // POD_UI_HOST_LOG=<file>: a runtime LaunchServices started has no stdout; E2Es read this instead.
-  const logFile = process.env.POD_UI_HOST_LOG
-  const log = (message: string): void => {
-    console.log(`[pod] ${message}`)
-    if (logFile) {
-      try {
-        appendFileSync(logFile, `${new Date().toISOString()} ${message}\n`)
-      } catch {
-        // A log that can't be written is no reason to stop.
-      }
-    }
-  }
+  const log = podUiHostLog
   const clearGrace = (): void => {
     if (graceTimer) {
       clearTimeout(graceTimer)
