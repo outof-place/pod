@@ -13,12 +13,12 @@ import {
   getOrcadMigrationCatalogState,
   stageOrcadMigrationCatalogDurably
 } from './orcad-migration-catalog-import'
-import { OrcaRuntimeWithResolveWaiter } from './orca-runtime-resolve-waiter'
+import { OrcaRuntimeWithHeadlessAgentResume } from './orca-runtime-headless-agent-resume'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { Store } from '../persistence'
 
 /** The destination half of a dormant catalog migration; every mutation is flushed before it answers. */
-export class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithResolveWaiter {
+export class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithHeadlessAgentResume {
   async stageOrcadMigrationCatalog(
     manifest: OrcadMigrationManifest,
     options: { signal?: AbortSignal } = {}

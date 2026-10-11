@@ -101,6 +101,11 @@ export async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
   const persistedPtyIdByPaneKey = indexPersistedPaneKeyPtyIds(
     store.getWorkspaceSession().terminalLayoutsByTabId ?? {}
   )
+  if (state.isServeMode) {
+    // Why: the sweep drops rows whose PTY died with the daemon; serve has no renderer anchor to
+    // resume them from, so it records one first.
+    state.runtime?.syncHeadlessAgentResumeAnchors()
+  }
   await sweepRestoredSubagentsWithoutLiveAgent({
     probeLiveLocalPty: (ptyId) => provider.probePtyLiveness(ptyId),
     isLocalExecutionHost: (worktreeId) =>
