@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PodBrowserPaneController, type PodBrowserFrames } from './pod-browser-pane'
+import { PodBrowserPaneController } from './pod-browser-pane'
+import type { PodBrowserFrames } from './pod-browser-pane-frames'
 import type { PodBrowserPaneServerMessage } from './pod-browser-pane-protocol'
 
 class FakeWebContents extends EventEmitter {
@@ -185,6 +186,52 @@ describe('PodBrowserPaneController', () => {
     expect(frames.browserDisconnect).toHaveBeenCalled()
     wc.emit('paint', { texture: texture() })
     expect(frames.browserSend).not.toHaveBeenCalled()
+  })
+
+  it('streams an attached pane only while it is on screen (browserPane)', () => {
+    const frames = fakeFrames()
+    const { panes, wc } = setup(frames)
+    panes.handle(rendezvous)
+    panes.handle(attach)
+    panes.handle({ type: 'browserPane', pageId: 'page-1', visible: false })
+    expect(wc.painting).toBe(false)
+    wc.emit('paint', { texture: texture() })
+    expect(frames.browserSend).not.toHaveBeenCalled()
+    wc.invalidate.mockClear()
+    panes.handle({ type: 'browserPane', pageId: 'page-1', visible: true })
+    expect(wc.painting).toBe(true)
+    expect(wc.invalidate).toHaveBeenCalledTimes(1)
+    wc.emit('paint', { texture: texture() })
+    expect(frames.browserSend).toHaveBeenCalledTimes(1)
+    // The same visibility again changes nothing.
+    panes.handle({ type: 'browserPane', pageId: 'page-1', visible: true })
+    expect(wc.invalidate).toHaveBeenCalledTimes(1)
+  })
+
+  it('connects to a rendezvous a browserPane names, once per new name', () => {
+    const frames = fakeFrames()
+    const { panes } = setup(frames)
+    panes.handle(attach)
+    const pane = {
+      type: 'browserPane',
+      pageId: 'page-1',
+      visible: true,
+      rendezvous: rendezvous.service
+    } as const
+    panes.handle(pane)
+    panes.handle(pane)
+    expect(frames.browserConnect).toHaveBeenCalledTimes(1)
+    expect(frames.browserConnect).toHaveBeenCalledWith(rendezvous.service)
+  })
+
+  it.each([
+    ['a page it does not host', 'webview-page', 'no offscreen page with that id'],
+    ['a page no pane is attached to', 'page-1', 'no pane is attached to that page']
+  ])('refuses a browserPane for %s', (_name, pageId, reason) => {
+    const { panes, wc, sent } = setup()
+    panes.handle({ type: 'browserPane', pageId, visible: true })
+    expect(sent).toContainEqual({ type: 'browserAttachFailed', pageId, reason })
+    expect(wc.painting).toBe(false)
   })
 
   it('says why it cannot attach a page it does not host', () => {
