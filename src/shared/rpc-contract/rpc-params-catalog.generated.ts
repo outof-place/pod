@@ -1280,6 +1280,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.isRunningAgent': TerminalHandle,
   'terminal.list': TerminalListParams,
   'terminal.multiplex': TerminalMultiplex,
+  'terminal.processes': null,
   'terminal.read': TerminalRead,
   'terminal.recoverPane': TerminalRecoverPane,
   'terminal.rename': TerminalRename,
