@@ -18,6 +18,7 @@ import { registerRendererDocumentNavigation } from './renderer-document-navigati
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
+import { notePodHeadlessWindowClosed } from '../pod/ui-host/pod-ui-host-window'
 
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
@@ -246,5 +247,7 @@ export function registerRuntimeWindowLifecycle(
       runtime.setNotifier(null)
       activeRuntimeNotifierToken = null
     }
+    // Fork-only (Pod): the headless one-app runtime republishes its own graph; a no-op elsewhere.
+    notePodHeadlessWindowClosed(runtime)
   })
 }
