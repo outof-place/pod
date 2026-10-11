@@ -41,7 +41,8 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
           'skipDeleteWorktreeConfirm',
           'skipCloseTerminalWithRunningProcessConfirm'
         ]
-      }
+      },
+      { title: 'Editor', keys: ['editorWordWrap'] }
     ]
   },
   {
