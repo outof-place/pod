@@ -16,14 +16,18 @@ export type DaemonAppPolicyLaunch = { program: string; args: string[] }
  */
 export function daemonAppPolicyLaunch(
   modulePath: string,
-  args: string[]
+  args: string[],
+  relocatedExecPath?: string
 ): DaemonAppPolicyLaunch | null {
   if (process.platform !== 'darwin' || process.env.POD_DAEMON_APP_POLICY === '0') {
     return null
   }
-  const helper: unknown = Object.getOwnPropertyDescriptor(process, 'helperExecPath')?.value
-  if (typeof helper !== 'string' || !existsSync(TASKPOLICY_PATH)) {
+  // Why the relocated executable first: a daemon forked from its daemon-host clone must run the
+  // clone's image, or it and every addon it loads come from the bundle an update deletes.
+  const executable: unknown =
+    relocatedExecPath ?? Object.getOwnPropertyDescriptor(process, 'helperExecPath')?.value
+  if (typeof executable !== 'string' || !existsSync(TASKPOLICY_PATH)) {
     return null
   }
-  return { program: TASKPOLICY_PATH, args: ['-a', helper, modulePath, ...args] }
+  return { program: TASKPOLICY_PATH, args: ['-a', executable, modulePath, ...args] }
 }
