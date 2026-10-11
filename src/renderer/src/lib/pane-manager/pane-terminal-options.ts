@@ -71,6 +71,13 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     // Matches VS Code's xtermTerminal.ts.
     vtExtensions: {
       kittyKeyboard: true
+    },
+    // Why: programs size themselves from CSI 14/16/18 t (text area px, cell px, text area cells),
+    // which xterm answers only when asked to; Ghostty answers all three.
+    windowOptions: {
+      getWinSizePixels: true,
+      getCellSizePixels: true,
+      getWinSizeChars: true
     }
   }
 }

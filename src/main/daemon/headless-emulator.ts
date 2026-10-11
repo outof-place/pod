@@ -86,7 +86,9 @@ export class HeadlessEmulator {
       allowProposedApi: true,
       logLevel: 'off',
       // Why: parse CSI =/>/< u pushes so CSI ? u answers with the flags the hidden app pushed (renderer parity).
-      vtExtensions: { kittyKeyboard: true }
+      vtExtensions: { kittyKeyboard: true },
+      // Why: CSI 18 t (text area in cells) is answerable without a view; pixel reports are not.
+      windowOptions: { getWinSizeChars: true }
     })
 
     this.serializer = new SerializeAddon()
