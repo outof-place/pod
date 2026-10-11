@@ -105,6 +105,14 @@ export const POD_ORBSTACK_METHODS = [
     params: PodOrbstackTemplatesParams,
     handler: (params) => service().setTemplates(params.enabled)
   }),
+  // Why no params and no confirmation here: it stops every running container and machine on the
+  // Mac, so each client asks the user first, with what is running.
+  defineMethod({
+    name: 'orbstack.restart',
+    permission: 'host-admin',
+    params: null,
+    handler: () => service().restart()
+  }),
   // Why on demand: each tick runs one `orb run` per running Pod machine. A client polls it only
   // while its OrbStack panel is visible and the app is active; ticks are at most every 2 s and
   // shared, so two clients cost what one does.

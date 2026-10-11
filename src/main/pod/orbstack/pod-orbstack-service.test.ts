@@ -101,6 +101,19 @@ describe('createPodOrbstackService', () => {
     expect(service.setDockerPin('repo::/', true)).toEqual({ ok: true })
     expect(registry.isDockerPinned('repo::/')).toBe(true)
   })
+
+  it("explains a machine OrbStack gave no address, and can't restart without the dependency", async () => {
+    const { service, machines } = setup([localRepo])
+    const raw =
+      "orb clone: [-32098] start 'pod-vm-1': machine didn't start in 30s (missing IP address)"
+    machines.createSandbox.mockResolvedValueOnce({ ok: false, error: raw } as never)
+    expect(
+      await service.create({ worktreeId: 'repo::/', displayName: 'root', kind: 'sandbox' })
+    ).toMatchObject({ ok: false, reason: 'out-of-addresses', detail: raw })
+    machines.start.mockResolvedValueOnce({ ok: false, error: raw } as never)
+    expect(await service.start('pod-vm-1')).toMatchObject({ reason: 'out-of-addresses' })
+    expect(await service.restart()).toMatchObject({ ok: false })
+  })
 })
 
 describe('agent sandbox switch', () => {
