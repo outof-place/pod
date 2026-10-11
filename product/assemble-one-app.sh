@@ -75,6 +75,7 @@ team_id="${sign_identity##*(}"
 team_id="${team_id%)}"
 . "$repo_root/product/notary-credentials.sh"
 pod_notary_credentials pod-notary
+pod_notary_preflight
 
 plist_value() { plutil -extract "$2" raw "$1/Contents/Info.plist"; }
 check_input() {
