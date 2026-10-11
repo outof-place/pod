@@ -2,6 +2,7 @@ import { getLocalPtyProvider, rebindLocalProviderListeners } from '../ipc/pty'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
 import { checkDaemonHealth } from './daemon-health'
 import { collectPinnedDaemonVersions, pruneOldDaemonHosts } from './daemon-host-relocation'
+import { scheduleDarwinDaemonHostMaintenance } from './daemon-host-darwin-prune'
 import {
   cleanupFailedDaemonAdoption,
   releaseDaemonAdoptionLease,
@@ -9,6 +10,7 @@ import {
 } from './daemon-endpoint-adoption'
 import { createLegacyDaemonAdapters } from './daemon-legacy-adapters'
 import {
+  getDaemonEntryPath,
   getDaemonHistoryDir as getHistoryDir,
   getDaemonRuntimeDir as getRuntimeDir,
   resolvePackagedDarwinAppVersion
@@ -62,6 +64,7 @@ export async function initDaemonPtyProvider(
   const info = await newSpawner.ensureRunning()
   // Why: reclaim superseded daemon-host copies on EVERY launch (spawns are rare), keeping current + live-daemon-pinned versions.
   pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
+  scheduleDarwinDaemonHostMaintenance(runtimeDir, getDaemonEntryPath())
   const launchMode = newSpawner.getHandle()?.mode
   logDaemonMilestone('daemon-current-ready')
   if (signal?.aborted) {
