@@ -28,6 +28,16 @@ describe('daemonAppPolicyLaunch', () => {
     })
   })
 
+  it('runs a relocated daemon host executable instead of the bundle Helper', () => {
+    vi.stubEnv('POD_DAEMON_APP_POLICY', undefined)
+    withPlatform('darwin', HELPER)
+    const clone =
+      '/Users/u/Library/Application Support/Pod/daemon-host.noindex/1.0.0/build-x/Pod Runtime'
+    expect(
+      daemonAppPolicyLaunch(`${clone}/daemon-entry.js`, [], `${clone}/Contents/MacOS/Pod`)?.args
+    ).toEqual(['-a', `${clone}/Contents/MacOS/Pod`, `${clone}/daemon-entry.js`])
+  })
+
   it('keeps the plain fork elsewhere, without a Helper, without taskpolicy, or when switched off', () => {
     withPlatform('linux', HELPER)
     expect(daemonAppPolicyLaunch('/app/daemon-entry.js', [])).toBeNull()
