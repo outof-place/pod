@@ -7,7 +7,7 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { makePaneKey } from '../../shared/stable-pane-id'
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
+const { OrcaRuntimeService, electronMocks } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const {
   HEADLESS_LEAF_ID,
@@ -156,8 +156,115 @@ describe('headless terminal-agent resume', () => {
     })
 
     setRows([claudeRow({ providerSessionOnly: true })])
-    runtime.syncHeadlessAgentResumeAnchor(PANE_KEY)
+    runtime.syncHeadlessAgentResumeAnchors()
     expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeUndefined()
+  })
+
+  it('retires the anchor at SessionEnd and when its tab closes', () => {
+    const { runtime, getSession } = makeRuntime({ rows: [claudeRow()] })
+    runtime.syncHeadlessAgentResumeAnchors()
+    expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeDefined()
+
+    runtime.noteHeadlessAgentSessionEnded(PANE_KEY, 'session-row')
+    runtime.syncHeadlessAgentResumeAnchors()
+    expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeUndefined()
+  })
+
+  it('drops the pane records with its tab when the tab is closed', async () => {
+    const { runtime, getSession } = makeRuntime({
+      session: { sleepingAgentSessionsByPaneKey: { [PANE_KEY]: sleepRecord() } }
+    })
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', {
+      reason: 'user',
+      force: true
+    })
+
+    expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeUndefined()
+  })
+
+  it('keeps the shell-only behavior behind ORCA_HEADLESS_AGENT_RESUME=0', async () => {
+    vi.stubEnv('ORCA_HEADLESS_AGENT_RESUME', '0')
+    try {
+      const { runtime, spawn } = makeRuntime({ rows: [claudeRow()] })
+      await openPane(runtime)
+      expect(spawn.mock.calls[0][0].command).toBeUndefined()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('starts one agent when the same pane is opened twice at once', async () => {
+    const { runtime, spawn } = makeRuntime({ rows: [claudeRow()] })
+
+    await Promise.all([openPane(runtime), openPane(runtime)])
+
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(spawn.mock.calls[0][0].resumeProviderSession).toEqual({
+      key: 'session_id',
+      id: 'session-row'
+    })
+  })
+
+  it('opens a plain shell and says the agent could not resume when its session is not usable here', async () => {
+    const { runtime, spawn } = makeRuntime({
+      session: {
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: 'persisted-pty',
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Claude',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              launchAgent: 'claude'
+            }
+          ]
+        },
+        sleepingAgentSessionsByPaneKey: { [PANE_KEY]: sleepRecord({ connectionId: 'other-box' }) }
+      }
+    })
+
+    const opened = await openPane(runtime)
+
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(spawn.mock.calls[0][0].command).toBeUndefined()
+    expect(opened.tabs[0]).toMatchObject({
+      agentResume: { agent: 'claude', outcome: 'unavailable' }
+    })
+  })
+
+  it('publishes the resume on the pane until its agent reports again', async () => {
+    const { runtime } = makeRuntime({ rows: [claudeRow()] })
+
+    const opened = await openPane(runtime)
+    expect(opened.tabs[0]).toMatchObject({ agentResume: { agent: 'claude', outcome: 'resumed' } })
+
+    runtime.noteHeadlessAgentStatus(PANE_KEY)
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(listed.tabs[0]).not.toHaveProperty('agentResume')
+  })
+
+  it('leaves records and resume to the renderer while a window owns the session', async () => {
+    const { runtime, getSession } = makeRuntime({
+      rows: [claudeRow()],
+      session: { sleepingAgentSessionsByPaneKey: { [PANE_KEY]: sleepRecord() } }
+    })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    })
+    runtime.attachWindow(1)
+
+    runtime.syncHeadlessAgentResumeAnchors()
+
+    expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toMatchObject({
+      origin: 'worktree-sleep',
+      providerSession: { id: 'session-slept' }
+    })
   })
 
   it('sleeps a worktree with no renderer: records each agent, then stops its terminals', async () => {
