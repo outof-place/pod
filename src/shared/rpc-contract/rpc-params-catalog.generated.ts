@@ -1072,6 +1072,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orbstack.enabled': null,
   'orbstack.machines': null,
   'orbstack.pinDocker': PodOrbstackDockerPinParams,
+  'orbstack.restart': null,
   'orbstack.setAgentSandbox': PodOrbstackAgentSandboxParams,
   'orbstack.setSandboxClaudeLogin': PodOrbstackSandboxClaudeLoginParams,
   'orbstack.setTemplates': PodOrbstackTemplatesParams,
