@@ -103,6 +103,16 @@ export type PodOrbstackStatus = {
   /** Commands that failed while reading the status; the rest is still shown. */
   errors: string[]
   checkedAt: number
+  /** Optional: machines Pod made since OrbStack started; older runtimes don't send it. */
+  churn?: PodOrbstackChurn
+}
+
+/** Pod's machine creates since OrbStack started; past `warnAt` its address pool may run out. */
+export type PodOrbstackChurn = {
+  creates: number
+  /** Epoch ms the count began (OrbStack's start, when Pod saw it). */
+  since: number
+  warnAt: number
 }
 
 /** One machine's usage at a stats tick; cpu is cumulative, so a client rates it between ticks. */
