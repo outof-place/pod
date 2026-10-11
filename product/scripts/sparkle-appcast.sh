@@ -42,8 +42,10 @@ drop_cache() {
     grep -qxF "$entry" <<<"$cached_before" || /usr/bin/trash "$cache/$entry" 2>/dev/null || true
   done
 }
-# The work directory is this run's own and regenerable: removed for good, not kept in the Trash.
-trap 'drop_cache; case "$work" in /tmp/pod-appcast.?*) rm -rf "$work" ;; esac' EXIT
+# The work directory is this run's own and regenerable: removed for good through pod-tmp-rm (owner,
+# protected paths and lsof checked) where the Mac has it, never kept in the Trash.
+remove=$(command -v pod-tmp-rm || echo "$HOME/.local/bin/pod-tmp-rm")
+trap 'drop_cache; if [ -x "$remove" ]; then "$remove" "$work" > /dev/null || true; fi' EXIT
 curl -fsSL -o "$work/sparkle.tar.xz" \
   "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
 [ "$(shasum -a 256 "$work/sparkle.tar.xz" | cut -d' ' -f1)" = "$SPARKLE_SHA256" ] \
