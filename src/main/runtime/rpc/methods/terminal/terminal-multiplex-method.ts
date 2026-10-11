@@ -10,6 +10,7 @@ import { installMultiplexFlowControl } from './terminal-multiplex-flow-control'
 import { installMultiplexCleanup } from './terminal-multiplex-cleanup'
 import { installMultiplexSlotFrames } from './terminal-multiplex-slot-frames'
 import { installMultiplexSubscribeFrame } from './terminal-multiplex-subscribe-frame'
+import { installMultiplexLinkBackpressure } from './terminal-multiplex-link-backpressure'
 import { registerPodLaneConnection } from '../../../pod-lane/pod-terminal-lanes'
 
 export const TERMINAL_MULTIPLEX_METHODS = [
@@ -19,7 +20,14 @@ export const TERMINAL_MULTIPLEX_METHODS = [
     params: TerminalMultiplex,
     handler: async (
       _params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
+      {
+        runtime,
+        connectionId,
+        sendBinary,
+        binaryBackpressure,
+        registerBinaryStreamHandler,
+        signal
+      },
       emit
     ) => {
       if (!sendBinary || !registerBinaryStreamHandler || !connectionId) {
@@ -35,6 +43,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         runtime,
         connectionId,
         sendBinary,
+        binaryBackpressure,
         registerBinaryStreamHandler,
         signal,
         emit,
@@ -56,6 +65,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
       installMultiplexCleanup(state)
       installMultiplexSlotFrames(state)
       installMultiplexSubscribeFrame(state)
+      installMultiplexLinkBackpressure(state)
 
       state.unregisterControlHandler = registerBinaryStreamHandler(0, (frame) => {
         if (frame.opcode === TerminalStreamOpcode.Subscribe) {
