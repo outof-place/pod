@@ -27,6 +27,11 @@ const gate: {
     app: string,
     options?: { read?: (path: string) => Record<string, unknown> }
   ): { checked: number; violations: string[] }
+  outerEntitlementViolations(
+    app: string,
+    nested: string,
+    options?: { read?: (path: string) => Record<string, unknown> }
+  ): { checked: number; violations: string[] }
 } = await import('../../../product/scripts/verify-entitlements.mjs')
 
 let root: string | null = null
@@ -158,6 +163,27 @@ describe.skipIf(process.platform !== 'darwin')('entitlements release gate', () =
       'Contents/MacOS/Pod (the app): personal-information.location',
       'Contents/MacOS/pod-notification-status (everything else): device.camera',
       'Contents/Resources/claude-acc/Pod Menu.app/Contents/MacOS/ClaudeAcc (Pod Menu): cs.allow-jit'
+    ])
+  })
+
+  it('allows no entitlement on a one-app outer and leaves the nested runtime to its own check', () => {
+    const sparkle = 'Contents/Frameworks/Sparkle.framework/Versions/B'
+    const app = fakeApp([
+      'Contents/MacOS/PodNative',
+      `${sparkle}/Autoupdate`,
+      `${sparkle}/XPCServices/Downloader.xpc/Contents/MacOS/Downloader`,
+      'Contents/Helpers/Pod Runtime.app/Contents/MacOS/Pod'
+    ])
+    const granted: Record<string, Record<string, unknown>> = {
+      'Downloader.xpc': { 'com.apple.security.network.client': true },
+      Pod: { 'com.apple.security.cs.allow-jit': true }
+    }
+    const result = gate.outerEntitlementViolations(app, 'Contents/Helpers/Pod Runtime.app', {
+      read: (path) => granted[basename(path)] ?? {}
+    })
+    expect(result.checked).toBe(5)
+    expect(result.violations).toEqual([
+      `${sparkle}/XPCServices/Downloader.xpc (outer): network.client`
     ])
   })
 
