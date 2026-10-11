@@ -186,6 +186,19 @@ describe('PodUiHostServer', () => {
       expect(onBrowser.mock.calls[0][0]).toEqual(attach)
     })
 
+    it('takes browserPane only from a version 3 PodNative', async () => {
+      const pane = { type: 'browserPane', pageId: 'page-1', visible: false }
+      const onBrowser = vi.fn()
+      const { options } = await startServer({ onBrowser })
+      const current = await hello(options.socketPath, TOKEN, 3)
+      send(current, pane)
+      await vi.waitFor(() => expect(onBrowser).toHaveBeenCalledWith(pane))
+      const older = await hello(options.socketPath, TOKEN, 2)
+      send(older, pane)
+      await older.closed
+      expect(onBrowser).toHaveBeenCalledTimes(1)
+    })
+
     it('ends the connection on a browser verb this runtime did not offer', async () => {
       const { options } = await startServer()
       const client = await hello(options.socketPath)
@@ -199,6 +212,17 @@ describe('PodUiHostServer', () => {
         { type: 'browserRendezvous', service: 'com.evil.browser.0123456789abcdef0123456789abcdef' }
       ],
       ['a token of 0', { ...attach, token: 0 }],
+      ['a pane visibility that is not a boolean', { type: 'browserPane', pageId: 'p', visible: 1 }],
+      ['a pane with an extra field', { type: 'browserPane', pageId: 'p', visible: true, token: 7 }],
+      [
+        'a pane rendezvous of another app',
+        {
+          type: 'browserPane',
+          pageId: 'p',
+          visible: true,
+          rendezvous: 'com.evil.browser.0123456789abcdef0123456789abcdef'
+        }
+      ],
       ['a size over the limit', { ...attach, width: 9000 }],
       ['a load without a URL', { type: 'browserNavigate', pageId: 'page-1', action: 'load' }],
       [
@@ -224,7 +248,8 @@ describe('PodUiHostServer', () => {
     ])('refuses %s and ends the connection', async (_name, message) => {
       const onBrowser = vi.fn()
       const { options } = await startServer({ onBrowser })
-      const client = await hello(options.socketPath)
+      // Version 3, so a refused browserPane is refused for its shape.
+      const client = await hello(options.socketPath, TOKEN, 3)
       send(client, message)
       await client.closed
       expect(onBrowser).not.toHaveBeenCalled()
@@ -269,7 +294,7 @@ describe('PodUiHostServer', () => {
       await client.closed
     })
 
-    it.each([0, 3])('a hello of protocol version %s', async (v) => {
+    it.each([0, 4])('a hello of protocol version %s', async (v) => {
       const { options } = await startServer()
       const client = await connect(options.socketPath)
       send(client, { type: 'hello', v, token: TOKEN, pid: 99 })
