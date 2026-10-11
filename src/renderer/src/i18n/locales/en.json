@@ -20037,7 +20037,7 @@
     },
     "restart": {
       "title": "Restart OrbStack?",
-      "description": "Restarting stops every running container and machine on this Mac, not only Pod's: {{containers}} containers and {{machines}} machines run now. Containers set to restart come back on their own; agents in a sandbox lose their connection.",
+      "description": "Restarting stops every running container and machine on this Mac, not only Pod's: {{containers}} containers and {{machines}} machines run now. Containers set to restart come back on their own; terminals and agents in a machine end.",
       "confirm": "Restart OrbStack",
       "action": "Restart OrbStack…"
     }
