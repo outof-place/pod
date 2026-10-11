@@ -70,7 +70,7 @@ export function spawnDaemonChildProcess(
     // Why: the detached plain-Node daemon has no AppEnvironment, but shell rcfiles must live outside swept tmp.
     ORCA_USER_DATA_PATH: userDataPath,
     // Pod: the direct terminal lane's peer check.
-    ...podLaneDaemonEnv()
+    ...podLaneDaemonEnv(relocatedExecPath)
   }
   // Why: this env becomes the daemon's, and so every PTY's (#21119).
   removeChromiumDisabledSessionBus(daemonEnv)
@@ -82,7 +82,9 @@ export function spawnDaemonChildProcess(
     stdio: ['ignore', 'ignore', 'pipe', 'ipc']
   }
   // Pod: the same command line under the app scheduling policy on macOS.
-  const appPolicy = useDurableScope ? null : daemonAppPolicyLaunch(forkEntryPath, scriptArgs)
+  const appPolicy = useDurableScope
+    ? null
+    : daemonAppPolicyLaunch(forkEntryPath, scriptArgs, relocatedExecPath)
   if (appPolicy) {
     return spawnProcess({ ...childOptions, ...appPolicy, env: daemonEnv })
   }
