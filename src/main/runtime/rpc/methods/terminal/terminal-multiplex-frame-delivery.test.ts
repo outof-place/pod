@@ -16,9 +16,11 @@ function connection(): { state: TerminalMultiplexConnection; seqs: number[] } {
       return true
     },
     emit: vi.fn(),
-    closeMultiplex: vi.fn()
+    closeMultiplex: vi.fn(),
+    // Pod: the local-stream backpressure gate (pod/multiplex-backpressure) admits every frame here.
+    admitStreamFrame: () => true
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sendFrame reads only closed, cursor, sendBinary and closeMultiplex; the rest is installed below.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sendFrame reads only closed, cursor, sendBinary, closeMultiplex and admitStreamFrame; the rest is installed below.
   const multiplex = state as unknown as TerminalMultiplexConnection
   installMultiplexFrameDelivery(multiplex)
   return { state: multiplex, seqs }
