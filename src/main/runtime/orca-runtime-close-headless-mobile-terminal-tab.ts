@@ -125,6 +125,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     }
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.forgetAgentResumeForTab(worktreeId, closedParentTabId)
   }
 
   async moveMobileSessionTab(
