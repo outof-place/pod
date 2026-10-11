@@ -19,6 +19,7 @@ import {
   searchWithStructuredOwners
 } from '../../../ai-vault/structured-session-ownership'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../structured-agent-session-host-refusal'
+import { podNativeSearchConsentPid } from '../../../pod/rpc/pod-native-peer'
 import {
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams,
@@ -51,10 +52,12 @@ export const AI_VAULT_METHODS = [
     name: 'aiVault.setSearchEnabled',
     permission: 'settings-write',
     params: AiVaultSetSearchEnabledParamsSchema,
-    handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
+    handler: async (params, { runtime, clientKind, pairedDeviceId, podNativePeer }) => {
       // Paired clients only: an in-process caller writes this host's own settings directly,
       // and admitting one here would let any unauthenticated local path flip consent.
-      if (!pairedDeviceId) {
+      // Fork-only (Pod): and PodNative, verified by its audit token, on the user's click.
+      const podNativePid = pairedDeviceId ? null : podNativeSearchConsentPid(params, podNativePeer)
+      if (!pairedDeviceId && podNativePid === null) {
         throw Object.assign(
           new Error('Session search consent can only be changed by a paired client.'),
           { code: 'forbidden' }
@@ -62,7 +65,7 @@ export const AI_VAULT_METHODS = [
       }
       await runtime.setSessionSearchEnabled(params.enabled)
       console.warn(
-        `[ai-vault-search] device ${pairedDeviceId} set indexing enabled=${params.enabled}`
+        `[ai-vault-search] ${pairedDeviceId ? `device ${pairedDeviceId}` : `PodNative pid ${podNativePid} (user)`} set indexing enabled=${params.enabled}`
       )
       return sessionSearchServiceStatus({}, clientKind ? 'relay' : 'runtime')
     }
