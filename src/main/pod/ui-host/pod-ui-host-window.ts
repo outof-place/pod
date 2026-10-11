@@ -2,7 +2,7 @@
 import { app, BrowserWindow } from 'electron'
 import { publishHeadlessRuntimeGraph } from '../../runtime/headless-runtime-graph'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { rearmPodHeadlessWorktreeWatch } from './pod-headless-worktree-watch'
+import { rearmPodHeadlessWindowServices } from './pod-headless-window-services'
 import { sendToPodUi } from './pod-ui-host-bridge'
 import { isPodHeadlessUiHost, isPodUiHostLaunch } from './pod-ui-host-launch'
 
@@ -36,7 +36,7 @@ export function notePodHeadlessWindowClosed(
     return
   }
   publishHeadlessRuntimeGraph(runtime)
-  rearmPodHeadlessWorktreeWatch()
+  rearmPodHeadlessWindowServices()
   yieldForeground()
 }
 
