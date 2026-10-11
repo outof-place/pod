@@ -35,6 +35,22 @@ export function selectTerminalTheme(
   return { mode, useLightVariant, themeName }
 }
 
+/** The theme the appearance settings select, or its mode's default when the name finds none. */
+export function resolveSelectedTerminalTheme(
+  settings: TerminalThemeSelectionSettings & Pick<GlobalSettings, 'terminalCustomThemes'>,
+  systemPrefersDark: boolean
+): TerminalThemeSelection & { theme: TerminalThemeMap[string] | null } {
+  const selection = selectTerminalTheme(settings, systemPrefersDark)
+  const fallback = selection.useLightVariant
+    ? DEFAULT_TERMINAL_THEME_LIGHT
+    : DEFAULT_TERMINAL_THEME_DARK
+  return {
+    ...selection,
+    theme:
+      lookupTerminalTheme(settings, selection.themeName) ?? TERMINAL_THEME_CATALOG[fallback] ?? null
+  }
+}
+
 /** A selection names a user-imported theme or a built-in one; one lookup for both. */
 export function lookupTerminalTheme(
   settings: Pick<GlobalSettings, 'terminalCustomThemes'> | undefined,
