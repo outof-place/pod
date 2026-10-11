@@ -48,6 +48,23 @@ describe('which Pod may write the user-global hook files', () => {
     expect(podHookWriteBlock(input({ defaultUserDataPath: null }))).toBe('custom-profile')
   })
 
+  it("PodNative's headless runtime on the default profile, and only that", () => {
+    const headless = ['Pod', '--pod-ui-host', '--serve', '--pod-headless-host', '--no-pairing']
+    expect(podHookWriteBlock(input({ argv: headless }))).toBeNull()
+    expect(podHookWriteBlock(input({ argv: headless, userDataPath: '/tmp/bench/profile' }))).toBe(
+      'custom-profile'
+    )
+    expect(podHookWriteBlock(input({ argv: [...headless, '--use-mock-keychain'] }))).toBe(
+      'mock-keychain'
+    )
+    expect(podHookWriteBlock(input({ argv: headless, packaged: false }))).toBe('dev-build')
+    expect(podHookWriteBlock(input({ argv: headless, automated: true }))).toBe('automated-launch')
+    expect(podHookWriteBlock(input({ argv: ['Pod', '--pod-ui-host', '--serve'] }))).toBe('serve')
+    expect(podHookWriteBlock(input({ argv: ['Pod', '--serve', '--pod-headless-host'] }))).toBe(
+      'serve'
+    )
+  })
+
   it('E2E only inside its disposable home', () => {
     expect(
       podHookWriteBlock(input({ packaged: false, e2e: true, hookHome: '/tmp/e2e/user-data/home' }))
