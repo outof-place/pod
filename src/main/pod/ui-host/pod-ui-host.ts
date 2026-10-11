@@ -172,6 +172,7 @@ export function installPodUiHost(
       showSurface({ type: 'openSurface', surface: 'window' })
     },
     onBrowser: (message) => panes?.handle(message),
+    headless: isPodHeadlessUiHost(),
     onQuit: ({ reason, confirmed, version }) => {
       log(`ui-host: PodNative asked to quit (${reason}${confirmed ? ', confirmed' : ''})`)
       if (version < 2) {
