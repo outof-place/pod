@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import {
   RUNTIME_LOCAL_STREAM_CONNECTION_ID_PREFIX,
-  RUNTIME_LOCAL_STREAM_MAX_OUTBOUND_FRAME_BYTES,
   RUNTIME_LOCAL_STREAM_PROTOCOL,
   RUNTIME_LOCAL_STREAM_UNSUPPORTED_CODE,
   RUNTIME_LOCAL_STREAM_VERSION,
@@ -180,7 +179,8 @@ export class RuntimeRpcLocalStreamDispatch extends RuntimeRpcWebSocketDispatch {
     const controller = new AbortController()
     session.dispatches.add(controller)
     const reply = (response: string): void => {
-      if (Buffer.byteLength(response, 'utf8') <= RUNTIME_LOCAL_STREAM_MAX_OUTBOUND_FRAME_BYTES) {
+      // Why the connection's ceiling: a larger reply would close the stream on every retry.
+      if (Buffer.byteLength(response, 'utf8') <= connection.maxPayloadBytes) {
         connection.sendText(response)
         return
       }
