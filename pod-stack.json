@@ -270,6 +270,12 @@
       "source": "pod/acc"
     },
     {
+      "branch": "pod/acc",
+      "forkOnly": "claude-acc payload pins on pod/acc after the stack copy",
+      "base": "2d0bdf81bd8317d1f5c599492bc27579b329030a",
+      "note": "b2; 1.31.11 (47a8ff10c6) then 1.31.12 (0575a46a95, payload sha256 a37dc4d8…: TimeoutExpired argv no longer logged, no secret in the security argv)"
+    },
+    {
       "branch": "pod/search-client",
       "forkOnly": "Pod native search: ogd client for quick open, file search and editor frecency",
       "note": "the product-neutral seam (src/main/search/external-workspace-search-provider.ts and its three hooks, fs:rankedPathSearch, host-ranked quick open) is also upstream as https://github.com/stablyai/orca/pull/27014; once that merges, rebase so only the Pod parts remain"
@@ -389,6 +395,12 @@
       "ref": "1866f01c7c59c0ae61aafdc9946577b0cf99f231",
       "note": "nt-packaging; product/assemble-one-app.sh, verify-entitlements --outer, RELEASING.md section; no app code",
       "hold": "v6.0.3: the CI-green tree has 1866f01c7c; d8a62b2868 (notary key on disk) waits for the next cut"
+    },
+    {
+      "branch": "pod/v604-safety",
+      "forkOnly": "v6.0.4 terminal safety",
+      "base": "f7a1995e0a9a874df4827054f3ed96bf15880974",
+      "note": "upstream-triage; 2 commits on v6.0.3 main: sidecar-only chunk acks its credit in a finally (#27033 files), Pod key podTerminalMainModelDormancy default false (dormancy and #27123 delegation off)"
     }
   ],
   "generated": [
