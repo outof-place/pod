@@ -37,8 +37,18 @@ function oid(dotted: string): Buffer {
   return tlv(0x06, Buffer.from(bytes))
 }
 
-function integer(bytes: Buffer): Buffer {
-  return tlv(0x02, (bytes[0] ?? 0) & 0x80 ? Buffer.concat([Buffer.from([0]), bytes]) : bytes)
+/**
+ * A non-negative DER INTEGER, minimal as DER demands. Why the trim: a random serial whose first
+ * byte is 0 (and second below 0x80) otherwise carries a padding byte OpenSSL refuses ("illegal
+ * padding"), about once in 512 certificates.
+ */
+export function integer(bytes: Buffer): Buffer {
+  let start = 0
+  while (start < bytes.length - 1 && bytes[start] === 0) {
+    start += 1
+  }
+  const minimal = bytes.length === 0 ? Buffer.from([0]) : bytes.subarray(start)
+  return tlv(0x02, (minimal[0] ?? 0) & 0x80 ? Buffer.concat([Buffer.from([0]), minimal]) : minimal)
 }
 
 function utcTime(date: Date): Buffer {
