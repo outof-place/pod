@@ -54,9 +54,9 @@
     },
     {
       "branch": "perf/native-proc-info-darwin",
-      "upstream": "https://github.com/stablyai/orca/pull/26985",
       "note": "Adds a macOS native addon plus a beforePack guard; squashed: maintainers merge Orca main into this PR branch",
-      "squash": true
+      "squash": true,
+      "forkOnly": "avoid ps during terminal repaint signals (stablyai/orca#26985 closed; Pod carries it)"
     },
     {
       "branch": "pod/proc-kernel-snapshot",
@@ -73,8 +73,8 @@
     },
     {
       "branch": "perf/pty-background-ack",
-      "upstream": "https://github.com/stablyai/orca/pull/27033",
-      "note": "sidecarOnly hidden delivery + receipt credit; nt-perf parse-once builds on it"
+      "note": "sidecarOnly hidden delivery + receipt credit; nt-perf parse-once builds on it",
+      "forkOnly": "hidden sidecar bytes past the view for throttled renderers (stablyai/orca#27033 closed; Pod carries it)"
     },
     {
       "branch": "perf/pty-responder-stamp",
@@ -86,9 +86,9 @@
     },
     {
       "branch": "perf/lazy-main-terminal-model",
-      "upstream": "https://github.com/stablyai/orca/pull/27086",
       "base": "5e82dfad92",
-      "note": "b4-perf; on #27129 5e82dfad92 (that commit left out). Ships only together with pod/native-model-consumer after the native terminal"
+      "note": "b4-perf; on #27129 5e82dfad92 (that commit left out). Ships only together with pod/native-model-consumer after the native terminal",
+      "forkOnly": "main skips parsing visible local daemon terminals (stablyai/orca#27086 closed; Pod carries it)"
     },
     {
       "branch": "fix/salvaged-query-replies",
@@ -98,21 +98,21 @@
     },
     {
       "branch": "perf/daemon-query-responder",
-      "upstream": "https://github.com/stablyai/orca/pull/27123",
       "base": "b814beccf7",
-      "note": "b4-perf; on #27086; 92a1f34f00 records daemon protocol 45 in the local build contract"
+      "note": "b4-perf; on #27086; 92a1f34f00 records daemon protocol 45 in the local build contract",
+      "forkOnly": "the daemon answers hidden local terminals' queries (stablyai/orca#27123 closed; Pod carries it)"
     },
     {
       "branch": "perf/agent-model-dormancy",
-      "upstream": "https://github.com/stablyai/orca/pull/27185",
       "base": "92a1f34f00f3d5a109e7adbf5d7615f15cb726cf",
-      "note": "b4-perf; on #27123"
+      "note": "b4-perf; on #27123",
+      "forkOnly": "main's model rests for agents that read no screen (stablyai/orca#27185 closed; Pod carries it)"
     },
     {
       "branch": "perf/screen-agent-dormancy",
-      "upstream": "https://github.com/stablyai/orca/pull/27207",
       "base": "ee5a1777383a37f5ea80f9faf4f857d425cd24b1",
-      "note": "b4-perf; on #27185"
+      "note": "b4-perf; on #27185",
+      "forkOnly": "main's model rests for agents whose readiness reads the screen (stablyai/orca#27207 closed; Pod carries it)"
     },
     {
       "branch": "fix/multiplex-attach-query-gap",
@@ -120,19 +120,26 @@
       "note": "r-orca-lowlevel; CPR reply while a multiplex viewer attaches; after #27207; ab8a19f2d9 adds the two runtime stub methods the remount and cross-version tests need"
     },
     {
-      "branch": "perf/terminal-tail-scan",
-      "upstream": "https://github.com/stablyai/orca/pull/27170",
-      "note": "b4-perf; positions-only sentinel index"
+      "branch": "pick/orca-27344",
+      "upstream": "https://github.com/stablyai/orca/pull/27344",
+      "base": "0969f60c8efa2ed50dbb7bbef2d8f907fff1f239",
+      "note": "merged upstream as b411bf33fd after Pod's base; cherry-picked onto 0969f60c8e until the base bump; replaces #27170"
+    },
+    {
+      "branch": "pick/orca-27342",
+      "upstream": "https://github.com/stablyai/orca/pull/27342",
+      "base": "0969f60c8efa2ed50dbb7bbef2d8f907fff1f239",
+      "note": "merged upstream as bc02f3ce6e, with its test follow-up #27375 f49d0bc764; cherry-picked onto 0969f60c8e until the base bump; replaces #27335"
     },
     {
       "branch": "perf/local-stream-transport",
-      "upstream": "https://github.com/stablyai/orca/pull/27156",
-      "note": "r-orca-lowlevel; RPC and terminal frames over the local socket, kill switch ORCA_LOCAL_STREAM_TRANSPORT=0"
+      "note": "r-orca-lowlevel; RPC and terminal frames over the local socket, kill switch ORCA_LOCAL_STREAM_TRANSPORT=0",
+      "forkOnly": "RPC and terminal frames over the local socket (stablyai/orca#27156 closed; Pod carries it)"
     },
     {
       "branch": "perf/terminal-output-leading-edge",
-      "upstream": "https://github.com/stablyai/orca/pull/27169",
-      "note": "r-orca-lowlevel; terminal-output-batcher leading edge"
+      "note": "r-orca-lowlevel; terminal-output-batcher leading edge",
+      "forkOnly": "first output chunk after a quiet spell at once (stablyai/orca#27169 closed; Pod carries it)"
     },
     {
       "branch": "pod/terminal-input-flush",
@@ -156,10 +163,10 @@
     },
     {
       "branch": "stack/agent-browser-warm-cli",
-      "upstream": "https://github.com/stablyai/orca/pull/27192",
       "base": "e74f2f6c308046a2ee2eafbae94a3124d63952d2",
       "source": "perf/agent-browser-warm-cli",
-      "note": "#27192 replayed onto the stack: package.json resolved key by key next to pod/electron-45’s @xterm pins; refresh when perf/agent-browser-warm-cli changes"
+      "note": "#27192 replayed onto the stack: package.json resolved key by key next to pod/electron-45’s @xterm pins; refresh when perf/agent-browser-warm-cli changes",
+      "forkOnly": "agent-browser 0.27.3 without the per-command settle sleep (stablyai/orca#27192 closed; Pod carries it)"
     },
     {
       "branch": "test/isolate-host-env",
@@ -273,7 +280,13 @@
       "branch": "pod/acc",
       "forkOnly": "claude-acc payload pins on pod/acc after the stack copy",
       "base": "2d0bdf81bd8317d1f5c599492bc27579b329030a",
-      "note": "b2; 1.31.11 (47a8ff10c6) then 1.31.12 (0575a46a95, payload sha256 a37dc4d8…: TimeoutExpired argv no longer logged, no secret in the security argv)"
+      "note": "b2; 1.31.11 (47a8ff10c6) then 1.31.12 (0575a46a95, security fix)"
+    },
+    {
+      "branch": "pod/claude-async-hooks",
+      "forkOnly": "status-only Claude hooks run async; an identical managed entry stays",
+      "base": "2d0bdf81bd8317d1f5c599492bc27579b329030a",
+      "note": "b2; 2 commits on pod/acc 2d0bdf81bd"
     },
     {
       "branch": "pod/search-client",
@@ -329,10 +342,16 @@
       "note": "agent-api; one commit on v6 main: install-pod-orbstack.ts (a --version probe) in the claude-launch-routing reviewed list"
     },
     {
+      "branch": "pod/orbstack-native",
+      "forkOnly": "OrbStack machines from templates, live stats, restart",
+      "base": "4e26e06123f3109d1cdc65338bdb9d4f6d577c61",
+      "note": "pn-orbstack; 6 commits on pod/sandbox-anthropic-upstream 4e26e06123; + ba6f027667 template updated in place by rename (keeps MAC/IPv4), 2533646027 real test renames an existing machine only, e470f8b6ad minimal DER serial (asn1 flake)"
+    },
+    {
       "branch": "pod/agent-turbo",
       "forkOnly": "agent CLIs at app priority",
       "base": "a9534ba7c8c889e153c760b0b3f4eac601eea4ce",
-      "note": "r-hw-perf; one commit, restacked by b2 onto pod/identity a9534ba7c8 (gated keychain test): the Swift pod-agent-launcher installed into Contents/Resources/bin with claude/codex symlinks; kill switch POD_AGENT_TURBO=0"
+      "note": "r-hw-perf; one commit on main 6edfc6c8e1: the Swift pod-agent-launcher installed into Contents/Resources/bin with claude/codex symlinks; kill switch POD_AGENT_TURBO=0"
     },
     {
       "branch": "pod/native-cli",
@@ -342,11 +361,11 @@
     },
     {
       "branch": "stack/git-performance-config",
-      "upstream": "https://github.com/stablyai/orca/pull/27028",
       "base": "34b56791ff",
       "source": "feat/git-performance-config",
       "sourceSince": "ae35e7299f",
-      "note": "pod-workspace; squashed copy"
+      "note": "pod-workspace; squashed copy",
+      "forkOnly": "opt-in recommended git performance config for large repositories (stablyai/orca#27028 closed; Pod carries it)"
     },
     {
       "branch": "stack/pod-settings-keys",
@@ -371,16 +390,40 @@
       "note": "pod/one-app bf0d308217 replayed without phase2, plus the tsconfig.tc.web.json fix; + 9768d37c22 safe quit (ui-host protocol v2); + 8c68b70eda c636d57d39 (no Ghostty views in the hidden window, unthrottled quit assessment) + 6e3e223f7d (one-app skips the classic first-run overlays)"
     },
     {
+      "branch": "pod/browser-pane",
+      "forkOnly": "one-app: browser pages in PodNative panes",
+      "base": "c636d57d3961398b534a55eccd276b844c90bdb2",
+      "note": "pn-shell; 6 commits on pod/one-app c636d57d39 (ui-host protocol v3, shared cdp-proxy-hooks)"
+    },
+    {
       "branch": "pod/headless-host",
       "forkOnly": "Pod headless host",
       "base": "a081f1458f4a9de4a25bb2cd07c44031d4ef7a53",
       "note": "b4-perf; 2 commits on v6 main: windowless --serve --pod-headless-host; no runtime WebSocket beyond loopback, none on the headless host"
     },
     {
+      "branch": "pod/ui-host-hidden-renderer",
+      "forkOnly": "one-app: the main window starts hidden while PodNative hosts the browser tabs",
+      "base": "0376d0456f4f5ea8f187385fa76cc3c506435d7e",
+      "note": "b4-perf; 2 commits on pod/browser-pane 0376d0456f (+ 41a8ce72fc leases on create and awaited notifier requests, c8f2629452 3 s wake per notifier send)"
+    },
+    {
+      "branch": "pod/agent-page-sleep",
+      "forkOnly": "agent browser pages sleep in a windowless host until something needs them drawn",
+      "base": "1c365546707949190d7adce894edd3c924128982",
+      "note": "b4-perf; on pod/ui-host-hidden-renderer; carries v6's headless-host pair (d972b94ac9 b469b68d03, deduped here), controller c66dcef1b6, CDP wakes as an addPodCdpProxySink sink f162ed6f4b"
+    },
+    {
+      "branch": "stack/pod-one-app-headless",
+      "forkOnly": "one-app: headless runtime, no window until a surface needs one",
+      "base": "14ce7ce447dc5f7ce55c6ae3c095936e445d4eb7",
+      "note": "pod/one-app-headless 0b252f6e6f 3c7df8be79 (pn-shell, before its rebase) replayed after agent-page-sleep: runtime-window-lifecycle.ts keeps both imports; its hook exception follows hook-isolation"
+    },
+    {
       "branch": "pod/identity",
       "forkOnly": "Pod identity: name, bundle id, icon, URL scheme and CLI name",
       "base": "bf87e2b7ce89dba0bc68c8527fee45d0e92a5f86",
-      "note": "nt-packaging; a9534ba7c8 (Pod registers its CLI only from Settings, never as `pod`) after headless-host, which touches the same main-process-runtime-launch.ts"
+      "note": "nt-packaging; a9534ba7c8 (Pod registers its CLI only from Settings, never as `pod`) after headless-host, which touches the same main-process-runtime-launch.ts; + e2a431da51 keychain path must exist, opt-in test restores keychain state"
     },
     {
       "branch": "pod/census-gaps",
@@ -392,15 +435,133 @@
       "branch": "pod/one-app-release",
       "forkOnly": "one-app release assembly script and docs",
       "base": "a081f1458f4a9de4a25bb2cd07c44031d4ef7a53",
-      "ref": "1866f01c7c59c0ae61aafdc9946577b0cf99f231",
-      "note": "nt-packaging; product/assemble-one-app.sh, verify-entitlements --outer, RELEASING.md section; no app code",
-      "hold": "v6.0.3: the CI-green tree has 1866f01c7c; d8a62b2868 (notary key on disk) waits for the next cut"
+      "note": "nt-packaging; product/assemble-one-app.sh, verify-entitlements --outer, RELEASING.md section; no app code; + d8a62b2868 notarize with the App Store Connect key on disk; + d93c0fdfdb 96e8e09fb4 notary preflight (default keychain, notarytool history), 0d21d0d96e no dscl on Linux"
+    },
+    {
+      "branch": "pod/terminal-latency",
+      "forkOnly": "terminal daemon at the app scheduling policy; hop trace",
+      "base": "a081f1458f4a9de4a25bb2cd07c44031d4ef7a53",
+      "note": "r-orca-lowlevel; 2 commits on v6 main"
+    },
+    {
+      "branch": "pod/terminal-lane",
+      "forkOnly": "direct daemon lane for PodNative terminals",
+      "base": "36ac218047ccdf69b3e1741e6582a382ca5bd810",
+      "note": "r-orca-lowlevel; 2 commits on pod/terminal-latency"
+    },
+    {
+      "branch": "stack/pod-worktree-status-event",
+      "forkOnly": "worktreeStatusChanged client event (opt-in)",
+      "base": "d5c21a35e1bc843795dac776224d727d60409507",
+      "source": "pod/worktree-status-event",
+      "sourceSince": "e0d080d9ceede55c59936fca6c0d032c1be5003d",
+      "note": "pod/worktree-status-event 49b7b7c3a8 (r-orca-lowlevel) replayed after browser-pane: main-process-ready-runtime keeps installPodUiHost(runtime)"
+    },
+    {
+      "branch": "stack/pod-settings-rpc",
+      "forkOnly": "podSettings.* for native clients (minimal variant; refactor upstream as #27341)",
+      "base": "86e06a31610b2968c6688d246334a4b1ad16c278",
+      "source": "pod/settings-rpc",
+      "sourceSince": "a081f1458f4a9de4a25bb2cd07c44031d4ef7a53",
+      "note": "pod/settings-rpc b699c90f6f (pn-acc) replayed after the lane and worktree-status: method index, ready-runtime and catalog keep both"
+    },
+    {
+      "branch": "stack/pod-workspace-v7",
+      "forkOnly": "Pod workspace v7: podWorkspace.* RPC, tidy, git profile, #27020, reftable heads",
+      "base": "40cecf92c38af3ce8e6f5dbcd789cafb510ba5ce",
+      "source": "pod/workspace-v7",
+      "sourceSince": "e9554d48e2e955251a458082cd9edc8b53ba3d4a",
+      "note": "pod/workspace-v7 206f7b2531 (pn-workspace) from aa74d65d26 on (its #27028 and settings-key copies are already stacked): method index and catalog keep both; preload keeps podUiHost where podWorkspace goes away"
+    },
+    {
+      "branch": "stack/pod-computer-actions",
+      "forkOnly": "Computer Use actions stream for the native pane",
+      "base": "d759a8eac6dd1b387db15212f6aa5d63091dcf91",
+      "source": "pod/computer-actions",
+      "sourceSince": "e0d080d9ceede55c59936fca6c0d032c1be5003d",
+      "note": "pod/computer-actions b73f2c1c94 (lead OK for v7; 1 commit on v6.0.1 main) replayed last: method index and catalog keep both"
+    },
+    {
+      "branch": "stack/pod-hook-isolation",
+      "forkOnly": "only the user’s own packaged Pod writes the managed agent hooks",
+      "base": "f5e79862ef05587d8d950929c221333b3b856d39",
+      "source": "pod/hook-isolation",
+      "sourceSince": "2d0bdf81bd8317d1f5c599492bc27579b329030a",
+      "note": "pod/hook-isolation 470f7378e6 (b2; 2 commits on pod/acc 2d0bdf81bd) replayed last: acc-startup.ts and main-process-ready-runtime.ts keep both imports"
+    },
+    {
+      "branch": "stack/pod-headless-hooks",
+      "forkOnly": "one-app: the headless runtime is the user's Pod, so the hook write gate lifts serve/headless-host for it",
+      "base": "f0b297db576bc138b26fb8ef0695a4f2bb1c62ed",
+      "note": "pod/one-app-headless 72786d475e (pn-shell; 1 commit on v7-dev f0b297db57; local branch, the source branch was rebased since)"
+    },
+    {
+      "branch": "pod/one-app-headless",
+      "forkOnly": "one-app: the headless runtime's ui-host welcome names the headless feature",
+      "base": "4a894114f0ee2f46b2c1615187c282fa7979158e",
+      "note": "pn-shell; 2 commits on v7-dev 4a894114f0: welcome names headless (PodNative posts agent notifications and the badge natively), files.open opens a session editor tab, ff8289232e worktree base watcher without a window, 90f00ac4ac headless window services + files.openDiff, a357d7c80c PodUIHostFeatures plist key"
+    },
+    {
+      "branch": "pod/dormancy-seed-veto",
+      "forkOnly": "dormant model seed retry: a failed seed keeps the screen veto",
+      "base": "f7a1995e0a9a874df4827054f3ed96bf15880974",
+      "note": "r-orca-lowlevel; 1 commit on main v6.0.3 (triage fix for #27185/#27207: retry 1 s doubling to 10 s with a fresh daemon request)"
+    },
+    {
+      "branch": "pod/dormancy-full-seed",
+      "forkOnly": "dormant model full-depth seed",
+      "base": "60f3b0e030c4b3dcbe99fe80c6a71173fe7c8718",
+      "note": "r-orca-lowlevel; 1 commit on pod/dormancy-seed-veto (triage fix for #27086: seed at 5000 rows; null snapshot when a dormant PTY's daemon recovery fails)"
     },
     {
       "branch": "pod/v604-safety",
       "forkOnly": "v6.0.4 terminal safety",
       "base": "f7a1995e0a9a874df4827054f3ed96bf15880974",
-      "note": "upstream-triage; 2 commits on v6.0.3 main: sidecar-only chunk acks its credit in a finally (#27033 files), Pod key podTerminalMainModelDormancy default false (dormancy and #27123 delegation off)"
+      "note": "upstream-triage; credit finally + podTerminalMainModelDormancy default false (dormancy stays off until the triage fixes pass)"
+    },
+    {
+      "branch": "pod/local-stream-limits",
+      "forkOnly": "local stream limits",
+      "base": "f12e76aee951a175c65d2d8b995b4756971cc2f6",
+      "note": "r-orca-lowlevel; 2 commits on main v6.0.4 (triage fix for #27156: send buffer cap, upgraded streams leave the CLI slots, 4 streams per runtime then local_stream_limit; 32-64 MiB replies get reply_too_large; pn-orbstack reviewed)"
+    },
+    {
+      "branch": "pod/leading-edge-local-only",
+      "forkOnly": "leading edge for local streams",
+      "base": "f12e76aee951a175c65d2d8b995b4756971cc2f6",
+      "note": "r-orca-lowlevel; 1 commit on main v6.0.4 (triage fix for #27169: leadingEdge batcher option, only local-stream connections)"
+    },
+    {
+      "branch": "pod/sidecar-only-fixes",
+      "forkOnly": "sidecar-only delivery fixes",
+      "base": "f12e76aee951a175c65d2d8b995b4756971cc2f6",
+      "note": "r-orca-lowlevel; 1 commit on main v6.0.4 (triage fix for #27033 a+c; b is v604-safety's 164d247c8b)"
+    },
+    {
+      "branch": "stack/pod-terminal-processes",
+      "forkOnly": "terminal.processes from the runtime's PTY inventory (pids only, host-admin)",
+      "base": "960859f1926371f2f2acb39d92febceb22a252e4",
+      "source": "pod/terminal-processes",
+      "sourceSince": "f7a1995e0a9a874df4827054f3ed96bf15880974",
+      "note": "pod/terminal-processes c2a0cbc8d2 (pn-orbstack; 2 commits on main v6.0.3, lead's option C) replayed last: the method index keeps both imports and spreads"
+    },
+    {
+      "branch": "stack/pod-v7-settings-classify",
+      "forkOnly": "Pod settings classification",
+      "base": "9dcc67de3b8719c8f83d22da885d1e19edefc532",
+      "note": "pod-repo; podTerminalMainModelDormancy (v604-safety) classified as a kill switch so podSettings (settings-rpc) compiles"
+    },
+    {
+      "branch": "pod/daemon-host-macos",
+      "forkOnly": "daemon host on macOS survives a deleted app bundle (Sparkle cleanup)",
+      "base": "0969f60c8efa2ed50dbb7bbef2d8f907fff1f239",
+      "note": "pod-rename; 3 commits on the Orca base, src/main/daemon only (RC1 gate 5; upstream PR after a green packaged E2E)"
+    },
+    {
+      "branch": "pod/osc-bel-echo-hold",
+      "forkOnly": "a BEL-terminated OSC string does not wait for an echo",
+      "base": "13caddc97268092cb86421614a5d6e6bfd851d1d",
+      "note": "r-orca-lowlevel; 1 commit on main v6.0.5 (conformance F3: OSC 12/4 after an OSC 11 reply 504 -> 3-4 ms; upstream candidate)"
     }
   ],
   "generated": [
