@@ -63,6 +63,14 @@ export type LegacyCoordinatorAuthorityProof = Readonly<{
   consumerGeneration: number
 }>
 
+/** A binary transport's fill, for per-stream backpressure below its own ceiling. */
+export type RpcBinaryBackpressure = {
+  /** Whether a bulk frame of this many bytes fits while headroom stays for control frames. */
+  canAcceptBulk(frameBytes: number): boolean
+  /** Called each time the transport's buffer empties; returns the unsubscribe. */
+  onDrain(listener: () => void): () => void
+}
+
 export type RpcContext = {
   runtime: OrcaRuntimeService
   // Why: lets long-poll handlers release immediately on client disconnect instead of running down timeoutMs. See design doc §3.1.
@@ -114,6 +122,8 @@ export type RpcContext = {
   pairing?: PairingRpcContext
   // Why: mobile terminal traffic bypasses JSON streaming; undefined on Unix/socket and non-E2EE WebSocket paths.
   sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
+  // Why: a transport that knows its own fill lets terminal streams back off one by one.
+  binaryBackpressure?: RpcBinaryBackpressure
   // Why: binary terminal frames arrive outside JSON-RPC once a stream is established; handlers register only the stream IDs they created.
   registerBinaryStreamHandler?: (
     streamId: number,
