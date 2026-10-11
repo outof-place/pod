@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 

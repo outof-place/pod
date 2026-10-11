@@ -1,4 +1,4 @@
-import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 
 // The claude-acc menu bar app; while it runs, Pod's own tray icon would be a second ring.
 export const ACC_MENU_HELPER_PROCESS = 'ClaudeAcc'
