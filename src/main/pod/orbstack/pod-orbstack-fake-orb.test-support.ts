@@ -1,5 +1,6 @@
 // Fork-only (Pod): an in-memory `orb`/`orbctl` for template tests. Machines are records; clones copy
-// the config, so tests can check what a clone keeps.
+// the config, so tests can check what a clone keeps. Like OrbStack 2.2.3, every new machine takes a
+// fresh address and a rename keeps it.
 import type { OrbstackToolResult, OrbstackToolRunner } from './pod-orbstack-tools'
 
 type FakeMachine = {
@@ -7,12 +8,14 @@ type FakeMachine = {
   isolateNetwork: boolean
   running: boolean
   mounts: string[]
+  address: number
 }
 
 export function createFakeOrb(options: { claudeVersion?: string; running?: boolean } = {}) {
   const machines = new Map<string, FakeMachine>()
   const calls: string[][] = []
   const failures = new Map<string, string>()
+  let addresses = 0
   const ok = (stdout = ''): OrbstackToolResult => ({ code: 0, stdout, stderr: '', timedOut: false })
   const fail = (stderr: string): OrbstackToolResult => ({
     code: 1,
@@ -49,7 +52,8 @@ export function createFakeOrb(options: { claudeVersion?: string; running?: boole
           isolated: rest.includes('--isolated'),
           isolateNetwork: rest.includes('--isolate-network'),
           running: true,
-          mounts: []
+          mounts: [],
+          address: ++addresses
         })
         return ok()
       case 'clone': {
@@ -58,7 +62,22 @@ export function createFakeOrb(options: { claudeVersion?: string; running?: boole
         if (!source || machines.has(to)) {
           return fail('cannot clone')
         }
-        machines.set(to, { ...source, running: false, mounts: [...source.mounts] })
+        machines.set(to, {
+          ...source,
+          running: false,
+          mounts: [...source.mounts],
+          address: ++addresses
+        })
+        return ok()
+      }
+      case 'rename': {
+        const [from = '', to = ''] = rest
+        const machine = machines.get(from)
+        if (!machine || machines.has(to)) {
+          return fail('cannot rename')
+        }
+        machines.delete(from)
+        machines.set(to, machine)
         return ok()
       }
       case 'start':
@@ -102,5 +121,5 @@ export function createFakeOrb(options: { claudeVersion?: string; running?: boole
     calls.push([tool, ...args])
     return tool === 'orb' ? orb(args) : tool === 'orbctl' ? orbctl(args) : fail('no docker')
   }
-  return { run, machines, calls, failures }
+  return { run, machines, calls, failures, addressesTaken: () => addresses }
 }
