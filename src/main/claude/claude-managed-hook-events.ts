@@ -84,8 +84,8 @@ export const CLAUDE_MANAGED_EVENTS = [...CLAUDE_EVENTS, CLAUDE_SESSION_END_EVENT
 export type ManagedHookEvent = {
   eventName: string
   definition: Omit<HookDefinition, 'hooks'>
-  /** Run Orca's hook in the background; undefined (version unknown) keeps what is written. */
-  async?: boolean
+  /** Run Orca's hook in the background; otherwise an `async` the entry already has stays. */
+  async?: true
 }
 
 // Why: on these Orca's hook only reports status and prints `{}`, and Claude waited for it before
@@ -113,16 +113,14 @@ export type ClaudeManagedHookPlan = {
 export function getClaudeManagedHookPlan(
   claudeVersion: string | null | undefined
 ): ClaudeManagedHookPlan {
-  const runsAsync =
-    parseClaudeCliVersion(claudeVersion) === null
-      ? undefined
-      : claudeVersionReaches(claudeVersion, CLAUDE_ASYNC_HOOK_FIRST_VERSION)
+  // Why never false: an older Claude ignores the key, and stripping one claude-acc wrote is a write
+  const runsAsync = claudeVersionReaches(claudeVersion, CLAUDE_ASYNC_HOOK_FIRST_VERSION)
   const install = CLAUDE_MANAGED_EVENTS.filter(
     (event) =>
       claudeKnowsHookEvent(claudeVersion, event.eventName) &&
       (!('installFrom' in event) || claudeVersionReaches(claudeVersion, event.installFrom))
   ).map((event): ManagedHookEvent =>
-    STATUS_ONLY_EVENTS.has(event.eventName) ? { ...event, async: runsAsync } : event
+    runsAsync && STATUS_ONLY_EVENTS.has(event.eventName) ? { ...event, async: true } : event
   )
   // Why: an unresolved version (e.g. a probe timeout) is no evidence of an old Claude, so it must
   // not strip entries an install that knew the version wrote; only a known version retires events.
