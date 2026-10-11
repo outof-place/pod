@@ -24,7 +24,18 @@ let currentAttributes: TerminalViewAttributes | null = null
 
 // Why one value for every pane: the host shows the same panes to every viewer. This host's own
 // window answers when it has one; a paired client's push answers only on a headless host.
-let pairedViewerColors: TerminalOscColorQueryReplyColors | null = null
+// Kept per viewer, latest push last: a viewer's colours answer only while it is connected, and once
+// the last one leaves the saved theme answers again. A push with no viewer id never expires.
+const pairedViewerColors = new Map<string, TerminalOscColorQueryReplyColors>()
+const UNOWNED_VIEWER = ''
+
+function latestPairedViewerColors(): TerminalOscColorQueryReplyColors | null {
+  let latest: TerminalOscColorQueryReplyColors | null = null
+  for (const colors of pairedViewerColors.values()) {
+    latest = colors
+  }
+  return latest
+}
 let seedColors: TerminalOscColorQueryReplyColors | null = null
 let viewerColorsListener: ((colors: TerminalOscColorQueryReplyColors) => void) | null = null
 
@@ -69,14 +80,26 @@ export function getTerminalViewColorQueryReplyColors(): TerminalOscColorQueryRep
 /** The colours OSC 10/11 answer with on this host: its own window, else a paired client, else
  *  the saved theme. */
 export function getTerminalViewerColors(): TerminalOscColorQueryReplyColors | null {
-  return getTerminalViewColorQueryReplyColors() ?? pairedViewerColors ?? seedColors
+  return getTerminalViewColorQueryReplyColors() ?? latestPairedViewerColors() ?? seedColors
 }
 
 /** A paired client's theme, from terminal.setViewerColors or the colours on terminal.create. */
-export function setPairedViewerColors(colors: TerminalOscColorQueryReplyColors): void {
+export function setPairedViewerColors(
+  colors: TerminalOscColorQueryReplyColors,
+  viewerId: string = UNOWNED_VIEWER
+): void {
   const before = getTerminalViewerColors()
-  pairedViewerColors = colors
+  pairedViewerColors.delete(viewerId)
+  pairedViewerColors.set(viewerId, colors)
   notifyIfViewerColorsChanged(before)
+}
+
+/** That viewer disconnected: its colours stop answering. */
+export function releasePairedViewerColors(viewerId: string): void {
+  const before = getTerminalViewerColors()
+  if (pairedViewerColors.delete(viewerId)) {
+    notifyIfViewerColorsChanged(before)
+  }
 }
 
 /** The saved theme, answering until a viewer reports its colours. */
@@ -104,7 +127,7 @@ export function setTerminalViewerColorsListener(
 export function _resetTerminalViewAttributesForTest(): void {
   currentAttributes = null
   pushAppliers.clear()
-  pairedViewerColors = null
+  pairedViewerColors.clear()
   seedColors = null
   viewerColorsListener = null
 }
