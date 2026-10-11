@@ -253,6 +253,8 @@ export class OrcaRuntimeWithHeadlessAgentResume extends OrcaRuntimeWithResolveWa
             })
           )
           .find((record) => record !== null)
+        // Why: the pane's last start is over; until it starts again it waits to resume.
+        this.agentResumeByPaneKey.delete(pty.paneKey)
         if (live) {
           // Why: as the renderer's manual sleep, a finished pane resumes when its tab is opened.
           captures[pty.paneKey] = {
