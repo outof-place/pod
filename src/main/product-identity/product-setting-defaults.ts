@@ -6,8 +6,15 @@ import { getProductIdentity, type ProductIdentity } from './product-identity'
 // profile, whose builds never had the setting) takes this default; a stored false stays off.
 // Cursor blink defaults off: a blinking focused native pane redraws ~2 frames/s and keeps
 // ~230 MB of Metal buffers alive. Only a missing key takes it; a stored true stays on.
+// Main's terminal model stays live (see isMainTerminalModelDormancyEnabled).
 export function productSettingDefaults(identity: ProductIdentity | null): Partial<GlobalSettings> {
-  return identity ? { experimentalNativeTerminal: true, terminalCursorBlink: false } : {}
+  return identity
+    ? {
+        experimentalNativeTerminal: true,
+        terminalCursorBlink: false,
+        podTerminalMainModelDormancy: false
+      }
+    : {}
 }
 
 export function installProductSettingDefaults(): void {
