@@ -186,7 +186,8 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
         ctx.deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
           ctx.result.id,
           ctx.result.providerSequence,
-          sequenceBeforeProviderSpawn
+          sequenceBeforeProviderSpawn,
+          ctx.result.providerAttachSequence
         ) ?? null
       if (runtimeSequenceBeforeReconcile > sequenceBeforeProviderSpawn) {
         ctx.snapshotKittyFlagsCoverReconciledSeq = false
