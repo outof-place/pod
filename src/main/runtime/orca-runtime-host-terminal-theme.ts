@@ -1,7 +1,12 @@
 import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from './orca-runtime-schedule-mobile-session-tabs-changed'
 import type { RuntimeMobileTerminalTheme } from '../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
-import { resolveHostTerminalTheme, sameTerminalTheme } from './runtime-host-terminal-theme'
+import {
+  hostViewerColors,
+  resolveHostTerminalTheme,
+  sameTerminalTheme
+} from './runtime-host-terminal-theme'
+import { seedTerminalViewerColors } from './terminal-view-attribute-store'
 
 export class OrcaRuntimeWithHostTerminalTheme extends OrcaRuntimeWithScheduleMobileSessionTabsChanged {
   private lastHostTerminalTheme: RuntimeMobileTerminalTheme | undefined
@@ -30,8 +35,13 @@ export class OrcaRuntimeWithHostTerminalTheme extends OrcaRuntimeWithScheduleMob
     }
   }
 
-  /** Settings or the system appearance moved: snapshots that carry the host's theme go out again. */
+  /** Settings or the system appearance moved: snapshots that carry the host's theme go out again,
+   *  and a colour query with no viewer connected answers the new theme. */
   refreshHostTerminalTheme(): void {
+    const colors = hostViewerColors(this.store?.getSettings())
+    if (colors) {
+      seedTerminalViewerColors(colors)
+    }
     const theme = this.getHostTerminalTheme()
     if (sameTerminalTheme(theme, this.lastHostTerminalTheme)) {
       return
