@@ -1,5 +1,6 @@
 import type { HookDefinition } from '../agent-hooks/installer-utils'
 import {
+  CLAUDE_ASYNC_HOOK_FIRST_VERSION,
   claudeKnowsHookEvent,
   claudeKnowsStatusLine,
   claudeVersionReaches,
@@ -83,7 +84,22 @@ export const CLAUDE_MANAGED_EVENTS = [...CLAUDE_EVENTS, CLAUDE_SESSION_END_EVENT
 export type ManagedHookEvent = {
   eventName: string
   definition: Omit<HookDefinition, 'hooks'>
+  /** Run Orca's hook in the background; undefined (version unknown) keeps what is written. */
+  async?: boolean
 }
+
+// Why: on these Orca's hook only reports status and prints `{}`, and Claude waited for it before
+// and after every tool (36-39 ms p50 each); SessionStart, SessionEnd and PermissionRequest stay in
+// line, since their answer or their delivery before exit matters.
+const STATUS_ONLY_EVENTS: ReadonlySet<string> = new Set([
+  'PreToolUse',
+  'PostToolUse',
+  'PostToolUseFailure',
+  'UserPromptSubmit',
+  'Stop',
+  'SubagentStart',
+  'SubagentStop'
+])
 
 export type ClaudeManagedHookPlan = {
   install: readonly ManagedHookEvent[]
@@ -97,17 +113,25 @@ export type ClaudeManagedHookPlan = {
 export function getClaudeManagedHookPlan(
   claudeVersion: string | null | undefined
 ): ClaudeManagedHookPlan {
+  const runsAsync =
+    parseClaudeCliVersion(claudeVersion) === null
+      ? undefined
+      : claudeVersionReaches(claudeVersion, CLAUDE_ASYNC_HOOK_FIRST_VERSION)
   const install = CLAUDE_MANAGED_EVENTS.filter(
     (event) =>
       claudeKnowsHookEvent(claudeVersion, event.eventName) &&
       (!('installFrom' in event) || claudeVersionReaches(claudeVersion, event.installFrom))
+  ).map((event): ManagedHookEvent =>
+    STATUS_ONLY_EVENTS.has(event.eventName) ? { ...event, async: runsAsync } : event
   )
   // Why: an unresolved version (e.g. a probe timeout) is no evidence of an old Claude, so it must
   // not strip entries an install that knew the version wrote; only a known version retires events.
   const retire =
     parseClaudeCliVersion(claudeVersion) === null
       ? []
-      : CLAUDE_MANAGED_EVENTS.filter((event) => !install.includes(event))
+      : CLAUDE_MANAGED_EVENTS.filter(
+          (event) => !install.some((e) => e.eventName === event.eventName)
+        )
   return {
     install,
     retire,
