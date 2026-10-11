@@ -11,7 +11,7 @@ import { createConnection, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isPodUiHostLaunch, podUiHostOuterApp } from './pod-ui-host-launch'
+import { isPodHeadlessUiHost, isPodUiHostLaunch, podUiHostOuterApp } from './pod-ui-host-launch'
 import { PodUiHostServer, type PodUiHostServerOptions } from './pod-ui-host-server'
 
 const TOKEN = 'runtime-token'
@@ -97,16 +97,27 @@ describe('isPodUiHostLaunch', () => {
   const classic = '/Applications/Pod.app/Contents/MacOS/Pod'
   const nested = '/Applications/Pod.app/Contents/Helpers/Pod Runtime.app/Contents/MacOS/Pod'
 
-  it('needs the switch on macOS and never applies to serve', () => {
+  it('needs the switch on macOS; serve only as the headless one-app runtime', () => {
     expect(isPodUiHostLaunch(['Pod', '--pod-ui-host'], 'darwin', classic)).toBe(true)
     expect(isPodUiHostLaunch(['Pod'], 'darwin', classic)).toBe(false)
     expect(isPodUiHostLaunch(['Pod', '--pod-ui-host'], 'linux', classic)).toBe(false)
     expect(isPodUiHostLaunch(['Pod', '--pod-ui-host', '--serve'], 'darwin', classic)).toBe(false)
+    expect(isPodUiHostLaunch(['Pod', '--serve', '--pod-headless-host'], 'darwin', classic)).toBe(
+      false
+    )
+    const headless = ['Pod', '--pod-ui-host', '--serve', '--pod-headless-host']
+    expect(isPodUiHostLaunch(headless, 'darwin', classic)).toBe(true)
+    expect(isPodHeadlessUiHost(headless, 'darwin', classic)).toBe(true)
+    expect(isPodHeadlessUiHost(headless, 'linux', classic)).toBe(false)
+    expect(isPodHeadlessUiHost(['Pod', '--pod-ui-host'], 'darwin', classic)).toBe(false)
   })
 
-  it('applies to the one-app helper however it was started, except serve', () => {
+  it('applies to the one-app helper however it was started, except a plain serve', () => {
     expect(isPodUiHostLaunch(['Pod'], 'darwin', nested)).toBe(true)
     expect(isPodUiHostLaunch(['Pod', '--serve'], 'darwin', nested)).toBe(false)
+    expect(isPodUiHostLaunch(['Pod', '--serve', '--pod-headless-host'], 'darwin', nested)).toBe(
+      false
+    )
     expect(podUiHostOuterApp(nested)).toBe('/Applications/Pod.app')
     expect(podUiHostOuterApp(classic)).toBeNull()
   })

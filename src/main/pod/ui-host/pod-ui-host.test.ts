@@ -31,10 +31,12 @@ const mocks = vi.hoisted(() => {
     mainWindow: unknown
     isQuitting: boolean
     agentAwakeService: { getWorkingAgentCount: () => number }
+    desktopActivationGate: { getState: () => string } | null
   } = {
     mainWindow: window,
     isQuitting: false,
-    agentAwakeService: { getWorkingAgentCount: () => 2 }
+    agentAwakeService: { getWorkingAgentCount: () => 2 },
+    desktopActivationGate: null
   }
   return {
     handlers,
@@ -64,6 +66,8 @@ const mocks = vi.hoisted(() => {
       isPackaged: false
     },
     state,
+    headless: { value: false },
+    openWindow: vi.fn(),
     openSettings: vi.fn(),
     panes: { handle: vi.fn(), reset: vi.fn() }
   }
@@ -77,7 +81,8 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../../startup/main-process-state', () => ({ mainProcessState: mocks.state }))
 vi.mock('../../startup/main-window-actions', () => ({
-  openSettingsFromSystemMenu: mocks.openSettings
+  openSettingsFromSystemMenu: mocks.openSettings,
+  showMainWindowFromTray: mocks.openWindow
 }))
 vi.mock('../../persistence/loading-store/user-data-path', () => ({
   getCanonicalUserDataPath: () => mocks.dir.path
@@ -95,6 +100,7 @@ vi.mock('../browser-pane/pod-browser-pane-host', () => ({
 }))
 vi.mock('./pod-ui-host-launch', () => ({
   isPodUiHostLaunch: () => true,
+  isPodHeadlessUiHost: () => mocks.headless.value,
   podUiHostOuterApp: () => null,
   POD_UI_HOST_SWITCH: '--pod-ui-host'
 }))
@@ -162,6 +168,8 @@ beforeEach(() => {
   mocks.window.webContents.send.mockReset()
   mocks.state.isQuitting = false
   mocks.state.mainWindow = mocks.window
+  mocks.state.desktopActivationGate = null
+  mocks.headless.value = false
   vi.unstubAllEnvs()
   vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '')
 })
@@ -332,6 +340,68 @@ describe('installPodUiHost', () => {
     await vi.waitFor(() =>
       expect(client.lines.filter((line) => line === '{"type":"activate"}')).toHaveLength(2)
     )
+  })
+
+  describe('the headless runtime', () => {
+    const rendererReady = (senderId = 31): void => {
+      for (const handler of mocks.ipcHandlers.get('pod:uiHostSurface:ready') ?? []) {
+        handler({ sender: { id: senderId } })
+      }
+    }
+
+    beforeEach(() => {
+      mocks.headless.value = true
+      mocks.state.mainWindow = null
+      mocks.openWindow.mockImplementation(() => {
+        mocks.state.mainWindow = mocks.window
+      })
+    })
+
+    it('opens a window only for a surface, and navigates it once the session is restored', async () => {
+      await install()
+      const client = await attach()
+      send(client, { type: 'openSurface', surface: 'window', worktreeId: 'repo-1::/w', tabId: 't' })
+      await vi.waitFor(() => expect(mocks.openWindow).toHaveBeenCalledTimes(1))
+      rendererReady(99)
+      expect(mocks.window.webContents.send).not.toHaveBeenCalled()
+      rendererReady()
+      await vi.waitFor(() =>
+        expect(client.lines).toContain('{"type":"surfaceShown","surface":"window","visible":true}')
+      )
+      expect(mocks.window.webContents.send).toHaveBeenCalledWith('ui:activateWorktree', {
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/w'
+      })
+      send(client, { type: 'openSurface', surface: 'settings' })
+      await vi.waitFor(() => expect(mocks.openSettings).toHaveBeenCalled())
+      expect(mocks.openWindow).toHaveBeenCalledTimes(1)
+    })
+
+    it('refuses a surface while no window may open', async () => {
+      mocks.state.desktopActivationGate = { getState: () => 'initializing' }
+      await install()
+      const client = await attach()
+      send(client, { type: 'openSurface', surface: 'window' })
+      await vi.waitFor(() =>
+        expect(client.lines).toContain('{"type":"surfaceShown","surface":"window","visible":false}')
+      )
+      expect(mocks.openWindow).not.toHaveBeenCalled()
+    })
+
+    it('leaves an unmarked quit to the serve veto, which asks PodNative itself', async () => {
+      await install()
+      const { markProcessQuitRequested } = await import('../../startup/process-quit-request')
+      const client = await attach()
+      fire('before-quit')
+      send(client, { type: 'openSurface', surface: 'window' })
+      await vi.waitFor(() => expect(mocks.openWindow).toHaveBeenCalled())
+      expect(client.lines.some((line) => line.includes('quitRequested'))).toBe(false)
+      markProcessQuitRequested()
+      fire('before-quit')
+      await vi.waitFor(() =>
+        expect(client.lines).toContain('{"type":"quitRequested","reason":"user"}')
+      )
+    })
   })
 
   it('quits a minute after PodNative vanished, unless a fallback window is on screen', async () => {
