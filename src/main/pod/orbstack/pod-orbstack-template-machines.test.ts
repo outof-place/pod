@@ -24,18 +24,25 @@ function setup(options: { recipe?: OrcaVmRecipe; running?: boolean } = {}) {
   roots.push(root)
   const worktreePath = join(root, 'web')
   mkdirSync(worktreePath)
-  const orb = createFakeOrb({ running: options.running })
+  const fake = { running: options.running, claudeVersion: release.version }
+  const orb = createFakeOrb(fake)
   const registry = new PodOrbstackRegistry(join(root, 'registry.json'))
   const templates = createPodOrbstackTemplates({ run: orb.run, file: join(root, 'templates.json') })
   const provision = vi.fn(async () => ({ agentVersion: '2.1.296' }))
   const runRecipe = vi.fn(runEphemeralVmRecipeStart)
+  let current = release
+  // The Mac's Claude Code moved: the next release Pod prepares, and what the VM then reports.
+  const moveClaude = (version: string) => {
+    current = { ...release, version }
+    fake.claudeVersion = version
+  }
   const machines = createPodOrbstackMachines({
     paths: () => ({ appInstalled: true, orb: '/fake/orb', orbctl: '/fake/orbctl', docker: null }),
     run: orb.run,
     registry,
     loadRecipe: () => options.recipe ?? POD_ORBSTACK_BUILTIN_RECIPE,
     runRecipe,
-    prepareClaudeRelease: async () => release,
+    prepareClaudeRelease: async () => current,
     resolveMounts: async (path) => [path],
     provision,
     templates
@@ -45,7 +52,7 @@ function setup(options: { recipe?: OrcaVmRecipe; running?: boolean } = {}) {
     mkdirSync(path, { recursive: true })
     return { worktreeId: `repo::${path}`, worktreePath: path, displayName: folder }
   }
-  return { orb, registry, templates, provision, runRecipe, machines, target }
+  return { orb, registry, templates, provision, runRecipe, machines, target, moveClaude }
 }
 
 const verbs = (calls: string[][]) => calls.map((call) => `${call[0]} ${call[1]}`)
@@ -100,6 +107,57 @@ describe('Pod OrbStack machines from templates', () => {
     expect(await machines.createSandbox(target('one'))).toEqual({ ok: true })
     expect(provision).toHaveBeenCalledTimes(1)
     expect(templates.list()).toEqual([])
+  })
+
+  it("updates the sandbox template in place when the Mac's Claude Code moves", async () => {
+    const { orb, templates, provision, machines, target, moveClaude } = setup()
+    expect(await machines.createSandbox(target('one'))).toEqual({ ok: true })
+    const [old] = templates.list()
+    const address = orb.machines.get(old?.name ?? '')?.address
+    moveClaude('2.1.297')
+    orb.calls.length = 0
+    await machines.prewarm()
+
+    const [updated] = templates.list()
+    expect(templates.list()).toHaveLength(1)
+    expect(updated).toMatchObject({ state: 'ready', agentVersion: '2.1.297' })
+    expect(updated?.name).not.toBe(old?.name)
+    // Same machine, renamed: its address stays, and no image or apt step runs again.
+    expect(orb.machines.get(updated?.name ?? '')).toMatchObject({
+      address,
+      isolated: true,
+      isolateNetwork: true,
+      running: false
+    })
+    expect(verbs(orb.calls)).toEqual(
+      expect.arrayContaining(['orb rename', 'orb start', 'orb info', 'orb push', 'orb stop'])
+    )
+    expect(verbs(orb.calls)).not.toContain('orb create')
+    expect(verbs(orb.calls)).not.toContain('orb delete')
+    expect(provision).not.toHaveBeenCalled()
+
+    // The next sandbox clones the updated template.
+    expect(await machines.createSandbox(target('two'))).toEqual({ ok: true })
+    expect(provision).not.toHaveBeenCalled()
+  })
+
+  it('builds the template fresh when the older one lost its isolation', async () => {
+    const { orb, templates, machines, target, moveClaude } = setup()
+    expect(await machines.createSandbox(target('one'))).toEqual({ ok: true })
+    const [old] = templates.list()
+    const record = orb.machines.get(old?.name ?? '')
+    if (record) {
+      record.isolateNetwork = false
+    }
+    moveClaude('2.1.297')
+    orb.calls.length = 0
+    await machines.prewarm()
+    // The renamed machine is deleted; the next create builds the template from the image.
+    expect(templates.list()).toEqual([])
+    expect(orb.machines.size).toBe(1)
+    expect(await machines.createSandbox(target('two'))).toEqual({ ok: true })
+    expect(templates.list()).toMatchObject([{ agentVersion: '2.1.297' }])
+    expect(verbs(orb.calls)).toContain('orb create')
   })
 
   it('clones worktree machines from the shared template for the built-in recipe only', async () => {
