@@ -35,7 +35,7 @@ vi.mock('../../claude/claude-hook-event-versions', async (original) => ({
 
 import { installManagedAgentHooks } from '../../agent-hooks/managed-agent-hook-controls'
 import { AUTOMATED_LAUNCH_ENV } from '../acc/acc-lifecycle'
-import { podDefaultUserDataPath } from './pod-instance'
+import { installPodHookWriteGate, podDefaultUserDataPath } from './pod-instance'
 
 describe("managed hooks from a Pod that isn't the user's own", () => {
   let root: string
@@ -57,6 +57,8 @@ describe("managed hooks from a Pod that isn't the user's own", () => {
     mkdirSync(overriddenHome, { recursive: true })
     process.env.HOME = overriddenHome
     electron.app.paths = { home: realHome, scratch: join(root, 'scratch') }
+    // what main-process-preflight does at startup
+    installPodHookWriteGate()
   })
 
   afterEach(() => {
@@ -91,5 +93,14 @@ describe("managed hooks from a Pod that isn't the user's own", () => {
     expect(statuses[0]).toMatchObject({ agent: 'claude', state: 'installed' })
     expect(existsSync(join(overriddenHome, '.claude', 'settings.json'))).toBe(true)
     expect(written(realHome)).toEqual([])
+  })
+
+  it('nor a background launch of the packaged app, on its default profile', async () => {
+    electron.app.isPackaged = true
+    electron.app.paths.userData = podDefaultUserDataPath() ?? ''
+    process.env.ORCA_BACKGROUND_LAUNCH = '1'
+    const statuses = await installManagedAgentHooks(null, { agents: ['claude'] })
+    expect(statuses[0]).toMatchObject({ agent: 'claude', state: 'skipped' })
+    expect(written(overriddenHome)).toEqual([])
   })
 })
