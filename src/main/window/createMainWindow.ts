@@ -33,6 +33,10 @@ import { installMainWindowWebviewSecurity } from './main-window-webview-security
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
+import {
+  holdPodUiHostWindowAwakeAtStartup,
+  podUiHostMainWindowOptions
+} from '../pod/headless-host/ui-host-hidden-renderer'
 
 export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
 
@@ -106,6 +110,8 @@ export function createMainWindow(
     minHeight: MIN_HEIGHT,
     title: opts?.title ?? productDisplayName(),
     show: false,
+    // Fork-only (Pod): a one-app window starts hidden so its renderer idles until a surface shows it.
+    ...podUiHostMainWindowOptions(),
     // Why: macOS swallows the app-activating click by default, so clicking back into Orca needed a second click (Windows/Linux already deliver it).
     acceptFirstMouse: true,
     // Why: auto-hide the Windows/Linux menu bar to save a row (Alt reveals it); macOS uses the system menu bar anyway.
@@ -171,6 +177,8 @@ export function createMainWindow(
     mainWindow.webContents.setBackgroundThrottling(true)
     installMacosVisibilityRepaint(mainWindow)
   }
+  // Fork-only (Pod): after the line above, which would end the startup wake.
+  holdPodUiHostWindowAwakeAtStartup(mainWindow)
 
   // Why: a focus-preserving wake fires no focus/visibility events; relay resume so terminal wake recovery runs and force a repaint so stale compositor surfaces recover.
   const onSystemResume = (): void => {
