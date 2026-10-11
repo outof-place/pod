@@ -66,6 +66,7 @@ function fakeService(enabled: boolean): PodOrbstackService {
     setAgentSandbox: vi.fn(() => ({ ok: true as const })),
     setSandboxClaudeLogin: vi.fn(() => ({ ok: true as const })),
     setTemplates: vi.fn(async () => ({ ok: true as const })),
+    restart: vi.fn(async () => ({ ok: true as const })),
     stats: vi.fn(async () => ({ tick: 1, sampledAt: 5, machines: [], errors: [] })),
     invalidate: vi.fn(),
     subscribe: vi.fn((emit: (event: PodOrbstackEvent) => void) => {
@@ -102,6 +103,7 @@ describe('orbstack.* RPC methods', () => {
       'orbstack.setAgentSandbox',
       'orbstack.setSandboxClaudeLogin',
       'orbstack.setTemplates',
+      'orbstack.restart',
       'orbstack.stats',
       'orbstack.subscribe',
       'orbstack.unsubscribe'
