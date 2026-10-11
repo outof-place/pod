@@ -6,6 +6,7 @@ import { sleepingAgentLaunchConfigSchema } from '../workspace-session-sleeping-a
 import type { TuiAgent } from '../tui-agent'
 import { isTuiAgent } from '../tui-agent-config'
 import { MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../terminal-quick-commands'
+import { PodCreateTerminalAgentArgs } from '../pod-create-terminal-agent-args'
 
 export const WorktreeTabSelector = z.object({
   worktree: z
@@ -161,6 +162,8 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     .max(MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH)
     .refine((value) => value.trim().length > 0, { message: 'Agent prompt cannot be empty' })
     .optional(),
+  // Fork-only (Pod): argv tokens in place of the agent's configured arguments.
+  agentArgs: PodCreateTerminalAgentArgs,
   // Why: `agent` is the legacy preset field; `launchAgent` is the launch-plan
   // identity used when preserving resume config across runtime boundaries.
   launchAgent: z
@@ -188,6 +191,13 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
       code: 'custom',
       path: ['agentPrompt'],
       message: 'Agent prompt cannot be combined with a startup command'
+    })
+  }
+  if (value.agentArgs !== undefined && (value.agent === undefined || value.command !== undefined)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['agentArgs'],
+      message: 'Agent arguments require an agent preset and no startup command'
     })
   }
 })
