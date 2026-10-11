@@ -85,6 +85,23 @@ export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends Orca
     return this.terminalViewSubscribers.isKnownUnattachedLocal(ptyId)
   }
 
+  /** Until the attach a view's subscribe started settles, main counts the session's output
+   *  from its own zero, not the provider's sequence; a snapshot taken then mixes the two. */
+  async waitForSubscriberDrivenProviderAttach(ptyId: string, timeoutMs = 2_000): Promise<void> {
+    const attach = this.terminalViewSubscribers.providerAttach(ptyId)
+    if (!attach) {
+      return
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      attach,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs)
+      })
+    ])
+    clearTimeout(timer)
+  }
+
   protected reconcileSubscriberDrivenProviderAttach(ptyId: string): void {
     this.terminalViewSubscribers.reconcileProviderAttach(ptyId)
   }
