@@ -386,7 +386,7 @@ describe('registerPtyHandlers', () => {
       })
       provider.emitExit('daemon-pty')
     })
-    it('reads the daemon for recovery once main dropped its model, falling back to main', async () => {
+    it('reads the daemon for recovery once main dropped its model, never its rebuilt one', async () => {
       const daemonSnapshot = {
         data: 'full daemon history\r\n',
         cols: 100,
@@ -422,8 +422,10 @@ describe('registerPtyHandlers', () => {
       })
       expect(runtime.serializeHiddenOutputRecoveryBuffer).not.toHaveBeenCalled()
 
+      // Main's rebuilt model may be a suffix: unavailable beats a shallower image over the renderer's.
       runtime.serializeProviderRecoveryBuffer.mockResolvedValueOnce(null)
-      await expect(read()).resolves.toMatchObject({ data: 'rebuilt model\r\n', seq: 640 })
+      await expect(read()).resolves.toBeNull()
+      expect(runtime.serializeHiddenOutputRecoveryBuffer).not.toHaveBeenCalled()
     })
     it("never paints main's incomplete tail when a required provider snapshot is unavailable", async () => {
       const provider = installObservableDaemonTestProvider()

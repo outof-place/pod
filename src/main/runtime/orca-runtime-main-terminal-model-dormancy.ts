@@ -16,14 +16,14 @@ import {
   isTerminalModelQueryAuthorityEnabled
 } from './terminal-model-query-authority'
 import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
-import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
+import { HEADLESS_EMULATOR_DEFAULT_SCROLLBACK } from '../daemon/headless-emulator'
 import type { RuntimeHeadlessTerminal } from './runtime-terminal-state-records'
 import { canAgentMainTerminalModelRest } from './main-terminal-model-agent-rest'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
 
-// Why the mobile depth: no reader of main's model asks for more; full-depth restores of a PTY
-// that went dormant come from the daemon instead (prefersProviderRecoverySnapshot).
-const DORMANT_MODEL_SEED_SCROLLBACK_ROWS = MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
+// Why the model's own depth: a rebuilt model must hold the history main held before it rested,
+// or a reader of it (recovery, a viewer's seed) gets a shallower image than before dormancy.
+const DORMANT_MODEL_SEED_SCROLLBACK_ROWS = HEADLESS_EMULATOR_DEFAULT_SCROLLBACK
 const DORMANT_MODEL_SEED_TIMEOUT_MS = 2_000
 
 /** An in-process consumer of one PTY's output. A 'model' reader reads main's emulator, or
@@ -84,8 +84,8 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
     )
   }
 
-  /** A model rebuilt after dormancy holds only a bounded seed, so full-depth hidden-output
-   *  recovery must come from the daemon, like after a keep-tail data gap. */
+  /** A model rebuilt after dormancy may hold only a suffix (a failed seed), so full-depth
+   *  hidden-output recovery must come from the daemon, like after a keep-tail data gap. */
   prefersProviderRecoverySnapshot(ptyId: string): boolean {
     return this.mainTerminalModelDormancy.wasEverDormant(ptyId)
   }
