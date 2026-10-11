@@ -36,6 +36,27 @@ describe('UnixSocketStreamConnection buffered-bytes ceiling', () => {
     // A reply can't be dropped silently: the connection closes, and the client resyncs.
     expect(socket.destroyed).toBe(true)
   })
+
+  it('fits its largest frame into an idle socket, so only a backed-up socket closes', () => {
+    const ceiling = 1024
+    const socket = new CountingSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the connection uses only write, writableLength, writable, destroyed, destroy and the close event.
+    const connection = new UnixSocketStreamConnection(socket as unknown as Socket, ceiling)
+    connection.sendText('x'.repeat(connection.maxPayloadBytes))
+    expect(socket.writableLength).toBe(ceiling)
+    expect(socket.destroyed).toBe(false)
+  })
+
+  it('discards a binary frame over the ceiling without closing the socket', () => {
+    const ceiling = 1024
+    const socket = new CountingSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the connection uses only write, writableLength, writable, destroyed, destroy and the close event.
+    const connection = new UnixSocketStreamConnection(socket as unknown as Socket, ceiling)
+    expect(connection.sendBinary(new Uint8Array(connection.maxPayloadBytes + 1))).toBe(false)
+    expect(connection.sendBinary(new Uint8Array(connection.maxPayloadBytes))).toBe(true)
+    expect(socket.writableLength).toBe(ceiling)
+    expect(socket.destroyed).toBe(false)
+  })
 })
 
 describe('UnixSocketTransport request slots', () => {
