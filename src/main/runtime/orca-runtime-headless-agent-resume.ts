@@ -5,9 +5,9 @@ import type {
   SleepingAgentSessionRecord
 } from '../../shared/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../shared/agent-session-resume'
+import type { RuntimeMobileSessionAgentResume } from '../../shared/runtime-mobile-session-tab-contracts'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
-import { parsePaneKey } from '../../shared/stable-pane-id'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
 import {
@@ -18,9 +18,10 @@ import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-termi
 import {
   isDurableAgentResumeRecord,
   liveAgentResumeRecord,
-  resolvePaneAgentResume,
-  sameAgentResumeRecord
+  paneAgentWithoutResume,
+  resolvePaneAgentResume
 } from './agent-resume-records'
+import { HeadlessAgentResumeAnchors } from './headless-agent-resume-anchors'
 import { OrcaRuntimeWithResolveWaiter } from './orca-runtime-resolve-waiter'
 
 export type PaneAgentResumeStartup = {
@@ -33,79 +34,86 @@ export type PaneAgentResumeStartup = {
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
 }
 
+/** A pane's start: the resume to run, or none when its agent cannot come back (`unavailable`). */
+export type PaneAgentResumePlan = {
+  outcome: RuntimeMobileSessionAgentResume
+  startup: PaneAgentResumeStartup | null
+}
+
+/** Kill switch: ORCA_HEADLESS_AGENT_RESUME=0 restores the shell-only headless behavior. */
+export function isHeadlessAgentResumeEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.ORCA_HEADLESS_AGENT_RESUME !== '0'
+}
+
 /** Terminal-agent resume for a host with no renderer: the records the renderer keeps on desktop
  *  (live anchors, worktree-sleep captures) and the `--resume` its cold restore issues. */
 export class OrcaRuntimeWithHeadlessAgentResume extends OrcaRuntimeWithResolveWaiter {
-  /** Keeps a pane's `live` anchor in step with its status rows, as the renderer does per update. */
-  syncHeadlessAgentResumeAnchor(paneKey: string): void {
-    // Why: a renderer writes its own anchors; two writers would race on the session.
-    if (this.getAvailableAuthoritativeWindow()) {
-      return
+  private agentResumeAnchors: HeadlessAgentResumeAnchors | null = null
+  private readonly paneMaterializationsInFlight = new Map<string, Promise<void>>()
+  private readonly agentResumeByPaneKey = new Map<string, RuntimeMobileSessionAgentResume>()
+
+  /** A pane's status rows changed; its `live` anchor follows at the next batched write. */
+  noteHeadlessAgentStatus(paneKey: string): void {
+    if (isHeadlessAgentResumeEnabled()) {
+      this.agentResumeByPaneKey.delete(paneKey)
+      this.headlessAgentResumeAnchors.note(paneKey)
     }
-    const rows = this.getAgentStatusRowsForPane(paneKey)
-    const worktreeId = rows.find((row) => row.worktreeId)?.worktreeId
-    const session = worktreeId ? this.getWorkspaceSessionForWorktree(worktreeId) : null
-    const tabId = parsePaneKey(paneKey)?.tabId
-    if (
-      !worktreeId ||
-      !session ||
-      !session.tabsByWorktree[worktreeId]?.some((t) => t.id === tabId)
-    ) {
-      return
-    }
-    const existing = session.sleepingAgentSessionsByPaneKey?.[paneKey]
-    const launchConfig = this.findPtyLaunchConfigForPaneKey(paneKey)
-    const next = rows
-      .map((row) =>
-        liveAgentResumeRecord({ row, worktreeId, launchConfig, existing, now: Date.now() })
-      )
-      .find((record) => record !== null)
-    if (!next) {
-      // Why: a remnant row means the agent exited under its shell; its anchor must not resume it.
-      const exited =
-        existing?.origin === 'live' &&
-        rows.some(
-          (row) =>
-            row.providerSessionOnly === true &&
-            row.agentType === existing.agent &&
-            agentProviderSessionsEqual(
-              existing.agent,
-              row.providerSession,
-              existing.providerSession
-            )
-        )
-      if (exited) {
-        this.writeAgentResumeRecords(worktreeId, session, { [paneKey]: null })
-      }
-      return
-    }
-    const keepsDurable =
-      isDurableAgentResumeRecord(existing) &&
-      agentProviderSessionsEqual(next.agent, existing?.providerSession, next.providerSession)
-    if (keepsDurable || sameAgentResumeRecord(existing, next)) {
-      return
-    }
-    this.writeAgentResumeRecords(worktreeId, session, { [paneKey]: next })
   }
 
-  /** Every pane's anchor at once; run before startup reaping drops rows whose PTY died with the daemon. */
+  /** Claude's process-ending SessionEnd retires the pane's anchor for that session. */
+  noteHeadlessAgentSessionEnded(paneKey: string, providerSessionId: string): void {
+    if (isHeadlessAgentResumeEnabled()) {
+      this.headlessAgentResumeAnchors.noteSessionEnded(paneKey, providerSessionId)
+    }
+  }
+
+  /** Every pane's anchor, written now; run before startup reaping drops rows whose PTY died. */
   syncHeadlessAgentResumeAnchors(): void {
-    const paneKeys = new Set(this.getAgentProviderSessionRows().map((row) => row.paneKey))
-    for (const paneKey of paneKeys) {
-      this.syncHeadlessAgentResumeAnchor(paneKey)
+    if (isHeadlessAgentResumeEnabled()) {
+      this.headlessAgentResumeAnchors.syncAll()
     }
   }
 
-  /** What a pane started again resumes, or null for a plain (or freshly launched) terminal. */
+  /** Session-file writes the anchors made, for the write-rate budget. */
+  getHeadlessAgentResumeAnchorWrites(): number {
+    return this.agentResumeAnchors?.writes ?? 0
+  }
+
+  /** What the last start of a pane did about its agent, for clients to show. */
+  getPaneAgentResume(paneKey: string): RuntimeMobileSessionAgentResume | undefined {
+    return this.agentResumeByPaneKey.get(paneKey)
+  }
+
+  /** A start already running for this pane; a second open waits for it instead of spawning. */
+  protected joinPaneMaterialization(worktreeId: string, paneKey: string): Promise<void> | null {
+    return this.paneMaterializationsInFlight.get(`${worktreeId}\0${paneKey}`) ?? null
+  }
+
+  protected beginPaneMaterialization(worktreeId: string, paneKey: string): () => void {
+    const key = `${worktreeId}\0${paneKey}`
+    let finish = (): void => {}
+    this.paneMaterializationsInFlight.set(
+      key,
+      new Promise<void>((resolve) => {
+        finish = () => {
+          this.paneMaterializationsInFlight.delete(key)
+          resolve()
+        }
+      })
+    )
+    return finish
+  }
+
+  /** What a pane started again resumes; null when no agent ran there (the caller's own launch). */
   protected async resolvePaneAgentResumeStartup(
     worktreeId: string,
     paneKey: string
-  ): Promise<PaneAgentResumeStartup | null> {
+  ): Promise<PaneAgentResumePlan | null> {
     const settings = this.store?.getSettings()
     const record =
       this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[paneKey]
     const rows = this.getAgentStatusRowsForPane(paneKey)
-    if (!settings || (!record && rows.length === 0)) {
+    if (!isHeadlessAgentResumeEnabled() || !settings || (!record && rows.length === 0)) {
       return null
     }
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
@@ -114,52 +122,74 @@ export class OrcaRuntimeWithHeadlessAgentResume extends OrcaRuntimeWithResolveWa
       rows,
       connectionId: workspace.connectionId ?? null
     })
-    if (!resume || !isTuiAgentEnabled(resume.agent, settings.disabledTuiAgents)) {
-      return null
-    }
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
     const isRemote = Boolean(workspace.connectionId)
-    const { launchConfig } = resume
-    const plan = buildAgentResumeStartupPlan({
-      agent: resume.agent,
-      providerSession: resume.providerSession,
-      cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: launchConfig
-        ? launchConfig.agentArgs
-        : resolveTuiAgentLaunchArgs(resume.agent, settings.agentDefaultArgs),
-      agentEnv: launchConfig
-        ? launchConfig.agentEnv
-        : resolveTuiAgentLaunchEnv(resume.agent, settings.agentDefaultEnv),
-      ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-      ...(launchConfig?.ompResumeFilePath
-        ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
-        : {}),
-      platform,
-      shell: resolveLocalWindowsAgentStartupShell({
-        platform,
-        isRemote,
-        terminalWindowsShell: settings.terminalWindowsShell
-      }),
-      isRemote
-    })
-    if (!plan) {
-      return null
+    const launchConfig = resume?.launchConfig
+    const plan =
+      resume && isTuiAgentEnabled(resume.agent, settings.disabledTuiAgents)
+        ? buildAgentResumeStartupPlan({
+            agent: resume.agent,
+            providerSession: resume.providerSession,
+            cmdOverrides: settings.agentCmdOverrides ?? {},
+            agentArgs: launchConfig
+              ? launchConfig.agentArgs
+              : resolveTuiAgentLaunchArgs(resume.agent, settings.agentDefaultArgs),
+            agentEnv: launchConfig
+              ? launchConfig.agentEnv
+              : resolveTuiAgentLaunchEnv(resume.agent, settings.agentDefaultEnv),
+            ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
+            ...(launchConfig?.ompResumeFilePath
+              ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
+              : {}),
+            platform,
+            shell: resolveLocalWindowsAgentStartupShell({
+              platform,
+              isRemote,
+              terminalWindowsShell: settings.terminalWindowsShell
+            }),
+            isRemote
+          })
+        : null
+    if (!resume || !plan) {
+      // Why: an agent ran here and cannot come back; the client says so over the shell.
+      const lost = resume?.agent ?? paneAgentWithoutResume({ record, rows })
+      return lost ? { outcome: { agent: lost, outcome: 'unavailable' }, startup: null } : null
     }
     return {
-      agent: resume.agent,
-      providerSession: resume.providerSession,
-      record: resume.record,
-      command: plan.launchCommand,
-      ...(plan.env ? { env: plan.env } : {}),
-      ...(plan.launchConfig ? { launchConfig: plan.launchConfig } : {}),
-      ...(plan.startupCommandDelivery
-        ? { startupCommandDelivery: plan.startupCommandDelivery }
-        : {})
+      outcome: { agent: resume.agent, outcome: 'resumed' },
+      startup: {
+        agent: resume.agent,
+        providerSession: resume.providerSession,
+        record: resume.record,
+        command: plan.launchCommand,
+        ...(plan.env ? { env: plan.env } : {}),
+        ...(plan.launchConfig ? { launchConfig: plan.launchConfig } : {}),
+        ...(plan.startupCommandDelivery
+          ? { startupCommandDelivery: plan.startupCommandDelivery }
+          : {})
+      }
     }
   }
 
+  /** After the pane started: publish what happened to its agent and spend a used sleep record. */
+  protected settlePaneAgentResume(
+    worktreeId: string,
+    paneKey: string,
+    plan: PaneAgentResumePlan | null
+  ): void {
+    if (!plan) {
+      this.agentResumeByPaneKey.delete(paneKey)
+      return
+    }
+    this.agentResumeByPaneKey.set(paneKey, plan.outcome)
+    if (plan.startup?.record) {
+      this.consumeAgentResumeRecord(worktreeId, plan.startup.record)
+    }
+    this.notifyMobileSessionTabsChanged(worktreeId)
+  }
+
   /** A sleep or quit capture is spent by its resume; a live anchor stays and follows the agent's rows. */
-  protected consumeAgentResumeRecord(worktreeId: string, record: SleepingAgentSessionRecord): void {
+  private consumeAgentResumeRecord(worktreeId: string, record: SleepingAgentSessionRecord): void {
     if (!isDurableAgentResumeRecord(record) || this.getAvailableAuthoritativeWindow()) {
       return
     }
@@ -174,8 +204,35 @@ export class OrcaRuntimeWithHeadlessAgentResume extends OrcaRuntimeWithResolveWa
     }
   }
 
+  /** A closed tab is never resumed; its panes' records go with it. */
+  protected forgetAgentResumeForTab(worktreeId: string, tabId: string): void {
+    for (const paneKey of this.agentResumeByPaneKey.keys()) {
+      if (paneKey.startsWith(`${tabId}:`)) {
+        this.agentResumeByPaneKey.delete(paneKey)
+      }
+    }
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    if (!session || this.getAvailableAuthoritativeWindow()) {
+      return
+    }
+    const closed = Object.keys(session.sleepingAgentSessionsByPaneKey ?? {}).filter((paneKey) =>
+      paneKey.startsWith(`${tabId}:`)
+    )
+    if (closed.length > 0) {
+      this.writeAgentResumeRecords(
+        worktreeId,
+        session,
+        Object.fromEntries(closed.map((paneKey) => [paneKey, null]))
+      )
+    }
+  }
+
   /** `worktree.sleep` with no renderer: keep each agent's resume handle, then stop the PTYs. */
   protected async sleepWorktreeTerminalsWithoutRenderer(worktreeId: string): Promise<void> {
+    if (!isHeadlessAgentResumeEnabled()) {
+      return
+    }
+    this.headlessAgentResumeAnchors.flush()
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (session) {
       const captures: Record<string, SleepingAgentSessionRecord> = {}
@@ -211,6 +268,19 @@ export class OrcaRuntimeWithHeadlessAgentResume extends OrcaRuntimeWithResolveWa
       }
     }
     await this.sleepTerminalsForWorktree(`id:${worktreeId}`)
+  }
+
+  private get headlessAgentResumeAnchors(): HeadlessAgentResumeAnchors {
+    this.agentResumeAnchors ??= new HeadlessAgentResumeAnchors({
+      hasRenderer: () => Boolean(this.getAvailableAuthoritativeWindow()),
+      rowsForPane: (paneKey) => this.getAgentStatusRowsForPane(paneKey),
+      allRows: () => this.getAgentProviderSessionRows(),
+      sessionFor: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
+      launchConfigFor: (paneKey) => this.findPtyLaunchConfigForPaneKey(paneKey),
+      writeRecords: (worktreeId, session, changes) =>
+        this.writeAgentResumeRecords(worktreeId, session, changes)
+    })
+    return this.agentResumeAnchors
   }
 
   private findPtyLaunchConfigForPaneKey(paneKey: string): SleepingAgentLaunchConfig | undefined {
