@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { runProcess } from '../../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 export type WorkspaceTool = 'tmutil' | 'mdfind' | 'mdutil' | 'defaults' | 'pnpm'
 
