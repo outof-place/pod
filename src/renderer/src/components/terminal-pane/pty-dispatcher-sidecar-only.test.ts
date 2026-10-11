@@ -75,4 +75,40 @@ describe('pty dispatcher sidecar-only delivery', () => {
     expect(handle.flush()).toBe('visible output')
     expect(ackData).toHaveBeenCalledWith('pty-1', 14, 14)
   })
+
+  it('holds sidecar-only teardown output and discards it when the shutdown commits', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-dispatcher')
+    const { subscribeToPtyData } = await import('./pty-data-sidecar-subscriptions')
+    const { unregisterPtyDataHandlers } = await import('./pty-shutdown-data-suspension')
+    registerEagerPtyBuffer('pty-1', vi.fn())
+    const sidecar = vi.fn()
+    subscribeToPtyData('pty-1', sidecar)
+    const [snapshot] = unregisterPtyDataHandlers(['pty-1'])
+
+    dataCallback?.({ id: 'pty-1', data: 'teardown output', sidecarOnly: true })
+    expect(sidecar).not.toHaveBeenCalled()
+    expect(ackData).toHaveBeenCalledWith('pty-1', 15, 15)
+    snapshot.commit()
+
+    expect(sidecar).not.toHaveBeenCalled()
+  })
+
+  it('hands held sidecar-only output to sidecars, never the view, when the shutdown rolls back', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-dispatcher')
+    const { subscribeToPtyData } = await import('./pty-data-sidecar-subscriptions')
+    const { ptyReplayHandlers, unregisterPtyDataHandlers } =
+      await import('./pty-shutdown-data-suspension')
+    const handle = registerEagerPtyBuffer('pty-1', vi.fn())
+    ptyReplayHandlers.set('pty-1', vi.fn())
+    const sidecar = vi.fn()
+    subscribeToPtyData('pty-1', sidecar)
+    const [snapshot] = unregisterPtyDataHandlers(['pty-1'])
+
+    dataCallback?.({ id: 'pty-1', data: 'held', sidecarOnly: true })
+    dataCallback?.({ id: 'pty-1', data: 'view' })
+    snapshot.rollback()
+
+    expect(sidecar.mock.calls).toEqual([['held'], ['view']])
+    expect(handle.flush()).toBe('view')
+  })
 })
