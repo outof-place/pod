@@ -1,6 +1,7 @@
 // Fork-only (Pod): every settings key podSettings.* leaves out, and why.
 import type { GlobalSettings } from './global-settings-types'
 import type { PodSettingsKey, PodSettingsValues } from './pod-settings-schema'
+import type { PodSettingsReadOnlyKey } from './pod-settings-read-only'
 
 /** Never in podSettings.schema, get or subscribe; set refuses them. */
 export const POD_SETTINGS_SECRET_KEYS = [
@@ -158,7 +159,6 @@ export const POD_SETTINGS_HIDDEN = {
   agentHibernationIdleMs: 'later',
   experimentalEphemeralVms: 'later',
   commitMessageAi: 'later',
-  sourceControlAi: 'later',
   nativeChatAppearance: 'electron-ui',
   nativeChatAutoName: 'electron-ui',
   leftSidebarAppearanceMode: 'electron-ui',
@@ -184,8 +184,6 @@ export const POD_SETTINGS_HIDDEN = {
   terminalPaneOpacityTransitionMs: 'electron-ui',
   terminalDividerThicknessPx: 'electron-ui',
   windowBackgroundBlur: 'electron-ui',
-  openLinksInApp: 'electron-ui',
-  openLinksInAppModifierInverts: 'electron-ui',
   terminalLinkActionPopoverEnabled: 'electron-ui',
   terminalLinkClickBehavior: 'electron-ui',
   terminalUrlMiddleClickBehavior: 'electron-ui',
@@ -229,7 +227,11 @@ export const POD_SETTINGS_HIDDEN = {
   compactWorktreeCards: 'electron-ui'
 } as const satisfies { [K in keyof GlobalSettings]?: PodSettingsHiddenReason }
 
-type Classified = PodSettingsKey | keyof typeof POD_SETTINGS_HIDDEN | PodSettingsSecretKey
+type Classified =
+  | PodSettingsKey
+  | keyof typeof POD_SETTINGS_HIDDEN
+  | PodSettingsSecretKey
+  | PodSettingsReadOnlyKey
 type Unclassified = Exclude<keyof GlobalSettings, Classified>
 /** Fails to compile, naming the keys, when Orca or Pod adds a setting nobody classified here. */
 export const POD_SETTINGS_ALL_CLASSIFIED: [Unclassified] extends [never] ? true : Unclassified =
