@@ -9,6 +9,11 @@ import {
   setHostSystemPrefersDark,
   settingsUpdateTouchesTerminalTheme
 } from './runtime-host-terminal-theme'
+import { TERMINAL_VIEWER_COLORS_METHODS } from './rpc/methods/terminal/terminal-viewer-colors-method'
+import {
+  _resetTerminalViewAttributesForTest,
+  getTerminalViewerColors
+} from './terminal-view-attribute-store'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([]),
@@ -76,6 +81,7 @@ function terminalTheme(
 describe('host terminal theme (headless)', () => {
   afterEach(() => {
     setHostSystemPrefersDark(() => true)
+    _resetTerminalViewAttributesForTest()
     settings = {}
   })
 
@@ -146,6 +152,30 @@ describe('host terminal theme (headless)', () => {
     runtime.refreshHostTerminalTheme()
     expect(events).toHaveLength(0)
     unsubscribe()
+  })
+
+  it("answers the host's theme again once the last viewer that reported colours disconnects", async () => {
+    settings = {
+      theme: 'light',
+      terminalThemeDark: '',
+      terminalUseSeparateLightTheme: true,
+      terminalThemeLight: ''
+    }
+    const runtime = makeRuntime()
+    runtime.refreshHostTerminalTheme()
+    const hostColors = getTerminalViewerColors()
+    expect(hostColors?.background).not.toBe('#282c34')
+    const [setViewerColors] = TERMINAL_VIEWER_COLORS_METHODS
+    const first = { foreground: '#111111', background: '#222222' }
+    await setViewerColors.handler({ colors: first }, { runtime, clientId: 'stream-a' })
+    await setViewerColors.handler(
+      { colors: { foreground: '#333333', background: '#444444' } },
+      { runtime, clientId: 'stream-b' }
+    )
+    runtime.onClientDisconnected('stream-b')
+    expect(getTerminalViewerColors()).toEqual(first)
+    runtime.onClientDisconnected('stream-a')
+    expect(getTerminalViewerColors()).toEqual(hostColors)
   })
 
   it('names the settings that move the theme', () => {
