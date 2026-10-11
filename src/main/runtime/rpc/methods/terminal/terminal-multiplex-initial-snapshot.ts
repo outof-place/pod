@@ -30,6 +30,11 @@ export async function publishMultiplexInitialSnapshot(
   const isMobile = stream.isMobile
   const forcedInitialSnapshotTruncated =
     process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED === '1'
+  // Why: the snapshot's seq must share a domain with the output buffered behind it.
+  await runtime.waitForSubscriberDrivenProviderAttach?.(ptyId)
+  if (!isMultiplexStreamAttached(state, stream)) {
+    return null
+  }
   let read = await runtime.readTerminal(request.terminal)
   let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId)
   if (!isMultiplexStreamAttached(state, stream)) {
