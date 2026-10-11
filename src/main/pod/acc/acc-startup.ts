@@ -1,7 +1,7 @@
 import { userInfo } from 'node:os'
 import { join } from 'node:path'
 import { app } from 'electron'
-import { runProcess } from '../../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { getProductIdentity } from '../../product-identity/product-identity'
 import { setMacTrayYield } from '../../tray/system-tray'
 import { syncMacMenuBarIcon } from '../../startup/main-window-actions'
