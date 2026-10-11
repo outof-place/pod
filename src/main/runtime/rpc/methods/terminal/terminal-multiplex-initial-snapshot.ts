@@ -3,6 +3,7 @@ import {
   serializeBudgetedMobileSnapshot
 } from './terminal-snapshot-publication'
 import { getOutputAfterSnapshotSeq } from './terminal-stream-replay'
+import { pushMultiplexStreamOutput } from './terminal-multiplex-query-responder'
 import { answerQueriesCoveredBySnapshot } from './terminal-snapshot-covered-queries'
 import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
 import {
@@ -147,7 +148,7 @@ export async function publishMultiplexInitialSnapshot(
     for (const chunk of pendingOutput) {
       const uncovered = getOutputAfterSnapshotSeq(chunk, snapshotOutputSeq)
       if (uncovered) {
-        stream.outputBatcher.push(uncovered.data, uncovered.meta)
+        pushMultiplexStreamOutput(stream, uncovered.data, uncovered.meta)
       }
     }
   }
