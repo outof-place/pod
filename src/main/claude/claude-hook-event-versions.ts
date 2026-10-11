@@ -32,6 +32,10 @@ export const UNRESOLVED_CLAUDE_VERSION = CLAUDE_STATUS_LINE_FIRST_VERSION
 
 export type ClaudeHookEventName = keyof typeof CLAUDE_HOOK_EVENT_FIRST_VERSIONS
 
+// Why: `async` on a command hook arrived in 2.1.15 (older schemas strip the key, keep the file and run
+// the hook in line), and until 2.1.19 a backgrounded hook could still hold the session up.
+export const CLAUDE_ASYNC_HOOK_FIRST_VERSION = '2.1.19'
+
 export function parseClaudeCliVersion(output: string | null | undefined): string | null {
   const version = output?.match(/\b\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\b/)?.[0]
   return version && isValidAppVersion(version) ? version : null
