@@ -86,9 +86,9 @@ function send(client: Client, message: unknown): void {
   client.socket.write(`${JSON.stringify(message)}\n`)
 }
 
-async function hello(path: string, token = TOKEN): Promise<Client> {
+async function hello(path: string, token = TOKEN, v = 1): Promise<Client> {
   const client = await connect(path)
-  send(client, { type: 'hello', v: 1, token, pid: 99 })
+  send(client, { type: 'hello', v, token, pid: 99 })
   await vi.waitFor(() => expect(client.lines.length).toBeGreaterThan(0))
   return client
 }
@@ -154,6 +154,12 @@ describe('PodUiHostServer', () => {
     expect(server.attached).toBe(true)
   })
 
+  it('welcomes a version 2 PodNative in its own version', async () => {
+    const { options } = await startServer()
+    const client = await hello(options.socketPath, TOKEN, 2)
+    expect(JSON.parse(client.lines[0])).toEqual({ type: 'welcome', v: 2, pid: 4242 })
+  })
+
   describe('refuses', () => {
     it('a peer that is not PodNative, before reading a byte', async () => {
       const verifyPeer = vi.fn(() => ({ ok: false, pid: 77, error: 'peer fails the requirement' }))
@@ -192,10 +198,10 @@ describe('PodUiHostServer', () => {
       await client.closed
     })
 
-    it('a hello of another protocol version', async () => {
+    it.each([0, 3])('a hello of protocol version %s', async (v) => {
       const { options } = await startServer()
       const client = await connect(options.socketPath)
-      send(client, { type: 'hello', v: 2, token: TOKEN, pid: 99 })
+      send(client, { type: 'hello', v, token: TOKEN, pid: 99 })
       await client.closed
       expect(client.lines).toEqual([])
     })
@@ -213,6 +219,7 @@ describe('PodUiHostServer', () => {
       ['a second hello', { type: 'hello', v: 1, token: TOKEN, pid: 99 }],
       ['an extra field on a known verb', { type: 'quit', reason: 'user', command: 'id' }],
       ['a quit for an unknown reason', { type: 'quit', reason: 'later' }],
+      ['a quit confirmed with anything but true', { type: 'quit', reason: 'user', confirmed: 1 }],
       ['an unknown surface', { type: 'openSurface', surface: 'terminal' }],
       [
         'a forward of 33 URLs',
@@ -249,7 +256,13 @@ describe('PodUiHostServer', () => {
     send(client, { type: 'openSurface', surface: 'window', worktreeId: 'repo::/w' })
     send(client, { type: 'secondInstance', urls: ['pod://skills/x'], files: [] })
     send(client, { type: 'quit', reason: 'update' })
-    await vi.waitFor(() => expect(options.onQuit).toHaveBeenCalledWith('update'))
+    await vi.waitFor(() =>
+      expect(options.onQuit).toHaveBeenCalledWith({
+        reason: 'update',
+        confirmed: false,
+        version: 1
+      })
+    )
     expect(options.onOpenSurface).toHaveBeenCalledWith({
       type: 'openSurface',
       surface: 'window',
@@ -275,6 +288,44 @@ describe('PodUiHostServer', () => {
     await quitting.closed
     // attached, gone, attached: no second "gone" for the UI that asked to quit
     expect(vi.mocked(options.onUiPresence).mock.calls).toEqual([[true], [false], [true]])
+  })
+
+  it('passes a confirmed quit on with the asking version', async () => {
+    const { options } = await startServer()
+    const client = await hello(options.socketPath, TOKEN, 2)
+    send(client, { type: 'quit', reason: 'user', confirmed: true })
+    await vi.waitFor(() =>
+      expect(options.onQuit).toHaveBeenCalledWith({ reason: 'user', confirmed: true, version: 2 })
+    )
+  })
+
+  it('takes a version 2 PodNative that asked to quit for gone until its quit commits', async () => {
+    const { server, options } = await startServer()
+    const asked = await hello(options.socketPath, TOKEN, 2)
+    send(asked, { type: 'quit', reason: 'user' })
+    await vi.waitFor(() => expect(options.onQuit).toHaveBeenCalledTimes(1))
+    // The user cancelled the confirmation, then PodNative crashed: a crash.
+    asked.socket.destroy()
+    await vi.waitFor(() => expect(options.onUiPresence).toHaveBeenLastCalledWith(false))
+
+    const committed = await hello(options.socketPath, TOKEN, 2)
+    send(committed, { type: 'quit', reason: 'user' })
+    await vi.waitFor(() => expect(options.onQuit).toHaveBeenCalledTimes(2))
+    server.noteQuitCommitted()
+    committed.socket.destroy()
+    await committed.closed
+    expect(vi.mocked(options.onUiPresence).mock.calls).toEqual([[true], [false], [true]])
+  })
+
+  it('keeps the attached PodNative once it stops listening, for the quit heartbeat', async () => {
+    const { server, options } = await startServer()
+    const client = await hello(options.socketPath, TOKEN, 2)
+    server.stopListening()
+    expect(server.send({ type: 'quitHeartbeat' })).toBe(true)
+    await vi.waitFor(() => expect(client.lines).toContain('{"type":"quitHeartbeat"}'))
+    const late = createConnection(options.socketPath)
+    sockets.push(late)
+    await new Promise<void>((resolve) => late.once('error', () => resolve()))
   })
 
   it('lets a newer PodNative replace the attached one without a gone report', async () => {

@@ -26,6 +26,7 @@ import { useCodexSharedSettingsNotice } from '../components/terminal-pane/codex-
 import { useVisibleReviewRefreshReporting } from './use-visible-review-refresh-reporting'
 import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
+import { usePodUiHostQuitAssess } from '../pod/ui-host/use-pod-ui-host-quit-assess'
 
 /**
  * App-level subscriptions that must outlive any individual surface. Each one is here because
@@ -48,6 +49,8 @@ export function useAppShellServices(): void {
   // Subscribe to IPC push events
   useIpcEvents()
   useProfileStateSaveDelayNotice()
+  // Fork-only (Pod): one-app's quit asks here what quitting would lose.
+  usePodUiHostQuitAssess()
   useRemoteRuntimeRecoveryTriggers()
   useVisibleReviewRefreshReporting()
   useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })
