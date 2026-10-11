@@ -17,7 +17,12 @@ export async function restartPodOrbstack(deps: {
   busyWorktreeIds: () => readonly string[]
   /** Before the stop: Pod's own `orb` children (stats readers) end with the VM anyway. */
   beforeStop?: () => void
+  env?: NodeJS.ProcessEnv
 }): Promise<PodOrbstackActionResult> {
+  // Why: an E2E profile still drives the user's one real OrbStack; no test may restart it.
+  if ((deps.env ?? process.env).ORCA_E2E_USER_DATA_DIR) {
+    return { ok: false, error: 'Pod does not restart OrbStack from a test profile.' }
+  }
   if (deps.busyWorktreeIds().length > 0) {
     return {
       ok: false,
