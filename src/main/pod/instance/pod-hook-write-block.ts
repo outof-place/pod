@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
+import { hasPodHeadlessUiHostSwitches } from '../ui-host/pod-ui-host-launch'
 
 /**
  * Whether this Pod is the user's own: the packaged app on its default profile, launched by the
@@ -57,10 +58,13 @@ export function podHookWriteBlock(input: PodInstanceInput): PodNonDefaultReason 
   if (input.automated) {
     return 'automated-launch'
   }
-  if (input.argv.includes('--serve')) {
+  // Fork-only (Pod): PodNative's own runtime (headless one-app) runs as --serve --pod-headless-host;
+  // it is the user's Pod, so only those two reasons lift. A serve host without both stays blocked.
+  const podNativeRuntime = hasPodHeadlessUiHostSwitches(input.argv)
+  if (!podNativeRuntime && input.argv.includes('--serve')) {
     return 'serve'
   }
-  if (input.argv.includes('--pod-headless-host')) {
+  if (!podNativeRuntime && input.argv.includes('--pod-headless-host')) {
     return 'headless-host'
   }
   if (input.argv.includes('--use-mock-keychain')) {
