@@ -14,6 +14,7 @@ import {
   type MobileInputFloorClaimHolder
 } from './terminal-input-delivery'
 import { updateViewportForClient } from './terminal-viewport-update'
+import { isMobileQueryReplyResponder } from './terminal-multiplex-query-responder'
 import {
   ensureUnsupportedTerminalPromptReceipt,
   observeReplayedTerminalPrompt
@@ -79,7 +80,7 @@ export const TERMINAL_SEND_METHODS = [
       if (
         params.inputKind === 'query-reply' &&
         leaf?.ptyId &&
-        !runtime.isMobileTerminalQueryReplyAuthority(leaf.ptyId, queryReplyClientId!)
+        !isMobileQueryReplyResponder(runtime, leaf.ptyId, queryReplyClientId!)
       ) {
         return {
           send: {
