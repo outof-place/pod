@@ -1,6 +1,7 @@
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { VoiceSettings } from '../../shared/speech-types'
+import type { RuntimeTerminalThemeSettings } from '../../shared/runtime-terminal-theme'
 
 export type RuntimeStore = {
   getRepos: Store['getRepos']
@@ -75,7 +76,8 @@ export type RuntimeStore = {
   saveSparsePreset?: Store['saveSparsePreset']
   getMobileClientTabSelections?: Store['getMobileClientTabSelections']
   setMobileClientTabSelections?: Store['setMobileClientTabSelections']
-  getSettings(): {
+  // Why the theme keys: a headless host resolves the terminal theme its renderer would publish.
+  getSettings(): Partial<RuntimeTerminalThemeSettings> & {
     workspaceDir: string
     nestWorkspaces: boolean
     // Read by worktree placement: decides whether this project's worktrees
