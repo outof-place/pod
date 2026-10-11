@@ -83,6 +83,26 @@ describe('daemon launch under the app scheduling policy', () => {
     expect(spec.detached).toBe(true)
     expect(spec.env.ELECTRON_RUN_AS_NODE).toBe('1')
   })
+
+  it('runs a relocated daemon host from its own executable, not the bundle Helper', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    Object.defineProperty(process, 'helperExecPath', { value: '/Pod Helper', configurable: true })
+    const clone = '/data/daemon-host.noindex/1.0.0/build-x/Pod Runtime'
+    spawnDaemonChildProcess(
+      {
+        ...options,
+        forkEntryPath: `${clone}/Contents/Resources/app.asar.unpacked/out/main/daemon-entry.js`,
+        relocatedExecPath: `${clone}/Contents/MacOS/Pod`
+      },
+      false
+    )
+    const spec = spawn.mock.calls[0]?.[0]
+    expect(spec.args.slice(0, 3)).toEqual([
+      '-a',
+      `${clone}/Contents/MacOS/Pod`,
+      `${clone}/Contents/Resources/app.asar.unpacked/out/main/daemon-entry.js`
+    ])
+  })
 })
 
 describe('daemon launch environment', () => {
