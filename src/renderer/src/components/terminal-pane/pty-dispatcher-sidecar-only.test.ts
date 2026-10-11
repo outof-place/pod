@@ -47,6 +47,21 @@ describe('pty dispatcher sidecar-only delivery', () => {
     expect(ackData).toHaveBeenCalledWith('pty-1', 12, 12)
   })
 
+  it('credits a sidecar-only chunk even when a sidecar throws', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-dispatcher')
+    const { subscribeToPtyData } = await import('./pty-data-sidecar-subscriptions')
+    registerEagerPtyBuffer('pty-1', vi.fn())
+    subscribeToPtyData('pty-1', () => {
+      throw new Error('sidecar bug')
+    })
+
+    expect(() => dataCallback?.({ id: 'pty-1', data: 'hidden', sidecarOnly: true })).toThrow(
+      'sidecar bug'
+    )
+
+    expect(ackData).toHaveBeenCalledWith('pty-1', 6, 6)
+  })
+
   it('still hands ordinary chunks to the view and the sidecars', async () => {
     const { registerEagerPtyBuffer } = await import('./pty-dispatcher')
     const { subscribeToPtyData } = await import('./pty-data-sidecar-subscriptions')
