@@ -61,11 +61,36 @@ describe('leading-edge flush', () => {
 
   function collect() {
     const delivered: { data: string; seq?: number }[] = []
-    const batcher = createTerminalOutputBatcher((data, meta) => {
-      delivered.push({ data, ...(typeof meta?.seq === 'number' ? { seq: meta.seq } : {}) })
-    })
+    const batcher = createTerminalOutputBatcher(
+      (data, meta) => {
+        delivered.push({ data, ...(typeof meta?.seq === 'number' ? { seq: meta.seq } : {}) })
+      },
+      { leadingEdge: true }
+    )
     return { batcher, delivered }
   }
+
+  // nwparker on #27169: the leading edge adds a frame to every small burst, which a WebSocket or a
+  // phone pays for; only local-stream batchers opt in.
+  it('keeps one frame per small burst for a batcher that did not opt in', () => {
+    const framesFor100Bursts = (options: { leadingEdge?: boolean }): number => {
+      let frames = 0
+      const batcher = createTerminalOutputBatcher(() => frames++, options)
+      let seq = 0
+      for (let burst = 0; burst < 100; burst += 1) {
+        for (let chunk = 0; chunk < 16; chunk += 1) {
+          seq += 1
+          batcher.push('x'.repeat(64), { seq, rawLength: 64 })
+          vi.advanceTimersByTime(0.1)
+        }
+        vi.advanceTimersByTime(20)
+      }
+      batcher.dispose()
+      return frames
+    }
+    expect(framesFor100Bursts({})).toBe(100)
+    expect(framesFor100Bursts({ leadingEdge: true })).toBe(200)
+  })
 
   it('sends a small chunk at once after a quiet spell and batches what follows', () => {
     const { batcher, delivered } = collect()
@@ -106,11 +131,14 @@ describe('leading-edge flush', () => {
   it('never holds a steady trickle longer than the 5 ms timer from its first pending byte', () => {
     const pushedAt = new Map<string, number>()
     const waits: number[] = []
-    const batcher = createTerminalOutputBatcher((data) => {
-      for (const id of data.match(/#\d+;/g) ?? []) {
-        waits.push(performance.now() - pushedAt.get(id)!)
-      }
-    })
+    const batcher = createTerminalOutputBatcher(
+      (data) => {
+        for (const id of data.match(/#\d+;/g) ?? []) {
+          waits.push(performance.now() - pushedAt.get(id)!)
+        }
+      },
+      { leadingEdge: true }
+    )
     // 100 B every 1 ms never counts as quiet, so only the first chunk takes the leading edge.
     for (let i = 0; i < 200; i += 1) {
       const id = `#${i};`
@@ -159,7 +187,8 @@ describe('Pod input flush', () => {
   it('flushes a pending batch 1 ms after input and keeps 1 ms batches for 8 ms', () => {
     const delivered: string[] = []
     const batcher = createTerminalOutputBatcher((data) => delivered.push(data), {
-      fastAfterInput: true
+      fastAfterInput: true,
+      leadingEdge: true
     })
     batcher.push('a')
     vi.advanceTimersByTime(1)
@@ -183,8 +212,8 @@ describe('Pod input flush', () => {
 
   it('ignores input for batchers that did not opt in, and with the kill switch', () => {
     for (const [options, env] of [
-      [{}, '1'],
-      [{ fastAfterInput: true }, '0']
+      [{ leadingEdge: true }, '1'],
+      [{ fastAfterInput: true, leadingEdge: true }, '0']
     ] as const) {
       vi.stubEnv('POD_TERMINAL_INPUT_FLUSH', env)
       const delivered: string[] = []
@@ -204,7 +233,10 @@ describe('Pod input flush', () => {
   it('bounds frames per second for a held key repeating every 30 ms during a flood', () => {
     const count = (fastAfterInput: boolean): number => {
       let frames = 0
-      const batcher = createTerminalOutputBatcher(() => frames++, { fastAfterInput })
+      const batcher = createTerminalOutputBatcher(() => frames++, {
+        fastAfterInput,
+        leadingEdge: fastAfterInput
+      })
       for (let ms = 0; ms < 3000; ms += 1) {
         if (ms % 30 === 0) {
           batcher.noteInput()
