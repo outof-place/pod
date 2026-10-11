@@ -6,7 +6,10 @@ import { resolveWorktreeCatalogSnapshot } from '../../runtime/rpc/worktree-catal
 import { projectWorktreePsRemovals } from '../../runtime/rpc/worktree-removal-marker-projection'
 import { supportsWorktreeVisibilitySourceDefaults } from '../../runtime/rpc/worktree-visibility-client-capability'
 import { snapshotPendingWorktreeRemovals } from '../../worktree-removal-listing'
-import type { PodWorktreeStatusChangedEvent } from '../../../shared/pod-worktree-status-event'
+import type {
+  PodWorktreeStatusChangedEvent,
+  PodWorktreeStatusReadyFields
+} from '../../../shared/pod-worktree-status-event'
 import type { PodClientEventsSubscribeParams } from '../../../shared/rpc-contract/pod-client-events-params'
 import {
   PodWorktreeStatusHub,
@@ -75,8 +78,22 @@ export function subscribePodWorktreeStatus(
         warned = true
         console.warn('[pod-worktree-status] worktree.ps read failed:', error)
       }
-    }
+    },
+    { agents: options !== true && options.agents === true }
   )
+}
+
+/** The `ready` frame's fields for a subscription `subscribePodWorktreeStatus` joined (or didn't). */
+export function podWorktreeStatusReadyFields(
+  params: SubscribeParams | undefined,
+  stop: (() => void) | null
+): PodWorktreeStatusReadyFields {
+  if (!stop) {
+    return {}
+  }
+  const options = params?.worktreeStatus
+  const agents = options !== undefined && options !== true && options.agents === true
+  return { worktreeStatus: true, ...(agents ? { worktreeStatusAgents: true } : {}) }
 }
 
 // The worktree.ps pipeline (worktree-catalog-methods.ts), so the event's snapshotId is that read's.
