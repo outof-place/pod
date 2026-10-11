@@ -9,6 +9,7 @@ import {
 } from '../../../runtime/terminal-view-attribute-store'
 import { validateTerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
+import { hostSystemPrefersDark } from '../../../runtime/runtime-host-terminal-theme'
 import { publishColorQueryReplyColors, publishTerminalViewAttributes } from '../provider/registry'
 import type { PtyIpcSession } from '../session'
 
@@ -26,7 +27,10 @@ export function installTerminalViewAttributesIpc(
   // can query before the first push lands; either way the owner should answer with the saved theme.
   if (settings) {
     seedTerminalViewerColors(
-      resolveConfiguredTerminalColors(settings, session.options?.systemPrefersDark?.() ?? true)
+      resolveConfiguredTerminalColors(
+        settings,
+        session.options?.systemPrefersDark?.() ?? hostSystemPrefersDark()
+      )
     )
   }
   const current = getTerminalViewerColors()
