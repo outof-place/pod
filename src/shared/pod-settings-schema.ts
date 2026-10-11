@@ -144,6 +144,12 @@ export const POD_SETTINGS_FIELDS = {
     z.boolean(),
     'Close busy terminals without asking'
   ),
+  // PodNative's file editor follows it too (⌥Z there writes it).
+  editorWordWrap: row(
+    z.boolean(),
+    'Wrap long lines',
+    'In file editors, instead of scrolling sideways.'
+  ),
   terminalFontFamily: row(z.string().max(512), 'Font'),
   terminalFontSize: row(z.number().int().min(6).max(72), 'Size'),
   terminalFontWeight: row(
