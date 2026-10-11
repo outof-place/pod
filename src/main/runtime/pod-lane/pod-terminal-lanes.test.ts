@@ -32,6 +32,8 @@ const CONNECTION = 'local-stream-test'
 const GRANT = { laneId: 'lane-1', socketPath: '/tmp/x/pod-lane-v44.sock', token: 'tok' }
 
 beforeEach(() => {
+  // Why: the lane is macOS-only; these tests model a Mac on every host (Linux CI included).
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
   control.mockReset()
   control.mockImplementation((_ptyId: string, type: string) =>
     Promise.resolve(type === 'podLaneGrant' ? GRANT : true)
@@ -40,6 +42,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs()
+  vi.restoreAllMocks()
 })
 
 function start(overrides: Partial<OrcaRuntimeService> = {}) {
@@ -153,6 +156,14 @@ describe('pod.terminal.directLane', () => {
     expect((await harness.requestLane(99)).error?.message).toContain('pod_lane_no_stream')
     vi.stubEnv('POD_TERMINAL_DIRECT_LANE', '0')
     expect((await harness.requestLane()).error?.message).toContain('pod_lane_disabled')
+  })
+
+  it('grants no lane off macOS', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    const harness = start()
+    await subscribed(harness)
+    expect((await harness.requestLane()).error?.message).toContain('pod_lane_disabled')
+    expect(control).not.toHaveBeenCalledWith('pty-1', 'podLaneGrant', expect.anything())
   })
 
   it("switches the stream's output off at the daemon's marker and back on with a snapshot", async () => {
