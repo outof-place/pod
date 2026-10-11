@@ -72,6 +72,9 @@ export type ToolState = {
   codesignCode: number
   lsofStdout: string
   copyDelayMs?: number
+  /** Filesystem mount(8) reports for the clone root's device. */
+  volumeType?: string
+  freeBytes?: number
 }
 
 const ok: ProcessResult = {
@@ -102,6 +105,13 @@ export async function fakeTool(state: ToolState, spec: ProcessSpec): Promise<Pro
     case '/bin/chmod':
       makeWritable(args[2])
       return ok
+    case '/usr/bin/stat':
+      return { ...ok, stdout: 'disk9s9\n' }
+    case '/sbin/mount':
+      return {
+        ...ok,
+        stdout: `/dev/disk9s9 on /System/Volumes/Data (${state.volumeType ?? 'apfs'}, local, journaled)\n`
+      }
     case '/usr/sbin/lsof':
       return state.lsofStdout ? { ...ok, stdout: state.lsofStdout } : { ...ok, code: 1 }
     default:
