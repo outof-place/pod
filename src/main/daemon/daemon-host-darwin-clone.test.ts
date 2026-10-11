@@ -3,6 +3,7 @@ import os from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  BACKGROUND_WORK_WAIT,
   ENTRY_REL,
   buildBundleFixture,
   fakeTool,
@@ -208,7 +209,10 @@ describe('darwinDaemonHostForSpawn', () => {
     tools.copyDelayMs = 200
     expect(await darwinDaemonHostForSpawn(entryPath, 20)).toBeNull()
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('no clone within 20 ms'))
-    await vi.waitFor(() => expect(darwinDaemonHostNeedsClone(entryPath)).toBe(false))
+    await vi.waitFor(
+      () => expect(darwinDaemonHostNeedsClone(entryPath)).toBe(false),
+      BACKGROUND_WORK_WAIT
+    )
     expect(await darwinDaemonHostForSpawn(entryPath, 20)).not.toBeNull()
   })
 })
