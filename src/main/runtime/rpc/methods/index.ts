@@ -60,6 +60,8 @@ import { WORKSPACE_LAYOUT_METHODS } from './workspace-layout'
 import { POD_ORBSTACK_METHODS } from '../../../pod/orbstack/pod-orbstack-rpc-methods'
 import { POD_TERMINAL_LANE_METHODS } from './pod-terminal-lane'
 import { POD_SETTINGS_METHODS } from '../../../pod/settings/pod-settings-rpc-methods'
+import { observePodComputerActions } from '../../../pod/computer-actions/pod-computer-actions'
+import { POD_COMPUTER_ACTIONS_METHODS } from '../../../pod/computer-actions/pod-computer-actions-rpc-methods'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -100,7 +102,9 @@ export const ALL_RPC_METHODS = [
   ...ACCOUNT_METHODS,
   ...ANTIGRAVITY_ACCOUNT_METHODS,
   ...PREFLIGHT_METHODS,
-  ...COMPUTER_METHODS,
+  // Fork-only (Pod): actions recorded for the Computer Use pane's recent actions.
+  ...observePodComputerActions(COMPUTER_METHODS),
+  ...POD_COMPUTER_ACTIONS_METHODS,
   ...SESSION_TAB_METHODS,
   ...WORKSPACE_LAYOUT_METHODS,
   ...NATIVE_CHAT_METHODS,
