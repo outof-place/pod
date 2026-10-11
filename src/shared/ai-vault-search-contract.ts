@@ -138,7 +138,11 @@ export const AiVaultSearchResponseSchema = z.discriminatedUnion('kind', [
 ])
 export const AiVaultSearchStatusRequestSchema = z.object({})
 /** Consent flip for one host's index. Answered with that host's status after the change is applied. */
-export const AiVaultSetSearchEnabledParamsSchema = z.object({ enabled: z.boolean() })
+export const AiVaultSetSearchEnabledParamsSchema = z.object({
+  enabled: z.boolean(),
+  // Fork-only (Pod): PodNative states the flip is the user's click (pod-native-peer.ts).
+  reason: z.literal('user').optional()
+})
 export const AiVaultSearchStatusSchema = z.object({
   // Strings keep a future host's larger catalog readable by this client.
   supportedAgents: z.array(z.string()).optional(),
