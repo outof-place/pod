@@ -289,6 +289,7 @@ export function projectRuntimeMobileSessionTabs(
     const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
       ? { agentStatus: clientStatusFields as AgentStatusEntry }
       : {}
+    const agentResume = host.getAgentResume?.(`${tab.parentTabId}:${tab.leafId}`)
     tabs.push({
       type: 'terminal',
       id: tab.id,
@@ -300,6 +301,7 @@ export function projectRuntimeMobileSessionTabs(
       ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),
       ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
       ...(launchAgent ? { launchAgent } : {}),
+      ...(agentResume ? { agentResume } : {}),
       ...clientAgentStatus,
       ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {}),
       ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),
