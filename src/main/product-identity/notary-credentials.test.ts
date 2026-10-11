@@ -83,9 +83,9 @@ describe('notarization credentials', () => {
 const STUBS: Record<string, string> = {
   dscl: 'echo "NFSHomeDirectory: $FAKE_HOME"',
   security: [
-    'case "$1" in',
-    '  default-keychain) echo "    \\"$FAKE_DEFAULT\\"" ;;',
-    '  list-keychains) echo "    \\"$FAKE_DEFAULT\\""; echo "    \\"/Library/Keychains/System.keychain\\"" ;;',
+    'case "$*" in',
+    '  "default-keychain -d user") echo "    \\"$FAKE_DEFAULT\\"" ;;',
+    '  "list-keychains -d user") echo "    \\"$FAKE_DEFAULT\\""; echo "    \\"/Library/Keychains/System.keychain\\"" ;;',
     '  *) echo "unexpected security $*" >&2; exit 9 ;;',
     'esac'
   ].join('\n'),
