@@ -75,7 +75,9 @@ export function createManagedCommandMatcher(
     `agent-hooks/${scriptFileName}`,
     `agent-hooks/${scriptStem}.cmd`,
     `agent-hooks/${scriptStem}.ps1`,
-    `agent-hooks/${scriptStem}.sh`
+    `agent-hooks/${scriptStem}.sh`,
+    // Fork-only (Pod): Claude's native client entry (src/main/pod/agent-hook/pod-agent-hook-native.ts).
+    ...(scriptStem === 'claude-hook' ? ['agent-hooks/pod-agent-hook'] : [])
   ]
   return (command) => {
     if (!command) {
