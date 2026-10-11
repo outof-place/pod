@@ -10,6 +10,7 @@ import { CdpDomFocusReplay } from './cdp-dom-focus-replay'
 import { CdpPageCaptureCommands } from './cdp-page-capture-commands'
 import type { CapturePaintHold } from './cdp-screenshot'
 import { notePodAgentBrowserCommand } from '../pod/browser-pane/pod-browser-pane-hooks'
+import { PodCdpCommandWakes } from '../pod/headless-host/guest-page-sleep'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -17,7 +18,12 @@ export class CdpWsProxy {
   private client: WebSocket | null = null
   private detachClientListeners: (() => void) | null = null
   private port = 0
-  private readonly responder = new CdpClientResponseWriter(() => this.client)
+  // Fork-only (Pod): keeps a sleeping page awake from each request until its reply.
+  private readonly sleepWakes = new PodCdpCommandWakes(() => this.webContents.id)
+  private readonly responder = new CdpClientResponseWriter(
+    () => this.client,
+    (clientId) => this.sleepWakes.reply(clientId)
+  )
   private readonly sessions = new CdpSyntheticSessionRegistry()
   private readonly discovery: CdpTargetDiscovery
   private readonly debuggerChannel: CdpDebuggerChannel
@@ -145,6 +151,7 @@ export class CdpWsProxy {
     this.domFocusReplay.clear()
     this.pageCapture.clear()
     this.sessions.clear()
+    this.sleepWakes.clear()
   }
 
   private handleClientMessage(client: WebSocket, raw: string): void {
@@ -158,6 +165,7 @@ export class CdpWsProxy {
       return
     }
     const clientId = msg.id
+    this.sleepWakes.request(clientId)
     this.responder.recordRequestSessionId(client, clientId, msg)
 
     if (this.discovery.handleCommand(client, clientId, msg)) {
