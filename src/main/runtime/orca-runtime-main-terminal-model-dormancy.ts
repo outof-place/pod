@@ -20,6 +20,7 @@ import { HEADLESS_EMULATOR_DEFAULT_SCROLLBACK } from '../daemon/headless-emulato
 import type { RuntimeHeadlessTerminal } from './runtime-terminal-state-records'
 import { canAgentMainTerminalModelRest } from './main-terminal-model-agent-rest'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
+import { isMainTerminalModelDormancyEnabled } from '../pod/pod-terminal-model-dormancy'
 
 // Why the model's own depth: a rebuilt model must hold the history main held before it rested,
 // or a reader of it (recovery, a viewer's seed) gets a shallower image than before dormancy.
@@ -180,7 +181,7 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
   private canMainTerminalModelRest(ptyId: string): boolean {
     const pty = this.ptysById.get(ptyId)
     if (
-      this.store?.getSettings()?.terminalMainModelDormancy === false ||
+      !isMainTerminalModelDormancyEnabled(this.store?.getSettings()) ||
       !pty ||
       pty.connectionId ||
       !this.canAgentPaneMainTerminalModelRest(ptyId)
