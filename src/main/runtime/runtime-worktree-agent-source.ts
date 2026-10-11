@@ -19,6 +19,8 @@ export type RuntimeWorktreeAgentSource = {
   mainAgent?: AgentMainAgentStatus
   stateStartedAt: number
   updatedAt: number
+  /** Pod: the state hydrated from disk for an agent that outlived the host's restart. */
+  beforeRestart?: true
   /** Projected by the structured session host; `owned` rows stay fresh past the staleness window. */
   structuredHost?: StructuredHostStatus
 }

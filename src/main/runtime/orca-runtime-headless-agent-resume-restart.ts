@@ -7,7 +7,9 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import { parseExecutionHostId } from '../../shared/execution-host'
+import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 import {
   agentStatusBeforeRestart,
   checkStateBeforeRestartOnScreen,
@@ -73,6 +75,38 @@ export class OrcaRuntimeWithHeadlessAgentResumeRestart extends OrcaRuntimeWithHe
       }
     })
     return changed ? { ...result, tabs } : result
+  }
+
+  /** worktree.ps: the hydrated row of an agent that outlived the restart counts, as on its tab. */
+  protected admitAgentRowsBeforeRestart(
+    rows: readonly AgentStatusIpcPayload[]
+  ): readonly AgentStatusIpcPayload[] {
+    if (!this.handlesRestartWithoutRenderer()) {
+      return rows
+    }
+    return rows.map((row) => {
+      if (row.restoredUnconfirmed !== true || !this.keptAgentBeforeRestart(row.paneKey)) {
+        return row
+      }
+      const { restoredUnconfirmed: _restored, ...admitted } = row
+      return admitted
+    })
+  }
+
+  protected markAgentSourcesBeforeRestart(
+    sources: ReadonlyMap<string, RuntimeWorktreeAgentSource>
+  ): ReadonlyMap<string, RuntimeWorktreeAgentSource> {
+    if (!this.handlesRestartWithoutRenderer()) {
+      return sources
+    }
+    const marked = new Map(sources)
+    for (const [paneKey, source] of sources) {
+      const kept = this.keptAgentBeforeRestart(paneKey)
+      if (kept && !kept.confirmed) {
+        marked.set(paneKey, { ...source, beforeRestart: true })
+      }
+    }
+    return marked
   }
 
   /** A ⌘⇧N agent that ran in this pane but left no session to resume starts afresh; say so. */
