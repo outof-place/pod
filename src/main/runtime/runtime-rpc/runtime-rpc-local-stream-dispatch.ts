@@ -22,6 +22,10 @@ import { RUNTIME_RPC_REPLY_TOO_LARGE_CODE } from './runtime-rpc-reply-size-limit
 import { RuntimeRpcWebSocketDispatch } from './runtime-rpc-websocket-dispatch'
 import { podTrace } from '../../../shared/pod-terminal-trace'
 
+// Why a cap of its own: streams leave the socket's request slots, and a native client needs one.
+export const MAX_RUNTIME_LOCAL_STREAM_CONNECTIONS = 4
+export const RUNTIME_LOCAL_STREAM_LIMIT_CODE = 'local_stream_limit'
+
 type LocalStreamSession = {
   connection: UnixSocketStreamConnection
   connectionId: string
@@ -63,6 +67,20 @@ export class RuntimeRpcLocalStreamDispatch extends RuntimeRpcWebSocketDispatch {
             RUNTIME_LOCAL_STREAM_UNSUPPORTED_CODE,
             `This runtime streams ${RUNTIME_LOCAL_STREAM_PROTOCOL} version ${RUNTIME_LOCAL_STREAM_VERSION} only`,
             { protocol: RUNTIME_LOCAL_STREAM_PROTOCOL, versions: [RUNTIME_LOCAL_STREAM_VERSION] }
+          )
+        )
+      )
+      return
+    }
+    if (this.localStreamConnections.size >= MAX_RUNTIME_LOCAL_STREAM_CONNECTIONS) {
+      // Why refuse, not queue: a client falls back to unary calls, which still have their slots.
+      upgrade.reject(
+        JSON.stringify(
+          errorResponse(
+            request.id,
+            { runtimeId: this.runtime.getRuntimeId() },
+            RUNTIME_LOCAL_STREAM_LIMIT_CODE,
+            `This runtime serves at most ${MAX_RUNTIME_LOCAL_STREAM_CONNECTIONS} local streams`
           )
         )
       )
