@@ -432,6 +432,7 @@ import {
   PluginSetEnabledParams,
   PluginsPanelActionParams
 } from './plugins-params'
+import { PodClientEventsSubscribeParams } from './pod-client-events-params'
 import {
   PodOrbstackAgentSandboxParams,
   PodOrbstackCreateParams,
@@ -1181,7 +1182,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.sparsePresets': RepoSelector,
   'repo.update': RepoUpdate,
   'runtime.clientCapabilities.update': ClientCapabilitiesUpdate,
-  'runtime.clientEvents.subscribe': null,
+  'runtime.clientEvents.subscribe': PodClientEventsSubscribeParams,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,
   'session.tabs.activate': ActivateTab,
   'session.tabs.close': CloseTab,
