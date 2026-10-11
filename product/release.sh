@@ -11,9 +11,10 @@
 #
 # Signing:      POD_SIGN_IDENTITY (default: outofplace's Developer ID, whose key lives only in
 #               this Mac's login keychain; CI imports its own certificate).
-# Notarization, one of (default: NOTARY_PROFILE=pod-notary):
+# Notarization, one of (default: the App Store Connect key in ~/.appstoreconnect, else
+# NOTARY_PROFILE=pod-notary; product/notary-credentials.sh):
 #   NOTARY_PROFILE=<name>                      notarytool keychain profile (local; see RELEASING.md)
-#   APPLE_API_KEY=<path .p8> APPLE_API_KEY_ID APPLE_API_ISSUER   App Store Connect API key (CI)
+#   APPLE_API_KEY=<path .p8> APPLE_API_KEY_ID APPLE_API_ISSUER   App Store Connect API key
 #   APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID           Apple ID (fallback)
 set -euo pipefail
 
@@ -35,7 +36,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --publish) publish=1; shift ;;
     --skip-build) skip_build=1; shift ;;
-    -h | --help) sed -n '2,19p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,20p' "$0"; exit 0 ;;
     -*) die "unknown option $1" ;;
     *) [ -z "$version" ] || die "one version only"; version="${1#v}"; shift ;;
   esac
@@ -61,22 +62,8 @@ esac
 team_id="${sign_identity##*(}"
 team_id="${team_id%)}"
 
-if [ -z "${NOTARY_PROFILE:-}${APPLE_API_KEY:-}${APPLE_ID:-}" ]; then
-  NOTARY_PROFILE="$DEFAULT_NOTARY_PROFILE"
-fi
-notary_args=()
-if [ -n "${NOTARY_PROFILE:-}" ]; then
-  notary_args=(--keychain-profile "$NOTARY_PROFILE")
-  export APPLE_KEYCHAIN_PROFILE="$NOTARY_PROFILE"
-  # electron-builder prefers Apple ID and API-key variables over the profile.
-  unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER
-elif [ -n "${APPLE_API_KEY:-}" ] && [ -n "${APPLE_API_KEY_ID:-}" ] && [ -n "${APPLE_API_ISSUER:-}" ]; then
-  notary_args=(--key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
-elif [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
-  notary_args=(--apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID")
-else
-  die "no notarization credentials: set NOTARY_PROFILE, or APPLE_API_KEY(+_ID,+ISSUER), or APPLE_ID(+APPLE_APP_SPECIFIC_PASSWORD,+APPLE_TEAM_ID)"
-fi
+. "$repo_root/product/notary-credentials.sh"
+pod_notary_credentials "$DEFAULT_NOTARY_PROFILE"
 
 # Apple's timestamp service fails now and then mid-signing ("The timestamp service is not
 # available", "A timestamp was expected but was not found"). Reruns only that failure: 3 attempts,
