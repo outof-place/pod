@@ -53,6 +53,7 @@
     "../src/main/window/focus-existing-window.ts",
     "../src/main/window/foreground-activation-policy.ts",
     "../src/main/pod/ui-host/pod-ui-host-launch.ts",
+    "../src/main/pod/headless-host/headless-host-mode.ts",
     "../src/main/window/macos-app-activation.ts"
   ],
   "compilerOptions": {
