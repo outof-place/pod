@@ -51,7 +51,7 @@ type TerminalWithSynchronousWrite = Terminal & {
   }
 }
 
-const DEFAULT_SCROLLBACK = 5000
+export const HEADLESS_EMULATOR_DEFAULT_SCROLLBACK = 5000
 // Keep in sync with the renderer twin terminal-capability-replies.ts (main must not import renderer modules).
 const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 
@@ -82,7 +82,7 @@ export class HeadlessEmulator {
     this.terminal = new Terminal({
       cols: opts.cols,
       rows: opts.rows,
-      scrollback: opts.scrollback ?? DEFAULT_SCROLLBACK,
+      scrollback: opts.scrollback ?? HEADLESS_EMULATOR_DEFAULT_SCROLLBACK,
       allowProposedApi: true,
       logLevel: 'off',
       // Why: parse CSI =/>/< u pushes so CSI ? u answers with the flags the hidden app pushed (renderer parity).
