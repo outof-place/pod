@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS,
   MAIN_TERMINAL_MODEL_HANDOFF_CATCH_UP_MS,
+  MAIN_TERMINAL_MODEL_RESEED_AFTER_MS,
+  MAIN_TERMINAL_MODEL_RESEED_MAX_MS,
   MainTerminalModelDormancy,
   chunkDataAfterSeed
 } from './main-terminal-model-dormancy'
@@ -139,7 +141,44 @@ describe('MainTerminalModelDormancy', () => {
     expect(state.dropped).toEqual(['pty'])
   })
 
-  it('keeps the model live for the rest of the generation after a failed seed', () => {
+  it('retries a failed seed on demand after a backoff that doubles up to its cap', () => {
+    const { state, dormancy, goDormant } = createHarness()
+    goDormant('pty')
+    dormancy.noteDemand('pty')
+    const backoffs: number[] = []
+    for (let failure = 0; failure < 6; failure += 1) {
+      dormancy.seedFailed('pty')
+      expect(dormancy.hasFailedSeed('pty')).toBe(true)
+      const attempts = state.materialized.length
+      let waited = 0
+      while (state.materialized.length === attempts) {
+        state.now += 500
+        waited += 500
+        dormancy.noteDemand('pty')
+      }
+      expect(state.handoff.get('pty')).toBe(true)
+      backoffs.push(waited)
+    }
+    expect(backoffs).toEqual([1_000, 2_000, 4_000, 8_000, 10_000, 10_000])
+    expect(MAIN_TERMINAL_MODEL_RESEED_AFTER_MS).toBe(1_000)
+    expect(MAIN_TERMINAL_MODEL_RESEED_MAX_MS).toBe(10_000)
+  })
+
+  it('lets the model rest again once a retried seed lands', () => {
+    const { state, dormancy, goDormant } = createHarness()
+    goDormant('pty')
+    dormancy.noteDemand('pty')
+    dormancy.seedFailed('pty')
+    state.now += MAIN_TERMINAL_MODEL_RESEED_AFTER_MS
+    dormancy.noteDemand('pty')
+    dormancy.seedSettled('pty', 0)
+    expect(dormancy.hasFailedSeed('pty')).toBe(false)
+    expect(dormancy.isCaughtUp('pty')).toBe(true)
+    state.now += MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS
+    expect(dormancy.onChunk('pty', 0)).toBe(true)
+  })
+
+  it('keeps the model live while its seed keeps failing', () => {
     const { state, dormancy, goDormant } = createHarness()
     goDormant('pty')
     dormancy.noteDemand('pty')
