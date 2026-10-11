@@ -72,6 +72,19 @@ describe('notarization credentials', () => {
     )
   })
 
+  it('falls back to HOME when the user database cannot be read (no dscl, as on Linux)', () => {
+    const asc = appStoreConnect(['KX7Q6Y844C'], ISSUER)
+    const bin = join(asc, 'bin')
+    mkdirSync(bin)
+    writeFileSync(join(bin, 'dscl'), '#!/bin/bash\nexit 127\n', { mode: 0o755 })
+    expect(resolve(asc, { PATH: `${bin}:/usr/bin:/bin` })).toBe(
+      [
+        `args --key ${asc}/private_keys/AuthKey_KX7Q6Y844C.p8 --key-id KX7Q6Y844C --issuer ${ISSUER}`,
+        `env profile= key_id=KX7Q6Y844C issuer=${ISSUER}`
+      ].join('\n')
+    )
+  })
+
   it('refuses an issuer file that holds no issuer id', () => {
     expect(resolve(appStoreConnect(['KX7Q6Y844C'], 'not-an-id'))).toMatch(
       /^DIE .*issuer is not an App Store Connect issuer id$/
