@@ -10,10 +10,11 @@ export const TERMINAL_VIEWER_COLORS_METHODS = [
     params: TerminalSetViewerColors,
     // Why: a headless host has no theme of its own to answer OSC 10/11 with, so it answers with
     // the colours of the paired client that last pushed; a host with its own window keeps its own.
-    handler: async (params) => {
+    // Why the client id: a viewer's colours answer only until it disconnects.
+    handler: async (params, { clientId }) => {
       const colors = normalizeColorQueryReplyColors(params.colors)
       if (colors) {
-        setPairedViewerColors(colors)
+        setPairedViewerColors(colors, clientId)
       }
       return { applied: colors !== null }
     }
