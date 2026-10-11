@@ -37,7 +37,7 @@ import { registerComputerUsePermissionHandlers } from '../computer-use-permissio
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser'
 import { setTrustedBrowserRendererWebContentsId } from '../browser-renderer-trust'
 import { registerSessionHandlers } from '../session'
-import { registerSettingsHandlers } from '../settings'
+import { registerSettingsHandlersOnce } from '../../pod/settings/pod-settings-registration'
 import { registerDiagnosticsHandlers } from '../diagnostics'
 import { registerSkillsHandlers } from '../skills'
 import { registerSkillDeleteIpcHandlers } from '../skill-delete/handlers'
@@ -186,7 +186,8 @@ export function registerCoreHandlers(
   registerTerminalRenderDesyncEvidenceHandler()
   registerComputerUsePermissionHandlers()
   registerNativeTerminalHandlers(runtime)
-  registerSettingsHandlers(store, agentAwakeService)
+  // Fork-only (Pod): podSettings may have registered them already (headless serve has no window).
+  registerSettingsHandlersOnce(store, agentAwakeService)
   registerSkillsHandlers(store, runtime)
   registerSkillDeleteIpcHandlers(store, runtime)
   if (automations) {

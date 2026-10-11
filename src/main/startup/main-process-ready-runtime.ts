@@ -43,6 +43,7 @@ import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-re
 import { startPodAccFromStartup } from '../pod/acc/acc-startup'
 import { installPodWorkspace } from '../pod/workspace/install-pod-workspace'
 import { installPodUiHost } from '../pod/ui-host/pod-ui-host'
+import { installPodSettings } from '../pod/settings/install-pod-settings'
 
 // Headless serve never opens a window, so the sweep still has to run off a timer there.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -61,6 +62,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   configureRuntimeServices(runtime)
   // Fork-only (Pod): workspace root IPC and listeners; no disk work at startup.
   installPodWorkspace(store, runtime)
+  // Fork-only (Pod): podSettings.* over settings:set's write path; a no-op without Pod's identity.
+  installPodSettings(store, state.agentAwakeService ?? undefined)
   // Fork-only (Pod): the one-app control socket; a no-op unless PodNative launched this runtime.
   installPodUiHost()
   await initializeMainProcessPlugins(runtime)

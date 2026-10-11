@@ -440,6 +440,7 @@ import {
   PodOrbstackSandboxClaudeLoginParams,
   PodOrbstackWorktreeParams
 } from './pod-orbstack-params'
+import { PodSettingsSetParams, PodSettingsUnsubscribeParams } from './pod-settings-params'
 import {
   PreflightAgentDetection,
   PreflightCheck,
@@ -1129,6 +1130,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.panelAction': PluginsPanelActionParams,
   'plugins.readPanelEntry': PluginReadPanelEntryParams,
   'plugins.setEnabled': PluginSetEnabledParams,
+  'podSettings.get': null,
+  'podSettings.schema': null,
+  'podSettings.set': PodSettingsSetParams,
+  'podSettings.subscribe': null,
+  'podSettings.unsubscribe': PodSettingsUnsubscribeParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
