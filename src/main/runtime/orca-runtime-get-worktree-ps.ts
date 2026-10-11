@@ -125,12 +125,15 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
     attachRuntimeWorktreeAgentRows({
       summaries,
       workingTerminalEvidenceByWorktreeId,
-      rowSources: collectRuntimeWorktreeAgentSources({
-        mirroredWorktreeIdByTabId,
-        connectedPtyEvidence,
-        // Structured sessions are in here too: the host publishes them into the same store.
-        hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? []
-      }),
+      // Pod: an agent that outlived a headless host's restart keeps its last state, marked.
+      rowSources: this.markAgentSourcesBeforeRestart(
+        collectRuntimeWorktreeAgentSources({
+          mirroredWorktreeIdByTabId,
+          connectedPtyEvidence,
+          // Structured sessions are in here too: the host publishes them into the same store.
+          hookSnapshots: this.admitAgentRowsBeforeRestart(this.getAgentStatusSnapshotFn?.() ?? [])
+        })
+      ),
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
       getSummary
     })
