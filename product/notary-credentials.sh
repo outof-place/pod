@@ -1,6 +1,7 @@
 # Sourced by product/release.sh and product/assemble-one-app.sh. pod_notary_credentials <default
 # profile> picks the notarization credentials, fills the `notary_args` array for notarytool and
-# leaves electron-builder's variables for the same set. The first set present wins:
+# leaves electron-builder's variables for the same set; pod_notary_preflight then checks the
+# keychain and those credentials before anything is built. The first set present wins:
 #   NOTARY_PROFILE=<name>                                   notarytool keychain profile
 #   APPLE_API_KEY=<.p8> APPLE_API_KEY_ID APPLE_API_ISSUER   App Store Connect API key
 #   APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID      Apple ID
@@ -47,4 +48,39 @@ pod_notary_credentials() {
   else
     die "no notarization credentials: set NOTARY_PROFILE, or APPLE_API_KEY(+_ID,+ISSUER), or APPLE_ID(+APPLE_APP_SPECIFIC_PASSWORD,+APPLE_TEAM_ID), or put the key and issuer in ~/.appstoreconnect"
   fi
+}
+
+# What the user's keychain setup and environment look like, for a failed preflight.
+pod_notary_diagnostics() {
+  {
+    echo "notarization diagnostics:"
+    echo "  default-keychain: $(security default-keychain 2>&1 | tr -s ' ')"
+    echo "  list-keychains -d user:"
+    security list-keychains -d user 2>&1 | sed 's/^/  /'
+    echo "  environment:"
+    env | grep -E 'HOME|CFFIXED' | sed 's/^/    /' || true
+  } >&2
+}
+
+# Before anything is built: codesign must find the user's login keychain, and notarytool must
+# accept exactly the credentials pod_notary_credentials picked (one read-only history call).
+pod_notary_preflight() {
+  local home expected actual err
+  home="$(pod_account_home)"
+  expected="${home:-$HOME}/Library/Keychains/login.keychain-db"
+  actual="$(security default-keychain 2>/dev/null | sed -n 's/^[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p')"
+  echo "default keychain: ${actual:-unknown}"
+  if [ "$actual" != "$expected" ]; then
+    pod_notary_diagnostics
+    die "the default keychain is ${actual:-unknown}, not $expected"
+  fi
+  err="$(mktemp)"
+  if ! xcrun notarytool history "${notary_args[@]}" >/dev/null 2>"$err"; then
+    sed 's/^/  notarytool: /' "$err" >&2
+    rm -f "$err"
+    pod_notary_diagnostics
+    die "notarytool history failed with the chosen credentials"
+  fi
+  rm -f "$err"
+  echo "notarization credentials: notarytool history OK"
 }
