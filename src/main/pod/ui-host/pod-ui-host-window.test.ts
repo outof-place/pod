@@ -24,8 +24,8 @@ vi.mock('./pod-ui-host-bridge', () => ({
     return mocks.attached.value
   }
 }))
-vi.mock('./pod-headless-worktree-watch', () => ({
-  rearmPodHeadlessWorktreeWatch: mocks.rearm
+vi.mock('./pod-headless-window-services', () => ({
+  rearmPodHeadlessWindowServices: mocks.rearm
 }))
 vi.mock('./pod-ui-host-launch', () => ({
   isPodUiHostLaunch: () => mocks.uiHost.value,
