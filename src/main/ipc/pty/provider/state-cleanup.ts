@@ -1,3 +1,4 @@
+import { setRendererQueryResponderVisible } from '../renderer-query-responder'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { unregisterPty } from '../../../memory/pty-registry'
 import { forgetCodexPaneAccount } from '../../../codex/codex-pane-account-registry'
@@ -54,6 +55,7 @@ export function clearProviderPtyState(
   interactiveOutputCharsByPty.delete(id)
   const activeChanged = activeRendererPtys.delete(id)
   visibleRendererPtys.delete(id)
+  setRendererQueryResponderVisible(id, false)
   rendererVisibilityKnownPtys.delete(id)
   // Why: every teardown path funnels through here — hidden/interest gate bits must not outlive the PTY or a reused map entry could silently gate a new one.
   const deliveryPolicyChanged = isHiddenRendererPty(id)
