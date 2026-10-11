@@ -30,9 +30,14 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     // Why: a seq-less Output chunk must carry sentinel 0, not the control-frame state.cursor, or it poisons the client's frame-drop tracker.
     const resolvedSeq =
       typeof seq === 'number' ? seq : opcode === TerminalStreamOpcode.Output ? 0 : state.cursor++
+    const frame = encodeTerminalStreamFrame({ opcode, streamId, seq: resolvedSeq, payload })
+    if (!state.admitStreamFrame(streamId, opcode, frame.byteLength)) {
+      onRejected?.()
+      return false
+    }
     let sent: boolean | void
     try {
-      sent = sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: resolvedSeq, payload }))
+      sent = sendBinary(frame)
     } catch {
       onRejected?.()
       state.closeMultiplex()
