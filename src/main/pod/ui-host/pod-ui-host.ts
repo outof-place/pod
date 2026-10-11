@@ -38,11 +38,13 @@ import {
   type PodUiHostSecondInstance
 } from './pod-ui-host-protocol'
 import { PodUiHostServer } from './pod-ui-host-server'
+import { podSurfaceFocusChannel, type PodUiHostSessionSource } from './pod-ui-host-surface-tab'
 
 // Long enough for "Pod quit unexpectedly" → Reopen to find this runtime still up.
 const NO_UI_GRACE_MS = 60_000
 
 let installed = false
+let sessions: PodUiHostSessionSource | null = null
 
 function readToken(): string | null {
   try {
@@ -66,7 +68,14 @@ function openSurface(request: PodUiHostOpenSurface): boolean {
       })
     }
     if (tabId) {
-      window.webContents.send('ui:focusTerminal', { tabId, worktreeId })
+      const channel = podSurfaceFocusChannel(sessions, worktreeId, tabId)
+      // The user's click: an agent tab of a worktree not yet active still shows.
+      window.webContents.send(
+        channel,
+        channel === 'ui:focusEditorTab'
+          ? { tabId, worktreeId, userInitiated: true }
+          : { tabId, worktreeId }
+      )
     }
   }
   const target = state.mainWindow
@@ -109,12 +118,14 @@ export function admitSecondInstance(
 
 /** Starts the control socket in a one-app launch; a no-op in every other launch. */
 export function installPodUiHost(
-  runtime: Pick<OrcaRuntimeService, 'setOffscreenBrowserBackend'>
+  runtime: Pick<OrcaRuntimeService, 'setOffscreenBrowserBackend'>,
+  workspaceSessions?: PodUiHostSessionSource
 ): void {
   if (installed || !isPodUiHostLaunch()) {
     return
   }
   installed = true
+  sessions = workspaceSessions ?? null
   let graceTimer: ReturnType<typeof setTimeout> | null = null
   let quitAskedByUi = false
   let systemShutdown = false
