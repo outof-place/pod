@@ -10,13 +10,23 @@ export const POD_UI_HOST_SURFACE_IPC = {
   navigate: 'pod:uiHostSurface:navigate'
 } as const
 
-/** The classic window's top-level views PodNative can ask for by name. */
+/** The classic window's views and panels PodNative can ask for by name. */
 export const POD_UI_HOST_WINDOW_SECTIONS = [
   'activity',
   'automations',
   'skills',
   'artifacts',
-  'space'
+  'space',
+  'tasks',
+  'new-workspace',
+  'add-project',
+  'workspace-board',
+  'quick-commands',
+  'explorer',
+  'search',
+  'source-control',
+  'checks',
+  'ports'
 ] as const
 
 /** The section of an `openSurface`; the renderer checks the names (an unknown one opens the root). */
