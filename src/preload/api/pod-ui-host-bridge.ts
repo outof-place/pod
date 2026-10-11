@@ -1,6 +1,9 @@
 import { ipcRenderer } from 'electron'
 import { POD_UI_HOST_QUIT_IPC } from '../../shared/pod-ui-host-quit'
-import { POD_UI_HOST_SURFACE_IPC } from '../../shared/pod-ui-host-surface'
+import {
+  isPodUiHostSurfaceNavigation,
+  POD_UI_HOST_SURFACE_IPC
+} from '../../shared/pod-ui-host-surface'
 import { ORCA_APP_RESTART_STARTED_EVENT } from '../../shared/updater-renderer-events'
 import type { PreloadApi } from '../api-types'
 
@@ -22,5 +25,14 @@ export const podUiHostApi = {
     ipcRenderer.on(POD_UI_HOST_QUIT_IPC.assess, listener)
     return () => ipcRenderer.removeListener(POD_UI_HOST_QUIT_IPC.assess, listener)
   },
-  surfaceReady: () => ipcRenderer.send(POD_UI_HOST_SURFACE_IPC.ready)
+  surfaceReady: () => ipcRenderer.send(POD_UI_HOST_SURFACE_IPC.ready),
+  onSurfaceNavigate: (navigate) => {
+    const listener = (_event: Electron.IpcRendererEvent, navigation: unknown): void => {
+      if (isPodUiHostSurfaceNavigation(navigation)) {
+        navigate(navigation)
+      }
+    }
+    ipcRenderer.on(POD_UI_HOST_SURFACE_IPC.navigate, listener)
+    return () => ipcRenderer.removeListener(POD_UI_HOST_SURFACE_IPC.navigate, listener)
+  }
 } satisfies PreloadApi['podUiHost']
