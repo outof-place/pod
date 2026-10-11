@@ -8,6 +8,7 @@ import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { withPodSandboxLaunchChoice } from '../pod/orbstack/pod-orbstack-terminal-override'
+import { withRequestedAgentArgs } from '../../shared/pod-create-terminal-agent-args'
 
 export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRuntimeWithRunCreateMobileSessionTerminal {
   protected async resolveMobileSessionTerminalCommand(
@@ -19,6 +20,7 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
       agentPrompt?: string
+      agentArgs?: readonly string[]
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
     }
@@ -48,14 +50,18 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
     const startupPlan = buildAgentStartupPlan({
-      ...resolveAgentStartupPlanInputs({
-        agent: opts.agent,
-        settings,
-        // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
-        platform: this.getAgentLaunchPlatformForWorkspace(workspace),
-        // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `orca-ide` rename must not apply.
-        isRemote: Boolean(workspace.connectionId)
-      }),
+      // Fork-only (Pod): the request's agentArgs replace the configured ones; no-op without them.
+      ...withRequestedAgentArgs(
+        resolveAgentStartupPlanInputs({
+          agent: opts.agent,
+          settings,
+          // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
+          platform: this.getAgentLaunchPlatformForWorkspace(workspace),
+          // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `orca-ide` rename must not apply.
+          isRemote: Boolean(workspace.connectionId)
+        }),
+        opts.agentArgs
+      ),
       prompt: opts.agentPrompt ?? '',
       allowEmptyPromptLaunch: true
     })
