@@ -26,7 +26,7 @@ import {
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream, TerminalViewportClient } from './terminal-stream-types'
-import { settlePodLaneFence } from '../../../pod-lane/pod-terminal-lanes'
+import { deferSnapshotToPodLane, settlePodLaneFence } from '../../../pod-lane/pod-terminal-lanes'
 
 function decodeViewportFrame(
   payload: TerminalStreamFrame['payload']
@@ -152,7 +152,11 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       const payload = TerminalMultiplexSnapshotRequestFrame.safeParse(
         decodeTerminalStreamJson<unknown>(frame.payload) ?? {}
       )
-      void state.sendRequestedSnapshot(stream, payload.success ? payload.data : {})
+      const request = payload.success ? payload.data : {}
+      // Pod: while a direct lane feeds the viewer, its snapshot comes after the lane's detach marker.
+      if (!deferSnapshotToPodLane(stream, request)) {
+        void state.sendRequestedSnapshot(stream, request)
+      }
     }
   }
   state.sendRequestedSnapshot = async (
