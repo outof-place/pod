@@ -2,6 +2,7 @@ import type { PtyRendererDelivery } from '../session'
 import { getPtyIpc } from '../../pty-host-bindings'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { createPtyWriteInput } from './write-input'
+import { noteRendererPtyInput, noteRendererViewportClaim } from '../renderer-query-responder'
 
 export function installPtyWriteIpcHandlers(deps: {
   mainWindow?: PtyRendererDelivery
@@ -23,6 +24,7 @@ export function installPtyWriteIpcHandlers(deps: {
     if (!isPtyWriteEventFromMainWindow(event) || !isPtyWritePayload(args)) {
       return
     }
+    noteRendererPtyInput(args.id, args.data)
     const claimTail = hostViewportClaimTails.get(args.id)
     if (claimTail) {
       void claimTail.then((claimed) => (claimed ? writePtyInput(args) : false))
@@ -34,6 +36,7 @@ export function installPtyWriteIpcHandlers(deps: {
     if (!isPtyWriteEventFromMainWindow(event) || !isPtyWritePayload(args)) {
       return false
     }
+    noteRendererPtyInput(args.id, args.data)
     const claimTail = hostViewportClaimTails.get(args.id)
     return claimTail
       ? claimTail.then((claimed) => (claimed ? writePtyInputAccepted(args) : false))
@@ -45,6 +48,7 @@ export function installPtyWriteIpcHandlers(deps: {
     if (!isPtyWriteEventFromMainWindow(event) || !runtime || !isPtyViewportClaimPayload(args)) {
       return
     }
+    noteRendererViewportClaim(args.id)
     const prior = hostViewportClaimTails.get(args.id)
     // Why: two panes can mirror one PTY — never let a later no-op claim replace the in-flight resize that the following host input must await.
     const claim = (
