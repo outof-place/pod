@@ -11,6 +11,11 @@ import {
 } from '../../../shared/pod-settings-schema'
 import { POD_SETTINGS_PAGES } from '../../../shared/pod-settings-pages'
 import { POD_SETTINGS_SECRET_KEYS } from '../../../shared/pod-settings-classification'
+import {
+  POD_SETTINGS_READ_ONLY_KEYS,
+  projectPodSettingsReadOnly,
+  type PodSettingsReadOnly
+} from '../../../shared/pod-settings-read-only'
 
 export type PodSettingsStore = {
   getSettings(): GlobalSettings
@@ -20,7 +25,12 @@ export type PodSettingsStore = {
 /** The write path `settings:set` uses (pod-settings-writer.ts): same sanitizing and side effects. */
 export type PodSettingsWrite = (values: Partial<GlobalSettings>) => Promise<GlobalSettings>
 
-export type PodSettingsSnapshot = { revision: string; values: PodSettingsValues }
+/** `readOnly`: settings a client follows but can't write (pod-settings-read-only.ts). */
+export type PodSettingsSnapshot = {
+  revision: string
+  values: PodSettingsValues
+  readOnly: PodSettingsReadOnly
+}
 
 export type PodSettingsSetResult =
   | ({ ok: true } & PodSettingsSnapshot)
@@ -36,6 +46,8 @@ export type PodSettingsChange = {
   values: PodSettingsValues
   /** Keys that no longer have a value (the client shows the default). */
   cleared: PodSettingsKey[]
+  /** All of them, when one moved. */
+  readOnly?: PodSettingsReadOnly
 }
 
 // The pages list every field once (pod-settings-pages.test.ts), in a stable order.
@@ -44,6 +56,7 @@ const FIELD_KEYS: readonly PodSettingsKey[] = POD_SETTINGS_PAGES.flatMap((page) 
 )
 const FIELD_SET = new Set<string>(FIELD_KEYS)
 const SECRET_KEYS = new Set<string>(POD_SETTINGS_SECRET_KEYS)
+const READ_ONLY_KEYS = new Set<string>(POD_SETTINGS_READ_ONLY_KEYS)
 /** Snapshots kept to tell which keys moved since a client's revision. */
 const REMEMBERED_REVISIONS = 64
 /** A burst of writes (a slider drag, an import) reaches a subscriber as one change. */
@@ -68,14 +81,16 @@ export class PodSettingsService {
   }
 
   get(): PodSettingsSnapshot {
-    const values = project(this.store.getSettings())
-    const revision = revisionOf(values)
+    const settings = this.store.getSettings()
+    const values = project(settings)
+    const readOnly = projectPodSettingsReadOnly(settings)
+    const revision = revisionOf(values, readOnly)
     this.seen.delete(revision)
     this.seen.set(revision, values)
     if (this.seen.size > REMEMBERED_REVISIONS) {
       this.seen.delete(this.seen.keys().next().value ?? revision)
     }
-    return { revision, values }
+    return { revision, values, readOnly }
   }
 
   /**
@@ -94,6 +109,10 @@ export class PodSettingsService {
     const secret = keys.filter((key) => SECRET_KEYS.has(key))
     if (secret.length > 0) {
       throw new PodSettingsRefusedError(`podSettings.set refuses ${secret.join(', ')}`)
+    }
+    const readOnly = keys.filter((key) => READ_ONLY_KEYS.has(key))
+    if (readOnly.length > 0) {
+      throw new PodSettingsRefusedError(`podSettings.set refuses read-only ${readOnly.join(', ')}`)
     }
     const unknown = keys.filter((key) => !FIELD_SET.has(key))
     if (unknown.length > 0) {
@@ -135,7 +154,10 @@ export class PodSettingsService {
     const keys = FIELD_KEYS.filter((key) => written[key] !== undefined)
     const base = this.seen.get(baseRevision)
     if (!base) {
-      return revisionOf(current) === baseRevision ? [] : keys
+      return revisionOf(current, projectPodSettingsReadOnly(this.store.getSettings())) ===
+        baseRevision
+        ? []
+        : keys
     }
     return keys.filter((key) => {
       if (key === 'notifications') {
@@ -176,8 +198,13 @@ export class PodSettingsService {
         return
       }
       const change = diff(last.values, next.values)
+      const readOnlyMoved = JSON.stringify(last.readOnly) !== JSON.stringify(next.readOnly)
       last = next
-      onChange({ revision: next.revision, ...change })
+      onChange({
+        revision: next.revision,
+        ...change,
+        ...(readOnlyMoved && { readOnly: next.readOnly })
+      })
     }
     const stop = this.store.onSettingsChanged(() => {
       if (!timer) {
@@ -250,8 +277,8 @@ function diff(
 
 // Why a digest of the values, not a counter: it holds across runtime restarts, and writes that
 // skip the change listeners still move it.
-function revisionOf(values: PodSettingsValues): string {
-  return digest(FIELD_KEYS.map((key) => [key, values[key] ?? null]))
+function revisionOf(values: PodSettingsValues, readOnly: PodSettingsReadOnly): string {
+  return digest([...FIELD_KEYS.map((key) => [key, values[key] ?? null]), ['readOnly', readOnly]])
 }
 
 function digest(value: unknown): string {
