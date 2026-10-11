@@ -3,6 +3,7 @@ import { sweepAgentBrowserOrphansOnFirstUse } from '../startup/pod-startup-polic
 import { BrowserError } from './cdp-bridge'
 import { AgentBrowserBridgeShutdown } from './agent-browser-bridge-shutdown'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
+import { podGuestPageSleep } from '../pod/headless-host/guest-page-sleep'
 import type {
   EnqueueTargetedCommandOptions,
   ResolvedBrowserCommandTarget
@@ -96,7 +97,8 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
       sweepAgentBrowserOrphansOnFirstUse(this)
       await this.ensureSession(sessionName, browserPageId, target.webContentsId)
     }
-    return execute(sessionName, target)
+    // Fork-only (Pod): a sleeping page draws for the whole command, then a little after it.
+    return podGuestPageSleep.whileAwake(target.webContentsId, () => execute(sessionName, target))
   }
 
   protected async processQueue(sessionName: string): Promise<void> {

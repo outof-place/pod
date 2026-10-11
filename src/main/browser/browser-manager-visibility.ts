@@ -1,5 +1,6 @@
 import { rendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import { BrowserManagerState } from './browser-manager-state'
+import { podGuestPageSleep } from '../pod/headless-host/guest-page-sleep'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
   // Why: page id -> active capture count; the renderer hears only the first hold and the last release.
@@ -8,10 +9,12 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   // Why: only pixel capture needs a drawn guest. One-way so a minimized or throttled desktop renderer
   // can't stall the capture; the capture itself retries until the page produces a frame.
   holdPaintForCapture(guestWebContentsId: number): () => void {
+    // Fork-only (Pod): before any early return, so a sleeping serve page with no renderer draws too.
+    const releasePageWake = podGuestPageSleep.wake(guestWebContentsId)
     const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
     const renderer = browserPageId ? this.resolveRendererForBrowserTab(browserPageId) : null
     if (!browserPageId || !renderer || renderer.isDestroyed()) {
-      return () => {}
+      return releasePageWake
     }
     const holds = this.capturePaintHolds.get(browserPageId) ?? 0
     this.capturePaintHolds.set(browserPageId, holds + 1)
@@ -26,6 +29,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
         return
       }
       released = true
+      releasePageWake()
       releaseThrottle()
       const remaining = (this.capturePaintHolds.get(browserPageId) ?? 1) - 1
       if (remaining > 0) {
