@@ -2,6 +2,10 @@
 import { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from './orca-runtime-build-headless-mobile-session-browser-tabs'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { isAgentLaunchRunningIn } from '../agent-launch/agent-launch-pane-attachment'
+import {
+  podUiHostRefusesAutomaticFocus,
+  podUiHostWorktreeSleepHeld
+} from '../pod/ui-host/pod-ui-host-sleep-hold'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { TabActivationIntent } from '../../shared/tab-activation-intent'
@@ -150,7 +154,11 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         // (#11598), so only a background probe may be refused for one.
         (!automatic ||
           (!this.isDeliberatelyParkedPane(worktreeId, tab) &&
-            !this.isWorktreeTerminalSleepHeld(worktreeId))) &&
+            // Pod: a one-app window's sleep under way holds too (pod-ui-host-sleep-hold.ts).
+            !podUiHostWorktreeSleepHeld(
+              worktreeId,
+              this.isWorktreeTerminalSleepHeld(worktreeId)
+            ))) &&
         // Why: a launch's early tab is listed before its agent spawns; that launch's spawn fills it.
         !isAgentLaunchRunningIn(worktreeId, {
           kind: 'pane',
@@ -282,7 +290,15 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         ) {
           this.activateHeadlessMobileSessionTerminalTab(worktreeId, snapshot!, targetTab)
         }
-      } else if (targetsHost) {
+      } else if (
+        targetsHost &&
+        // Pod: focusing a sleeping worktree's tab spawns its PTY, waking what Close Terminals slept.
+        !podUiHostRefusesAutomaticFocus(
+          automatic,
+          worktreeId,
+          this.isWorktreeTerminalSleepHeld(worktreeId)
+        )
+      ) {
         this.notifier?.focusTerminal?.(targetTab.parentTabId, worktreeId, targetTab.leafId)
       }
       return this.applyMobileSessionTabNavigation(
