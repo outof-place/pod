@@ -77,6 +77,7 @@ beforeEach(() => {
   setProcessProp('platform', 'darwin')
   setProcessProp('execPath', fixture.execPath)
   tools.calls = []
+  hostApp.willQuit.length = 0
   tools.copyDelayMs = 0
   tools.lsofStdout = ''
   vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -158,5 +159,51 @@ describe('scheduleDarwinDaemonHostMaintenance', () => {
     }
     await vi.waitFor(() => expect(darwinDaemonHostNeedsClone(entryPath)).toBe(false))
     expect(existsSync(old)).toBe(false)
+  })
+
+  it('runs its tools at background priority', async () => {
+    publishClone('1.0.0')
+    const runtimeDir = join(tempDir, 'userData', 'daemon')
+    mkdirSync(runtimeDir, { recursive: true })
+    vi.useFakeTimers()
+    try {
+      scheduleDarwinDaemonHostMaintenance(runtimeDir, entryPath)
+      await vi.advanceTimersByTimeAsync(30_000)
+    } finally {
+      vi.useRealTimers()
+    }
+    await vi.waitFor(() => expect(darwinDaemonHostNeedsClone(entryPath)).toBe(false))
+    const wrapped = tools.calls.filter((call) => call.program === '/usr/sbin/taskpolicy')
+    if (existsSync('/usr/sbin/taskpolicy')) {
+      expect(wrapped.map((call) => call.args.slice(0, 2))).toEqual(
+        expect.arrayContaining([
+          ['-b', '/usr/sbin/lsof'],
+          ['-b', '/bin/cp'],
+          ['-b', '/usr/bin/codesign']
+        ])
+      )
+    } else {
+      expect(wrapped).toEqual([])
+    }
+  })
+
+  it('never starts once a quit is under way, and a quit before the delay cancels it', async () => {
+    const old = publishClone('1.0.0')
+    const runtimeDir = join(tempDir, 'userData', 'daemon')
+    mkdirSync(runtimeDir, { recursive: true })
+    vi.useFakeTimers()
+    try {
+      scheduleDarwinDaemonHostMaintenance(runtimeDir, entryPath, () => true)
+      await vi.advanceTimersByTimeAsync(30_000)
+      scheduleDarwinDaemonHostMaintenance(runtimeDir, entryPath)
+      for (const handler of hostApp.willQuit) {
+        handler()
+      }
+      await vi.advanceTimersByTimeAsync(30_000)
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(tools.calls).toEqual([])
+    expect(existsSync(old)).toBe(true)
   })
 })
