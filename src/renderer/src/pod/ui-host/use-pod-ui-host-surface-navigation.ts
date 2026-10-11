@@ -1,6 +1,9 @@
 // Fork-only (Pod): PodNative's "Open in Classic Window → <section>" and "Classic Settings…" land on
 // the settings pane, repo, anchor or top-level view they name, not the settings root.
 import { useEffect } from 'react'
+import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
+import { openNewWorkspaceFromShortcut } from '@/hooks/ipc-events/new-workspace-command'
+import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
 import { isSettingsNavigationTarget } from '@/lib/settings-navigation-types'
 import type { PodUiHostSurfaceNavigation } from '../../../../shared/pod-ui-host-surface'
 import { useAppStore } from '../../store'
@@ -16,6 +19,15 @@ type NavigationStore = Pick<
   | 'openSkillsPage'
   | 'openArtifactsPage'
   | 'openSpacePage'
+  | 'activeModal'
+  | 'activeView'
+  | 'taskPageData'
+  | 'openModal'
+  | 'openTaskPage'
+  | 'setSidebarOpen'
+  | 'showRightSidebarSearch'
+  | 'setRightSidebarOpen'
+  | 'setRightSidebarTab'
 >
 
 export function applyPodUiHostSurfaceNavigation(
@@ -39,6 +51,11 @@ export function applyPodUiHostSurfaceNavigation(
     store.openSettingsPage()
     return
   }
+  applyWindowSection(navigation, store)
+}
+
+/** A view of the window, with the same store actions and events its menus and shortcuts use. */
+function applyWindowSection(navigation: PodUiHostSurfaceNavigation, store: NavigationStore): void {
   switch (navigation.section) {
     case 'activity':
       store.openActivityPage()
@@ -57,6 +74,32 @@ export function applyPodUiHostSurfaceNavigation(
       return
     case 'space':
       store.openSpacePage()
+      return
+    case 'tasks':
+      store.openTaskPage()
+      return
+    case 'new-workspace':
+      openNewWorkspaceFromShortcut(store)
+      return
+    case 'add-project':
+      store.openModal('add-repo')
+      return
+    case 'workspace-board':
+      store.setSidebarOpen(true)
+      window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
+      return
+    case 'quick-commands':
+      window.dispatchEvent(new CustomEvent(TOGGLE_QUICK_COMMANDS_MENU_EVENT))
+      return
+    case 'search':
+      store.showRightSidebarSearch()
+      return
+    case 'explorer':
+    case 'source-control':
+    case 'checks':
+    case 'ports':
+      store.setRightSidebarOpen(true)
+      store.setRightSidebarTab(navigation.section)
   }
 }
 
