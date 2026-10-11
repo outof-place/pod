@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => {
       send: vi.fn(),
       isCrashed: () => false,
       isLoadingMainFrame: () => false,
+      isFocused: () => false,
+      setBackgroundThrottling: vi.fn(),
+      capturePage: vi.fn(async () => undefined),
       once: vi.fn((event: string, handler: () => void) => webContentsHandlers.set(event, handler))
     }
   }
@@ -247,6 +250,8 @@ describe('installPodUiHost', () => {
       await vi.waitFor(() => expect(mocks.app.quit).toHaveBeenCalledTimes(1))
       expect(mocks.state.isQuitting).toBe(true)
       expect(mocks.window.webContents.send).toHaveBeenCalledWith('pod:uiHostQuit:commit')
+      // The question ran unthrottled, then the renderer went back to its throttling.
+      expect(mocks.window.webContents.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
       await vi.waitFor(() =>
         expect(parsed(client)).toContainEqual({ type: 'quitting', reason: 'user' })
       )
@@ -285,7 +290,9 @@ describe('installPodUiHost', () => {
       const client = await attach(2)
       send(client, { type: 'quit', reason: 'user' })
       await vi.waitFor(() => expect(mocks.app.quit).toHaveBeenCalledTimes(1), { timeout: 4_000 })
-      expect(parsed(client)).toContainEqual({ type: 'quitting', reason: 'user' })
+      await vi.waitFor(() =>
+        expect(parsed(client)).toContainEqual({ type: 'quitting', reason: 'user' })
+      )
     })
 
     it('reports a quit the renderer vetoed, and a later crash counts as one again', async () => {
