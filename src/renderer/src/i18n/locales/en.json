@@ -20034,6 +20034,12 @@
     "claudeLogin": {
       "label": "Let sandboxed agents use this Mac's Claude Code login (the token stays on the Mac; same subscription limits)",
       "description": "Off by default. When on, Claude Code in a sandbox sends its API calls through Pod on this Mac, which adds the login."
+    },
+    "restart": {
+      "title": "Restart OrbStack?",
+      "description": "Restarting stops every running container and machine on this Mac, not only Pod's: {{containers}} containers and {{machines}} machines run now. Containers set to restart come back on their own; agents in a sandbox lose their connection.",
+      "confirm": "Restart OrbStack",
+      "action": "Restart OrbStack…"
     }
   }
 }

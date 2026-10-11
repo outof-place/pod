@@ -10,6 +10,7 @@ import { isPodOrbstackEnabled } from './pod-orbstack-flag'
 import { createPodOrbstackMachines } from './pod-orbstack-machines'
 import { loadPodOrbstackRecipe } from './pod-orbstack-recipe'
 import { PodOrbstackRegistry } from './pod-orbstack-registry'
+import { restartPodOrbstack } from './pod-orbstack-restart'
 import { createPodOrbstackService, setPodOrbstackService } from './pod-orbstack-service'
 import { createSandboxRelays } from './pod-orbstack-relay'
 import {
@@ -155,6 +156,12 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
       }),
     readStats: (names) => stats.read(names),
     ...(templatesAllowed ? { setTemplates: (on: boolean) => templates.setEnabled(on) } : {}),
+    restart: () =>
+      restartPodOrbstack({
+        run,
+        busyWorktreeIds: () => machines.busyWorktreeIds(),
+        beforeStop: () => readers.closeAll()
+      }),
     onChanged: () => events.changed(),
     subscribe: (emit) => events.subscribe(emit)
   })
