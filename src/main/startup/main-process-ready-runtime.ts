@@ -71,7 +71,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // Fork-only (Pod): podSettings.* over settings:set's write path; a no-op without Pod's identity.
   installPodSettings(store, state.agentAwakeService ?? undefined)
   // Fork-only (Pod): the one-app control socket; a no-op unless PodNative launched this runtime.
-  installPodUiHost(runtime)
+  installPodUiHost(runtime, store)
   // Fork-only (Pod): window-armed services without a window; a no-op unless the runtime is headless.
   installPodHeadlessWindowServices(store, runtime)
   // Fork-only (Pod): worktreeStatusChanged for clients that opt in; listens to nothing until one does.
