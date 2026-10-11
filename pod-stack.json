@@ -100,24 +100,24 @@
       "branch": "perf/daemon-query-responder",
       "upstream": "https://github.com/stablyai/orca/pull/27123",
       "base": "b814beccf7",
-      "note": "b4-perf; on #27086"
+      "note": "b4-perf; on #27086; 92a1f34f00 records daemon protocol 45 in the local build contract"
     },
     {
       "branch": "perf/agent-model-dormancy",
       "upstream": "https://github.com/stablyai/orca/pull/27185",
-      "base": "bff7c7f891",
+      "base": "92a1f34f00f3d5a109e7adbf5d7615f15cb726cf",
       "note": "b4-perf; on #27123"
     },
     {
       "branch": "perf/screen-agent-dormancy",
       "upstream": "https://github.com/stablyai/orca/pull/27207",
-      "base": "2a3d70a0c8",
+      "base": "ee5a1777383a37f5ea80f9faf4f857d425cd24b1",
       "note": "b4-perf; on #27185"
     },
     {
       "branch": "fix/multiplex-attach-query-gap",
       "upstream": "https://github.com/stablyai/orca/pull/27312",
-      "note": "r-orca-lowlevel; CPR reply while a multiplex viewer attaches; after #27207"
+      "note": "r-orca-lowlevel; CPR reply while a multiplex viewer attaches; after #27207; ab8a19f2d9 adds the two runtime stub methods the remount and cross-version tests need"
     },
     {
       "branch": "perf/terminal-tail-scan",
@@ -183,7 +183,9 @@
     {
       "branch": "pod/identity",
       "forkOnly": "Pod identity: name, bundle id, icon, URL scheme and CLI name",
-      "base": "71bec057fd"
+      "base": "71bec057fd",
+      "ref": "bf87e2b7ce89dba0bc68c8527fee45d0e92a5f86",
+      "hold": "a9534ba7c8 (CLI registration only from Settings) is stacked after pod/headless-host, below"
     },
     {
       "branch": "pod/least-entitlements",
@@ -264,7 +266,7 @@
       "branch": "stack/pod-acc",
       "forkOnly": "claude-acc built into Pod: bundled plugin, payload and tray",
       "base": "10849bc8b8",
-      "note": "pod/acc minus its status-bar copies of stack/plugins, replayed onto the stack; v6 adds ddb9adf6b6 4ad324fdc6 5fc7b455c3 a2486ad095 722cf633e7 (lifecycle outcome record, seal gate probes, rerun a failed setup, claude-acc 1.31.7, then 1.31.8)",
+      "note": "pod/acc minus its status-bar copies of stack/plugins, replayed onto the stack; v6 adds ddb9adf6b6 4ad324fdc6 5fc7b455c3 a2486ad095 722cf633e7 (lifecycle outcome record, seal gate probes, rerun a failed setup, claude-acc 1.31.7, then 1.31.8, 1.31.10 2d0bdf81bd)",
       "source": "pod/acc"
     },
     {
@@ -315,6 +317,12 @@
       "note": "agent-api; 9 commits on 9ca1946cba"
     },
     {
+      "branch": "pod/orbstack-launch-routing-review",
+      "forkOnly": "OrbStack sandbox launch-routing review",
+      "base": "a081f1458f4a9de4a25bb2cd07c44031d4ef7a53",
+      "note": "agent-api; one commit on v6 main: install-pod-orbstack.ts (a --version probe) in the claude-launch-routing reviewed list"
+    },
+    {
       "branch": "pod/agent-turbo",
       "forkOnly": "agent CLIs at app priority",
       "base": "6edfc6c8e1",
@@ -346,7 +354,9 @@
       "base": "57e357f35925de869dd8ee8df5d67275e2d45499",
       "source": "pod/naming",
       "sourceSince": "525a5850e67fd00e6b85b725ec4fcfe9df4cea4f",
-      "note": "pod/naming 7fac8733bb replayed without phase2: helper-names require next to installNativeCli"
+      "ref": "3f3474d5662f6dd78fa09ed39719c6108326b006",
+      "note": "pod/naming 7fac8733bb replayed without phase2: helper-names require next to installNativeCli; + b7185e8276 (CLI helper copy without main's module)",
+      "hold": "v6.0.2: pod/naming 759801b532 (CliSection fallback copy) goes into v6.0.3"
     },
     {
       "branch": "stack/pod-one-app",
@@ -354,7 +364,31 @@
       "base": "36d08e91be2bf5d58557d9b375ef1a9668f6e6b5",
       "source": "pod/one-app",
       "sourceSince": "525a5850e67fd00e6b85b725ec4fcfe9df4cea4f",
-      "note": "pod/one-app bf0d308217 replayed without phase2, plus the tsconfig.tc.web.json fix"
+      "note": "pod/one-app bf0d308217 replayed without phase2, plus the tsconfig.tc.web.json fix; + 9768d37c22 safe quit (ui-host protocol v2)"
+    },
+    {
+      "branch": "pod/headless-host",
+      "forkOnly": "Pod headless host",
+      "base": "a081f1458f4a9de4a25bb2cd07c44031d4ef7a53",
+      "note": "b4-perf; 2 commits on v6 main: windowless --serve --pod-headless-host; no runtime WebSocket beyond loopback, none on the headless host"
+    },
+    {
+      "branch": "pod/identity",
+      "forkOnly": "Pod identity: name, bundle id, icon, URL scheme and CLI name",
+      "base": "bf87e2b7ce89dba0bc68c8527fee45d0e92a5f86",
+      "note": "nt-packaging; a9534ba7c8 (Pod registers its CLI only from Settings, never as `pod`) after headless-host, which touches the same main-process-runtime-launch.ts"
+    },
+    {
+      "branch": "pod/census-gaps",
+      "forkOnly": "packaged listener census for ui-host and serve launches (opt-in POD_PACKAGED_APP)",
+      "base": "a081f1458f4a9de4a25bb2cd07c44031d4ef7a53",
+      "note": "nt-packaging; test only; needs pod/headless-host for the serve census"
+    },
+    {
+      "branch": "pod/one-app-release",
+      "forkOnly": "one-app release assembly script and docs",
+      "base": "a081f1458f4a9de4a25bb2cd07c44031d4ef7a53",
+      "note": "nt-packaging; product/assemble-one-app.sh, verify-entitlements --outer, RELEASING.md section; no app code"
     }
   ],
   "generated": [
