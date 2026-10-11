@@ -47,6 +47,11 @@ export class UnixSocketStreamConnection {
     })
   }
 
+  // Fork-only (Pod): PodNative's peer check reads this connection's descriptor.
+  get podPeerSocket(): Socket {
+    return this.socket
+  }
+
   get isOpen(): boolean {
     return !this.closed && !this.socket.destroyed && this.socket.writable
   }
