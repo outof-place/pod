@@ -2,8 +2,11 @@
 // Release gate: every executable and bundle in the app carries only what product/entitlements-policy.cjs
 // allows it. The app and Electron's helpers may have the keys of the electron-builder config's
 // entitlements files; every other executable only its rule's plist, and most get none.
+// With --outer, a one-app Pod.app's outer side (PodNative, Sparkle) must carry none at all; the
+// nested runtime gets the policy check on its own.
 //
 //   node product/scripts/verify-entitlements.mjs <Pod.app>
+//   node product/scripts/verify-entitlements.mjs --outer <Pod.app> <nested runtime, relative>
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   closeSync,
@@ -58,12 +61,15 @@ function isExecutable(path) {
   }
 }
 
-/** The app, its nested bundles and every Mach-O executable, relative to the app. */
-export function signedCode(app) {
+/** The app, its nested bundles and every Mach-O executable, relative to the app, minus `skip`. */
+export function signedCode(app, skip = null) {
   const found = ['']
   const walk = (relative) => {
     for (const name of readdirSync(join(app, relative)).sort()) {
       const path = relative ? `${relative}/${name}` : name
+      if (path === skip) {
+        continue
+      }
       const stat = lstatSync(join(app, path))
       if (stat.isDirectory()) {
         if (BUNDLE.test(name)) {
@@ -96,19 +102,21 @@ export function allowedKeys(rule, electronKeys) {
   return file ? new Set(Object.keys(plistKeys(file))) : electronKeys
 }
 
+function embeddedEntitlements(path) {
+  return plistJson(
+    spawnSync('codesign', ['-d', '--entitlements', '-', '--xml', path], { encoding: 'utf8' }).stdout
+  )
+}
+
+const shortKey = (key) => key.replace('com.apple.security.', '')
+
 /** Each code path whose entitlements step outside its rule, with the keys that do. */
 export function entitlementViolations(
   app,
   { electronKeys = electronEntitlementKeys(), read } = {}
 ) {
   const mainExecutable = plistValue(join(app, 'Contents', 'Info.plist'), 'CFBundleExecutable')
-  const entitlementsOf =
-    read ??
-    ((path) =>
-      plistJson(
-        spawnSync('codesign', ['-d', '--entitlements', '-', '--xml', path], { encoding: 'utf8' })
-          .stdout
-      ))
+  const entitlementsOf = read ?? embeddedEntitlements
   const violations = []
   const code = signedCode(app)
   for (const path of code) {
@@ -119,10 +127,19 @@ export function entitlementViolations(
       .filter((key) => !allowed.has(key) || entitlements[key] !== true)
       .sort()
     if (extra.length > 0) {
-      const keys = extra.map((key) => key.replace('com.apple.security.', ''))
-      violations.push(`${path || '.'} (${rule.name}): ${keys.join(', ')}`)
+      violations.push(`${path || '.'} (${rule.name}): ${extra.map(shortKey).join(', ')}`)
     }
   }
+  return { checked: code.length, violations }
+}
+
+/** A one-app outer: every code path outside the nested runtime that carries any entitlement. */
+export function outerEntitlementViolations(app, nested, { read = embeddedEntitlements } = {}) {
+  const code = signedCode(app, nested)
+  const violations = code.flatMap((path) => {
+    const keys = Object.keys(read(join(app, path))).sort()
+    return keys.length > 0 ? [`${path || '.'} (outer): ${keys.map(shortKey).join(', ')}`] : []
+  })
   return { checked: code.length, violations }
 }
 
@@ -135,17 +152,28 @@ function plistValue(plist, key) {
 
 // Why realpath: run through a symlinked path, a plain compare skips the check and exits 0.
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(import.meta.filename)) {
-  const app = process.argv[2]
-  if (!app || !existsSync(join(app, 'Contents', 'Info.plist'))) {
-    console.error('usage: node product/scripts/verify-entitlements.mjs <Pod.app>')
+  const outer = process.argv[2] === '--outer'
+  const [app, nested] = process.argv.slice(outer ? 3 : 2)
+  if (
+    !app ||
+    !existsSync(join(app, 'Contents', 'Info.plist')) ||
+    (outer && (!nested || !existsSync(join(app, nested, 'Contents', 'Info.plist'))))
+  ) {
+    console.error(
+      'usage: node product/scripts/verify-entitlements.mjs [--outer] <Pod.app> [nested]'
+    )
     process.exit(2)
   }
-  const { checked, violations } = entitlementViolations(app)
+  const { checked, violations } = outer
+    ? outerEntitlementViolations(app, nested)
+    : entitlementViolations(app)
   if (violations.length > 0) {
     console.error(`entitlements: outside the policy:\n  ${violations.join('\n  ')}`)
     process.exit(1)
   }
   console.log(
-    `entitlements: ${checked} executables and bundles within product/entitlements-policy.cjs`
+    outer
+      ? `entitlements: ${checked} outer executables and bundles, none with entitlements`
+      : `entitlements: ${checked} executables and bundles within product/entitlements-policy.cjs`
   )
 }
