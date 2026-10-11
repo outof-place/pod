@@ -205,6 +205,7 @@ export class RuntimeRpcLocalStreamDispatch extends RuntimeRpcWebSocketDispatch {
         clientCapabilities: session.clientCapabilities,
         signal: controller.signal,
         sendBinary: (bytes) => connection.sendBinary(bytes),
+        binaryBackpressure: connection,
         registerBinaryStreamHandler: (streamId, handler) =>
           this.registerBinaryStreamHandler(connectionId, streamId, handler),
         registerBinaryMessageHandler: (handler) =>
