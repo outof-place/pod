@@ -47,6 +47,7 @@ import { installPodUiHost } from '../pod/ui-host/pod-ui-host'
 import { installPodWorktreeStatus } from '../pod/worktree-status/install-pod-worktree-status'
 import { agentHookServer } from '../agent-hooks/server'
 import { installPodSettings } from '../pod/settings/install-pod-settings'
+import { installPodHookWriteGate } from '../pod/instance/pod-instance'
 
 // Headless serve never opens a window, so the sweep still has to run off a timer there.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -138,6 +139,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
       return state.codexRuntimeHome.resolveHostCodexHomePathForLaunchReadOnly()
     }
   })
+  // Pod: the full check of which instance may write the user-global agent hook files
+  installPodHookWriteGate()
   const startupManagedHookSettings = store.getSettings()
   const shouldReconcileStartupManagedHooks =
     shouldInstallManagedHooks(is.dev) &&
