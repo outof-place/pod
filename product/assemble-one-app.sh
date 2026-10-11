@@ -18,8 +18,8 @@
 # The outer side (PodNative, Sparkle) may carry no entitlements: PodNative is not sandboxed.
 # Never publish latest-mac.yml for a one-app build: electron-updater is off in that layout.
 #
-# Signing and notarization: POD_SIGN_IDENTITY, NOTARY_PROFILE (default pod-notary), or
-# APPLE_API_KEY with APPLE_API_KEY_ID and APPLE_API_ISSUER, as in release.sh.
+# Signing and notarization as in release.sh: POD_SIGN_IDENTITY; credentials from
+# product/notary-credentials.sh (by default the App Store Connect key in ~/.appstoreconnect).
 set -euo pipefail
 
 DEFAULT_SIGN_IDENTITY="Developer ID Application: OUTOFPLACE POLAND SP. Z O.O (75Y2KR6P5W)"
@@ -73,13 +73,8 @@ identities="$(security find-identity -v -p codesigning)"
 grep -Fq "\"$sign_identity\"" <<<"$identities" || die "signing identity not in the keychain: $sign_identity"
 team_id="${sign_identity##*(}"
 team_id="${team_id%)}"
-if [ -n "${APPLE_API_KEY:-}" ] && [ -z "${NOTARY_PROFILE:-}" ]; then
-  [ -n "${APPLE_API_KEY_ID:-}" ] && [ -n "${APPLE_API_ISSUER:-}" ] ||
-    die "APPLE_API_KEY needs APPLE_API_KEY_ID and APPLE_API_ISSUER"
-  notary_args=(--key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
-else
-  notary_args=(--keychain-profile "${NOTARY_PROFILE:-pod-notary}")
-fi
+. "$repo_root/product/notary-credentials.sh"
+pod_notary_credentials pod-notary
 
 plist_value() { plutil -extract "$2" raw "$1/Contents/Info.plist"; }
 check_input() {
