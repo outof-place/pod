@@ -41,6 +41,8 @@ export type TerminalCreateOptions = {
   envToDelete?: string[]
   launchConfig?: WorktreeStartupLaunch['launchConfig']
   resumeProviderSession?: AgentProviderSessionMetadata
+  /** Fork-only (Pod): the resume moves the Codex session into the selected account. */
+  codexAccountRestart?: true
   launchToken?: string
   launchAgent?: TuiAgent
   startupAgent?: TuiAgent

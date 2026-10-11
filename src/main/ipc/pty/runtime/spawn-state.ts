@@ -99,6 +99,8 @@ export type RuntimePtySpawnArgs = {
   env?: Record<string, string>
   envToDelete?: string[]
   resumeProviderSession?: AgentProviderSessionMetadata
+  /** Fork-only (Pod): the resume moves the Codex session into the selected account. */
+  codexAccountRestart?: true
   connectionId?: string | null
   worktreeId?: string
   preAllocatedHandle?: string

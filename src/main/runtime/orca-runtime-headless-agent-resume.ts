@@ -171,6 +171,17 @@ export class OrcaRuntimeWithHeadlessAgentResume extends OrcaRuntimeWithResolveWa
     }
   }
 
+  /** Fork-only (Pod): the resume a client's restart of this pane runs (pod-codex-account-restart). */
+  async resolvePodPaneAgentRestart(
+    worktreeSelector: string,
+    tabId: string,
+    leafId: string
+  ): Promise<PaneAgentResumeStartup | null> {
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+    const plan = await this.resolvePaneAgentResumeStartup(workspace.id, `${tabId}:${leafId}`)
+    return plan?.startup ?? null
+  }
+
   /** After the pane started: publish what happened to its agent and spend a used sleep record. */
   protected settlePaneAgentResume(
     worktreeId: string,

@@ -58,6 +58,8 @@ export type RuntimePtyController = {
     env?: Record<string, string>
     envToDelete?: string[]
     resumeProviderSession?: AgentProviderSessionMetadata
+    /** Fork-only (Pod): the resume moves the Codex session into the selected account. */
+    codexAccountRestart?: true
     telemetry?: WorktreeStartupLaunch['telemetry']
     connectionId?: string | null
     worktreeId?: string

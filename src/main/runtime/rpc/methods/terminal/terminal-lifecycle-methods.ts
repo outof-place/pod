@@ -18,6 +18,7 @@ import {
   TerminalWait
 } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal-stream-params'
+import { podCodexAccountRestartLaunch } from '../../../pod-codex-account-restart'
 
 export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
@@ -46,6 +47,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
       const activate = pairedViewer ? false : params.activate === true
       const presentation =
         pairedViewer && params.presentation === 'focused' ? 'background' : params.presentation
+      const podCodexRestart = await podCodexAccountRestartLaunch(runtime, params)
       return {
         terminal: await runtime.dedupeTerminalCreate(
           pairedDeviceId ?? clientId ?? 'local',
@@ -78,7 +80,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               presentation,
               tabId: params.tabId,
               leafId: params.leafId,
-              ...(preAllocatedHandle ? { preAllocatedHandle } : {})
+              ...(preAllocatedHandle ? { preAllocatedHandle } : {}),
+              ...podCodexRestart
             })
         )
       }

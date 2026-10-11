@@ -9,6 +9,7 @@ export {
   resolveTerminalPresentation
 } from './orca-runtime-core'
 export { makePaneKey } from '../../shared/stable-pane-id'
+export { podResumeSpawnOpts } from './pod-codex-account-restart'
 export { randomUUID } from 'node:crypto'
 export {
   admitStablePaneAdoption,

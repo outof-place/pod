@@ -184,6 +184,8 @@ export const TerminalCreateParams = z.object({
     .optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
+  // Fork-only (Pod): start the pane's Codex again in the selected account (pod-codex-account-restart).
+  codexAccountRestart: z.literal(true).optional(),
   terminalKittyKeyboardProtocol: z.boolean().optional(),
   terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),
   title: OptionalString,
