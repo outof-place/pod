@@ -18,6 +18,7 @@ import type {
   RemoteTerminalSourceRangeReplacementPublication,
   RemoteTerminalSourceRangeReplacementReservation
 } from '../../../remote-terminal-source-range-consumer'
+import { deferSnapshotToPodLane } from '../../../pod-lane/pod-terminal-lanes'
 
 const sourceRangeStreamIdentity = (stream: TerminalMultiplexStream) => ({
   ptyId: stream.ptyId,
@@ -48,6 +49,14 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       stream.outputPaused ||
       stream.ackRecoverySnapshotInFlight ||
       stream.linkOverflowed
+    ) {
+      return
+    }
+    // Pod: while a direct lane feeds the viewer, the recovery comes after the lane's detach marker.
+    if (
+      deferSnapshotToPodLane(stream, {
+        scrollbackRows: TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS
+      })
     ) {
       return
     }
