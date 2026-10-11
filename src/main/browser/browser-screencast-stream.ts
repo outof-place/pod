@@ -6,6 +6,7 @@ import { sendDebuggerCommand } from './browser-screencast-debugger-command'
 import { createBrowserScreencastDeviceMetrics } from './browser-screencast-device-metrics'
 import { createBrowserScreencastFramePacer } from './browser-screencast-frame-pacer'
 import { createBrowserScreencastSnapshotCapture } from './browser-screencast-snapshot-capture'
+import { podGuestPageSleep } from '../pod/headless-host/guest-page-sleep'
 import type {
   BrowserScreencastFrameBudget,
   BrowserScreencastOptions,
@@ -35,6 +36,8 @@ export async function startBrowserScreencast(
     )
   }
 
+  // Fork-only (Pod): a viewer watches, so a sleeping page draws until the stream ends.
+  const releasePageWake = podGuestPageSleep.wake(webContents.id)
   let closed = false
   let stopping = false
   // The dialog this stream reported and has not seen closed. Only this session may answer it, so
@@ -107,6 +110,7 @@ export async function startBrowserScreencast(
     dbg.removeListener('detach', handleDetach as never)
     debuggerLease?.release()
     debuggerLease = null
+    releasePageWake()
     resolveDone()
   }
 
