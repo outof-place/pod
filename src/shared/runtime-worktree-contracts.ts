@@ -30,6 +30,8 @@ export type RuntimeWorktreeAgentRow = {
   stateStartedAt: number
   updatedAt: number
   restoredUnconfirmed?: boolean
+  /** Pod: a headless host shows this agent's state from before its restart, not seen since. */
+  beforeRestart?: true
   /** The structured session host still runs this row's provider child, so it is fresh regardless
    *  of age. Optional on the wire: old hosts never send it. */
   structuredHostOwned?: true
