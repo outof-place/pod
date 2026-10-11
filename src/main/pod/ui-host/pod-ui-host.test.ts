@@ -8,16 +8,46 @@ const mocks = vi.hoisted(() => {
   const on = (event: string, handler: (...args: unknown[]) => void): void => {
     handlers.set(event, [...(handlers.get(event) ?? []), handler])
   }
+  const ipcHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
+  const webContentsHandlers = new Map<string, () => void>()
   const window = {
     isDestroyed: vi.fn(() => false),
     isMinimized: vi.fn(() => false),
     isVisible: vi.fn(() => false),
     restore: vi.fn(),
     show: vi.fn(),
-    webContents: { send: vi.fn() }
+    webContents: {
+      id: 31,
+      send: vi.fn(),
+      isCrashed: () => false,
+      isLoadingMainFrame: () => false,
+      once: vi.fn((event: string, handler: () => void) => webContentsHandlers.set(event, handler))
+    }
+  }
+  const state: {
+    mainWindow: unknown
+    isQuitting: boolean
+    agentAwakeService: { getWorkingAgentCount: () => number }
+  } = {
+    mainWindow: window,
+    isQuitting: false,
+    agentAwakeService: { getWorkingAgentCount: () => 2 }
   }
   return {
     handlers,
+    ipcHandlers,
+    webContentsHandlers,
+    ipcMain: {
+      on: vi.fn((channel: string, handler: (...args: unknown[]) => void) => {
+        ipcHandlers.set(channel, [...(ipcHandlers.get(channel) ?? []), handler])
+      }),
+      removeListener: vi.fn((channel: string, handler: (...args: unknown[]) => void) => {
+        ipcHandlers.set(
+          channel,
+          (ipcHandlers.get(channel) ?? []).filter((entry) => entry !== handler)
+        )
+      })
+    },
     window,
     dir: { path: '' },
     app: {
@@ -30,13 +60,14 @@ const mocks = vi.hoisted(() => {
       getAppPath: () => '/app',
       isPackaged: false
     },
-    state: { mainWindow: window as unknown, isQuitting: false },
+    state,
     openSettings: vi.fn()
   }
 })
 
 vi.mock('electron', () => ({
   app: mocks.app,
+  ipcMain: mocks.ipcMain,
   shell: { openPath: vi.fn() },
   powerMonitor: { on: vi.fn() }
 }))
@@ -70,7 +101,7 @@ function fire(event: string, ...args: unknown[]): void {
   }
 }
 
-async function attach(): Promise<Client> {
+async function attach(v = 1): Promise<Client> {
   const socketPath = join(mocks.dir.path, 'pod-ui-host', 'host.sock')
   await vi.waitFor(() => {
     const probe = createConnection(socketPath)
@@ -88,7 +119,7 @@ async function attach(): Promise<Client> {
   socket.setEncoding('utf8')
   socket.on('data', (chunk: string) => lines.push(...chunk.split('\n').filter(Boolean)))
   await new Promise<void>((resolve) => socket.once('connect', () => resolve()))
-  socket.write(`${JSON.stringify({ type: 'hello', v: 1, token: 'token', pid: 7 })}\n`)
+  socket.write(`${JSON.stringify({ type: 'hello', v, token: 'token', pid: 7 })}\n`)
   await vi.waitFor(() => expect(lines[0]).toContain('welcome'))
   return { socket, lines }
 }
@@ -103,9 +134,25 @@ async function install(): Promise<void> {
   installPodUiHost()
 }
 
+// The renderer's answer to main's quit question (use-pod-ui-host-quit-assess.ts).
+function rendererAnswers(blockers: unknown): void {
+  mocks.window.webContents.send.mockImplementation((channel: string, requestId?: unknown) => {
+    if (channel === 'pod:uiHostQuit:assess') {
+      for (const handler of mocks.ipcHandlers.get('pod:uiHostQuit:assessed') ?? []) {
+        handler({ sender: { id: 31 } }, requestId, blockers)
+      }
+    }
+  })
+}
+
+const parsed = (client: Client): { type: string }[] => client.lines.map((line) => JSON.parse(line))
+
 beforeEach(() => {
   mocks.dir.path = mkdtempSync('/tmp/pod-ui-host-app-')
   mocks.handlers.clear()
+  mocks.ipcHandlers.clear()
+  mocks.webContentsHandlers.clear()
+  mocks.window.webContents.send.mockReset()
   mocks.state.isQuitting = false
   mocks.state.mainWindow = mocks.window
   vi.unstubAllEnvs()
@@ -189,6 +236,72 @@ describe('installPodUiHost', () => {
     fire('before-quit')
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(client.lines.some((line) => line.includes('quitRequested'))).toBe(false)
+  })
+
+  describe('a version 2 quit', () => {
+    it('answers quitting and beats through teardown when nothing would be lost', async () => {
+      rendererAnswers({ unsavedFiles: 0, remoteWork: 'none' })
+      await install()
+      const client = await attach(2)
+      send(client, { type: 'quit', reason: 'user' })
+      await vi.waitFor(() => expect(mocks.app.quit).toHaveBeenCalledTimes(1))
+      expect(mocks.state.isQuitting).toBe(true)
+      expect(mocks.window.webContents.send).toHaveBeenCalledWith('pod:uiHostQuit:commit')
+      await vi.waitFor(() =>
+        expect(parsed(client)).toContainEqual({ type: 'quitting', reason: 'user' })
+      )
+      // Teardown starts: no new connections, but the heartbeat still reaches this one.
+      fire('will-quit')
+      await vi.waitFor(() => expect(parsed(client)).toContainEqual({ type: 'quitHeartbeat' }), {
+        timeout: 2_500
+      })
+      fire('before-quit')
+      expect(client.lines.some((line) => line.includes('quitRequested'))).toBe(false)
+    })
+
+    it('asks for confirmation over unsaved changes and quits only once confirmed', async () => {
+      rendererAnswers({ unsavedFiles: 1, remoteWork: 'none' })
+      await install()
+      const client = await attach(2)
+      send(client, { type: 'quit', reason: 'update' })
+      await vi.waitFor(() =>
+        expect(parsed(client)).toContainEqual({
+          type: 'needsConfirmation',
+          reason: 'unsavedChanges',
+          unsavedFiles: 1,
+          remoteWork: null,
+          runningAgents: 2
+        })
+      )
+      expect(mocks.app.quit).not.toHaveBeenCalled()
+      expect(mocks.state.isQuitting).toBe(false)
+      send(client, { type: 'quit', reason: 'update', confirmed: true })
+      await vi.waitFor(() => expect(mocks.app.quit).toHaveBeenCalledTimes(1))
+      expect(parsed(client)).toContainEqual({ type: 'quitting', reason: 'update' })
+    })
+
+    it('quits when the renderer does not answer in time', async () => {
+      await install()
+      const client = await attach(2)
+      send(client, { type: 'quit', reason: 'user' })
+      await vi.waitFor(() => expect(mocks.app.quit).toHaveBeenCalledTimes(1), { timeout: 4_000 })
+      expect(parsed(client)).toContainEqual({ type: 'quitting', reason: 'user' })
+    })
+
+    it('reports a quit the renderer vetoed, and a later crash counts as one again', async () => {
+      rendererAnswers({ unsavedFiles: 0, remoteWork: 'none' })
+      await install()
+      const client = await attach(2)
+      send(client, { type: 'quit', reason: 'user' })
+      await vi.waitFor(() => expect(mocks.app.quit).toHaveBeenCalledTimes(1))
+      mocks.webContentsHandlers.get('will-prevent-unload')?.()
+      await vi.waitFor(() =>
+        expect(parsed(client)).toContainEqual({
+          type: 'quitAborted',
+          reason: 'the session could not be saved'
+        })
+      )
+    })
   })
 
   it('tells PodNative when something else quits the runtime', async () => {
