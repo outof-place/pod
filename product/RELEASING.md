@@ -41,7 +41,7 @@ Set `POD_SIGN_IDENTITY`, or `NOTARY_PROFILE` / `APPLE_API_KEY` (+`_ID`, `_ISSUER
 
 `release.sh` does the following:
 
-1. Checks that the identity is a Developer ID in the keychain, then makes a test signature (keychain access and Apple's timestamp server).
+1. Checks that the identity is a Developer ID in the keychain. It checks that the default keychain is the user's `login.keychain-db`, and runs one read-only `notarytool history` with the credentials it picked. When either check fails, it prints the default keychain, the user search list and `HOME`/`CFFIXED_USER_HOME`, then stops. Then it makes a test signature (keychain access and Apple's timestamp server).
 2. Builds the JS, mobile web bundle and native helpers. The helpers get the product's identifiers: `<appId>.computer-use` and the notification helper's `--bundle-id`.
 3. Fetches the claude-acc payload pinned in `config/claude-acc-payload.json` into `resources/claude-acc`, when the stack has that script. This also runs with `--skip-build`.
 4. Runs electron-builder with `product/electron-builder.pod.cjs` (`POD_RELEASE=1`, `ORCA_MAC_RELEASE=1`). Before any signing, `afterPack` fails the build when app.asar is over 400 MB or packs a `dist`, `dist-*`, `test-results`, `playwright-report` or hidden folder (`product/release-bundle-gate.cjs`). Then it signs every nested binary with hardened runtime and a timestamp, notarizes and staples the app. When Apple's timestamp service fails mid-signing, the step reruns: at most 3 attempts, 3 min apart, and only for that failure.
@@ -122,7 +122,7 @@ product/assemble-one-app.sh 0.1.0 <PodNative.app>     # dist/one-app: Pod.app, D
 
 `assemble-one-app.sh` does the following:
 
-1. Checks both inputs: bundle id, version, `codesign --verify --deep --strict`, team and hardened runtime. The runtime must speak ui-host protocol 2, which PodNative's safe quit needs: the checkout declares it and app.asar carries its messages (`product/scripts/verify-ui-host-protocol.mjs`).
+1. Runs the same notarization preflight as `release.sh`. Checks both inputs: bundle id, version, `codesign --verify --deep --strict`, team and hardened runtime. The runtime must speak ui-host protocol 2, which PodNative's safe quit needs: the checkout declares it and app.asar carries its messages (`product/scripts/verify-ui-host-protocol.mjs`).
 2. Copies PodNative and nests the runtime. Removes the runtime's stapled ticket and clears xattrs (an APFS clone keeps quarantine).
 3. Moves the URL types, document types and UT type declarations to the outer app, and marks the runtime `LSUIElement`.
 4. Re-signs the runtime's top level, then signs the outer last without `--deep`. Each keeps the entitlements it was built with.
