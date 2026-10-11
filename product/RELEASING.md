@@ -124,7 +124,7 @@ product/assemble-one-app.sh 0.1.0 <PodNative.app>     # dist/one-app: Pod.app, D
 3. Moves the URL types, document types and UT type declarations to the outer app, and marks the runtime `LSUIElement`.
 4. Re-signs the runtime's top level, then signs the outer last without `--deep`. Each keeps the entitlements it was built with.
 5. Notarizes and staples the app. Then it builds the DMG, signs it, checks its size, notarizes and staples it, and zips the stapled app.
-6. Runs `release.sh`'s gates. Gatekeeper checks the outer app and the DMG. The runtime gets the asar, claude-acc host, bundle seal and entitlements checks.
+6. Runs `release.sh`'s gates. Gatekeeper checks the outer app and the DMG. The runtime gets the asar, claude-acc host, bundle seal and entitlements checks. Nothing on the outer side (PodNative, Sparkle.framework and its helpers) may carry an entitlement (`verify-entitlements.mjs --outer`): PodNative is not sandboxed, so Sparkle needs none of its XPC services.
 
 Publish only the DMG and the zip. A one-app build has no `latest-mac.yml`, because electron-updater is off in that layout. To check that Pod has quit before a manual install, also run `pgrep -f '/Contents/MacOS/PodNative$'` and `lsappinfo find bundleid=codes.pod.native`. The Homebrew cask's `binary` becomes `#{appdir}/Pod.app/Contents/Helpers/Pod Runtime.app/Contents/Resources/bin/podx`.
 
