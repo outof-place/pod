@@ -62,6 +62,7 @@ import { POD_TERMINAL_LANE_METHODS } from './pod-terminal-lane'
 import { POD_SETTINGS_METHODS } from '../../../pod/settings/pod-settings-rpc-methods'
 import { observePodComputerActions } from '../../../pod/computer-actions/pod-computer-actions'
 import { POD_COMPUTER_ACTIONS_METHODS } from '../../../pod/computer-actions/pod-computer-actions-rpc-methods'
+import { POD_TERMINAL_PROCESSES_METHODS } from '../../../pod/terminal-processes/pod-terminal-processes-rpc-methods'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -88,6 +89,8 @@ export const ALL_RPC_METHODS = [
   ...POD_WORKSPACE_METHODS,
   ...TERMINAL_METHODS,
   ...TERMINAL_ORPHAN_METHODS,
+  // Fork-only (Pod): the pids behind this Mac's terminals, for native resource sampling.
+  ...POD_TERMINAL_PROCESSES_METHODS,
   ...BROWSER_CORE_METHODS,
   ...BROWSER_IDENTITY_METHODS,
   ...BROWSER_SCREENCAST_METHODS,
