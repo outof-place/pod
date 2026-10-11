@@ -12,6 +12,8 @@ export type ExtractedRendererQueryData = {
   statelessQueryData: string
   statefulQueryData: string
   oscColorQueryData: string
+  /** Every query above, in the order the output sent them: replies must come back in that order. */
+  orderedQueryData: string
   pending: string
 }
 
@@ -23,6 +25,7 @@ export function extractHiddenStartupRendererQueryData(
   let statelessQueryData = ''
   let statefulQueryData = ''
   let oscColorQueryData = ''
+  let orderedQueryData = ''
   let offset = 0
 
   while (offset < input.length) {
@@ -35,6 +38,7 @@ export function extractHiddenStartupRendererQueryData(
         statelessQueryData,
         statefulQueryData,
         oscColorQueryData,
+        orderedQueryData,
         pending: input.slice(candidateIndex)
       }
     }
@@ -45,6 +49,7 @@ export function extractHiddenStartupRendererQueryData(
           statelessQueryData,
           statefulQueryData,
           oscColorQueryData,
+          orderedQueryData,
           pending: input.slice(
             candidateIndex,
             candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
@@ -54,8 +59,10 @@ export function extractHiddenStartupRendererQueryData(
       const sequence = input.slice(candidateIndex, finalByteIndex + 1)
       if (isStatelessRendererReplyCsiQuery(sequence)) {
         statelessQueryData += sequence
+        orderedQueryData += sequence
       } else if (isStatefulRendererReplyCsiQuery(sequence)) {
         statefulQueryData += sequence
+        orderedQueryData += sequence
       }
       offset = finalByteIndex + 1
       continue
@@ -68,6 +75,7 @@ export function extractHiddenStartupRendererQueryData(
           statelessQueryData,
           statefulQueryData,
           oscColorQueryData,
+          orderedQueryData,
           pending: input.slice(
             candidateIndex,
             candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
@@ -79,6 +87,7 @@ export function extractHiddenStartupRendererQueryData(
         continue
       }
       oscColorQueryData += input.slice(candidateIndex, query.endIndex)
+      orderedQueryData += input.slice(candidateIndex, query.endIndex)
       offset = query.endIndex
       continue
     }
@@ -88,6 +97,7 @@ export function extractHiddenStartupRendererQueryData(
         statelessQueryData,
         statefulQueryData,
         oscColorQueryData,
+        orderedQueryData,
         pending: input.slice(candidateIndex)
       }
     }
@@ -98,7 +108,13 @@ export function extractHiddenStartupRendererQueryData(
     }
   }
 
-  return { statelessQueryData, statefulQueryData, oscColorQueryData, pending: '' }
+  return {
+    statelessQueryData,
+    statefulQueryData,
+    oscColorQueryData,
+    orderedQueryData,
+    pending: ''
+  }
 }
 
 export function containsCsiRendererQuery(data: string): boolean {
