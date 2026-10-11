@@ -3,6 +3,10 @@
 // the restart was last seen in. Never shown as live truth: the turn may have moved on meanwhile.
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import {
+  pickParsedAgentStatusPayload,
+  type AgentStatusEntry
+} from '../../shared/agent-status-types'
+import {
   agentProviderSessionsEqual,
   normalizeAgentProviderSession,
   type SleepingAgentSessionRecord
@@ -56,28 +60,40 @@ export function pendingPaneAgentResume(args: {
   }
 }
 
-/** An agent whose terminal outlived the host's restart, still in the state hydrated from disk. */
-export function keptPaneAgentResume(
-  rows: readonly AgentStatusIpcPayload[],
-  check: AgentStateScreenCheck | undefined
-): RuntimeMobileSessionAgentResume | undefined {
-  const row = rows.find(
-    (candidate) =>
-      candidate.restoredUnconfirmed === true &&
-      !candidate.providerSessionOnly &&
-      !candidate.structuredHost &&
-      candidate.agentType !== undefined &&
-      candidate.agentType !== 'unknown'
-  )
-  const before = asStateBeforeRestart(row?.state)
-  if (!row?.agentType || !before || check === 'stale') {
-    return undefined
+/** The row of an agent whose terminal outlived the host's restart, still as hydrated from disk. */
+export function restoredAgentRowBeforeRestart(
+  rows: readonly AgentStatusIpcPayload[]
+): { row: AgentStatusIpcPayload; state: AgentStateBeforeRestart } | undefined {
+  for (const row of rows) {
+    const state = asStateBeforeRestart(row.state)
+    if (
+      state &&
+      row.restoredUnconfirmed === true &&
+      !row.providerSessionOnly &&
+      !row.structuredHost &&
+      row.agentType !== undefined &&
+      row.agentType !== 'unknown'
+    ) {
+      return { row, state }
+    }
   }
+  return undefined
+}
+
+/** That row as the tab's status: marked until its screen confirms it or the agent speaks again. */
+export function agentStatusBeforeRestart(
+  current: AgentStatusEntry | null | undefined,
+  row: AgentStatusIpcPayload,
+  confirmed: boolean
+): AgentStatusEntry {
   return {
-    agent: row.agentType,
-    outcome: 'kept',
-    stateBeforeRestart: before,
-    ...(check === 'confirmed' ? { confirmed: true as const } : {})
+    ...current,
+    ...pickParsedAgentStatusPayload(row),
+    paneKey: row.paneKey,
+    updatedAt: row.receivedAt,
+    stateStartedAt: row.stateStartedAt ?? row.receivedAt,
+    stateHistory: current?.stateHistory ?? [],
+    ...(confirmed ? {} : { beforeRestart: true as const })
   }
 }
 
