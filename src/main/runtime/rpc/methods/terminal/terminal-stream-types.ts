@@ -91,6 +91,8 @@ export type TerminalMultiplexStream = {
   ackPendingOutputBytes: number
   ackPendingOutputOverflowed: boolean
   ackRecoverySnapshotInFlight: boolean
+  /** The link refused this stream's bulk; nothing more goes out until a re-seed after it drains. */
+  linkOverflowed: boolean
   /** A recovery went out screen-only while the link was saturated; history follows once it drains. */
   ackRecoveryHistoryOwed: boolean
   pendingOutput: TerminalOutputChunk[]
