@@ -46,7 +46,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
     if (
       !isMultiplexStreamAttached(state, stream) ||
       stream.outputPaused ||
-      stream.ackRecoverySnapshotInFlight
+      stream.ackRecoverySnapshotInFlight ||
+      stream.linkOverflowed
     ) {
       return
     }
@@ -98,6 +99,15 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
           data: serialized.data
         }
       )
+      if (!publication.published && stream.linkOverflowed) {
+        // Why: the link filled again mid-snapshot; the next drain re-seeds this stream.
+        if (replacement && stream.sourceRangeReplacement === replacement) {
+          stream.sourceRangeReplacement = null
+          runtime.rollbackRemoteTerminalSourceRangeReplacement(replacement, 'link-overflow')
+        }
+        replacement = null
+        return
+      }
       if (!publication.published) {
         throw new Error('Remote terminal recovery snapshot was not published.')
       }
