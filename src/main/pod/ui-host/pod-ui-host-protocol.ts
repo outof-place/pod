@@ -72,7 +72,8 @@ export type PodUiHostSecondInstance = z.infer<typeof SecondInstance>
 export type PodUiHostQuitReason = z.infer<typeof Quit>['reason']
 
 // What a welcome's `features` may name beyond the base verbs; PodNative sends only what it lists.
-export const POD_UI_HOST_FEATURES = ['browser'] as const
+// `headless`: no classic window posts agent notifications or sets the Dock badge; PodNative does.
+export const POD_UI_HOST_FEATURES = ['browser', 'headless'] as const
 
 export type PodUiHostServerMessage =
   | { type: 'welcome'; v: number; pid: number; features: readonly string[] }
