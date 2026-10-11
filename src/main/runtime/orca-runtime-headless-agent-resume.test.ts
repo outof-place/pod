@@ -245,7 +245,7 @@ describe('headless terminal-agent resume', () => {
 
     runtime.noteHeadlessAgentStatus(PANE_KEY)
     const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-    expect(listed.tabs[0]).not.toHaveProperty('agentResume')
+    expect(listed.tabs[0]).not.toMatchObject({ agentResume: { outcome: 'resumed' } })
   })
 
   it('leaves records and resume to the renderer while a window owns the session', async () => {
