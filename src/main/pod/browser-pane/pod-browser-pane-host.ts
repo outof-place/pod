@@ -10,7 +10,8 @@ import { isBackgroundLaunch } from '../../window/foreground-activation-policy'
 import { loadPodBrowserFrames } from '../ui-host/pod-peer-identity'
 import { setPodBrowserPaneHooks } from './pod-browser-pane-hooks'
 import type { PodBrowserPaneServerMessage } from './pod-browser-pane-protocol'
-import { POD_BROWSER_PANE_SCALE, PodBrowserPaneController } from './pod-browser-pane'
+import { PodBrowserPaneController } from './pod-browser-pane'
+import { POD_BROWSER_PANE_SCALE } from './pod-browser-pane-frames'
 
 export function installPodBrowserPanes(options: {
   runtime: Pick<OrcaRuntimeService, 'setOffscreenBrowserBackend'>
@@ -38,9 +39,10 @@ export function installPodBrowserPanes(options: {
       onWindowCreated: (browserPageId, win) => panes.trackPage(browserPageId, win)
     })
   )
-  // POD_E2E_DOWNLOADS_DIR: an E2E's downloads land in its own directory, never ~/Downloads.
+  // POD_E2E_DOWNLOADS_DIR: an E2E's downloads land in its own directory, never ~/Downloads; only
+  // on an E2E profile, so no other launch environment can move a user's downloads.
   const downloads = process.env.POD_E2E_DOWNLOADS_DIR
-  if (downloads) {
+  if (downloads && process.env.ORCA_E2E_USER_DATA_DIR) {
     app.setPath('downloads', downloads)
   }
   setPodBrowserPaneHooks({
