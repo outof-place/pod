@@ -24,7 +24,12 @@ export type PodSettingsSnapshot = { revision: string; values: PodSettingsValues 
 
 export type PodSettingsSetResult =
   | ({ ok: true } & PodSettingsSnapshot)
-  | ({ ok: false; reason: 'conflict' } & PodSettingsSnapshot)
+  | ({
+      ok: false
+      reason: 'conflict'
+      /** The written keys someone else changed since `baseRevision` (all of them when unknown). */
+      conflictingKeys: PodSettingsKey[]
+    } & PodSettingsSnapshot)
 
 export type PodSettingsChange = {
   revision: string
@@ -37,7 +42,10 @@ export type PodSettingsChange = {
 const FIELD_KEYS: readonly PodSettingsKey[] = POD_SETTINGS_PAGES.flatMap((page) =>
   page.sections.flatMap((section) => section.keys)
 )
+const FIELD_SET = new Set<string>(FIELD_KEYS)
 const SECRET_KEYS = new Set<string>(POD_SETTINGS_SECRET_KEYS)
+/** Snapshots kept to tell which keys moved since a client's revision. */
+const REMEMBERED_REVISIONS = 64
 /** A burst of writes (a slider drag, an import) reaches a subscriber as one change. */
 export const POD_SETTINGS_COALESCE_MS = 50
 
@@ -46,6 +54,8 @@ export class PodSettingsRefusedError extends Error {}
 export class PodSettingsService {
   private readonly jsonSchema = z.toJSONSchema(PodSettingsValuesSchema, { io: 'input' })
   private writes: Promise<unknown> = Promise.resolve()
+  /** Values by the revisions handed out, oldest first. */
+  private readonly seen = new Map<string, PodSettingsValues>()
 
   constructor(
     private readonly store: PodSettingsStore,
@@ -59,10 +69,20 @@ export class PodSettingsService {
 
   get(): PodSettingsSnapshot {
     const values = project(this.store.getSettings())
-    return { revision: revisionOf(values), values }
+    const revision = revisionOf(values)
+    this.seen.delete(revision)
+    this.seen.set(revision, values)
+    if (this.seen.size > REMEMBERED_REVISIONS) {
+      this.seen.delete(this.seen.keys().next().value ?? revision)
+    }
+    return { revision, values }
   }
 
-  /** Writes only when `baseRevision` is the values' revision now; else hands back the current ones. */
+  /**
+   * Writes unless one of the keys it writes changed since `baseRevision`; then it writes nothing
+   * and hands back the current values. Keys it doesn't write may have moved meanwhile. A revision
+   * this runtime no longer remembers (restarted, or 64 snapshots ago) counts as all keys changed.
+   */
   set(values: unknown, baseRevision: string): Promise<PodSettingsSetResult> {
     const run = this.writes.then(() => this.setNow(values, baseRevision))
     this.writes = run.catch(() => {})
@@ -70,18 +90,29 @@ export class PodSettingsService {
   }
 
   private async setNow(values: unknown, baseRevision: string): Promise<PodSettingsSetResult> {
-    const refused = Object.keys(values ?? {}).filter((key) => SECRET_KEYS.has(key))
-    if (refused.length > 0) {
-      throw new PodSettingsRefusedError(`podSettings.set refuses ${refused.join(', ')}`)
+    const keys = Object.keys(values ?? {})
+    const secret = keys.filter((key) => SECRET_KEYS.has(key))
+    if (secret.length > 0) {
+      throw new PodSettingsRefusedError(`podSettings.set refuses ${secret.join(', ')}`)
+    }
+    const unknown = keys.filter((key) => !FIELD_SET.has(key))
+    if (unknown.length > 0) {
+      throw new PodSettingsRefusedError(
+        `podSettings.set refuses unknown keys: ${unknown.join(', ')}`
+      )
     }
     const parsed = PodSettingsValuesSchema.safeParse(values)
     if (!parsed.success) {
       throw new PodSettingsRefusedError(`podSettings.set refuses: ${parsed.error.message}`)
     }
     const current = this.get()
-    if (current.revision !== baseRevision) {
-      return { ok: false, reason: 'conflict', ...current }
+    const conflicting = this.movedSince(baseRevision, current.values, parsed.data)
+    if (conflicting.length > 0) {
+      return { ok: false, reason: 'conflict', conflictingKeys: conflicting, ...current }
     }
+    // settings:set from a window bypasses this queue. From this check to the store update the write
+    // doesn't yield, so nothing lands between, except for alwaysForceDeleteWorktrees: it waits for
+    // the durable write queue, and a window's write to it in that wait wins unseen.
     const { notifications, ...rest } = parsed.data
     // The store merges a partial notifications object too; spelled out, the update is whole.
     await this.write(
@@ -95,8 +126,38 @@ export class PodSettingsService {
     return { ok: true, ...this.get() }
   }
 
-  /** `onChange` gets the changed fields only, coalesced; never hidden or secret keys. */
-  subscribe(onChange: (change: PodSettingsChange) => void): {
+  /** The written keys (and, for an object, its written fields) that differ from `base`'s values. */
+  private movedSince(
+    baseRevision: string,
+    current: PodSettingsValues,
+    written: PodSettingsValues
+  ): PodSettingsKey[] {
+    const keys = FIELD_KEYS.filter((key) => written[key] !== undefined)
+    const base = this.seen.get(baseRevision)
+    if (!base) {
+      return revisionOf(current) === baseRevision ? [] : keys
+    }
+    return keys.filter((key) => {
+      if (key === 'notifications') {
+        const fields = Object.keys(written.notifications ?? {})
+        return fields.some(
+          (field) =>
+            JSON.stringify(Reflect.get(base.notifications ?? {}, field)) !==
+            JSON.stringify(Reflect.get(current.notifications ?? {}, field))
+        )
+      }
+      return JSON.stringify(base[key]) !== JSON.stringify(current[key])
+    })
+  }
+
+  /**
+   * `onChange` gets the changed fields only, coalesced; never hidden or secret keys. A read that
+   * fails goes to `onError` and the subscription stays: the next change tries again.
+   */
+  subscribe(
+    onChange: (change: PodSettingsChange) => void,
+    onError: (message: string) => void = () => {}
+  ): {
     snapshot: PodSettingsSnapshot
     unsubscribe: () => void
   } {
@@ -104,7 +165,13 @@ export class PodSettingsService {
     let timer: ReturnType<typeof setTimeout> | null = null
     const flush = (): void => {
       timer = null
-      const next = this.get()
+      let next: PodSettingsSnapshot
+      try {
+        next = this.get()
+      } catch (error) {
+        onError(error instanceof Error ? error.message : String(error))
+        return
+      }
       if (next.revision === last.revision) {
         return
       }
@@ -113,7 +180,11 @@ export class PodSettingsService {
       onChange({ revision: next.revision, ...change })
     }
     const stop = this.store.onSettingsChanged(() => {
-      timer ??= setTimeout(flush, POD_SETTINGS_COALESCE_MS)
+      if (!timer) {
+        timer = setTimeout(flush, POD_SETTINGS_COALESCE_MS)
+        // A pending fold never keeps a quitting runtime up.
+        timer.unref?.()
+      }
     })
     return {
       snapshot: last,
