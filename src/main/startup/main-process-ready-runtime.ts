@@ -49,6 +49,7 @@ import { installPodWorktreeStatus } from '../pod/worktree-status/install-pod-wor
 import { agentHookServer } from '../agent-hooks/server'
 import { installPodSettings } from '../pod/settings/install-pod-settings'
 import { installPodHookWriteGate } from '../pod/instance/pod-instance'
+import { installPodNativePeerCheck } from '../pod/rpc/install-pod-native-peer'
 
 // Headless serve never opens a window, so the sweep still has to run off a timer there.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -75,6 +76,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   installPodHeadlessWindowServices(store, runtime)
   // Fork-only (Pod): worktreeStatusChanged for clients that opt in; listens to nothing until one does.
   installPodWorktreeStatus(agentHookServer)
+  // Fork-only (Pod): which local streams PodNative holds; the check runs only when a call needs it.
+  installPodNativePeerCheck()
   await initializeMainProcessPlugins(runtime)
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()
