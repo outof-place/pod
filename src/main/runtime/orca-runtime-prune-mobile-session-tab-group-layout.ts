@@ -1,6 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { selectFreshAgentRowForMobileTab } from './runtime-hook-agent-row-selection'
-import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from './orca-runtime-schedule-mobile-session-tabs-changed'
+import { OrcaRuntimeWithHostTerminalTheme } from './orca-runtime-host-terminal-theme'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type {
   RuntimeMobileSessionSnapshotTab,
@@ -30,7 +30,7 @@ import {
   titleStructuredConversationTabs
 } from './structured-conversation-tab-title'
 
-export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithScheduleMobileSessionTabsChanged {
+export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithHostTerminalTheme {
   protected pruneMobileSessionTabGroupLayout(
     layout: TabGroupLayoutNode | null | undefined,
     validGroupIds: ReadonlySet<string>
@@ -85,7 +85,8 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       const record = host?.deps?.store?.getRecord(sessionId)
       return record?.location.workspaceId === snapshot.worktree ? record.conversationName : null
     })
-    return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
+    const result = projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
+    return this.withHostTerminalTheme(result)
   }
 
   refreshStructuredConversationTabTitle(workspaceId: string, sessionId: string): void {
