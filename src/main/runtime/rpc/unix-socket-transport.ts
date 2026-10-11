@@ -1,6 +1,6 @@
 // Why: this is the original Unix socket / named pipe transport extracted from
 // runtime-rpc.ts. It preserves the exact same behavior: newline-delimited JSON,
-// 30s idle timeout, 1MB max message, 32 max connections, chmod 0o600 on Unix.
+// 30s idle timeout, 1MB max message, 32 request connections (upgraded streams apart), chmod 0o600 on Unix.
 // It also owns the keepalive timer and per-connection abort signal so the
 // server-side handler can cancel long-poll dispatches when the client goes
 // away. See design doc §3.1. A connection whose first line is a `transport.upgrade`
@@ -44,6 +44,9 @@ export class UnixSocketTransport implements RpcTransport {
   private messageHandler: MessageHandler | null = null
   private streamUpgradeHandler: UnixSocketStreamUpgradeHandler | null = null
   private readonly activeSockets = new Set<Socket>()
+  // Why not server.maxConnections: an upgraded stream lives as long as its client, so it must not
+  // hold one of the request slots CLI calls need; the runtime caps streams on their own.
+  private readonly requestSockets = new Set<Socket>()
 
   constructor({ endpoint, kind, keepaliveIntervalMs }: UnixSocketTransportOptions) {
     this.endpoint = endpoint
@@ -72,7 +75,6 @@ export class UnixSocketTransport implements RpcTransport {
     const server = createServer((socket) => {
       this.handleConnection(socket)
     })
-    server.maxConnections = MAX_RUNTIME_RPC_CONNECTIONS
 
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
@@ -116,7 +118,12 @@ export class UnixSocketTransport implements RpcTransport {
   }
 
   private handleConnection(socket: Socket): void {
+    if (this.requestSockets.size >= MAX_RUNTIME_RPC_CONNECTIONS) {
+      socket.destroy()
+      return
+    }
     this.activeSockets.add(socket)
+    this.requestSockets.add(socket)
     // Why bytes, not setEncoding: an upgraded connection switches to binary frames mid-stream, and a
     // decoder cannot be removed. Splitting on 0x0a is safe because it never occurs inside a UTF-8 sequence.
     let tail: Buffer[] = []
@@ -146,6 +153,7 @@ export class UnixSocketTransport implements RpcTransport {
       }
       inflight.clear()
       this.activeSockets.delete(socket)
+      this.requestSockets.delete(socket)
     })
 
     socket.on('data', (data: Buffer | string) => {
@@ -194,6 +202,7 @@ export class UnixSocketTransport implements RpcTransport {
               MAX_RUNTIME_RPC_MESSAGE_BYTES,
               (connection) => {
                 stream = connection
+                this.requestSockets.delete(socket)
               }
             )
             upgradeHandler(rawMessage, pendingUpgrade.upgrade)
