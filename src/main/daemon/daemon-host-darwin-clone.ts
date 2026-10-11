@@ -16,6 +16,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import { removeHostTree } from '../host-tree-removal'
 import type { RelocatedDaemonHost } from './daemon-host-relocation'
 import { daemonHostStagingName } from './daemon-host-reclaim'
+import { reportDaemonHost } from './daemon-host-darwin-report'
 import {
   CODE_RESOURCES_REL,
   DARWIN_HOST_MARKER_NAME,
@@ -145,12 +146,13 @@ async function findDarwinDaemonHost(
         darwinBundleFingerprint(bundleDir, marker.executableRelPath) === fingerprint &&
         (await darwinTreeStamp(bundleDir)).stamp === marker.treeStamp
       ) {
+        reportDaemonHost('reused', `forking from ${buildDir}`)
         return hostPaths(buildDir, marker)
       }
     } catch {
       // A vanished or unreadable clone is skipped; a fresh one is cloned below.
     }
-    console.warn(`[daemon] daemon-host: ignoring ${buildDir}: it changed since it was verified`)
+    reportDaemonHost('ignored', `ignoring ${buildDir}: it changed since it was verified`)
   }
   return null
 }
@@ -224,10 +226,7 @@ async function cloneDarwinDaemonHost(
     }
     mkdirSync(staging)
   } catch (error) {
-    console.warn(
-      `[daemon] daemon-host: cannot create ${versionRoot}; forking from the app bundle`,
-      error
-    )
+    reportDaemonHost('bundle', `cannot create ${versionRoot}; forking from the app bundle`, error)
     return null
   }
   const cloned = volumeCanClone(join(source.bundleDir, INFO_PLIST_REL), staging)
@@ -236,14 +235,16 @@ async function cloneDarwinDaemonHost(
     const { bavail, bsize } = statfsSync(versionRoot)
     const free = Number(bavail) * Number(bsize)
     if (free < bytes + FULL_COPY_HEADROOM_BYTES) {
-      console.warn(
-        `[daemon] daemon-host: volume cannot clone and has ${Math.round(free / 1024 ** 2)} MB free for a ${Math.round(bytes / 1024 ** 2)} MB copy; forking from the app bundle`
+      reportDaemonHost(
+        'bundle',
+        `volume cannot clone and has ${Math.round(free / 1024 ** 2)} MB free for a ${Math.round(bytes / 1024 ** 2)} MB copy; forking from the app bundle`
       )
       await removeStaging(staging)
       return null
     }
-    console.warn(
-      `[daemon] daemon-host: volume cannot clone; making a full ${Math.round(bytes / 1024 ** 2)} MB copy`
+    reportDaemonHost(
+      'copied',
+      `volume cannot clone; making a full ${Math.round(bytes / 1024 ** 2)} MB copy`
     )
   }
   const bundleDir = join(staging, cloneDirName(source.bundleName))
@@ -265,9 +266,7 @@ async function cloneDarwinDaemonHost(
     const failure = verify
       ? `failed seal verification (${firstLine(verify.stderr)})`
       : `could not be copied (${firstLine(copy.stderr) || `exit ${copy.code}`})`
-    console.warn(
-      `[daemon] daemon-host: ${source.bundleName} ${failure}; forking from the app bundle`
-    )
+    reportDaemonHost('bundle', `${source.bundleName} ${failure}; forking from the app bundle`)
     await removeStaging(staging)
     return null
   }
@@ -289,15 +288,13 @@ async function cloneDarwinDaemonHost(
     writeFileSync(join(staging, DARWIN_HOST_MARKER_NAME), JSON.stringify(marker))
     const buildDir = join(versionRoot, `build-${fingerprint.slice(0, 16)}-${nonce}`)
     renameSync(staging, buildDir)
-    console.info(
-      `[daemon] daemon-host: ${cloned ? 'cloned' : 'copied'} ${source.bundleName} ${version} in ${copiedAt - startedAt} ms, verified in ${Date.now() - copiedAt} ms`
+    reportDaemonHost(
+      cloned ? 'cloned' : 'copied',
+      `${cloned ? 'cloned' : 'copied'} ${source.bundleName} ${version} to ${buildDir} in ${copiedAt - startedAt} ms, verified in ${Date.now() - copiedAt} ms`
     )
     return hostPaths(buildDir, marker)
   } catch (error) {
-    console.warn(
-      `[daemon] daemon-host: cannot publish ${staging}; forking from the app bundle`,
-      error
-    )
+    reportDaemonHost('bundle', `cannot publish ${staging}; forking from the app bundle`, error)
     await removeStaging(staging)
     return null
   }
@@ -324,7 +321,7 @@ export function materializeDarwinDaemonHost(
         (await cloneDarwinDaemonHost(root, versionRoot, source, version, fingerprint))
       )
     } catch (error) {
-      console.warn('[daemon] daemon-host: relocation failed; forking from the app bundle', error)
+      reportDaemonHost('bundle', 'relocation failed; forking from the app bundle', error)
       return null
     }
   })().finally(() => {
