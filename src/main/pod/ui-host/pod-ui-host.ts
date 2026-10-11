@@ -15,6 +15,8 @@ import { isBackgroundLaunch } from '../../window/foreground-activation-policy'
 import { loadPodPeerVerifier, podPeerIdentityAddonPath } from './pod-peer-identity'
 import { setPodUiHostSink } from './pod-ui-host-bridge'
 import { isPodUiHostLaunch, podUiHostOuterApp, POD_UI_HOST_SWITCH } from './pod-ui-host-launch'
+import { PodUiHostQuitFlow } from './pod-ui-host-quit'
+import { assessRendererQuit, commitRendererQuit } from './pod-ui-host-quit-renderer'
 import {
   POD_UI_HOST_DIRECTORY_NAME,
   POD_UI_HOST_SOCKET_NAME,
@@ -145,11 +147,15 @@ export function installPodUiHost(): void {
       const visible = openSurface({ type: 'openSurface', surface: 'window' })
       server.send({ type: 'surfaceShown', surface: 'window', visible })
     },
-    onQuit: (reason) => {
-      quitAskedByUi = true
-      state.isQuitting = true
-      log(`ui-host: PodNative asked to quit (${reason})`)
-      app.quit()
+    onQuit: ({ reason, confirmed, version }) => {
+      log(`ui-host: PodNative asked to quit (${reason}${confirmed ? ', confirmed' : ''})`)
+      if (version < 2) {
+        quitAskedByUi = true
+        state.isQuitting = true
+        app.quit()
+        return
+      }
+      void quitFlow.request(reason, confirmed)
     },
     onUiPresence: (attached) => {
       clearGrace()
@@ -167,6 +173,23 @@ export function installPodUiHost(): void {
       }, NO_UI_GRACE_MS)
       graceTimer.unref?.()
     }
+  })
+  const quitFlow = new PodUiHostQuitFlow({
+    assess: () => assessRendererQuit(state.mainWindow),
+    runningAgents: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0,
+    commit: () => {
+      quitAskedByUi = true
+      state.isQuitting = true
+      server.noteQuitCommitted()
+      commitRendererQuit(state.mainWindow, () => {
+        quitAskedByUi = false
+        server.noteQuitAborted()
+        quitFlow.aborted('the session could not be saved')
+      })
+      app.quit()
+    },
+    send: (message) => server.send(message),
+    log
   })
   setPodUiHostSink(server)
   powerMonitor.on('shutdown', () => {
@@ -189,7 +212,12 @@ export function installPodUiHost(): void {
   app.once('will-quit', () => {
     clearGrace()
     setPodUiHostSink(null)
-    server.close()
+    // Why: a committed quit keeps its connection for the heartbeat through teardown (up to 20 s).
+    if (quitFlow.isCommitted) {
+      server.stopListening()
+    } else {
+      server.close()
+    }
   })
   void server.start().then((listening) => {
     // Started without PodNative (a login item, `open -b`, the CLI): bring up the app around it,
