@@ -13,6 +13,7 @@ import {
   isClientDisconnectedError
 } from './orca-runtime-core'
 import { rendererPublicationThrottle } from '../window/renderer-publication-throttle'
+import { podUiHostWindowStartsHidden } from '../pod/headless-host/ui-host-hidden-renderer'
 import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
 
 export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithCreateMobileSessionTerminal {
@@ -114,9 +115,11 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
     if (win.webContents.isDestroyed?.()) {
       throw new Error('runtime_unavailable')
     }
-    const releasePublicationThrottle = pairedCreate
-      ? rendererPublicationThrottle.acquire(win.webContents)
-      : () => {}
+    // Fork-only (Pod): a hidden one-app window also wakes for PodNative's (unpaired) creates.
+    const releasePublicationThrottle =
+      pairedCreate || podUiHostWindowStartsHidden()
+        ? rendererPublicationThrottle.acquire(win.webContents)
+        : () => {}
     try {
       const requestId = randomUUID()
       const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
