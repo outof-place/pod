@@ -21,6 +21,13 @@ import { translate } from '@/i18n/i18n'
  * Centralizing the sequence here keeps that safety invariant in one place so
  * a new caller can't accidentally skip it.
  */
+// Undefined in the web client and in tests that stub only part of `window.api`.
+function podUiHostApi(): Partial<Window['api']>['podUiHost'] {
+  const api: Partial<Window['api']> | undefined =
+    typeof window === 'undefined' ? undefined : window.api
+  return api?.podUiHost
+}
+
 export async function runSleepWorktree(worktreeId: string): Promise<void> {
   await runSleepWorktrees([worktreeId])
 }
@@ -187,7 +194,11 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         // serializer buffers into buffersByLeafId for SSH wake to reseed
         // scrollback. See DESIGN_DOC_TERMINAL_HISTORY_FIX_V2.md §3.3.c.
         await withWorktreeSleepTeardown(worktreeId, async () => {
+          // Fork-only (Pod): the one-app runtime holds the worktree asleep from here, and sleeps
+          // the PTYs no pane here bound after (pod-ui-host-sleep.ts).
+          podUiHostApi()?.beginRuntimeSleep?.(worktreeId)
           await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
+          await podUiHostApi()?.sleepRuntimeTerminals?.(worktreeId)
           if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
             await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
           }
