@@ -20,6 +20,7 @@ import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import type { RuntimeHeadlessTerminal } from './runtime-terminal-state-records'
 import { canAgentMainTerminalModelRest } from './main-terminal-model-agent-rest'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
+import { isMainTerminalModelDormancyEnabled } from '../pod/pod-terminal-model-dormancy'
 
 // Why the mobile depth: no reader of main's model asks for more; full-depth restores of a PTY
 // that went dormant come from the daemon instead (prefersProviderRecoverySnapshot).
@@ -175,7 +176,7 @@ export class OrcaRuntimeWithMainTerminalModelDormancy extends OrcaRuntimeWithSer
   private canMainTerminalModelRest(ptyId: string): boolean {
     const pty = this.ptysById.get(ptyId)
     if (
-      this.store?.getSettings()?.terminalMainModelDormancy === false ||
+      !isMainTerminalModelDormancyEnabled(this.store?.getSettings()) ||
       !pty ||
       pty.connectionId ||
       !this.canAgentPaneMainTerminalModelRest(ptyId)
