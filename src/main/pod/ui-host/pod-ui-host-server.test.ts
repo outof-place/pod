@@ -160,7 +160,12 @@ describe('PodUiHostServer', () => {
   it('welcomes an admitted peer whose hello carries the runtime token', async () => {
     const { server, options } = await startServer()
     const client = await hello(options.socketPath)
-    expect(JSON.parse(client.lines[0])).toEqual({ type: 'welcome', v: 1, pid: 4242, features: [] })
+    expect(JSON.parse(client.lines[0])).toEqual({
+      type: 'welcome',
+      v: 1,
+      pid: 4242,
+      features: ['surfaceSection']
+    })
     expect(options.onUiPresence).toHaveBeenCalledWith(true)
     expect(server.attached).toBe(true)
   })
@@ -168,7 +173,12 @@ describe('PodUiHostServer', () => {
   it('welcomes a version 2 PodNative in its own version', async () => {
     const { options } = await startServer()
     const client = await hello(options.socketPath, TOKEN, 2)
-    expect(JSON.parse(client.lines[0])).toEqual({ type: 'welcome', v: 2, pid: 4242, features: [] })
+    expect(JSON.parse(client.lines[0])).toEqual({
+      type: 'welcome',
+      v: 2,
+      pid: 4242,
+      features: ['surfaceSection']
+    })
   })
 
   describe('browser verbs', () => {
@@ -184,14 +194,18 @@ describe('PodUiHostServer', () => {
     it('names headless for the headless runtime, next to browser', async () => {
       const { options } = await startServer({ onBrowser: vi.fn(), headless: true })
       const client = await hello(options.socketPath)
-      expect(JSON.parse(client.lines[0]).features).toEqual(['browser', 'headless'])
+      expect(JSON.parse(client.lines[0]).features).toEqual([
+        'browser',
+        'headless',
+        'surfaceSection'
+      ])
     })
 
     it('names the browser feature and routes its verbs when the runtime takes them', async () => {
       const onBrowser = vi.fn()
       const { options } = await startServer({ onBrowser })
       const client = await hello(options.socketPath)
-      expect(JSON.parse(client.lines[0]).features).toEqual(['browser'])
+      expect(JSON.parse(client.lines[0]).features).toEqual(['browser', 'surfaceSection'])
       send(client, attach)
       send(client, {
         type: 'browserNavigate',
@@ -335,6 +349,10 @@ describe('PodUiHostServer', () => {
       ['a quit confirmed with anything but true', { type: 'quit', reason: 'user', confirmed: 1 }],
       ['an unknown surface', { type: 'openSurface', surface: 'terminal' }],
       [
+        'a section that is not a plain name',
+        { type: 'openSurface', surface: 'settings', section: '../accounts' }
+      ],
+      [
         'a forward of 33 URLs',
         { type: 'secondInstance', urls: Array(33).fill('pod://x'), files: [] }
       ]
@@ -367,6 +385,13 @@ describe('PodUiHostServer', () => {
     const { options } = await startServer()
     const client = await hello(options.socketPath)
     send(client, { type: 'openSurface', surface: 'window', worktreeId: 'repo::/w' })
+    send(client, {
+      type: 'openSurface',
+      surface: 'settings',
+      section: 'repo',
+      repoId: 'repo-1',
+      item: 'repo-1-local-commands'
+    })
     send(client, { type: 'secondInstance', urls: ['pod://skills/x'], files: [] })
     send(client, { type: 'quit', reason: 'update' })
     await vi.waitFor(() =>
@@ -380,6 +405,13 @@ describe('PodUiHostServer', () => {
       type: 'openSurface',
       surface: 'window',
       worktreeId: 'repo::/w'
+    })
+    expect(options.onOpenSurface).toHaveBeenCalledWith({
+      type: 'openSurface',
+      surface: 'settings',
+      section: 'repo',
+      repoId: 'repo-1',
+      item: 'repo-1-local-commands'
     })
     expect(options.onSecondInstance).toHaveBeenCalledWith({
       type: 'secondInstance',
