@@ -262,6 +262,11 @@ export class PodUiHostServer {
         socket.destroy()
         return
       }
+      if (message.type === 'browserPane' && this.uiVersion < 3) {
+        this.options.log('ui-host: refused a verb newer than the connection')
+        socket.destroy()
+        return
+      }
       this.options.onBrowser(message)
     } else {
       // Version 2 may answer needsConfirmation; its quit commits later (noteQuitCommitted).
