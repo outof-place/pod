@@ -13,6 +13,10 @@ import type {
   PersistedOpenFile,
   WorkspaceSessionState
 } from '../../shared/workspace-session-state-types'
+import {
+  listPodHeadlessDiffTabs,
+  removePodHeadlessDiffTab
+} from '../pod/ui-host/pod-headless-diff-tabs'
 
 export type HeadlessEditorTab = RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab
 
@@ -66,9 +70,13 @@ export function buildHeadlessMobileSessionEditorTabs(
   worktreeId: string,
   session: WorkspaceSessionState
 ): HeadlessEditorTab[] {
-  return (session.openFilesByWorktree?.[worktreeId] ?? []).map((file) =>
-    editorTab(session, worktreeId, file)
-  )
+  return [
+    ...(session.openFilesByWorktree?.[worktreeId] ?? []).map((file) =>
+      editorTab(session, worktreeId, file)
+    ),
+    // Fork-only (Pod): the headless one-app runtime's diff tabs, kept in memory.
+    ...listPodHeadlessDiffTabs(worktreeId)
+  ]
 }
 
 /** The session without one persisted editor tab, or null when it holds no such tab. */
@@ -139,8 +147,10 @@ export function retireHeadlessMobileSessionEditorTab(
   force = false
 ): boolean {
   const session = host.getWorkspaceSessionForWorktree(worktreeId)
-  const next =
-    session && (tab.type === 'markdown' || tab.type === 'file') && tab.filePath
+  // Fork-only (Pod): a headless one-app diff tab lives in memory; the session stays as it is.
+  const next = removePodHeadlessDiffTab(worktreeId, tab.id)
+    ? (session ?? null)
+    : session && (tab.type === 'markdown' || tab.type === 'file') && tab.filePath
       ? retireHeadlessEditorTab(session, worktreeId, { id: tab.id, filePath: tab.filePath }, force)
       : null
   if (!next) {
