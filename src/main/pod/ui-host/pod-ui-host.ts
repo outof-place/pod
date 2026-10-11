@@ -9,7 +9,11 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { productUrlSchemes } from '../../product-identity/product-identity'
 import { readRuntimeMetadata } from '../../runtime/runtime-metadata'
-import { openSettingsFromSystemMenu } from '../../startup/main-window-actions'
+import {
+  openSettingsFromSystemMenu,
+  showMainWindowFromTray
+} from '../../startup/main-window-actions'
+import { isProcessQuitRequested, quitProcess } from '../../startup/process-quit-request'
 import { mainProcessState as state } from '../../startup/main-process-state'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { isBackgroundLaunch } from '../../window/foreground-activation-policy'
@@ -17,7 +21,13 @@ import { installPodBrowserPanes } from '../browser-pane/pod-browser-pane-host'
 import type { PodBrowserPaneController } from '../browser-pane/pod-browser-pane'
 import { loadPodPeerVerifier, podPeerIdentityAddonPath } from './pod-peer-identity'
 import { setPodUiHostSink } from './pod-ui-host-bridge'
-import { isPodUiHostLaunch, podUiHostOuterApp, POD_UI_HOST_SWITCH } from './pod-ui-host-launch'
+import {
+  isPodHeadlessUiHost,
+  isPodUiHostLaunch,
+  podUiHostOuterApp,
+  POD_UI_HOST_SWITCH
+} from './pod-ui-host-launch'
+import { PodUiHostLazyWindow } from './pod-ui-host-lazy-window'
 import { PodUiHostQuitFlow } from './pod-ui-host-quit'
 import { assessRendererQuit, commitRendererQuit } from './pod-ui-host-quit-renderer'
 import {
@@ -147,10 +157,7 @@ export function installPodUiHost(
     verifyPeer,
     pid: process.pid,
     log,
-    onOpenSurface: (request) => {
-      const visible = openSurface(request)
-      server.send({ type: 'surfaceShown', surface: request.surface, visible })
-    },
+    onOpenSurface: (request) => showSurface(request),
     onSecondInstance: (request) => {
       const argv = admitSecondInstance(request, productUrlSchemes())
       if (!argv) {
@@ -161,8 +168,7 @@ export function installPodUiHost(
       forwardingSecondInstance = true
       app.emit('second-instance', { preventDefault: () => {} }, [process.execPath, ...argv], '')
       forwardingSecondInstance = false
-      const visible = openSurface({ type: 'openSurface', surface: 'window' })
-      server.send({ type: 'surfaceShown', surface: 'window', visible })
+      showSurface({ type: 'openSurface', surface: 'window' })
     },
     onBrowser: (message) => panes?.handle(message),
     onQuit: ({ reason, confirmed, version }) => {
@@ -171,7 +177,7 @@ export function installPodUiHost(
         panes?.reset()
         quitAskedByUi = true
         state.isQuitting = true
-        app.quit()
+        quitProcess()
         return
       }
       void quitFlow.request(reason, confirmed)
@@ -189,7 +195,7 @@ export function installPodUiHost(
         if (!server.attached && !state.mainWindow?.isVisible()) {
           log('ui-host: no PodNative came back; quitting')
           state.isQuitting = true
-          app.quit()
+          quitProcess()
         }
       }, NO_UI_GRACE_MS)
       graceTimer.unref?.()
@@ -208,11 +214,32 @@ export function installPodUiHost(
         server.noteQuitAborted()
         quitFlow.aborted('the session could not be saved')
       })
-      app.quit()
+      quitProcess()
     },
     send: (message) => server.send(message),
     log
   })
+  const present = (request: PodUiHostOpenSurface): void => {
+    const visible = openSurface(request)
+    server.send({ type: 'surfaceShown', surface: request.surface, visible })
+  }
+  // The headless runtime has no window until a surface needs one (pod-ui-host-lazy-window.ts).
+  const lazyWindow = isPodHeadlessUiHost()
+    ? new PodUiHostLazyWindow<PodUiHostOpenSurface>({
+        getWindow: () => state.mainWindow,
+        canOpen: () =>
+          !state.isQuitting &&
+          (state.desktopActivationGate === null ||
+            state.desktopActivationGate.getState() === 'ready'),
+        openWindow: showMainWindowFromTray,
+        present,
+        refuse: (request) =>
+          server.send({ type: 'surfaceShown', surface: request.surface, visible: false }),
+        log
+      })
+    : null
+  const showSurface = (request: PodUiHostOpenSurface): void =>
+    lazyWindow ? lazyWindow.request(request) : present(request)
   setPodUiHostSink(server)
   panes = installPodBrowserPanes({
     runtime,
@@ -226,7 +253,9 @@ export function installPodUiHost(
   // Why: a Quit in a fallback window, logout or a signal quits this process; PodNative quits with
   // it instead of restarting a runtime it thinks crashed.
   app.on('before-quit', () => {
-    if (!quitAskedByUi) {
+    // An unmarked quit of the headless runtime is vetoed; the veto tells PodNative itself.
+    const vetoed = isPodHeadlessUiHost() && !isProcessQuitRequested()
+    if (!quitAskedByUi && !vetoed) {
       server.send({ type: 'quitRequested', reason: systemShutdown ? 'system' : 'user' })
     }
   })
@@ -239,6 +268,7 @@ export function installPodUiHost(
   app.on('activate', () => server.send({ type: 'activate' }))
   app.once('will-quit', () => {
     clearGrace()
+    lazyWindow?.dispose()
     setPodUiHostSink(null)
     // Why: a committed quit keeps its connection for the heartbeat through teardown (up to 20 s).
     if (quitFlow.isCommitted) {
