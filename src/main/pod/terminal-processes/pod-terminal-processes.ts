@@ -45,19 +45,31 @@ function hasPodProductIdentity(): boolean {
   }
 }
 
-/** This Mac's terminals only: an SSH host's pids mean nothing to a client sampling here. */
+/** Where the runtime's own records place a PTY (`terminal.list`), by PTY id. */
+export type PodTerminalPlacement = { worktreeId: string; handle: string }
+
+/**
+ * This Mac's terminals only: an SSH host's pids mean nothing to a client sampling here. A PTY whose
+ * id names no worktree (a headless runtime's `serve-…` terminals) takes it from `placements`.
+ */
 export async function listPodTerminalProcesses(
   source: PodPtyProcessList | null = list,
+  placements: ReadonlyMap<string, PodTerminalPlacement> = new Map(),
   now: () => number = Date.now
 ): Promise<PodTerminalProcess[]> {
   if (!source) {
     throw new Error('Terminal processes are not available yet.')
   }
   const rows = await source(LOCAL_EXECUTION_HOST_ID, { deadlineMs: now() + LIST_BUDGET_MS })
-  return rows.map((row) => ({
-    ptyId: row.id,
-    ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
-    ...(row.terminalHandle ? { handle: row.terminalHandle } : {}),
-    ...(row.rootProcessId ? { shellPid: row.rootProcessId } : {})
-  }))
+  return rows.map((row) => {
+    const placed = placements.get(row.id)
+    const worktreeId = row.worktreeId ?? placed?.worktreeId
+    const handle = row.terminalHandle ?? placed?.handle
+    return {
+      ptyId: row.id,
+      ...(worktreeId ? { worktreeId } : {}),
+      ...(handle ? { handle } : {}),
+      ...(row.rootProcessId ? { shellPid: row.rootProcessId } : {})
+    }
+  })
 }
