@@ -22,6 +22,7 @@ export type TerminalMultiplexConnectionBase = {
   runtime: RpcContext['runtime']
   connectionId: string
   sendBinary: NonNullable<RpcContext['sendBinary']>
+  binaryBackpressure: RpcContext['binaryBackpressure']
   registerBinaryStreamHandler: NonNullable<RpcContext['registerBinaryStreamHandler']>
   signal: RpcContext['signal']
   emit: MultiplexEmit
@@ -98,6 +99,12 @@ export type TerminalMultiplexSlotFrames = {
   ) => Promise<void>
 }
 
+export type TerminalMultiplexLinkBackpressure = {
+  /** False refuses a bulk frame for a stream the link has no room for; that stream re-seeds later. */
+  admitStreamFrame: (streamId: number, opcode: TerminalStreamOpcode, frameBytes: number) => boolean
+  releaseLinkBackpressure: () => void
+}
+
 export type TerminalMultiplexSubscribeFrame = {
   handleSubscribeFrame: (payload: Uint8Array<ArrayBufferLike>) => Promise<void>
 }
@@ -107,7 +114,8 @@ export type TerminalMultiplexConnection = TerminalMultiplexConnectionBase &
   TerminalMultiplexFlowControl &
   TerminalMultiplexCleanup &
   TerminalMultiplexSlotFrames &
-  TerminalMultiplexSubscribeFrame
+  TerminalMultiplexSubscribeFrame &
+  TerminalMultiplexLinkBackpressure
 
 export function isMultiplexStreamAttached(
   state: Pick<TerminalMultiplexConnection, 'closed' | 'streams'>,
