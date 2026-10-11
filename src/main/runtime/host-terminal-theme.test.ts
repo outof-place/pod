@@ -47,6 +47,7 @@ function makeRuntime(): OrcaRuntimeService {
 }
 
 type Private = { mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot> }
+type Republish = { republishMobileSessionTabsSnapshot: (worktreeId: string) => void }
 
 function seed(runtime: OrcaRuntimeService, terminalTheme?: RuntimeMobileTerminalTheme): void {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test reaches the runtime's snapshot map, a protected field.
@@ -176,6 +177,21 @@ describe('host terminal theme (headless)', () => {
     expect(getTerminalViewerColors()).toEqual(first)
     runtime.onClientDisconnected('stream-a')
     expect(getTerminalViewerColors()).toEqual(hostColors)
+  })
+
+  it('publishes tabs without a theme when the store has no getSettings', () => {
+    const { getSettings: _omitted, ...bareStore } = store
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store, as runtime test mocks pass; these paths read only the repo and worktree lists.
+    const runtime = new OrcaRuntimeService(bareStore as never)
+    seed(runtime)
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((event) => events.push(event))
+    runtime.refreshHostTerminalTheme()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test reaches the runtime's protected republish.
+    ;(runtime as unknown as Republish).republishMobileSessionTabsSnapshot('worktree-a')
+    expect(events).toHaveLength(1)
+    expect(terminalTheme(events[0])).toBeUndefined()
+    unsubscribe()
   })
 
   it('names the settings that move the theme', () => {
