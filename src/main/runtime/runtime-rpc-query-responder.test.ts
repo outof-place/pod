@@ -206,6 +206,35 @@ describe('one query responder among several terminal views', () => {
     }
   })
 
+  it('gives the part of a query a view held back the seq where it ended, once the view answers', async () => {
+    const { runtime, server, endpoint, authToken, handle } = await startServer()
+    const first = await attachViewer(endpoint, authToken, handle, 'first')
+    const second = await attachViewer(endpoint, authToken, handle, 'second')
+    try {
+      const lead = 'x'.repeat(100)
+      runtime.onPtyData(PTY, `${lead}\x1b[`, 1)
+      await vi.waitFor(() => expect(second.output()).toContain(lead))
+      second.send(TerminalStreamOpcode.Input, encodeTerminalStreamText('k'))
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      runtime.onPtyData(PTY, '6nb\r\n', 2)
+      await vi.waitFor(() => expect(second.output()).toContain(`${lead}${CPR}b`))
+      const held = second.client.binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .find(
+          (frame) =>
+            frame?.streamId === 7 &&
+            frame.opcode === TerminalStreamOpcode.OutputSpan &&
+            SpanPayload.parse(decodeTerminalStreamJson<unknown>(frame.payload)).data === '\x1b['
+        )
+      // A viewer checks each output frame's seq for gaps; the held bytes end at the first chunk's end.
+      expect(held?.seq).toBe(lead.length + 2)
+    } finally {
+      first.client.close()
+      second.client.close()
+      await server.stop()
+    }
+  })
+
   it("has main's model answer a query the responder left before answering", async () => {
     const { runtime, server, endpoint, authToken, handle, answerFromModel } = await startServer()
     const first = await attachViewer(endpoint, authToken, handle, 'first')
