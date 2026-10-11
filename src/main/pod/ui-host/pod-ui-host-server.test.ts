@@ -181,6 +181,12 @@ describe('PodUiHostServer', () => {
       scale: 2
     }
 
+    it('names headless for the headless runtime, next to browser', async () => {
+      const { options } = await startServer({ onBrowser: vi.fn(), headless: true })
+      const client = await hello(options.socketPath)
+      expect(JSON.parse(client.lines[0]).features).toEqual(['browser', 'headless'])
+    })
+
     it('names the browser feature and routes its verbs when the runtime takes them', async () => {
       const onBrowser = vi.fn()
       const { options } = await startServer({ onBrowser })
