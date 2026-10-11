@@ -29,9 +29,18 @@ export function isPodUiHostLaunch(
     return false
   }
   if (argv.includes('--serve')) {
-    return argv.includes(POD_UI_HOST_SWITCH) && argv.includes(POD_HEADLESS_HOST_FLAG)
+    return hasPodHeadlessUiHostSwitches(argv)
   }
   return argv.includes(POD_UI_HOST_SWITCH) || podUiHostOuterApp(execPath) !== null
+}
+
+/** The switches PodNative starts the headless one-app runtime with; nothing else passes all three. */
+export function hasPodHeadlessUiHostSwitches(argv: readonly string[]): boolean {
+  return (
+    argv.includes('--serve') &&
+    argv.includes(POD_UI_HOST_SWITCH) &&
+    argv.includes(POD_HEADLESS_HOST_FLAG)
+  )
 }
 
 /** The headless one-app runtime: no window until PodNative asks for a surface; closing destroys it. */
