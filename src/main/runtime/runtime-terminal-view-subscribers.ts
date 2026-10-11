@@ -65,6 +65,11 @@ export class RuntimeTerminalViewSubscribers {
     return this.providerAttaches.has(ptyId)
   }
 
+  /** The attach a view's subscribe started (settled ones included); null when there is none. */
+  providerAttach(ptyId: string): Promise<boolean> | null {
+    return this.providerAttaches.get(ptyId) ?? null
+  }
+
   attachInventoryWaiterIds(): string[] {
     return [...this.attachInventoryWaiters]
   }
