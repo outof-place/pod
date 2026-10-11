@@ -25,6 +25,8 @@ if (existsSync('src/shared/child-process/run-process.ts')) {
 const IMPORT =
   /^import (type )?\{([^}]*)\} from '(?:\.\.\/)+(?:src\/)?shared\/child-process\/run-process'$/gm
 const VALUE_NAMES = new Set(['runProcess', 'spawnProcess', 'runProcessSync'])
+// A test that mocks the old module mocks the package its subject now imports.
+const VI_MOCK = /\bvi\.mock\((['"])(?:\.\.\/)+(?:src\/)?shared\/child-process\/run-process\1/g
 // The handle @orca/process-host returns has nullable streams.
 const STREAM_RESUME = /^(\s*)(\w+)\.(stdout|stderr)\.resume\(\)$/gm
 
@@ -64,6 +66,7 @@ for (const file of files) {
     }
     return `import { ${names.join(', ')} } from '@orca/process-host'`
   })
+  after = after.replace(VI_MOCK, "vi.mock('@orca/process-host'")
   if (after !== before && /\bspawnProcess\b/.test(after)) {
     after = after.replace(STREAM_RESUME, '$1$2.$3?.resume()')
   }
