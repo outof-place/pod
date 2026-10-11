@@ -3,7 +3,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Socket } from 'node:net'
-import type { PodBrowserFrames } from '../browser-pane/pod-browser-pane'
+import type { PodBrowserFrames } from '../browser-pane/pod-browser-pane-frames'
 
 export const POD_PEER_IDENTITY_RESOURCE_PATH = join('native', 'pod-peer-identity.node')
 export const POD_PEER_IDENTITY_BUILD_PATH = join(
