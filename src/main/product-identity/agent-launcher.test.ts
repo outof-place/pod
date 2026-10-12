@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import {
   chmodSync,
   lstatSync,
@@ -103,6 +103,60 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
     }
     expect(watching()).toBe(false)
   })
+
+  it('takes the role back from a tool that has used a second of CPU', () => {
+    // A busy loop and an idle process under the agent, read before and after the budget.
+    script(
+      join(root, 'busy'),
+      'claude',
+      [
+        "sh -c 'while :; do :; done' &",
+        'b=$!',
+        "sh -c 'sleep 3' &",
+        's=$!',
+        'sleep 0.3',
+        'echo "$(ps -o pri= -p $b) $(ps -o pri= -p $s)"',
+        'sleep 2.4',
+        'echo "$(ps -o pri= -p $b) $(ps -o pri= -p $s)"',
+        'kill $b',
+        'wait $s'
+      ].join('\n')
+    )
+    const result = run('claude', [], [binDir, join(root, 'busy')])
+    const [before, after] = result.stdout
+      .split('\n')
+      .map((line) => line.trim().split(/\s+/).map(Number))
+    expect(before[0]).toBe(before[1])
+    expect(after[0]).toBeLessThan(after[1])
+  }, 10_000)
+
+  it('leaves no watcher behind when the agent or the launcher is killed', async () => {
+    script(join(root, 'sleeper'), 'claude', 'exec sleep 30')
+    const env = { PATH: [binDir, join(root, 'sleeper'), '/usr/bin', '/bin'].join(':'), HOME: root }
+    const watchers = (pids: number[]): number =>
+      spawnSync('ps', ['-axo', 'command='], { encoding: 'utf8' })
+        .stdout.split('\n')
+        .filter((line) => pids.some((pid) => line.endsWith(`--tree-watch ${pid}`))).length
+    const pause = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms))
+    const pids: number[] = []
+    // A running agent killed outright, then a launcher killed while it starts.
+    for (let i = 0; i < 5; i++) {
+      const agent = spawn('claude', [], { env, stdio: 'ignore' })
+      pids.push(agent.pid ?? 0)
+      for (let tries = 0; tries < 50 && watchers([agent.pid ?? 0]) === 0; tries++) {
+        await pause(20)
+      }
+      agent.kill('SIGKILL')
+    }
+    for (let i = 0; i < 3; i++) {
+      const launcher = spawn('claude', [], { env, stdio: 'ignore' })
+      pids.push(launcher.pid ?? 0)
+      await pause(i)
+      launcher.kill('SIGKILL')
+    }
+    await pause(1000)
+    expect(watchers(pids)).toBe(0)
+  }, 15_000)
 
   it('reports the task role it applied', () => {
     const turbo = run(join(binDir, 'pod-agent-launcher'), ['--print-policy'], [])
