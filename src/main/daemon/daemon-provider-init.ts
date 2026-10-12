@@ -21,7 +21,7 @@ import {
   type DaemonLaunchPolicy
 } from './daemon-out-of-process-launcher'
 import type { DaemonProvider } from './daemon-provider-routing'
-import { installDaemonProvider } from './daemon-provider-state'
+import { getDaemonProvider, installDaemonProvider } from './daemon-provider-state'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { trackDaemonAdopted } from './daemon-adoption-telemetry-event'
 import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
@@ -76,7 +76,10 @@ export async function initDaemonPtyProvider(
   scheduleDarwinDaemonHostMaintenance(runtimeDir, getDaemonEntryPath(), options.isQuitting)
   const launchMode = newSpawner.getHandle()?.mode
   logDaemonMilestone('daemon-current-ready')
-  if (signal?.aborted) {
+  // Fork-only (Pod): a late start has no signal; a quit under way stops it the same way.
+  const abandoned = (): boolean =>
+    signal?.aborted === true || (options.late === true && options.isQuitting?.() === true)
+  if (abandoned()) {
     // Why: fail-open may already have spawned fallback PTYs; don't install late, but retire an empty daemon (live sessions reject it and survive).
     const abortedStartupAdapter = new DaemonPtyAdapter({
       socketPath: info.socketPath,
@@ -153,7 +156,8 @@ export async function initDaemonPtyProvider(
     } else if (routedAdapter instanceof DaemonPtyRouter) {
       await routedAdapter.discoverLegacySessions()
     }
-    if (signal?.aborted) {
+    // Pod: a late start also yields to a provider installed meanwhile (e.g. Restart daemon).
+    if (abandoned() || (options.late && getDaemonProvider() !== null)) {
       // Why: same late-swap guard after legacy discovery; release uninstalled adapter leases without killing live sessions.
       await routedAdapter.disconnectOnly()
       return

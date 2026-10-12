@@ -40,7 +40,7 @@ describe('scheduleLateDaemonStart', () => {
     expect(start).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(200_000)
     expect(start).toHaveBeenCalledTimes(2)
-    expect(console.info).toHaveBeenCalledWith(expect.stringContaining('started late'))
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('started late'))
   })
 
   it('gives up after its last delay', async () => {
