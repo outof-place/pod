@@ -24,6 +24,7 @@ function installAgentLauncher(resourcesDir, arch) {
       '-target',
       `${cpu}-apple-macosx${MACOS_MINIMUM}`,
       join(__dirname, 'main.swift'),
+      join(__dirname, 'claude-settings.swift'),
       '-o',
       launcherPath
     ],
