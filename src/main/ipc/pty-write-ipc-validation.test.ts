@@ -250,7 +250,8 @@ describe('registerPtyHandlers', () => {
     expect(runtime.synchronizePtyOutputSequenceFromProvider).toHaveBeenCalledWith(
       'pty-restored',
       { value: 900, generation: 'continued' },
-      7
+      7,
+      undefined
     )
   })
   it('pairs the daemon kitty flags with the reconciled boundary when no bytes crossed mid-spawn', async () => {
