@@ -82,6 +82,7 @@ beforeEach(() => {
   hostApp.willQuit.length = 0
   tools.copyDelayMs = 0
   tools.lsofStdout = ''
+  tools.lsofTimedOut = false
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'info').mockImplementation(() => {})
 })
@@ -123,8 +124,16 @@ describe('pruneDarwinDaemonHosts', () => {
     await pruneDarwinDaemonHosts(complete({}))
     expect(existsSync(old)).toBe(true)
     expect(console.warn).toHaveBeenCalledWith(
-      expect.stringContaining('a process still runs from it')
+      expect.stringContaining('a process still runs from it (pid 4242)')
     )
+  })
+
+  it('keeps a version when lsof runs out of time, and says so', async () => {
+    const old = publishClone('1.0.0')
+    tools.lsofTimedOut = true
+    await pruneDarwinDaemonHosts(complete({}))
+    expect(existsSync(old)).toBe(true)
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('lsof timed out after'))
   })
 
   it('reclaims staging of an exited writer and keeps a live writer’s', async () => {
@@ -166,7 +175,7 @@ describe('scheduleDarwinDaemonHostMaintenance', () => {
     expect(existsSync(old)).toBe(false)
   })
 
-  it('runs its tools at background priority', async () => {
+  it('runs its copy tools at background priority and lsof at its own', async () => {
     publishClone('1.0.0')
     const runtimeDir = join(tempDir, 'userData', 'daemon')
     mkdirSync(runtimeDir, { recursive: true })
@@ -185,11 +194,13 @@ describe('scheduleDarwinDaemonHostMaintenance', () => {
     if (existsSync('/usr/sbin/taskpolicy')) {
       expect(wrapped.map((call) => call.args.slice(0, 2))).toEqual(
         expect.arrayContaining([
-          ['-b', '/usr/sbin/lsof'],
           ['-b', '/bin/cp'],
           ['-b', '/usr/bin/codesign']
         ])
       )
+      // Why: under -b on a loaded Mac lsof ran past its timeout and kept every stale version.
+      expect(wrapped.some((call) => call.args[1] === '/usr/sbin/lsof')).toBe(false)
+      expect(tools.calls.some((call) => call.program === '/usr/sbin/lsof')).toBe(true)
     } else {
       expect(wrapped).toEqual([])
     }
