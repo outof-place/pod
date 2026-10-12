@@ -95,6 +95,22 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
     expect(missing.stderr).toBe('codex: command not found')
   })
 
+  it("passes the caller's argument bytes on as they are, UTF-8 or not", () => {
+    // The command prints each argument's bytes in hex.
+    script(join(root, 'bytes'), 'show', 'for a; do printf %s "$a" | /usr/bin/xxd -p; done')
+    const result = spawnSync(
+      '/bin/bash',
+      [
+        '-c',
+        'exec "$0" -- "$1" a "$(printf \'\\377\\376\')"',
+        join(binDir, 'pod-agent-launcher'),
+        join(root, 'bytes', 'show')
+      ],
+      { encoding: 'utf8', env: { PATH: '/usr/bin:/bin', HOME: root } }
+    )
+    expect(result.stdout.split('\n').filter(Boolean)).toEqual(['61', 'fffe'])
+  })
+
   it('reaches the real command through a wrapper that execs it by name', () => {
     script(join(root, 'exec-wrapper'), 'claude', 'exec claude wrapped "$@"')
     const result = run('claude', ['x'], [binDir, join(root, 'exec-wrapper'), join(root, 'real')])
@@ -207,6 +223,27 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
       ).toBe('args=x')
     })
 
+    it("keeps the caller's argument bytes around Pod's --settings", () => {
+      const { dir, pane } = setup()
+      script(
+        join(dir, 'bytes'),
+        'claude',
+        'echo "$1"; for a; do printf %s "$a" | /usr/bin/xxd -p; done'
+      )
+      const result = spawnSync('/bin/bash', ['-c', 'exec claude x "$(printf \'\\377\')"'], {
+        encoding: 'utf8',
+        cwd: root,
+        env: {
+          PATH: [binDir, join(dir, 'bytes'), '/usr/bin', '/bin'].join(':'),
+          HOME: root,
+          ...pane
+        }
+      })
+      const lines = result.stdout.split('\n').filter(Boolean)
+      expect(lines[0]).toBe('--settings')
+      expect(lines.slice(-2)).toEqual(['78', 'ff'])
+    })
+
     it('takes the statusLine template only while the user has no statusLine of their own', () => {
       const { dir, prefix, pane } = setup()
       writeFileSync(`${prefix}.command-statusline.json`, '{"hooks":{},"statusLine":{"x":1}}')
@@ -297,6 +334,44 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
       encoding: 'utf8'
     })
     expect(gone.stdout.trim()).toBe('999999')
+  })
+
+  it('returns at once when its caller is already gone', async () => {
+    const sleeper = spawn('/bin/sleep', ['30'])
+    try {
+      // The subshell outlives its sh, so launchd is its parent when it becomes the launcher.
+      const started = spawnSync(
+        '/bin/sh',
+        [
+          '-c',
+          '(sleep 0.3; exec "$0" --await-exit "$1") >/dev/null 2>&1 & echo $!',
+          join(binDir, 'pod-agent-launcher'),
+          String(sleeper.pid)
+        ],
+        { encoding: 'utf8' }
+      )
+      const watcher = Number(started.stdout.trim())
+      expect(watcher).toBeGreaterThan(1)
+      const alive = (): boolean => {
+        try {
+          process.kill(watcher, 0)
+          return true
+        } catch {
+          return false
+        }
+      }
+      const deadline = Date.now() + 3000
+      while (alive() && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      const stillWaiting = alive()
+      if (stillWaiting) {
+        process.kill(watcher, 'SIGKILL')
+      }
+      expect(stillWaiting).toBe(false)
+    } finally {
+      sleeper.kill()
+    }
   })
 
   it('stops a wrapper that calls itself through PATH', () => {

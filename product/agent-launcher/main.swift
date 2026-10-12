@@ -201,11 +201,12 @@ if isScript(target) {
 }
 
 applyPolicy()
-var launchArgs = Array(arguments[commandIndex...])
-if let withSettings = claudeLaunchArgs(command: command, args: launchArgs) {
-  launchArgs = withSettings
+// Why the caller's pointers: arguments came through String, which repairs bytes that aren't UTF-8.
+var argv = Array(UnsafeBufferPointer(
+  start: CommandLine.unsafeArgv + commandIndex, count: arguments.count - commandIndex + 1))
+if let edit = claudeLaunchArgs(command: command, args: Array(arguments[commandIndex...])) {
+  edit.apply(to: &argv)
   setenv(settingsPidEnv, String(getpid()), 1)
 }
-let argv = launchArgs.map { strdup($0) } + [nil]
 execv(target, argv)
 fail("\(command): \(String(cString: strerror(errno)))", code: 126)
