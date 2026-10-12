@@ -74,6 +74,23 @@ describe('daemon-init: late start', () => {
     expect(late.routesFreshSpawnsToLocalProvider).toBe(true)
   })
 
+  it('installs nothing once a quit is under way', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider(undefined, { late: true, isQuitting: () => true })
+    expect(mod.getDaemonProvider()).toBeNull()
+    expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('yields to a provider installed while it was starting', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const installed = mod.getDaemonProvider()
+    expect(installed).not.toBeNull()
+    await mod.initDaemonPtyProvider(undefined, { late: true })
+    expect(mod.getDaemonProvider()).toBe(installed)
+    expect(setLocalPtyProviderMock).toHaveBeenCalledOnce()
+  })
+
   it('installs a plain daemon provider when startup did not fall back', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
