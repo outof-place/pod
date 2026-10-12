@@ -20,12 +20,15 @@ const PRODUCT_FILE_EXCLUSIONS = [
   '!.ruff_cache{,/**/*}',
   // Brand generator sources (PodNative's catalog, SVG masters, scripts): Electron reads only their
   // outputs, which live outside resources/brand (tray, icon, logo, build).
-  '!resources/brand{,/**/*}'
+  '!resources/brand{,/**/*}',
+  // Release tooling (builder configs, signing policy, scripts, docs). The runtime reads
+  // Resources/product-identity.json and out/, never this folder.
+  '!product{,/**/*}'
 ]
 // osx-sign gives every binary-looking file its own signature and timestamp; the bundle seal already
 // covers code-free resources, and each skipped file is one Apple timestamp call fewer.
 const PRODUCT_SIGN_IGNORE = ['/Contents/Resources/app\\.asar\\.unpacked/resources/brand/']
-const FORBIDDEN_TOP_LEVEL = /^(dist|dist-.*|test-results|playwright-report)$/
+const FORBIDDEN_TOP_LEVEL = /^(dist|dist-.*|test-results|playwright-report|product)$/
 // Why dot folders too: caches are hidden folders, while the dot files upstream ships are configs.
 const HIDDEN = /^\..+/
 
