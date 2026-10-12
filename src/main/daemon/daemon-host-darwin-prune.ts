@@ -44,19 +44,32 @@ function safeReaddir(dir: string): string[] {
 
 /**
  * Second veto beside the pid records: a process whose image is in the tree (a daemon whose record
- * was lost) keeps it. Anything but lsof's clean "no match" counts as in use.
+ * was lost) keeps it. Anything but lsof's clean "no match" counts as in use; returns why, or null.
  */
-async function anyProcessRunsFrom(executables: string[], mode: HostToolMode): Promise<boolean> {
+async function whyVersionInUse(executables: string[], mode: HostToolMode): Promise<string | null> {
   if (executables.length === 0) {
-    return false
+    return null
   }
+  // Why not background: lsof walks every process's files, and under taskpolicy -b on a loaded Mac
+  // that took 3-9 s and timed out, which kept every stale version.
   const result = await runHostTool(
     '/usr/sbin/lsof',
     ['-w', '-t', '--', ...executables],
     LSOF_TIMEOUT_MS,
-    mode
+    mode.signal ? { signal: mode.signal } : {}
   )
-  return !(result.code === 1 && result.stdout.trim() === '' && result.stderr.trim() === '')
+  const stdout = result.stdout.trim()
+  const stderr = result.stderr.trim()
+  if (result.code === 1 && stdout === '' && stderr === '') {
+    return null
+  }
+  if (result.timedOut) {
+    return `lsof timed out after ${LSOF_TIMEOUT_MS} ms`
+  }
+  if (stdout !== '') {
+    return `a process still runs from it (pid ${stdout.split(/\s+/).join(', ')})`
+  }
+  return `lsof exited ${result.code}${stderr ? `: ${stderr.slice(0, 200)}` : ''}`
 }
 
 async function reclaimAbandonedStaging(versionDir: string, mode: HostToolMode): Promise<void> {
@@ -100,8 +113,9 @@ export async function pruneDarwinDaemonHosts(
     if ((evidence.versionLiveness.get(version) ?? { status: 'exited' }).status !== 'exited') {
       continue
     }
-    if (await anyProcessRunsFrom(versionExecutables(versionDir), mode)) {
-      reportDaemonHost('kept', `keeping ${versionDir}: a process still runs from it`)
+    const inUse = await whyVersionInUse(versionExecutables(versionDir), mode)
+    if (inUse) {
+      reportDaemonHost('kept', `keeping ${versionDir}: ${inUse}`)
       continue
     }
     if (!mode.signal?.aborted && (await removeDarwinDaemonHostTree(versionDir, mode))) {

@@ -83,6 +83,8 @@ export type ToolState = {
   calls: { program: string; args: readonly string[] }[]
   codesignCode: number
   lsofStdout: string
+  /** lsof ran out of time (a loaded Mac); no verdict either way. */
+  lsofTimedOut?: boolean
   copyDelayMs?: number
   /** Filesystem mount(8) reports for the clone root's device. */
   volumeType?: string
@@ -133,6 +135,9 @@ export async function fakeTool(state: ToolState, spec: ProcessSpec): Promise<Pro
         stdout: `/dev/disk9s9 on /System/Volumes/Data (${state.volumeType ?? 'apfs'}, local, journaled)\n`
       }
     case '/usr/sbin/lsof':
+      if (state.lsofTimedOut) {
+        return { ...ok, code: null, signal: 'SIGTERM', timedOut: true }
+      }
       return state.lsofStdout ? { ...ok, stdout: state.lsofStdout } : { ...ok, code: 1 }
     default:
       throw new Error(`unexpected tool ${spec.program}`)
