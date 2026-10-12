@@ -72,10 +72,11 @@ export function podNextDecayAt(rows: readonly PodStatusRow[], now: number): numb
 }
 
 export type PodWorktreeRank = Pick<RuntimeWorktreePsSummary, 'status' | 'workingMode'> &
-  Partial<Pick<RuntimeWorktreePsSummary, 'agents'>>
+  Partial<Pick<RuntimeWorktreePsSummary, 'agents' | 'liveTerminalCount'>>
 
+/** Status, working mode, and whether any terminal lives (a card's sleeping dot). */
 export function podRankKey(row: PodWorktreeRank): string {
-  return `${row.status}\u0000${row.workingMode ?? ''}`
+  return `${row.status}\u0000${row.workingMode ?? ''}\u0000${(row.liveTerminalCount ?? 0) > 0}`
 }
 
 /** The hook store fields an agent row on a worktree card shows, for `worktreeStatus.agents`. */

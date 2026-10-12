@@ -380,4 +380,56 @@ describe('PodWorktreeStatusHub', () => {
     expect(emit).not.toHaveBeenCalled()
     expect(hub.subscriberCount).toBe(0)
   })
+
+  it('reads again when a terminal starts or ends, and emits where a worktree lost or gained its last one', async () => {
+    const harness = makeStore([row('p1', 'working')])
+    let fire = (): void => {}
+    let terminalListeners = 0
+    const hub = new PodWorktreeStatusHub(harness.store, (listener) => {
+      fire = listener
+      terminalListeners += 1
+      return () => {
+        terminalListeners -= 1
+      }
+    })
+    const read = makeReader(
+      [
+        's1',
+        [
+          { worktreeId: 'wt-a', status: 'active', liveTerminalCount: 2 },
+          { worktreeId: 'wt-b', status: 'active', liveTerminalCount: 1 }
+        ]
+      ],
+      [
+        's2',
+        [
+          // Close Terminals: no hook row moved, the terminals are gone.
+          { worktreeId: 'wt-a', status: 'active', liveTerminalCount: 0 },
+          { worktreeId: 'wt-b', status: 'active', liveTerminalCount: 3 }
+        ]
+      ]
+    )
+    const events: PodWorktreeStatusChangedEvent[] = []
+    const stop = hub.subscribe(read, (event) => events.push(event))
+    await settle()
+    expect(terminalListeners).toBe(1)
+
+    fire()
+    fire()
+    fire()
+    await vi.advanceTimersByTimeAsync(POD_WORKTREE_STATUS_COALESCE_MS)
+
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(events).toEqual([
+      {
+        type: 'worktreeStatusChanged',
+        worktreeId: 'wt-a',
+        snapshotId: 's2',
+        status: 'active',
+        liveTerminalCount: 0
+      }
+    ])
+    stop()
+    expect(terminalListeners).toBe(0)
+  })
 })

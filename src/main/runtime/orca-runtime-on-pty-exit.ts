@@ -10,6 +10,7 @@ import { SSH_EXIT_UNCONFIRMED_REASON } from '../../shared/pty-liveness-verdict'
 import type { RetiredTerminalSurface } from './mobile-session-terminal-retirement'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
+import { podTerminalLivenessChanged } from '../pod/worktree-status/pod-terminal-liveness-signal'
 
 export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnected {
   onPtyExit(
@@ -266,6 +267,8 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       }
     }
     this.pruneDisconnectedPtyRecords()
+    // Pod: worktree.ps's live terminals moved (pod-terminal-liveness-signal.ts).
+    podTerminalLivenessChanged()
     return retirement
   }
 

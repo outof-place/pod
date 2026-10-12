@@ -6,6 +6,7 @@ import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
+import { podTerminalLivenessChanged } from '../pod/worktree-status/pod-terminal-liveness-signal'
 
 export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHandlesForPty {
   registerPty(
@@ -151,6 +152,8 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     }
     // Why: a listed surface's pending-handle → ready flip must not wait on a later renderer graph change.
     this.touchMobileSessionSnapshotsForPty(ptyId)
+    // Pod: worktree.ps's live terminals moved (pod-terminal-liveness-signal.ts).
+    podTerminalLivenessChanged()
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
     // mobile create's tab is live; publish its surface main-side (#7587).
     if (binding && paneKey) {

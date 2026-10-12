@@ -9,6 +9,7 @@ import {
   type PodAgentStatusRow,
   type PodWorktreeRank
 } from './worktree-status-signature'
+import { subscribePodTerminalLiveness } from './pod-terminal-liveness-signal'
 
 /** A burst of hook writes (a turn ending, a permission prompt) reaches a subscriber as one change. */
 export const POD_WORKTREE_STATUS_COALESCE_MS = 50
@@ -55,8 +56,15 @@ export class PodWorktreeStatusHub {
   private agentSignature: string | null = null
   private flushTimer: Timer | null = null
   private decayTimer: Timer | null = null
+  // A PTY started or ended since the last flush: every subscriber reads.
+  private terminalsMoved = false
 
-  constructor(private readonly store: PodWorktreeStatusStore) {}
+  constructor(
+    private readonly store: PodWorktreeStatusStore,
+    private readonly subscribeTerminals: (
+      listener: () => void
+    ) => () => void = subscribePodTerminalLiveness
+  ) {}
 
   subscribe(
     read: Subscriber['read'],
@@ -101,9 +109,14 @@ export class PodWorktreeStatusHub {
     const onInput = (): void => this.observe()
     const stopMutations = this.store.subscribeStatusRowMutations(onInput)
     const stopFreshness = this.store.subscribeStatusFreshness(onInput)
+    const stopTerminals = this.subscribeTerminals(() => {
+      this.terminalsMoved = true
+      this.observe()
+    })
     this.detach = () => {
       stopMutations()
       stopFreshness()
+      stopTerminals()
     }
     this.signature = this.measure().rank
   }
@@ -113,6 +126,7 @@ export class PodWorktreeStatusHub {
     this.detach = null
     this.signature = null
     this.agentSignature = null
+    this.terminalsMoved = false
     for (const timer of [this.flushTimer, this.decayTimer]) {
       if (timer) {
         clearTimeout(timer)
@@ -161,10 +175,11 @@ export class PodWorktreeStatusHub {
     this.flushTimer = this.arm(() => {
       this.flushTimer = null
       const next = this.measure()
-      const rankMoved = next.rank !== this.signature
+      const rankMoved = next.rank !== this.signature || this.terminalsMoved
       const agentsMoved = next.agents !== null && next.agents !== this.agentSignature
       this.signature = next.rank
       this.agentSignature = next.agents
+      this.terminalsMoved = false
       if (!rankMoved && !agentsMoved) {
         return
       }
@@ -225,7 +240,10 @@ export class PodWorktreeStatusHub {
           worktreeId: row.worktreeId,
           snapshotId: read.snapshotId,
           status: row.status,
-          ...(row.workingMode ? { workingMode: row.workingMode } : {})
+          ...(row.workingMode ? { workingMode: row.workingMode } : {}),
+          ...(row.liveTerminalCount !== undefined
+            ? { liveTerminalCount: row.liveTerminalCount }
+            : {})
         })
       }
     }
