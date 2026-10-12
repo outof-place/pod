@@ -133,7 +133,8 @@ looked after while the agents work.
 
 Every figure here comes from a pod-bench run, with its n, median, p95, machine and date, and the
 caveats the run recorded. The charts round to three figures; the table under them keeps every
-digit. How it is measured: [bench/README.md](../bench/README.md).
+digit. How it is measured: [bench/README.md](https://github.com/outof-place/pod/blob/pod/bench/bench/README.md)
+on the `pod/bench` branch.
 
 <!-- bench:start -->
 <picture>
