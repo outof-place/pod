@@ -99,7 +99,8 @@ Fork-only: Pod identity: name, bundle id, icon
 - A pull request that Orca has merged leaves the manifest. Squash merges are not caught by the
   patch-id dedupe, so check that the merged commit matches the branch, then drop the entry.
 - The [upstream sync](.github/workflows/upstream-sync.yml) workflow runs daily. It fast-forwards
-  `orca-main`. When Orca's `main` has a newer green commit, it rebases `main` into
+  `orca-main` with plain git (`scripts/pod-mirror-orca-main.sh`: fetch from Orca, push, never
+  forced), since this repository no longer shares Orca's objects as a fork. When Orca's `main` has a newer green commit, it rebases `main` into
   `sync/orca-main`, runs the typecheck, unit tests, the daemon protocol crossing check and the
   macOS build, and opens or refreshes the one "Rebase on Orca main" pull request. A conflict or a
   failed check opens or updates one `upstream-sync` issue instead. The cross-version wire journeys
@@ -127,7 +128,8 @@ The sync workflow needs a repository secret named `POD_SYNC_TOKEN`. The built-in
 cannot push commits that change `.github/workflows`, and Orca's `main` changes them constantly.
 
 - Fine-grained token: resource owner `outof-place`, repository `outof-place/pod` only, with
-  Contents, Pull requests, Issues and Workflows set to read and write.
+  Contents, Pull requests, Issues and Workflows set to read and write. The mirror's push needs
+  only Contents and Workflows; the token reaches it through the environment, never a remote URL.
 - Or a classic token with the `repo` and `workflow` scopes.
 - Store it with `gh secret set POD_SYNC_TOKEN -R outof-place/pod`.
 
