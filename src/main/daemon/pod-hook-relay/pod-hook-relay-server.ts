@@ -1,16 +1,24 @@
 // Fork-only (Pod): the endpoint of Claude's http hooks in Pod sessions. The daemon lives as long as
 // every claude it hosts, so a hook never meets a closed port, and it never waits: 200 at once, then
-// the event goes on to the runtime in its pane's order (pod-hook-relay-delivery.ts).
+// the event goes on to the runtime in its pane's order (pod-hook-relay-delivery.ts). A pane whose
+// runtime stops answering keeps a bounded backlog; the rest goes to the spool as the C client's would.
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { chmod, rename, unlink, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import {
   decodePodHookRelayPane,
   deliverPodHookRelayEvent,
+  spoolPodHookRelayEvent,
   type PodHookRelayEvent
 } from './pod-hook-relay-delivery'
+import { podHookRelayEndpointAllowed } from './pod-hook-relay-endpoints'
 
 const MAX_PAYLOAD_BYTES = 16 * 1024 * 1024
+/** A pane's backlog while its runtime hangs (1.5 s per event); beyond it events spool or drop. */
+const PANE_QUEUE_MAX_EVENTS = 64
+const PANE_QUEUE_MAX_BYTES = 8 * 1024 * 1024
+/** How long a closing relay spends spooling its backlog. */
+const CLOSE_SPOOL_BUDGET_MS = 200
 const HOOK_PATH = /^\/hook\/([a-z0-9-]+)$/
 
 export const POD_HOOK_RELAY_TOKEN_HEADER = 'x-pod-hook-relay-token'
@@ -21,12 +29,17 @@ export type PodHookRelayOptions = {
   relayFilePath: string
   log: (event: string, details?: Record<string, unknown>) => void
   deliver?: (event: PodHookRelayEvent) => Promise<unknown>
+  endpointAllowed?: (endpoint: string) => boolean
+  now?: () => number
 }
+
+type PaneQueue = { events: PodHookRelayEvent[]; bytes: number; spooled: number; dropped: number }
 
 export class PodHookRelay {
   private server: Server | null = null
   private readonly token = randomBytes(24).toString('hex')
-  private readonly paneQueues = new Map<string, Promise<unknown>>()
+  private readonly paneQueues = new Map<string, PaneQueue>()
+  private refusedEndpoints = 0
 
   constructor(private readonly options: PodHookRelayOptions) {}
 
@@ -73,6 +86,7 @@ export class PodHookRelay {
   async close(): Promise<void> {
     const server = this.server
     this.server = null
+    this.spoolBacklog()
     await unlink(this.options.relayFilePath).catch(() => {})
     if (server) {
       server.closeAllConnections()
@@ -97,6 +111,19 @@ export class PodHookRelay {
       req.resume()
       return
     }
+    if (!(this.options.endpointAllowed ?? podHookRelayEndpointAllowed)(pane.endpoint)) {
+      // Why: the relay reads this file and spools beside it; only a path the daemon spawned with.
+      this.refusedEndpoints += 1
+      if (this.refusedEndpoints === 1 || this.refusedEndpoints % 100 === 0) {
+        this.options.log('pod-hook-relay-endpoint-refused', {
+          endpoint: pane.endpoint,
+          refused: this.refusedEndpoints
+        })
+      }
+      req.resume()
+      req.on('end', () => res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}\n'))
+      return
+    }
     const agentProcess = req.headers['x-orca-agent-process']
     const chunks: Buffer[] = []
     let size = 0
@@ -113,7 +140,11 @@ export class PodHookRelay {
       while (payload.length > 0 && payload.at(-1) === 0x0a) {
         payload = payload.subarray(0, -1)
       }
-      if (payload.length === 0 || size > MAX_PAYLOAD_BYTES) {
+      if (size > MAX_PAYLOAD_BYTES) {
+        this.options.log('pod-hook-relay-payload-too-large', { paneKey: pane.paneKey, bytes: size })
+        return
+      }
+      if (payload.length === 0) {
         return
       }
       this.enqueue({
@@ -128,20 +159,87 @@ export class PodHookRelay {
   /** One pane's events reach the runtime in the order Claude sent them. */
   private enqueue(event: PodHookRelayEvent): void {
     const key = event.pane.paneKey
+    const queue = this.paneQueues.get(key)
+    if (!queue) {
+      const fresh = { events: [event], bytes: event.payload.length, spooled: 0, dropped: 0 }
+      this.paneQueues.set(key, fresh)
+      void this.drain(key, fresh)
+      return
+    }
+    if (
+      queue.events.length >= PANE_QUEUE_MAX_EVENTS ||
+      queue.bytes + event.payload.length > PANE_QUEUE_MAX_BYTES
+    ) {
+      if (queue.spooled + queue.dropped === 0) {
+        this.options.log('pod-hook-relay-pane-backlog-full', {
+          paneKey: key,
+          events: queue.events.length,
+          bytes: queue.bytes
+        })
+      }
+      this.overflow(queue, event)
+      return
+    }
+    queue.events.push(event)
+    queue.bytes += event.payload.length
+  }
+
+  private async drain(key: string, queue: PaneQueue): Promise<void> {
     const deliver = this.options.deliver ?? deliverPodHookRelayEvent
-    const previous = this.paneQueues.get(key) ?? Promise.resolve()
-    const next = previous
-      .then(() => deliver(event))
-      .catch((error: unknown) =>
+    for (let event = queue.events[0]; event; event = queue.events[0]) {
+      try {
+        await deliver(event)
+      } catch (error) {
         this.options.log('pod-hook-relay-delivery-failed', {
           error: error instanceof Error ? error.message : String(error)
         })
-      )
-    this.paneQueues.set(key, next)
-    void next.then(() => {
-      if (this.paneQueues.get(key) === next) {
-        this.paneQueues.delete(key)
       }
-    })
+      // Why after: the event in flight still counts against the pane's backlog.
+      queue.events.shift()
+      queue.bytes -= event.payload.length
+    }
+    if (this.paneQueues.get(key) === queue) {
+      this.paneQueues.delete(key)
+    }
+    if (queue.spooled + queue.dropped > 0) {
+      this.options.log('pod-hook-relay-pane-backlog-drained', {
+        paneKey: key,
+        spooled: queue.spooled,
+        dropped: queue.dropped
+      })
+    }
+  }
+
+  /** Lifecycle events to the spool, tool events dropped: the C client's choice when nothing answers. */
+  private overflow(queue: PaneQueue, event: PodHookRelayEvent): void {
+    const now = (this.options.now ?? Date.now)()
+    if (spoolPodHookRelayEvent(event, now) === 'spooled') {
+      queue.spooled += 1
+    } else {
+      queue.dropped += 1
+    }
+  }
+
+  /** On close: every queued event behind the one in flight, within a budget. */
+  private spoolBacklog(): void {
+    const now = this.options.now ?? Date.now
+    const deadline = now() + CLOSE_SPOOL_BUDGET_MS
+    for (const [key, queue] of this.paneQueues) {
+      const backlog = queue.events.splice(1)
+      for (const event of backlog) {
+        if (now() > deadline) {
+          queue.dropped += 1
+        } else {
+          this.overflow(queue, event)
+        }
+      }
+      if (backlog.length > 0) {
+        this.options.log('pod-hook-relay-closed-with-backlog', {
+          paneKey: key,
+          spooled: queue.spooled,
+          dropped: queue.dropped
+        })
+      }
+    }
   }
 }
