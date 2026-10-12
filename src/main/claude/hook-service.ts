@@ -26,13 +26,13 @@ export { getManagedScript }
 import { getManagedStatusLineScript } from './statusline-script'
 import { refuseProfileAtDefaultHome } from './claude-profile-hook-target'
 import { podManagedClaudeHook } from '../pod/agent-hook/pod-agent-hook-native'
+import { podManagedStatusLineCommand } from '../pod/agent-hook/pod-statusline-native'
 import {
   applyManagedHooks,
   applyManagedStatusLine,
   CLAUDE_HOOK_SETTINGS,
   getManagedScriptFileName,
   getConfigPath,
-  getManagedCommand,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
@@ -223,7 +223,7 @@ export class ClaudeHookService {
     writeManagedScript(statusLineScriptPath, getManagedStatusLineScript('local'))
     const next = applyManagedStatusLine(
       config,
-      getManagedCommand(statusLineScriptPath),
+      podManagedStatusLineCommand(this.options, statusLineScriptPath),
       scriptFileName
     )
     try {
