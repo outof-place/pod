@@ -229,7 +229,11 @@ export function spoolPodHookRelayEvent(
     let size = 0
     try {
       const info = statSync(file)
-      if (info.isFile() && (now - info.mtimeMs) / 86_400_000 > SPOOL_MAX_AGE_DAYS) {
+      // Why whole seconds and days: the C client's integer arithmetic, so 7.9 days is still 7.
+      const ageDays = Math.trunc(
+        (Math.trunc(now / 1000) - Math.trunc(info.mtimeMs / 1000)) / 86_400
+      )
+      if (info.isFile() && ageDays > SPOOL_MAX_AGE_DAYS) {
         truncateSync(file, 0)
       } else {
         size = info.size

@@ -232,6 +232,20 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
         statusLine: { command: 'mine' }
       })
       expect(lstatSync(mergedPath).mode & 0o777).toBe(0o600)
+      // Through the relay too: the filled template goes into the merged file only.
+      writeFileSync(mine, '{"model":"opus"}')
+      const relayed = run('claude', ['--settings', mine, 'x'], real, {
+        ...pane,
+        POD_AGENT_HOOK_RELAY: join(dir, 'relay.env')
+      }).stdout.split('\n')
+      const relayedPid = relayed[1].replace('pid=', '')
+      expect(relayed[0]).toBe(
+        `args=--settings ${join(dir, 'hooks', 'claude-launch', `merged-${relayedPid}.json`)} x`
+      )
+      expect(JSON.parse(relayed[2]).url).toBe('http://127.0.0.1:4567/hook/claude')
+      expect(() =>
+        lstatSync(join(dir, 'hooks', 'claude-launch', `claude-${relayedPid}.json`))
+      ).toThrow()
       const inline = run('claude', ['--settings={"model":"opus"}', 'x'], real, pane).stdout
       expect(inline.split('\n')[0]).toMatch(/^args=--settings=\/.*\/merged-\d+\.json x$/)
       // A wrapper that runs claude again with Pod's file in its argv: left as it is.
