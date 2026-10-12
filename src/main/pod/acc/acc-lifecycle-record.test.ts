@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import { ACC_STATE_DIR, decideAccLifecycle, type AccLifecycleOutcome } from './acc-lifecycle'
 import { ACC_LIFECYCLE_RECORD, accLifecycleRecord } from './acc-lifecycle-record'
 import { startPodAccSupervisor } from './acc-supervisor'
