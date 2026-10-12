@@ -7,7 +7,7 @@ import { basename, dirname, join } from 'node:path'
 // build's refresh would replace a newer build's script. A per-directory ledger records which
 // generation wrote each script; bytes it does not know came from a pre-ledger build (generation 0).
 // Bump on any change to a managed script's bytes; managed-hook-script-refresh.test.ts pins it.
-export const MANAGED_SCRIPT_GENERATION = 1
+export const MANAGED_SCRIPT_GENERATION = 2
 
 export const MANAGED_SCRIPT_LEDGER_FILE = '.orca-managed-scripts.json'
 

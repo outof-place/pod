@@ -21,6 +21,7 @@ import {
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
+import { notePodClaudeAgentChange } from '../../pod/agent-hook/pod-claude-agent-change'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
@@ -40,6 +41,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         }
       })
     }
+    // Fork-only (Pod): a claude started or ended; Pod's deferred settings.json cut rechecks.
+    notePodClaudeAgentChange(before, after)
     return super.commitStatusRowMutation(before, after, emit)
   }
 
