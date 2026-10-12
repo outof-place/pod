@@ -1,6 +1,6 @@
 // Fork-only (Pod): an isolated OrbStack machine where Claude runs without seeing the rest of the Mac.
 import { isAbsolute, join, relative, resolve } from 'node:path'
-import { runProcess } from '../../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { buildManagedCommandHook } from '../../agent-hooks/installer-utils'
 import { applyClaudeFolderTrust, toClaudeTrustKey } from '../../claude/claude-folder-trust-file'
 import { getClaudeManagedHookPlan } from '../../claude/claude-managed-hook-events'
