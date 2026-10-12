@@ -2,6 +2,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import { normalizePtySize } from './daemon-pty-size'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { createDaemonPtyEnvironment } from './pty-subprocess/spawn-environment'
+import { notePodHookRelaySpawnEnv } from './pod-hook-relay/pod-hook-relay-endpoints'
 import { createPtyShellLaunchPlan } from './pty-subprocess/shell-launch-plan'
 import { spawnNativeDaemonPty, type SpawnedDaemonPty } from './pty-subprocess/native-pty-spawn'
 import {
@@ -70,6 +71,7 @@ export async function checkPtySpawnHealth(): Promise<void> {
 export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env = createDaemonPtyEnvironment(opts)
+  notePodHookRelaySpawnEnv(opts.sessionId, env)
   const launch = createPtyShellLaunchPlan(opts, env)
 
   await preflightPtySpawn({
