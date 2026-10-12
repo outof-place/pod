@@ -94,6 +94,28 @@ describe('Session query responder delegation', () => {
     session.dispose()
   })
 
+  it('names the model Pod to a Claude Code launch (Pod)', () => {
+    const { session, written, emit } = createSession('claude')
+    session.setQueryResponder({})
+    emit('\x1b[>0q\x1b[c')
+    expect(written).toContain('\x1bP>|Pod\x1b\\')
+    expect(written.some((reply) => reply.startsWith('\x1b[?'))).toBe(true)
+    session.dispose()
+  })
+
+  it('names the model Pod to a hand-typed Claude Code, not to vim (Pod)', () => {
+    const claude = createSession()
+    claude.session.setQueryResponder({})
+    claude.emit('\x1b]0;✳ Claude Code\x07\x1b[>0q\x1b[c')
+    expect(claude.written).toContain('\x1bP>|Pod\x1b\\')
+    claude.session.dispose()
+    const vim = createSession()
+    vim.session.setQueryResponder({})
+    vim.emit('\x1b]0;VIM - notes.md\x07\x1b[>0q')
+    expect(vim.written.some((reply) => reply.startsWith('\x1bP>|xterm.js'))).toBe(true)
+    vim.session.dispose()
+  })
+
   it('answers palette queries from the viewer attributes main pushed', () => {
     const { session, written, emit } = createSession()
     setDaemonTerminalViewAttributes(viewAttributes())
