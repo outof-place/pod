@@ -65,6 +65,7 @@ describe('product entitlements', () => {
     ).toBe('camera')
     expect(ruleOf('Contents/Resources/python/bin/python3.14')).toBe('python-jit')
     expect(ruleOf('Contents/Resources/bin/pod-agent-launcher')).toBe('exec-shim')
+    expect(ruleOf('Contents/Resources/agent-shell/pod-search-tool')).toBe('exec-shim')
     for (const path of [
       'Contents/MacOS/pod-notification-status',
       'Contents/Resources/Pod Computer Use.app/Contents/MacOS/pod-computer-use-macos',

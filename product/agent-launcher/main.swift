@@ -455,6 +455,7 @@ if isScript(target) {
 }
 
 applyIndexedSearch(command: command)
+applyClaudeOg(command: command, target: target)
 applyPolicy()
 startTreeWatcher()
 let argv = CommandLine.unsafeArgv + commandIndex
