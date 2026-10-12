@@ -59,11 +59,13 @@ jobs:
       contents: read
       actions: write
     steps:
-      - name: Checkout the quarantine script
+      - name: Checkout the quarantine and mirror scripts
         uses: actions/checkout@v6
         with:
           ref: ${{ env.PRODUCT_BRANCH }}
-          sparse-checkout: scripts/pod-workflow-quarantine.sh
+          sparse-checkout: |
+            scripts/pod-workflow-quarantine.sh
+            scripts/pod-mirror-orca-main.sh
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -72,25 +74,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/pod-workflow-quarantine.sh
 
+      # Plain git since the repository left Orca's fork network: it no longer shares Orca's
+      # objects, so the refs API answered 422 ("Object does not exist"). Never forced.
       - name: Fast-forward orca-main
         env:
           GH_TOKEN: ${{ secrets.POD_SYNC_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::error::POD_SYNC_TOKEN is not set. See CONTRIBUTING.md, section 'Maintainers: the sync token'."
-            exit 1
-          fi
-          upstream=$(gh api "repos/$UPSTREAM_REPO/branches/main" --jq .commit.sha)
-          current=$(gh api "repos/$GITHUB_REPOSITORY/branches/$MIRROR_BRANCH" --jq .commit.sha 2>/dev/null || true)
-          # The fork shares Orca's objects, so the ref can point at a commit only Orca has pushed.
-          if [ -z "$current" ]; then
-            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/heads/$MIRROR_BRANCH" -f "sha=$upstream" >/dev/null
-          elif [ "$current" != "$upstream" ]; then
-            # force=false: a stray commit on orca-main makes this fail instead of being overwritten.
-            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$MIRROR_BRANCH" -f "sha=$upstream" -F force=false >/dev/null
-          fi
-          echo "$MIRROR_BRANCH is at $upstream" >> "$GITHUB_STEP_SUMMARY"
+        run: bash scripts/pod-mirror-orca-main.sh
 
       - name: Keep Orca workflows disabled after the push
         env:
