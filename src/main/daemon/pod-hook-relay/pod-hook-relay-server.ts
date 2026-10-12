@@ -8,9 +8,9 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import {
   decodePodHookRelayPane,
   deliverPodHookRelayEvent,
-  spoolPodHookRelayEvent,
   type PodHookRelayEvent
 } from './pod-hook-relay-delivery'
+import { spoolPodHookRelayEvent, spoolPodHookRelayEventAsync } from './pod-hook-relay-spool'
 import { podHookRelayEndpointAllowed } from './pod-hook-relay-endpoints'
 
 const MAX_PAYLOAD_BYTES = 16 * 1024 * 1024
@@ -38,15 +38,20 @@ export type PodHookRelayOptions = {
 type PaneQueue = {
   events: PodHookRelayEvent[]
   bytes: number
+  /** Events past the cap; spooled and dropped count their outcome as each write settles. */
+  overflowed: number
   spooled: number
   dropped: number
   drained?: Promise<void>
+  /** The pane's last spool write; its file's chain keeps the earlier ones before it. */
+  lastSpool?: Promise<unknown>
 }
 
 export class PodHookRelay {
   private server: Server | null = null
   private readonly token = randomBytes(24).toString('hex')
   private readonly paneQueues = new Map<string, PaneQueue>()
+  private readonly pendingSpools = new Set<Promise<unknown>>()
   private refusedEndpoints = 0
 
   constructor(private readonly options: PodHookRelayOptions) {}
@@ -104,10 +109,11 @@ export class PodHookRelay {
 
   /** Settles once every queued event has been delivered or spooled. */
   async idle(): Promise<void> {
-    while (this.paneQueues.size > 0) {
-      await Promise.all(
-        [...this.paneQueues.values()].map((queue) => queue.drained ?? Promise.resolve())
-      )
+    while (this.paneQueues.size > 0 || this.pendingSpools.size > 0) {
+      await Promise.all([
+        ...[...this.paneQueues.values()].map((queue) => queue.drained ?? Promise.resolve()),
+        ...this.pendingSpools
+      ])
     }
   }
 
@@ -182,6 +188,7 @@ export class PodHookRelay {
       const fresh: PaneQueue = {
         events: [event],
         bytes: event.payload.length,
+        overflowed: 0,
         spooled: 0,
         dropped: 0
       }
@@ -193,7 +200,7 @@ export class PodHookRelay {
       queue.events.length >= PANE_QUEUE_MAX_EVENTS ||
       queue.bytes + event.payload.length > PANE_QUEUE_MAX_BYTES
     ) {
-      if (queue.spooled + queue.dropped === 0) {
+      if (queue.overflowed++ === 0) {
         this.options.log('pod-hook-relay-pane-backlog-full', {
           paneKey: key,
           events: queue.events.length,
@@ -224,7 +231,8 @@ export class PodHookRelay {
     if (this.paneQueues.get(key) === queue) {
       this.paneQueues.delete(key)
     }
-    if (queue.spooled + queue.dropped > 0) {
+    if (queue.overflowed > 0) {
+      await queue.lastSpool
       this.options.log('pod-hook-relay-pane-backlog-drained', {
         paneKey: key,
         spooled: queue.spooled,
@@ -235,8 +243,16 @@ export class PodHookRelay {
 
   /** Lifecycle events to the spool, tool events dropped: the C client's choice when nothing answers. */
   private overflow(queue: PaneQueue, event: PodHookRelayEvent): void {
-    const now = (this.options.now ?? Date.now)()
-    if (spoolPodHookRelayEvent(event, now) === 'spooled') {
+    const spool = spoolPodHookRelayEventAsync(event, (this.options.now ?? Date.now)()).then(
+      (outcome) => this.count(queue, outcome)
+    )
+    queue.lastSpool = spool
+    this.pendingSpools.add(spool)
+    void spool.then(() => this.pendingSpools.delete(spool))
+  }
+
+  private count(queue: PaneQueue, outcome: 'spooled' | 'skipped'): void {
+    if (outcome === 'spooled') {
       queue.spooled += 1
     } else {
       queue.dropped += 1
@@ -253,7 +269,8 @@ export class PodHookRelay {
         if (now() > deadline) {
           queue.dropped += 1
         } else {
-          this.overflow(queue, event)
+          // Why sync: the daemon may exit before an async write lands.
+          this.count(queue, spoolPodHookRelayEvent(event, now()))
         }
       }
       if (backlog.length > 0) {
