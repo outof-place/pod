@@ -49,7 +49,16 @@ export function decodePodHookRelayPane(header: string | undefined): PodHookRelay
 
 type Endpoint = { port: string; token: string; env: string; version: string; transport: string }
 
-/** The endpoint file's KEY=value lines; the pane's own values where it has none. */
+/** The C client's buffers (read_endpoint_file): a longer value leaves the pane's in place. */
+const ENDPOINT_SLOTS: [string, keyof Endpoint, number][] = [
+  ['ORCA_AGENT_HOOK_PORT', 'port', 64],
+  ['ORCA_AGENT_HOOK_TOKEN', 'token', 512],
+  ['ORCA_AGENT_HOOK_ENV', 'env', 128],
+  ['ORCA_AGENT_HOOK_VERSION', 'version', 64],
+  ['ORCA_AGENT_HOOK_TRANSPORT', 'transport', 64]
+]
+
+/** The endpoint file's KEY=value lines over the pane's own values, as the C client reads them. */
 async function readEndpoint(pane: PodHookRelayPane): Promise<Endpoint | null> {
   let text: string
   try {
@@ -57,25 +66,28 @@ async function readEndpoint(pane: PodHookRelayPane): Promise<Endpoint | null> {
   } catch {
     return null
   }
-  const values = new Map<string, string>()
-  for (const line of text.split(/\r?\n/)) {
+  const endpoint: Endpoint = {
+    port: '',
+    token: '',
+    env: pane.env,
+    version: pane.version,
+    transport: ''
+  }
+  for (const raw of text.split('\n')) {
+    const line = raw.split('\r')[0]
     const eq = line.indexOf('=')
-    if (eq > 0) {
-      values.set(line.slice(0, eq), line.slice(eq + 1))
+    if (eq === -1) {
+      continue
+    }
+    const key = line.slice(0, eq)
+    const value = line.slice(eq + 1)
+    for (const [name, slot, size] of ENDPOINT_SLOTS) {
+      if (key === name && Buffer.byteLength(value) < size) {
+        endpoint[slot] = value
+      }
     }
   }
-  const port = values.get('ORCA_AGENT_HOOK_PORT') ?? ''
-  const token = values.get('ORCA_AGENT_HOOK_TOKEN') ?? ''
-  if (!port || !token) {
-    return null
-  }
-  return {
-    port,
-    token,
-    env: values.get('ORCA_AGENT_HOOK_ENV') ?? pane.env,
-    version: values.get('ORCA_AGENT_HOOK_VERSION') ?? pane.version,
-    transport: values.get('ORCA_AGENT_HOOK_TRANSPORT') ?? ''
-  }
+  return endpoint.port && endpoint.token ? endpoint : null
 }
 
 /** Bytes the C client's urlencode keeps as they are (RFC 3986 unreserved). */
@@ -168,7 +180,14 @@ async function post(event: PodHookRelayEvent, endpoint: Endpoint): Promise<boole
         path: `/hook/${event.agent}`,
         agent: false,
         timeout: REQUEST_TIMEOUT_MS,
-        headers: { ...headers, 'Content-Length': String(length), Connection: 'close' }
+        // As the C client's request, header for header (pod-hook-relay-parity.test.ts).
+        headers: {
+          'User-Agent': 'pod-agent-hook/1',
+          Accept: '*/*',
+          ...headers,
+          'Content-Length': String(length),
+          Connection: 'close'
+        }
       },
       (res) => {
         // As curl -sS without -f: any answer is delivered.
