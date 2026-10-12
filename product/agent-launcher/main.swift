@@ -249,7 +249,8 @@ func programPath(_ pid: pid_t) -> String? {
 
 /// Pod's statusline, which Claude runs about once a second per agent and doesn't wait for: it
 /// stays at default, so it doesn't compete with the tool's shell. (Pod's hooks get the role: a
-/// PreToolUse hook runs before every tool.)
+/// PreToolUse hook runs before every tool.) Across all of argv: the native client is one `sh -c`
+/// argument, then `.../agent-hooks/pod-agent-hook statusline` (two), and the watcher may see only that.
 func isPodStatusLine(_ pid: pid_t) -> Bool {
   var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
   var buffer = [UInt8](repeating: 0, count: 16384)
@@ -260,11 +261,15 @@ func isPodStatusLine(_ pid: pid_t) -> Bool {
   var index = 4
   while index < size && buffer[index] != 0 { index += 1 }
   while index < size && buffer[index] == 0 { index += 1 }
+  var hooksPath = false
+  var statusLine = false
   for _ in 0..<max(argc, 0) where index < size {
     let start = index
     while index < size && buffer[index] != 0 { index += 1 }
     let argument = String(decoding: buffer[start..<index], as: UTF8.self)
-    if argument.contains("/agent-hooks/"), argument.contains("statusline") { return true }
+    if argument.contains("/agent-hooks/") { hooksPath = true }
+    if argument.contains("statusline") { statusLine = true }
+    if hooksPath, statusLine { return true }
     index += 1
   }
   return false
