@@ -9,8 +9,10 @@
 //   claude [args...]                       via the symlink: run the next `claude` on PATH
 //   pod-agent-launcher -- <cmd> [args...]  explicit form
 //   pod-agent-launcher --print-policy      apply the policy and print what the kernel reports
+//   pod-agent-launcher --tree-watch <pid>  (internal) the watcher that gives <pid>'s tree the role
 //
-// POD_AGENT_TURBO=0 skips the policy (the command still runs).
+// POD_AGENT_TURBO=0 skips the policy (the command still runs); POD_AGENT_TREE=0 keeps the role on
+// the agent's own process only.
 //
 // Why a task role and not a QoS class: thread QoS does not survive exec, and
 // posix_spawnattr_set_qos_class_np only accepts UTILITY or BACKGROUND (pthread/spawn.h). A task
@@ -155,6 +157,205 @@ func printPolicy() {
       + "\"turbo\":\(env(turboEnv) != "0")}")
 }
 
+// The agent's whole tree at app priority. The role is not inherited by fork, so the hooks, MCP
+// servers and tool commands an agent starts ran at 31 and waited behind everything else under load.
+// A watcher, detached from the agent (launchd's child, its own session, no terminal fd, no working
+// directory), gives the agent's children and theirs the same role as soon as they exist: kqueue
+// NOTE_FORK (no polling), proc_listchildpids for the new ones, and setpriority(PRIO_DARWIN_ROLE),
+// which the kernel allows only on processes of the same user. Deeper processes (a build's workers)
+// and Pod's statusline stay at default; a process that already has a role (darwinbg, throttled)
+// keeps it, and a QoS clamp (`taskpolicy -c`) still wins over the role. It exits with the agent.
+let treeEnv = "POD_AGENT_TREE"
+// "<pid>": the agent whose watcher this process's tree already has.
+let treeRootEnv = "POD_AGENT_TREE_ROOT"
+// <sys/resource.h> (PRIVATE): PRIO_DARWIN_ROLE, and PRIO_DARWIN_ROLE_UI = TASK_DEFAULT_APPLICATION.
+let prioDarwinRole: Int32 = 6
+let prioDarwinRoleUI: Int32 = 2
+// The watcher's word that it follows the agent, on this descriptor.
+let readyFd: Int32 = 3
+let forkNote = UInt32(truncatingIfNeeded: NOTE_FORK)
+let exitNote = UInt32(truncatingIfNeeded: NOTE_EXIT)
+
+func processInfo(_ pid: pid_t) -> proc_bsdinfo? {
+  var info = proc_bsdinfo()
+  let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+  return proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size ? info : nil
+}
+
+/// This process or an ancestor already has a watcher (a wrapper that execs the agent again, an
+/// agent started from inside another): that tree includes this one.
+func treeAlreadyWatched() -> Bool {
+  guard let value = env(treeRootEnv), let root = pid_t(value), root > 1 else { return false }
+  var pid = getpid()
+  for _ in 0..<64 {
+    if pid == root { return true }
+    guard let info = processInfo(pid), info.pbi_ppid > 1 else { return false }
+    pid = pid_t(info.pbi_ppid)
+  }
+  return false
+}
+
+/// `path args...` with /dev/null for 0-2, `ready` as fd 3 and no other descriptor, from /.
+func spawnHelper(_ path: String, _ args: [String], ready: Int32, newSession: Bool) -> pid_t? {
+  var attributes: posix_spawnattr_t?
+  var actions: posix_spawn_file_actions_t?
+  guard posix_spawnattr_init(&attributes) == 0 else { return nil }
+  defer { posix_spawnattr_destroy(&attributes) }
+  guard posix_spawn_file_actions_init(&actions) == 0 else { return nil }
+  defer { posix_spawn_file_actions_destroy(&actions) }
+  var flags = Int32(POSIX_SPAWN_CLOEXEC_DEFAULT)
+  if newSession { flags |= Int32(POSIX_SPAWN_SETSID) }
+  posix_spawnattr_setflags(&attributes, Int16(flags))
+  for fd: Int32 in 0...2 { posix_spawn_file_actions_addopen(&actions, fd, "/dev/null", O_RDWR, 0) }
+  posix_spawn_file_actions_adddup2(&actions, ready, readyFd)
+  posix_spawn_file_actions_addchdir_np(&actions, "/")
+  let argv: [UnsafeMutablePointer<CChar>?] = ([path] + args).map { strdup($0) } + [nil]
+  defer { argv.forEach { free($0) } }
+  var pid: pid_t = 0
+  return posix_spawn(&pid, path, &actions, &attributes, argv, environ) == 0 ? pid : nil
+}
+
+/// Starts this pid's watcher and returns once it follows the pid, so nothing the agent starts is
+/// missed; after 250 ms without word the agent starts anyway. The middle process starts the
+/// watcher and exits, so the watcher is launchd's child, not the agent's.
+func startTreeWatcher() {
+  guard env(turboEnv) != "0", env(treeEnv) != "0", !treeAlreadyWatched(),
+    let selfPath = executablePath()
+  else { return }
+  var fds: [Int32] = [-1, -1]
+  guard pipe(&fds) == 0 else { return }
+  defer { close(fds[0]) }
+  let middle = spawnHelper(selfPath, ["--tree-detach", String(getpid())], ready: fds[1], newSession: false)
+  close(fds[1])
+  guard let middle else { return }
+  var status: Int32 = 0
+  while waitpid(middle, &status, 0) < 0 && errno == EINTR {}
+  var poller = pollfd(fd: fds[0], events: Int16(POLLIN), revents: 0)
+  var byte: UInt8 = 0
+  if poll(&poller, 1, 250) > 0, read(fds[0], &byte, 1) == 1, byte == UInt8(ascii: "1") {
+    setenv(treeRootEnv, String(getpid()), 1)
+  }
+}
+
+let execNote = UInt32(truncatingIfNeeded: NOTE_EXEC)
+
+/// The program a process runs now.
+func programPath(_ pid: pid_t) -> String? {
+  var buffer = [CChar](repeating: 0, count: 4096)
+  guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+  return String(cString: buffer)
+}
+
+/// Pod's statusline, which Claude runs about once a second per agent and doesn't wait for: it
+/// stays at default, so it doesn't compete with the tool's shell. (Pod's hooks get the role: a
+/// PreToolUse hook runs before every tool.)
+func isPodStatusLine(_ pid: pid_t) -> Bool {
+  var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+  var buffer = [UInt8](repeating: 0, count: 16384)
+  var size = buffer.count
+  guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0, size > 4 else { return false }
+  let argc = buffer.withUnsafeBytes { $0.load(as: Int32.self) }
+  // argc, the exec path, NULs, then argc arguments (the environment follows: never read).
+  var index = 4
+  while index < size && buffer[index] != 0 { index += 1 }
+  while index < size && buffer[index] == 0 { index += 1 }
+  for _ in 0..<max(argc, 0) where index < size {
+    let start = index
+    while index < size && buffer[index] != 0 { index += 1 }
+    let argument = String(decoding: buffer[start..<index], as: UTF8.self)
+    if argument.contains("/agent-hooks/"), argument.contains("statusline") { return true }
+    index += 1
+  }
+  return false
+}
+
+/// The watched tree: depth below the agent of each process followed.
+struct Tree {
+  let queue: Int32
+  var depth: [pid_t: Int] = [:]
+
+  /// Follows `pid` (forks, exit, and the exec of the agent's own children), once.
+  mutating func follow(_ pid: pid_t, depth level: Int) -> Bool {
+    guard depth[pid] == nil else { return false }
+    var change = kevent(
+      ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_CLEAR),
+      fflags: forkNote | exitNote | (level == 1 ? execNote : 0), data: 0, udata: nil)
+    guard kevent(queue, &change, 1, nil, 0, nil) == 0 else { return false }
+    depth[pid] = level
+    return true
+  }
+
+  mutating func forget(_ pid: pid_t) {
+    var change = kevent(
+      ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_DELETE), fflags: 0, data: 0,
+      udata: nil)
+    _ = kevent(queue, &change, 1, nil, 0, nil)
+    depth[pid] = nil
+  }
+
+  /// `parent`'s new children get the role (unless they have one). The agent's children are
+  /// followed, so their own children (the command a tool's shell runs, a hook's client) get it
+  /// too; deeper processes (a build's workers) stay at default, and so does Pod's statusline.
+  mutating func sweep(_ parent: pid_t) {
+    guard let parentDepth = depth[parent], parentDepth < 2 else { return }
+    var children = [pid_t](repeating: 0, count: 256)
+    let size = Int32(children.count * MemoryLayout<pid_t>.size)
+    let count = proc_listchildpids(parent, &children, size)
+    guard count > 0 else { return }
+    let parentProgram = programPath(parent)
+    for child in children.prefix(min(Int(count), children.count)) where depth[child] == nil {
+      // Still that parent's child, and this user's (the kernel checks the user again).
+      guard let info = processInfo(child), pid_t(info.pbi_ppid) == parent,
+        info.pbi_uid == getuid()
+      else { continue }
+      let level = parentDepth + 1
+      // A child not exec'd yet runs its parent's program: its exec decides (NOTE_EXEC).
+      if level == 1, programPath(child) != parentProgram, isPodStatusLine(child) { continue }
+      errno = 0
+      let role = getpriority(prioDarwinRole, id_t(child))
+      guard errno == 0 else { continue }
+      if role == 0 { _ = setpriority(prioDarwinRole, id_t(child), prioDarwinRoleUI) }
+      if level == 1, follow(child, depth: level) { sweep(child) }
+    }
+  }
+
+  /// One of the agent's children exec'd: Pod's statusline goes back to default.
+  mutating func execed(_ pid: pid_t) {
+    guard depth[pid] == 1, isPodStatusLine(pid) else { return }
+    _ = setpriority(prioDarwinRole, id_t(pid), 0)
+    forget(pid)
+  }
+}
+
+func watchTree(_ root: pid_t) -> Never {
+  _ = applyAppRole()
+  var tree = Tree(queue: kqueue())
+  let ok = tree.queue >= 0 && tree.follow(root, depth: 0)
+  var word = UInt8(ascii: ok ? "1" : "0")
+  _ = write(readyFd, &word, 1)
+  close(readyFd)
+  guard ok else { exit(0) }
+  tree.sweep(root)
+  var events = Array(
+    repeating: kevent(ident: 0, filter: 0, flags: 0, fflags: 0, data: 0, udata: nil), count: 64)
+  while true {
+    let count = kevent(tree.queue, nil, 0, &events, Int32(events.count), nil)
+    if count < 0 {
+      if errno == EINTR { continue }
+      exit(0)
+    }
+    for event in events.prefix(Int(count)) {
+      let pid = pid_t(event.ident)
+      if event.fflags & execNote != 0 { tree.execed(pid) }
+      if event.fflags & forkNote != 0 { tree.sweep(pid) }
+      if event.fflags & exitNote != 0 {
+        if pid == root { exit(0) }
+        tree.depth[pid] = nil
+      }
+    }
+  }
+}
+
 let arguments = CommandLine.arguments
 let invokedAs = String(arguments[0].split(separator: "/").last ?? "")
 var commandIndex = 0
@@ -163,6 +364,14 @@ if invokedAs == launcherName {
   case "--print-policy":
     printPolicy()
     exit(0)
+  case "--tree-detach" where arguments.count == 3:
+    if let root = pid_t(arguments[2]), let selfPath = executablePath() {
+      _ = spawnHelper(selfPath, ["--tree-watch", String(root)], ready: readyFd, newSession: true)
+    }
+    exit(0)
+  case "--tree-watch" where arguments.count == 3:
+    guard let root = pid_t(arguments[2]), root > 1 else { exit(64) }
+    watchTree(root)
   case "--" where arguments.count > 2:
     commandIndex = 2
   default:
@@ -194,6 +403,7 @@ if isScript(target) {
 }
 
 applyPolicy()
+startTreeWatcher()
 let argv = CommandLine.unsafeArgv + commandIndex
 execv(target, argv)
 fail("\(command): \(String(cString: strerror(errno)))", code: 126)
