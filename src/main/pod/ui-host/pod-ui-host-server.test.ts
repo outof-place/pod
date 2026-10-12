@@ -483,6 +483,27 @@ describe('PodUiHostServer', () => {
     expect(vi.mocked(options.onUiPresence).mock.calls).toEqual([[true], [true]])
   })
 
+  // Why: a burst of profile events made PodNative open several channels at once and keep the
+  // first welcome, closing the later ones; the server keeps the newest, so that close read as a
+  // crash and the 60 s no-UI grace ended the runtime. The newest welcome is the live channel.
+  it('keeps the newest of parallel hellos; closing that one is the UI gone', async () => {
+    const { server, options } = await startServer()
+    // All connected before any hello; the hellos one by one, so the newest is known.
+    const burst = await Promise.all([1, 2, 3].map(() => connect(options.socketPath)))
+    for (const client of burst) {
+      send(client, { type: 'hello', v: 3, token: TOKEN, pid: 99 })
+      await vi.waitFor(() => expect(client.lines[0]).toMatch(/"type":"welcome"/))
+    }
+    const [first, second, newest] = burst
+    await Promise.all([first.closed, second.closed])
+    expect(server.attached).toBe(true)
+    expect(vi.mocked(options.onUiPresence).mock.calls).toEqual([[true], [true], [true]])
+
+    newest.socket.destroy()
+    await vi.waitFor(() => expect(options.onUiPresence).toHaveBeenLastCalledWith(false))
+    expect(server.attached).toBe(false)
+  })
+
   it('sends nothing while no UI is attached', async () => {
     const { server } = await startServer()
     expect(server.send({ type: 'badge', label: '3' })).toBe(false)
