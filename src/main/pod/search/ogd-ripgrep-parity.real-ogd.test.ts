@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SearchOptions } from '../../../shared/code-search-types'
 import { BUNDLED_RIPGREP_PACKAGE_BIN_DIR } from '../../../shared/bundled-ripgrep'
-import { runProcess, spawnProcess } from '../../../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import {
   buildRgArgsForQuickOpen,
   shouldIncludeQuickOpenPath
@@ -207,8 +207,8 @@ describe.skipIf(!ogdBin || !parityRepo || process.platform === 'win32')(
         program: String(ogdBin),
         args: ['--socket', socketPath, '--state-dir', join(stateDir, 'state'), '--idle-secs', '900']
       })
-      daemon.stdout.resume()
-      daemon.stderr.resume()
+      daemon.stdout?.resume()
+      daemon.stderr?.resume()
       client = new OgdClient({ socketPath, client: 'orca/parity', timeoutMs: 600_000 })
       for (let attempt = 0; ; attempt++) {
         try {
