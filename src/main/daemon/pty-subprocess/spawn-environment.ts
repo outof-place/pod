@@ -10,6 +10,7 @@ import { stripPiProcessOwnerEnv } from '../../pty/pi-process-owner-env'
 import { dropIncoherentCondaActivationEnv } from '../../pty/conda-activation-env'
 import { stripLegacyTerminalShimEnv } from '../../pty/legacy-terminal-shim-dir'
 import { removeInheritedNoColor } from '../../pty/terminal-color-env'
+import { removeInheritedTerminalSessionEnv } from '../../pty/terminal-session-env'
 import { resolvePathEnvKey } from '../../pty/windows-environment-path'
 import { dropInheritedOrcaHistFile } from '../../worktree-history-file-path'
 import {
@@ -202,6 +203,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   removeAppImageRuntimeEnv(env)
   removeChromiumDisabledSessionBus(env)
   removeInheritedNoColor(env)
+  removeInheritedTerminalSessionEnv(env)
   // Why last: the aliases mirror pane identity AFTER every strip above has settled, so an
   // alias can never outlive the value it mirrors.
   applyScrubSafeAgentEnvAliases(env)
