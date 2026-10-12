@@ -11,7 +11,7 @@ import { createServer, request, type IncomingHttpHeaders, type Server } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { spoolPodHookRelayEventAsync } from './pod-hook-relay-spool'
+import { spoolPodHookRelayEvent, spoolPodHookRelayEventAsync } from './pod-hook-relay-spool'
 import {
   deliverPodHookRelayEvent,
   type PodHookRelayEvent,
@@ -183,6 +183,20 @@ describe('pod-hook-relay delivery', () => {
     expect(await spoolPodHookRelayEventAsync(event('{"hook_event_name":"PreToolUse"}'), now)).toBe(
       'skipped'
     )
+  })
+
+  it("queues a closing relay's line behind a write still in flight for the same file", async () => {
+    const now = Date.parse('2026-10-12T03:00:00.000Z')
+    const writes = Array.from({ length: 5 }, (_, n) =>
+      spoolPodHookRelayEventAsync(event(`{"hook_event_name":"Stop","n":${n}}`), now)
+    )
+    expect(spoolPodHookRelayEvent(event('{"hook_event_name":"Stop","n":5}'), now)).toBe('spooled')
+    await Promise.all(writes)
+    await spoolPodHookRelayEventAsync(event('{"hook_event_name":"Stop","n":6}'), now)
+    const lines = readFileSync(join(dir, 'spool', 'pane-tab-1_leaf-1.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+    expect(lines.map((line) => JSON.parse(line).payload.n)).toEqual([0, 1, 2, 3, 4, 5, 6])
   })
 
   it('truncates a spool older than 7 whole days, as the C client counts them', async () => {
