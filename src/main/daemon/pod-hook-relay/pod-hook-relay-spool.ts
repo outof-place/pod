@@ -50,7 +50,10 @@ function spoolLine(event: PodHookRelayEvent, now: number): Buffer {
   ])
 }
 
-/** Synchronous: a closing relay spools its backlog before the daemon exits. */
+const spoolChains = new Map<string, Promise<'spooled' | 'skipped'>>()
+
+/** Synchronous: a closing relay spools its backlog before the daemon exits. Behind a write still in
+ *  flight for the same file it queues instead, so the file's lines keep their order. */
 export function spoolPodHookRelayEvent(
   event: PodHookRelayEvent,
   now: number
@@ -58,6 +61,10 @@ export function spoolPodHookRelayEvent(
   const target = spoolTarget(event)
   if (!target) {
     return 'skipped'
+  }
+  if (spoolChains.has(target.file)) {
+    void spoolPodHookRelayEventAsync(event, now)
+    return 'spooled'
   }
   try {
     mkdirSync(target.dir, { recursive: true, mode: 0o700 })
@@ -114,8 +121,6 @@ async function writeSpool(
     return 'skipped'
   }
 }
-
-const spoolChains = new Map<string, Promise<'spooled' | 'skipped'>>()
 
 /** The same off the daemon's loop (a slow disk must not stall every PTY), one write at a time per
  *  file so its lines keep their order. */
