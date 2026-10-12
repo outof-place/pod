@@ -24,7 +24,8 @@ function installAgentLauncher(resourcesDir, arch) {
       '-O',
       '-target',
       `${cpu}-apple-macosx${MACOS_MINIMUM}`,
-      // main.swift plus the feature files beside it (agent-search.swift, claude-og.swift)
+      // main.swift plus the feature files beside it (agent-search.swift, claude-og.swift,
+      // claude-settings.swift)
       ...readdirSync(__dirname)
         .filter((name) => name.endsWith('.swift'))
         .sort()
