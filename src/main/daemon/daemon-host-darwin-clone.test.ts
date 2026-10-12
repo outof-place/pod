@@ -114,7 +114,7 @@ describe('materializeDarwinDaemonHost', () => {
     // Verified in staging, before anything can fork from it.
     const verifyArgs = tools.calls.find((call) => call.program === '/usr/bin/codesign')?.args
     expect(verifyArgs?.slice(0, 3)).toEqual(['--verify', '--strict', '--deep'])
-    expect(verifyArgs?.[3]).toMatch(/\/\.staging-\d+-[0-9a-f]+\/Pod Runtime$/)
+    expect(verifyArgs?.[3]).toMatch(/\/\.staging-\d+-[0-9a-f]+\/Pod Runtime\.app$/)
     expect(readDarwinDaemonHostMarker(buildDir)?.version).toBe('9.9.9')
     expect(existsSync(join(getDarwinDaemonHostRootDir(), '.metadata_never_index'))).toBe(true)
     expect(readdirSync(versionRoot()).filter((name) => name.startsWith('.staging-'))).toEqual([])
