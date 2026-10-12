@@ -49,6 +49,7 @@ import { installPodHeadlessWindowServices } from '../pod/ui-host/pod-headless-wi
 import { installPodWorktreeStatus } from '../pod/worktree-status/install-pod-worktree-status'
 import { agentHookServer } from '../agent-hooks/server'
 import { installPodSettings } from '../pod/settings/install-pod-settings'
+import { installMcpLazy } from '../pod/mcp-lazy/install-mcp-lazy'
 import { installPodHookWriteGate } from '../pod/instance/pod-instance'
 import { installPodNativePeerCheck } from '../pod/rpc/install-pod-native-peer'
 
@@ -71,6 +72,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   installPodWorkspace(store, runtime)
   // Fork-only (Pod): podSettings.* over settings:set's write path; a no-op without Pod's identity.
   installPodSettings(store, state.agentAwakeService ?? undefined)
+  // Fork-only (Pod): "Lazy-start heavy MCP servers"; at startup only wraps what the setting names.
+  installMcpLazy(store)
   // Fork-only (Pod): the one-app control socket; a no-op unless PodNative launched this runtime.
   installPodUiHost(runtime, store)
   // Fork-only (Pod): Close Terminals in the one-app window also sleeps the runtime's own PTYs.
