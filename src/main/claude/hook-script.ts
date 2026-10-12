@@ -79,6 +79,11 @@ export function getManagedScript(
     'if [ -n "$CLAUDE_JOB_DIR" ]; then',
     '  exit 0',
     'fi',
+    // Fork-only (Pod): a claude that got Pod's hooks with its launch reports through those (the
+    // native client, src/main/pod/agent-hook/pod-claude-launch-settings.ts); this entry stays silent.
+    ...(source === 'claude'
+      ? ['if [ -n "$POD_CLAUDE_SETTINGS_PID" ]; then', '  exit 0', 'fi']
+      : []),
     ...(source === 'claude' ? buildHookProcessCapture() : []),
     // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
     // Why: suppress parse errors so they neither leak nor trip outer set -e.
