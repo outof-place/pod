@@ -97,6 +97,9 @@ const ok: ProcessResult = {
   timedOut: false
 }
 
+// Why captured at import: a stand-in tool takes wall time; a delay on a test's fake clock never fires.
+const realSetTimeout = globalThis.setTimeout
+
 /** Stand-ins for cp, codesign, chmod and lsof, so the suite runs on every CI host. */
 export async function fakeTool(state: ToolState, spec: ProcessSpec): Promise<ProcessResult> {
   if (spec.program === '/usr/sbin/taskpolicy' && spec.args?.[0] === '-b') {
@@ -108,7 +111,7 @@ export async function fakeTool(state: ToolState, spec: ProcessSpec): Promise<Pro
   state.calls.push({ program: spec.program, args })
   switch (spec.program) {
     case '/bin/cp':
-      await new Promise((resolve) => setTimeout(resolve, state.copyDelayMs ?? 0))
+      await new Promise((resolve) => realSetTimeout(resolve, state.copyDelayMs ?? 0))
       cpSync(args[2], args[3], { recursive: true, verbatimSymlinks: true })
       return ok
     case '/usr/bin/codesign':
