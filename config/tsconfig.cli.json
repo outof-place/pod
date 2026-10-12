@@ -31,6 +31,7 @@
     "../src/main/pod/instance/pod-hook-write-block.ts",
     "../src/main/pod/agent-hook/pod-agent-hook-native.ts",
     "../src/main/pod/agent-hook/pod-statusline-native.ts",
+    "../src/main/pod/agent-hook/pod-claude-launch-settings.ts",
     "../src/main/pod/ui-host/pod-ui-host-launch.ts",
     "../src/main/pod/headless-host/headless-host-mode.ts",
     "../src/main/agent-hooks/managed-agent-hook-registry.ts",
