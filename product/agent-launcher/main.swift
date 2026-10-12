@@ -13,9 +13,7 @@
 // POD_AGENT_TURBO=0 skips the policy (the command still runs).
 //
 // In a Pod pane, `claude` also gets Pod's agent-status hooks with the launch (`--settings`), so
-// ~/.claude/settings.json holds none of Pod's: the runtime writes two templates, and the launcher
-// fills the http one (the terminal daemon's relay, which answers at once) or, without a relay,
-// passes the command one (Pod's hook client).
+// ~/.claude/settings.json holds none of Pod's (claude-settings.swift).
 //
 // Why a task role and not a QoS class: thread QoS does not survive exec, and
 // posix_spawnattr_set_qos_class_np only accepts UTILITY or BACKGROUND (pthread/spawn.h). A task
@@ -160,138 +158,6 @@ func printPolicy() {
       + "\"turbo\":\(env(turboEnv) != "0")}")
 }
 
-// Template prefix: <prefix>.http.json and <prefix>.command.json, from the runtime.
-let settingsEnv = "POD_CLAUDE_LAUNCH_SETTINGS"
-// The terminal daemon's relay file: POD_HOOK_RELAY_PORT, POD_HOOK_RELAY_TOKEN.
-let relayEnv = "POD_AGENT_HOOK_RELAY"
-// The pid that already got settings (a wrapper script runs claude again in the same pid).
-let settingsPidEnv = "POD_CLAUDE_SETTINGS_PID"
-
-func readText(_ path: String) -> String? {
-  let fd = open(path, O_RDONLY | O_CLOEXEC)
-  guard fd >= 0 else { return nil }
-  defer { close(fd) }
-  var bytes: [UInt8] = []
-  var chunk = [UInt8](repeating: 0, count: 16_384)
-  while true {
-    let n = read(fd, &chunk, chunk.count)
-    if n <= 0 { break }
-    bytes.append(contentsOf: chunk[0..<n])
-    if bytes.count > 1 << 20 { return nil }
-  }
-  return String(decoding: bytes, as: UTF8.self)
-}
-
-func keyValues(_ text: String) -> [String: String] {
-  var values: [String: String] = [:]
-  for line in text.split(separator: "\n") {
-    guard let eq = line.firstIndex(of: "=") else { continue }
-    values[String(line[..<eq])] = String(line[line.index(after: eq)...])
-  }
-  return values
-}
-
-func base64(_ bytes: [UInt8]) -> String {
-  let table = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
-  var out = ""
-  var i = 0
-  while i < bytes.count {
-    let b0 = UInt32(bytes[i])
-    let b1 = i + 1 < bytes.count ? UInt32(bytes[i + 1]) : 0
-    let b2 = i + 2 < bytes.count ? UInt32(bytes[i + 2]) : 0
-    let v = b0 << 16 | b1 << 8 | b2
-    out.append(table[Int(v >> 18 & 63)])
-    out.append(table[Int(v >> 12 & 63)])
-    out.append(i + 1 < bytes.count ? table[Int(v >> 6 & 63)] : "=")
-    out.append(i + 2 < bytes.count ? table[Int(v & 63)] : "=")
-    i += 3
-  }
-  return out
-}
-
-func jsonEscaped(_ text: String) -> String {
-  var out = ""
-  for scalar in text.unicodeScalars {
-    switch scalar {
-    case "\\": out += "\\\\"
-    case "\"": out += "\\\""
-    default: out.unicodeScalars.append(scalar.value < 0x20 ? " " : scalar)
-    }
-  }
-  return out
-}
-
-/// What Pod's hook client sends as X-Orca-Agent-Process: this pid is claude's after exec.
-func agentProcess() -> String? {
-  var info = kinfo_proc()
-  var size = MemoryLayout<kinfo_proc>.size
-  var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
-  guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
-  var start = info.kp_proc.p_starttime.tv_sec
-  var parts = tm()
-  gmtime_r(&start, &parts)
-  var when = [CChar](repeating: 0, count: 64)
-  strftime(&when, when.count, "%a %b %e %H:%M:%S %Y", &parts)
-  return "{\"pid\":\(getpid()),\"platform\":\"darwin\",\"startTime\":\"\(String(cString: when))\"}"
-}
-
-func writePrivate(_ path: String, _ text: String) -> Bool {
-  let tmp = "\(path).\(getpid()).tmp"
-  let fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0o600)
-  guard fd >= 0 else { return false }
-  let bytes = Array(text.utf8)
-  let written = bytes.withUnsafeBytes { write(fd, $0.baseAddress, bytes.count) }
-  close(fd)
-  guard written == bytes.count, rename(tmp, path) == 0 else {
-    unlink(tmp)
-    return false
-  }
-  return true
-}
-
-/// Settings files of claudes that are gone.
-func pruneLaunchFiles(_ dir: String) {
-  guard let handle = opendir(dir) else { return }
-  defer { closedir(handle) }
-  while let entry = readdir(handle) {
-    let name = withUnsafeBytes(of: entry.pointee.d_name) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
-    guard name.hasPrefix("claude-"), name.hasSuffix(".json"),
-      let pid = Int32(name.dropFirst(7).dropLast(5)), pid != getpid()
-    else { continue }
-    if kill(pid, 0) != 0 && errno == ESRCH { unlink("\(dir)/\(name)") }
-  }
-}
-
-/// The settings file for this claude, or nil where Pod adds none.
-func claudeLaunchSettings(command: String, args: [String]) -> String? {
-  guard command.split(separator: "/").last == "claude", let prefix = env(settingsEnv), !prefix.isEmpty,
-    let pane = env("ORCA_PANE_KEY"), !pane.isEmpty, env(settingsPidEnv) != String(getpid()),
-    // As Pod's hook client: agents that run claude for themselves report nothing.
-    env("CLAUDE_JOB_DIR") == nil, env("GROK_HOOK_EVENT") == nil, env("DEVIN_PROJECT_DIR") == nil,
-    // Why: Claude keeps only the last --settings; the user's own wins over Pod's status.
-    !args.dropFirst().contains(where: { $0 == "--settings" || $0.hasPrefix("--settings=") })
-  else { return nil }
-  let commandTemplate = "\(prefix).command.json"
-  guard let relayPath = env(relayEnv), let relay = readText(relayPath).map(keyValues),
-    let port = relay["POD_HOOK_RELAY_PORT"], let token = relay["POD_HOOK_RELAY_TOKEN"],
-    let template = readText("\(prefix).http.json"), let process = agentProcess()
-  else { return access(commandTemplate, R_OK) == 0 ? commandTemplate : nil }
-  let fields = [pane, env("ORCA_TAB_ID") ?? "", env("ORCA_AGENT_LAUNCH_TOKEN") ?? "",
-    env("ORCA_WORKTREE_ID") ?? "", env("ORCA_AGENT_HOOK_ENV") ?? "", env("ORCA_AGENT_HOOK_VERSION") ?? "",
-    env("ORCA_AGENT_HOOK_ENDPOINT") ?? ""]
-  let settings = template
-    .replacing("@@POD_RELAY_URL@@", with: "http://127.0.0.1:\(port)/hook/claude")
-    .replacing("@@POD_RELAY_TOKEN@@", with: jsonEscaped(token))
-    .replacing("@@POD_RELAY_PANE@@", with: base64(Array(fields.joined(separator: "\u{1f}").utf8)))
-    .replacing("@@POD_AGENT_PROCESS@@", with: jsonEscaped(process))
-  let dir = String(prefix[..<(prefix.lastIndex(of: "/") ?? prefix.startIndex)]) + "/claude-launch"
-  mkdir(dir, 0o700)
-  // Why: mkdir leaves an existing directory's mode as it was.
-  chmod(dir, 0o700)
-  pruneLaunchFiles(dir)
-  let path = "\(dir)/claude-\(getpid()).json"
-  return writePrivate(path, settings) ? path : (access(commandTemplate, R_OK) == 0 ? commandTemplate : nil)
-}
 
 let arguments = CommandLine.arguments
 let invokedAs = String(arguments[0].split(separator: "/").last ?? "")
@@ -333,8 +199,8 @@ if isScript(target) {
 
 applyPolicy()
 var launchArgs = Array(arguments[commandIndex...])
-if let settings = claudeLaunchSettings(command: command, args: launchArgs) {
-  launchArgs.insert(contentsOf: ["--settings", settings], at: 1)
+if let withSettings = claudeLaunchArgs(command: command, args: launchArgs) {
+  launchArgs = withSettings
   setenv(settingsPidEnv, String(getpid()), 1)
 }
 let argv = launchArgs.map { strdup($0) } + [nil]
