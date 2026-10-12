@@ -144,7 +144,7 @@ export async function launchDaemonViaLaunchd(
       removeQuietly(paths.reportPath)
       return {
         kind: 'ready',
-        child: new LaunchdDaemonProcess(identity.pid, paths.label, jobs.bootout),
+        child: new LaunchdDaemonProcess(identity.pid, paths.label, (label) => jobs.bootout(label)),
         identity
       }
     }
