@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app } from 'electron'
-import { spawnProcess } from '../../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import type { Repo } from '../../../shared/repo-types'
 import { probeClaudeCliVersion } from '../../claude/claude-hook-event-versions'
 import { resolveClaudeCommand } from '../../codex-cli/command'
