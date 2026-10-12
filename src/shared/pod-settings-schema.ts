@@ -162,6 +162,11 @@ export const POD_SETTINGS_FIELDS = {
     'Autosave delay (ms)',
     'After the last edit.'
   ),
+  editorFontFamily: row(
+    z.string().max(512),
+    'Editor font',
+    "Empty: the terminal's font. The size is the terminal's, plus the editor's zoom."
+  ),
   terminalFontFamily: row(z.string().max(512), 'Font'),
   terminalFontSize: row(z.number().int().min(6).max(72), 'Size'),
   terminalFontWeight: row(
