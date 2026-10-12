@@ -66,6 +66,12 @@ export class PtyBuffer {
 }
 
 function mayContainHttpUrl(text: string): boolean {
+  // Pod: servers and agents print a scheme's "://" unbroken (Vite colours the URL and its port,
+  // Next prints it plain, Claude Code's OSC 8 links carry it whole); stripping then reads only
+  // the lines that can hold a URL instead of nearly every TUI frame.
+  if (!text.includes('://')) {
+    return false
+  }
   // Control stripping cannot create any character required by an HTTP scheme.
   return (
     (text.includes('h') || text.includes('H')) &&
