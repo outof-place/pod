@@ -104,6 +104,24 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
     expect(watching()).toBe(false)
   })
 
+  it("keeps Pod's native statusline client at default, run through sh -c or directly", () => {
+    const hooks = join(root, 'home', '.orca', 'agent-hooks')
+    script(hooks, 'pod-agent-hook', 'ps -o pri= -p $$')
+    const client = join(hooks, 'pod-agent-hook')
+    // As Pod's statusLine runs it (sh -c, then exec: path and `statusline` in separate arguments),
+    // and with no shell in between.
+    script(
+      join(root, 'native'),
+      'claude',
+      `ps -o pri= -p $$; sh -c 'exec "${client}" statusline'; "${client}" statusline`
+    )
+    const result = run('claude', [], [binDir, join(root, 'native')])
+    const [agent, viaShell, direct] = result.stdout.split('\n').map(Number)
+    expect(result.status).toBe(0)
+    expect(viaShell).toBeLessThan(agent)
+    expect(direct).toBeLessThan(agent)
+  })
+
   it('takes the role back from a tool that has used a second of CPU', () => {
     // A busy loop and an idle process under the agent, read before and after the budget.
     script(
