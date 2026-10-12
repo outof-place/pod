@@ -65,6 +65,7 @@ import { POD_KEYBINDINGS_METHODS } from '../../../pod/keybindings/pod-keybinding
 import { observePodComputerActions } from '../../../pod/computer-actions/pod-computer-actions'
 import { POD_COMPUTER_ACTIONS_METHODS } from '../../../pod/computer-actions/pod-computer-actions-rpc-methods'
 import { POD_TERMINAL_PROCESSES_METHODS } from '../../../pod/terminal-processes/pod-terminal-processes-rpc-methods'
+import { POD_CLAUDE_OLD_TERMINAL_METHODS } from '../../../pod/claude-old-terminal/pod-claude-old-terminal-rpc-methods'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -141,5 +142,6 @@ export const ALL_RPC_METHODS = [
   ...EMULATOR_METHODS,
   ...PAIRING_METHODS,
   ...UPDATER_METHODS,
-  ...POD_TERMINAL_LANE_METHODS
+  ...POD_TERMINAL_LANE_METHODS,
+  ...POD_CLAUDE_OLD_TERMINAL_METHODS
 ]
