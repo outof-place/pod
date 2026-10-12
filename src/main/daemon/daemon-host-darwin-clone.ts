@@ -226,10 +226,13 @@ async function cloneDarwinDaemonHost(
       `volume cannot clone; making a full ${Math.round(bytes / 1024 ** 2)} MB copy`
     )
   }
+  // Why staged as `.app`: macOS assesses a bundle as one, 2-3x cheaper than loose files; the
+  // verdict survives the rename to `bundleDir` (no `.app`) before anything can run from it.
+  const stagedDir = join(staging, source.bundleName)
   const bundleDir = join(staging, cloneDirName(source.bundleName))
   const copy = await runHostTool(
     '/bin/cp',
-    ['-c', '-R', source.bundleDir, bundleDir],
+    ['-c', '-R', source.bundleDir, stagedDir],
     COPY_TIMEOUT_MS,
     mode
   )
@@ -238,7 +241,7 @@ async function cloneDarwinDaemonHost(
     copy.code === 0 && !mode.signal?.aborted
       ? await runHostTool(
           '/usr/bin/codesign',
-          ['--verify', '--strict', '--deep', bundleDir],
+          ['--verify', '--strict', '--deep', stagedDir],
           VERIFY_TIMEOUT_MS,
           mode
         )
@@ -256,7 +259,12 @@ async function cloneDarwinDaemonHost(
     await removeStaging(staging, mode)
     return null
   }
+  if (mode.background) {
+    // Off the spawn path: assessed before publish, so no daemon start from it ever pays.
+    await assessDarwinDaemonHost(source.bundleDir, stagedDir, mode)
+  }
   try {
+    renameSync(stagedDir, bundleDir)
     // Why: the seal proves the copy intact; the fingerprint, that it is the bundle this process runs.
     if (darwinBundleFingerprint(bundleDir, source.executableRelPath) !== fingerprint) {
       throw new Error('the app bundle changed while it was copied')
@@ -278,12 +286,14 @@ async function cloneDarwinDaemonHost(
       cloned ? 'cloned' : 'copied',
       `${cloned ? 'cloned' : 'copied'} ${source.bundleName} ${version} to ${buildDir} in ${copiedAt - startedAt} ms, verified in ${Date.now() - copiedAt} ms`
     )
-    // Not awaited: a spawn waiting for this clone forks now; the next start from it is the gain.
-    void assessDarwinDaemonHost(
-      source.bundleDir,
-      join(buildDir, cloneDirName(source.bundleName)),
-      mode
-    ).catch(() => {})
+    if (!mode.background) {
+      // Not awaited: a spawn waiting for this clone forks now; the next start from it is the gain.
+      void assessDarwinDaemonHost(
+        source.bundleDir,
+        join(buildDir, cloneDirName(source.bundleName)),
+        mode
+      ).catch(() => {})
+    }
     return hostPaths(buildDir, marker)
   } catch (error) {
     reportDaemonHost('bundle', `cannot publish ${staging}; forking from the app bundle`, error)
