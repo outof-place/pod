@@ -45,12 +45,6 @@ const ENTITLEMENT_RULES = [
     name: 'agent shim',
     match: /^Contents\/Resources\/bin\/pod-agent-launcher$/,
     entitlements: 'exec-shim.plist'
-  },
-  // Same for the search tool between an agent's shell and Claude's own ugrep (POD_CLAUDE_OG=1).
-  {
-    name: 'agent search tool',
-    match: /^Contents\/Resources\/agent-shell\/pod-search-tool$/,
-    entitlements: 'exec-shim.plist'
   }
 ]
 
