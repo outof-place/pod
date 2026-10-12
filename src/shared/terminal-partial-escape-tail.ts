@@ -55,6 +55,12 @@ function stateAfterEscByte(code: number): ScanState {
  *  extract(a + b) === extract(extract(a) + b), which is how ingest-time
  *  trackers advance without keeping the whole stream. */
 export function extractPartialEscapeTail(stream: string): string {
+  // Pod: every ESC either opens the trailing sequence or ends the OSC/string before it, in every
+  // state, so the tail never starts before the last ESC; walk only from there.
+  const lastEscape = stream.lastIndexOf('\x1b')
+  if (lastEscape > 0) {
+    return extractPartialEscapeTail(stream.slice(lastEscape))
+  }
   let state: ScanState = 'ground'
   let start = 0
   for (let i = 0; i < stream.length; i++) {
@@ -164,6 +170,10 @@ export function advancePartialEscapeTail(pendingTail: string, chunk: string): st
   if (pendingTail.length === 0 && !chunk.includes('\x1b')) {
     return ''
   }
-  const tail = extractPartialEscapeTail(pendingTail + chunk)
+  // Pod: an ESC in the chunk starts the tail there (see extractPartialEscapeTail); skip the concat.
+  const lastEscape = chunk.lastIndexOf('\x1b')
+  const tail = extractPartialEscapeTail(
+    lastEscape !== -1 ? chunk.slice(lastEscape) : pendingTail + chunk
+  )
   return tail.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : tail
 }
