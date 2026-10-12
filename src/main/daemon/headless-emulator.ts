@@ -20,6 +20,7 @@ import {
   type TerminalViewAttributeResponder
 } from './terminal-view-attribute-responder'
 import { installDeviceAttributesResponder } from './startup-device-attributes-responder'
+import { leadingWrappedRowsField } from './normal-buffer-leading-wrapped-rows'
 import type { TerminalSnapshot, TerminalModes } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalCursorContext } from '../../shared/terminal-composer-draft'
@@ -269,6 +270,7 @@ export class HeadlessEmulator {
       cols: this.terminal.cols,
       rows: this.terminal.rows,
       scrollbackLines: this.terminal.buffer.normal.length - this.terminal.rows,
+      ...leadingWrappedRowsField(this.terminal, opts.scrollbackRows),
       lastTitle: this.oscText.lastTitle ?? undefined,
       // Why written LAST by the restorer: the next live chunk must complete this dangling sequence, not render it literally (Bug E / #7329).
       ...(this.partialEscapeTail.length > 0

@@ -17,6 +17,8 @@ export type TerminalSnapshot = {
   cols: number
   rows: number
   scrollbackLines: number
+  /** The normal buffer's first rows when they continue a line its scrollback limit cut mid-line. */
+  leadingWrappedRows?: number
   lastTitle?: string
   /** Optional because persisted snapshots and older v19 daemons lack it. */
   outputSequence?: number
