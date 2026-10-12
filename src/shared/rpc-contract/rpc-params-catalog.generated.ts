@@ -432,6 +432,7 @@ import {
   PluginSetEnabledParams,
   PluginsPanelActionParams
 } from './plugins-params'
+import { PodTerminalOpenedBeforeClaudeAccountsParams } from './pod-claude-old-terminal-params'
 import { PodClientEventsSubscribeParams } from './pod-client-events-params'
 import { PodComputerActionsUnsubscribeParams } from './pod-computer-actions-params'
 import {
@@ -1158,6 +1159,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.readPanelEntry': PluginReadPanelEntryParams,
   'plugins.setEnabled': PluginSetEnabledParams,
   'pod.terminal.directLane': PodTerminalDirectLaneParams,
+  'pod.terminal.openedBeforeClaudeAccounts': PodTerminalOpenedBeforeClaudeAccountsParams,
   'podMcpLazy.restoreBackup': null,
   'podMcpLazy.status': null,
   'podSettings.get': null,
