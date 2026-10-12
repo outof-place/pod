@@ -10,9 +10,8 @@
 // and their ugrep checked against og (pod-search harness/ugrep_diff.py). Any other build, an npm
 // install or a wrapper script runs as if the flag were off.
 //
-// With the flag on, DYLD_* variables don't reach Claude's embedded ugrep, bfs and rg: dyld prunes
-// them from pod-search-tool, a hardened executable without allow-dyld-environment-variables, which
-// it doesn't get (least entitlements).
+// pod-search-tool has no entitlements, so dyld prunes DYLD_* from it. Nothing is lost: Claude's own
+// binary is hardened without allow-dyld-environment-variables, so its Bash commands never had them.
 
 import Darwin
 

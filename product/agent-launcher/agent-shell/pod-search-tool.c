@@ -5,8 +5,8 @@
 // A ugrep call with exactly the defaults below goes to pod-search's ugrep entry (og), which execs
 // OG_UGREP_FALLBACK with the same argv whenever it cannot promise ugrep's output. Everything else,
 // and every ugrep call while that entry is missing, execs Claude's binary with the argv unchanged,
-// argv[0] included: that binary picks ugrep, bfs or rg by argv[0]. It has no entitlements, so dyld
-// prunes DYLD_* from its environment and the exec'd binary doesn't get them.
+// argv[0] included: that binary picks ugrep, bfs or rg by argv[0]. No entitlements: DYLD_* are
+// already gone under Claude, whose binary is hardened without allow-dyld-environment-variables.
 //
 // Plain C: every `grep` and `find` in an agent's commands pays this binary's start.
 #include <stdio.h>
