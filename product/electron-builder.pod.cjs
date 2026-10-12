@@ -25,6 +25,7 @@ const {
   PRODUCT_FILE_EXCLUSIONS,
   PRODUCT_SIGN_IGNORE
 } = require('./release-bundle-gate.cjs')
+const { prunePodNodePty } = require('./packaged-node-pty.cjs')
 
 const repoRoot = join(__dirname, '..')
 // claude-acc payload and distro plugins (identity.claudeAcc); the file arrives with the pod/acc branch.
@@ -165,6 +166,9 @@ module.exports = {
     // Before any signing: an oversized or polluted asar never reaches notarization.
     assertAppAsar(resourcesDir)
     renameComputerUseHelper(resourcesDir)
+    // Before upstream's afterPack, whose daemon-entry boot check then loads the pruned node-pty.
+    const removed = prunePodNodePty(resourcesDir, arch)
+    console.log(`[product] node-pty: removed ${removed.join(', ')}`)
     await base.afterPack(context)
     installCliLaunchers(resourcesDir, context.packager.appInfo.productFilename)
     writeFileSync(
