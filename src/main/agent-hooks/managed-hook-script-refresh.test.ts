@@ -75,9 +75,9 @@ import { MANAGED_SCRIPT_GENERATION, MANAGED_SCRIPT_LEDGER_FILE } from './managed
 // those bytes belong to. A failure here means a managed script changed: bump
 // MANAGED_SCRIPT_GENERATION in managed-script-generation.ts and paste the new digests.
 const MANAGED_SCRIPT_DIGESTS = {
-  generation: 1,
-  darwin: '0931080d8b67f65126ea3391754780987398d2273d586003d49d36c59695f9e1',
-  linux: '0931080d8b67f65126ea3391754780987398d2273d586003d49d36c59695f9e1',
+  generation: 2,
+  darwin: '69b6898d6a8cd42fa8b34dc15d15b02c6274ca0aa11151a481337adb1d0356bd',
+  linux: '69b6898d6a8cd42fa8b34dc15d15b02c6274ca0aa11151a481337adb1d0356bd',
   win32: 'e229f76bba6ce6790f6daa4235d8109220be26069b5c7a090a99424abb074838'
 }
 

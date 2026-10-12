@@ -32,15 +32,15 @@ type LaunchOptions = {
   resourcesPath?: string | undefined
 }
 
-/** On where the app ships its launcher (Contents/Resources/bin), or POD_AGENT_LAUNCHER_BINARY's
- *  in a checkout whose panes have it first on PATH. POD_CLAUDE_LAUNCH_SETTINGS=0 switches it off. */
-export function podClaudeLaunchSettingsEnabled(options: LaunchOptions = {}): boolean {
+/** The launcher the app ships (Contents/Resources/bin), or POD_AGENT_LAUNCHER_BINARY's in a
+ *  checkout whose panes have it first on PATH; null off macOS or with POD_CLAUDE_LAUNCH_SETTINGS=0. */
+export function resolvePodAgentLauncher(options: LaunchOptions = {}): string | null {
   const env = options.env ?? process.env
   if (
     (options.platform ?? process.platform) !== 'darwin' ||
     env[POD_CLAUDE_LAUNCH_SETTINGS_ENV] === '0'
   ) {
-    return false
+    return null
   }
   const appResources: unknown = Reflect.get(process, 'resourcesPath')
   const resourcesPath =
@@ -49,10 +49,18 @@ export function podClaudeLaunchSettingsEnabled(options: LaunchOptions = {}): boo
       : typeof appResources === 'string'
         ? appResources
         : undefined
-  return [
-    env.POD_AGENT_LAUNCHER_BINARY,
-    resourcesPath ? join(resourcesPath, 'bin', LAUNCHER_FILE_NAME) : undefined
-  ].some((path) => typeof path === 'string' && path !== '' && existsSync(path))
+  return (
+    [
+      env.POD_AGENT_LAUNCHER_BINARY,
+      resourcesPath ? join(resourcesPath, 'bin', LAUNCHER_FILE_NAME) : undefined
+    ].find((path): path is string => typeof path === 'string' && path !== '' && existsSync(path)) ??
+    null
+  )
+}
+
+/** On where Pod's launcher is (resolvePodAgentLauncher). */
+export function podClaudeLaunchSettingsEnabled(options: LaunchOptions = {}): boolean {
+  return resolvePodAgentLauncher(options) !== null
 }
 
 export function getPodClaudeLaunchSettingsPrefix(): string {
