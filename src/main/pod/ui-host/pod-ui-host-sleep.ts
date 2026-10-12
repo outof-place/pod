@@ -39,8 +39,7 @@ export async function sleepPodUiHostRuntimeTerminals(
     throw error
   } finally {
     endPodUiHostWindowSleep(worktreeId)
-    // Why: an exit publishes its worktree's tabs before it marks the renderer's leaf disconnected,
-    // so with a window PodNative's last snapshot still shows the slept terminals ready.
+    // Why: one frame once the window's sleep is done, whichever order its exits landed in.
     runtime.touchMobileSessionTabsForWorktree(worktreeId, { immediate: true })
   }
 }
