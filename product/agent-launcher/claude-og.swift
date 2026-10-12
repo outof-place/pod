@@ -9,6 +9,10 @@
 // These are undocumented Claude internals, so only the builds below get it: their snapshot was read
 // and their ugrep checked against og (pod-search harness/ugrep_diff.py). Any other build, an npm
 // install or a wrapper script runs as if the flag were off.
+//
+// With the flag on, DYLD_* variables don't reach Claude's embedded ugrep, bfs and rg: dyld prunes
+// them from pod-search-tool, a hardened executable without allow-dyld-environment-variables, which
+// it doesn't get (least entitlements).
 
 import Darwin
 
