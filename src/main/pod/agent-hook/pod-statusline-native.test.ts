@@ -235,6 +235,16 @@ describe('the managed statusLine command', () => {
   })
 })
 
+const realPlatform = process.platform
+
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', {
+    value: platform,
+    configurable: true,
+    writable: true
+  })
+}
+
 describe('installing the managed statusLine', () => {
   let home = ''
   let bundled = ''
@@ -251,6 +261,7 @@ describe('installing the managed statusLine', () => {
   afterEach(() => {
     rmSync(home, { recursive: true, force: true })
     vi.unstubAllEnvs()
+    setPlatform(realPlatform)
   })
 
   it('uses the client once it is copied beside the hooks, else the shell wrapper', () => {
@@ -273,6 +284,8 @@ describe('installing the managed statusLine', () => {
 
   it('replaces the shell entry once through the hook service, and leaves a user one alone', () => {
     freshHome()
+    // Why: the client ships for macOS only; elsewhere (Linux CI) the service keeps the script.
+    setPlatform('darwin')
     const settingsPath = join(home, '.claude', 'settings.json')
     mkdirSync(join(home, '.claude'), { recursive: true })
     const service = new ClaudeHookService()
