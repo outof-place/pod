@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import os from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -212,5 +213,28 @@ describe('scheduleDarwinDaemonHostMaintenance', () => {
     }
     expect(tools.calls).toEqual([])
     expect(existsSync(old)).toBe(true)
+  })
+
+  it('clones when its copy starts before the test is back on real timers', async () => {
+    publishClone('1.0.0')
+    const runtimeDir = join(tempDir, 'userData', 'daemon')
+    mkdirSync(runtimeDir, { recursive: true })
+    const copyStarted = (): boolean => tools.calls.some((call) => call.program === '/bin/cp')
+    vi.useFakeTimers()
+    try {
+      scheduleDarwinDaemonHostMaintenance(runtimeDir, entryPath)
+      await vi.advanceTimersByTimeAsync(30_000)
+      // Why real I/O: the maintenance reaches the copy while the fake clock is installed (CI's order).
+      for (let turn = 0; turn < 1000 && !copyStarted(); turn++) {
+        await readdir(tempDir)
+      }
+      expect(copyStarted()).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+    await vi.waitFor(
+      () => expect(darwinDaemonHostNeedsClone(entryPath)).toBe(false),
+      BACKGROUND_WORK_WAIT
+    )
   })
 })
