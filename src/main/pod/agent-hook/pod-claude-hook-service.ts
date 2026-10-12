@@ -17,7 +17,6 @@ import {
   applyManagedHooks,
   CLAUDE_HOOK_SETTINGS,
   getConfigPath,
-  getManagedCommand,
   getManagedScriptFileName,
   getManagedScriptPath,
   getStatusLineInstallMarkerPath,
@@ -34,6 +33,7 @@ import {
   resolveBundledPodAgentHook
 } from './pod-agent-hook-native'
 import { setPodClaudeAgentChangeListener } from './pod-claude-agent-change'
+import { podManagedStatusLineCommand } from './pod-statusline-native'
 import {
   CLAUDE_HTTP_HOOK_FIRST_VERSION,
   getPodClaudeLaunchSettingsPrefix,
@@ -141,7 +141,11 @@ function writeLaunchTemplates(settingsPath: string, claudeVersion: string | unde
   if (statusLineOn) {
     const statusLineScript = getStatusLineScriptPath()
     writeManagedScript(statusLineScript, getManagedStatusLineScript('local'))
-    statusLine = { type: 'command', command: getManagedCommand(statusLineScript) }
+    // Why the client's: it is in place (above), so a refresh is one process, as in settings.json.
+    statusLine = {
+      type: 'command',
+      command: podManagedStatusLineCommand(POD_CLAUDE_SERVICE, statusLineScript)
+    }
   }
   writePodClaudeLaunchTemplates(hooks, claudeVersion, statusLine)
 }
