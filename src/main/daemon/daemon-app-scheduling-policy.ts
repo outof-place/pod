@@ -22,12 +22,18 @@ export function daemonAppPolicyLaunch(
   if (process.platform !== 'darwin' || process.env.POD_DAEMON_APP_POLICY === '0') {
     return null
   }
+  const executable = daemonNodeExecutable(relocatedExecPath)
+  if (!executable || !existsSync(TASKPOLICY_PATH)) {
+    return null
+  }
+  return { program: TASKPOLICY_PATH, args: ['-a', executable, modulePath, ...args] }
+}
+
+/** The executable a daemon runs as plain Node; null outside Electron. */
+export function daemonNodeExecutable(relocatedExecPath?: string): string | null {
   // Why the relocated executable first: a daemon forked from its daemon-host clone must run the
   // clone's image, or it and every addon it loads come from the bundle an update deletes.
   const executable: unknown =
     relocatedExecPath ?? Object.getOwnPropertyDescriptor(process, 'helperExecPath')?.value
-  if (typeof executable !== 'string' || !existsSync(TASKPOLICY_PATH)) {
-    return null
-  }
-  return { program: TASKPOLICY_PATH, args: ['-a', executable, modulePath, ...args] }
+  return typeof executable === 'string' ? executable : null
 }

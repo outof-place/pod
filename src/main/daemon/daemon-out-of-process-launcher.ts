@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 import type { DaemonReplaceReason } from '../../shared/daemon-lifecycle-telemetry'
 import { DaemonClient } from './client'
 import {
@@ -10,6 +9,7 @@ import {
 } from './daemon-endpoint-adoption'
 import {
   DaemonEndpointUnavailableError,
+  daemonChildHasExited,
   launchDaemonChild,
   terminateLaunchedDaemonChild
 } from './daemon-launched-child'
@@ -184,7 +184,7 @@ export function createOutOfProcessLauncher(
           unlinkOwnedDaemonPidFile(pidPath, launched.identity.pid, launchNonce)
         }
         launched.child.once('exit', removeExitedPidRecord)
-        if (childProcessHasExited(launched.child)) {
+        if (daemonChildHasExited(launched.child)) {
           launched.child.off('exit', removeExitedPidRecord)
           removeExitedPidRecord()
         }

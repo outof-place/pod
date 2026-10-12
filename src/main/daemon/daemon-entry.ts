@@ -3,7 +3,8 @@
  *
  * Usage: node daemon-entry.js --socket /path/to/sock --token /path/to/token
  *
- * Signals readiness to parent via IPC: { type: 'ready' }
+ * Signals readiness to parent via IPC: { type: 'ready' }, or (Pod) to launchd's launcher by the
+ * file `--launchd-report` names (daemon-launchd-report.ts).
  * Shuts down cleanly on SIGTERM.
  */
 import { readFileSync } from 'node:fs'
@@ -29,6 +30,7 @@ import { publishDaemonPidFile } from './daemon-spawner'
 import { isNativePtyException } from './daemon-native-pty-exception'
 import { startDaemonScopeDeathWatch } from './daemon-scope-death-watch'
 import { isWindowsProcessTableAvailable } from '../windows/windows-process-table'
+import { reportToLaunchd, takeLaunchdReportPath } from './daemon-launchd-report'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -130,6 +132,9 @@ async function main(): Promise<void> {
     freshDaemonScope,
     logFilePath
   } = parseArgs(process.argv.slice(2))
+  // Why this early: the launcher watches this pid for an exit during startup.
+  takeLaunchdReportPath(process.argv.slice(2))
+  reportToLaunchd({ type: 'started', pid: process.pid })
   const startedAtMs = Date.now() - process.uptime() * 1000
   const readyIdentity = await readCurrentDaemonReadyIdentity(startedAtMs)
   // Fail-open: a broken log path must never block daemon startup.
@@ -332,6 +337,7 @@ async function main(): Promise<void> {
   if (process.send) {
     process.send({ type: 'ready', ...readyIdentity })
   }
+  reportToLaunchd({ type: 'ready', ...readyIdentity })
   daemonLog.log('ready')
 
   warmWindowsConptyOnce()
@@ -356,6 +362,7 @@ if (isDirectExecution) {
       // parent settles the launch on exit. A code rides the same event that ends the wait, so it
       // cannot lose that race. The message is still sent best-effort for log detail.
       process.send?.({ type: 'endpoint-unavailable', reason: err.reason })
+      reportToLaunchd({ type: 'endpoint-unavailable', reason: err.reason })
       process.exit(DAEMON_EXIT_ENDPOINT_OCCUPIED)
     }
     process.exit(1)
