@@ -7,6 +7,10 @@ import {
   podWorktreeStatusReadyFields,
   subscribePodWorktreeStatus
 } from '../../../pod/worktree-status/install-pod-worktree-status'
+import {
+  podKeybindingsReadyFields,
+  subscribePodKeybindings
+} from '../../../pod/keybindings/install-pod-keybindings'
 
 let clientEventSubscriptionSeq = 0
 
@@ -30,6 +34,8 @@ export const CLIENT_EVENT_METHODS = [
 
         // Fork-only (Pod): opt-in worktreeStatusChanged; null without Pod's identity or the opt-in.
         const stopPodWorktreeStatus = subscribePodWorktreeStatus(params, context, emit)
+        // Fork-only (Pod): opt-in keybindingsChanged; null without Pod's identity or the opt-in.
+        const stopPodKeybindings = subscribePodKeybindings(params, emit)
         const seq = ++clientEventSubscriptionSeq
         const subscriptionId = `runtime-client-events-${connectionId ?? 'inproc'}-${seq}`
         runtime.registerSubscriptionCleanup(
@@ -37,6 +43,7 @@ export const CLIENT_EVENT_METHODS = [
           () => {
             unsubscribe()
             stopPodWorktreeStatus?.()
+            stopPodKeybindings?.()
             emit({ type: 'end' })
             resolve()
           },
@@ -60,7 +67,8 @@ export const CLIENT_EVENT_METHODS = [
           type: 'ready',
           subscriptionId,
           snapshot: { sshStates },
-          ...podWorktreeStatusReadyFields(params, stopPodWorktreeStatus)
+          ...podWorktreeStatusReadyFields(params, stopPodWorktreeStatus),
+          ...podKeybindingsReadyFields(stopPodKeybindings)
         })
       })
     }
