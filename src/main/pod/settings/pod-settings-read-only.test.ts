@@ -55,7 +55,9 @@ describe('settings a native client reads but never writes', () => {
     expect(snapshot.readOnly).toEqual({
       openLinksInApp: true,
       openLinksInAppModifierInverts: false,
-      sourceControlAi: { enabled: true }
+      sourceControlAi: { enabled: true },
+      promptCacheTimerEnabled: false,
+      promptCacheTtlMs: 300_000
     })
     expect(snapshot.values).not.toHaveProperty('openLinksInApp')
     expect(clientSettings.get()).toMatchObject({
@@ -78,7 +80,9 @@ describe('settings a native client reads but never writes', () => {
         readOnly: {
           openLinksInApp: true,
           openLinksInAppModifierInverts: true,
-          sourceControlAi: { enabled: false }
+          sourceControlAi: { enabled: false },
+          promptCacheTimerEnabled: false,
+          promptCacheTtlMs: 300_000
         }
       })
     ])
@@ -93,6 +97,40 @@ describe('settings a native client reads but never writes', () => {
     for (const values of [{ openLinksInApp: false }, { sourceControlAi: { enabled: true } }]) {
       await expect(service.set(values, revision)).rejects.toThrow(PodSettingsRefusedError)
     }
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it("podSettings carries Claude's prompt cache timer, read only", async () => {
+    vi.useFakeTimers()
+    const { store, write, service } = setup({
+      promptCacheTimerEnabled: true,
+      promptCacheTtlMs: 3_600_000
+    })
+    setPodSettingsService(service)
+    expect(service.get().readOnly).toMatchObject({
+      promptCacheTimerEnabled: true,
+      promptCacheTtlMs: 3_600_000
+    })
+    expect(service.get().values).not.toHaveProperty('promptCacheTimerEnabled')
+
+    const changes: PodSettingsChange[] = []
+    service.subscribe((change) => changes.push(change))
+    // A value the desktop wouldn't use falls back to its default lifetime.
+    store.updateSettings({ promptCacheTimerEnabled: false, promptCacheTtlMs: -1 })
+    vi.advanceTimersByTime(100)
+    expect(changes).toEqual([
+      expect.objectContaining({
+        readOnly: expect.objectContaining({
+          promptCacheTimerEnabled: false,
+          promptCacheTtlMs: 300_000
+        })
+      })
+    ])
+
+    const { revision } = service.get()
+    await expect(service.set({ promptCacheTtlMs: 60_000 }, revision)).rejects.toThrow(
+      PodSettingsRefusedError
+    )
     expect(write).not.toHaveBeenCalled()
   })
 })
