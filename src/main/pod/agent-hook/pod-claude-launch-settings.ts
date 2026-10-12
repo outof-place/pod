@@ -1,8 +1,9 @@
 // Fork-only (Pod): Claude's agent-status hooks come with each launch in a Pod pane, not from
-// ~/.claude/settings.json. Pod's launcher (product/agent-launcher/main.swift, `claude` first on every
-// pane's PATH) passes `--settings` from two templates written here: http hooks to the terminal
-// daemon's relay (no process per event; the relay answers at once), or Pod's command hook client
-// where the relay is missing. settings.json keeps none of Pod's hooks, so nothing rewrites it.
+// ~/.claude/settings.json. Pod's launcher (product/agent-launcher/claude-settings.swift, `claude`
+// first on every pane's PATH) passes `--settings` from templates written here: http hooks to the
+// terminal daemon's relay (no process per event; the relay answers at once), or Pod's command hook
+// client where the relay is missing; each also with Pod's statusLine. Written by
+// pod-claude-hook-service.ts, which takes Pod's entries out of settings.json once.
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
@@ -10,18 +11,9 @@ import {
   getSharedManagedScriptPath,
   MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
-  type HookCommandConfig,
   type HooksConfig
 } from '../../agent-hooks/installer-utils'
 import { claudeVersionReaches } from '../../claude/claude-hook-event-versions'
-import { getClaudeManagedHookPlan } from '../../claude/claude-managed-hook-events'
-import {
-  applyManagedHooks,
-  getManagedScriptFileName,
-  removeManagedHooks,
-  type ClaudeCompatibleHookSettings
-} from '../../claude/hook-settings'
-import { podManagedClaudeHook } from './pod-agent-hook-native'
 
 /** PTY env: the templates' prefix (`<prefix>.http.json`, `<prefix>.command.json`). */
 export const POD_CLAUDE_LAUNCH_SETTINGS_ENV = 'POD_CLAUDE_LAUNCH_SETTINGS'
@@ -80,8 +72,10 @@ function httpVariant(command: HooksConfig): { hooks: Record<string, unknown[]> }
               headers: {
                 'X-Pod-Hook-Relay-Token': '@@POD_RELAY_TOKEN@@',
                 'X-Pod-Hook-Relay-Pane': '@@POD_RELAY_PANE@@',
-                'X-Orca-Agent-Process': '@@POD_AGENT_PROCESS@@'
-              }
+                'X-Orca-Agent-Process': '@@POD_AGENT_PROCESS@@',
+                'X-Pod-Hook-Relay-Job-Dir': '$CLAUDE_JOB_DIR'
+              },
+              allowedEnvVars: ['CLAUDE_JOB_DIR']
             }))
           }))
   }
@@ -103,83 +97,71 @@ function writeIfChanged(path: string, text: string): void {
   }
 }
 
+export type PodClaudeStatusLine = { type: 'command'; command: string }
+
+/** Template file names: `<prefix>.<kind>.json`, and `<kind>-statusline` with Pod's statusLine. */
+const TEMPLATE_SUFFIXES = [
+  '.command.json',
+  '.http.json',
+  '.command-statusline.json',
+  '.http-statusline.json'
+] as const
+
+export function podClaudeLaunchTemplatesExist(
+  prefix = getPodClaudeLaunchSettingsPrefix()
+): boolean {
+  return existsSync(`${prefix}.command.json`)
+}
+
+/** Whether the templates carry Pod's statusLine: the launcher takes it while the user has none. */
+export function podClaudeLaunchStatusLineOn(prefix = getPodClaudeLaunchSettingsPrefix()): boolean {
+  return existsSync(`${prefix}.command-statusline.json`)
+}
+
 export function writePodClaudeLaunchTemplates(
   command: HooksConfig,
   claudeVersion: string | undefined,
+  statusLine: PodClaudeStatusLine | null,
   prefix: string = getPodClaudeLaunchSettingsPrefix()
 ): void {
   const http = claudeVersionReaches(claudeVersion, CLAUDE_HTTP_HOOK_FIRST_VERSION)
     ? httpVariant(command)
     : { hooks: command.hooks }
-  writeIfChanged(`${prefix}.command.json`, `${JSON.stringify({ hooks: command.hooks }, null, 2)}\n`)
-  writeIfChanged(`${prefix}.http.json`, `${JSON.stringify(http, null, 2)}\n`)
+  const text = (value: object): string => `${JSON.stringify(value, null, 2)}\n`
+  const kinds = [
+    ['command', { hooks: command.hooks }],
+    ['http', http]
+  ] as const
+  // Why the statusLine files first: the launcher takes `.command.json` as "Pod's hooks moved".
+  for (const [kind, settings] of kinds) {
+    if (statusLine) {
+      writeIfChanged(`${prefix}.${kind}-statusline.json`, text({ ...settings, statusLine }))
+    } else {
+      rmSync(`${prefix}.${kind}-statusline.json`, { force: true })
+    }
+  }
+  for (const [kind, settings] of kinds) {
+    writeIfChanged(`${prefix}.${kind}.json`, text(settings))
+  }
 }
 
 export function removePodClaudeLaunchTemplates(prefix = getPodClaudeLaunchSettingsPrefix()): void {
-  for (const suffix of ['.command.json', '.http.json']) {
+  for (const suffix of TEMPLATE_SUFFIXES) {
     rmSync(`${prefix}${suffix}`, { force: true })
   }
+}
+
+/** The hooks Claude gets with each launch, for the status check; null before the move. */
+export function readPodClaudeLaunchHooks(
+  prefix = getPodClaudeLaunchSettingsPrefix()
+): HooksConfig | null {
+  return podClaudeLaunchTemplatesExist(prefix) ? readHooksJson(`${prefix}.command.json`) : null
 }
 
 /** PTY env for the launcher; none until the templates are written. */
 export function podClaudeLaunchSettingsEnv(): Record<string, string> {
   const prefix = getPodClaudeLaunchSettingsPrefix()
-  return podClaudeLaunchSettingsEnabled() && existsSync(`${prefix}.command.json`)
+  return podClaudeLaunchSettingsEnabled() && podClaudeLaunchTemplatesExist(prefix)
     ? { [POD_CLAUDE_LAUNCH_SETTINGS_ENV]: prefix }
     : {}
-}
-
-type HookService = { agent: string; settings: ClaudeCompatibleHookSettings }
-
-/** Install: Pod's hooks go to the launch templates, and settings.json loses any it had (one write,
- *  then none). Elsewhere, or for another agent, they go to settings.json as before. */
-export function applyClaudeHooks(
-  service: HookService,
-  config: HooksConfig,
-  hook: HookCommandConfig,
-  plan: Parameters<typeof applyManagedHooks>[3],
-  options: { claudeVersion?: string },
-  enabled: boolean = podClaudeLaunchSettingsEnabled()
-): HooksConfig {
-  const scriptFileName = getManagedScriptFileName(service.settings)
-  if (service.agent !== 'claude' || !enabled) {
-    return applyManagedHooks(config, hook, scriptFileName, plan)
-  }
-  writePodClaudeLaunchTemplates(
-    applyManagedHooks({}, hook, scriptFileName, plan),
-    options.claudeVersion
-  )
-  return removeManagedHooks(config, scriptFileName).config
-}
-
-/** Status: settings.json as read, with Pod's hooks present where the launch templates carry them. */
-export function readClaudeHooksForStatus(
-  service: HookService,
-  configPath: string,
-  scriptPath: string,
-  options: { claudeVersion?: string },
-  enabled: boolean = podClaudeLaunchSettingsEnabled()
-): HooksConfig | null {
-  const config = readHooksJson(configPath)
-  if (
-    !config ||
-    service.agent !== 'claude' ||
-    !enabled ||
-    !existsSync(`${getPodClaudeLaunchSettingsPrefix()}.command.json`)
-  ) {
-    return config
-  }
-  return applyManagedHooks(
-    config,
-    podManagedClaudeHook(service, scriptPath, options, false),
-    getManagedScriptFileName(service.settings),
-    getClaudeManagedHookPlan(options.claudeVersion)
-  )
-}
-
-/** Remove: the launches lose Pod's hooks too. */
-export function removeClaudeLaunchSettings(service: HookService): void {
-  if (service.agent === 'claude') {
-    removePodClaudeLaunchTemplates()
-  }
 }
