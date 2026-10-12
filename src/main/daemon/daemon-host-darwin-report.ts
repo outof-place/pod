@@ -9,8 +9,10 @@ export type DaemonHostOutcome =
   | 'ignored'
   | 'kept'
   | 'failed'
+  | 'assessed'
+  | 'unassessed'
 
-const QUIET: ReadonlySet<DaemonHostOutcome> = new Set(['reused', 'cloned', 'reclaimed'])
+const QUIET: ReadonlySet<DaemonHostOutcome> = new Set(['reused', 'cloned', 'reclaimed', 'assessed'])
 const FAILED: ReadonlySet<DaemonHostOutcome> = new Set(['bundle', 'failed'])
 
 // Why a span too: a packaged app's console reaches no file, so the trace log is where a fallback shows.
