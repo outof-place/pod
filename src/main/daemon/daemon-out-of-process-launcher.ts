@@ -27,6 +27,7 @@ import {
 import { PROTOCOL_VERSION } from './types'
 import { prepareDaemonReplacement } from './daemon-replacement-preflight'
 import { ensureDaemonSocketDir } from './daemon-socket-endpoint-path'
+import { darwinDaemonStartupTimeoutMs } from './daemon-startup-budget-darwin'
 
 // Why: the adapter decides a runtime resolver replacement, but the launcher completes it — and by
 // then the daemon has usually self-retired (dropping its last authenticated client is enough), so
@@ -143,7 +144,7 @@ export function createOutOfProcessLauncher(
           pidPath,
           launchNonce,
           macosLoginSessionWatch,
-          startupTimeoutMs
+          startupTimeoutMs: startupTimeoutMs ?? darwinDaemonStartupTimeoutMs(recoveryDeadlineMs)
         })
       } catch (error) {
         if (!(error instanceof DaemonEndpointUnavailableError) || error.reason !== 'occupied') {

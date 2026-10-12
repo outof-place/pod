@@ -31,6 +31,7 @@ import {
 } from '../agent-hooks/restored-subagent-liveness-sweep'
 import { startFirstWindowStartupServices } from './first-window-startup-services'
 import { isProcessQuitRequested } from './process-quit-request'
+import { scheduleLateDaemonStartOnDarwin } from '../daemon/daemon-late-start'
 import { logStartupMilestone } from './startup-diagnostics'
 import type { WindowsDesktopStartupServices } from './windows-desktop-shell-path-startup'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
@@ -143,10 +144,24 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
       logStartupMilestone('startup-service-start', { service: 'daemon-pty-provider' })
       // Why: only GUI-spawned macOS daemons watch for login-session death; a headless
       // serve daemon must survive its spawning session ending (SSH disconnect).
-      await initDaemonPtyProvider(signal, {
+      const daemonOptions = {
         macosLoginSessionWatch: process.platform === 'darwin' && !state.isServeMode,
         isQuitting: isProcessQuitRequested
+      }
+      // Fork-only (Pod): a daemon that missed the gate still takes fresh terminals once it starts.
+      const startLate = (): void =>
+        scheduleLateDaemonStartOnDarwin(
+          (options) => initDaemonPtyProvider(undefined, options),
+          daemonOptions,
+          () => getDaemonProvider() !== null
+        )
+      await initDaemonPtyProvider(signal, daemonOptions).catch((error: unknown) => {
+        startLate()
+        throw error
       })
+      if (!getDaemonProvider()) {
+        startLate()
+      }
       // Why: a retained shell keeps its launch-time Codex home even when the current routing lane changes.
       const hasRetainedManagedHostPane = hasRecordedManagedHostCodexPane()
       if (
