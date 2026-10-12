@@ -8,4 +8,14 @@
 export const POD_CREATE_TERMINAL_AGENT_ARGS_RUNTIME_CAPABILITY =
   'pod.session-tabs.create-terminal-agent-args.v1' as const
 
-export const POD_RUNTIME_CAPABILITIES = [POD_CREATE_TERMINAL_AGENT_ARGS_RUNTIME_CAPABILITY] as const
+/**
+ * pod.terminal.openedBeforeClaudeAccounts: whether a pane's shell predates per-account Claude
+ * folders, so its `claude` runs System default's login. A client asks only a host that lists this.
+ */
+export const POD_TERMINAL_OPENED_BEFORE_CLAUDE_ACCOUNTS_RUNTIME_CAPABILITY =
+  'pod.terminal.opened-before-claude-accounts.v1' as const
+
+export const POD_RUNTIME_CAPABILITIES = [
+  POD_CREATE_TERMINAL_AGENT_ARGS_RUNTIME_CAPABILITY,
+  POD_TERMINAL_OPENED_BEFORE_CLAUDE_ACCOUNTS_RUNTIME_CAPABILITY
+] as const
