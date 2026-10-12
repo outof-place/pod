@@ -15,6 +15,8 @@ export const PodClientEventsSubscribeParams = z
         })
       ])
       .optional()
-      .catch(undefined)
+      .catch(undefined),
+    /** Opt in to `keybindingsChanged`: keybindings.effective's answer each time the file changes it. */
+    keybindings: z.literal(true).optional().catch(undefined)
   })
   .catch({})
