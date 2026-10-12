@@ -97,7 +97,8 @@ function testCut(legacy: { pids: number[] }) {
     scan: async () => [...legacy.pids],
     awaitExit: (pids) => {
       watched.push(pids)
-      return { exited: new Promise<void>((resolve) => (exit = resolve)), cancel: () => {} }
+      const exited = new Promise<boolean>((resolve) => (exit = () => resolve(true)))
+      return { exited, cancel: () => {} }
     }
   })
   return { cut, watched, exitOne: () => exit() }
