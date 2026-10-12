@@ -79,6 +79,11 @@ function row<T extends z.ZodType>(schema: T, title: string, description?: string
 
 const opacity = z.number().min(0).max(1)
 
+const McpLazyStartSchema = z.object({
+  enabled: row(z.boolean(), 'Lazy-start heavy MCP servers'),
+  servers: row(z.array(z.string().min(1).max(256)).max(64), 'Servers')
+})
+
 const NotificationsSchema = z
   .object({
     enabled: row(z.boolean(), 'Notifications'),
@@ -248,6 +253,12 @@ export const POD_SETTINGS_FIELDS = {
     'Repo-local settings that speed up git in large repositories.'
   ),
   gitTuningFsmonitor: row(z.boolean(), 'File system monitor (core.fsmonitor)'),
+  mcpLazyStart: McpLazyStartSchema.meta({
+    title: 'Lazy-start heavy MCP servers',
+    description:
+      'Chosen stdio servers of ~/.claude.json start at their first tool call instead of with every Claude session.',
+    propertyOrder: Object.keys(McpLazyStartSchema.shape)
+  }),
   alwaysForceDeleteWorktrees: row(z.boolean(), 'Discard changes when deleting a worktree'),
   sourceControlCompareAgainstUpstream: row(z.boolean(), 'Compare against the upstream branch'),
   showGitIgnoredFiles: row(z.boolean(), 'Show ignored files'),
