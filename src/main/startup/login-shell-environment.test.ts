@@ -64,6 +64,17 @@ describe('resolveLoginShellEnvironment', () => {
     ).resolves.toMatchObject({ EXAMPLE_GATEWAY_TOKEN: 'shell-exported' })
   })
 
+  it("doesn't hand Terminal.app's session to the probe or its result", async () => {
+    const spawner = vi.fn(async (_shell: string, env: NodeJS.ProcessEnv) => env)
+    const environment = await resolveLoginShellEnvironment({
+      shellOverride: '/bin/zsh',
+      env: { PATH: '/bin', TERM_SESSION_ID: 'w0t0p0:4253ACE2', SHELL_SESSION_FILE: '/s.session' },
+      spawner
+    })
+    expect(spawner.mock.calls[0]?.[1]).toEqual({ PATH: '/bin' })
+    expect(environment).toEqual({ PATH: '/bin' })
+  })
+
   it.runIf(realShell !== null)(
     'captures a profile export missing from the parent process',
     async () => {
