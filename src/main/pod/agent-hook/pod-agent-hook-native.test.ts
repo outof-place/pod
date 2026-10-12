@@ -39,7 +39,18 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(home, { recursive: true, force: true })
   vi.unstubAllEnvs()
+  setPlatform(realPlatform)
 })
+
+const realPlatform = process.platform
+
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', {
+    value: platform,
+    configurable: true,
+    writable: true
+  })
+}
 
 function managedCommands(config: HooksConfig, event: string): string[] {
   return (config.hooks?.[event] ?? []).flatMap((definition) =>
@@ -140,6 +151,8 @@ describe('pod-agent-hook, the native managed Claude hook', () => {
 
   it('installs through the hook service, and a second install leaves settings.json as it is', () => {
     vi.stubEnv('POD_AGENT_HOOK_BINARY', bundled)
+    // Why: the client ships for macOS only; elsewhere (Linux CI) the service keeps the script.
+    setPlatform('darwin')
     const service = new ClaudeHookService()
     const settingsPath = join(home, '.claude', 'settings.json')
     expect(service.install({ claudeVersion: '2.1.296' }).state).toBe('installed')
