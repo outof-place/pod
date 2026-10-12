@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
+import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
 import {
   resolveProfileLoadingFallbackShell,
@@ -20,10 +21,15 @@ function processEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.Proces
   )
 }
 
-function shellProbe(shell: string): string[] | null {
+export function shellProbe(shell: string): string[] | null {
   if (process.platform !== 'win32' || resolveWindowsShellStartupFamily(shell) === 'posix') {
+    // Pod: SIGPIPE ignored. When the reader goes away mid-probe (a runtime quitting at startup),
+    // an interactive zsh takes SIGPIPE inside printf's stdio flush and exits from the signal
+    // handler; a zshexit hook that forks (Terminal.app's session save) then deadlocks on the
+    // stdout lock its child inherited, and both shells hang for good. Ignored, the write fails.
     const command =
-      `printf '\\0${START_MARKER}\\0'; /usr/bin/env -0; ` + `printf '\\0${END_MARKER}\\0'`
+      `trap '' PIPE; printf '\\0${START_MARKER}\\0'; /usr/bin/env -0; ` +
+      `printf '\\0${END_MARKER}\\0'`
     return ['-ilc', command]
   }
   const basename = pathWin32.basename(shell).toLowerCase()
@@ -90,7 +96,9 @@ function spawnShellAndReadEnvironment(
   return new Promise((resolve) => {
     let settled = false
     const chunks: Buffer[] = []
-    const child = spawnProcess({ program: shell, args, env })
+    // Pod: its own process group, so the timeout takes the shell's subshells along.
+    const detached = process.platform !== 'win32'
+    const child = spawnProcess({ program: shell, args, env, detached })
     const finish = (value: NodeJS.ProcessEnv | null): void => {
       if (settled) {
         return
@@ -101,7 +109,11 @@ function spawnShellAndReadEnvironment(
     }
     const timer = setTimeout(() => {
       try {
-        child.kill('SIGKILL')
+        if (detached) {
+          void signalProcessTree(child, 'SIGKILL')
+        } else {
+          child.kill('SIGKILL')
+        }
       } catch {
         // Best-effort timeout cleanup.
       }
