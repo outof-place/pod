@@ -56,7 +56,13 @@ jobs:
 
       - name: Check tag
         run: |
+          set -euo pipefail
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::tag $TAG is not v<semver>"; exit 1; }
+          # Why: this fork also carries Orca's own tags, and Orca's v0.0.1 matches v0.*. A product tag
+          # points at a commit with product/identity.json, which no Orca commit has. Not "an ancestor of
+          # main": pod-stack rewrites main for every release candidate, so a tag on a tested candidate
+          # stops being one as soon as the next candidate lands.
+          [ -f product/identity.json ] || { echo "::error::$TAG has no product/identity.json, so it is not a product commit"; exit 1; }
 
       - name: Import the Developer ID certificate into a temporary keychain
         env:
