@@ -7,6 +7,7 @@ import { daemonAppPolicyLaunch } from './daemon-app-scheduling-policy'
 import { buildDurableDaemonScopeCommand } from './daemon-cgroup-scope'
 import { daemonLogArgs } from './daemon-launch-paths'
 import { podLaneDaemonEnv } from './pod-lane/pod-lane-daemon-env'
+import { podClaudeHookDaemonEnv } from './pod-claude-hooks/pod-claude-hook-daemon-env'
 
 export type DaemonChildSpawnOptions = {
   entryPath: string
@@ -69,8 +70,9 @@ export function spawnDaemonChildProcess(
     ELECTRON_RUN_AS_NODE: '1',
     // Why: the detached plain-Node daemon has no AppEnvironment, but shell rcfiles must live outside swept tmp.
     ORCA_USER_DATA_PATH: userDataPath,
-    // Pod: the direct terminal lane's peer check.
-    ...podLaneDaemonEnv(relocatedExecPath)
+    // Pod: the direct terminal lane's peer check, and Claude's hook relay.
+    ...podLaneDaemonEnv(relocatedExecPath),
+    ...podClaudeHookDaemonEnv()
   }
   // Why: this env becomes the daemon's, and so every PTY's (#21119).
   removeChromiumDisabledSessionBus(daemonEnv)

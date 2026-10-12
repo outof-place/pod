@@ -6,7 +6,8 @@
 // in every terminal (ORCA_CLI_BIN_DIR), so a typed `claude` reaches this binary, which looks the
 // real command up on the rest of PATH.
 //
-//   claude [args...]                       via the symlink: run the next `claude` on PATH
+//   claude [args...]                       via the symlink: run the next `claude` on PATH, with
+//                                          Pod's hooks in `--settings` (claude-settings.swift)
 //   pod-agent-launcher -- <cmd> [args...]  explicit form
 //   pod-agent-launcher --print-policy      apply the policy and print what the kernel reports
 //
@@ -193,7 +194,20 @@ if isScript(target) {
   unsetenv(depthEnv)
 }
 
+// Claude gets Pod's hooks on its command line (claude-settings.swift).
+var claudeArgv: [String]?
+if command == "claude" {
+  if let process = agentProcessJSON() { setenv(agentProcessEnv, process, 1) }
+  if let home = env("HOME"), home.hasPrefix("/") {
+    claudeArgv = withClaudeSettings(Array(arguments[commandIndex...]), home: home)
+  }
+}
+
 applyPolicy()
-let argv = CommandLine.unsafeArgv + commandIndex
-execv(target, argv)
+if let claudeArgv {
+  var argv = claudeArgv.map { strdup($0) } + [nil]
+  execv(target, &argv)
+} else {
+  execv(target, CommandLine.unsafeArgv + commandIndex)
+}
 fail("\(command): \(String(cString: strerror(errno)))", code: 126)

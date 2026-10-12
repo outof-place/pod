@@ -11,6 +11,7 @@ import {
   runPtySpawnHealthProbe
 } from './pty-subprocess/spawn-preflight'
 import { createDaemonPtySubprocessHandle } from './pty-subprocess/subprocess-handle'
+import { podClaudeHookPtyEnv } from './pod-claude-hooks/pod-claude-hook-daemon'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
 
@@ -70,6 +71,7 @@ export async function checkPtySpawnHealth(): Promise<void> {
 export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env = createDaemonPtyEnvironment(opts)
+  podClaudeHookPtyEnv(opts.sessionId, env)
   const launch = createPtyShellLaunchPlan(opts, env)
 
   await preflightPtySpawn({

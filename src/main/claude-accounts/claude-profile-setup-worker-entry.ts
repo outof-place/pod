@@ -1,5 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads'
-import { ClaudeHookService } from '../claude/hook-service'
+// Pod: Claude's hooks may ride `--settings` instead.
+import { PodClaudeProfileHookService as ClaudeHookService } from '../pod/agent-hook/pod-claude-profile-hook-service'
 import { provisionClaudeAccountProfile } from './claude-profile-setup'
 import type { ClaudeProfileSetupJob } from './claude-profile-setup-worker'
 

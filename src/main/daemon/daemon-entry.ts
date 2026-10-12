@@ -29,6 +29,7 @@ import { publishDaemonPidFile } from './daemon-spawner'
 import { isNativePtyException } from './daemon-native-pty-exception'
 import { startDaemonScopeDeathWatch } from './daemon-scope-death-watch'
 import { isWindowsProcessTableAvailable } from '../windows/windows-process-table'
+import { startPodClaudeHookRelay } from './pod-claude-hooks/pod-claude-hook-daemon'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -269,6 +270,8 @@ async function main(): Promise<void> {
         })
       : null
 
+  // Pod: before any PTY, which is told where the relay is.
+  await startPodClaudeHookRelay({ socketPath, log: daemonLog })
   daemon = await startDaemon({
     socketPath,
     tokenPath,
