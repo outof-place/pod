@@ -50,6 +50,8 @@ import { installPodWorktreeStatus } from '../pod/worktree-status/install-pod-wor
 import { agentHookServer } from '../agent-hooks/server'
 import { installPodSettings } from '../pod/settings/install-pod-settings'
 import { installMcpLazy } from '../pod/mcp-lazy/install-mcp-lazy'
+import { installPodKeybindings } from '../pod/keybindings/install-pod-keybindings'
+import { getUserKeybindingsPath } from '../keybindings/keybinding-file'
 import { installPodHookWriteGate } from '../pod/instance/pod-instance'
 import { installPodNativePeerCheck } from '../pod/rpc/install-pod-native-peer'
 
@@ -74,6 +76,10 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   installPodSettings(store, state.agentAwakeService ?? undefined)
   // Fork-only (Pod): "Lazy-start heavy MCP servers"; at startup only wraps what the setting names.
   installMcpLazy(store)
+  // Fork-only (Pod): keybindings.effective on KeybindingService's file; watches only while a client opts in.
+  installPodKeybindings(
+    () => state.keybindings?.getPath() ?? getUserKeybindingsPath(app.getPath('home'))
+  )
   // Fork-only (Pod): the one-app control socket; a no-op unless PodNative launched this runtime.
   installPodUiHost(runtime, store)
   // Fork-only (Pod): Close Terminals in the one-app window also sleeps the runtime's own PTYs.
