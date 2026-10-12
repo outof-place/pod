@@ -86,6 +86,8 @@ export type ToolState = {
   /** lsof ran out of time (a loaded Mac); no verdict either way. */
   lsofTimedOut?: boolean
   copyDelayMs?: number
+  /** A promise cp waits on before copying: a copy that takes as long as a test says, on no clock. */
+  copyGate?: Promise<void>
   /** Filesystem mount(8) reports for the clone root's device. */
   volumeType?: string
   freeBytes?: number
@@ -120,6 +122,7 @@ export async function fakeTool(state: ToolState, spec: ProcessSpec): Promise<Pro
   }
   switch (spec.program) {
     case '/bin/cp':
+      await state.copyGate
       await new Promise((resolve) => realSetTimeout(resolve, state.copyDelayMs ?? 0))
       cpSync(args[2], args[3], { recursive: true, verbatimSymlinks: true })
       return ok

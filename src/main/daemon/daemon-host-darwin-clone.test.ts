@@ -75,6 +75,7 @@ beforeEach(() => {
   setProcessProp('execPath', fixture.execPath)
   tools.calls = []
   tools.copyDelayMs = 0
+  tools.copyGate = undefined
   tools.volumeType = 'apfs'
   tools.freeBytes = undefined
   tools.codesignCode = 0
@@ -206,13 +207,26 @@ describe('materializeDarwinDaemonHost', () => {
 
 describe('darwinDaemonHostForSpawn', () => {
   it('forks this daemon from the bundle when the clone outlasts the budget, and keeps cloning', async () => {
-    tools.copyDelayMs = 200
-    expect(await darwinDaemonHostForSpawn(entryPath, 20)).toBeNull()
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('no clone within 20 ms'))
-    await vi.waitFor(
-      () => expect(darwinDaemonHostNeedsClone(entryPath)).toBe(false),
-      BACKGROUND_WORK_WAIT
-    )
-    expect(await darwinDaemonHostForSpawn(entryPath, 20)).not.toBeNull()
+    // Why a fake clock and a gated copy: the budget expires only when the test says, and the clone
+    // ends only when released, so a loaded host can't reorder them (a real 20 ms flaked under load).
+    let releaseCopy: () => void = () => {}
+    tools.copyGate = new Promise((resolve) => {
+      releaseCopy = resolve
+    })
+    vi.useFakeTimers()
+    try {
+      const late = darwinDaemonHostForSpawn(entryPath, 20)
+      await vi.advanceTimersByTimeAsync(20)
+      expect(await late).toBeNull()
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('no clone within 20 ms'))
+      releaseCopy()
+      await vi.waitFor(
+        () => expect(darwinDaemonHostNeedsClone(entryPath)).toBe(false),
+        BACKGROUND_WORK_WAIT
+      )
+      expect(await darwinDaemonHostForSpawn(entryPath, 20)).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
