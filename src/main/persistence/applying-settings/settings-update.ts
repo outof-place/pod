@@ -1,5 +1,6 @@
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { normalizeMcpLazySetting } from '../../pod/mcp-lazy/mcp-lazy-entries'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
 import {
@@ -181,6 +182,10 @@ export function updateSettings(
   }
   if ('gitTuningFsmonitor' in updates) {
     sanitizedUpdates.gitTuningFsmonitor = updates.gitTuningFsmonitor === true
+  }
+  // Fork-only (Pod)
+  if ('mcpLazyStart' in updates) {
+    sanitizedUpdates.mcpLazyStart = normalizeMcpLazySetting(updates.mcpLazyStart)
   }
   if ('sourceControlGroupOrder' in updates) {
     sanitizedUpdates.sourceControlGroupOrder = normalizeSourceControlGroupOrder(
