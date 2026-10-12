@@ -23,7 +23,7 @@ export function resolveBundledMcpLazy(
     return null
   }
   const env = options.env ?? process.env
-  const appResources: unknown = Reflect.get(process, 'resourcesPath')
+  const appResources: unknown = process.resourcesPath
   const resourcesPath =
     options.resourcesPath ?? (typeof appResources === 'string' ? appResources : undefined)
   const candidates = [

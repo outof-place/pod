@@ -37,7 +37,7 @@ export type McpLazyDeps = {
   backupDir: string
   /** ~/.claude.json */
   configPath?: string
-  /** Claude Code's CLI writer, or null when no `claude` is found. */
+  /** The ~/.claude.json writer (in place, else Claude Code's CLI), or null when there is none. */
   writer: () => Promise<ClaudeMcpWriter | null>
   measure: (servers: Record<string, McpServerEntry>) => Promise<Record<string, McpServerCost>>
   /** Turns the setting off (restoreBackup), through settings:set's own path. */
@@ -72,7 +72,10 @@ const MEASURE_TTL_MS = 60_000
 export class McpLazyService {
   private queue: Promise<unknown> = Promise.resolve()
   private lastApply: McpLazyApply | null = null
-  private measured: { at: number; costs: Record<string, McpServerCost> } | null = null
+  private measured: {
+    at: number
+    costs: Record<string, McpServerCost>
+  } | null = null
 
   constructor(
     private readonly store: McpLazyStore,

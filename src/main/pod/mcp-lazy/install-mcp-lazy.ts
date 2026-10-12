@@ -7,7 +7,7 @@ import { getManagedAgentHookTarget } from '../../../shared/managed-agent-hook-ta
 import { isPodSettingsRpcEnabled } from '../settings/install-pod-settings'
 import { getPodSettingsWriter } from '../settings/pod-settings-writer'
 import { getMcpLazyInstallPath, resolveBundledMcpLazy } from './mcp-lazy-binary'
-import { claudeCliWriter } from './mcp-lazy-claude-config'
+import { claudeCliWriter, inPlaceWriter } from './mcp-lazy-claude-config'
 import { measureMcpServers } from './mcp-lazy-measure'
 import { McpLazyService, setMcpLazyService } from './mcp-lazy-service'
 
@@ -19,21 +19,25 @@ export function installMcpLazy(store: Store): void {
     bundled: resolveBundledMcpLazy(),
     installPath: getMcpLazyInstallPath(),
     backupDir: join(app.getPath('userData'), 'mcp-lazy', 'backups'),
+    // In place, byte for byte around the entry; Claude Code's CLI only for a file not in its format.
     writer: async () => {
       const target = getManagedAgentHookTarget('claude')
-      if (!target) {
-        return null
-      }
-      const presence = await detectLocalManagedAgentCliPresence([target], store.getSettings())
+      const presence = target
+        ? await detectLocalManagedAgentCliPresence([target], store.getSettings())
+        : {}
       const claude = presence.claude
-      return claude?.state === 'found' ? claudeCliWriter(claude.executablePath) : null
+      return inPlaceWriter(
+        claude?.state === 'found' ? claudeCliWriter(claude.executablePath) : null
+      )
     },
     measure: measureMcpServers,
     disable: async () => {
       const write = getPodSettingsWriter()
       if (write) {
         const current = store.getSettings().mcpLazyStart
-        await write({ mcpLazyStart: { enabled: false, servers: current?.servers ?? [] } })
+        await write({
+          mcpLazyStart: { enabled: false, servers: current?.servers ?? [] }
+        })
       }
     },
     log: (message) => console.info(`[pod-mcp-lazy] ${message}`)

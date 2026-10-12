@@ -1,14 +1,18 @@
-// Fork-only (Pod): the user-scope MCP servers of ~/.claude.json, read here and written only through
-// Claude Code's own `claude mcp remove/add-json -s user`, which keeps its lock and format. Entry
-// env values are copied as they are and never logged.
+// Fork-only (Pod): the user-scope MCP servers of ~/.claude.json, read here and written in place,
+// as Claude Code itself writes the file (or through its `claude mcp` CLI when the file isn't in that
+// format). Entry env values are copied as they are and never logged.
+import { randomUUID } from 'node:crypto'
 import {
   chmodSync,
   copyFileSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
-  statSync
+  statSync,
+  writeFileSync
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
@@ -92,7 +96,10 @@ export function claudeCliWriter(claudePath: string, home = homedir()): ClaudeMcp
       timeoutMs: CLI_TIMEOUT_MS,
       maxOutputBytes: 16_384
     })
-    return { code: result.timedOut ? null : result.code, stderr: result.stderr }
+    return {
+      code: result.timedOut ? null : result.code,
+      stderr: result.stderr
+    }
   }
   return async (name, entry) => {
     // A missing entry is fine to remove; the add below decides.
@@ -104,6 +111,58 @@ export function claudeCliWriter(claudePath: string, home = homedir()): ClaudeMcp
         `claude mcp add-json ${name} failed (${added.code}): ${added.stderr.trim().slice(0, 200)}`
       )
     }
+  }
+}
+
+const IN_PLACE_ATTEMPTS = 5
+
+/** Claude Code writes ~/.claude.json as `JSON.stringify(config, null, 2)` (no trailing newline). */
+function claudeFormat(document: unknown): string {
+  return JSON.stringify(document, null, 2)
+}
+
+/**
+ * Replaces one user-scope entry where it stands, so every other byte stays: the file must read
+ * back as Claude Code writes it and be no symlink, else the CLI writer takes over (`fallback`). Claude Code takes no
+ * lock on the file (2.1.296 writes through a held ~/.claude.json.lock), so this does what its own
+ * writes do: temp + rename, and only while the file still holds the bytes read.
+ */
+export function inPlaceWriter(
+  fallback: ClaudeMcpWriter | null,
+  path = claudeJsonPath()
+): ClaudeMcpWriter {
+  return async (name, entry) => {
+    for (let attempt = 0; attempt < IN_PLACE_ATTEMPTS; attempt++) {
+      const text = readFileSync(path, 'utf8')
+      const document: unknown = JSON.parse(text)
+      if (
+        !isRecord(document) ||
+        claudeFormat(document) !== text ||
+        lstatSync(path).isSymbolicLink()
+      ) {
+        if (!fallback) {
+          throw new Error(
+            "~/.claude.json is not in Claude Code's own format, and no claude CLI was found"
+          )
+        }
+        return fallback(name, entry)
+      }
+      const servers = isRecord(document.mcpServers) ? document.mcpServers : {}
+      servers[name] = entry
+      document.mcpServers = servers
+      const temp = `${path}.${process.pid}-${randomUUID()}.tmp`
+      try {
+        writeFileSync(temp, claudeFormat(document), { mode: 0o600 })
+        if (readFileSync(path, 'utf8') !== text) {
+          continue
+        }
+        renameSync(temp, path)
+        return
+      } finally {
+        rmSync(temp, { force: true })
+      }
+    }
+    throw new Error(`~/.claude.json kept changing; ${name} was left as it was`)
   }
 }
 
