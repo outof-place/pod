@@ -30,7 +30,7 @@ The first signature after a keychain change can raise a keychain prompt for the 
 
 ## Cutting a release
 
-Versions are Pod's own semver, starting at `0.1.0`, and every release must be higher than the last. The Orca base is recorded in `upstream.json` and shown in the About panel; it is not part of the version. A prerelease such as `0.2.0-beta.1` is only offered to users who are already on a prerelease.
+Versions are Pod's own semver, starting at `0.1.0`, and every release must be higher than the last. Never tag `v0.0.1`: the fork carries Orca's own `v0.0.1` tag (an Orca commit, `637e7c5bec`), so Pod's first public tag is `v0.1.0`. Leave Orca's tag where it is. `pod-release.yml` refuses a tag whose commit has no `product/identity.json`, before it touches any signing secret. The Orca base is recorded in `upstream.json` and shown in the About panel; it is not part of the version. A prerelease such as `0.2.0-beta.1` is only offered to users who are already on a prerelease.
 
 ```sh
 product/release.sh 0.1.0             # build, sign, notarize, staple, verify; no upload
