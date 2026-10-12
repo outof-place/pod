@@ -216,6 +216,43 @@ describe('PodClaudeSettingsCut', () => {
     expect(spawned).toHaveLength(1)
     await vi.advanceTimersByTimeAsync(1)
     expect(spawned).toHaveLength(2)
+    // The same set again and again: the pause grows as for a failing watcher.
+    await vi.advanceTimersByTimeAsync(1999)
+    expect(spawned).toHaveLength(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(spawned).toHaveLength(3)
+    cut.disarm()
+  })
+
+  it('starts the pause over once a watched claude exits and the set moves on', async () => {
+    vi.useFakeTimers()
+    writeFileSync(settingsPath, WITH_POD)
+    let answer = [7]
+    const exits: ((exited: boolean) => void)[] = []
+    const spawned: number[][] = []
+    const { cut } = cutWith(
+      async () => answer,
+      (pids) => {
+        spawned.push(pids)
+        return { exited: new Promise<boolean>((resolve) => exits.push(resolve)), cancel: () => {} }
+      }
+    )
+    await cut.arm()
+    // An exit while the table still lists 7: a 1 s pause, one failure counted.
+    exits[0](true)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(spawned).toEqual([[7], [7]])
+    // 7 exits for real and 8 is left: a new watcher at once, the count back at zero.
+    answer = [8]
+    exits[1](true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(spawned).toEqual([[7], [7], [8]])
+    // So the next pause is 1 s again, not 2.
+    exits[2](true)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(spawned).toHaveLength(3)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(spawned).toHaveLength(4)
     cut.disarm()
   })
 
