@@ -43,9 +43,10 @@ describe('release bundle gate', () => {
         '/.ruff_cache/0.16.10/x',
         '/dist-0.0.1-test-2718f89dbd/mac-arm64/Pod.app/Contents/Info.plist',
         '/test-results/.last-run.json',
-        '/cloud/README.md'
+        '/cloud/README.md',
+        '/product/RELEASING.md'
       ])
-    ).toEqual(['.ruff_cache', 'dist-0.0.1-test-2718f89dbd', 'test-results'])
+    ).toEqual(['.ruff_cache', 'dist-0.0.1-test-2718f89dbd', 'product', 'test-results'])
   })
 
   it('fails a polluted or oversized asar before signing and passes a clean one', () => {
