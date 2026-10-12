@@ -5,6 +5,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import { removeHostTree } from '../host-tree-removal'
 import type { RelocatedDaemonHost } from './daemon-host-relocation'
 import { daemonHostStagingName } from './daemon-host-reclaim'
+import { assessDarwinDaemonHost } from './daemon-host-darwin-assess'
 import { reportDaemonHost } from './daemon-host-darwin-report'
 import { runHostTool, type HostToolMode } from './daemon-host-darwin-tools'
 import { freeBytes, volumeCanClone } from './daemon-host-darwin-volume'
@@ -277,6 +278,12 @@ async function cloneDarwinDaemonHost(
       cloned ? 'cloned' : 'copied',
       `${cloned ? 'cloned' : 'copied'} ${source.bundleName} ${version} to ${buildDir} in ${copiedAt - startedAt} ms, verified in ${Date.now() - copiedAt} ms`
     )
+    // Not awaited: a spawn waiting for this clone forks now; the next start from it is the gain.
+    void assessDarwinDaemonHost(
+      source.bundleDir,
+      join(buildDir, cloneDirName(source.bundleName)),
+      mode
+    ).catch(() => {})
     return hostPaths(buildDir, marker)
   } catch (error) {
     reportDaemonHost('bundle', `cannot publish ${staging}; forking from the app bundle`, error)
