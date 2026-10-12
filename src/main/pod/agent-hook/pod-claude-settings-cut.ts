@@ -4,7 +4,8 @@
 // unchanged) waits until no such claude runs: every live claude in a Pod pane that reads this file
 // carries POD_CLAUDE_SETTINGS_PID, the launcher's mark. The process table decides, so a Pod
 // restarted mid-wait decides the same way; it is read again when a claude starts or exits (the hook
-// server's rows, and a kqueue watcher on the waited-for pids), never on a timer.
+// server's rows, and a kqueue watcher on the waited-for pids), and on a timer only while that
+// watcher can't run.
 import { readFileSync } from 'node:fs'
 import { runProcess } from '@orca/process-host'
 import {
@@ -15,9 +16,24 @@ import {
 
 const PS = '/bin/ps'
 const PS_TIMEOUT_MS = 3000
+/** A watcher that can't run is tried again after this, doubled per failure up to the cap. */
+const WATCH_RETRY_MS = 1000
+const WATCH_RETRY_MAX_MS = 60_000
 
 type Names = { hookScript: string; statusLineScript: string }
 type Run = typeof runProcess
+type Watcher = { exited: Promise<boolean>; cancel: () => void }
+
+/** An npm install's claude: node running claude-code's cli.js, or the `claude` bin linked to it
+ *  (`#!/usr/bin/env node` gives node that path), or a title Claude set over its argv. */
+function isNodeClaude(args: string): boolean {
+  const [program, script] = args.trim().split(/\s+/)
+  return [program, script].some(
+    (word) =>
+      word !== undefined &&
+      (word.split('/').at(-1) === 'claude' || /\/@anthropic-ai\/claude-code\/cli\.m?js$/.test(word))
+  )
+}
 
 /** Claudes in Pod panes under `home` that got no launch settings; null when the process table
  *  can't be read (the cut then waits). An account profile's claude counts too: its settings.json is
@@ -36,10 +52,35 @@ export async function scanLegacyClaudes(
     return null
   }
   const pids: number[] = []
+  const nodes: number[] = []
   for (const line of list.stdout.split('\n')) {
     const match = /^\s*(\d+)\s+(.+?)\s*$/.exec(line)
-    if (match && match[2].split('/').at(-1) === 'claude' && Number(match[1]) !== process.pid) {
+    if (!match || Number(match[1]) === process.pid) {
+      continue
+    }
+    const name = match[2].split('/').at(-1)
+    if (name === 'claude') {
       pids.push(Number(match[1]))
+    } else if (name === 'node') {
+      nodes.push(Number(match[1]))
+    }
+  }
+  if (nodes.length > 0) {
+    // Why the arguments alone first: -E would mix the environment into them.
+    const argv = await run({
+      program: PS,
+      args: ['-ww', '-o', 'pid=,args=', '-p', nodes.join(',')],
+      timeoutMs: PS_TIMEOUT_MS,
+      maxOutputBytes: 4 * 1024 * 1024
+    })
+    if (argv.timedOut) {
+      return null
+    }
+    for (const line of argv.stdout.split('\n')) {
+      const match = /^\s*(\d+)\s(.*)$/.exec(line)
+      if (match && isNodeClaude(match[2])) {
+        pids.push(Number(match[1]))
+      }
     }
   }
   if (pids.length === 0) {
@@ -73,12 +114,13 @@ export async function scanLegacyClaudes(
   return legacy
 }
 
-/** The launcher's watcher: settles once one of `pids` exits; `cancel` stops it. */
+/** The launcher's watcher: `exited` is true once one of `pids` exited (the launcher printed it),
+ *  false when the watcher couldn't run or stopped otherwise; `cancel` stops it. */
 export function launcherAwaitExit(
   launcher: string,
   pids: number[],
   run: Run = runProcess
-): { exited: Promise<void>; cancel: () => void } {
+): Watcher {
   const controller = new AbortController()
   const exited = run({
     program: launcher,
@@ -86,8 +128,8 @@ export function launcherAwaitExit(
     timeoutMs: null,
     signal: controller.signal
   }).then(
-    () => undefined,
-    () => undefined
+    (result) => result.code === 0 && /^\d+\s*$/.test(result.stdout),
+    () => false
   )
   return { exited, cancel: () => controller.abort() }
 }
@@ -98,7 +140,7 @@ export type PodClaudeSettingsCutOptions = {
   names: () => Names
   scan: () => Promise<number[] | null>
   /** Null where nothing may outlive the call (the CLI): the next start or event decides. */
-  awaitExit: ((pids: number[]) => { exited: Promise<void>; cancel: () => void }) | null
+  awaitExit: ((pids: number[]) => Watcher) | null
   log?: (event: string, details?: Record<string, unknown>) => void
 }
 
@@ -106,7 +148,9 @@ export class PodClaudeSettingsCut {
   private armed = false
   private running: Promise<void> | null = null
   private again = false
-  private watcher: { key: string; cancel: () => void } | null = null
+  private watcher: { key: string; cancel: () => void; ended: boolean } | null = null
+  private retry: ReturnType<typeof setTimeout> | null = null
+  private watchFailures = 0
 
   constructor(private readonly options: PodClaudeSettingsCutOptions) {}
 
@@ -201,22 +245,56 @@ export class PodClaudeSettingsCut {
   private watch(pids: number[]): void {
     const key = [...pids].sort((a, b) => a - b).join(',')
     this.options.log?.('pod-claude-settings-cut-waits', { legacyClaudes: pids.length })
-    if (!this.options.awaitExit || this.watcher?.key === key) {
+    // Why the retry first: while the watcher can't run, a new one starts only from the retry.
+    if (!this.options.awaitExit || this.retry) {
+      return
+    }
+    if (this.watcher?.key === key) {
+      // A watcher said one of these exited, yet the table still has them all: never at once again.
+      if (this.watcher.ended) {
+        this.retryLater()
+      }
       return
     }
     this.stopWatching()
-    const watcher = this.options.awaitExit(pids)
-    this.watcher = { key, cancel: watcher.cancel }
-    void watcher.exited.then(() => {
-      if (this.watcher?.key === key) {
-        this.watcher = null
-        void this.recheck()
+    const started = this.options.awaitExit(pids)
+    const watcher = { key, cancel: started.cancel, ended: false }
+    this.watcher = watcher
+    void started.exited.then((exited) => {
+      if (this.watcher !== watcher) {
+        return
       }
+      watcher.ended = true
+      if (exited) {
+        this.watchFailures = 0
+        void this.recheck()
+        return
+      }
+      // Why not recheck: the same set would start the same failing watcher at once, in a loop.
+      if (this.watchFailures === 0) {
+        this.options.log?.('pod-claude-settings-cut-watch-failed', { legacyClaudes: pids.length })
+      }
+      this.retryLater()
     })
+  }
+
+  private retryLater(): void {
+    const delay = Math.min(WATCH_RETRY_MS * 2 ** this.watchFailures, WATCH_RETRY_MAX_MS)
+    this.watchFailures += 1
+    this.retry = setTimeout(() => {
+      this.retry = null
+      this.watcher = null
+      void this.recheck()
+    }, delay)
+    this.retry.unref?.()
   }
 
   private stopWatching(): void {
     this.watcher?.cancel()
     this.watcher = null
+    if (this.retry) {
+      clearTimeout(this.retry)
+      this.retry = null
+    }
   }
 }
