@@ -1,4 +1,12 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs'
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+  existsSync
+} from 'node:fs'
 import { createServer, request, type IncomingHttpHeaders, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -159,6 +167,21 @@ describe('pod-hook-relay delivery', () => {
       payload: { hook_event_name: 'Stop' }
     })
     expect(statSync(file).mode & 0o777).toBe(0o600)
+  })
+
+  it('truncates a spool older than 7 whole days, as the C client counts them', async () => {
+    writeFileSync(join(dir, 'endpoint.env'), 'ORCA_AGENT_HOOK_PORT=1\nORCA_AGENT_HOOK_TOKEN=t\n')
+    const file = join(dir, 'spool', 'pane-tab-1_leaf-1.jsonl')
+    const now = Date.parse('2026-10-12T03:00:00.000Z')
+    await deliverPodHookRelayEvent(event('{"hook_event_name":"Stop","n":1}'), () => now)
+    // 7.9 days is 7 in integer days: kept.
+    utimesSync(file, (now - 7.9 * 86_400_000) / 1000, (now - 7.9 * 86_400_000) / 1000)
+    await deliverPodHookRelayEvent(event('{"hook_event_name":"Stop","n":2}'), () => now)
+    expect(readFileSync(file, 'utf8').split('\n').filter(Boolean)).toHaveLength(2)
+    utimesSync(file, (now - 8 * 86_400_000) / 1000, (now - 8 * 86_400_000) / 1000)
+    await deliverPodHookRelayEvent(event('{"hook_event_name":"Stop","n":3}'), () => now)
+    const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean)
+    expect(lines.map((line) => JSON.parse(line).payload.n)).toEqual([3])
   })
 })
 
