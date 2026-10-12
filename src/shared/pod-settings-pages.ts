@@ -44,7 +44,7 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
       },
       {
         title: 'Editor',
-        keys: ['editorWordWrap', 'editorAutoSave', 'editorAutoSaveDelayMs']
+        keys: ['editorWordWrap', 'editorAutoSave', 'editorAutoSaveDelayMs', 'editorFontFamily']
       }
     ]
   },
