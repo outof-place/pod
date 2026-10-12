@@ -8,6 +8,7 @@ import {
   ORCA_HOOK_RAW_JSON_TRANSPORT
 } from '../../../shared/agent-hook-types'
 import { AgentHookServerIngestRemote } from './server-ingest-remote'
+import { podClaudeLaunchSettingsEnv } from '../../pod/agent-hook/pod-claude-launch-settings'
 
 export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRemote {
   buildPtyEnv(): Record<string, string> {
@@ -26,7 +27,8 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
     if (this.endpointFileWritten && this.endpointFilePathCache) {
       env.ORCA_AGENT_HOOK_ENDPOINT = this.endpointFilePathCache
     }
-    return env
+    // Fork-only (Pod): where Pod's launcher finds Claude's hooks for this pane's launches.
+    return { ...env, ...podClaudeLaunchSettingsEnv() }
   }
 
   get endpointFilePath(): string | null {

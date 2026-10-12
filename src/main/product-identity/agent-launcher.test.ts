@@ -183,6 +183,87 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
     expect(result.stdout.split('\n')[0]).toBe('args=wrapped x')
   })
 
+  describe("Claude's hooks with the launch in a Pod pane", () => {
+    function setup(): { dir: string; prefix: string; relay: string; pane: Record<string, string> } {
+      const dir = mkdtempSync(join(root, 'settings-'))
+      const prefix = join(dir, 'hooks', 'pod-claude-settings')
+      mkdirSync(join(dir, 'hooks'))
+      writeFileSync(
+        `${prefix}.http.json`,
+        '{"url":"@@POD_RELAY_URL@@","token":"@@POD_RELAY_TOKEN@@","pane":"@@POD_RELAY_PANE@@","process":"@@POD_AGENT_PROCESS@@"}'
+      )
+      writeFileSync(`${prefix}.command.json`, '{"hooks":{}}')
+      const relay = join(dir, 'relay.env')
+      writeFileSync(relay, 'POD_HOOK_RELAY_PORT=4567\nPOD_HOOK_RELAY_TOKEN=tok\n')
+      // The agent: its argv, its pid (the launcher's after exec) and the settings file it got.
+      script(
+        join(dir, 'real'),
+        'claude',
+        'echo "args=$*"; echo "pid=$$"; [ "$1" = --settings ] && cat "$2"; exit 0'
+      )
+      script(join(dir, 'real'), 'codex', 'echo "args=$*"')
+      const pane = {
+        ORCA_PANE_KEY: 'tab-1:leaf-1',
+        ORCA_TAB_ID: 'tab-1',
+        ORCA_WORKTREE_ID: 'repo::/w',
+        ORCA_AGENT_HOOK_ENDPOINT: '/u/agent-hooks/endpoint.env',
+        POD_CLAUDE_LAUNCH_SETTINGS: prefix
+      }
+      return { dir, prefix, relay, pane }
+    }
+
+    it("fills the http template for this claude: the relay, the pane and claude's own pid", () => {
+      const { dir, relay, pane } = setup()
+      const result = run('claude', ['-p', 'x'], [binDir, join(dir, 'real')], {
+        ...pane,
+        POD_AGENT_HOOK_RELAY: relay
+      })
+      const [argsLine, pidLine, settingsText] = result.stdout.split('\n')
+      const pid = pidLine.replace('pid=', '')
+      const launchFile = join(dir, 'hooks', 'claude-launch', `claude-${pid}.json`)
+      expect(argsLine).toBe(`args=--settings ${launchFile} -p x`)
+      const settings = JSON.parse(settingsText)
+      expect(settings.url).toBe('http://127.0.0.1:4567/hook/claude')
+      expect(settings.token).toBe('tok')
+      expect(Buffer.from(settings.pane, 'base64').toString()).toBe(
+        'tab-1:leaf-1\x1ftab-1\x1f\x1frepo::/w\x1f\x1f\x1f/u/agent-hooks/endpoint.env'
+      )
+      expect(JSON.parse(settings.process)).toMatchObject({ pid: Number(pid), platform: 'darwin' })
+      expect(lstatSync(launchFile).mode & 0o777).toBe(0o600)
+    })
+
+    it('passes the command template without a relay, and drops files of claudes that are gone', () => {
+      const { dir, prefix, pane } = setup()
+      mkdirSync(join(dir, 'hooks', 'claude-launch'))
+      const stale = join(dir, 'hooks', 'claude-launch', 'claude-999999.json')
+      writeFileSync(stale, '{}')
+      const result = run('claude', ['x'], [binDir, join(dir, 'real')], pane)
+      expect(result.stdout.split('\n')[0]).toBe(`args=--settings ${prefix}.command.json x`)
+      // A command-template launch writes no file and prunes nothing; an http one prunes.
+      const relay = join(dir, 'relay.env')
+      run('claude', ['x'], [binDir, join(dir, 'real')], { ...pane, POD_AGENT_HOOK_RELAY: relay })
+      expect(() => lstatSync(stale)).toThrow()
+    })
+
+    it("adds nothing outside a Pod pane, to other agents, or over the user's own --settings", () => {
+      const { dir, pane, relay } = setup()
+      const inPane = { ...pane, POD_AGENT_HOOK_RELAY: relay }
+      const real = [binDir, join(dir, 'real')]
+      expect(
+        run('claude', ['x'], real, {
+          POD_CLAUDE_LAUNCH_SETTINGS: pane.POD_CLAUDE_LAUNCH_SETTINGS
+        }).stdout.split('\n')[0]
+      ).toBe('args=x')
+      expect(run('codex', ['x'], real, inPane).stdout).toBe('args=x')
+      expect(run('claude', ['--settings', 'mine.json'], real, inPane).stdout.split('\n')[0]).toBe(
+        'args=--settings mine.json'
+      )
+      expect(
+        run('claude', ['x'], real, { ...inPane, CLAUDE_JOB_DIR: '/j' }).stdout.split('\n')[0]
+      ).toBe('args=x')
+    })
+  })
+
   it('stops a wrapper that calls itself through PATH', () => {
     script(join(root, 'fork-wrapper'), 'claude', 'claude "$@"')
     const result = run('claude', [], [binDir, join(root, 'fork-wrapper')])
