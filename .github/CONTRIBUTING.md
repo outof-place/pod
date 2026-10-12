@@ -1,5 +1,8 @@
 # Contributing to Orca
 
+> In Pod this is Orca's guide, kept because its toolchain and code rules apply to Pod as well.
+> Start with Pod's own [CONTRIBUTING.md](../CONTRIBUTING.md).
+
 Thanks for contributing to Orca.
 
 ## Before You Start
