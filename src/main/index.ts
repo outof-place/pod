@@ -7,6 +7,7 @@ import { brandProductCopy } from './product-identity/product-overlay'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch } from './window/foreground-activation-policy'
 import { isPodHeadlessUiHost } from './pod/ui-host/pod-ui-host-launch'
+import { installRuntimeStderrLog } from './pod/runtime-stderr-log'
 import {
   focusExistingWindow as focusExistingWindowAction,
   setMainWindowOpener
@@ -129,6 +130,10 @@ if (preflightReady) {
   registerMainProcessIpcHandlers()
   installMainProcessQuitHandlers()
   void app.whenReady().then(async () => {
+    // Fork-only (Pod): after the profile is resolved, before the daemon can fail to start.
+    if (app.isPackaged) {
+      installRuntimeStderrLog()
+    }
     try {
       // Why first: a downstream product's import must finish before any window or browser session.
       await completeProductImportBeforeWindows()
