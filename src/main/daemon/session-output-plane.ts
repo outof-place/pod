@@ -12,6 +12,7 @@ import {
   onDaemonTerminalViewAttributes
 } from './daemon-view-attributes'
 import { shouldForwardHeadlessTerminalQueryReply } from '../runtime/headless-terminal-query-reply-policy'
+import { podHeadlessQueryReply } from '../pod/pod-headless-query-reply-policy'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 // Why: bounds in-memory pending output when no client drains it; past the cap we drop records and flag
@@ -77,7 +78,12 @@ export class SessionOutputPlane {
       // would be queued behind the marker it is needed to produce, so it cannot be authoritative there.
       onQueryReply: (reply) => {
         if (shouldForwardHeadlessTerminalQueryReply(this.launchAgent, reply)) {
-          this.writeQueryReply?.(reply)
+          this.writeQueryReply?.(
+            podHeadlessQueryReply(
+              { launchAgent: this.launchAgent, title: this.emulator.getLastTitle() },
+              reply
+            )
+          )
         }
       }
     })
