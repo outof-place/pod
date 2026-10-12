@@ -60,6 +60,7 @@ import { WORKSPACE_LAYOUT_METHODS } from './workspace-layout'
 import { POD_ORBSTACK_METHODS } from '../../../pod/orbstack/pod-orbstack-rpc-methods'
 import { POD_TERMINAL_LANE_METHODS } from './pod-terminal-lane'
 import { POD_SETTINGS_METHODS } from '../../../pod/settings/pod-settings-rpc-methods'
+import { POD_MCP_LAZY_METHODS } from '../../../pod/mcp-lazy/mcp-lazy-rpc-methods'
 import { observePodComputerActions } from '../../../pod/computer-actions/pod-computer-actions'
 import { POD_COMPUTER_ACTIONS_METHODS } from '../../../pod/computer-actions/pod-computer-actions-rpc-methods'
 import { POD_TERMINAL_PROCESSES_METHODS } from '../../../pod/terminal-processes/pod-terminal-processes-rpc-methods'
@@ -133,6 +134,7 @@ export const ALL_RPC_METHODS = [
   ...CLIENT_UI_METHODS,
   // Fork-only (Pod): settings for native clients, rendered from one schema.
   ...POD_SETTINGS_METHODS,
+  ...POD_MCP_LAZY_METHODS,
   ...EMULATOR_METHODS,
   ...PAIRING_METHODS,
   ...UPDATER_METHODS,
