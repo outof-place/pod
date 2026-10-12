@@ -1,6 +1,7 @@
 import { emitPtyListeners } from './daemon-pty-listener-emission'
 import { existsSync } from 'node:fs'
 import { getMacDaemonSystemResolverHealth } from './daemon-health'
+import { ResolverHealthProbeCache } from './daemon-resolver-health-cache'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
 import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
 import { isDaemonGoneError } from './daemon-endpoint-errors'
@@ -10,6 +11,8 @@ import type { ListSessionsResult } from './types'
 import type { PtyBackgroundStreamEvent } from '../providers/types'
 
 export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersistence {
+  private readonly resolverHealthCache = new ResolverHealthProbeCache()
+
   // Why: the token read no longer throws, so audit its absence directly after an authenticated drop.
   protected isRetiredEndpointTokenMissing(): boolean {
     return this.client.hasObservedAuthenticatedDisconnect() && !existsSync(this.tokenPath)
@@ -122,10 +125,11 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
       return
     }
 
-    const health = await getMacDaemonSystemResolverHealth(
-      this.socketPath,
-      this.tokenPath,
-      this.protocolVersion
+    // Why keyed by incarnation: a 'healthy' answer only stands for the daemon that gave it.
+    const identity = this.client.getDaemonIdentity()
+    const health = await this.resolverHealthCache.read(
+      identity ? `${identity.pid}:${identity.startedAtMs}:${identity.launchNonce}` : null,
+      () => getMacDaemonSystemResolverHealth(this.socketPath, this.tokenPath, this.protocolVersion)
     )
     if (health !== 'unhealthy') {
       return
