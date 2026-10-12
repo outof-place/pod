@@ -127,6 +127,7 @@ const SHELL_PREFIXES = [
   'src/main/runtime/structured-session-cli-login-shell',
   'src/main/runtime/structured-session-login-shell-test-harness',
   'src/main/runtime/structured-session-child-identity-env',
+  'src/main/startup/login-shell-environment',
   'src/renderer/src/components/terminal-pane/fish-color-scheme',
   'src/shared/fish-',
   'src/shared/pty-reply-echo-shapes',
