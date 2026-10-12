@@ -46,6 +46,11 @@ function installAgentHook(resourcesDir, arch) {
     if (out !== '{}\n') {
       throw new Error(`product: ${HOOK} answered ${JSON.stringify(out)}, expected "{}\\n"`)
     }
+    // Claude's statusLine shows whatever this prints: it must stay silent.
+    const status = execFileSync(hookPath, ['statusline'], { input: '', env: {}, encoding: 'utf8' })
+    if (status !== '') {
+      throw new Error(`product: ${HOOK} statusline printed ${JSON.stringify(status)}`)
+    }
   }
 }
 
