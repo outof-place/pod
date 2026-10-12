@@ -421,7 +421,7 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
 
     sendSubscribe(harness, 1, handle)
-    await waitForSubscribed(harness, 1)
+    // The initial snapshot waits (bounded) for the attach in flight, so subscribed follows it.
     await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
     expect(internals(runtime).terminalViewSubscribers.hasPendingProviderAttach(PTY_ID)).toBe(true)
     expect(runtime.hasRemoteTerminalViewSubscriber(PTY_ID)).toBe(true)
@@ -433,6 +433,7 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     expect(model.attachCalls).toEqual([PTY_ID])
     expect(internals(runtime).terminalViewSubscribers.attachInventoryWaiterIds()).toEqual([PTY_ID])
     refuseFirstAttach()
+    await waitForSubscribed(harness, 1)
 
     await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
     await vi.waitFor(() =>
