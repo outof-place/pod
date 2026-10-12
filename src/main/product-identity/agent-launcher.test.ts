@@ -73,6 +73,37 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
     expect(Number(turbo.stdout.split('\n')[1])).toBeGreaterThan(Number(plain.stdout.split('\n')[1]))
   })
 
+  it("gives the agent's tools and hooks its priority, not Pod's statusline, and its watcher leaves with it", () => {
+    const hooks = join(root, 'home', '.orca', 'agent-hooks')
+    script(hooks, 'claude-hook.sh', 'ps -o pri= -p $$')
+    script(hooks, 'claude-statusline.sh', 'ps -o pri= -p $$')
+    // The agent, a tool's shell and the command it runs (two levels down), a hook, the statusline.
+    script(
+      join(root, 'tree'),
+      'claude',
+      `echo $$; ps -o pri= -p $$; sh -c "sh -c \\"ps -o pri= -p \\\\$\\\\$\\""; ${join(hooks, 'claude-hook.sh')}; ${join(hooks, 'claude-statusline.sh')}`
+    )
+    const tree = run('claude', [], [binDir, join(root, 'tree')])
+    const own = run('claude', [], [binDir, join(root, 'tree')], { POD_AGENT_TREE: '0' })
+    const [agentPid, agent, command, hook, statusLine] = tree.stdout.split('\n').map(Number)
+    expect(tree.status).toBe(0)
+    expect(command).toBe(agent)
+    expect(hook).toBe(agent)
+    expect(statusLine).toBeLessThan(agent)
+    const [, ownAgent, ownCommand] = own.stdout.split('\n').map(Number)
+    expect(ownCommand).toBeLessThan(ownAgent)
+    // The watcher follows the agent's exit (kqueue), a moment after it.
+    const watching = (): boolean =>
+      spawnSync('ps', ['-axo', 'command='], { encoding: 'utf8' })
+        .stdout.split('\n')
+        .some((line) => line.endsWith(`--tree-watch ${agentPid}`))
+    const deadline = Date.now() + 2000
+    while (watching() && Date.now() < deadline) {
+      spawnSync('sleep', ['0.05'])
+    }
+    expect(watching()).toBe(false)
+  })
+
   it('reports the task role it applied', () => {
     const turbo = run(join(binDir, 'pod-agent-launcher'), ['--print-policy'], [])
     const plain = run(join(binDir, 'pod-agent-launcher'), ['--print-policy'], [], {
