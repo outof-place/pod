@@ -1,0 +1,353 @@
+{
+  "about": "Files Pod inherits from Orca but never ships, builds or runs. product/scripts/pod-prune.mjs deletes them as the last generated layer of the stack; a file a kept file still refers to is held back instead (see the script). Every entry says why it is not Pod's.",
+  "protect": [
+    ".github/README.md",
+    ".github/assets/**",
+    ".github/workflows/upstream-sync.yml",
+    ".github/workflows/pod-*.yml",
+    ".github/actions/install-node-dependencies/**",
+    ".github/actions/restore-pnpm-verification/**",
+    ".github/actions/prepare-native-runtime/**",
+    ".github/actions/install-mobile-dependencies/**",
+    "scripts/pod-*",
+    "product/**",
+    "src/shared/product/**",
+    "pod-stack.json",
+    "upstream.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "LICENSE",
+    "README.md",
+    "CONTRIBUTING.md",
+    "CHANGELOG.md",
+    "AGENTS.md",
+    "CLAUDE.md"
+  ],
+  "baselines": [
+    {
+      "file": "config/max-lines-baseline.txt",
+      "format": "lines"
+    },
+    {
+      "file": "config/ts-nocheck-baseline.txt",
+      "format": "lines"
+    },
+    {
+      "file": "config/process-host-direct-import-baseline.txt",
+      "format": "lines"
+    },
+    {
+      "file": "config/runtime-electron-baseline.txt",
+      "format": "lines"
+    },
+    {
+      "file": "config/localization-coverage-allowlist.json",
+      "format": "json-array",
+      "key": "filePath"
+    }
+  ],
+  "ignoreReferrers": [
+    {
+      "glob": ".gitignore",
+      "reason": "ignore patterns: one for a pruned path matches nothing"
+    },
+    {
+      "glob": ".gitattributes",
+      "reason": "attribute patterns: one for a pruned path matches nothing"
+    },
+    {
+      "glob": ".oxlintrc.json",
+      "reason": "lint ignore patterns: one for a pruned path matches nothing"
+    },
+    {
+      "glob": ".oxfmtrc.json",
+      "reason": "format ignore patterns: one for a pruned path matches nothing"
+    },
+    {
+      "glob": "config/scripts/ci-shard-timings.json",
+      "reason": "unit shard timings: the balancer skips a file that is gone"
+    },
+    {
+      "glob": "**/*.{md,mdx}",
+      "except": ["README.md", "docs/readme/**", ".github/README.md"],
+      "reason": "prose: a mention breaks nothing; the READMEs stay because check:readme-local-links follows their links"
+    },
+    {
+      "glob": "config/scripts/{pr-code-change-scope,node-server-change-scope,node-server-qualification}.mjs",
+      "reason": "change-scope tables of Orca's PR CI: they classify changed paths and never read them"
+    },
+    {
+      "glob": "config/scripts/vitest-node-runtime-files.mjs",
+      "reason": "vitest include globs: a pruned test matches nothing"
+    }
+  ],
+  "inertWhenHeld": [
+    {
+      "glob": ".github/workflows/*",
+      "reason": "Pod never runs an Orca workflow: one kept only because a kept test reads it holds nothing else"
+    }
+  ],
+  "entries": [
+    {
+      "id": "orca-workflows",
+      "category": "github",
+      "reason": "Orca's GitHub Actions: Stably cloud deploys, Orca's releases and dev builds, Windows, Linux and mobile CI. Pod's CI is upstream-sync.yml and pod-*.yml; scripts/pod-workflow-quarantine.sh still disables any Orca workflow a push registers",
+      "paths": [".github/workflows/*"],
+      "except": [".github/workflows/upstream-sync.yml", ".github/workflows/pod-*.yml"]
+    },
+    {
+      "id": "orca-actions",
+      "category": "github",
+      "reason": "Composite actions only Orca's workflows use (Cloud SQL rollout lease, SignPath, Linux package fixtures, headless compiler, xterm, git compatibility)",
+      "paths": [".github/actions/**"],
+      "except": [
+        ".github/actions/{install-node-dependencies,restore-pnpm-verification,prepare-native-runtime,install-mobile-dependencies}/**"
+      ]
+    },
+    {
+      "id": "orca-github-meta",
+      "category": "github",
+      "reason": "Orca's issue forms, Stably's code owners, Dependabot for Orca, and the scripts of Orca's PR and README-badge workflows",
+      "paths": [
+        ".github/ISSUE_TEMPLATE/**",
+        ".github/CODEOWNERS",
+        ".github/dependabot.yml",
+        ".github/scripts/**"
+      ]
+    },
+    {
+      "id": "orca-ci-scripts",
+      "category": "github",
+      "reason": "Scripts and contract tests that exist only for Orca's pruned workflows: dev/daily/hourly build versions, release tooling, CI runner metrics, mobile and Wayland checks, the Windows SSH provider image",
+      "paths": [
+        "config/ci/windows-ssh-provider/**",
+        "config/scripts/adhoc-build-pinned-commit.test.mjs",
+        "config/scripts/adhoc-build-version.mjs",
+        "config/scripts/adhoc-build-version.test.mjs",
+        "config/scripts/agent-state-rules-bundle.mjs",
+        "config/scripts/agent-state-rules-bundle.test.mjs",
+        "config/scripts/check-root-directory-entries.test.mjs",
+        "config/scripts/ci-cache-warmup-workflow.test.mjs",
+        "config/scripts/ci-closed-pr-caches.test.mjs",
+        "config/scripts/ci-closed-pr-cancellation.test.mjs",
+        "config/scripts/ci-dependency-download-cache.test.mjs",
+        "config/scripts/ci-runner-demand.mjs",
+        "config/scripts/ci-runner-metrics.mjs",
+        "config/scripts/ci-runner-metrics.test.mjs",
+        "config/scripts/ci-unit-exclusion-coverage.test.mjs",
+        "config/scripts/cloud-security-history-workflow.test.mjs",
+        "config/scripts/daemon-boot-smoke.mjs",
+        "config/scripts/daemon-endpoint-handover-smoke.mjs",
+        "config/scripts/daily-build-version.mjs",
+        "config/scripts/daily-build-version.test.mjs",
+        "config/scripts/dev-channel-base-version.mjs",
+        "config/scripts/dev-channel-base-version.test.mjs",
+        "config/scripts/headless-detector-compiler-cache.test.mjs",
+        "config/scripts/hourly-build-version.mjs",
+        "config/scripts/hourly-build-version.test.mjs",
+        "config/scripts/hourly-preflight-workflow.test.mjs",
+        "config/scripts/linux-package-fixture-cache.test.mjs",
+        "config/scripts/linux-wayland-renderer-diagnostics.mjs",
+        "config/scripts/linux-wayland-terminal-exercise.mjs",
+        "config/scripts/linux-wayland-validation-watchdog.mjs",
+        "config/scripts/merge-orcad-prebuilds.mjs",
+        "config/scripts/merge-orcad-prebuilds.test.mjs",
+        "config/scripts/mobile-launch-contract-workflow.test.mjs",
+        "config/scripts/mobile-release-check-scope.mjs",
+        "config/scripts/mobile-release-check-scope.test.mjs",
+        "config/scripts/mobile-test-change-scope.mjs",
+        "config/scripts/mobile-test-change-scope.test.mjs",
+        "config/scripts/node-server-change-scope.test.mjs",
+        "config/scripts/node-server-concurrency.test.mjs",
+        "config/scripts/node-server-qualification.test.mjs",
+        "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+        "config/scripts/playwright-focused-workflow-selection.test.mjs",
+        "config/scripts/pr-code-change-scope.test.mjs",
+        "config/scripts/pr-e2e-gate-contract.test.mjs",
+        "config/scripts/pr-e2e-linux-packages.test-fixture.mjs",
+        "config/scripts/pr-ready-check-reuse.test.mjs",
+        "config/scripts/pr-test-loc-summary.test.mjs",
+        "config/scripts/pullfrog-review-scope.cjs",
+        "config/scripts/pullfrog-review-scope.test.mjs",
+        "config/scripts/readme-downloads-badge.test.mjs",
+        "config/scripts/release-cut-token-permissions.test.mjs",
+        "config/scripts/release-javascript-benchmark.mjs",
+        "config/scripts/release-javascript-parity.mjs",
+        "config/scripts/release-javascript-parity.test.mjs",
+        "config/scripts/release-tag-pattern-census.test.mjs",
+        "config/scripts/release-title-timestamp.mjs",
+        "config/scripts/run-headless-linux-pairing-docker.mjs",
+        "config/scripts/setup-adhoc-release-repo.sh",
+        "config/scripts/setup-daily-release-repo.sh",
+        "config/scripts/setup-hourly-release-token.sh",
+        "config/scripts/ssh-hostile-hosts-workflow.test.mjs",
+        "config/scripts/terminal-perf-dependency-preparation.test.mjs",
+        "config/scripts/verify-dev-channel-packaging.mjs",
+        "config/scripts/verify-dev-channel-packaging.test.mjs",
+        "config/scripts/verify-linux-wayland-gpu-sandbox.mjs",
+        "config/scripts/win32-test-lane-registration.test.mjs",
+        "config/scripts/workflow-ref-mirror-case-safety.test.mjs",
+        "config/scripts/workflow-ref-reachability.test.mjs"
+      ]
+    },
+    {
+      "id": "orca-casks",
+      "category": "docs",
+      "reason": "Orca's Homebrew casks, written by Orca's homebrew-bump workflow; Pod's cask lives in outof-place/homebrew-tap",
+      "paths": ["Casks/**"]
+    },
+    {
+      "id": "orca-docs-site",
+      "category": "docs",
+      "reason": "Orca's documentation website (onorca.dev/docs, Next.js on Vercel), built only by Orca's docs workflow and outside the pnpm workspace",
+      "paths": ["docs/site/**"],
+      "allowReferrers": [
+        {
+          "glob": "config/scripts/pod-font-swaps.test.ts",
+          "reason": "src/assets/fonts/Geist-Variable.woff2 there is a made-up Vite manifest key"
+        }
+      ]
+    },
+    {
+      "id": "orca-docs-records",
+      "category": "docs",
+      "reason": "Orca's internal audits, bug reproductions, review evidence and implementation checklists; nothing reads them",
+      "paths": [
+        "docs/audits/**",
+        "docs/relay-region-correction/**",
+        "docs/bug-reproductions/**",
+        "docs/review-evidence/**",
+        "docs/agent-skill-sharing-implementation-checklist.md"
+      ]
+    },
+    {
+      "id": "orca-agent-config",
+      "category": "docs",
+      "reason": "Orca's opencode project config; nothing reads it",
+      "paths": ["opencode.json"],
+      "allowReferrers": [
+        {
+          "glob": "src/main/runtime/agent-state-rules/agent-state-rules-catalog.ts",
+          "reason": "names OpenCode's config file in a user's project, not this one"
+        }
+      ]
+    },
+    {
+      "id": "orca-windows-linux-desktop",
+      "category": "platform",
+      "reason": "Windows and Linux-desktop packaging, CI and E2E only: Pod is a macOS app (Linux SSH hosts and Linux CI keep their code)",
+      "paths": [
+        "resources/win32/**",
+        "config/nsis/**",
+        "config/scripts/nsis-process-check.test.mjs",
+        "native/windows-cli-launcher/**",
+        "config/scripts/build-windows-cli-launcher.mjs",
+        "config/scripts/build-windows-cli-launcher.test.mjs",
+        "config/ci/windows-ssh-provider/**",
+        "config/docker/linux-lid-sleep-assertion/**",
+        "config/scripts/run-linux-lid-sleep-assertion-docker.mjs",
+        "tests/tools/windows-pty-native-capability-smoke/**",
+        "tests/e2e/computer-windows-store.e2e.ts",
+        "tests/e2e/right-sidebar-windows-titlebar.spec.ts",
+        "tests/e2e/runtime-file-browser-windows-drives.spec.ts",
+        "tests/e2e/terminal-linux-claimed-preedit-selector.spec.ts",
+        "tests/e2e/terminal-linux-direct-ime-commit.spec.ts",
+        "tests/e2e/terminal-windows-codex-multiline-paste.spec.ts",
+        "tests/e2e/terminal-windows-conpty-keyboard-reset.spec.ts",
+        "tests/e2e/terminal-windows-path-expansion.spec.ts",
+        "tests/e2e/windows-project-runtime-smoke.spec.ts",
+        "tests/e2e/windows-terminal-env-icons.spec.ts",
+        "tests/e2e/windows-wsl-terminal-restore.spec.ts",
+        "config/scripts/generate-windows-blockmap.mjs",
+        "config/scripts/linux-packaged-node-pty-floor-child.cjs",
+        "config/scripts/linux-wayland-renderer-diagnostics.mjs",
+        "config/scripts/linux-wayland-terminal-exercise.mjs",
+        "config/scripts/linux-wayland-validation-watchdog.mjs",
+        "config/scripts/orcad-windows-prebuild-cache.mjs",
+        "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+        "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+        "config/scripts/replace-cached-nsis-elevate.mjs",
+        "config/scripts/replace-cached-nsis-elevate.test.mjs",
+        "config/scripts/repro-windows-apphang-terminal-activation.mjs",
+        "config/scripts/run-headless-linux-pairing-docker.mjs",
+        "config/scripts/run-linux-packaged-node-pty-floor-smoke.mjs",
+        "config/scripts/run-linux-packaged-node-pty-floor-smoke.test.mjs",
+        "config/scripts/verify-linux-wayland-gpu-sandbox.mjs",
+        "config/scripts/verify-windows-inner-signature.mjs",
+        "config/scripts/verify-windows-inner-signature.test.mjs",
+        "config/scripts/windows-apphang-repro/apphang-report-summary.mjs",
+        "config/scripts/windows-apphang-repro/terminal-activation-scenario.mjs",
+        "config/scripts/windows-ssh-attach-console-repro.mjs"
+      ]
+    },
+    {
+      "id": "orca-mobile-web-app-scripts",
+      "category": "feature",
+      "reason": "Render harness and tests of Orca Mobile's web app (mobileWebClient is cut in Pod); they import only mobile/",
+      "paths": [
+        "config/scripts/mobile-web-app-agent-history-render.test.mjs",
+        "config/scripts/mobile-web-app-browser-pane-render.test.mjs",
+        "config/scripts/mobile-web-app-browser-pane-text-inputs.test.mjs",
+        "config/scripts/mobile-web-app-clipboard-image-resize-render.test.mjs",
+        "config/scripts/mobile-web-app-drawer-render.test.mjs",
+        "config/scripts/mobile-web-app-editable-host-font-size.mjs",
+        "config/scripts/mobile-web-app-editable-host-font-size.test.mjs",
+        "config/scripts/mobile-web-app-files-external-links.test.mjs",
+        "config/scripts/mobile-web-app-files-render.test.mjs",
+        "config/scripts/mobile-web-app-frame-budget-sweep.test.ts",
+        "config/scripts/mobile-web-app-handoff-grants-render.test.mjs",
+        "config/scripts/mobile-web-app-held-press-probe-routes.mjs",
+        "config/scripts/mobile-web-app-held-press-render.test.mjs",
+        "config/scripts/mobile-web-app-html-preview-render.test.mjs",
+        "config/scripts/mobile-web-app-live-input-probe-route.mjs",
+        "config/scripts/mobile-web-app-media-picker-seam.mjs",
+        "config/scripts/mobile-web-app-media-preview-render.test.mjs",
+        "config/scripts/mobile-web-app-mermaid-render.test.mjs",
+        "config/scripts/mobile-web-app-native-chat-visual-links.test.mjs",
+        "config/scripts/mobile-web-app-native-parity-render.test.mjs",
+        "config/scripts/mobile-web-app-page-closure-families.mjs",
+        "config/scripts/mobile-web-app-page-closure-families.test.mjs",
+        "config/scripts/mobile-web-app-preview-arm-driver.mjs",
+        "config/scripts/mobile-web-app-preview-artifact-fixture.mjs",
+        "config/scripts/mobile-web-app-preview-asset-server.mjs",
+        "config/scripts/mobile-web-app-preview-csp-reports.mjs",
+        "config/scripts/mobile-web-app-preview-frame-diagnosis.mjs",
+        "config/scripts/mobile-web-app-preview-frame-readiness.mjs",
+        "config/scripts/mobile-web-app-preview-frame-readings.mjs",
+        "config/scripts/mobile-web-app-preview-image-evidence.mjs",
+        "config/scripts/mobile-web-app-preview-request-log.mjs",
+        "config/scripts/mobile-web-app-push-subsystem-closure.test.mjs",
+        "config/scripts/mobile-web-app-render-harness.mjs",
+        "config/scripts/mobile-web-app-render.test.mjs",
+        "config/scripts/mobile-web-app-rich-markdown-render.test.mjs",
+        "config/scripts/mobile-web-app-route-chunk-closure.mjs",
+        "config/scripts/mobile-web-app-safe-area-render.test.mjs",
+        "config/scripts/mobile-web-app-session-external-links.test.mjs",
+        "config/scripts/mobile-web-app-session-media-picker.test.mjs",
+        "config/scripts/mobile-web-app-session-render.test.mjs",
+        "config/scripts/mobile-web-app-session-terminal-closure.test.mjs",
+        "config/scripts/mobile-web-app-session-terminal-init.test.mjs",
+        "config/scripts/mobile-web-app-session-text-inputs.test.mjs",
+        "config/scripts/mobile-web-app-session-webview-consumers.test.mjs",
+        "config/scripts/mobile-web-app-source-control-external-links.test.mjs",
+        "config/scripts/mobile-web-app-source-control-keyboard.test.mjs",
+        "config/scripts/mobile-web-app-source-control-render.test.mjs",
+        "config/scripts/mobile-web-app-source-control-text-inputs.test.mjs",
+        "config/scripts/mobile-web-app-stack-transition-render.test.mjs",
+        "config/scripts/mobile-web-app-tasks-external-links.test.mjs",
+        "config/scripts/mobile-web-app-tasks-render.test.mjs",
+        "config/scripts/mobile-web-app-terminal-live-input-render.test.mjs",
+        "config/scripts/mobile-web-app-terminal-probe-route.mjs",
+        "config/scripts/mobile-web-app-terminal-render-fixture.mjs",
+        "config/scripts/mobile-web-app-terminal-render-fixture.test.mjs",
+        "config/scripts/mobile-web-app-terminal-render.test.mjs",
+        "config/scripts/mobile-web-app-text-input-font-size-seam.mjs",
+        "config/scripts/mobile-web-app-web-overrides.test.mjs",
+        "config/scripts/mobile-web-app-working-spinner-render.test.mjs",
+        "config/scripts/mobile-web-bundle-serializer-parity.test.mjs",
+        "config/scripts/mobile-web-terminal-engine-closure.test.mjs"
+      ]
+    }
+  ]
+}
