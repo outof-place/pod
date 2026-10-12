@@ -37,7 +37,8 @@ export function scheduleLateDaemonStart({
       start().then(
         () => {
           if (hasDaemon()) {
-            console.info('[daemon] started late; fresh terminals are daemon-backed')
+            // Why warn: stderr reaches runtime-stderr.log, beside the fallback it recovers from.
+            console.warn('[daemon] started late; fresh terminals are daemon-backed')
           }
         },
         (error: unknown) => {

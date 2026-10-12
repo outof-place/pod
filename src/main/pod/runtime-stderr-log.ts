@@ -1,6 +1,6 @@
 // Fork-only (Pod): a runtime LaunchServices started has no stderr, so why the daemon fell back
 // to local PTYs (or any other startup error) was lost. Tee it into userData/logs.
-import { createWriteStream, mkdirSync, renameSync, statSync } from 'node:fs'
+import { mkdirSync, openSync, renameSync, statSync, writeSync } from 'node:fs'
 import { join } from 'node:path'
 import { getLogsDirectory } from '../observability/logs-directory'
 
@@ -28,10 +28,16 @@ export function installRuntimeStderrLog(
     } catch {
       // No log yet.
     }
-    const file = createWriteStream(path, { flags: 'a', mode: 0o600 })
-    // A log that can't be written is no reason to stop.
-    file.on('error', () => {})
-    file.write(`--- ${new Date().toISOString()} pid ${process.pid}\n`)
+    // Why sync: a hard crash's last lines are the ones worth keeping, and stderr writes are rare.
+    const fd = openSync(path, 'a', 0o600)
+    const append = (text: string): void => {
+      try {
+        writeSync(fd, text)
+      } catch {
+        // A log that can't be written is no reason to stop.
+      }
+    }
+    append(`--- ${new Date().toISOString()} pid ${process.pid}\n`)
     let written = 0
     const original = stream.write
     stream.write = (
@@ -39,10 +45,11 @@ export function installRuntimeStderrLog(
       encodingOrCallback?: BufferEncoding | ((error?: Error | null) => void),
       callback?: (error?: Error | null) => void
     ): boolean => {
-      if (written < RUNTIME_STDERR_LOG_MAX_BYTES) {
-        const text = typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
-        written += text.length
-        file.write(`${new Date().toISOString()} ${text}`)
+      const text = typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
+      const bytes = Buffer.byteLength(text)
+      if (written + bytes <= RUNTIME_STDERR_LOG_MAX_BYTES) {
+        written += bytes
+        append(`${new Date().toISOString()} ${text}`)
       }
       return Reflect.apply(original, stream, [chunk, encodingOrCallback, callback])
     }
