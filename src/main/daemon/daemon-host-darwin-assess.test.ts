@@ -100,6 +100,18 @@ describe('daemon-host clone assessment', () => {
     }
   })
 
+  it('assesses a background clone while staged as a bundle, before it is published', async () => {
+    installPodAssess()
+    const host = await materializeDarwinDaemonHost(entryPath, { background: true })
+    const calls = assessCalls()
+    expect(calls).toHaveLength(1)
+    expect(calls[0][1]).toMatch(/\/\.staging-\d+-[0-9a-f]+\/Pod Runtime\.app$/)
+    // Published without `.app`, so LaunchServices never registers it.
+    expect(host!.execPath).toMatch(
+      /\/build-[0-9a-f]+-[0-9a-f]+\/Pod Runtime\/Contents\/MacOS\/Pod$/
+    )
+  })
+
   it('forks from the clone without waiting for the assessment', async () => {
     installPodAssess()
     let release: () => void = () => {}
