@@ -234,7 +234,7 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
 
     it('passes the command template without a relay, and drops files of claudes that are gone', () => {
       const { dir, prefix, pane } = setup()
-      mkdirSync(join(dir, 'hooks', 'claude-launch'))
+      mkdirSync(join(dir, 'hooks', 'claude-launch'), { mode: 0o755 })
       const stale = join(dir, 'hooks', 'claude-launch', 'claude-999999.json')
       writeFileSync(stale, '{}')
       const result = run('claude', ['x'], [binDir, join(dir, 'real')], pane)
@@ -243,6 +243,7 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
       const relay = join(dir, 'relay.env')
       run('claude', ['x'], [binDir, join(dir, 'real')], { ...pane, POD_AGENT_HOOK_RELAY: relay })
       expect(() => lstatSync(stale)).toThrow()
+      expect(lstatSync(join(dir, 'hooks', 'claude-launch')).mode & 0o777).toBe(0o700)
     })
 
     it("adds nothing outside a Pod pane, to other agents, or over the user's own --settings", () => {

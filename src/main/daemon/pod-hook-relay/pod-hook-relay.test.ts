@@ -113,8 +113,29 @@ describe('pod-hook-relay delivery', () => {
     const captured = await fakeRuntime('')
     await deliverPodHookRelayEvent(event('{"a":"b c"}'))
     expect(captured[0].headers['content-type']).toBe('application/x-www-form-urlencoded')
-    expect(captured[0].body).toContain('&payload=%7B%22a%22%3A%22b%20c%22%7D')
+    expect(captured[0].body).toContain('&payload=%7B%22a%22%3A%22b+c%22%7D')
     expect(captured[0].body.startsWith('paneKey=tab-1%3Aleaf-1&tabId=tab-1&')).toBe(true)
+  })
+
+  it('form-encodes a payload of every byte across encoding slices, byte for byte', async () => {
+    const captured = await fakeRuntime('')
+    const payload = Buffer.alloc(600 * 1024)
+    for (let i = 0; i < payload.length; i++) {
+      payload[i] = (i * 7) % 256
+    }
+    await deliverPodHookRelayEvent(event('', { payload }))
+    const encoded = captured[0].body.split('&payload=')[1]
+    const decoded: number[] = []
+    for (let i = 0; i < encoded.length; i++) {
+      if (encoded[i] === '%') {
+        decoded.push(Number.parseInt(encoded.slice(i + 1, i + 3), 16))
+        i += 2
+      } else {
+        decoded.push(encoded[i] === '+' ? 0x20 : encoded.charCodeAt(i))
+      }
+    }
+    expect(Buffer.from(decoded).equals(payload)).toBe(true)
+    expect(Number(captured[0].headers['content-length'])).toBe(Buffer.byteLength(captured[0].body))
   })
 
   it('spools a lifecycle event the runtime missed, never a tool event', async () => {
@@ -159,9 +180,18 @@ function post(port: number, headers: Record<string, string>, body: string, path 
 }
 
 describe('pod-hook-relay server', () => {
-  async function startRelay(deliver: (event: PodHookRelayEvent) => Promise<unknown>) {
+  async function startRelay(
+    deliver: (event: PodHookRelayEvent) => Promise<unknown>,
+    options: { endpointAllowed?: (endpoint: string) => boolean; logs?: unknown[][] } = {}
+  ) {
     const relayFilePath = join(dir, 'pod-hook-relay-v1.env')
-    const relay = new PodHookRelay({ relayFilePath, log: () => {}, deliver })
+    const relay = new PodHookRelay({
+      relayFilePath,
+      log: (...entry) =>
+        void (entry[0] !== 'pod-hook-relay-listening' && options.logs?.push(entry)),
+      deliver,
+      endpointAllowed: options.endpointAllowed ?? ((endpoint) => endpoint === pane().endpoint)
+    })
     await relay.start()
     const values = Object.fromEntries(
       readFileSync(relayFilePath, 'utf8')
@@ -231,6 +261,104 @@ describe('pod-hook-relay server', () => {
       ).status
     ).toBe(404)
     expect(seen).toEqual([])
+    await relay.close()
+  })
+
+  it('answers but drops an event whose endpoint no daemon session was spawned with', async () => {
+    const seen: PodHookRelayEvent[] = []
+    const logs: unknown[][] = []
+    const { relay, port, token } = await startRelay(async (e) => void seen.push(e), { logs })
+    const elsewhere = encodePane(pane({ endpoint: join(dir, 'other', 'endpoint.env') }))
+    const headers = {
+      [POD_HOOK_RELAY_TOKEN_HEADER]: token,
+      [POD_HOOK_RELAY_PANE_HEADER]: elsewhere
+    }
+    expect(await post(port, headers, '{"hook_event_name":"Stop"}')).toEqual({
+      status: 200,
+      body: '{}\n'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(seen).toEqual([])
+    expect(existsSync(join(dir, 'other'))).toBe(false)
+    expect(logs).toEqual([
+      [
+        'pod-hook-relay-endpoint-refused',
+        { endpoint: join(dir, 'other', 'endpoint.env'), refused: 1 }
+      ]
+    ])
+    await relay.close()
+  })
+
+  it('caps a hung pane: lifecycle events go to the spool, tool events are dropped', async () => {
+    const seen: string[] = []
+    let release: () => void = () => {}
+    const blocked = new Promise<void>((resolve) => (release = resolve))
+    const logs: unknown[][] = []
+    const { relay, port, token } = await startRelay(
+      async (e) => {
+        await blocked
+        seen.push(e.payload.toString())
+      },
+      { logs }
+    )
+    const headers = {
+      [POD_HOOK_RELAY_TOKEN_HEADER]: token,
+      [POD_HOOK_RELAY_PANE_HEADER]: encodePane(pane())
+    }
+    for (let i = 0; i < 64; i++) {
+      await post(port, headers, `{"hook_event_name":"PostToolUse","i":${i}}`)
+    }
+    await post(port, headers, '{"hook_event_name":"PreToolUse","i":64}')
+    await post(port, headers, '{"hook_event_name":"Stop","i":65}')
+    const spooled = readFileSync(join(dir, 'spool', 'pane-tab-1_leaf-1.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line).payload)
+    expect(spooled).toEqual([{ hook_event_name: 'Stop', i: 65 }])
+    release()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(seen).toHaveLength(64)
+    expect(logs).toEqual([
+      [
+        'pod-hook-relay-pane-backlog-full',
+        { paneKey: 'tab-1:leaf-1', events: 64, bytes: expect.any(Number) }
+      ],
+      ['pod-hook-relay-pane-backlog-drained', { paneKey: 'tab-1:leaf-1', spooled: 1, dropped: 1 }]
+    ])
+    await relay.close()
+  })
+
+  it('spools the backlog behind the event in flight when it closes', async () => {
+    const { relay, port, token } = await startRelay(() => new Promise(() => {}))
+    const headers = {
+      [POD_HOOK_RELAY_TOKEN_HEADER]: token,
+      [POD_HOOK_RELAY_PANE_HEADER]: encodePane(pane())
+    }
+    await post(port, headers, '{"hook_event_name":"UserPromptSubmit"}')
+    await post(port, headers, '{"hook_event_name":"PreToolUse"}')
+    await post(port, headers, '{"hook_event_name":"Stop"}')
+    await relay.close()
+    const spooled = readFileSync(join(dir, 'spool', 'pane-tab-1_leaf-1.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line).payload)
+    expect(spooled).toEqual([{ hook_event_name: 'Stop' }])
+  })
+
+  it('logs a payload over 16 MiB with its size', async () => {
+    const logs: unknown[][] = []
+    const seen: PodHookRelayEvent[] = []
+    const { relay, port, token } = await startRelay(async (e) => void seen.push(e), { logs })
+    const headers = {
+      [POD_HOOK_RELAY_TOKEN_HEADER]: token,
+      [POD_HOOK_RELAY_PANE_HEADER]: encodePane(pane())
+    }
+    const body = 'x'.repeat(16 * 1024 * 1024 + 1)
+    expect((await post(port, headers, body)).status).toBe(200)
+    expect(seen).toEqual([])
+    expect(logs).toEqual([
+      ['pod-hook-relay-payload-too-large', { paneKey: 'tab-1:leaf-1', bytes: body.length }]
+    ])
     await relay.close()
   })
 })
