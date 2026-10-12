@@ -1,0 +1,21 @@
+# Pod agent shells (POD_CLAUDE_OG=1): the launcher points BASH_ENV here for claude; the bash twin
+# of ../zsh/.zshenv. Claude's stdin is a socket, so bash reads this only with SHLVL set (a top-level
+# bash on a socket reads ~/.bashrc instead); without it Claude's own ugrep answers.
+if [ -n "${POD_SEARCH_TOOL:-}" ] && [ -x "$POD_SEARCH_TOOL" ] && [ -n "${CLAUDE_CODE_EXECPATH:-}" ] &&
+  [ "$CLAUDE_CODE_EXECPATH" != "$POD_SEARCH_TOOL" ] &&
+  [ "${CLAUDE_CODE_EXECPATH##*/}" = "${POD_CLAUDE_OG_VERSION:-/}" ]; then
+  builtin export POD_CLAUDE_EXECPATH="$CLAUDE_CODE_EXECPATH" CLAUDE_CODE_EXECPATH="$POD_SEARCH_TOOL"
+fi
+if [ -n "${POD_ORIG_ZDOTDIR+x}" ]; then
+  builtin export ZDOTDIR="$POD_ORIG_ZDOTDIR"
+  builtin unset POD_ORIG_ZDOTDIR
+else
+  builtin unset ZDOTDIR
+fi
+if [ -n "${POD_ORIG_BASH_ENV+x}" ]; then
+  builtin export BASH_ENV="$POD_ORIG_BASH_ENV"
+  builtin unset POD_ORIG_BASH_ENV
+else
+  builtin unset BASH_ENV
+fi
+if [ -n "${BASH_ENV:-}" ] && [ -r "$BASH_ENV" ]; then builtin source "$BASH_ENV"; fi
