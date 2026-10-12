@@ -1157,6 +1157,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.readPanelEntry': PluginReadPanelEntryParams,
   'plugins.setEnabled': PluginSetEnabledParams,
   'pod.terminal.directLane': PodTerminalDirectLaneParams,
+  'podMcpLazy.restoreBackup': null,
+  'podMcpLazy.status': null,
   'podSettings.get': null,
   'podSettings.schema': null,
   'podSettings.set': PodSettingsSetParams,
