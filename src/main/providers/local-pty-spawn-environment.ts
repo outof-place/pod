@@ -9,6 +9,7 @@ import { removeChromiumDisabledSessionBus } from '../pty/chromium-session-bus-en
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
 import { stripPiProcessOwnerEnv } from '../pty/pi-process-owner-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
+import { removeInheritedTerminalSessionEnv } from '../pty/terminal-session-env'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { applyScrubSafeAgentEnvAliases } from '../../shared/agent-hook-scrub-safe-env'
 import { removeUnspecifiedPaneIdentityEnv } from './local-pty-launch-helpers'
@@ -42,6 +43,7 @@ export function buildLocalPtySpawnEnvironment(args: {
   removeAppImageRuntimeEnv(spawnEnv)
   removeChromiumDisabledSessionBus(spawnEnv)
   removeInheritedNoColor(spawnEnv)
+  removeInheritedTerminalSessionEnv(spawnEnv)
   for (const key of spawn.envToDelete ?? []) {
     delete spawnEnv[key]
   }
