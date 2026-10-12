@@ -3,6 +3,7 @@ import { OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer } from './orca-runtime-
 import type { RuntimeHeadlessTerminal } from './runtime-terminal-state-records'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
+import { podHeadlessQueryReply } from '../pod/pod-headless-query-reply-policy'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 import { getTerminalViewAttributes } from './terminal-view-attribute-store'
 import { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
@@ -47,7 +48,17 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
           // pending and flushes at the ready marker or the 15s
           // SHELL_READY_TIMEOUT_MS bound (session.ts) — a spawn-time query
           // reply is delayed at most that bound, not lost.
-          this.ptyController?.write(ptyId, reply, 'query-reply')
+          this.ptyController?.write(
+            ptyId,
+            podHeadlessQueryReply(
+              {
+                launchAgent: this.ptysById.get(ptyId)?.launchAgent,
+                title: emulator.getLastTitle()
+              },
+              reply
+            ),
+            'query-reply'
+          )
         }
       }
     })
