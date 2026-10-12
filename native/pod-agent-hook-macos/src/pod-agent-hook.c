@@ -2,6 +2,8 @@
 // claude-hook.sh (src/main/claude/hook-script.ts): "{}" on stdout, the hook JSON from stdin (trailing
 // newlines stripped, as $(cat) does), the pane's metadata and the agent process POSTed to the
 // runtime's hook server, spooled when the server can't be reached.
+// `pod-agent-hook statusline` is claude-statusline.sh (src/main/claude/statusline-script.ts) the
+// same way: nothing on stdout, the payload's rate limits POSTed at most once per pane per interval.
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -256,7 +258,115 @@ static void spool(const buf_t *payload, const char *process) {
   free(line.data);
 }
 
-int main(void) {
+// src/shared/claude-statusline-rate-limits.ts
+#define STATUSLINE_PATH "/statusline/claude"
+#define STATUSLINE_MIN_POST_INTERVAL_SECONDS 15
+
+// The shell's canonical decimal (0, or no leading zero) of at most 15 digits, as the script's
+// `case 0|[1-9]|[1-9][0-9]*` and length checks take it; -1 otherwise.
+static long long canonical_decimal(const char *s, size_t n) {
+  if (n == 0 || n > 15 || (s[0] == '0' && n > 1)) return -1;
+  long long v = 0;
+  for (size_t i = 0; i < n; i++) {
+    if (s[i] < '0' || s[i] > '9') return -1;
+    v = v * 10 + (s[i] - '0');
+  }
+  return v;
+}
+
+// The payload clock: the digits after the first "total_duration_ms" and its colon, in seconds.
+static long long payload_seconds(const buf_t *payload) {
+  const char *key = memmem(payload->data, payload->len, "\"total_duration_ms\"", 19);
+  if (!key) return -1;
+  const char *p = key + 19, *end = payload->data + payload->len;
+  const char *colon = memchr(p, ':', (size_t)(end - p));
+  if (colon) p = colon + 1;  // `${x#*:}` leaves x as it is without a colon
+  while (p < end && (*p == ' ' || (*p >= '\t' && *p <= '\r'))) p++;
+  const char *digits = p;
+  while (p < end && *p >= '0' && *p <= '9') p++;
+  long long ms = canonical_decimal(digits, (size_t)(p - digits));
+  return ms < 0 ? -1 : ms / 1000;
+}
+
+static int statusline_main(void) {
+  buf_t payload = {0};
+  char chunk[65536];
+  ssize_t n;
+  while ((n = read(0, chunk, sizeof chunk)) > 0) {
+    if (payload.len + (size_t)n > MAX_PAYLOAD) break;
+    buf_put(&payload, chunk, (size_t)n);
+  }
+  // The script's read loop: every line, and one trailing newline gone.
+  if (payload.len && payload.data[payload.len - 1] == '\n') payload.data[--payload.len] = 0;
+  if (!payload.len || *env("CLAUDE_JOB_DIR")) return 0;
+  if (!memmem(payload.data, payload.len, "\"rate_limits\"", 13)) return 0;
+  read_endpoint_file();
+  const char *pane = env("ORCA_PANE_KEY");
+  if (!*port || !*token || !*pane) return 0;
+
+  // The stable leaf UUID; a numeric (pre-migration, tab-local) leaf id gets its safe tab id first.
+  char pane_id[1024];
+  const char *colon = strrchr(pane, ':');
+  const char *leaf = colon ? colon + 1 : pane;
+  size_t tab_len = colon ? (size_t)(colon - pane) : strlen(pane);
+  int numeric = *leaf != 0, safe_tab = tab_len != 0;
+  for (const char *c = leaf; *c; c++) numeric &= *c >= '0' && *c <= '9';
+  for (size_t i = 0; i < tab_len; i++) {
+    char c = pane[i];
+    safe_tab &= (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-';
+  }
+  if (numeric && safe_tab) {
+    snprintf(pane_id, sizeof pane_id, "%.*s_%s", (int)tab_len, pane, leaf);
+  } else {
+    snprintf(pane_id, sizeof pane_id, "%s", leaf);
+  }
+  const char *tmp = *env("TMPDIR") ? env("TMPDIR") : "/tmp";
+  char stamp[4096];
+  snprintf(stamp, sizeof stamp, "%s/orca-claude-statusline-last-%s", tmp, pane_id);
+
+  long long now = payload_seconds(&payload);
+  if (now < 0) now = (long long)time(NULL);
+  struct stat st;
+  if (stat(stamp, &st) == 0 && S_ISREG(st.st_mode)) {
+    char last[64] = {0};
+    int fd = open(stamp, O_RDONLY);
+    if (fd >= 0) {
+      ssize_t got = read(fd, last, sizeof last - 1);
+      close(fd);
+      last[got > 0 ? got : 0] = 0;
+      last[strcspn(last, "\n")] = 0;
+      long long then = canonical_decimal(last, strlen(last));
+      if (then >= 0 && now - then >= 0 && now - then < STATUSLINE_MIN_POST_INTERVAL_SECONDS) return 0;
+    }
+  }
+  int fd = open(stamp, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+  if (fd >= 0) {
+    char text[32];
+    int len = snprintf(text, sizeof text, "%lld", now);
+    ssize_t ignored = write(fd, text, (size_t)len);
+    (void)ignored;
+    close(fd);
+  }
+
+  buf_t headers = {0}, body = {0};
+  buf_str(&headers, "Content-Type: application/x-www-form-urlencoded\r\nX-Orca-Agent-Hook-Token: ");
+  buf_str(&headers, token);
+  buf_str(&headers, "\r\n");
+  struct { const char *key; const char *value; size_t len; } form[] = {
+    {"paneKey", pane, strlen(pane)}, {"configDir", env("CLAUDE_CONFIG_DIR"), strlen(env("CLAUDE_CONFIG_DIR"))},
+    {"env", hook_env, strlen(hook_env)}, {"version", version, strlen(version)}, {"payload", payload.data, payload.len},
+  };
+  for (size_t i = 0; i < sizeof form / sizeof form[0]; i++) {
+    if (i) buf_str(&body, "&");
+    buf_str(&body, form[i].key); buf_str(&body, "=");
+    urlencode(&body, form[i].value, form[i].len);
+  }
+  post(STATUSLINE_PATH, &headers, &body);
+  return 0;
+}
+
+int main(int argc, char **argv) {
+  if (argc > 1 && !strcmp(argv[1], "statusline")) return statusline_main();
   // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
   ssize_t ignored = write(1, "{}\n", 3);
   (void)ignored;
