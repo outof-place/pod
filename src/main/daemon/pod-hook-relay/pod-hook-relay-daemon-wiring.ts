@@ -1,6 +1,10 @@
 // Fork-only (Pod): the hook relay's place in the daemon. Kill switch: POD_AGENT_HOOK_RELAY=0.
 import { dirname, join } from 'node:path'
 import type { DaemonFileLog } from '../daemon-file-log'
+import {
+  disablePodHookRelayEndpoints,
+  enablePodHookRelayEndpoints
+} from './pod-hook-relay-endpoints'
 import { PodHookRelay } from './pod-hook-relay-server'
 
 /** What the daemon's PTYs inherit: the relay file Pod's launcher reads. */
@@ -25,6 +29,7 @@ export function createDaemonPodHookRelay(deps: {
     return null
   }
   const relayFilePath = podHookRelayFilePath(deps.socketPath, deps.protocolVersion)
+  enablePodHookRelayEndpoints()
   const relay = new PodHookRelay({
     relayFilePath,
     log: (event, details) => deps.log.log(event, details)
@@ -32,12 +37,14 @@ export function createDaemonPodHookRelay(deps: {
   return {
     start: async () => {
       if (await relay.start()) {
-        // Why: the daemon's env seeds its PTYs'; terminals opened from now on find the relay.
+        // Why: the daemon's env seeds its PTYs'; terminals opened from now on find the relay (those
+        // spawned before the relay is up keep command hooks).
         process.env[POD_AGENT_HOOK_RELAY_ENV] = relayFilePath
       }
     },
     close: async () => {
       delete process.env[POD_AGENT_HOOK_RELAY_ENV]
+      disablePodHookRelayEndpoints()
       await relay.close()
     }
   }
