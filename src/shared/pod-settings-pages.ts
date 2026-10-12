@@ -2,7 +2,7 @@
 import type { PodSettingsKey } from './pod-settings-schema'
 
 export type PodSettingsPage = {
-  id: 'general' | 'terminal' | 'notifications' | 'accounts' | 'git'
+  id: 'general' | 'terminal' | 'notifications' | 'accounts' | 'git' | 'claude'
   title: string
   /** A page whose content comes from another RPC namespace (Accounts: `accounts.*`). */
   source?: string
@@ -141,5 +141,12 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
         ]
       }
     ]
+  },
+  // Its own page: podMcpLazy.status lists the servers the setting picks from.
+  {
+    id: 'claude',
+    title: 'Claude',
+    source: 'podMcpLazy',
+    sections: [{ title: 'MCP servers', keys: ['mcpLazyStart'] }]
   }
 ]
