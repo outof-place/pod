@@ -148,7 +148,8 @@ export class PodClaudeSettingsCut {
   private armed = false
   private running: Promise<void> | null = null
   private again = false
-  private watcher: { key: string; cancel: () => void; ended: boolean } | null = null
+  private watcher: { key: string; cancel: () => void; ended: boolean; exitSeen: boolean } | null =
+    null
   private retry: ReturnType<typeof setTimeout> | null = null
   private watchFailures = 0
 
@@ -239,6 +240,7 @@ export class PodClaudeSettingsCut {
       return
     }
     this.armed = false
+    this.watchFailures = 0
     this.options.log?.('pod-claude-settings-cut', { removed: entry?.removed.length ?? 0 })
   }
 
@@ -256,9 +258,13 @@ export class PodClaudeSettingsCut {
       }
       return
     }
+    // A watched claude exited and the set moved on: the pause starts over.
+    if (this.watcher?.exitSeen) {
+      this.watchFailures = 0
+    }
     this.stopWatching()
     const started = this.options.awaitExit(pids)
-    const watcher = { key, cancel: started.cancel, ended: false }
+    const watcher = { key, cancel: started.cancel, ended: false, exitSeen: false }
     this.watcher = watcher
     void started.exited.then((exited) => {
       if (this.watcher !== watcher) {
@@ -266,7 +272,7 @@ export class PodClaudeSettingsCut {
       }
       watcher.ended = true
       if (exited) {
-        this.watchFailures = 0
+        watcher.exitSeen = true
         void this.recheck()
         return
       }
