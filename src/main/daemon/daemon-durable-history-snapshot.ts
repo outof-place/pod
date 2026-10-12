@@ -64,11 +64,18 @@ export async function buildDurableCheckpointSnapshot(opts: {
     }
     // Why: rows are counted from the bottom, so both buffers must wrap on the same grid.
     await replay.resize(liveSnapshot.cols, liveSnapshot.rows)
+    // Why: live's leading wrapped rows are the tail of a line it trimmed mid-line, which after a
+    // reflow need not line up with the replay's rows of it; the head takes that line whole instead.
+    const trimmedTail = trimmedLineTailRows(liveSnapshot)
     const head = emulator.serializeNormalBufferHead(
-      liveSnapshot.scrollbackLines + liveSnapshot.rows
+      liveSnapshot.scrollbackLines + liveSnapshot.rows - trimmedTail
     )
+    const live =
+      trimmedTail > 0 && head.rowCount > 0
+        ? await boundSnapshot(liveSnapshot, liveSnapshot.scrollbackLines - trimmedTail)
+        : liveSnapshot
     return {
-      ...rebaseOnOlderRows(liveSnapshot, head),
+      ...rebaseOnOlderRows(live, head),
       ...(!liveSnapshot.cwd && restoreInfo?.cwd ? { cwd: restoreInfo.cwd } : {}),
       ...(!liveSnapshot.lastTitle && restoreInfo?.lastTitle
         ? { lastTitle: restoreInfo.lastTitle }
@@ -127,6 +134,11 @@ export async function boundSnapshot(
   }
 }
 
+function trimmedLineTailRows(live: TerminalSnapshot): number {
+  const rows = live.leadingWrappedRows ?? 0
+  return rows > 0 && rows <= live.scrollbackLines ? rows : 0
+}
+
 function restoreSegments(restoreInfo: ColdRestoreInfo): string[] {
   return [
     // Why alt only: a normal-screen snapshotAnsi already holds its scrollback.
@@ -145,12 +157,14 @@ function rebaseOnOlderRows(live: TerminalSnapshot, head: NormalBufferHead): Term
   // scrollback and leaves the blank, homed screen a fresh live replay expects.
   const prefix = `${head.ansi}${OLDER_ROWS_SEAM}${'\r\n'.repeat(live.rows)}\x1b[H`
   const scrollbackLines = live.scrollbackLines + head.rowCount
+  // Why dropped: the head's rows open the buffer now.
+  const { leadingWrappedRows: _liveTail, ...rest } = live
   if (live.modes.alternateScreen) {
     // Why links untouched: they index the alt screen, which older rows never enter.
-    return { ...live, scrollbackAnsi: prefix + live.scrollbackAnsi, scrollbackLines }
+    return { ...rest, scrollbackAnsi: prefix + live.scrollbackAnsi, scrollbackLines }
   }
   return {
-    ...live,
+    ...rest,
     snapshotAnsi: prefix + live.snapshotAnsi,
     oscLinks: [
       ...head.oscLinks,

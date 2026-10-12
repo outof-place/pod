@@ -404,15 +404,9 @@ describe('durable checkpoint rebased on the live snapshot', () => {
       isFirstTake: false
     })
 
-    // Measured seam loss: the live window reflows its orphaned continuation to
-    // the same row count as the deep replay's full line, so the straddling
-    // line loses the head row the live window had evicted. Cosmetic, one line.
-    const evictedRows = STRADDLE_LINES * 4 + 1 - (DAEMON_SESSION_SCROLLBACK_ROWS + 24)
-    const straddleStart = Math.floor(evictedRows / 4) * STRADDLE_LINE_LENGTH
-    const lostHead = (evictedRows % 4) * 80
-    expect(joinedCells(durable)).toBe(
-      expected.slice(0, straddleStart) + expected.slice(straddleStart + lostHead)
-    )
+    // Why whole: live reports the rows of the line it evicted the head of, so
+    // the older rows take that line from the replay instead of losing its head.
+    expect(joinedCells(durable)).toBe(expected)
   })
 })
 
