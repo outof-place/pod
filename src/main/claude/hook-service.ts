@@ -27,6 +27,7 @@ import { getManagedStatusLineScript } from './statusline-script'
 import { refuseProfileAtDefaultHome } from './claude-profile-hook-target'
 import { podManagedClaudeHook } from '../pod/agent-hook/pod-agent-hook-native'
 import { podManagedStatusLineCommand } from '../pod/agent-hook/pod-statusline-native'
+import * as podLaunch from '../pod/agent-hook/pod-claude-launch-settings'
 import {
   applyManagedHooks,
   applyManagedStatusLine,
@@ -110,7 +111,7 @@ export class ClaudeHookService {
     }
     const configPath = getConfigPath(this.options.settings, options.configDir)
     const scriptPath = getManagedScriptPath(this.options.settings)
-    const config = readHooksJson(configPath)
+    const config = podLaunch.readClaudeHooksForStatus(this.options, configPath, scriptPath, options)
     if (!config) {
       return {
         agent: this.options.agent,
@@ -188,12 +189,7 @@ export class ClaudeHookService {
 
     const hook = podManagedClaudeHook(this.options, scriptPath, options, true)
     const plan = this.managedHookPlan(options)
-    let nextConfig = applyManagedHooks(
-      config,
-      hook,
-      getManagedScriptFileName(this.options.settings),
-      plan
-    )
+    let nextConfig = podLaunch.applyClaudeHooks(this.options, config, hook, plan, options)
     const payload = this.managedScript()
     if (this.usesWindowsEntry) {
       installWindowsClaudeHookFiles(scriptPath, payload)
@@ -332,6 +328,7 @@ export class ClaudeHookService {
     if (hooksChanged || statusLineChanged) {
       writeHooksJson(configPath, nextConfig)
     }
+    podLaunch.removeClaudeLaunchSettings(this.options)
     if (this.options.agent === 'claude') {
       try {
         // Why: an Orca-level uninstall resets the opt-out memory so a later re-enable installs the statusline again.
