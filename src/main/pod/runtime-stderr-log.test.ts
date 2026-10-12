@@ -56,6 +56,16 @@ describe('installRuntimeStderrLog', () => {
     expect((await logText()).startsWith('---')).toBe(true)
   })
 
+  it('keeps each session copy under the cap, counted in bytes', async () => {
+    const stream = fakeStderr()
+    installRuntimeStderrLog(logsDir, stream)
+    stream.write('é'.repeat(RUNTIME_STDERR_LOG_MAX_BYTES / 2 + 1))
+    stream.write('after the big one\n')
+    const text = await logText()
+    expect(text).not.toContain('é')
+    expect(text).toContain('after the big one')
+  })
+
   it('installs once', async () => {
     const stream = fakeStderr()
     installRuntimeStderrLog(logsDir, stream)
