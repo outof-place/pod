@@ -193,6 +193,7 @@ if isScript(target) {
   unsetenv(depthEnv)
 }
 
+applyClaudeOg(command: command, target: target)
 applyPolicy()
 let argv = CommandLine.unsafeArgv + commandIndex
 execv(target, argv)
