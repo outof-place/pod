@@ -1,8 +1,9 @@
 // Builds pod-agent-launcher into Contents/Resources/bin and links each agent command to it there.
 // Pod's shell wrappers keep that directory first on every terminal's PATH (ORCA_CLI_BIN_DIR), so the
 // links shadow the user's own installs only inside Pod terminals. electron-builder signs the binary.
+// Next to bin, agent-shell holds what claude gets with POD_CLAUDE_OG=1 (claude-og.swift).
 const { execFileSync } = require('node:child_process')
-const { chmodSync, readdirSync, rmSync, symlinkSync } = require('node:fs')
+const { chmodSync, copyFileSync, mkdirSync, readdirSync, rmSync, symlinkSync } = require('node:fs')
 const { join } = require('node:path')
 
 const LAUNCHER = 'pod-agent-launcher'
@@ -23,7 +24,7 @@ function installAgentLauncher(resourcesDir, arch) {
       '-O',
       '-target',
       `${cpu}-apple-macosx${MACOS_MINIMUM}`,
-      // main.swift plus the feature files beside it (agent-search.swift)
+      // main.swift plus the feature files beside it (agent-search.swift, claude-og.swift)
       ...readdirSync(__dirname)
         .filter((name) => name.endsWith('.swift'))
         .sort()
@@ -39,6 +40,7 @@ function installAgentLauncher(resourcesDir, arch) {
     rmSync(linkPath, { force: true })
     symlinkSync(LAUNCHER, linkPath)
   }
+  installAgentShell(resourcesDir, cpu)
   if (process.arch === (cpu === 'x86_64' ? 'x64' : 'arm64')) {
     // Why: a kernel that stops honoring the role must fail the build, not ship a silent no-op.
     const policy = JSON.parse(
@@ -51,6 +53,35 @@ function installAgentLauncher(resourcesDir, arch) {
       throw new Error(`product: ${LAUNCHER} reported role ${policy.role}, expected ${APP_ROLE}`)
     }
   }
+}
+
+function installAgentShell(resourcesDir, cpu) {
+  const source = join(__dirname, 'agent-shell')
+  const shellDir = join(resourcesDir, 'agent-shell')
+  rmSync(shellDir, { recursive: true, force: true })
+  mkdirSync(join(shellDir, 'zsh'), { recursive: true })
+  mkdirSync(join(shellDir, 'bash'), { recursive: true })
+  const toolPath = join(shellDir, 'pod-search-tool')
+  execFileSync(
+    'xcrun',
+    [
+      'clang',
+      '-O2',
+      '-std=c11',
+      '-Wall',
+      '-Wextra',
+      '-Werror',
+      '-target',
+      `${cpu}-apple-macosx${MACOS_MINIMUM}`,
+      join(source, 'pod-search-tool.c'),
+      '-o',
+      toolPath
+    ],
+    { stdio: 'inherit' }
+  )
+  chmodSync(toolPath, 0o755)
+  copyFileSync(join(source, 'zsh', '.zshenv'), join(shellDir, 'zsh', '.zshenv'))
+  copyFileSync(join(source, 'bash', 'bashenv'), join(shellDir, 'bash', 'bashenv'))
 }
 
 module.exports = { AGENT_COMMANDS, installAgentLauncher }
