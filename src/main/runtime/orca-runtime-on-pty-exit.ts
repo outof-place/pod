@@ -221,6 +221,13 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
         this.pruneDisconnectedPtyTranscript(pty)
       }
       if (preservesIntentionallyStoppedSurface || preservesAbnormalSshSurface) {
+        if (preservesIntentionallyStoppedSurface) {
+          // Pod: the frame below shows a slept pane pending, not its dead terminal ready.
+          for (const leaf of this.getLeavesForPty(ptyId)) {
+            leaf.connected = false
+            leaf.writable = false
+          }
+        }
         // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
         this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
       } else {
