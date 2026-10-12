@@ -35,6 +35,9 @@ function run(
 ): { status: number | null; stdout: string; stderr: string } {
   const result = spawnSync(command, args, {
     encoding: 'utf8',
+    // Why the cwd: the launcher looks for a statusLine from there up, and the checkout's parents
+    // reach the real home.
+    cwd: root,
     env: { PATH: [...pathDirs, '/usr/bin', '/bin'].join(':'), HOME: root, ...env }
   })
   return { status: result.status, stdout: result.stdout.trim(), stderr: result.stderr.trim() }
@@ -195,6 +198,7 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
       writeFileSync(`${prefix}.command.json`, '{"hooks":{}}')
       const relay = join(dir, 'relay.env')
       writeFileSync(relay, 'POD_HOOK_RELAY_PORT=4567\nPOD_HOOK_RELAY_TOKEN=tok\n')
+      writeFileSync(join(dir, 'endpoint.env'), 'ORCA_AGENT_HOOK_PORT=1\n')
       // The agent: its argv, its pid (the launcher's after exec) and the settings file it got.
       script(
         join(dir, 'real'),
@@ -206,7 +210,7 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
         ORCA_PANE_KEY: 'tab-1:leaf-1',
         ORCA_TAB_ID: 'tab-1',
         ORCA_WORKTREE_ID: 'repo::/w',
-        ORCA_AGENT_HOOK_ENDPOINT: '/u/agent-hooks/endpoint.env',
+        ORCA_AGENT_HOOK_ENDPOINT: join(dir, 'endpoint.env'),
         POD_CLAUDE_LAUNCH_SETTINGS: prefix
       }
       return { dir, prefix, relay, pane }
@@ -226,10 +230,15 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
       expect(settings.url).toBe('http://127.0.0.1:4567/hook/claude')
       expect(settings.token).toBe('tok')
       expect(Buffer.from(settings.pane, 'base64').toString()).toBe(
-        'tab-1:leaf-1\x1ftab-1\x1f\x1frepo::/w\x1f\x1f\x1f/u/agent-hooks/endpoint.env'
+        `tab-1:leaf-1\x1ftab-1\x1f\x1frepo::/w\x1f\x1f\x1f${join(dir, 'endpoint.env')}`
       )
       expect(JSON.parse(settings.process)).toMatchObject({ pid: Number(pid), platform: 'darwin' })
       expect(lstatSync(launchFile).mode & 0o777).toBe(0o600)
+      // The relay reads only the endpoint file; without one the C client reads the pane's env.
+      const noFile = { ...pane, POD_AGENT_HOOK_RELAY: relay, ORCA_AGENT_HOOK_ENDPOINT: '/nowhere' }
+      expect(run('claude', ['x'], [binDir, join(dir, 'real')], noFile).stdout.split('\n')[0]).toBe(
+        `args=--settings ${join(dir, 'hooks', 'pod-claude-settings')}.command.json x`
+      )
     })
 
     it('passes the command template without a relay, and drops files of claudes that are gone', () => {
@@ -256,12 +265,68 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
         }).stdout.split('\n')[0]
       ).toBe('args=x')
       expect(run('codex', ['x'], real, inPane).stdout).toBe('args=x')
-      expect(run('claude', ['--settings', 'mine.json'], real, inPane).stdout.split('\n')[0]).toBe(
-        'args=--settings mine.json'
-      )
       expect(
         run('claude', ['x'], real, { ...inPane, CLAUDE_JOB_DIR: '/j' }).stdout.split('\n')[0]
       ).toBe('args=x')
+    })
+
+    it('takes the statusLine template only while the user has no statusLine of their own', () => {
+      const { dir, prefix, pane } = setup()
+      writeFileSync(`${prefix}.command-statusline.json`, '{"hooks":{},"statusLine":{"x":1}}')
+      const real = [binDir, join(dir, 'real')]
+      expect(run('claude', ['x'], real, pane).stdout.split('\n')[0]).toBe(
+        `args=--settings ${prefix}.command-statusline.json x`
+      )
+      const configDir = join(dir, 'config')
+      mkdirSync(configDir)
+      writeFileSync(join(configDir, 'settings.json'), '{"statusLine":{"command":"mine"}}')
+      expect(
+        run('claude', ['x'], real, { ...pane, CLAUDE_CONFIG_DIR: configDir }).stdout.split('\n')[0]
+      ).toBe(`args=--settings ${prefix}.command.json x`)
+    })
+
+    it("merges the user's own --settings with Pod's, theirs first, and leaves Pod's own alone", () => {
+      const { dir, prefix, pane } = setup()
+      writeFileSync(
+        `${prefix}.command.json`,
+        '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"pod"}]}]},"statusLine":{"command":"pod"}}'
+      )
+      const real = [binDir, join(dir, 'real')]
+      const mine = join(dir, 'mine.json')
+      writeFileSync(
+        mine,
+        '{"model":"opus","hooks":{"Stop":[{"hooks":[{"type":"command","command":"say"}]}]},"statusLine":{"command":"mine"}}'
+      )
+      const [argsLine, pidLine, merged] = run(
+        'claude',
+        ['--settings', mine, 'x'],
+        real,
+        pane
+      ).stdout.split('\n')
+      const pid = pidLine.replace('pid=', '')
+      const mergedPath = join(dir, 'hooks', 'claude-launch', `merged-${pid}.json`)
+      expect(argsLine).toBe(`args=--settings ${mergedPath} x`)
+      expect(JSON.parse(merged)).toEqual({
+        model: 'opus',
+        hooks: {
+          Stop: [
+            { hooks: [{ type: 'command', command: 'say' }] },
+            { hooks: [{ type: 'command', command: 'pod' }] }
+          ]
+        },
+        statusLine: { command: 'mine' }
+      })
+      expect(lstatSync(mergedPath).mode & 0o777).toBe(0o600)
+      const inline = run('claude', ['--settings={"model":"opus"}', 'x'], real, pane).stdout
+      expect(inline.split('\n')[0]).toMatch(/^args=--settings=\/.*\/merged-\d+\.json x$/)
+      // A wrapper that runs claude again with Pod's file in its argv: left as it is.
+      const again = ['--settings', `${prefix}.command.json`, 'x']
+      expect(run('claude', again, real, pane).stdout.split('\n')[0]).toBe(`args=${again.join(' ')}`)
+      // A user file Pod can't parse: Claude gets it as given, and reports the error itself.
+      writeFileSync(mine, '{"model":')
+      expect(run('claude', ['--settings', mine], real, pane).stdout.split('\n')[0]).toBe(
+        `args=--settings ${mine}`
+      )
     })
   })
 

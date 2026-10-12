@@ -23,6 +23,8 @@ const HOOK_PATH = /^\/hook\/([a-z0-9-]+)$/
 
 export const POD_HOOK_RELAY_TOKEN_HEADER = 'x-pod-hook-relay-token'
 export const POD_HOOK_RELAY_PANE_HEADER = 'x-pod-hook-relay-pane'
+/** Claude's $CLAUDE_JOB_DIR: a background job's worker inherits a pane's settings but doesn't run in it. */
+export const POD_HOOK_RELAY_JOB_DIR_HEADER = 'x-pod-hook-relay-job-dir'
 
 export type PodHookRelayOptions = {
   /** KEY=value file the launcher reads: POD_HOOK_RELAY_PORT, POD_HOOK_RELAY_TOKEN. */
@@ -33,7 +35,13 @@ export type PodHookRelayOptions = {
   now?: () => number
 }
 
-type PaneQueue = { events: PodHookRelayEvent[]; bytes: number; spooled: number; dropped: number }
+type PaneQueue = {
+  events: PodHookRelayEvent[]
+  bytes: number
+  spooled: number
+  dropped: number
+  drained?: Promise<void>
+}
 
 export class PodHookRelay {
   private server: Server | null = null
@@ -94,6 +102,15 @@ export class PodHookRelay {
     }
   }
 
+  /** Settles once every queued event has been delivered or spooled. */
+  async idle(): Promise<void> {
+    while (this.paneQueues.size > 0) {
+      await Promise.all(
+        [...this.paneQueues.values()].map((queue) => queue.drained ?? Promise.resolve())
+      )
+    }
+  }
+
   private authorized(req: IncomingMessage): boolean {
     const given = req.headers[POD_HOOK_RELAY_TOKEN_HEADER]
     if (typeof given !== 'string' || given.length !== this.token.length) {
@@ -144,7 +161,8 @@ export class PodHookRelay {
         this.options.log('pod-hook-relay-payload-too-large', { paneKey: pane.paneKey, bytes: size })
         return
       }
-      if (payload.length === 0) {
+      // As the C client: an empty payload, or a background job's, reports nothing.
+      if (payload.length === 0 || req.headers[POD_HOOK_RELAY_JOB_DIR_HEADER]) {
         return
       }
       this.enqueue({
@@ -161,9 +179,14 @@ export class PodHookRelay {
     const key = event.pane.paneKey
     const queue = this.paneQueues.get(key)
     if (!queue) {
-      const fresh = { events: [event], bytes: event.payload.length, spooled: 0, dropped: 0 }
+      const fresh: PaneQueue = {
+        events: [event],
+        bytes: event.payload.length,
+        spooled: 0,
+        dropped: 0
+      }
       this.paneQueues.set(key, fresh)
-      void this.drain(key, fresh)
+      fresh.drained = this.drain(key, fresh)
       return
     }
     if (
