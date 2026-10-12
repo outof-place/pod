@@ -119,6 +119,7 @@ describe("Pod's Claude hooks with each launch", () => {
       args: []
     })
     expect(http.hooks?.SessionStart).toEqual(command.hooks?.SessionStart)
+    expect(http.hooks?.TeammateIdle).toEqual(command.hooks?.TeammateIdle)
     expect(http.hooks?.Stop?.[0]?.hooks?.[0]).toEqual({
       type: 'http',
       url: '@@POD_RELAY_URL@@',

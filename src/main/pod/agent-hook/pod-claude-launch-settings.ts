@@ -17,8 +17,12 @@ import { claudeVersionReaches } from '../../claude/claude-hook-event-versions'
 
 /** PTY env: the templates' prefix (`<prefix>.http.json`, `<prefix>.command.json`). */
 export const POD_CLAUDE_LAUNCH_SETTINGS_ENV = 'POD_CLAUDE_LAUNCH_SETTINGS'
-/** Claude's http hooks, from its changelog. */
-export const CLAUDE_HTTP_HOOK_FIRST_VERSION = '2.1.63'
+/** The Claude its http events were measured on (agent-api's E2E on gate 2's mock); an older one
+ *  gets the command hooks in both templates. */
+export const CLAUDE_HTTP_HOOK_FIRST_VERSION = '2.1.296'
+/** Events that stay on the command hook: SessionStart fires no http hook, TeammateIdle was never
+ *  reached in that E2E. */
+const COMMAND_ONLY_EVENTS = new Set(['SessionStart', 'TeammateIdle'])
 const LAUNCHER_FILE_NAME = 'pod-agent-launcher'
 const PREFIX_NAME = 'pod-claude-settings'
 
@@ -55,29 +59,28 @@ export function getPodClaudeLaunchSettingsPrefix(): string {
   return getSharedManagedScriptPath(PREFIX_NAME)
 }
 
-/** The command hooks, with an http hook for every event but SessionStart (Claude fires no http
- *  hook for it): the relay's address and the pane come from the launcher. */
+/** The command hooks, with an http hook for every measured event: the relay's address and the pane
+ *  come from the launcher. */
 function httpVariant(command: HooksConfig): { hooks: Record<string, unknown[]> } {
   const hooks: Record<string, unknown[]> = {}
   for (const [event, definitions] of Object.entries(command.hooks ?? {})) {
-    hooks[event] =
-      event === 'SessionStart'
-        ? definitions
-        : definitions.map((definition) => ({
-            ...definition,
-            hooks: (definition.hooks ?? []).map((hook) => ({
-              type: 'http',
-              url: '@@POD_RELAY_URL@@',
-              timeout: hook.timeout ?? MANAGED_HOOK_TIMEOUT_SECONDS,
-              headers: {
-                'X-Pod-Hook-Relay-Token': '@@POD_RELAY_TOKEN@@',
-                'X-Pod-Hook-Relay-Pane': '@@POD_RELAY_PANE@@',
-                'X-Orca-Agent-Process': '@@POD_AGENT_PROCESS@@',
-                'X-Pod-Hook-Relay-Job-Dir': '$CLAUDE_JOB_DIR'
-              },
-              allowedEnvVars: ['CLAUDE_JOB_DIR']
-            }))
+    hooks[event] = COMMAND_ONLY_EVENTS.has(event)
+      ? definitions
+      : definitions.map((definition) => ({
+          ...definition,
+          hooks: (definition.hooks ?? []).map((hook) => ({
+            type: 'http',
+            url: '@@POD_RELAY_URL@@',
+            timeout: hook.timeout ?? MANAGED_HOOK_TIMEOUT_SECONDS,
+            headers: {
+              'X-Pod-Hook-Relay-Token': '@@POD_RELAY_TOKEN@@',
+              'X-Pod-Hook-Relay-Pane': '@@POD_RELAY_PANE@@',
+              'X-Orca-Agent-Process': '@@POD_AGENT_PROCESS@@',
+              'X-Pod-Hook-Relay-Job-Dir': '$CLAUDE_JOB_DIR'
+            },
+            allowedEnvVars: ['CLAUDE_JOB_DIR']
           }))
+        }))
   }
   return { hooks }
 }
