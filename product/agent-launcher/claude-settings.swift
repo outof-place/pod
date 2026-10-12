@@ -297,8 +297,9 @@ func mergeSettings(user: JSONValue, pod: JSONValue) -> JSONValue? {
 
 // MARK: Claude's argv
 
-/// Pod's settings for this launch: the filled http template, else the command one.
-func podLaunchSettings(prefix: String, pane: String, statusLine: Bool) -> (path: String, bytes: [UInt8])? {
+/// Pod's settings for this launch: the filled http template, else the command one. With `write`
+/// false (a merge follows) the filled template stays in memory.
+func podLaunchSettings(prefix: String, pane: String, statusLine: Bool, write: Bool) -> (path: String, bytes: [UInt8])? {
   let variant = statusLine ? "-statusline" : ""
   let commandTemplate = "\(prefix).command\(variant).json"
   let fallback = readBytes(commandTemplate).map { (commandTemplate, $0) }
@@ -316,6 +317,7 @@ func podLaunchSettings(prefix: String, pane: String, statusLine: Bool) -> (path:
     .replacing("@@POD_RELAY_TOKEN@@", with: jsonEscaped(token))
     .replacing("@@POD_RELAY_PANE@@", with: base64(Array(fields.joined(separator: "\u{1f}").utf8)))
     .replacing("@@POD_AGENT_PROCESS@@", with: jsonEscaped(process)).utf8)
+  guard write else { return ("", settings) }
   let path = "\(launchDir(prefix))/claude-\(getpid()).json"
   return writePrivate(path, settings) ? (path, settings) : fallback
 }
@@ -346,7 +348,8 @@ func claudeLaunchArgs(command: String, args: [String]) -> [String]? {
   // Why: a wrapper that runs claude again with Pod's file already in its argv.
   if let given, given.hasPrefix(ours) { return nil }
   let statusLine = access("\(prefix).command-statusline.json", R_OK) == 0 && !userHasStatusLine()
-  guard let pod = podLaunchSettings(prefix: prefix, pane: pane, statusLine: statusLine) else { return nil }
+  guard let pod = podLaunchSettings(prefix: prefix, pane: pane, statusLine: statusLine, write: given == nil)
+  else { return nil }
   guard let at = userValueIndex, let given else {
     return [args[0], "--settings", pod.path] + args.dropFirst()
   }
