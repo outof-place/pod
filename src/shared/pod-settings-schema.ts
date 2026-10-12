@@ -10,6 +10,7 @@ import {
   TERMINAL_FONT_WEIGHT_MIN,
   TERMINAL_FONT_WEIGHT_STEP
 } from './terminal-fonts'
+import { MAX_EDITOR_AUTO_SAVE_DELAY_MS, MIN_EDITOR_AUTO_SAVE_DELAY_MS } from './constants'
 import { MAX_TERMINAL_LINE_HEIGHT, MIN_TERMINAL_LINE_HEIGHT } from './terminal-line-height-settings'
 import {
   MAX_TERMINAL_CONTRAST_RATIO,
@@ -144,11 +145,17 @@ export const POD_SETTINGS_FIELDS = {
     z.boolean(),
     'Close busy terminals without asking'
   ),
-  // PodNative's file editor follows it too (⌥Z there writes it).
+  // PodNative's file editor follows these too (⌥Z there writes the wrap).
   editorWordWrap: row(
     z.boolean(),
     'Wrap long lines',
     'In file editors, instead of scrolling sideways.'
+  ),
+  editorAutoSave: row(z.boolean(), 'Save files automatically'),
+  editorAutoSaveDelayMs: row(
+    z.number().int().min(MIN_EDITOR_AUTO_SAVE_DELAY_MS).max(MAX_EDITOR_AUTO_SAVE_DELAY_MS),
+    'Autosave delay (ms)',
+    'After the last edit.'
   ),
   terminalFontFamily: row(z.string().max(512), 'Font'),
   terminalFontSize: row(z.number().int().min(6).max(72), 'Size'),

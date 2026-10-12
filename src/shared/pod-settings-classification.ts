@@ -166,8 +166,6 @@ export const POD_SETTINGS_HIDDEN = {
   leftSidebarTintOpacity: 'electron-ui',
   appIcon: 'electron-ui',
   appFontFamily: 'electron-ui',
-  editorAutoSave: 'electron-ui',
-  editorAutoSaveDelayMs: 'electron-ui',
   editorMinimapEnabled: 'electron-ui',
   editorFontFamily: 'electron-ui',
   richMarkdownSpellcheckEnabled: 'electron-ui',
