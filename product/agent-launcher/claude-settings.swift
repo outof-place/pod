@@ -350,7 +350,21 @@ func podLaunchSettings(prefix: String, pane: String, statusLine: Bool, write: Bo
 
 /// Claude's argv with Pod's settings, or nil where Pod adds none: outside a Pod pane, in a job or
 /// another agent's claude, already handed over, or a user file Pod can't merge with.
-func claudeLaunchArgs(command: String, args: [String]) -> [String]? {
+/// Claude's argv change: Pod's `--settings <file>` after argv[0], or the user's own value at an
+/// index swapped for the merged file. The rest stays the caller's bytes (main.swift).
+enum ClaudeArgvEdit {
+  case insert([String])
+  case replace(Int, String)
+
+  func apply(to argv: inout [UnsafeMutablePointer<CChar>?]) {
+    switch self {
+    case .insert(let words): argv.insert(contentsOf: words.map { strdup($0) }, at: 1)
+    case .replace(let index, let word): argv[index] = strdup(word)
+    }
+  }
+}
+
+func claudeLaunchArgs(command: String, args: [String]) -> ClaudeArgvEdit? {
   guard command.split(separator: "/").last == "claude", let prefix = env(settingsEnv), !prefix.isEmpty,
     let pane = env("ORCA_PANE_KEY"), !pane.isEmpty, env(settingsPidEnv) != String(getpid()),
     // As Pod's hook client: agents that run claude for themselves report nothing.
@@ -377,7 +391,7 @@ func claudeLaunchArgs(command: String, args: [String]) -> [String]? {
   guard let pod = podLaunchSettings(prefix: prefix, pane: pane, statusLine: statusLine, write: given == nil)
   else { return nil }
   guard let at = userValueIndex, let given else {
-    return [args[0], "--settings", pod.path] + args.dropFirst()
+    return .insert(["--settings", pod.path])
   }
   let trimmed = given.drop { $0 == " " || $0 == "\t" || $0 == "\n" }
   guard let userBytes = trimmed.hasPrefix("{") ? Array(given.utf8) : readBytes(given),
@@ -393,9 +407,7 @@ func claudeLaunchArgs(command: String, args: [String]) -> [String]? {
   serialize(merged, into: &bytes)
   let path = "\(launchDir(prefix))/merged-\(getpid()).json"
   guard writePrivate(path, bytes) else { return nil }
-  var next = args
-  next[at] = inline ? "--settings=\(path)" : path
-  return next
+  return .replace(at, inline ? "--settings=\(path)" : path)
 }
 
 /// For the runtime's deferred settings.json cut (pod-claude-settings-cut.ts): returns, printing the
@@ -404,7 +416,10 @@ func claudeLaunchArgs(command: String, args: [String]) -> [String]? {
 func awaitExit(_ pids: [pid_t]) -> Never {
   let queue = kqueue()
   guard queue >= 0, !pids.isEmpty else { exit(64) }
-  for pid in pids + [getppid()] {
+  // Why: a caller gone before this ran left launchd as the parent, whose exit never comes.
+  let parent = getppid()
+  if parent == 1 { exit(0) }
+  for pid in pids + [parent] {
     var change = kevent(
       ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_ONESHOT),
       fflags: NOTE_EXIT, data: 0, udata: nil)
@@ -413,6 +428,8 @@ func awaitExit(_ pids: [pid_t]) -> Never {
       exit(0)
     }
   }
+  // The caller gone between getppid and its registration: no NOTE_EXIT is left to come.
+  if getppid() != parent { exit(0) }
   var event = kevent()
   while kevent(queue, nil, 0, &event, 1, nil) < 0 && errno == EINTR {}
   print(event.ident)
