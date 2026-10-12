@@ -42,7 +42,12 @@ function run(
   const result = spawnSync(command, args, {
     encoding: 'utf8',
     cwd: options.cwd ?? root,
-    env: { PATH: [binDir, realDir, '/usr/bin', '/bin'].join(':'), HOME: home, ...options.env }
+    env: {
+      PATH: [binDir, realDir, '/usr/bin', '/bin'].join(':'),
+      HOME: home,
+      ORCA_PANE_KEY: 'tab-1:leaf',
+      ...options.env
+    }
   })
   expect(result.status, result.stderr).toBe(0)
   const lines = result.stdout.split('\n').filter(Boolean)
@@ -96,7 +101,8 @@ describe.skipIf(process.platform !== 'darwin')("pod-agent-launcher's Claude sett
     expect(JSON.parse(agentProcess).startTime).toMatch(/^\w{3} \w{3} [ \d]\d \d\d:\d\d:\d\d \d{4}$/)
   })
 
-  it('changes nothing while the runtime has not moved the hooks, nor for other agents', () => {
+  it('changes nothing outside a Pod terminal, before the move, or for other agents', () => {
+    expect(run('claude', ['x'], { env: { ORCA_PANE_KEY: '' } }).argv).toEqual(['x'])
     expect(run('codex', ['x']).argv).toEqual(['x'])
     rmSync(join(hooksDir, 'claude-pod-settings.json'))
     expect(run('claude', ['x']).argv).toEqual(['x'])
@@ -172,7 +178,11 @@ describe.skipIf(process.platform !== 'darwin')("pod-agent-launcher's Claude sett
     const result = spawnSync('claude', ['x'], {
       encoding: 'utf8',
       cwd: root,
-      env: { PATH: [binDir, wrapperDir, realDir, '/usr/bin', '/bin'].join(':'), HOME: home }
+      env: {
+        PATH: [binDir, wrapperDir, realDir, '/usr/bin', '/bin'].join(':'),
+        HOME: home,
+        ORCA_PANE_KEY: 'tab-1:leaf'
+      }
     })
     const argv = result.stdout
       .split('\n')

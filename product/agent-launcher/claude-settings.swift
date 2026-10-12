@@ -267,11 +267,13 @@ func writeMerged(_ bytes: [UInt8], in dir: String) -> String? {
   return path
 }
 
-/// argv with Pod's `--settings`, or nil to run it as given: native mode off, already handed over
-/// (a wrapper script that ran `claude` again), or a user file Pod can't merge with.
+/// argv with Pod's `--settings`, or nil to run it as given: outside a Pod terminal (no pane for the
+/// hooks to report to, e.g. this launcher on a Terminal.app PATH), native mode off, already handed
+/// over (a wrapper script that ran `claude` again), or a user file Pod can't merge with.
 func withClaudeSettings(_ argv: [String], home: String) -> [String]? {
   let fallbackDir = "\(home)/.orca/agent-hooks"
-  guard exists("\(fallbackDir)/claude-pod-settings.json") else { return nil }
+  guard env("ORCA_PANE_KEY")?.isEmpty == false, exists("\(fallbackDir)/claude-pod-settings.json")
+  else { return nil }
   var dir = fallbackDir
   var names = ("claude-pod-settings.json", "claude-pod-settings-statusline.json")
   if let relayDir = env(claudeSettingsDirEnv), relayDir.hasPrefix("/"), relayAlive(relayDir) {
