@@ -3,6 +3,7 @@ import { win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
+import { removeInheritedTerminalSessionEnv } from '../pty/terminal-session-env'
 import {
   resolveProfileLoadingFallbackShell,
   resolveProfileLoadingShell
@@ -16,9 +17,12 @@ const environmentCache = new Map<string, Promise<NodeJS.ProcessEnv>>()
 const MAX_CACHED_ENVIRONMENTS = 8
 
 function processEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  return Object.fromEntries(
+  const result: NodeJS.ProcessEnv = Object.fromEntries(
     Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined)
   )
+  // Pod: the probe is an interactive shell; with Terminal.app's session id it saves that window's session.
+  removeInheritedTerminalSessionEnv(result)
+  return result
 }
 
 export function shellProbe(shell: string): string[] | null {
