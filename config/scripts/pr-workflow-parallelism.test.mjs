@@ -32,6 +32,7 @@ const shellContractFiles = [
   'src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',
   'src/main/zsh-wrapper-version-mismatch.live-shell.test.ts',
   'src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts',
+  'src/main/startup/login-shell-environment.live-shell.test.ts',
   'src/shared/posix-command-path-lookup.test.ts'
 ]
 const patchedNodePtyContractFiles = [
