@@ -380,6 +380,9 @@ int main(int argc, char **argv) {
   while (payload.len && payload.data[payload.len - 1] == '\n') payload.data[--payload.len] = 0;
   if (!payload.len) return 0;
   if (*env("GROK_HOOK_EVENT") || *env("DEVIN_PROJECT_DIR") || *env("CLAUDE_JOB_DIR")) return 0;
+  // A claude that got Pod's hooks with its launch (pod-agent-launcher sets POD_CLAUDE_SETTINGS_PID)
+  // reports through those, which call this with --launch; settings.json's older entry stays silent.
+  if (*env("POD_CLAUDE_SETTINGS_PID") && !(argc > 1 && !strcmp(argv[1], "--launch"))) return 0;
   char process[256];
   agent_process(process, sizeof process);
   read_endpoint_file();
