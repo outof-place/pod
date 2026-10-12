@@ -6,6 +6,7 @@ import type { DaemonFileLog } from '../daemon-file-log'
 import type { DaemonSessionAttachments } from '../daemon-session-attachments'
 import type { DaemonStreamDataBatcher } from '../daemon-stream-data-batcher'
 import type { TerminalHost } from '../terminal-host'
+import { createDaemonPodHookRelay } from '../pod-hook-relay/pod-hook-relay-daemon-wiring'
 import { PodLaneServer } from './pod-lane-server'
 import { livePodLaneSession } from './pod-lane-sessions'
 
@@ -48,4 +49,30 @@ export function createDaemonPodLaneServer(deps: {
       log: (event, details) => log.log(event, details)
     }
   })
+}
+
+/** The daemon's fork-only services, started and closed with it: the direct lane and the hook relay. */
+export type DaemonPodServices = {
+  lane: PodLaneServer
+  start: () => Promise<void>
+  close: () => Promise<void>
+}
+
+export function createDaemonPodServices(
+  deps: Parameters<typeof createDaemonPodLaneServer>[0]
+): DaemonPodServices {
+  const lane = createDaemonPodLaneServer(deps)
+  const relay = createDaemonPodHookRelay(deps)
+  return {
+    lane,
+    start: async () => {
+      await lane.start()
+      await relay?.start()
+    },
+    close: async () => {
+      // Why not awaited: disposal goes on to cancel pending spawns before the relay finishes.
+      void relay?.close()
+      await lane.close()
+    }
+  }
 }
