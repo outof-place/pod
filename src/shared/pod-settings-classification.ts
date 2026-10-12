@@ -143,8 +143,6 @@ export const POD_SETTINGS_HIDDEN = {
   httpProxyBypassRules: 'later',
   localhostWorktreeLabelsEnabled: 'later',
   openInApplications: 'later',
-  promptCacheTimerEnabled: 'later',
-  promptCacheTtlMs: 'later',
   agentCmdOverrides: 'later',
   codexSessionSourceHome: 'later',
   agentDefaultArgs: 'later',
