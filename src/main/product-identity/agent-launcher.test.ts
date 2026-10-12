@@ -9,6 +9,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { createRequire } from 'node:module'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -102,6 +103,18 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
   })
 
   describe("Claude's hooks with the launch in a Pod pane", () => {
+    // The relay: the launcher only checks that something answers on its port.
+    const relayServer = createServer((socket) => socket.end())
+    let relayPort = 0
+    beforeAll(async () => {
+      await new Promise<void>((resolve) => relayServer.listen(0, '127.0.0.1', resolve))
+      const address = relayServer.address()
+      relayPort = typeof address === 'object' && address !== null ? address.port : 0
+    })
+    afterAll(async () => {
+      await new Promise((resolve) => relayServer.close(resolve))
+    })
+
     function setup(): { dir: string; prefix: string; relay: string; pane: Record<string, string> } {
       const dir = mkdtempSync(join(root, 'settings-'))
       const prefix = join(dir, 'hooks', 'pod-claude-settings')
@@ -112,7 +125,7 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
       )
       writeFileSync(`${prefix}.command.json`, '{"hooks":{}}')
       const relay = join(dir, 'relay.env')
-      writeFileSync(relay, 'POD_HOOK_RELAY_PORT=4567\nPOD_HOOK_RELAY_TOKEN=tok\n')
+      writeFileSync(relay, `POD_HOOK_RELAY_PORT=${relayPort}\nPOD_HOOK_RELAY_TOKEN=tok\n`)
       writeFileSync(join(dir, 'endpoint.env'), 'ORCA_AGENT_HOOK_PORT=1\n')
       // The agent: its argv, its pid (the launcher's after exec) and the settings file it got.
       script(
@@ -142,13 +155,22 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
       const launchFile = join(dir, 'hooks', 'claude-launch', `claude-${pid}.json`)
       expect(argsLine).toBe(`args=--settings ${launchFile} -p x`)
       const settings = JSON.parse(settingsText)
-      expect(settings.url).toBe('http://127.0.0.1:4567/hook/claude')
+      expect(settings.url).toBe(`http://127.0.0.1:${relayPort}/hook/claude`)
       expect(settings.token).toBe('tok')
       expect(Buffer.from(settings.pane, 'base64').toString()).toBe(
         `tab-1:leaf-1\x1ftab-1\x1f\x1frepo::/w\x1f\x1f\x1f${join(dir, 'endpoint.env')}`
       )
       expect(JSON.parse(settings.process)).toMatchObject({ pid: Number(pid), platform: 'darwin' })
       expect(lstatSync(launchFile).mode & 0o777).toBe(0o600)
+      // A relay file a dead daemon left: the command template.
+      const dead = join(dir, 'dead-relay.env')
+      writeFileSync(dead, 'POD_HOOK_RELAY_PORT=1\nPOD_HOOK_RELAY_TOKEN=tok\n')
+      expect(
+        run('claude', ['x'], [binDir, join(dir, 'real')], {
+          ...pane,
+          POD_AGENT_HOOK_RELAY: dead
+        }).stdout.split('\n')[0]
+      ).toBe(`args=--settings ${join(dir, 'hooks', 'pod-claude-settings')}.command.json x`)
       // The relay reads only the endpoint file; without one the C client reads the pane's env.
       const noFile = { ...pane, POD_AGENT_HOOK_RELAY: relay, ORCA_AGENT_HOOK_ENDPOINT: '/nowhere' }
       expect(run('claude', ['x'], [binDir, join(dir, 'real')], noFile).stdout.split('\n')[0]).toBe(
@@ -242,7 +264,7 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
       expect(relayed[0]).toBe(
         `args=--settings ${join(dir, 'hooks', 'claude-launch', `merged-${relayedPid}.json`)} x`
       )
-      expect(JSON.parse(relayed[2]).url).toBe('http://127.0.0.1:4567/hook/claude')
+      expect(JSON.parse(relayed[2]).url).toBe(`http://127.0.0.1:${relayPort}/hook/claude`)
       expect(() =>
         lstatSync(join(dir, 'hooks', 'claude-launch', `claude-${relayedPid}.json`))
       ).toThrow()

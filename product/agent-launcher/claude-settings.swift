@@ -295,6 +295,32 @@ func mergeSettings(user: JSONValue, pod: JSONValue) -> JSONValue? {
   return .object(members)
 }
 
+/// The relay answers on loopback; a relay file a dead daemon left behind must not cost the hooks
+/// (agent-api's check).
+func relayAlive(_ port: String) -> Bool {
+  guard let number = UInt16(port) else { return false }
+  let fd = socket(AF_INET, SOCK_STREAM, 0)
+  guard fd >= 0 else { return false }
+  defer { close(fd) }
+  _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+  var address = sockaddr_in()
+  address.sin_family = sa_family_t(AF_INET)
+  address.sin_port = number.bigEndian
+  address.sin_addr.s_addr = UInt32(0x7f00_0001).bigEndian
+  let result = withUnsafePointer(to: &address) {
+    $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+      connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+    }
+  }
+  if result == 0 { return true }
+  guard errno == EINPROGRESS else { return false }
+  var poller = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+  guard poll(&poller, 1, 100) == 1 else { return false }
+  var error: Int32 = 0
+  var length = socklen_t(MemoryLayout<Int32>.size)
+  return getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) == 0 && error == 0
+}
+
 // MARK: Claude's argv
 
 /// Pod's settings for this launch: the filled http template, else the command one. With `write`
@@ -306,7 +332,7 @@ func podLaunchSettings(prefix: String, pane: String, statusLine: Bool, write: Bo
   // Why the endpoint file: the relay reads only that; without it the C client uses the pane's env.
   guard let endpoint = env("ORCA_AGENT_HOOK_ENDPOINT"), access(endpoint, R_OK) == 0,
     let relayPath = env(relayEnv), let relay = readText(relayPath).map(keyValues),
-    let port = relay["POD_HOOK_RELAY_PORT"], let token = relay["POD_HOOK_RELAY_TOKEN"],
+    let port = relay["POD_HOOK_RELAY_PORT"], let token = relay["POD_HOOK_RELAY_TOKEN"], relayAlive(port),
     let template = readText("\(prefix).http\(variant).json"), let process = agentProcess()
   else { return fallback }
   let fields = [pane, env("ORCA_TAB_ID") ?? "", env("ORCA_AGENT_LAUNCH_TOKEN") ?? "",
