@@ -286,6 +286,8 @@ func claudeLaunchSettings(command: String, args: [String]) -> String? {
     .replacing("@@POD_AGENT_PROCESS@@", with: jsonEscaped(process))
   let dir = String(prefix[..<(prefix.lastIndex(of: "/") ?? prefix.startIndex)]) + "/claude-launch"
   mkdir(dir, 0o700)
+  // Why: mkdir leaves an existing directory's mode as it was.
+  chmod(dir, 0o700)
   pruneLaunchFiles(dir)
   let path = "\(dir)/claude-\(getpid()).json"
   return writePrivate(path, settings) ? path : (access(commandTemplate, R_OK) == 0 ? commandTemplate : nil)

@@ -1,9 +1,11 @@
 // Fork-only (Pod): what the relay does with one hook event, as Pod's command hook does it
 // (native/pod-agent-hook-macos/src/pod-agent-hook.c): the same request to the runtime's hook
 // server, read from the endpoint file at send time, or the same spool line when nothing answers.
-import { appendFile, chmod, mkdir, readFile, stat, truncate } from 'node:fs/promises'
+import { appendFileSync, chmodSync, mkdirSync, statSync, truncateSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { request } from 'node:http'
 import { dirname, join } from 'node:path'
+import { setImmediate as nextTurn } from 'node:timers/promises'
 
 /** What the launcher wrote into the per-launch settings, base64 of \x1f-joined fields. */
 export type PodHookRelayPane = {
@@ -76,14 +78,42 @@ async function readEndpoint(pane: PodHookRelayPane): Promise<Endpoint | null> {
   }
 }
 
-function formBody(event: PodHookRelayEvent, endpoint: Endpoint): Buffer {
+/** Bytes the C client's urlencode keeps as they are (RFC 3986 unreserved). */
+const UNRESERVED = new Uint8Array(256)
+for (const c of 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~') {
+  UNRESERVED[c.charCodeAt(0)] = 1
+}
+const HEX = Buffer.from('0123456789ABCDEF')
+/** ~0.7 ms of encoding: the daemon's loop gets a turn between slices. */
+const ENCODE_SLICE_BYTES = 256 * 1024
+
+/** As curl --data-urlencode: a space as '+', the rest %XX. */
+function urlencode(value: Buffer): Buffer {
+  let length = value.length
+  for (let i = 0; i < value.length; i++) {
+    if (UNRESERVED[value[i]] === 0 && value[i] !== 0x20) {
+      length += 2
+    }
+  }
+  const out = Buffer.allocUnsafe(length)
+  let at = 0
+  for (let i = 0; i < value.length; i++) {
+    const byte = value[i]
+    if (UNRESERVED[byte] === 1) {
+      out[at++] = byte
+    } else if (byte === 0x20) {
+      out[at++] = 0x2b
+    } else {
+      out[at++] = 0x25
+      out[at++] = HEX[byte >> 4]
+      out[at++] = HEX[byte & 15]
+    }
+  }
+  return out
+}
+
+async function formBody(event: PodHookRelayEvent, endpoint: Endpoint): Promise<Buffer[]> {
   const { pane } = event
-  // Why: the C client's encoding (RFC 3986 unreserved kept), not URLSearchParams' '+' for a space.
-  const encode = (value: string | Buffer): string =>
-    Array.from(Buffer.isBuffer(value) ? value : Buffer.from(value, 'utf8'), (byte) => {
-      const c = String.fromCharCode(byte)
-      return /[A-Za-z0-9\-._~]/.test(c) ? c : `%${byte.toString(16).toUpperCase().padStart(2, '0')}`
-    }).join('')
   const fields: [string, string][] = [
     ['paneKey', pane.paneKey],
     ['tabId', pane.tabId],
@@ -93,12 +123,18 @@ function formBody(event: PodHookRelayEvent, endpoint: Endpoint): Buffer {
     ['version', endpoint.version],
     ['agentProcess', event.agentProcess]
   ]
-  return Buffer.from(
-    `${fields.map(([key, value]) => `${key}=${encode(value)}`).join('&')}&payload=${encode(event.payload)}`
-  )
+  const head = fields.map(([key, value]) => `${key}=${urlencode(Buffer.from(value)).toString()}`)
+  const parts: Buffer[] = [Buffer.from(`${head.join('&')}&payload=`)]
+  for (let at = 0; at < event.payload.length; at += ENCODE_SLICE_BYTES) {
+    if (at > 0) {
+      await nextTurn()
+    }
+    parts.push(urlencode(event.payload.subarray(at, at + ENCODE_SLICE_BYTES)))
+  }
+  return parts
 }
 
-function post(event: PodHookRelayEvent, endpoint: Endpoint): Promise<boolean> {
+async function post(event: PodHookRelayEvent, endpoint: Endpoint): Promise<boolean> {
   const { pane } = event
   const raw = endpoint.transport === 'raw-json-v1'
   const meta = [
@@ -121,7 +157,8 @@ function post(event: PodHookRelayEvent, endpoint: Endpoint): Promise<boolean> {
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-Orca-Agent-Hook-Token': endpoint.token
       }
-  const body = raw ? event.payload : formBody(event, endpoint)
+  const body = raw ? [event.payload] : await formBody(event, endpoint)
+  const length = body.reduce((sum, part) => sum + part.length, 0)
   return new Promise((resolve) => {
     const req = request(
       {
@@ -131,7 +168,7 @@ function post(event: PodHookRelayEvent, endpoint: Endpoint): Promise<boolean> {
         path: `/hook/${event.agent}`,
         agent: false,
         timeout: REQUEST_TIMEOUT_MS,
-        headers: { ...headers, 'Content-Length': String(body.length), Connection: 'close' }
+        headers: { ...headers, 'Content-Length': String(length), Connection: 'close' }
       },
       (res) => {
         // As curl -sS without -f: any answer is delivered.
@@ -147,28 +184,34 @@ function post(event: PodHookRelayEvent, endpoint: Endpoint): Promise<boolean> {
       resolve(false)
     })
     req.on('close', () => clearTimeout(connectTimer))
-    req.end(body)
+    for (const part of body.slice(0, -1)) {
+      req.write(part)
+    }
+    req.end(body.at(-1))
   })
 }
 
-/** The runtime replays these at its next start (claude-hook.sh spool_hook_event). */
-async function spool(event: PodHookRelayEvent, now: number): Promise<void> {
-  const text = event.payload.toString('utf8')
-  const { pane } = event
-  if (TOOL_EVENTS.some((name) => text.includes(name)) || !pane.endpoint) {
-    return
+/** The runtime replays these at its next start (claude-hook.sh spool_hook_event). Synchronous, as
+ *  the C client's: a closing relay spools its backlog before the daemon exits. */
+export function spoolPodHookRelayEvent(
+  event: PodHookRelayEvent,
+  now: number
+): 'spooled' | 'skipped' {
+  const { pane, payload } = event
+  if (TOOL_EVENTS.some((name) => payload.includes(name)) || !pane.endpoint) {
+    return 'skipped'
   }
   const dir = join(dirname(pane.endpoint), 'spool')
   const id = pane.paneKey.slice(-36).replace(/[/:]/g, '_')
   const file = join(dir, `pane-${id}.jsonl`)
   try {
-    await mkdir(dir, { recursive: true, mode: 0o700 })
-    await chmod(dir, 0o700)
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    chmodSync(dir, 0o700)
     let size = 0
     try {
-      const info = await stat(file)
+      const info = statSync(file)
       if (info.isFile() && (now - info.mtimeMs) / 86_400_000 > SPOOL_MAX_AGE_DAYS) {
-        await truncate(file, 0)
+        truncateSync(file, 0)
       } else {
         size = info.size
       }
@@ -176,7 +219,7 @@ async function spool(event: PodHookRelayEvent, now: number): Promise<void> {
       // No spool yet.
     }
     if (size >= SPOOL_CAP_BYTES) {
-      return
+      return 'skipped'
     }
     const fields = JSON.stringify({
       paneKey: pane.paneKey,
@@ -189,10 +232,13 @@ async function spool(event: PodHookRelayEvent, now: number): Promise<void> {
       receivedAt: Math.floor(now / 1000) * 1000,
       agentProcess: event.agentProcess
     })
-    await appendFile(file, `\n${fields.slice(0, -1)},"payload":${text}}\n`, { mode: 0o600 })
-    await chmod(file, 0o600)
+    const line = [Buffer.from(`\n${fields.slice(0, -1)},"payload":`), payload, Buffer.from('}\n')]
+    appendFileSync(file, Buffer.concat(line), { mode: 0o600 })
+    chmodSync(file, 0o600)
+    return 'spooled'
   } catch {
     // A spool that can't be written loses the event, as the command hook does.
+    return 'skipped'
   }
 }
 
@@ -205,6 +251,6 @@ export async function deliverPodHookRelayEvent(
   if (endpoint && (await post(event, endpoint))) {
     return 'delivered'
   }
-  await spool(event, now())
+  spoolPodHookRelayEvent(event, now())
   return 'spooled'
 }
