@@ -87,6 +87,9 @@ export type ToolState = {
   /** Filesystem mount(8) reports for the clone root's device. */
   volumeType?: string
   freeBytes?: number
+  /** pod-assess's exit code, and a promise it waits on before exiting. */
+  assessCode?: number
+  assessGate?: Promise<void>
 }
 
 const ok: ProcessResult = {
@@ -100,7 +103,7 @@ const ok: ProcessResult = {
 // Why captured at import: a stand-in tool takes wall time; a delay on a test's fake clock never fires.
 const realSetTimeout = globalThis.setTimeout
 
-/** Stand-ins for cp, codesign, chmod and lsof, so the suite runs on every CI host. */
+/** Stand-ins for cp, codesign, chmod, lsof and pod-assess, so the suite runs on every CI host. */
 export async function fakeTool(state: ToolState, spec: ProcessSpec): Promise<ProcessResult> {
   if (spec.program === '/usr/sbin/taskpolicy' && spec.args?.[0] === '-b') {
     state.calls.push({ program: spec.program, args: spec.args })
@@ -109,6 +112,10 @@ export async function fakeTool(state: ToolState, spec: ProcessSpec): Promise<Pro
   }
   const args = spec.args ?? []
   state.calls.push({ program: spec.program, args })
+  if (spec.program.endsWith('/pod-assess')) {
+    await state.assessGate
+    return { ...ok, code: state.assessCode ?? 0 }
+  }
   switch (spec.program) {
     case '/bin/cp':
       await new Promise((resolve) => realSetTimeout(resolve, state.copyDelayMs ?? 0))
