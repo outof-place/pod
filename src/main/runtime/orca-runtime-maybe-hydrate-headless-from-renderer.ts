@@ -7,6 +7,7 @@ import { detectAgentStatusFromTitle, normalizeTerminalTitle } from '../../shared
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { chunkDataAfterSeed } from './main-terminal-model-dormancy'
+import { podScansForFreebuff } from '../pod/pod-freebuff-scan-gate'
 
 export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   // Why: hydrate the runtime headless emulator from the desktop renderer's
@@ -212,13 +213,19 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
       // Why inside the chain: the ownership mirror must observe live bytes in
       // the same total order as seeds (seedOwner also runs on this chain).
       state.ownership.scan(fresh ?? '')
-      for (const chunk of splitFreebuffScreenUpdates(
-        fresh ?? '',
-        state.emulator.partialEscapeTailAnsi
-      )) {
+      // Pod: see pod-freebuff-scan-gate.ts.
+      const freebuffScan = podScansForFreebuff(fresh ?? '', state.emulator.getLastTitle())
+      for (const chunk of freebuffScan
+        ? splitFreebuffScreenUpdates(fresh ?? '', state.emulator.partialEscapeTailAnsi)
+        : [fresh ?? '']) {
         await state.emulator.write(chunk, { forwardQueryReplies })
         const pty = this.ptysById.get(ptyId)
-        if (pty && !pty.connectionId && this.headlessTerminals.get(ptyId) === state) {
+        if (
+          freebuffScan &&
+          pty &&
+          !pty.connectionId &&
+          this.headlessTerminals.get(ptyId) === state
+        ) {
           const payload = observeFreebuffTerminalStatus(
             state.emulator,
             chunk,
