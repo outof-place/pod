@@ -163,8 +163,9 @@ func printPolicy() {
 // directory), gives the agent's children and theirs the same role as soon as they exist: kqueue
 // NOTE_FORK (no polling), proc_listchildpids for the new ones, and setpriority(PRIO_DARWIN_ROLE),
 // which the kernel allows only on processes of the same user. Deeper processes (a build's workers)
-// and Pod's statusline stay at default; a process that already has a role (darwinbg, throttled)
-// keeps it, and a QoS clamp (`taskpolicy -c`) still wins over the role. It exits with the agent.
+// and Pod's statusline stay at default, and a process that has used a second of CPU goes back to
+// default; a process that already has a role (darwinbg, throttled) keeps it, and a QoS clamp
+// (`taskpolicy -c`) still wins over the role. It exits with the agent, killed or not.
 let treeEnv = "POD_AGENT_TREE"
 // "<pid>": the agent whose watcher this process's tree already has.
 let treeRootEnv = "POD_AGENT_TREE_ROOT"
@@ -269,20 +270,79 @@ func isPodStatusLine(_ pid: pid_t) -> Bool {
   return false
 }
 
-/// The watched tree: depth below the agent of each process followed.
+/// CPU time a process has used so far, in nanoseconds.
+func cpuNanoseconds(_ pid: pid_t) -> UInt64? {
+  var usage = rusage_info_v0()
+  let result = withUnsafeMutablePointer(to: &usage) { pointer in
+    pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
+      proc_pid_rusage(pid, RUSAGE_INFO_V0, $0)
+    }
+  }
+  guard result == 0 else { return nil }
+  // Why the timebase: rusage times are in Mach absolute time units, not nanoseconds, on arm64.
+  var timebase = mach_timebase_info_data_t()
+  mach_timebase_info(&timebase)
+  return (usage.ri_user_time + usage.ri_system_time) * UInt64(timebase.numer)
+    / UInt64(max(timebase.denom, 1))
+}
+
+/// The watched tree: depth below the agent of each process followed, and the processes this
+/// watcher gave the role. One that has used a second of CPU (a compiler, a test runner, a busy
+/// loop) goes back to default, so builds don't compete with the user's apps; while any keep the
+/// role, a 1 s timer checks them.
 struct Tree {
   let queue: Int32
   var depth: [pid_t: Int] = [:]
+  var raised: Set<pid_t> = []
+  var ticking = false
+  static let cpuBudget: UInt64 = 1_000_000_000
+  static let timerIdent: UInt = 1
 
-  /// Follows `pid` (forks, exit, and the exec of the agent's own children), once.
+  /// Follows `pid` once: the agent and its children for forks (and the children's exec), their
+  /// children for their exit only.
   mutating func follow(_ pid: pid_t, depth level: Int) -> Bool {
     guard depth[pid] == nil else { return false }
+    let notes =
+      level < 2 ? forkNote | exitNote | (level == 1 ? execNote : 0) : exitNote
     var change = kevent(
       ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_CLEAR),
-      fflags: forkNote | exitNote | (level == 1 ? execNote : 0), data: 0, udata: nil)
+      fflags: notes, data: 0, udata: nil)
     guard kevent(queue, &change, 1, nil, 0, nil) == 0 else { return false }
     depth[pid] = level
     return true
+  }
+
+  mutating func exited(_ pid: pid_t) {
+    depth[pid] = nil
+    raised.remove(pid)
+  }
+
+  /// The role back to default for whoever has used its CPU budget (still this watcher's: the
+  /// role it gave, the user's), and the timer on while any keep it.
+  mutating func demoteBusy() {
+    for pid in raised {
+      guard let used = cpuNanoseconds(pid) else {
+        raised.remove(pid)
+        continue
+      }
+      guard used > Tree.cpuBudget else { continue }
+      errno = 0
+      if getpriority(prioDarwinRole, id_t(pid)) == prioDarwinRoleUI, errno == 0,
+        processInfo(pid)?.pbi_uid == getuid()
+      {
+        _ = setpriority(prioDarwinRole, id_t(pid), 0)
+      }
+      raised.remove(pid)
+      // Its own children from now on stay at default too.
+      if depth[pid] == 1 { forget(pid) }
+    }
+    if raised.isEmpty == ticking {
+      var timer = kevent(
+        ident: Tree.timerIdent, filter: Int16(EVFILT_TIMER),
+        flags: UInt16(ticking ? EV_DELETE : EV_ADD), fflags: 0, data: 1000, udata: nil)
+      _ = kevent(queue, &timer, 1, nil, 0, nil)
+      ticking.toggle()
+    }
   }
 
   mutating func forget(_ pid: pid_t) {
@@ -314,8 +374,10 @@ struct Tree {
       errno = 0
       let role = getpriority(prioDarwinRole, id_t(child))
       guard errno == 0 else { continue }
-      if role == 0 { _ = setpriority(prioDarwinRole, id_t(child), prioDarwinRoleUI) }
-      if level == 1, follow(child, depth: level) { sweep(child) }
+      if role == 0, setpriority(prioDarwinRole, id_t(child), prioDarwinRoleUI) == 0 {
+        raised.insert(child)
+      }
+      if follow(child, depth: level), level == 1 { sweep(child) }
     }
   }
 
@@ -323,6 +385,7 @@ struct Tree {
   mutating func execed(_ pid: pid_t) {
     guard depth[pid] == 1, isPodStatusLine(pid) else { return }
     _ = setpriority(prioDarwinRole, id_t(pid), 0)
+    raised.remove(pid)
     forget(pid)
   }
 }
@@ -344,15 +407,16 @@ func watchTree(_ root: pid_t) -> Never {
       if errno == EINTR { continue }
       exit(0)
     }
-    for event in events.prefix(Int(count)) {
+    for event in events.prefix(Int(count)) where event.filter == Int16(EVFILT_PROC) {
       let pid = pid_t(event.ident)
       if event.fflags & execNote != 0 { tree.execed(pid) }
       if event.fflags & forkNote != 0 { tree.sweep(pid) }
       if event.fflags & exitNote != 0 {
         if pid == root { exit(0) }
-        tree.depth[pid] = nil
+        tree.exited(pid)
       }
     }
+    tree.demoteBusy()
   }
 }
 
