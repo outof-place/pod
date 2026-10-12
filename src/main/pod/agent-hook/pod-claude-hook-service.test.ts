@@ -34,6 +34,7 @@ import {
 import { PodClaudeHookService } from './pod-claude-hook-service'
 import { PodClaudeSettingsCut } from './pod-claude-settings-cut'
 import { PodClaudeProfileHookService } from './pod-claude-profile-hook-service'
+import { podStatusLineCommand } from './pod-statusline-native'
 import { readPodClaudeMigrations } from './pod-claude-settings-migration'
 
 let home = ''
@@ -119,6 +120,8 @@ describe("Pod's Claude hooks with each launch", () => {
     writeFileSync(settingsPath, `// mine\n${readFileSync(settingsPath, 'utf8')}`)
     const legacyText = readFileSync(settingsPath, 'utf8')
     expect(legacyText).toContain('pod-agent-hook')
+    const nativeStatusLine = podStatusLineCommand('claude-statusline.sh')
+    expect(readJson(settingsPath).statusLine).toMatchObject({ command: nativeStatusLine })
     const legacy = { pids: [4242] }
     const { cut, watched, exitOne } = testCut(legacy)
     const service = new PodClaudeHookService(() => cut)
@@ -175,7 +178,8 @@ describe("Pod's Claude hooks with each launch", () => {
     })
     const statusLine = readJson(template('command-statusline'))
     expect(statusLine.hooks).toEqual(command.hooks)
-    expect(JSON.stringify(statusLine.statusLine)).toContain('claude-statusline')
+    // The native client's, as settings.json had it: one process per refresh.
+    expect(statusLine.statusLine).toEqual({ type: 'command', command: nativeStatusLine })
     expect(podClaudeLaunchSettingsEnv()).toEqual({
       POD_CLAUDE_LAUNCH_SETTINGS: getPodClaudeLaunchSettingsPrefix()
     })
