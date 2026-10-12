@@ -42,7 +42,10 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
           'skipCloseTerminalWithRunningProcessConfirm'
         ]
       },
-      { title: 'Editor', keys: ['editorWordWrap'] }
+      {
+        title: 'Editor',
+        keys: ['editorWordWrap', 'editorAutoSave', 'editorAutoSaveDelayMs']
+      }
     ]
   },
   {
