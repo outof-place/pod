@@ -11,6 +11,7 @@ import { createServer, request, type IncomingHttpHeaders, type Server } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { spoolPodHookRelayEventAsync } from './pod-hook-relay-spool'
 import {
   deliverPodHookRelayEvent,
   type PodHookRelayEvent,
@@ -167,6 +168,21 @@ describe('pod-hook-relay delivery', () => {
       payload: { hook_event_name: 'Stop' }
     })
     expect(statSync(file).mode & 0o777).toBe(0o600)
+  })
+
+  it('spools off the loop, one write at a time per file, in the order asked', async () => {
+    const now = Date.parse('2026-10-12T03:00:00.000Z')
+    const writes = Array.from({ length: 20 }, (_, n) =>
+      spoolPodHookRelayEventAsync(event(`{"hook_event_name":"Stop","n":${n}}`), now)
+    )
+    expect(await Promise.all(writes)).toEqual(Array(20).fill('spooled'))
+    const lines = readFileSync(join(dir, 'spool', 'pane-tab-1_leaf-1.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+    expect(lines.map((line) => JSON.parse(line).payload.n)).toEqual([...Array(20).keys()])
+    expect(await spoolPodHookRelayEventAsync(event('{"hook_event_name":"PreToolUse"}'), now)).toBe(
+      'skipped'
+    )
   })
 
   it('truncates a spool older than 7 whole days, as the C client counts them', async () => {
@@ -333,13 +349,13 @@ describe('pod-hook-relay server', () => {
     }
     await post(port, headers, '{"hook_event_name":"PreToolUse","i":64}')
     await post(port, headers, '{"hook_event_name":"Stop","i":65}')
+    release()
+    await relay.idle()
     const spooled = readFileSync(join(dir, 'spool', 'pane-tab-1_leaf-1.jsonl'), 'utf8')
       .split('\n')
       .filter(Boolean)
       .map((line) => JSON.parse(line).payload)
     expect(spooled).toEqual([{ hook_event_name: 'Stop', i: 65 }])
-    release()
-    await new Promise((resolve) => setTimeout(resolve, 50))
     expect(seen).toHaveLength(64)
     expect(logs).toEqual([
       [

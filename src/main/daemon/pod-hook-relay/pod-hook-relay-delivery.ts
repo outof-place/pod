@@ -1,11 +1,10 @@
 // Fork-only (Pod): what the relay does with one hook event, as Pod's command hook does it
 // (native/pod-agent-hook-macos/src/pod-agent-hook.c): the same request to the runtime's hook
 // server, read from the endpoint file at send time, or the same spool line when nothing answers.
-import { appendFileSync, chmodSync, mkdirSync, statSync, truncateSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { request } from 'node:http'
-import { dirname, join } from 'node:path'
 import { setImmediate as nextTurn } from 'node:timers/promises'
+import { spoolPodHookRelayEventAsync } from './pod-hook-relay-spool'
 
 /** What the launcher wrote into the per-launch settings, base64 of \x1f-joined fields. */
 export type PodHookRelayPane = {
@@ -31,9 +30,6 @@ export type PodHookRelayEvent = {
 const PANE_FIELDS = 7
 const CONNECT_TIMEOUT_MS = 500
 const REQUEST_TIMEOUT_MS = 1_500
-const SPOOL_CAP_BYTES = 5_242_880
-const SPOOL_MAX_AGE_DAYS = 7
-const TOOL_EVENTS = ['"PreToolUse"', '"PostToolUse"', '"PostToolUseFailure"']
 
 export function decodePodHookRelayPane(header: string | undefined): PodHookRelayPane | null {
   if (!header) {
@@ -210,61 +206,6 @@ async function post(event: PodHookRelayEvent, endpoint: Endpoint): Promise<boole
   })
 }
 
-/** The runtime replays these at its next start (claude-hook.sh spool_hook_event). Synchronous, as
- *  the C client's: a closing relay spools its backlog before the daemon exits. */
-export function spoolPodHookRelayEvent(
-  event: PodHookRelayEvent,
-  now: number
-): 'spooled' | 'skipped' {
-  const { pane, payload } = event
-  if (TOOL_EVENTS.some((name) => payload.includes(name)) || !pane.endpoint) {
-    return 'skipped'
-  }
-  const dir = join(dirname(pane.endpoint), 'spool')
-  const id = pane.paneKey.slice(-36).replace(/[/:]/g, '_')
-  const file = join(dir, `pane-${id}.jsonl`)
-  try {
-    mkdirSync(dir, { recursive: true, mode: 0o700 })
-    chmodSync(dir, 0o700)
-    let size = 0
-    try {
-      const info = statSync(file)
-      // Why whole seconds and days: the C client's integer arithmetic, so 7.9 days is still 7.
-      const ageDays = Math.trunc(
-        (Math.trunc(now / 1000) - Math.trunc(info.mtimeMs / 1000)) / 86_400
-      )
-      if (info.isFile() && ageDays > SPOOL_MAX_AGE_DAYS) {
-        truncateSync(file, 0)
-      } else {
-        size = info.size
-      }
-    } catch {
-      // No spool yet.
-    }
-    if (size >= SPOOL_CAP_BYTES) {
-      return 'skipped'
-    }
-    const fields = JSON.stringify({
-      paneKey: pane.paneKey,
-      tabId: pane.tabId,
-      worktreeId: pane.worktreeId,
-      env: pane.env,
-      version: pane.version,
-      launchToken: pane.launchToken,
-      source: event.agent,
-      receivedAt: Math.floor(now / 1000) * 1000,
-      agentProcess: event.agentProcess
-    })
-    const line = [Buffer.from(`\n${fields.slice(0, -1)},"payload":`), payload, Buffer.from('}\n')]
-    appendFileSync(file, Buffer.concat(line), { mode: 0o600 })
-    chmodSync(file, 0o600)
-    return 'spooled'
-  } catch {
-    // A spool that can't be written loses the event, as the command hook does.
-    return 'skipped'
-  }
-}
-
 /** Delivered, or spooled when the runtime didn't answer. */
 export async function deliverPodHookRelayEvent(
   event: PodHookRelayEvent,
@@ -274,6 +215,6 @@ export async function deliverPodHookRelayEvent(
   if (endpoint && (await post(event, endpoint))) {
     return 'delivered'
   }
-  spoolPodHookRelayEvent(event, now())
+  await spoolPodHookRelayEventAsync(event, now())
   return 'spooled'
 }
