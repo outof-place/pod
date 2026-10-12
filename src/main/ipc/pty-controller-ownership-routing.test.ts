@@ -292,7 +292,7 @@ describe('registerPtyHandlers', () => {
     const daemonPtyId = 'repo-1::/tmp/wt@@sequence-handoff'
     const providerSequence = { value: 204, generation: 'continued' as const }
     const localProvider = createAgentClaimProvider({})
-    localProvider.attach.mockResolvedValueOnce({ providerSequence })
+    localProvider.attach.mockResolvedValueOnce({ providerSequence, providerAttachSequence: 180 })
     setLocalPtyProvider(localProvider as never)
     const getPtyOutputSequence = vi.fn(() => 0)
     const synchronizePtyOutputSequenceFromProvider = vi.fn()
@@ -307,7 +307,8 @@ describe('registerPtyHandlers', () => {
     expect(synchronizePtyOutputSequenceFromProvider).toHaveBeenCalledWith(
       daemonPtyId,
       providerSequence,
-      0
+      0,
+      180
     )
   })
   it('does not dispatch a runtime PTY spawn after its client disconnects', async () => {
