@@ -7,8 +7,12 @@ import {
   type DaemonChildSpawnOptions
 } from './daemon-launched-child-spawn'
 import { parseDaemonReadyIdentity } from './daemon-ready-identity'
+import {
+  isLaunchdDaemonLaunchEnabled,
+  launchDaemonViaLaunchd,
+  type DaemonLaunchdJobs
+} from './daemon-launchd-launch'
 import { unlinkOwnedDaemonPidFile } from './daemon-spawner'
-import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 
 const DAEMON_CHILD_TERMINATION_GRACE_MS = 5_000
 const DAEMON_CHILD_FORCE_EXIT_WAIT_MS = 1_000
@@ -24,9 +28,24 @@ export class DaemonEndpointUnavailableError extends Error {
   }
 }
 
+/** A forked daemon's ChildProcess, or (Pod, macOS) a launchd job's LaunchdDaemonProcess. */
+export type DaemonChildHandle = Pick<
+  ChildProcess,
+  'pid' | 'exitCode' | 'signalCode' | 'connected' | 'disconnect' | 'unref'
+> & {
+  kill(signal?: NodeJS.Signals): boolean
+  on(event: 'exit', listener: () => void): unknown
+  once(event: 'exit', listener: () => void): unknown
+  off(event: 'exit', listener: () => void): unknown
+}
+
 export type LaunchedDaemonChild = {
-  child: ChildProcess
+  child: DaemonChildHandle
   identity: DaemonEndpointIdentity
+}
+
+export function daemonChildHasExited(child: DaemonChildHandle): boolean {
+  return (child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null
 }
 
 /**
@@ -38,8 +57,31 @@ export type LaunchedDaemonChild = {
  * support isolation degrades to today's proven behavior instead of failing the launch outright.
  */
 export async function launchDaemonChild(
-  options: DaemonChildSpawnOptions
+  options: DaemonChildSpawnOptions,
+  launchdJobs?: DaemonLaunchdJobs
 ): Promise<LaunchedDaemonChild> {
+  // Pod: a launchd job when asked (macOS); like the scope below, any failure but a lost endpoint
+  // race falls back to the fork.
+  if (launchdJobs && isLaunchdDaemonLaunchEnabled()) {
+    try {
+      const outcome = await launchDaemonViaLaunchd(options, launchdJobs)
+      if (outcome.kind === 'endpoint-unavailable') {
+        throw new DaemonEndpointUnavailableError(outcome.reason)
+      }
+      return {
+        child: outcome.child,
+        identity: { ...outcome.identity, launchNonce: options.launchNonce }
+      }
+    } catch (error) {
+      if (error instanceof DaemonEndpointUnavailableError) {
+        throw error
+      }
+      console.warn(
+        '[daemon] launchd launch failed, forking instead:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
+  }
   if (!isDurableDaemonScopeSupported()) {
     return launchDaemonChildAttempt(options, false)
   }
@@ -218,9 +260,9 @@ async function launchDaemonChildAttempt(
  * is either still systemd-run (scope setup not finished, and killing it aborts the launch) or
  * already the daemon itself. There is never an intermediate process left holding the daemon.
  */
-export async function terminateLaunchedDaemonChild(child: ChildProcess): Promise<void> {
+export async function terminateLaunchedDaemonChild(child: DaemonChildHandle): Promise<void> {
   try {
-    if (childProcessHasExited(child)) {
+    if (daemonChildHasExited(child)) {
       return
     }
     await new Promise<void>((resolve, reject) => {
