@@ -340,6 +340,10 @@ export class HeadlessEmulator {
     this.oscText.cwd = cwd
   }
 
+  getLastTitle(): string | null {
+    return this.oscText.lastTitle
+  }
+
   setLastTitle(title: string): void {
     this.oscText.lastTitle = title
   }
