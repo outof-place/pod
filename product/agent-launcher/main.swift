@@ -9,6 +9,7 @@
 //   claude [args...]                       via the symlink: run the next `claude` on PATH
 //   pod-agent-launcher -- <cmd> [args...]  explicit form
 //   pod-agent-launcher --print-policy      apply the policy and print what the kernel reports
+//   pod-agent-launcher --await-exit <pid>…  return once one of them, or the caller, exits
 //
 // POD_AGENT_TURBO=0 skips the policy (the command still runs).
 //
@@ -167,6 +168,8 @@ if invokedAs == launcherName {
   case "--print-policy":
     printPolicy()
     exit(0)
+  case "--await-exit":
+    awaitExit(arguments.dropFirst(2).compactMap { pid_t($0) })
   case "--" where arguments.count > 2:
     commandIndex = 2
   default:

@@ -122,11 +122,14 @@ function spoolOf(root: string): string[] {
   )
 }
 
-async function viaClient(scenario: Case): Promise<{ requests: Captured[]; spool: string[] }> {
+async function viaClient(
+  scenario: Case,
+  args: string[] = []
+): Promise<{ requests: Captured[]; spool: string[] }> {
   const root = mkdtempSync(join(dir, 'client-'))
   const env = { PATH: '/usr/bin:/bin', HOME: root, ...paneEnv(scenario, root) }
   captured = []
-  const child = spawn(client, [], { env, stdio: ['pipe', 'pipe', 'pipe'] })
+  const child = spawn(client, args, { env, stdio: ['pipe', 'pipe', 'pipe'] })
   child.stdin.end(scenario.payload)
   await new Promise((resolve) => child.on('close', resolve))
   return { requests: [...captured], spool: spoolOf(root) }
@@ -285,5 +288,19 @@ describe.runIf(process.platform === 'darwin')('the relay against pod-agent-hook'
     const relayed = await viaRelay(scenario, { [POD_HOOK_RELAY_JOB_DIR_HEADER]: '/tmp/job' })
     expect(native).toEqual({ requests: [], spool: [] })
     expect(relayed).toEqual({ requests: [], spool: [] })
+  })
+
+  it("stays silent as settings.json's entry for a launched claude, and reports with --launch", async () => {
+    const launched = { ORCA_AGENT_HOOK_TRANSPORT: '', POD_CLAUDE_SETTINGS_PID: '4242' }
+    const scenario: Case = {
+      name: 'launched',
+      payload: stop(),
+      endpoint,
+      env: launched,
+      outcome: 'post'
+    }
+    expect(await viaClient(scenario)).toEqual({ requests: [], spool: [] })
+    expect((await viaClient(scenario, ['--launch'])).requests).toHaveLength(1)
+    expect((await viaClient({ ...scenario, down: true }, [])).spool).toEqual([])
   })
 })

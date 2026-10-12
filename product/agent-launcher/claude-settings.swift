@@ -397,3 +397,24 @@ func claudeLaunchArgs(command: String, args: [String]) -> [String]? {
   next[at] = inline ? "--settings=\(path)" : path
   return next
 }
+
+/// For the runtime's deferred settings.json cut (pod-claude-settings-cut.ts): returns, printing the
+/// pid, once one of `pids` exits (kqueue NOTE_EXIT, no polling); also when the caller exits, so the
+/// watcher never outlives Pod. A pid already gone returns at once.
+func awaitExit(_ pids: [pid_t]) -> Never {
+  let queue = kqueue()
+  guard queue >= 0, !pids.isEmpty else { exit(64) }
+  for pid in pids + [getppid()] {
+    var change = kevent(
+      ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_ONESHOT),
+      fflags: NOTE_EXIT, data: 0, udata: nil)
+    if kevent(queue, &change, 1, nil, 0, nil) != 0 {
+      print(pid)
+      exit(0)
+    }
+  }
+  var event = kevent()
+  while kevent(queue, nil, 0, &event, 1, nil) < 0 && errno == EINTR {}
+  print(event.ident)
+  exit(0)
+}

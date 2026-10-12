@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import {
   chmodSync,
   lstatSync,
@@ -279,6 +279,24 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
         `args=--settings ${mine}`
       )
     })
+  })
+
+  it('returns once a watched pid exits, and at once for one already gone', async () => {
+    const child = spawn('/bin/sleep', ['0.5'])
+    const started = Date.now()
+    const waited = spawnSync(
+      join(binDir, 'pod-agent-launcher'),
+      ['--await-exit', String(child.pid)],
+      {
+        encoding: 'utf8'
+      }
+    )
+    expect(waited.stdout.trim()).toBe(String(child.pid))
+    expect(Date.now() - started).toBeGreaterThanOrEqual(400)
+    const gone = spawnSync(join(binDir, 'pod-agent-launcher'), ['--await-exit', '999999'], {
+      encoding: 'utf8'
+    })
+    expect(gone.stdout.trim()).toBe('999999')
   })
 
   it('stops a wrapper that calls itself through PATH', () => {
