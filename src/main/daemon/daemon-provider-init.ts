@@ -43,8 +43,14 @@ function logDaemonMilestone(event: string, details: Record<string, unknown> = {}
   }
 }
 
-/** `isQuitting`: whether the host's quit is under way (main's, injected: this module runs in orcad too). */
-export type DaemonProviderInitOptions = DaemonLaunchPolicy & { isQuitting?: () => boolean }
+/**
+ * `isQuitting`: whether the host's quit is under way (main's, injected: this module runs in orcad too).
+ * `late` (fork-only, Pod): startup already fell back to local PTYs; they stay local, fresh ones go to the daemon.
+ */
+export type DaemonProviderInitOptions = DaemonLaunchPolicy & {
+  isQuitting?: () => boolean
+  late?: boolean
+}
 
 export async function initDaemonPtyProvider(
   signal?: AbortSignal,
@@ -123,7 +129,7 @@ export async function initDaemonPtyProvider(
 
     legacyAdapters = await createLegacyDaemonAdapters(runtimeDir)
     routedAdapter =
-      launchMode === 'degraded-new-pty-fallback'
+      launchMode === 'degraded-new-pty-fallback' || options.late
         ? new DegradedDaemonPtyProvider({
             current: newAdapter,
             legacy: legacyAdapters,
@@ -140,6 +146,10 @@ export async function initDaemonPtyProvider(
     if (routedAdapter instanceof DegradedDaemonPtyProvider) {
       // Why: preserved daemon can't create fresh terminals; discover its live session ids so only they route to it (fresh panes fall back locally).
       await routedAdapter.discoverDaemonSessions()
+      if (options.late) {
+        // Why: a late daemon that answers takes fresh spawns now; unknown ids (the fallback's PTYs) stay local.
+        await routedAdapter.recoverFreshSpawnRouting()
+      }
     } else if (routedAdapter instanceof DaemonPtyRouter) {
       await routedAdapter.discoverLegacySessions()
     }
