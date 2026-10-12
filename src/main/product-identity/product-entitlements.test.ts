@@ -65,12 +65,12 @@ describe('product entitlements', () => {
     ).toBe('camera')
     expect(ruleOf('Contents/Resources/python/bin/python3.14')).toBe('python-jit')
     expect(ruleOf('Contents/Resources/bin/pod-agent-launcher')).toBe('exec-shim')
-    expect(ruleOf('Contents/Resources/agent-shell/pod-search-tool')).toBe('exec-shim')
     for (const path of [
       'Contents/MacOS/pod-notification-status',
       'Contents/Resources/Pod Computer Use.app/Contents/MacOS/pod-computer-use-macos',
       'Contents/Resources/ripgrep/darwin-arm64/rg',
       'Contents/Resources/claude-acc/fanctl',
+      'Contents/Resources/agent-shell/pod-search-tool',
       'Contents/Frameworks/Squirrel.framework/Versions/A/Resources/ShipIt',
       'Contents/Helpers/PodNative.app',
       'Contents/Resources/node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper'
