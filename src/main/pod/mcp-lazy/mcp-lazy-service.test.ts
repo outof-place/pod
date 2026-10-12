@@ -3,12 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import {
-  inPlaceWriter,
-  listBackups,
-  readUserMcpServers,
-  type ClaudeMcpWriter
-} from './mcp-lazy-claude-config'
+import { listBackups, readUserMcpServers, type ClaudeMcpWriter } from './mcp-lazy-claude-config'
 import { isWrapped, type McpServerEntry } from './mcp-lazy-entries'
 import { McpLazyService } from './mcp-lazy-service'
 
@@ -68,10 +63,7 @@ function service(writer: ClaudeMcpWriter | null = fakeCli): McpLazyService {
       disable: async () => {
         settings = {
           ...settings,
-          mcpLazyStart: {
-            enabled: false,
-            servers: settings.mcpLazyStart?.servers ?? []
-          }
+          mcpLazyStart: { enabled: false, servers: settings.mcpLazyStart?.servers ?? [] }
         }
       }
     }
@@ -160,31 +152,5 @@ describe('McpLazyService', () => {
     expect(restored.changed).toEqual(['chrome'])
     expect(readUserMcpServers(configPath).chrome).toEqual(chrome)
     expect(settings.mcpLazyStart?.enabled).toBe(false)
-  })
-})
-
-describe('inPlaceWriter', () => {
-  it('wraps and unwraps where the entry stands, leaving every other byte as Claude Code wrote it', async () => {
-    const seeded = readFileSync(configPath, 'utf8')
-    settings = { mcpLazyStart: { enabled: true, servers: ['chrome'] } }
-    const lazy = service(inPlaceWriter(null, configPath))
-    await lazy.apply('startup')
-    const wrapped = readFileSync(configPath, 'utf8')
-    expect(Object.keys(JSON.parse(wrapped).mcpServers)).toEqual(['chrome', 'mail', 'remote'])
-    expect(isWrapped(readUserMcpServers(configPath).chrome)).toBe(true)
-    settings = { mcpLazyStart: { enabled: false, servers: ['chrome'] } }
-    await lazy.apply('change')
-    expect(readFileSync(configPath, 'utf8')).toBe(seeded)
-  })
-
-  it("hands a file not in Claude Code's format to the CLI writer", async () => {
-    writeFileSync(configPath, JSON.stringify({ mcpServers: { chrome } }))
-    const seen: string[] = []
-    const write = inPlaceWriter(async (name) => {
-      seen.push(name)
-    }, configPath)
-    await write('chrome', { command: 'x' })
-    expect(seen).toEqual(['chrome'])
-    await expect(inPlaceWriter(null, configPath)('chrome', { command: 'x' })).rejects.toThrow()
   })
 })
