@@ -165,7 +165,6 @@ export const POD_SETTINGS_HIDDEN = {
   appIcon: 'electron-ui',
   appFontFamily: 'electron-ui',
   editorMinimapEnabled: 'electron-ui',
-  editorFontFamily: 'electron-ui',
   richMarkdownSpellcheckEnabled: 'electron-ui',
   markdownReviewToolsEnabled: 'electron-ui',
   primarySelectionMiddleClickPaste: 'electron-ui',
