@@ -4,11 +4,11 @@
     {
       "id": "home-join",
       "stage": "pre-env",
-      "why": "per-user state under the home directory (credentials, keybindings, hook lock, agent-teams bin)",
-      "files": "^(?!src/main/orcad/orcad-app-paths\\.ts$)(src/(main|cli|shared|preload)|tests)/",
-      "find": "((?:^|[^\\w.])(?:path(?:Win32|Posix)\\.)?join\\(\\s*(?:homedir\\(\\)|home|homePath|homeDir|homeDirectory|runtimeHomePath|linuxRuntimeHome)\\s*,\\s*)'\\.orca'",
+      "why": "per-user state under the home directory (credentials, keybindings, hook lock, agent-teams bin), as code and tests join it; orcad's own data root (and its test) stays",
+      "files": "^(?!src/main/orcad/orcad-app-paths(?:\\.test)?\\.ts$)(src/(main|cli|shared|preload)|tests)/",
+      "find": "((?:^|[^\\w.])(?:path(?:Win32|Posix)\\.)?join\\(\\s*(?:homedir\\(\\)|home|homePath|homeDir|homeDirectory|runtimeHomePath|linuxRuntimeHome|tempHome|home\\.directory)\\s*,\\s*)'\\.orca'",
       "replace": "$1'.pod'",
-      "applied": "join\\(\\s*(?:homedir\\(\\)|home|homePath|homeDir|homeDirectory|runtimeHomePath|linuxRuntimeHome)\\s*,\\s*'\\.pod'"
+      "applied": "join\\(\\s*(?:homedir\\(\\)|home|homePath|homeDir|homeDirectory|runtimeHomePath|linuxRuntimeHome|tempHome|home\\.directory)\\s*,\\s*'\\.pod'"
     },
     {
       "id": "hook-dir-join",
@@ -22,11 +22,11 @@
     {
       "id": "hook-dir",
       "stage": "pre-env",
-      "why": "managed hook script paths baked into agent configs (local, WSL, remote)",
+      "why": "managed hook script paths baked into agent configs (local, WSL, remote), also as a quoted relative path",
       "files": "^(src|tests)/",
-      "find": "/\\.orca/agent-hooks(?=[/'\\\"`$\\s]|$)",
-      "replace": "/.pod/agent-hooks",
-      "applied": "/\\.pod/agent-hooks"
+      "find": "(?<=[/'\"`])\\.orca/agent-hooks(?=[/'\\\"`$\\s]|$)",
+      "replace": ".pod/agent-hooks",
+      "applied": "(?<=[/'\"`])\\.pod/agent-hooks"
     },
     {
       "id": "hook-dir-windows",
@@ -45,6 +45,24 @@
       "find": "\\.orca((?:[/\\\\]+|',\\s*')keybindings\\.json)",
       "replace": ".pod$1",
       "applied": "\\.pod(?:[/\\\\]+|',\\s*')keybindings\\.json"
+    },
+    {
+      "id": "test-home-literal",
+      "stage": "pre-env",
+      "why": "tests that pin a stubbed home (/home/test) spell the per-user state path as a literal",
+      "files": "^(src|tests)/.*\\.test\\.tsx?$",
+      "find": "/home/test/\\.orca/",
+      "replace": "/home/test/.pod/",
+      "applied": "/home/test/\\.pod/"
+    },
+    {
+      "id": "jcode-stripped-path",
+      "stage": "pre-env",
+      "why": "the jcode quoting test spells the hook path as a bare Windows path loses its backslashes",
+      "files": "^src/main/jcode/hook-command-quoting\\.test\\.ts$",
+      "find": "me\\.orcaagent-hooks",
+      "replace": "me.podagent-hooks",
+      "applied": "me\\.podagent-hooks"
     },
     {
       "id": "hook-runtime-home-listing",
@@ -87,7 +105,7 @@
       "id": "tilde-home",
       "stage": "pre-env",
       "why": "~/.orca named in UI text, help and comments",
-      "files": "^(?!src/main/ssh/orcad-update-plan\\.ts$|src/shared/product-name-branding\\.ts$)(src|tests|skills|skill-guides|skill-stubs|resources)/",
+      "files": "^(?!src/main/ssh/orcad-update-plan\\.ts$|src/main/orcad/orcad-app-paths\\.test\\.ts$|src/shared/product-name-branding\\.ts$)(src|tests|skills|skill-guides|skill-stubs|resources)/",
       "find": "~/\\.orca(?=[/\\s'\\\"`),.:;]|$)",
       "flags": "gm",
       "replace": "~/.pod",
@@ -139,6 +157,15 @@
       "find": "( +)delete baseEnv\\.POD_CLI_COMMAND\\n(\\s*\\}\\n\\s*prependOrcaCliDirToChildPath)",
       "replace": "$1if (opts.isPackaged && process.platform === 'darwin') {\n$1  // Why: Pod ships only `podx`; agents and skills must not fall back to a bare `orca`.\n$1  baseEnv.POD_CLI_COMMAND = 'podx'\n$1} else {\n$1  delete baseEnv.POD_CLI_COMMAND\n$1}\n$2",
       "applied": "baseEnv\\.POD_CLI_COMMAND = 'podx'"
+    },
+    {
+      "id": "env-prefix-literals",
+      "stage": "post-env",
+      "why": "prefix literals that select a family of renamed names (every ORCA_OPENCODE_* and ORCA_DATA_ACCOUNT_* name is renamed)",
+      "files": "^(src|tests)/",
+      "find": "'ORCA_(OPENCODE|DATA_ACCOUNT)_'",
+      "replace": "'POD_$1_'",
+      "applied": "'POD_(?:OPENCODE|DATA_ACCOUNT)_'"
     }
   ],
   "keep": [
