@@ -12,6 +12,8 @@
 # The private key is read from this Mac's login keychain (`generate_keys --account $SPARKLE_ACCOUNT`,
 # default codes.pod); the first use asks for keychain access once. It is never read from a file.
 # SPARKLE_KEY_ON_STDIN=1 reads a throwaway key from stdin instead (tests and rehearsals only).
+# SPARKLE_DOWNLOAD_URL_PREFIX replaces the release's download URL (a rehearsal's feed on 127.0.0.1).
+# The archive's app must carry the signing key's public half: generate_appcast only warns.
 # Sparkle's tools come from the release whose framework PodNative pins, checked against its digest.
 set -euo pipefail
 
@@ -58,22 +60,26 @@ cp -c "$archive" "$work/feed/"
 # A stdin key is read once, into memory, and handed to both tools.
 [ "${SPARKLE_KEY_ON_STDIN:-0}" = 1 ] && key=$(cat)
 run_with_key() { if [ -n "${key:-}" ]; then printf '%s' "$key" | "$@"; else "$@"; fi; }
+prefix=${SPARKLE_DOWNLOAD_URL_PREFIX:-https://github.com/$FEED_REPO/releases/download/$tag/}
 run_with_key "$work/tools/bin/generate_appcast" "${KEY[@]}" \
-  --download-url-prefix "https://github.com/$FEED_REPO/releases/download/$tag/" \
-  --link https://pod.codes "$work/feed"
+  --download-url-prefix "$prefix" \
+  --link https://pod.codes "$work/feed" 2>&1 | tee "$work/generate_appcast.log"
+# Why: an app with another key's SUPublicEDKey refuses every update this feed offers.
+! grep -q 'does not match' "$work/generate_appcast.log" ||
+  { echo "the archive's SUPublicEDKey is not the signing key's: its app would refuse this update" >&2; exit 1; }
 # generate_appcast signs the feed only for an app that sets SURequireSignedFeed (PodNative's
 # build-app.sh does); an unsigned feed stops the release here.
 run_with_key "$work/tools/bin/sign_update" --verify "${KEY[@]}" "$work/feed/appcast.xml"
 unset key
-# One item, pointing at this tag.
-python3 - "$work/feed/appcast.xml" "$tag" "$(basename "$archive")" <<'PY'
+# One item, at this release's download URL.
+python3 -I - "$work/feed/appcast.xml" "$prefix" "$(basename "$archive")" <<'PY'
 import sys
 import xml.etree.ElementTree as ET
-path, tag, name = sys.argv[1:]
+path, prefix, name = sys.argv[1:]
 items = ET.parse(path).getroot().findall("./channel/item")
 assert len(items) == 1, f"expected one appcast item, found {len(items)}"
 url = items[0].find("enclosure").get("url")
-assert url.endswith(f"/releases/download/{tag}/{name}"), f"enclosure URL {url} is not under {tag}"
+assert url == prefix + name, f"enclosure URL {url} is not {prefix}{name}"
 PY
 cp "$work/feed/appcast.xml" "$out/appcast.xml"
 echo "$out/appcast.xml"
