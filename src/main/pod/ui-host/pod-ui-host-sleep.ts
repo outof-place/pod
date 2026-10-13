@@ -33,6 +33,9 @@ export async function sleepPodUiHostRuntimeTerminals(
   const startedAt = Date.now()
   // Why: a tab the user showed during the window's sleep woke on purpose; stopping it would cost
   // that user a dead tab and the next wake a wait behind this sleep. The set fills until the end.
+  // The worktree still counts as asleep for the tabs slept here (no automatic wake of those) until
+  // the next spawn, as any sleep's does. A sleep of the same worktree already under way from
+  // elsewhere (idle sleep, the CLI) is joined as is, without these spares.
   const spare = podUiHostWindowSleepSpawns(worktreeId)
   try {
     const slept = await runtime.sleepTerminalsForWorktree(`id:${worktreeId}`, {
@@ -47,7 +50,8 @@ export async function sleepPodUiHostRuntimeTerminals(
     )
     throw error
   } finally {
-    endPodUiHostWindowSleep(worktreeId)
+    // Why the set: a second Close Terminals begun meanwhile keeps its own hold and spares.
+    endPodUiHostWindowSleep(worktreeId, spare)
     // Why: one frame once the window's sleep is done, whichever order its exits landed in.
     runtime.touchMobileSessionTabsForWorktree(worktreeId, { immediate: true })
   }

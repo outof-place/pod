@@ -210,6 +210,8 @@ export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWi
         }
       }
       const remainingLivePtyIds = this.getLivePtyIdsForWorktree(worktree.id, postStopLiveness)
+      // Pod: a spared PTY living on is no failure of this sleep.
+      podSparePtyIds?.forEach((ptyId) => remainingLivePtyIds.delete(ptyId))
       const provenStoppedPtyIds = orderedLivePtyIds.filter(
         (ptyId) => !remainingLivePtyIds.has(ptyId)
       )

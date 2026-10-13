@@ -46,6 +46,8 @@ function makeRuntime() {
   const live = new Set([BEFORE])
   const stopped: string[] = []
   let onList: () => void = () => {}
+  // A stop the daemon doesn't acknowledge, though the process is gone.
+  let acknowledge = true
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
@@ -53,7 +55,7 @@ function makeRuntime() {
       stopped.push(ptyId)
       live.delete(ptyId)
       runtime.onPtyExit(ptyId, -1)
-      return true
+      return acknowledge
     },
     getForegroundProcess: async () => null,
     listProcesses: async () => {
@@ -66,7 +68,18 @@ function makeRuntime() {
     live.add(WOKEN)
     runtime.registerPty(WOKEN, WORKTREE)
   }
-  return { runtime, stopped, wake, whenListed: (run: () => void) => (onList = run) }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads the sleep transaction's own record of the worktree, which the runtime keeps protected.
+  const states = runtime as unknown as {
+    terminalSleepStateByWorktreeId: Map<string, { phase: string }>
+  }
+  return {
+    runtime,
+    stopped,
+    wake,
+    whenListed: (run: () => void) => (onList = run),
+    phase: () => [...states.terminalSleepStateByWorktreeId.values()].map((state) => state.phase),
+    refuseAcknowledgement: () => (acknowledge = false)
+  }
 }
 
 describe("the runtime's part of a one-app window's sleep", () => {
@@ -94,6 +107,30 @@ describe("the runtime's part of a one-app window's sleep", () => {
     await sleepPodUiHostRuntimeTerminals(runtime, WORKTREE, true)
 
     expect(stopped).toEqual([BEFORE])
+  })
+
+  it("ends asleep and verified, the spared terminal counted as no failure of the sleep's own", async () => {
+    const { runtime, stopped, wake, phase } = makeRuntime()
+    wake()
+
+    const result = await runtime.sleepTerminalsForWorktree(`id:${WORKTREE}`, {
+      sparePtyIds: new Set([WOKEN])
+    })
+
+    expect(stopped).toEqual([BEFORE])
+    expect(result).toMatchObject({ stoppedPtyIds: [BEFORE], postStopVerified: true })
+    expect(result).not.toHaveProperty('postStopFailure')
+    expect(phase()).toEqual(['sleeping'])
+  })
+
+  it('does not fail its sleep over a spared terminal when its own stop goes unacknowledged', async () => {
+    const { runtime, wake, refuseAcknowledgement } = makeRuntime()
+    wake()
+    refuseAcknowledgement()
+
+    await expect(
+      runtime.sleepTerminalsForWorktree(`id:${WORKTREE}`, { sparePtyIds: new Set([WOKEN]) })
+    ).resolves.toBeDefined()
   })
 
   it('spares nothing for a spawn after the sleep ended', async () => {
