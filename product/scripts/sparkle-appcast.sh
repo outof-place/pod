@@ -11,7 +11,7 @@
 #   <tag>      the release tag, e.g. v0.1.0
 #
 # The private key is read from this Mac's login keychain (`generate_keys --account $SPARKLE_ACCOUNT`,
-# default codes.pod); the first use asks for keychain access once. It is never read from a file.
+# default codes.pod), by generate_appcast and again by sign_update: macOS asks twice. Never from a file.
 # SPARKLE_KEY_ON_STDIN=1 reads a throwaway key from stdin instead (tests and rehearsals only).
 # SPARKLE_DOWNLOAD_URL_PREFIX replaces the release's download URL (a rehearsal's feed on 127.0.0.1).
 # The archive's app must carry the signing key's public half: generate_appcast only warns.
@@ -30,6 +30,9 @@ tag=${2:?usage: sparkle-appcast.sh <archive> <tag> <out dir>}
 out=${3:?usage: sparkle-appcast.sh <archive> <tag> <out dir>}
 [ -f "$archive" ] || { echo "no archive at $archive" >&2; exit 2; }
 [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]] || { echo "tag '$tag' is not v<semver>" >&2; exit 2; }
+# The keychain's key is the release owner's: an agent (CLAUDECODE) signs only with a stdin throwaway.
+[ "${SPARKLE_KEY_ON_STDIN:-0}" = 1 ] || [ -z "${CLAUDECODE:-}" ] ||
+  { echo "sparkle-appcast.sh: an agent never signs with the keychain key; use SPARKLE_KEY_ON_STDIN=1" >&2; exit 2; }
 mkdir -p "$out"
 
 work=$(mktemp -d /tmp/pod-appcast.XXXXXX)

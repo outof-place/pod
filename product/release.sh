@@ -1,7 +1,8 @@
 #!/bin/bash
 # Builds, signs, notarizes and (optionally) publishes a product release described by
 # product/identity.json: an arm64 DMG + zip, notarized and stapled, plus latest-mac.yml for the
-# in-app updater. The same script runs locally and in .github/workflows/pod-release.yml.
+# in-app updater. product/release-one-app.sh runs it for a one-app release; .github/workflows/pod-release.yml
+# is disabled.
 #
 #   product/release.sh <version> [--publish] [--skip-build]
 #
