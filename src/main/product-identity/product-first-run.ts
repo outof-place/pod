@@ -6,6 +6,7 @@ import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS } from '../daemon/daemon-protocol-ver
 import { getMainE2EConfig } from '../e2e-config'
 import { setAppBundleId } from '../../shared/app-identity'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import { podMainInstanceBlock } from '../pod/instance/pod-instance'
 import { claudeProfileKeychainServices } from '../claude-accounts/claude-profile-keychain-services'
 import { getKeychainUser } from '../claude-accounts/keychain'
 import { listClaudeProfileIds, moveClaudeProfileCredentials } from './claude-credentials-move'
@@ -86,7 +87,11 @@ export function runProductFirstRun(
   if (requested && !importLegacyProfile(identity, legacyUserData, scratch)) {
     return false
   }
-  if (legacy.homeDirName && identity.homeDirName) {
+  // Why only the user's own Pod: a dev, bench or custom-profile build shares the account's home.
+  const block = podMainInstanceBlock()
+  if (block !== null) {
+    console.log(`[product-decouple] home folder left alone: ${block}`)
+  } else if (legacy.homeDirName && identity.homeDirName) {
     try {
       const result = moveLegacyHome({
         home: homedir(),
@@ -224,12 +229,14 @@ function notifyDaemonLoss(identity: ProductIdentity, loss: DaemonLoss): void {
 function moveClaudeCredentialsOnce(identity: ProductIdentity, userData: string): void {
   const legacy = identity.legacyProfile
   const recordPath = join(userData, CLAUDE_CREDENTIALS_MOVE_RECORD)
-  // Why never under E2E: the login keychain holds the user's real accounts.
+  // Why never under E2E or outside the user's own Pod: the login keychain is the account's, and a
+  // dev profile cloned from the user's lists the same profile ids.
   if (
     process.platform !== 'darwin' ||
     getMainE2EConfig().userDataDir ||
     !legacy ||
-    existsSync(recordPath)
+    existsSync(recordPath) ||
+    podMainInstanceBlock() !== null
   ) {
     return
   }
@@ -243,7 +250,9 @@ function moveClaudeCredentialsOnce(identity: ProductIdentity, userData: string):
     const result = moveClaudeProfileCredentials({
       profiles,
       keychainAccount: getKeychainUser(),
-      trustedAppPath: appBundlePathFromExecPath(process.execPath),
+      // Why no trusted app: Claude reads and rewrites the item through /usr/bin/security, as when
+      // it creates the item itself (without -T).
+      trustedAppPath: null,
       legacyAppPid: liveSingletonOwner(legacyUserData),
       keychain: createMacSafeStorageKeychain()
     })
