@@ -1,53 +1,25 @@
 # Contributing to Pod
 
-Pod is Orca's code at a recent, green `main` commit plus a short stack of Pod patches. Orca's
-[contributing guide](.github/CONTRIBUTING.md) covers setup, code standards and pull requests, and
-all of it applies here. This file adds what is specific to Pod.
+Pod is Orca's code at a pinned `main` commit plus a stack of Pod patches; the sync with Orca ended
+on 2026-10-13. Orca's [contributing guide](.github/CONTRIBUTING.md) covers setup, code standards and
+pull requests, and all of it applies here. This file adds what is specific to Pod.
 
 ## Branch model
 
 | Branch | What it is | Who writes it |
 | --- | --- | --- |
-| `main` (default) | The product. A green Orca `main` commit plus a linear stack of Pod commits, each with a trailer. | `scripts/pod-stack.sh`, always with a lease. Don't commit to it directly. |
-| Orca-style topic branches: `feat/*`, `fix/*`, `perf/*`, `plugins/*`, `native-terminal/*` | One branch per Orca pull request, cut from Orca's `main`. | You. |
+| `main` (default) | The product. The pinned Orca commit plus a linear stack of Pod commits, each with a trailer. | `scripts/pod-stack.sh`, always with a lease. Don't commit to it directly. |
+| Orca-style topic branches: `feat/*`, `fix/*`, `perf/*`, `plugins/*`, `native-terminal/*` | Older changes once sent to Orca, still stacked under their names. No new ones: Pod sends no changes to Orca. | Nobody; they only leave the manifest. |
 | `pod/*` | Pod-only work, one branch per change. `pod/infra` holds these docs, `upstream.json`, the check workflow and the stack scripts. | You. |
 | `stack/<topic>` | A copy of a topic branch replayed onto the Pod stack, when two topic branches conflict with each other. Its `pod-stack.json` entry says what it was replayed onto. | Whoever settles the conflict. Refresh it when its source branch changes, or drop it once the source is rebased. |
 
-- Branches keep their names once they have an open Orca pull request.
-- Don't name local branches `upstream/*`: the `upstream` remote (Orca) makes `upstream/<name>`
-  ambiguous with its remote-tracking branches.
 - `fork/no-official-updater` predates the `pod/*` convention and keeps its name.
 
-## Does this belong upstream?
-
-Answer this before writing code. Most changes belong in [Orca](https://github.com/stablyai/orca).
-
-| Your change | Where it goes |
-| --- | --- |
-| Fixes a bug that also happens in the official Orca build | Orca |
-| Improves something Orca already has, on any platform | Orca |
-| Makes Orca easier to package or fork, for example reading an id from one place | Orca |
-| A macOS-only feature Orca might want, such as the native terminal | Orca, and Pod carries it until it lands |
-| Pod's name, icon, bundle id, packaging, signing or update feed | Pod only |
-| Turning off a Stably-hosted service | Pod only |
-| A product decision Orca has declined | Pod only, with the reason |
-
-When unsure, open the Orca pull request. A declined pull request becomes a fork-only patch, and
-the reason it was declined goes in its trailer.
-
-## Sending a change to Orca
-
-1. Branch from Orca's `main`, for example `git switch -c fix/<topic> upstream/main`. Follow
-   Orca's branch naming (see their guide).
-2. Follow Orca's guide and pull request template, and open the pull request against `stablyai/orca`.
-3. To ship it in Pod before Orca does, add the branch to [`pod-stack.json`](pod-stack.json) with
-   `"upstream": "<pull request URL>"`.
-
-## Pod-only changes
+## Making a change
 
 - Work on a `pod/*` branch. Changes to these docs and the Pod tooling go on `pod/infra`.
 - Keep Pod code in its own files and directories, and touch Orca files only with thin hooks.
-  Every line changed in an Orca file is a possible conflict on each rebase.
+  Every line changed in an Orca file is a possible conflict between stacked branches.
 - Make one logical change per commit.
 - Add the branch to `pod-stack.json` with `"forkOnly": "<reason>"`.
 
@@ -56,11 +28,12 @@ the reason it was declined goes in its trailer.
 Every commit on `main` ends with exactly one of these trailers:
 
 ```text
-Upstream: https://github.com/stablyai/orca/pull/26914
 Fork-only: Pod identity: name, bundle id, icon
+Upstream: https://github.com/stablyai/orca/pull/26914
 ```
 
-`scripts/pod-stack.sh` adds them from the manifest, so topic branches do not have to.
+New entries are `Fork-only`. `Upstream` stays only on the older entries that were sent to Orca.
+`scripts/pod-stack.sh` adds the trailers from the manifest, so topic branches do not have to.
 
 ## How `main` is built
 
