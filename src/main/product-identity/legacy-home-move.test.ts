@@ -42,20 +42,23 @@ function scratch() {
 }
 
 describe('moveLegacyHome', () => {
-  it('renames the legacy folder when the product has none, and only once', () => {
+  it('moves the legacy entries when the product has no folder, and only once', () => {
     const { home, userData, move } = scratch()
     mkdirSync(join(home, LEGACY, 'agent-hooks'), { recursive: true })
+    writeFileSync(join(home, LEGACY, 'agent-hooks', 'claude-hook.sh'), '#!/bin/sh\n')
     writeFileSync(join(home, LEGACY, 'keybindings.json'), '[]')
-    expect(move()).toEqual({ status: 'moved' })
+    const merged = { status: 'merged', moved: ['keybindings.json'], skipped: ['agent-hooks'] }
+    expect(move()).toEqual(merged)
     expect(readFileSync(join(home, PRODUCT, 'keybindings.json'), 'utf8')).toBe('[]')
-    expect(existsSync(join(home, LEGACY))).toBe(false)
+    // Sessions started before the move still run their hook scripts from the old path.
+    expect(existsSync(join(home, LEGACY, 'agent-hooks', 'claude-hook.sh'))).toBe(true)
     expect(
       JSON.parse(readFileSync(join(userData, PRODUCT_HOME_MOVE_RECORD), 'utf8'))
-    ).toMatchObject({ at: '2026-10-10T06:00:00.000Z', result: { status: 'moved' } })
-    // A legacy app run afterwards recreates its folder; the product leaves it alone.
-    mkdirSync(join(home, LEGACY))
+    ).toMatchObject({ at: '2026-10-10T06:00:00.000Z', result: merged })
+    // A legacy app run afterwards writes its folder again; the product leaves it alone.
+    writeFileSync(join(home, LEGACY, 'keybindings.json'), '[1]')
     expect(move()).toEqual({ status: 'not-needed', reason: 'already-recorded' })
-    expect(existsSync(join(home, LEGACY))).toBe(true)
+    expect(readFileSync(join(home, LEGACY, 'keybindings.json'), 'utf8')).toBe('[1]')
   })
 
   it('merges into an existing product folder without overwriting or taking regenerated files', () => {
