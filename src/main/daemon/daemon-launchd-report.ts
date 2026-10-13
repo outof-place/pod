@@ -32,6 +32,19 @@ export function takeLaunchdReportPath(argv: string[]): void {
   ownReportPath = index !== -1 && argv[index + 1] ? argv[index + 1] : undefined
 }
 
+/** launchd puts its job's label (XPC_SERVICE_NAME) and XPC_FLAGS in the job's environment, which
+ *  every PTY would inherit: dropped here, the label returned for the log. A no-op unless launchd
+ *  started this daemon. */
+export function dropLaunchdJobEnv(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  if (!ownReportPath) {
+    return undefined
+  }
+  const label = env.XPC_SERVICE_NAME
+  delete env.XPC_SERVICE_NAME
+  delete env.XPC_FLAGS
+  return label
+}
+
 /** A no-op unless launchd started this daemon. */
 export function reportToLaunchd(report: DaemonLaunchdReport): void {
   if (ownReportPath) {
