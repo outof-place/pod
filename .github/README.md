@@ -89,10 +89,8 @@ Pod is not affiliated with or endorsed by Stably AI or Lovecast Inc. Orca is the
 | Branch | What it is |
 | --- | --- |
 | `main` (default) | The product: a green Orca `main` commit plus the Pod stack. |
-| `orca-main` | An untouched mirror of Orca's `main`, updated daily. |
 | `feat/*`, `fix/*`, `perf/*` and other Orca-style names | One branch per Orca pull request. |
 | `pod/*` | Pod-only work, one branch per change. |
-| `sync/orca-main` | The next rebase, prepared by the sync job and waiting for review. |
 
 ## Build from source
 
