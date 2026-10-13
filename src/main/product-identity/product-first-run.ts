@@ -58,7 +58,16 @@ export function applyProductIdentityPreReady(
   // Why pre-ready: IPC handlers register after ready, each through the branded registrar.
   installProductCopyBoundaries()
   // Why before the instance lock: Chromium writes its lock files into userData.
-  return isServeMode || runProductFirstRun(identity)
+  if (isServeMode) {
+    // Fork-only (Pod): one-app Pod's runtime is a serve host, so it moves the home (the gate turns
+    // other serve hosts away) but never offers an import, which needs the app menu.
+    const legacy = identity.legacyProfile
+    if (legacy) {
+      moveLegacyHomeOnce(identity, join(app.getPath('appData'), legacy.userDataName))
+    }
+    return true
+  }
+  return runProductFirstRun(identity)
 }
 
 /**
@@ -87,26 +96,34 @@ export function runProductFirstRun(
   if (requested && !importLegacyProfile(identity, legacyUserData, scratch)) {
     return false
   }
+  moveLegacyHomeOnce(identity, legacyUserData)
+  return true
+}
+
+function moveLegacyHomeOnce(identity: ProductIdentity, legacyUserData: string): void {
+  const legacyHomeDirName = identity.legacyProfile?.homeDirName
+  if (!legacyHomeDirName || !identity.homeDirName) {
+    return
+  }
   // Why only the user's own Pod: a dev, bench or custom-profile build shares the account's home.
   const block = podMainInstanceBlock()
   if (block !== null) {
     console.log(`[product-decouple] home folder left alone: ${block}`)
-  } else if (legacy.homeDirName && identity.homeDirName) {
-    try {
-      const result = moveLegacyHome({
-        home: homedir(),
-        legacyHomeDirName: legacy.homeDirName,
-        productHomeDirName: identity.homeDirName,
-        productUserData: app.getPath('userData'),
-        legacyAppPid: liveSingletonOwner(legacyUserData)
-      })
-      console.log(`[product-decouple] home folder: ${JSON.stringify(result)}`)
-    } catch (error) {
-      // Why continue: the move records itself only when it finishes, so the next launch retries.
-      console.error('[product-decouple] home folder move failed', error)
-    }
+    return
   }
-  return true
+  try {
+    const result = moveLegacyHome({
+      home: homedir(),
+      legacyHomeDirName,
+      productHomeDirName: identity.homeDirName,
+      productUserData: app.getPath('userData'),
+      legacyAppPid: liveSingletonOwner(legacyUserData)
+    })
+    console.log(`[product-decouple] home folder: ${JSON.stringify(result)}`)
+  } catch (error) {
+    // Why continue: the move records itself only when it finishes, so the next launch retries.
+    console.error('[product-decouple] home folder move failed', error)
+  }
 }
 
 function importLegacyProfile(
