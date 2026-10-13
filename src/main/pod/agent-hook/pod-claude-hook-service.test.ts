@@ -116,6 +116,7 @@ describe("Pod's Claude hooks with each launch", () => {
   })
 
   it("writes the templates at once, and settings.json loses Pod's entries only after the last older claude", async () => {
+    vi.stubEnv('POD_CLAUDE_HTTP_HOOKS', '1')
     legacyInstall()
     // The user's edit since: a comment a JSON writer would drop.
     writeFileSync(settingsPath, `// mine\n${readFileSync(settingsPath, 'utf8')}`)
@@ -209,6 +210,21 @@ describe("Pod's Claude hooks with each launch", () => {
     expect(service.getStatus({ claudeVersion: '2.1.296' }).state).toBe('installed')
     expect(statSync(settingsPath).mtimeMs).toBe(mtime)
     expect(readdirSync(hooksDir).sort()).toEqual(files)
+  })
+
+  it('gives the http template the command hooks unless POD_CLAUDE_HTTP_HOOKS=1', async () => {
+    legacyInstall({})
+    const { cut } = testCut({ pids: [] })
+    new PodClaudeHookService(() => cut).install({ claudeVersion: '2.1.296' })
+    await cut.settled()
+    expect(readFileSync(template('http'), 'utf8')).toBe(readFileSync(template('command'), 'utf8'))
+    expect(readFileSync(template('http-statusline'), 'utf8')).toBe(
+      readFileSync(template('command-statusline'), 'utf8')
+    )
+    expect(readJson(template('command')).hooks?.PreToolUse?.[0]?.hooks?.[0]).toMatchObject({
+      args: ['--launch'],
+      async: true
+    })
   })
 
   it("cuts at once when no older claude runs, and leaves a user's own statusLine", async () => {

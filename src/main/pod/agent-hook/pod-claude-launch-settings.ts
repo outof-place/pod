@@ -1,8 +1,8 @@
 // Fork-only (Pod): Claude's agent-status hooks come with each launch in a Pod pane, not from
 // ~/.claude/settings.json. Pod's launcher (product/agent-launcher/claude-settings.swift, `claude`
-// first on every pane's PATH) passes `--settings` from templates written here: http hooks to the
-// terminal daemon's relay for the events Claude waits on (no process per event; the relay answers
-// at once), Pod's command hook client for the rest and where the relay is missing; each also with
+// first on every pane's PATH) passes `--settings` from templates written here: Pod's command hook
+// client, with main's `async` per event; with POD_CLAUDE_HTTP_HOOKS=1, http hooks to the terminal
+// daemon's relay for the events Claude waits on anyway (no process per event); each also with
 // Pod's statusLine. Written by
 // pod-claude-hook-service.ts, which takes Pod's entries out of settings.json once.
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -21,6 +21,9 @@ export const POD_CLAUDE_LAUNCH_SETTINGS_ENV = 'POD_CLAUDE_LAUNCH_SETTINGS'
 /** The Claude its http events were measured on (agent-api's E2E on gate 2's mock); an older one
  *  gets the command hooks in both templates. */
 export const CLAUDE_HTTP_HOOK_FIRST_VERSION = '2.1.296'
+/** Runtime env, for an A/B: the http template sends the events Claude waits on to the relay.
+ *  Off by default: no measurement has shown it beating the command hooks (lead, 2026-10-13). */
+export const POD_CLAUDE_HTTP_HOOKS_ENV = 'POD_CLAUDE_HTTP_HOOKS'
 /** Events that stay on the command hook: SessionStart fires no http hook, TeammateIdle was never
  *  reached in that E2E. */
 const COMMAND_ONLY_EVENTS = new Set(['SessionStart', 'TeammateIdle'])
@@ -142,9 +145,11 @@ export function writePodClaudeLaunchTemplates(
   statusLine: PodClaudeStatusLine | null,
   prefix: string = getPodClaudeLaunchSettingsPrefix()
 ): void {
-  const http = claudeVersionReaches(claudeVersion, CLAUDE_HTTP_HOOK_FIRST_VERSION)
-    ? httpVariant(command)
-    : { hooks: command.hooks }
+  const http =
+    process.env[POD_CLAUDE_HTTP_HOOKS_ENV] === '1' &&
+    claudeVersionReaches(claudeVersion, CLAUDE_HTTP_HOOK_FIRST_VERSION)
+      ? httpVariant(command)
+      : { hooks: command.hooks }
   const text = (value: object): string => `${JSON.stringify(value, null, 2)}\n`
   const kinds = [
     ['command', { hooks: command.hooks }],
