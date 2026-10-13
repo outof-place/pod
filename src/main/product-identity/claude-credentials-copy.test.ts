@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  copyClaudeProfileCredentials,
   listClaudeProfileIds,
-  moveClaudeProfileCredentials,
   type ClaudeCredentialsKeychainPort
-} from './claude-credentials-move'
+} from './claude-credentials-copy'
 
 const ACCOUNT = 'marcel'
 
@@ -20,8 +20,7 @@ function memoryKeychain(items: Record<string, string>, options: { denied?: strin
     writeSecret: (service, account, secret, trusted) => {
       store.set(`${service}/${account}`, secret)
       writes.push({ service, trusted })
-    },
-    deleteItem: (service, account) => store.delete(`${service}/${account}`)
+    }
   }
   return { keychain, store, writes }
 }
@@ -39,31 +38,36 @@ afterEach(() => {
   }
 })
 
-describe('moveClaudeProfileCredentials', () => {
-  it('moves each legacy sign-in to the product item and clears every legacy spelling', () => {
-    const { keychain, store, writes } = memoryKeychain({
+describe('copyClaudeProfileCredentials', () => {
+  it('copies each legacy sign-in to the product item and keeps every legacy item', () => {
+    const legacy = {
       [`legacy-a-alias/${ACCOUNT}`]: 'token-a',
       [`legacy-b/${ACCOUNT}`]: 'token-b',
       [`legacy-b-alias/${ACCOUNT}`]: 'token-b'
-    })
-    const result = moveClaudeProfileCredentials({
+    }
+    const { keychain, store, writes } = memoryKeychain(legacy)
+    const result = copyClaudeProfileCredentials({
       profiles: [profile('a'), profile('b'), profile('c')],
       keychainAccount: ACCOUNT,
-      trustedAppPath: '/Applications/Product.app',
+      trustedAppPath: null,
       legacyAppPid: null,
       keychain
     })
-    expect(result).toEqual({ status: 'moved', moved: ['a', 'b'], denied: [], legacyKept: [] })
+    expect(result).toEqual({ status: 'copied', copied: ['a', 'b'], denied: [] })
     expect(Object.fromEntries(store)).toEqual({
+      ...legacy,
       [`product-a/${ACCOUNT}`]: 'token-a',
       [`product-b/${ACCOUNT}`]: 'token-b'
     })
-    expect(writes.every((write) => write.trusted === '/Applications/Product.app')).toBe(true)
+    expect(writes).toEqual([
+      { service: 'product-a', trusted: null },
+      { service: 'product-b', trusted: null }
+    ])
   })
 
-  it('waits while the legacy app runs, since it rotates these tokens', () => {
+  it('waits while the legacy app runs, so the copy holds its newest token', () => {
     const { keychain, store } = memoryKeychain({ [`legacy-a/${ACCOUNT}`]: 'token-a' })
-    const result = moveClaudeProfileCredentials({
+    const result = copyClaudeProfileCredentials({
       profiles: [profile('a')],
       keychainAccount: ACCOUNT,
       trustedAppPath: null,
@@ -74,7 +78,7 @@ describe('moveClaudeProfileCredentials', () => {
     expect(store.has(`product-a/${ACCOUNT}`)).toBe(false)
   })
 
-  it('keeps a denied sign-in and never overwrites a product item', () => {
+  it('copies nothing for a denied read and never overwrites a product item', () => {
     const { keychain, store } = memoryKeychain(
       {
         [`legacy-a/${ACCOUNT}`]: 'old',
@@ -83,16 +87,16 @@ describe('moveClaudeProfileCredentials', () => {
       },
       { denied: ['legacy-b'] }
     )
-    const result = moveClaudeProfileCredentials({
+    const result = copyClaudeProfileCredentials({
       profiles: [profile('a'), profile('b')],
       keychainAccount: ACCOUNT,
       trustedAppPath: null,
       legacyAppPid: null,
       keychain
     })
-    expect(result).toEqual({ status: 'moved', moved: [], denied: ['b'], legacyKept: [] })
+    expect(result).toEqual({ status: 'copied', copied: [], denied: ['b'] })
     expect(store.get(`product-a/${ACCOUNT}`)).toBe('current')
-    expect(store.get(`legacy-b/${ACCOUNT}`)).toBe('token-b')
+    expect(store.has(`product-b/${ACCOUNT}`)).toBe(false)
   })
 
   it('lists profile folders and ignores anything else', () => {
