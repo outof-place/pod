@@ -22,12 +22,17 @@ function patchCliLauncher(text, executableName, userDataName, envPrefix) {
     }
   }
   const prefix = envPrefix && text.includes(`${envPrefix}NODE_OPTIONS`) ? envPrefix : 'ORCA_'
+  const defaultUserData = `$HOME/Library/Application Support/${userDataName}`
+  // A terminal opened before the decouple update has only ORCA_USER_DATA_PATH.
+  // TODO(pod): drop the fallback after 2026-12-31, no earlier than the release after the decouple.
+  const userData =
+    prefix === 'ORCA_' ? defaultUserData : `\${ORCA_USER_DATA_PATH:-${defaultUserData}}`
   return text
     .replace(APP_PATH_ANCHOR, () => APP_PATH_INNERMOST)
     .replace(CLI_LAUNCHER_ANCHOR, () =>
       [
         `ELECTRON="$CONTENTS/MacOS/${executableName}"`,
-        `export ${prefix}USER_DATA_PATH="\${${prefix}USER_DATA_PATH:-$HOME/Library/Application Support/${userDataName}}"`
+        `export ${prefix}USER_DATA_PATH="\${${prefix}USER_DATA_PATH:-${userData}}"`
       ].join('\n')
     )
 }

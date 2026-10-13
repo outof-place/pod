@@ -2,8 +2,22 @@ import Darwin
 
 // Thin Darwin wrappers; Foundation costs ~1.5 ms of dyld work per exec, so it stays out.
 
+// Fork-only (Pod): an unset name is read in the other spelling too. The decouple renames this
+// front's names to POD_, but a terminal opened before that update keeps only the ORCA_ ones: so
+// the POD_ spelling, else the ORCA_ one (and before the decouple, the reverse).
+// TODO(pod): drop the fallback after 2026-12-31, and no earlier than the release after the decouple.
 public func env(_ name: String) -> String? {
-  guard let value = getenv(name) else { return nil }
+  if let value = getenv(name) { return String(cString: value) }
+  let current = "POD_", legacy = "ORCA_"  // pod-decouple:keep
+  let other: String
+  if name.hasPrefix(current) {
+    other = legacy + String(name.dropFirst(current.count))
+  } else if name.hasPrefix(legacy) {
+    other = current + String(name.dropFirst(legacy.count))
+  } else {
+    return nil
+  }
+  guard let value = getenv(other) else { return nil }
   return String(cString: value)
 }
 
