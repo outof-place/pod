@@ -196,6 +196,7 @@ describe('PodUiHostServer', () => {
       const client = await hello(options.socketPath)
       expect(JSON.parse(client.lines[0]).features).toEqual([
         'browser',
+        'browserContextMenu',
         'headless',
         'surfaceSection'
       ])
@@ -205,7 +206,12 @@ describe('PodUiHostServer', () => {
       const onBrowser = vi.fn()
       const { options } = await startServer({ onBrowser })
       const client = await hello(options.socketPath)
-      expect(JSON.parse(client.lines[0]).features).toEqual(['browser', 'surfaceSection'])
+      // browserContextMenu: the page's right-clicks come; PodNative reads the feature, the hello is unchanged.
+      expect(JSON.parse(client.lines[0]).features).toEqual([
+        'browser',
+        'browserContextMenu',
+        'surfaceSection'
+      ])
       send(client, attach)
       send(client, {
         type: 'browserNavigate',
