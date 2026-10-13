@@ -11,7 +11,9 @@ import { teardownRpcDeadline } from './worktree-teardown'
 
 export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWithStopTerminalsForWorktree {
   protected async sleepResolvedWorktreeTerminals(
-    worktree: ResolvedWorktree
+    worktree: ResolvedWorktree,
+    // Pod: PTYs a one-app window's sleep leaves running (pod-ui-host-sleep.ts).
+    podSparePtyIds?: ReadonlySet<string>
   ): Promise<RuntimeWorktreeTerminalSleepResult> {
     const sleepDeadline = Date.now() + WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS
     const releaseMutation = await this.acquireWorktreeTerminalMutation(
@@ -79,6 +81,8 @@ export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWi
         throw new Error('terminal_liveness_unavailable')
       }
       const livePtyIds = this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness)
+      // Pod: a fresh set, so the spared ones leave only this sleep's.
+      podSparePtyIds?.forEach((ptyId) => livePtyIds.delete(ptyId))
       generation = ++this.terminalSleepGeneration
       for (const ptyId of livePtyIds) {
         pendingPtyIds.add(ptyId)

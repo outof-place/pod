@@ -7,7 +7,11 @@ import { POD_UI_HOST_SLEEP_IPC } from '../../../shared/pod-ui-host-sleep'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { isPodUiHostLaunch } from './pod-ui-host-launch'
 import { podUiHostLog } from './pod-ui-host-log'
-import { beginPodUiHostWindowSleep, endPodUiHostWindowSleep } from './pod-ui-host-sleep-hold'
+import {
+  beginPodUiHostWindowSleep,
+  endPodUiHostWindowSleep,
+  podUiHostWindowSleepSpawns
+} from './pod-ui-host-sleep-hold'
 
 type SleepRuntime = Pick<
   OrcaRuntimeService,
@@ -27,10 +31,15 @@ export async function sleepPodUiHostRuntimeTerminals(
     return
   }
   const startedAt = Date.now()
+  // Why: a tab the user showed during the window's sleep woke on purpose; stopping it would cost
+  // that user a dead tab and the next wake a wait behind this sleep. The set fills until the end.
+  const spare = podUiHostWindowSleepSpawns(worktreeId)
   try {
-    const slept = await runtime.sleepTerminalsForWorktree(`id:${worktreeId}`)
+    const slept = await runtime.sleepTerminalsForWorktree(`id:${worktreeId}`, {
+      sparePtyIds: spare
+    })
     podUiHostLog(
-      `ui-host: Close Terminals in the window: the runtime slept ${slept.stopped} more in ${Date.now() - startedAt} ms`
+      `ui-host: Close Terminals in the window: the runtime slept ${slept.stopped} more in ${Date.now() - startedAt} ms, spared ${spare.size} woken meanwhile`
     )
   } catch (error) {
     podUiHostLog(

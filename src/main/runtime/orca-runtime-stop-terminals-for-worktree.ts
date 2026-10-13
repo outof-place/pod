@@ -244,7 +244,9 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
   }
 
   async sleepTerminalsForWorktree(
-    worktreeSelector: string
+    worktreeSelector: string,
+    // Pod: a one-app window's sleep spares the PTYs a user woke during it (pod-ui-host-sleep.ts).
+    podOptions?: { sparePtyIds?: ReadonlySet<string> }
   ): Promise<RuntimeWorktreeTerminalSleepResult> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const existing = this.terminalSleepByWorktreeId.get(worktree.id)
@@ -252,7 +254,7 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
       return await existing
     }
 
-    const sleeping = this.sleepResolvedWorktreeTerminals(worktree)
+    const sleeping = this.sleepResolvedWorktreeTerminals(worktree, podOptions?.sparePtyIds)
     this.terminalSleepByWorktreeId.set(worktree.id, sleeping)
     try {
       return await sleeping
