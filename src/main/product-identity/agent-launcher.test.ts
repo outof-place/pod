@@ -252,7 +252,11 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
 
   describe("Claude's hooks with the launch in a Pod pane", () => {
     // The relay: the launcher only checks that something answers on its port.
-    const relayServer = createServer((socket) => socket.end())
+    let relayChecks = 0
+    const relayServer = createServer((socket) => {
+      relayChecks += 1
+      socket.end()
+    })
     let relayPort = 0
     beforeAll(async () => {
       await new Promise<void>((resolve) => relayServer.listen(0, '127.0.0.1', resolve))
@@ -338,6 +342,23 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
       run('claude', ['x'], [binDir, join(dir, 'real')], { ...pane, POD_AGENT_HOOK_RELAY: relay })
       expect(() => lstatSync(stale)).toThrow()
       expect(lstatSync(join(dir, 'hooks', 'claude-launch')).mode & 0o777).toBe(0o700)
+    })
+
+    it('passes the command template, asking no relay, where the runtime wrote no http one', async () => {
+      const { dir, prefix, relay, pane } = setup()
+      rmSync(`${prefix}.http.json`)
+      // Why the waits: spawnSync holds this loop, so a launcher's check is accepted only after it.
+      const settle = () => new Promise((resolve) => setTimeout(resolve, 100))
+      await settle()
+      const checks = relayChecks
+      const result = run('claude', ['x'], [binDir, join(dir, 'real')], {
+        ...pane,
+        POD_AGENT_HOOK_RELAY: relay
+      })
+      expect(result.stdout.split('\n')[0]).toBe(`args=--settings ${prefix}.command.json x`)
+      await settle()
+      expect(relayChecks).toBe(checks)
+      expect(() => lstatSync(join(dir, 'hooks', 'claude-launch'))).toThrow()
     })
 
     it("adds nothing outside a Pod pane, to other agents, or over the user's own --settings", () => {
