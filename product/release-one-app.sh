@@ -21,7 +21,8 @@
 # Versions: CFBundleShortVersionString is <version> in both apps; the outer's CFBundleVersion comes
 # from product/scripts/pod-build-number.sh, the number Sparkle compares.
 # Assets: Pod-<version>.dmg (the download and the Sparkle update), Pod-<version>.zip, appcast.xml,
-# SHA256SUMS. A real release takes the key from this Mac's login keychain through sparkle-appcast.sh,
+# SHA256SUMS. The feed is the `appcast` prerelease's asset, not releases/latest: GitHub's latest skips
+# prereleases, and RCs are prereleases. A real release takes the key from this Mac's login keychain through sparkle-appcast.sh,
 # and the outer's public key from PodNative's scripts/sparkle-ed-public-key.txt.
 set -euo pipefail
 
@@ -77,12 +78,12 @@ SWIFT
   seed=$(sed -n 1p <<<"$keys")
   public_key=$(sed -n 2p <<<"$keys")
   unset keys
-  expected_feed=${feed_url:-https://github.com/outof-place/pod/releases/latest/download/appcast.xml}
+  expected_feed=${feed_url:-https://github.com/outof-place/pod/releases/download/appcast/appcast.xml}
 else
   key_file="$native_checkout/scripts/sparkle-ed-public-key.txt"
   [ -s "$key_file" ] || die "no Sparkle public key in $key_file: this release could never update (RELEASE-RUNBOOK.md)"
   public_key=$(tr -d '[:space:]' <"$key_file")
-  expected_feed=https://github.com/outof-place/pod/releases/latest/download/appcast.xml
+  expected_feed=https://github.com/outof-place/pod/releases/download/appcast/appcast.xml
 fi
 log "Pod $version (CFBundleVersion $build)$([ "$dry_run" = 1 ] && echo ', dry run with a throwaway key')"
 
@@ -93,6 +94,8 @@ if [ -z "$runtime" ]; then
   runtime="dist/mac-arm64/$display_name.app"
 fi
 [ "$(plist "$runtime" CFBundleShortVersionString)" = "$version" ] || die "$runtime is not version $version"
+# One CFBundleVersion in both halves.
+[ "$(plist "$runtime" CFBundleVersion)" = "$build" ] || die "$runtime: CFBundleVersion is not $build"
 
 # 2. The outer, in a directory of this run's own.
 native_out=$(mktemp -d /tmp/pod-release-native.XXXXXX)
@@ -125,8 +128,8 @@ check_outer "$assembled/$display_name.app"
 # Developer ID signed, Sparkle's way back if the EdDSA key is ever lost.
 mkdir -p "$out"
 dmg="$out/$display_name-$version.dmg"
-cp -c "$assembled/$display_name-$version-arm64.dmg" "$dmg"
-cp -c "$assembled/$display_name-$version-arm64-mac.zip" "$out/$display_name-$version.zip"
+cp -c "$assembled/$display_name-$version.dmg" "$dmg"
+cp -c "$assembled/$display_name-$version.zip" "$out/$display_name-$version.zip"
 log "appcast"
 if [ "$dry_run" = 1 ]; then
   appcast_env=(SPARKLE_KEY_ON_STDIN=1)
@@ -171,7 +174,10 @@ log "done: $out"
 if [ "$dry_run" = 1 ]; then
   echo "dry run: these assets carry a throwaway key; never publish them"
 else
-  # Not --prerelease: Sparkle's feed is releases/latest/download/appcast.xml, and GitHub's latest
-  # skips prereleases, so an rc published as one would never reach the installed rcs.
-  echo "publish (RELEASE-RUNBOOK.md): gh release create $tag \"$out/$display_name-$version.dmg\" \"$out/$display_name-$version.zip\" \"$out/appcast.xml\" \"$out/SHA256SUMS\" --repo outof-place/pod --title \"$display_name $version\" --notes-file <notes.md>"
+  # The release first, then the feed that points at it (RELEASE-RUNBOOK.md); an RC is a prerelease.
+  prerelease=""
+  [[ "$version" == *-rc* ]] && prerelease=" --prerelease"
+  echo "publish (RELEASE-RUNBOOK.md), in this order:"
+  echo "  gh release create $tag \"$out/$display_name-$version.dmg\" \"$out/$display_name-$version.zip\" \"$out/SHA256SUMS\" --repo outof-place/pod --title \"$display_name $version\" --notes-file <notes.md>$prerelease"
+  echo "  gh release upload appcast \"$out/appcast.xml\" --repo outof-place/pod --clobber"
 fi
