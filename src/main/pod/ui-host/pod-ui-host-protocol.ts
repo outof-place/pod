@@ -82,7 +82,13 @@ export type PodUiHostQuitReason = z.infer<typeof Quit>['reason']
 // What a welcome's `features` may name beyond the base verbs; PodNative sends only what it lists.
 // `headless`: no classic window posts agent notifications or sets the Dock badge; PodNative does.
 // `surfaceSection`: openSurface takes a section; an older runtime refuses the unknown keys.
-export const POD_UI_HOST_FEATURES = ['browser', 'headless', 'surfaceSection'] as const
+// `browserContextMenu`: a right-click on an attached page comes as browserContextMenu.
+export const POD_UI_HOST_FEATURES = [
+  'browser',
+  'browserContextMenu',
+  'headless',
+  'surfaceSection'
+] as const
 
 export type PodUiHostServerMessage =
   | { type: 'welcome'; v: number; pid: number; features: readonly string[] }
