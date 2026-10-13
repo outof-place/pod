@@ -13,6 +13,7 @@ import type { PodBrowserDownloadEvent } from './pod-browser-pane-hooks'
 import { PaneInputState } from './pod-browser-pane-input'
 import { navigatePanePage } from './pod-browser-pane-navigation'
 import { PaneSelectMenus } from './pod-browser-pane-select'
+import { describePaneContextMenu } from './pod-browser-pane-context-menu'
 import { PaneFramePump, type PodBrowserFrames } from './pod-browser-pane-frames'
 const PANE_FRAME_RATE = 60
 // A page nobody sees and no agent drives. Why 10: a rate change waits for the next tick, so a
@@ -78,6 +79,12 @@ export class PodBrowserPaneController {
     wc.stopPainting()
     wc.setFrameRate(UNSEEN_FRAME_RATE)
     wc.on('paint', (event) => this.frames.paint(page, event.texture))
+    // Why not while an agent drives: its right-clicks must not open a menu on the screen.
+    wc.on('context-menu', (_event, params) => {
+      if (page.token !== null && Date.now() >= page.agentDrivingUntil) {
+        this.deps.send(describePaneContextMenu(pageId, wc, params))
+      }
+    })
     wc.on('cursor-changed', (_event, cursor) => {
       if (page.token !== null) {
         this.deps.send({ type: 'browserCursor', pageId, cursor })
