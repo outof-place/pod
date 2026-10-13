@@ -6,13 +6,15 @@
 #   1. upload it as appcast.xml.new and download it back: it must be byte for byte this file;
 #   2. rename the live asset to appcast.xml.old, then the new one to appcast.xml. The feed is
 #      missing only between those two calls, and a failed second rename puts the old one back;
-#   3. delete appcast.xml.old, then read the feed until it offers this appcast's sparkle:version.
+#   3. read the feed until it serves this file byte for byte, and only then delete appcast.xml.old.
+#      Nothing proves the download URL follows a renamed asset, so a feed that never shows up
+#      rolls the swap back: the new asset to appcast.xml.new, the old one to appcast.xml.
 #
 #   product/scripts/publish-appcast.sh <appcast.xml>
 #
 # The release owner runs it from Terminal, after `gh release create` of the release it points at.
 # Tests only: POD_FEED_URL replaces the feed URL it reads back, POD_PUBLISH_RETRY_SECONDS the 5 s
-# between attempts.
+# between attempts (3 for an API call, 10 for the feed).
 set -euo pipefail
 
 REPO=outof-place/pod
@@ -81,15 +83,23 @@ if ! retry rename "$new" appcast.xml; then
   die "THE FEED IS MISSING: gh api -X PATCH repos/$REPO/releases/assets/$new -f name=appcast.xml"
 fi
 
-# 3. The old feed goes; the new one must be what apps get.
+# 3. What apps get must be this file before the old feed goes.
+serves_feed() {
+  local attempt
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    rm -f "$work/live/appcast.xml"
+    curl -fsL --connect-timeout 20 --max-time 60 -o "$work/live/appcast.xml" "$FEED_URL" &&
+      [ "$(sha "$work/live/appcast.xml")" = "$(sha "$feed")" ] && return 0
+    [ "$attempt" = 10 ] || sleep "${POD_PUBLISH_RETRY_SECONDS:-5}"
+  done
+  return 1
+}
+if ! serves_feed; then
+  [ -n "$old" ] || die "$FEED_URL does not serve $feed, and there is no old feed to go back to: check it with curl"
+  retry rename "$new" appcast.xml.new && retry rename "$old" appcast.xml &&
+    die "$FEED_URL did not serve $feed: the swap is rolled back, the old feed is appcast.xml again"
+  die "$FEED_URL did not serve $feed and the rollback failed: fix the assets by hand (gh api repos/$REPO/releases/tags/$TAG)"
+fi
 [ -z "$old" ] || retry gh api -X DELETE "repos/$REPO/releases/assets/$old" ||
   echo "publish-appcast: asset $old appcast.xml.old is still there; delete it before the next release" >&2
-for attempt in 1 2 3 4 5 6 7 8 9 10; do
-  if curl -fsL --connect-timeout 20 --max-time 60 -o "$work/live/appcast.xml" "$FEED_URL" &&
-    [ "$(version_of "$work/live/appcast.xml")" = "$build" ]; then
-    echo "publish-appcast: $FEED_URL offers sparkle:version $build"
-    exit 0
-  fi
-  sleep 6
-done
-die "$FEED_URL does not offer sparkle:version $build yet: check it with curl before telling anyone"
+echo "publish-appcast: $FEED_URL serves $feed (sparkle:version $build)"
