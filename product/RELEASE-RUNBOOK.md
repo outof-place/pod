@@ -10,7 +10,7 @@ What the release owner does by hand. Everything else is `product/release-one-app
 | RC 2    | `1.0.0-rc2`                | `1000002`                               | `v1.0.0-rc2` | `Pod-1.0.0-rc2.dmg` |
 | 1.0     | `1.0.0`                    | `1000099`                               | `v1.0.0`     | `Pod-1.0.0.dmg`     |
 
-Tags are `v<version>`, created by `gh release create --target <the commit>`. `release-one-app.sh` refuses a tag that already exists, in this clone or on GitHub. outof-place/pod on GitHub has no `v1` tags, but clones that fetch upstream carry Orca's `v1.0.1` to `v1.4.224`: decide how Pod 1.0.1 and later avoid them (a tag prefix, or keeping upstream's tags out of `refs/tags`) before 1.0.1.
+Tags are `v<version>`, created by `gh release create --target <the commit>`. `release-one-app.sh` refuses a tag that already exists, in this clone or on GitHub. Orca's tags were deleted from GitHub on 2026-10-13, but a clone that fetched upstream still has Orca's `v1.0.1` to `v1.4.224`, and the guard then refuses Pod 1.0.1 and later. In the release clone, delete those local tags and stop them coming back: remove the upstream remote, or `git config remote.upstream.tagOpt --no-tags`.
 
 `product/scripts/pod-build-number.sh <version>` gives the build number (MAJOR·1000000 + MINOR·10000 + PATCH·100 + rc number, 99 for the release). Test builds (`0.0.1-testN`) carry no feed, so they never update: install the first RC by hand from its DMG.
 
