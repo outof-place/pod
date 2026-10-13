@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PodBrowserPaneController } from './pod-browser-pane'
 import type { PodBrowserFrames } from './pod-browser-pane-frames'
 import type { PodBrowserPaneServerMessage } from './pod-browser-pane-protocol'
+import { POD_UI_HOST_MAX_LINE_BYTES } from '../ui-host/pod-ui-host-protocol'
 
 class FakeWebContents extends EventEmitter {
   id = 41
@@ -409,5 +410,95 @@ describe('PodBrowserPaneController', () => {
     expect(rate()).toBe(60)
     panes.handle({ type: 'browserDetach', pageId: 'page-1' })
     expect(rate()).toBe(10)
+  })
+
+  it("sends an attached page's right-click as Pod's renderer gets it: link normalized, URL redacted", () => {
+    const { panes, wc, sent } = setup()
+    wc.emit('context-menu', {}, { x: 5, y: 6, linkURL: 'https://example.com/a', selectionText: '' })
+    expect(sent).toEqual([])
+    panes.handle(attach)
+    sent.length = 0
+    wc.url = 'https://kagi.com/search?q=pod&token=secret'
+    wc.history = { back: true, forward: false }
+    wc.emit(
+      'context-menu',
+      {},
+      { x: 5, y: 6, linkURL: 'example.com/docs', selectionText: 'some words' }
+    )
+    expect(sent).toEqual([
+      {
+        type: 'browserContextMenu',
+        pageId: 'page-1',
+        x: 5,
+        y: 6,
+        pageUrl: 'https://kagi.com/search?q=pod',
+        linkUrl: 'https://example.com/docs',
+        selectionText: 'some words',
+        selectionComplete: true,
+        canGoBack: true,
+        canGoForward: false
+      }
+    ])
+    sent.length = 0
+    // Not on a link, or on one too long to open: no link.
+    wc.emit('context-menu', {}, { x: 1, y: 1, linkURL: '', selectionText: '' })
+    wc.emit(
+      'context-menu',
+      {},
+      { x: 1, y: 1, linkURL: `data:text/plain,${'a'.repeat(9000)}`, selectionText: '' }
+    )
+    expect(sent.map((message) => 'linkUrl' in message && message.linkUrl)).toEqual([null, null])
+    // An agent's right-click opens nothing on the screen.
+    panes.noteAgentCommand(wc.id)
+    sent.length = 0
+    wc.emit('context-menu', {}, { x: 1, y: 1, linkURL: '', selectionText: '' })
+    expect(sent).toEqual([])
+  })
+
+  it('cuts a selection too big for one line, never through a surrogate pair', () => {
+    const { panes, wc, sent } = setup()
+    panes.handle(attach)
+    sent.length = 0
+    const selection = `${'x'.repeat(40_000)}${'😀'.repeat(20_000)}`
+    wc.emit('context-menu', {}, { x: 1, y: 1, linkURL: '', selectionText: selection })
+    const [menu] = sent
+    expect(menu).toMatchObject({ type: 'browserContextMenu', selectionComplete: false })
+    const text = menu.type === 'browserContextMenu' ? menu.selectionText : ''
+    expect(selection.startsWith(text)).toBe(true)
+    // As much as fits: into the emoji, not halved.
+    expect(text.length).toBeGreaterThan(40_000)
+    expect(/[\ud800-\udbff]$/.test(text)).toBe(false)
+    expect(Buffer.byteLength(`${JSON.stringify(menu)}\n`)).toBeLessThanOrEqual(
+      POD_UI_HOST_MAX_LINE_BYTES
+    )
+  })
+
+  it('fits the whole line: a 60 KiB selection beside 8 KiB page and link URLs', () => {
+    const { panes, wc, sent } = setup()
+    panes.handle(attach)
+    sent.length = 0
+    wc.url = `https://example.com/${'p'.repeat(8100)}`
+    const link = `https://example.com/${'l'.repeat(8100)}`
+    wc.emit('context-menu', {}, { x: 1, y: 1, linkURL: link, selectionText: 'x'.repeat(60 * 1024) })
+    const [menu] = sent
+    expect(menu).toMatchObject({ pageUrl: wc.url, linkUrl: link, selectionComplete: false })
+    expect(Buffer.byteLength(`${JSON.stringify(menu)}\n`)).toBeLessThanOrEqual(
+      POD_UI_HOST_MAX_LINE_BYTES
+    )
+  })
+
+  it('measures a link after normalizing it and sends lone surrogates as U+FFFD', () => {
+    const { panes, wc, sent } = setup()
+    panes.handle(attach)
+    sent.length = 0
+    // 1,020 characters, 9,020 once percent-encoded: past the bound.
+    wc.emit(
+      'context-menu',
+      {},
+      { x: 1, y: 1, linkURL: `https://example.com/${'…'.repeat(1000)}`, selectionText: 'a\ud800b' }
+    )
+    expect(sent).toMatchObject([
+      { linkUrl: null, selectionText: 'a\ufffdb', selectionComplete: true }
+    ])
   })
 })
