@@ -165,7 +165,24 @@ describe("Pod's Claude hooks with each launch", () => {
     })
     expect(http.hooks?.SessionStart).toEqual(command.hooks?.SessionStart)
     expect(http.hooks?.TeammateIdle).toEqual(command.hooks?.TeammateIdle)
-    expect(http.hooks?.Stop?.[0]?.hooks?.[0]).toEqual({
+    // Claude waits on an http hook even with `async`: the tool path stays on the async client.
+    const asyncEvents = Object.entries(command.hooks ?? {})
+      .filter(([, definitions]) => definitions[0]?.hooks?.[0]?.async === true)
+      .map(([event]) => event)
+      .sort()
+    expect(asyncEvents).toEqual([
+      'PostToolUse',
+      'PostToolUseFailure',
+      'PreToolUse',
+      'Stop',
+      'SubagentStart',
+      'SubagentStop',
+      'UserPromptSubmit'
+    ])
+    for (const event of asyncEvents) {
+      expect(http.hooks?.[event]).toEqual(command.hooks?.[event])
+    }
+    expect(http.hooks?.PostCompact?.[0]?.hooks?.[0]).toEqual({
       type: 'http',
       url: '@@POD_RELAY_URL@@',
       timeout: 10,
