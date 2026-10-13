@@ -24,6 +24,8 @@
     "ORCA_REPO_REF_HEAD": "orca.yaml repository contract (setup scripts, VM recipes), shared with Orca users",
     "ORCA_REPO_URL": "orca.yaml repository contract (setup scripts, VM recipes), shared with Orca users",
     "ORCA_ROOT_PATH": "orca.yaml repository contract (setup scripts, VM recipes), shared with Orca users",
+    "ORCA_RUN_DOCKER_SSH_BROWSER_E2E": "CI input e2e.yml hands to the test harness (config/, tests/), never read by the app",
+    "ORCA_SHARD_SOURCE_SHA": "CI input e2e.yml hands to the test harness (config/, tests/), never read by the app",
     "ORCA_SSH_PUBLIC_KEY": "orca.yaml repository contract (setup scripts, VM recipes), shared with Orca users",
     "ORCA_TEST_*": "test harness inputs",
     "ORCA_VM_INSTANCE_ID": "orca.yaml repository contract (setup scripts, VM recipes), shared with Orca users",
@@ -35,7 +37,11 @@
     "files": [
       "^src/shared/ephemeral-vm-recipe-process(\\.test)?\\.ts$",
       "^src/main/setup-hook-env-vars(\\.test)?\\.ts$",
-      "^skill-guides/orca-per-workspace-env(\\.md$|/)"
+      "^skill-guides/orca-per-workspace-env(\\.md$|/)",
+      "^src/main/hooks-runner\\.test\\.ts$",
+      "^src/main/ephemeral-vm-recipe-runner\\.test\\.ts$",
+      "^src/cli/bundled-skill-guides\\.ts$",
+      "^config/scripts/generate-bundled-skill-guides\\.test\\.mjs$"
     ],
     "names": [
       "ORCA_PROJECT_ID",
