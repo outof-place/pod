@@ -81,13 +81,10 @@ Pod is not affiliated with or endorsed by Stably AI or Lovecast Inc. Orca is the
 
 ## Versions
 
-- Pod tracks Orca's `main`, not its releases. Every Pod build sits on one Orca `main` commit whose
-  GitHub Actions checks all passed.
+- Pod is built on one Orca `main` commit whose GitHub Actions checks all passed, not on an Orca
+  release. Pod no longer follows Orca's `main`: the base stays where it is.
 - [`upstream.json`](../upstream.json) records that commit, its date and the nearest Orca release
   tag. Pod's release notes use the tag as the "Based on Orca vX" label.
-- A daily job moves Pod to the newest green Orca commit. It runs the typecheck, the unit tests and
-  the macOS build, then opens a pull request, or one tracking issue when the rebase needs a hand.
-- We aim to ship Orca's security fixes in Pod within 48 hours of the fix landing on Orca's `main`.
 
 | Branch | What it is |
 | --- | --- |
