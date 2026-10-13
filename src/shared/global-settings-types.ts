@@ -42,13 +42,17 @@ import type {
 import type { SetupScriptLaunchMode } from './worktree/launch-types'
 import type { WorktreeVisibilityDefaults } from './repo-types'
 import type { GitTuningMode } from './git-performance-config-types'
+import type { TerminalPipelineKillSwitches } from './terminal-pipeline-kill-switches'
 
 export type { WorktreeVisibilityDefaults } from './repo-types'
 
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
 
-export type GlobalSettings = GlobalSettingsBase & {
+/** The GlobalSettings keys declared in their own modules. */
+type GlobalSettingsModules = GlobalSettingsBase & TerminalPipelineKillSwitches
+
+export type GlobalSettings = GlobalSettingsModules & {
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
@@ -326,24 +330,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Per-worktree shell history so ArrowUp doesn't surface other worktrees' commands (a HISTFILE for
    *  bash/zsh, a `fish_history` session name for fish). Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
-  /** Kill switch for hidden terminal view parking: unmount long-hidden panes while a pane-less watcher keeps PTY side effects alive. */
-  terminalHiddenViewParking?: boolean
-  /** Kill switch for SSH terminal parking (C1): SSH panes park like local ones; reveal restores from main's headless model, falling back to relay replay. */
-  terminalSshViewParking?: boolean
-  /** Kill switch for the hidden-worktree retention budget (C1): force-parks the least-recently-hidden un-parkable worktrees beyond a count budget or TTL. */
-  terminalHiddenWorktreeRetentionBudget?: boolean
   /** Kill switch for the browser-guest worktree retention budget: destroys the least-recently-activated hidden worktrees' webview guests beyond an LRU count budget. */
   browserGuestWorktreeRetentionBudget?: boolean
-  /** Kill switch for main-process PTY side-effect authority; on (default) = title/bell/agent facts via pty:sideEffect channel, not renderer byte parsing. */
-  terminalMainSideEffectAuthority?: boolean
-  /** Kill switch for main's hidden-delivery gate (Phase 4): drops PTY bytes to hidden views after model ingestion; requires terminalMainSideEffectAuthority. */
-  terminalHiddenDeliveryGate?: boolean
-  /** Kill switch for main's model query responder (Phase 5); active only when both Phase-4 gates are also on. */
-  terminalModelQueryAuthority?: boolean
-  /** Kill switch for dropping main's model of a visible local daemon PTY nothing reads; demand rebuilds it from the daemon snapshot. */
-  terminalMainModelDormancy?: boolean
-  /** Kill switch for handing a hidden local daemon PTY's query replies to the daemon (protocol 45+), so main's model of it can rest. */
-  terminalDaemonQueryAuthority?: boolean
   /** Which agent to pre-select in the new-workspace composer.
    *  - null: auto (first detected agent)
    *  - 'blank': blank terminal (no agent launched)
