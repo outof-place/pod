@@ -3,7 +3,7 @@
 // hook script reads takes its ORCA_ value while unset; no fork, so a new terminal pays nothing.
 // TODO(pod): drop after 2026-12-31, and no earlier than the release after the decouple.
 
-const SPELLINGS = { legacy: 'ORCA_', current: 'POD_' } as const // pod-decouple:keep
+import { legacyEnvName } from '../../../shared/pod-legacy-env-names'
 
 // The pane env the scripts read; the codemod renames these with the rest.
 const PANE_HOOK_ENV = [
@@ -24,11 +24,10 @@ const PANE_HOOK_ENV = [
 
 export function buildPosixLegacyHookEnvLines(): string[] {
   return PANE_HOOK_ENV.flatMap((name: string) => {
+    const legacy = legacyEnvName(name)
     // Before the codemod the names are the legacy ones already.
-    if (!name.startsWith(SPELLINGS.current)) {
-      return []
-    }
-    const legacy = `${SPELLINGS.legacy}${name.slice(SPELLINGS.current.length)}`
-    return [`[ -n "\${${name}+x}" ] || [ -z "\${${legacy}+x}" ] || export ${name}="$${legacy}"`]
+    return legacy === null
+      ? []
+      : [`[ -n "\${${name}+x}" ] || [ -z "\${${legacy}+x}" ] || export ${name}="$${legacy}"`]
   })
 }

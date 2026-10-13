@@ -84,7 +84,8 @@ describe.skipIf(process.platform === 'win32')('Pod CLI launcher', () => {
     }
     const decoupled = readFileSync(UPSTREAM_LAUNCHER, 'utf8').replaceAll('ORCA_', 'POD_')
     expect(patchCliLauncher(decoupled, 'Pod', 'Pod', 'POD_')).toContain(
-      'export POD_USER_DATA_PATH="${POD_USER_DATA_PATH:-$HOME/Library/Application Support/Pod}"'
+      // A terminal from before the decouple has only the legacy name.
+      'export POD_USER_DATA_PATH="${POD_USER_DATA_PATH:-${ORCA_USER_DATA_PATH:-$HOME/Library/Application Support/Pod}}"' // pod-decouple:keep
     )
   })
 
