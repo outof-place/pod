@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { findAdoptableDaemons, moveLegacyDaemons } from './legacy-daemon-handover'
 
 const DEAD_PID = 2_147_000_000
-const RESTORE_SCRIPT = join(__dirname, '../../../product/scripts/restore-orca-terminals.mjs')
+const RESTORE_SCRIPT = join(__dirname, '../../../product/scripts/restore-legacy-terminals.mjs')
 
 let root = ''
 let orca = ''

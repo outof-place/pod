@@ -90,7 +90,7 @@ Changing a name is a one-line edit here; nothing else in the repo hard-codes the
 
     ```sh
     ELECTRON_RUN_AS_NODE=1 /Applications/Pod.app/Contents/MacOS/Pod \
-      /Applications/Pod.app/Contents/Resources/restore-orca-terminals.mjs
+      /Applications/Pod.app/Contents/Resources/restore-legacy-terminals.mjs
     ```
 
     It refuses while the product runs. It skips any daemon whose name Orca has already reused, rather than overwriting it.

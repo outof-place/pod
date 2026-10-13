@@ -215,7 +215,7 @@ module.exports = {
       { from: 'product/identity.json', to: 'product-identity.json' },
       { from: 'LICENSE', to: 'ORCA-LICENSE.txt' },
       // Rollback of the opt-in terminal handover, runnable with the app's own Node.
-      { from: 'product/scripts/restore-orca-terminals.mjs', to: 'restore-orca-terminals.mjs' },
+      { from: 'product/scripts/restore-legacy-terminals.mjs', to: 'restore-legacy-terminals.mjs' },
       // The one-app control socket admits only PodNative signed by Pod (pod/one-app).
       { from: POD_PEER_IDENTITY_BUILD, to: 'native/pod-peer-identity.node' },
       ...podAccMacExtraResources()
