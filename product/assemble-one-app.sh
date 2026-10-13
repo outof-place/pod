@@ -4,12 +4,13 @@
 # Contents/Helpers/Pod Runtime.app (identity.appId, LSUIElement). The runtime's URL and document
 # types move to the outer, which now answers pod:// and opens the documents.
 #
-#   product/assemble-one-app.sh <version> <PodNative.app> [--runtime <app>] [--out <dir>]
+#   product/assemble-one-app.sh <version> <PodNative.app> [--runtime <app>] [--out <dir>] [--no-dmg]
 #
 #   <version>        both apps' CFBundleShortVersionString must equal it
 #   <PodNative.app>  Developer ID signed with hardened runtime and a timestamp (nt-lean's build)
 #   --runtime        default dist/mac-arm64/<displayName>.app, from `product/release.sh <version>`
 #   --out            default dist/one-app; must not exist yet
+#   --no-dmg         no DMG and no second notarization: a local test install takes the stapled app
 #   Relative paths are taken from the repository root, as in release.sh.
 #
 # Signs inside out: the nested runtime's top level again (its Info.plist changed; nested code keeps
@@ -39,12 +40,13 @@ display_name="$(identity .displayName)"
 app_id="$(identity .appId)"
 arch=arm64
 
-version="" native="" runtime="" out=""
+version="" native="" runtime="" out="" dmg_wanted=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --runtime) runtime="${2:?--runtime needs a path}"; shift 2 ;;
     --out) out="${2:?--out needs a path}"; shift 2 ;;
-    -h | --help) sed -n '2,22p' "$0"; exit 0 ;;
+    --no-dmg) dmg_wanted=0; shift ;;
+    -h | --help) sed -n '2,23p' "$0"; exit 0 ;;
     -*) die "unknown option $1" ;;
     *)
       if [ -z "$version" ]; then version="${1#v}"
@@ -167,18 +169,22 @@ ditto -c -k --keepParent "$app" "$scratch/notarize.zip"
 xcrun notarytool submit "$scratch/notarize.zip" "${notary_args[@]}" --wait
 xcrun stapler staple "$app"
 
-log "DMG and zip"
 # The release's asset names (RELEASE-RUNBOOK.md): arm64 is the only architecture.
 dmg="$out/$display_name-$version.dmg"
 zip="$out/$display_name-$version.zip"
-mkdir "$scratch/stage"
-ditto "$app" "$scratch/stage/$display_name.app"
-ln -s /Applications "$scratch/stage/Applications"
-hdiutil create -volname "$display_name $version" -srcfolder "$scratch/stage" -fs HFS+ -format UDZO "$dmg" >/dev/null
-codesign --force --timestamp --sign "$sign_identity" "$dmg"
-node product/release-bundle-gate.cjs --dmg "$dmg"
-xcrun notarytool submit "$dmg" "${notary_args[@]}" --wait
-xcrun stapler staple "$dmg"
+if [ "$dmg_wanted" = 1 ]; then
+  log "DMG and zip"
+  mkdir "$scratch/stage"
+  ditto "$app" "$scratch/stage/$display_name.app"
+  ln -s /Applications "$scratch/stage/Applications"
+  hdiutil create -volname "$display_name $version" -srcfolder "$scratch/stage" -fs HFS+ -format UDZO "$dmg" >/dev/null
+  codesign --force --timestamp --sign "$sign_identity" "$dmg"
+  node product/release-bundle-gate.cjs --dmg "$dmg"
+  xcrun notarytool submit "$dmg" "${notary_args[@]}" --wait
+  xcrun stapler staple "$dmg"
+else
+  log "zip (--no-dmg: no DMG, no second notarization)"
+fi
 ditto -c -k --keepParent "$app" "$zip"
 
 log "verify (Gatekeeper, release.sh's bundle gates on the nested runtime, no outer entitlements)"
@@ -186,11 +192,11 @@ codesign --verify --deep --strict --verbose=2 "$app"
 signature="$(codesign -dv "$app" 2>&1)"
 grep -Fqx "TeamIdentifier=$team_id" <<<"$signature" || die "$app is not signed by team $team_id"
 xcrun stapler validate "$app"
-xcrun stapler validate "$dmg"
+[ "$dmg_wanted" = 0 ] || xcrun stapler validate "$dmg"
 gatekeeper="$(spctl -a -vv "$app" 2>&1)" || die "spctl rejected $app: $gatekeeper"
 printf '%s\n' "$gatekeeper"
 grep -Fq "source=Notarized Developer ID" <<<"$gatekeeper" || die "$app is not notarized: $gatekeeper"
-spctl -a -vv -t open --context context:primary-signature "$dmg"
+[ "$dmg_wanted" = 0 ] || spctl -a -vv -t open --context context:primary-signature "$dmg"
 [ "$(plist_value "$nested" LSUIElement)" = true ] || die "nested runtime is not LSUIElement"
 if plutil -extract CFBundleURLTypes xml1 -o - "$nested/Contents/Info.plist" >/dev/null 2>&1; then
   die "nested runtime still declares URL types"
@@ -201,4 +207,4 @@ node product/scripts/verify-claude-acc-host.mjs "$nested"
 node product/scripts/verify-bundle-seal.mjs "$nested"
 node product/scripts/verify-entitlements.mjs "$nested"
 node product/scripts/verify-entitlements.mjs --outer "$app" "$NESTED_PATH"
-log "done: $app, $dmg, $zip"
+if [ "$dmg_wanted" = 1 ]; then log "done: $app, $dmg, $zip"; else log "done: $app, $zip"; fi
