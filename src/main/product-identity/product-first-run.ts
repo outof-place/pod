@@ -9,7 +9,7 @@ import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import { podMainInstanceBlock } from '../pod/instance/pod-instance'
 import { claudeProfileKeychainServices } from '../claude-accounts/claude-profile-keychain-services'
 import { getKeychainUser } from '../claude-accounts/keychain'
-import { listClaudeProfileIds, moveClaudeProfileCredentials } from './claude-credentials-move'
+import { copyClaudeProfileCredentials, listClaudeProfileIds } from './claude-credentials-copy'
 import {
   pendingDeferredImport,
   readMigrationMarker,
@@ -19,7 +19,7 @@ import {
 import { openImportProgressWindow } from './import-progress-window'
 import { offerLegacyDaemonHandover } from './legacy-daemon-handover-prompt'
 import { watchMovedDaemons, type DaemonLoss } from './legacy-daemon-loss-watch'
-import { moveLegacyHome } from './legacy-home-move'
+import { copyLegacyHome } from './legacy-home-copy'
 import {
   liveSingletonOwner,
   migrateLegacyProfile,
@@ -30,8 +30,8 @@ import { getProductIdentity, type ProductIdentity } from './product-identity'
 import { installProductCopyBoundaries } from './product-copy-boundaries'
 
 const PRIVACY_SETTINGS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy'
-// One-time record in userData: the imported Claude profiles' sign-ins moved (or there were none).
-const CLAUDE_CREDENTIALS_MOVE_RECORD = 'product-claude-credentials-move.json'
+// One-time record in userData: the imported Claude profiles' sign-ins copied (or there were none).
+const CLAUDE_CREDENTIALS_COPY_RECORD = 'product-claude-credentials-copy.json'
 
 /** `/Applications/Pod.app/Contents/MacOS/Pod` → `/Applications/Pod.app`. */
 export function appBundlePathFromExecPath(execPath: string): string | null {
@@ -54,11 +54,11 @@ export function applyProductIdentityPreReady(
   installProductCopyBoundaries()
   // Why before the instance lock: Chromium writes its lock files into userData.
   if (isServeMode) {
-    // Fork-only (Pod): one-app Pod's runtime is a serve host, so it moves the home too (the gate
+    // Fork-only (Pod): one-app Pod's runtime is a serve host, so it copies the home too (the gate
     // turns other serve hosts away).
     const legacy = identity.legacyProfile
     if (legacy) {
-      moveLegacyHomeOnce(identity, join(app.getPath('appData'), legacy.userDataName))
+      copyLegacyHomeOnce(identity, join(app.getPath('appData'), legacy.userDataName))
     }
     return true
   }
@@ -66,7 +66,7 @@ export function applyProductIdentityPreReady(
 }
 
 /**
- * Pre-ready product setup: the one-time move of the legacy home folder. Pod never imports the
+ * Pre-ready product setup: the one-time copy of the legacy home folder. Pod never imports the
  * legacy profile; only an E2E run does, through `scratch`, which points it at a disposable legacy
  * profile and keeps the login keychain out of it. Returns false when startup must stop.
  */
@@ -87,11 +87,11 @@ export function runProductFirstRun(
   if (scratch?.importLegacyProfile && !importLegacyProfile(identity, legacyUserData, scratch)) {
     return false
   }
-  moveLegacyHomeOnce(identity, legacyUserData)
+  copyLegacyHomeOnce(identity, legacyUserData)
   return true
 }
 
-function moveLegacyHomeOnce(identity: ProductIdentity, legacyUserData: string): void {
+function copyLegacyHomeOnce(identity: ProductIdentity, legacyUserData: string): void {
   const legacyHomeDirName = identity.legacyProfile?.homeDirName
   if (!legacyHomeDirName || !identity.homeDirName) {
     return
@@ -103,7 +103,7 @@ function moveLegacyHomeOnce(identity: ProductIdentity, legacyUserData: string): 
     return
   }
   try {
-    const result = moveLegacyHome({
+    const result = copyLegacyHome({
       home: homedir(),
       legacyHomeDirName,
       productHomeDirName: identity.homeDirName,
@@ -112,8 +112,8 @@ function moveLegacyHomeOnce(identity: ProductIdentity, legacyUserData: string): 
     })
     console.log(`[product-decouple] home folder: ${JSON.stringify(result)}`)
   } catch (error) {
-    // Why continue: the move records itself only when it finishes, so the next launch retries.
-    console.error('[product-decouple] home folder move failed', error)
+    // Why continue: the copy records itself only when it finishes, so the next launch retries.
+    console.error('[product-decouple] home folder copy failed', error)
   }
 }
 
@@ -179,7 +179,7 @@ export async function completeProductImportBeforeWindows(): Promise<void> {
       progressWindow?.close()
     }
   }
-  moveClaudeCredentialsOnce(identity, userData)
+  copyClaudeCredentialsOnce(identity, userData)
   try {
     await offerLegacyDaemonHandover(identity, userData)
   } catch (error) {
@@ -210,9 +210,9 @@ function notifyDaemonLoss(identity: ProductIdentity, loss: DaemonLoss): void {
   }).show()
 }
 
-function moveClaudeCredentialsOnce(identity: ProductIdentity, userData: string): void {
+function copyClaudeCredentialsOnce(identity: ProductIdentity, userData: string): void {
   const legacy = identity.legacyProfile
-  const recordPath = join(userData, CLAUDE_CREDENTIALS_MOVE_RECORD)
+  const recordPath = join(userData, CLAUDE_CREDENTIALS_COPY_RECORD)
   // Why never under E2E or outside the user's own Pod: the login keychain is the account's, and a
   // dev profile cloned from the user's lists the same profile ids.
   if (
@@ -231,7 +231,7 @@ function moveClaudeCredentialsOnce(identity: ProductIdentity, userData: string):
       legacyServices: claudeProfileKeychainServices(legacyUserData, id).spellings,
       productService: claudeProfileKeychainServices(userData, id).canonical
     }))
-    const result = moveClaudeProfileCredentials({
+    const result = copyClaudeProfileCredentials({
       profiles,
       keychainAccount: getKeychainUser(),
       // Why no trusted app: Claude reads and rewrites the item through /usr/bin/security, as when
@@ -245,7 +245,7 @@ function moveClaudeCredentialsOnce(identity: ProductIdentity, userData: string):
       writeFileSync(recordPath, `${JSON.stringify({ at: new Date().toISOString(), result })}\n`)
     }
   } catch (error) {
-    console.error('[product-decouple] Claude sign-in move failed', error)
+    console.error('[product-decouple] Claude sign-in copy failed', error)
   }
 }
 
