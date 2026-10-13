@@ -5,6 +5,7 @@ import { lstat, open, realpath, type FileHandle } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { parse, stringify } from 'yaml'
 import {
+  LEGACY_LOCAL_BUILD_COMPATIBILITY_FILENAME,
   LOCAL_BUILD_COMPATIBILITY_FILENAME,
   ORCA_APP_ID,
   parseLocalBuildCompatibility,
@@ -111,11 +112,14 @@ async function assertContainedRegularFile(rootPath: string, filePath: string): P
   }
 }
 
-function extractCompatibility(zipFile: FileHandle): Promise<string> {
+function extractCompatibility(
+  zipFile: FileHandle,
+  fileName = LOCAL_BUILD_COMPATIBILITY_FILENAME
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(
       '/usr/bin/unzip',
-      ['-p', '/dev/fd/3', `Orca.app/Contents/Resources/${LOCAL_BUILD_COMPATIBILITY_FILENAME}`],
+      ['-p', '/dev/fd/3', `Orca.app/Contents/Resources/${fileName}`],
       { stdio: ['ignore', 'pipe', 'ignore', zipFile.fd] }
     )
     const chunks: Buffer[] = []
@@ -155,6 +159,18 @@ async function readCompatibility(zipFile: FileHandle): Promise<LocalBuildCompati
     stdout = await extractCompatibility(zipFile)
   } catch (error) {
     console.warn('[local-build] Could not read compatibility metadata:', error)
+    // Fork-only (Pod): a build from before the decouple carries the file under its old name.
+    if (
+      LEGACY_LOCAL_BUILD_COMPATIBILITY_FILENAME !== LOCAL_BUILD_COMPATIBILITY_FILENAME &&
+      (await extractCompatibility(zipFile, LEGACY_LOCAL_BUILD_COMPATIBILITY_FILENAME).then(
+        () => true,
+        () => false
+      ))
+    ) {
+      throw new Error(
+        `This build is from before Pod renamed its compatibility metadata (${LEGACY_LOCAL_BUILD_COMPATIBILITY_FILENAME}), so it can't be switched to. Rebuild it from a current checkout.`
+      )
+    }
     throw new Error(
       'This build predates local switching or is missing its signed compatibility metadata.'
     )
