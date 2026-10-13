@@ -62,6 +62,8 @@ describe("the daemon's hook relay", () => {
     process.env.POD_CLAUDE_HTTP_HOOKS = '1'
     const relay = createDaemonPodHookRelay(deps())
     expect(relay).not.toBeNull()
+    // The daemon's terminals don't pass the A/B on to a Pod started in one of them.
+    expect(process.env.POD_CLAUDE_HTTP_HOOKS).toBeUndefined()
     await relay?.start()
     const file = podHookRelayFilePath(join(dir, 'daemon.sock'), 7)
     expect(process.env[POD_AGENT_HOOK_RELAY_ENV]).toBe(file)
@@ -73,8 +75,12 @@ describe("the daemon's hook relay", () => {
     expect(process.env[POD_AGENT_HOOK_RELAY_ENV]).toBeUndefined()
     expect(existsSync(file)).toBe(false)
     process.env[POD_AGENT_HOOK_RELAY_ENV] = '0'
+    process.env.POD_CLAUDE_HTTP_HOOKS = '1'
     expect(createDaemonPodHookRelay(deps())).toBeNull()
+    expect(process.env.POD_CLAUDE_HTTP_HOOKS).toBeUndefined()
+    process.env.POD_CLAUDE_HTTP_HOOKS = '1'
     setPlatform('linux')
     expect(createDaemonPodHookRelay(deps())).toBeNull()
+    expect(process.env.POD_CLAUDE_HTTP_HOOKS).toBeUndefined()
   })
 })
