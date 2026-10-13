@@ -18,7 +18,9 @@
 #   --download-url-prefix <url>  dry-run only: the appcast's download URL prefix
 #   --out <dir>               outside this checkout, must not exist: <dir>/one-app (the assembly) and
 #                             <dir>/release (what the GitHub release takes)
+# Step 0, the Electron zip in electron-builder's cache: product/scripts/electron-cache.sh (checked here).
 # On a flaky network put ~/.local/share/pod-release/net-shims first on PATH (codesign/xcrun retries).
+# A real release runs from the release owner's Terminal, never from an agent (CLAUDECODE).
 # release.sh leaves latest-mac.yml in dist/: never publish it.
 #
 # Versions: CFBundleShortVersionString is <version> in both apps, and so is one numeric CFBundleVersion
@@ -46,7 +48,7 @@ while [ $# -gt 0 ]; do
     --feed-url) feed_url=${2:?--feed-url needs a URL}; shift 2 ;;
     --download-url-prefix) url_prefix=${2:?--download-url-prefix needs a URL}; shift 2 ;;
     --out) out=${2:?--out needs a directory}; shift 2 ;;
-    -h | --help) sed -n '2,29p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,31p' "$0"; exit 0 ;;
     -*) die "unknown option $1" ;;
     *) [ -z "$version" ] || die "one version only"; version="${1#v}"; shift ;;
   esac
@@ -55,8 +57,19 @@ done
   die "usage: product/release-one-app.sh <version> --native-checkout <PodNative checkout> --out <dir> [--dry-run]"
 build=$(product/scripts/pod-build-number.sh "$version")
 tag="v$version"
+release_repo=outof-place/pod
 [ "$dry_run" = 1 ] || { [ -z "$feed_url" ] && [ -z "$url_prefix" ]; } ||
   die "--feed-url and --download-url-prefix are for --dry-run only: a release reads Pod's own feed"
+# The real path signs with the release owner's keychain key, which an agent never touches.
+[ "$dry_run" = 1 ] || [ -z "${CLAUDECODE:-}" ] ||
+  die "a real release runs from the release owner's Terminal, not from an agent: use --dry-run"
+[ -z "$(git status --porcelain)" ] || die "the Pod checkout is dirty: electron-builder would pack what no commit has"
+pod_commit=$(git rev-parse HEAD)
+# Why both: clones that fetch upstream carry Orca's own v1.0.1 and up, which GitHub's repo does not.
+! git rev-parse -q --verify "refs/tags/$tag" >/dev/null || die "tag $tag already exists in this clone"
+remote_tag=$(git ls-remote --tags "https://github.com/$release_repo.git" "refs/tags/$tag") ||
+  die "cannot list $release_repo's tags"
+[ -z "$remote_tag" ] || die "tag $tag already exists on $release_repo"
 native_checkout=$(cd "$native_checkout" && pwd)
 [ -x "$native_checkout/scripts/release-app.sh" ] || die "$native_checkout is not a PodNative checkout"
 [ -z "$(git -C "$native_checkout" status --porcelain)" ] || die "$native_checkout is dirty"
@@ -86,17 +99,18 @@ SWIFT
   seed=$(sed -n 1p <<<"$keys")
   public_key=$(sed -n 2p <<<"$keys")
   unset keys
-  expected_feed=${feed_url:-https://github.com/outof-place/pod/releases/download/appcast/appcast.xml}
+  expected_feed=${feed_url:-https://github.com/$release_repo/releases/download/appcast/appcast.xml}
 else
   key_file="$native_checkout/scripts/sparkle-ed-public-key.txt"
   [ -s "$key_file" ] || die "no Sparkle public key in $key_file: this release could never update (RELEASE-RUNBOOK.md)"
   public_key=$(tr -d '[:space:]' <"$key_file")
-  expected_feed=https://github.com/outof-place/pod/releases/download/appcast/appcast.xml
+  expected_feed=https://github.com/$release_repo/releases/download/appcast/appcast.xml
 fi
 log "Pod $version (CFBundleVersion $build)$([ "$dry_run" = 1 ] && echo ', dry run with a throwaway key')"
 
 # 1. The runtime.
 if [ -z "$runtime" ]; then
+  product/scripts/electron-cache.sh
   log "runtime: product/release.sh $version"
   product/release.sh "$version"
   runtime="dist/mac-arm64/$display_name.app"
@@ -124,6 +138,8 @@ check_outer() {
   [ "$(plist "$app" SUFeedURL)" = "$expected_feed" ] || die "$app: SUFeedURL is not $expected_feed"
   [ "$(plist "$app" SUPublicEDKey)" = "$public_key" ] || die "$app: SUPublicEDKey is not this release's key"
   [ "$(plist "$app" SURequireSignedFeed)" = true ] || die "$app: SURequireSignedFeed is not set"
+  # Also what lets a Developer ID-signed DMG through after a key rotation.
+  [ "$(plist "$app" SUVerifyUpdateBeforeExtraction)" = true ] || die "$app: SUVerifyUpdateBeforeExtraction is not set"
 }
 check_outer "$native_app"
 
@@ -147,10 +163,11 @@ if [ "$dry_run" = 1 ]; then
 else
   product/scripts/sparkle-appcast.sh "$dmg" "$tag" "$release_dir"
 fi
-python3 -I - "$release_dir/appcast.xml" "$build" "$version" <<'PY'
+signature=$(python3 -I - "$release_dir/appcast.xml" "$build" "$version" "$dmg" <<'PY'
+import os
 import sys
 import xml.etree.ElementTree as ET
-path, build, version = sys.argv[1:]
+path, build, version, dmg = sys.argv[1:]
 ns = {"sparkle": "http://www.andymatuschak.org/xml-namespaces/sparkle"}
 item = ET.parse(path).getroot().find("./channel/item")
 got = {k: (item.findtext(f"sparkle:{k}", namespaces=ns) or "") for k in ("version", "shortVersionString", "channel")}
@@ -159,14 +176,20 @@ assert got["shortVersionString"] == version, f"appcast shortVersionString {got['
 # PodNative's updater sets no allowed channels: an item on a channel would never be offered.
 assert not got["channel"], f"appcast item is on channel {got['channel']}"
 enclosure = item.find("enclosure")
-assert enclosure.get("{%s}edSignature" % ns["sparkle"]), "the DMG has no EdDSA signature"
+signature = enclosure.get("{%s}edSignature" % ns["sparkle"])
+assert signature, "the DMG has no EdDSA signature"
+assert enclosure.get("length") == str(os.path.getsize(dmg)), f"enclosure length {enclosure.get('length')} is not the DMG's"
+print(signature)
 PY
+)
+# The signature as the installed app checks it, with the outer's own SUPublicEDKey.
+swift product/scripts/sparkle-ed-verify.swift "$dmg" "$signature" "$(plist "$assembled/$display_name.app" SUPublicEDKey)"
 node product/release-feed-gate.cjs "$app_id" "$assembled/$display_name.app" "$release_dir"/*
 
 # 5. Checksums and the list of what the GitHub release takes.
 (cd "$release_dir" && shasum -a 256 "$display_name-$version.dmg" "$display_name-$version.zip" appcast.xml >SHA256SUMS)
 {
-  echo "Pod $version (CFBundleVersion $build), tag $tag$([ "$dry_run" = 1 ] && echo ', DRY RUN: throwaway key, never publish')"
+  echo "Pod $version (CFBundleVersion $build), tag $tag at $pod_commit$([ "$dry_run" = 1 ] && echo ', DRY RUN: throwaway key, never publish')"
   echo "runtime  $(plist "$runtime" CFBundleShortVersionString) ($(plist "$runtime" CFBundleVersion)) from $runtime"
   echo "outer    PodNative $(plist "$assembled/$display_name.app" PodNativeRevision)"
   echo "feed     $expected_feed"
@@ -186,6 +209,6 @@ else
   prerelease=""
   [[ "$version" == *-rc* ]] && prerelease=" --prerelease"
   echo "publish (RELEASE-RUNBOOK.md), in this order:"
-  echo "  gh release create $tag \"$release_dir/$display_name-$version.dmg\" \"$release_dir/$display_name-$version.zip\" \"$release_dir/SHA256SUMS\" --repo outof-place/pod --title \"$display_name $version\" --notes-file <notes.md>$prerelease"
-  echo "  gh release upload appcast \"$release_dir/appcast.xml\" --repo outof-place/pod --clobber"
+  echo "  gh release create $tag \"$release_dir/$display_name-$version.dmg\" \"$release_dir/$display_name-$version.zip\" \"$release_dir/SHA256SUMS\" --repo $release_repo --target $pod_commit --title \"$display_name $version\" --notes-file <notes.md>$prerelease"
+  echo "  gh release upload appcast \"$release_dir/appcast.xml\" --repo $release_repo --clobber"
 fi
