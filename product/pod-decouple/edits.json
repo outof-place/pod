@@ -159,6 +159,15 @@
       "applied": "baseEnv\\.POD_CLI_COMMAND = 'podx'"
     },
     {
+      "id": "endpoint-legacy-spelling",
+      "stage": "post-env",
+      "why": "one release of hook scripts and clients from before the decouple (old panes, old Claude sessions) read the endpoint file's ORCA_ keys; remove in the release after decouple",
+      "files": "^src/shared/agent-hook-listener/endpoint-publication\\.ts$",
+      "find": "  const lines = \\[\\.\\.\\.valuesToWrite\\.map\\(\\(\\[key, value\\]\\) => `\\$\\{prefix\\}\\$\\{key\\}=\\$\\{value\\}`\\), ''\\]\\n",
+      "replace": "  // Fork-only (Pod): for one release the file also carries the ORCA_ spelling, which hook scripts\n  // and clients installed before the decouple read. TODO(pod): drop it in the release after.\n  const legacyPrefix = 'ORCA_' // pod-decouple:keep\n  const legacy = valuesToWrite.map(\n    ([key, value]): [string, string] => [`${legacyPrefix}${key.slice('POD_'.length)}`, value]\n  )\n  const lines = [\n    ...[...valuesToWrite, ...legacy].map(([key, value]) => `${prefix}${key}=${value}`),\n    ''\n  ]\n",
+      "applied": "const legacyPrefix = 'ORCA_' // pod-decouple:keep"
+    },
+    {
       "id": "env-prefix-literals",
       "stage": "post-env",
       "why": "prefix literals that select a family of renamed names (every ORCA_OPENCODE_* and ORCA_DATA_ACCOUNT_* name is renamed)",
