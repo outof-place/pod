@@ -6,6 +6,7 @@ import { rmSync, writeFileSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
+import { TERMINAL_HANDLE_ENV } from '../pod/decouple/legacy-daemon-env'
 import { TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 import type { HistoryReader } from './history-reader'
 import type { DaemonFileLog } from './daemon-file-log'
@@ -636,7 +637,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           current: {
             pid: process.pid,
             startedAtMs: (firstIdentity?.startedAtMs ?? 0) + 10_000,
-            launchNonce: 'replacement-launch'
+            launchNonce: 'replacement-launch',
+            // Fork-only (Pod): the hello names the env a terminal's handle is read from.
+            terminalHandleEnv: TERMINAL_HANDLE_ENV
           }
         }
       ])
