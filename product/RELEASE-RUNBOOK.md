@@ -10,6 +10,8 @@ What the release owner does by hand. Everything else is `product/release-one-app
 | RC 2    | `1.0.0-rc2`                | `1000002`                               | `v1.0.0-rc2` | `Pod-1.0.0-rc2.dmg` |
 | 1.0     | `1.0.0`                    | `1000099`                               | `v1.0.0`     | `Pod-1.0.0.dmg`     |
 
+Tags are `v<version>`, created by `gh release create --target <the commit>`. `release-one-app.sh` refuses a tag that already exists, in this clone or on GitHub. outof-place/pod on GitHub has no `v1` tags, but clones that fetch upstream carry Orca's `v1.0.1` to `v1.4.224`: decide how Pod 1.0.1 and later avoid them (a tag prefix, or keeping upstream's tags out of `refs/tags`) before 1.0.1.
+
 `product/scripts/pod-build-number.sh <version>` gives the build number (MAJOR·1000000 + MINOR·10000 + PATCH·100 + rc number, 99 for the release). Test builds (`0.0.1-testN`) carry no feed, so they never update: install the first RC by hand from its DMG.
 
 ## Once: the Sparkle signing key (you, in Terminal; agents never run generate_keys or touch the key)
@@ -26,7 +28,7 @@ tar -xJf Sparkle-2.10.0.tar.xz bin
 
 - **What it does:** it makes an EdDSA key pair. The private key goes into your **login keychain** (item "Private key for signing Sparkle updates", account `codes.pod`; macOS may ask to allow the save). The public key is printed. Run again, it reuses the account's key and never overwrites it.
 - **Where the public key goes:** the printed base64 string, alone on one line, into PodNative's `scripts/sparkle-ed-public-key.txt`. Send it to nt-lean, who commits it. `~/sparkle-2.10.0/bin/generate_keys --account codes.pod -p` prints it again. Every distribution build embeds it as `SUPublicEDKey`; without it, a build never updates and `release-one-app.sh` refuses to run.
-- **Backup, offline:** `~/sparkle-2.10.0/bin/generate_keys --account codes.pod -x /Volumes/<USB or encrypted volume>/pod-sparkle-key`. The file is the private key itself, so keep it off this Mac and out of any repo or cloud folder. `-f <file>` imports it on a new release Mac. A lost key can only be replaced through a key rotation shipped as a Developer ID–signed DMG, which is why every release's Sparkle archive is the signed DMG.
+- **Backup, offline:** `(umask 077; ~/sparkle-2.10.0/bin/generate_keys --account codes.pod -x /Volumes/<encrypted volume>/pod-sparkle-key)`, then `ls -l` must show `-rw-------`. The file is the private key itself: keep it on an encrypted external volume no sync tool watches, never in `~/Documents`, `~/Desktop`, iCloud Drive, Dropbox, a repo or a cloud folder. `-f <file>` imports it on a new release Mac. A lost key can only be replaced through a key rotation shipped as a Developer ID–signed DMG, which is why every release's Sparkle archive is the signed DMG.
 
 ## Once: the feed release
 
@@ -39,17 +41,21 @@ gh release create appcast --repo outof-place/pod --prerelease --title "Pod updat
 
 ## Each release
 
+0. **The Electron zip, cached and checked**: `product/scripts/electron-cache.sh`. It checks the zip electron-builder unpacks (Electron's version from `pnpm-lock.yaml`) against the installed package's `checksums.json` and Electron's own `SHASUMS256.txt`, in `~/Library/Caches/electron/<sha256 of the release URL>/`. A missing or different one: `--from <zip>` copies a checked zip in (another Mac's cache, a download), `--fetch` downloads it. `release-one-app.sh` runs the check again before release.sh.
+   - electron-builder 26.15.3 (@electron/get 3.1.0) reads neither `ELECTRON_CACHE` nor `electron_config_cache`; `ELECTRON_BUILDER_CACHE` moves only its own tools. No `ELECTRON_MIRROR`: it changes the cache directory.
+   - The build still downloads `SHASUMS256.txt` from github.com (never cached), so GitHub must answer even with a full cache.
 1. **Dry run first**, same chain, throwaway key:
    `PATH=~/.local/share/pod-release/net-shims:$PATH product/release-one-app.sh 1.0.0-rc1 --native-checkout <clean PodNative checkout at the pinned revision> --out ~/pod-releases/1.0.0-rc1-dry --dry-run`
    - `--out` must be outside the Pod checkout (electron-builder packs the checkout). The net-shims retry codesign's timestamp and notarytool/stapler on network errors.
 2. **The release**, on the release Mac, at low load, one build at a time:
    `PATH=~/.local/share/pod-release/net-shims:$PATH product/release-one-app.sh 1.0.0-rc1 --native-checkout <same checkout> --out ~/pod-releases/1.0.0-rc1`
    - release.sh also leaves `latest-mac.yml` in the checkout's `dist/`: never publish it, and move `dist/` out of the checkout afterwards.
-   - macOS asks once for access to "Private key for signing Sparkle updates": choose **Allow** (the tools run from a fresh temp directory each time, so "Always Allow" doesn't stick).
+   - Run it from Terminal, not from an agent's shell: the real path refuses `CLAUDECODE`.
+   - macOS asks **twice** for access to "Private key for signing Sparkle updates": once for `generate_appcast`, then for `sign_update`, which checks the feed's signature. Choose **Allow** both times, not "Always Allow", which would let these tools read the key without asking from then on.
    - Notarization runs five times (runtime app and DMG, PodNative, the assembled app and its DMG).
-3. **Check** `~/pod-releases/1.0.0-rc1/release/artifacts.txt`: version, build number, feed, public key, the assets and their sha256.
+3. **Check** `~/pod-releases/1.0.0-rc1/release/artifacts.txt`: version, build number, the commit, feed, public key, the assets and their sha256. The script has already checked the DMG's EdDSA signature against the app's own `SUPublicEDKey` with CryptoKit.
 4. **Publish**, from Terminal with `gh auth status` green, with the two commands the script prints, in this order:
-   - the release: `gh release create v1.0.0-rc1 Pod-1.0.0-rc1.dmg Pod-1.0.0-rc1.zip SHA256SUMS --repo outof-place/pod --title "Pod 1.0.0-rc1" --notes-file notes.md --prerelease`. An RC is a prerelease; 1.0.0 is not, so it becomes "latest" for the website and the cask.
+   - the release: `gh release create v1.0.0-rc1 Pod-1.0.0-rc1.dmg Pod-1.0.0-rc1.zip SHA256SUMS --repo outof-place/pod --target <commit> --title "Pod 1.0.0-rc1" --notes-file notes.md --prerelease`. The commit must be pushed to outof-place/pod; without `--target` GitHub would tag the default branch's head. An RC is a prerelease; 1.0.0 is not, so it becomes "latest" for the website and the cask.
    - then the feed: `gh release upload appcast appcast.xml --repo outof-place/pod --clobber`. `--clobber` deletes the old asset and uploads the new one (GitHub refuses a second asset with the same name). The download URL is addressed by tag and file name, so it stays the same. Between the delete and the upload the URL answers 404; an app that checks right then tries again at its next check. The release goes first because the feed points at its DMG.
 5. **Verify**:
    `curl -fsL https://github.com/outof-place/pod/releases/download/appcast/appcast.xml | grep -E 'sparkle:(version|shortVersionString)'`

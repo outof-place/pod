@@ -1,3 +1,7 @@
+# DISABLED: Pod.app is one-app, cut on the release Mac by product/release-one-app.sh
+# (product/RELEASE-RUNBOOK.md), and release.sh --publish refuses a classic release without
+# POD_CLASSIC_RELEASE=1. No tag starts this workflow; a manual run stops at its first step.
+#
 # Release workflow for the downstream product described by product/identity.json (Pod).
 # Push a tag v0.<minor>.<patch> to build an arm64 DMG + zip, sign them with Developer ID, notarize and
 # staple them, and publish a GitHub release (with latest-mac.yml for the in-app updater) in the
@@ -15,10 +19,6 @@
 name: Pod release
 
 on:
-  push:
-    # Why v0.* only: this fork also carries Orca's ~1100 v1.x tags, and a `git push --tags` from a
-    # clone holding new ones must not start a release per tag. Revisit before Pod 1.0.
-    tags: ['v0.*']
   workflow_dispatch:
     inputs:
       tag:
@@ -40,6 +40,11 @@ jobs:
     env:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
+      - name: One-app releases are cut on the release Mac
+        run: |
+          echo "::error::Pod releases are one-app: product/release-one-app.sh on the release Mac (product/RELEASE-RUNBOOK.md)"
+          exit 1
+
       - uses: actions/checkout@v5
         with:
           ref: ${{ env.TAG }}
