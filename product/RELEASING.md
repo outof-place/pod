@@ -2,7 +2,7 @@
 
 A release is an arm64 DMG and zip of `<displayName>.app`. Both are signed with a **Developer ID Application** certificate, notarized by Apple and stapled. They are published as a GitHub release in `identity.updateFeed`'s repo, together with `latest-mac.yml`, which the in-app updater reads.
 
-For now, releases are cut **locally** with `product/release.sh` on the Mac that holds the signing key. `.github/workflows/pod-release.yml` runs the same script on a `v<semver>` tag, but needs its own certificate first (see [CI](#ci-later)).
+For now, releases are cut **locally** with `product/release.sh` on the Mac that holds the signing key. `.github/workflows/pod-release.yml` is disabled: a one-app release comes from `product/release-one-app.sh` ([RELEASE-RUNBOOK.md](./RELEASE-RUNBOOK.md)).
 
 ## Signing setup (done)
 
