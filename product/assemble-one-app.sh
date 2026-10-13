@@ -160,8 +160,9 @@ xcrun notarytool submit "$scratch/notarize.zip" "${notary_args[@]}" --wait
 xcrun stapler staple "$app"
 
 log "DMG and zip"
-dmg="$out/$display_name-$version-$arch.dmg"
-zip="$out/$display_name-$version-$arch-mac.zip"
+# The release's asset names (RELEASE-RUNBOOK.md): arm64 is the only architecture.
+dmg="$out/$display_name-$version.dmg"
+zip="$out/$display_name-$version.zip"
 mkdir "$scratch/stage"
 ditto "$app" "$scratch/stage/$display_name.app"
 ln -s /Applications "$scratch/stage/Applications"
