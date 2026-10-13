@@ -3,6 +3,8 @@
 // macOS only: the product ships no Windows or Linux artifacts.
 //
 //   POD_VERSION   app version (release builds take it from the tag; default: package.json version)
+//   POD_BUILD_VERSION  CFBundleVersion (default: the version); a one-app release's comes from
+//                 product/scripts/pod-build-number.sh, the same number as the PodNative outer's
 //   POD_ARCH      arm64 (default) or x64
 //   POD_RELEASE=1 dmg + zip, notarized (with ORCA_MAC_RELEASE=1 for upstream's strict signing);
 //                 otherwise a signed but unnotarized .app (`dir`) for local installs
@@ -126,6 +128,7 @@ function readOrcaUpstream() {
 
 module.exports = {
   ...base,
+  ...(process.env.POD_BUILD_VERSION ? { buildVersion: process.env.POD_BUILD_VERSION } : {}),
   appId: identity.appId,
   productName: identity.displayName,
   copyright: identity.copyright,

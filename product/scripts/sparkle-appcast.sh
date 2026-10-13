@@ -1,7 +1,8 @@
 #!/bin/bash
 # Writes the Sparkle appcast for one release of the one-app Pod.app: a single item for <archive>,
 # its EdDSA signature and the feed's own (PodNative sets SURequireSignedFeed), with download URLs
-# under the release's tag. PodNative reads it from releases/latest/download/appcast.xml.
+# under the release's tag. PodNative reads it from the asset of the `appcast` prerelease
+# (releases/download/appcast/appcast.xml), which each release replaces (RELEASE-RUNBOOK.md).
 #
 #   product/scripts/sparkle-appcast.sh <archive> <tag> <out dir>
 #

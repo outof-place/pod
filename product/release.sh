@@ -159,7 +159,11 @@ fi
 
 log "package, sign and notarize the app (electron-builder staples it)"
 rm -rf dist
-DEVELOPER_DIR="$icon_developer_dir" POD_RELEASE=1 POD_VERSION="$version" POD_ARCH="$arch" with_timestamp_retry \
+# A release version (X.Y.Z or X.Y.Z-rcN) gets the integer CFBundleVersion its outer carries too;
+# other versions (test builds) keep electron-builder's default, the version itself.
+build_version=$(product/scripts/pod-build-number.sh "$version" 2>/dev/null || true)
+DEVELOPER_DIR="$icon_developer_dir" POD_RELEASE=1 POD_VERSION="$version" POD_BUILD_VERSION="$build_version" \
+  POD_ARCH="$arch" with_timestamp_retry \
   pnpm exec electron-builder --config product/electron-builder.pod.cjs --mac "--$arch" --publish never
 
 app="dist/mac-$arch/$display_name.app"
