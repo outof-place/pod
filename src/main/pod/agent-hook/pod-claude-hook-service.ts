@@ -35,7 +35,7 @@ import {
 import { setPodClaudeAgentChangeListener } from './pod-claude-agent-change'
 import { podManagedStatusLineCommand } from './pod-statusline-native'
 import {
-  CLAUDE_HTTP_HOOK_FIRST_VERSION,
+  CLAUDE_LAUNCH_SETTINGS_FIRST_VERSION,
   getPodClaudeLaunchSettingsPrefix,
   podClaudeLaunchSettingsEnabled,
   podClaudeLaunchStatusLineOn,
@@ -67,7 +67,7 @@ export function podClaudeLaunchMode(claudeVersion?: string): boolean {
   if (
     claudeVersion === undefined
       ? !moved
-      : !claudeVersionReaches(claudeVersion, CLAUDE_HTTP_HOOK_FIRST_VERSION)
+      : !claudeVersionReaches(claudeVersion, CLAUDE_LAUNCH_SETTINGS_FIRST_VERSION)
   ) {
     return false
   }
