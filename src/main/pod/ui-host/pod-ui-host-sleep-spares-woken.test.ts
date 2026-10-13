@@ -48,11 +48,16 @@ function makeRuntime() {
   let onList: () => void = () => {}
   // A stop the daemon doesn't acknowledge, though the process is gone.
   let acknowledge = true
+  // A stop that doesn't land: the process stays.
+  let stuck = false
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
     stopAndWait: async (ptyId: string) => {
       stopped.push(ptyId)
+      if (stuck) {
+        return false
+      }
       live.delete(ptyId)
       runtime.onPtyExit(ptyId, -1)
       return acknowledge
@@ -78,7 +83,8 @@ function makeRuntime() {
     wake,
     whenListed: (run: () => void) => (onList = run),
     phase: () => [...states.terminalSleepStateByWorktreeId.values()].map((state) => state.phase),
-    refuseAcknowledgement: () => (acknowledge = false)
+    refuseAcknowledgement: () => (acknowledge = false),
+    jamStops: () => (stuck = true)
   }
 }
 
@@ -131,6 +137,19 @@ describe("the runtime's part of a one-app window's sleep", () => {
     await expect(
       runtime.sleepTerminalsForWorktree(`id:${WORKTREE}`, { sparePtyIds: new Set([WOKEN]) })
     ).resolves.toBeDefined()
+  })
+
+  it("names only its own PTY when that one doesn't stop", async () => {
+    const { runtime, wake, jamStops } = makeRuntime()
+    wake()
+    jamStops()
+
+    await expect(
+      runtime.sleepTerminalsForWorktree(`id:${WORKTREE}`, { sparePtyIds: new Set([WOKEN]) })
+    ).rejects.toMatchObject({
+      message: 'terminal_worktree_sleep_failed',
+      remainingLivePtyIds: [BEFORE]
+    })
   })
 
   it('spares nothing for a spawn after the sleep ended', async () => {
