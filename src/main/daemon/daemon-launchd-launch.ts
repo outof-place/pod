@@ -1,6 +1,7 @@
 // Fork-only (Pod): the macOS daemon as a launchd job in the user's GUI domain (POD_DAEMON_LAUNCHD=1).
-// A forked daemon stays in the runtime's coalition, where CLPC keeps the terminals' short
-// interactive bursts on E-cores; a job gets a coalition of its own and ProcessType Interactive.
+// A forked daemon stays in the coalition of the runtime that started it, so a Force Quit of that
+// runtime kills it and every session (incident #2); a job gets a coalition of its own. (It does not
+// get P-cores: pod-rootd measured a ProcessType Interactive job's bursts on E-cores too, M10.)
 import { EventEmitter } from 'node:events'
 import { readFileSync, unlinkSync } from 'node:fs'
 import { runProcess } from '@orca/process-host'
@@ -13,13 +14,20 @@ import {
 } from './daemon-launched-child-spawn'
 import { DAEMON_LAUNCHD_REPORT_ARG, readDaemonLaunchdReport } from './daemon-launchd-report'
 import { parseDaemonReadyIdentity, type DaemonReadyIdentity } from './daemon-ready-identity'
+import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
 
 const LAUNCHCTL_PATH = '/bin/launchctl'
 const LAUNCHCTL_TIMEOUT_MS = 10_000
 const DEFAULT_STARTUP_TIMEOUT_MS = 10_000
 const REPORT_POLL_MS = 25
 const EXIT_POLL_MS = 250
+const PRINT_POLL_MS = 500
 const STDERR_TAIL_BYTES = 8192
+// The daemon's SIGTERM budget (daemon-entry SHUTDOWN_TIMEOUT_MS, 5 s) plus its reply flush (1 s)
+// and a second of slack, before launchd's SIGKILL.
+const DAEMON_EXIT_TIMEOUT_S = 7
+// launchd's default soft NOFILE for a job is 256; a daemon holds several descriptors per PTY.
+const DAEMON_NUMBER_OF_FILES = 10_240
 
 export function isLaunchdDaemonLaunchEnabled(): boolean {
   return process.platform === 'darwin' && process.env.POD_DAEMON_LAUNCHD === '1'
@@ -39,6 +47,10 @@ export type DaemonLaunchdJob = {
   args: string[]
   env: NodeJS.ProcessEnv
   cwd: string
+  /** ExitTimeOut: seconds between launchd's SIGTERM and its SIGKILL. */
+  exitTimeoutSeconds: number
+  /** SoftResourceLimits.NumberOfFiles. */
+  numberOfFiles: number
 }
 
 /** The daemon-host side of a launchd launch: naming, the plist, and removing a job by label. */
@@ -79,6 +91,19 @@ function removeQuietly(path: string): void {
   }
 }
 
+/** What launchd says of a job: its pid while it runs, the exit code of its last run. */
+async function printJob(
+  launchctl: RunLaunchctl,
+  uid: number,
+  label: string
+): Promise<{ pid: number | null; lastExitCode: number | null }> {
+  const printed = await launchctl(['print', `gui/${uid}/${label}`]).catch(() => null)
+  const text = printed?.code === 0 ? printed.stdout : ''
+  const pid = /^\s*pid = (\d+)$/m.exec(text)
+  const last = /^\s*last exit code = (-?\d+)$/m.exec(text)
+  return { pid: pid ? Number(pid[1]) : null, lastExitCode: last ? Number(last[1]) : null }
+}
+
 function stderrTail(path: string): string {
   try {
     return readFileSync(path, 'utf8').slice(-STDERR_TAIL_BYTES).trim()
@@ -113,7 +138,9 @@ export async function launchDaemonViaLaunchd(
       paths.reportPath
     ],
     env: buildDaemonChildEnv(options),
-    cwd: options.userDataPath
+    cwd: options.userDataPath,
+    exitTimeoutSeconds: DAEMON_EXIT_TIMEOUT_S,
+    numberOfFiles: DAEMON_NUMBER_OF_FILES
   })
   let bootstrap: ProcessResult
   try {
@@ -133,7 +160,21 @@ export async function launchDaemonViaLaunchd(
     return fail(`launchctl bootstrap exited ${bootstrap.code}: ${bootstrap.stderr.trim()}`)
   }
   const deadline = Date.now() + (options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS)
-  let pid: number | null = null
+  // Why launchd's own view too: a daemon that dies before its first report leaves only that.
+  let pid: number | null = (await printJob(launchctl, uid, paths.label)).pid
+  let printedAt = Date.now()
+  const exitedEarly = async (): Promise<DaemonLaunchdOutcome> => {
+    const { lastExitCode } = await printJob(launchctl, uid, paths.label)
+    if (lastExitCode === DAEMON_EXIT_ENDPOINT_OCCUPIED) {
+      // Lost the endpoint race before it could say so in its report.
+      await jobs.bootout(paths.label).catch(() => {})
+      removeQuietly(paths.reportPath)
+      return { kind: 'endpoint-unavailable', reason: 'occupied' }
+    }
+    return fail(
+      `Daemon exited during startup${lastExitCode === null ? '' : ` (launchd: last exit code ${lastExitCode})`}`
+    )
+  }
   for (;;) {
     const report = readDaemonLaunchdReport(paths.reportPath)
     if (report?.type === 'ready') {
@@ -160,8 +201,16 @@ export async function launchDaemonViaLaunchd(
     if (report?.type === 'started' && typeof report.pid === 'number') {
       pid = report.pid
     }
+    if (pid === null && Date.now() - printedAt >= PRINT_POLL_MS) {
+      const printed = await printJob(launchctl, uid, paths.label)
+      printedAt = Date.now()
+      pid = printed.pid
+      if (pid === null && printed.lastExitCode !== null) {
+        return exitedEarly()
+      }
+    }
     if (pid !== null && !processIsAlive(pid)) {
-      return fail('Daemon exited during startup')
+      return exitedEarly()
     }
     if (Date.now() >= deadline) {
       return fail('Daemon startup timed out')

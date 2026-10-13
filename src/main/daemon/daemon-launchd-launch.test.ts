@@ -39,13 +39,18 @@ const options = {
   startupTimeoutMs: 1_000
 }
 
-function result(code: number, stderr = ''): ProcessResult {
-  return { code, signal: null, stdout: '', stderr, timedOut: false }
+function result(code: number, stderr = '', stdout = ''): ProcessResult {
+  return { code, signal: null, stdout, stderr, timedOut: false }
 }
 
-/** launchctl that "starts" the daemon: the reports it would write, `after` ms apart. */
-function launchctlReporting(reports: DaemonLaunchdReport[], after = 20) {
+/** launchctl that "starts" the daemon: the reports it would write, `after` ms apart, and what
+ *  `launchctl print` says of the job. */
+function launchctlReporting(reports: DaemonLaunchdReport[], after = 20, printed = '') {
   return vi.fn(async (args: string[]) => {
+    if (args[0] === 'print') {
+      expect(args).toEqual(['print', `gui/${process.getuid?.()}/${paths.label}`])
+      return result(0, '', printed)
+    }
     expect(args.slice(0, 1)).toEqual(['bootstrap'])
     expect(existsSync(paths.plistPath)).toBe(true)
     reports.forEach((report, index) =>
@@ -104,6 +109,8 @@ describe('a daemon launchd starts', () => {
     expect(job.args.slice(-2)).toEqual(['--launchd-report', paths.reportPath])
     expect(job.env.ELECTRON_RUN_AS_NODE).toBe('1')
     expect(job.cwd).toBe('/data')
+    expect(job.exitTimeoutSeconds).toBe(7)
+    expect(job.numberOfFiles).toBe(10_240)
     expect(launchctl.mock.calls[0]?.[0]).toEqual([
       'bootstrap',
       `gui/${process.getuid?.()}`,
@@ -142,6 +149,29 @@ describe('a daemon launchd starts', () => {
     const started = Date.now()
     await expect(launchDaemonViaLaunchd(options, jobs, launchctl)).rejects.toThrow(
       /Daemon exited during startup\nDaemon stderr \(tail\):\nError: cannot find module/
+    )
+    expect(Date.now() - started).toBeLessThan(options.startupTimeoutMs)
+    expect(bootouts).toEqual([paths.label])
+  })
+
+  it("reads a lost endpoint race from launchd's last exit code when the report never says so", async () => {
+    const launchctl = launchctlReporting(
+      [{ type: 'started', pid: GONE_PID }],
+      20,
+      '\tstate = not running\n\tlast exit code = 20\n'
+    )
+    expect(await launchDaemonViaLaunchd(options, jobs, launchctl)).toEqual({
+      kind: 'endpoint-unavailable',
+      reason: 'occupied'
+    })
+    expect(bootouts).toEqual([paths.label])
+  })
+
+  it("fails fast on a daemon that dies before its first report, with launchd's exit code", async () => {
+    const launchctl = launchctlReporting([], 20, '\tstate = not running\n\tlast exit code = 1\n')
+    const started = Date.now()
+    await expect(launchDaemonViaLaunchd(options, jobs, launchctl)).rejects.toThrow(
+      'Daemon exited during startup (launchd: last exit code 1)'
     )
     expect(Date.now() - started).toBeLessThan(options.startupTimeoutMs)
     expect(bootouts).toEqual([paths.label])
