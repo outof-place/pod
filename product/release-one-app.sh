@@ -16,14 +16,17 @@
 #                             generate_keys. The outer carries its public half.
 #   --feed-url <url>          dry-run only: the outer's SUFeedURL (an update rehearsal on 127.0.0.1)
 #   --download-url-prefix <url>  dry-run only: the appcast's download URL prefix
-#   --out <dir>               the release directory (default dist/release-<version>; must not exist)
+#   --out <dir>               outside this checkout, must not exist: <dir>/one-app (the assembly) and
+#                             <dir>/release (what the GitHub release takes)
+# On a flaky network put ~/.local/share/pod-release/net-shims first on PATH (codesign/xcrun retries).
+# release.sh leaves latest-mac.yml in dist/: never publish it.
 #
-# Versions: CFBundleShortVersionString is <version> in both apps; the outer's CFBundleVersion comes
-# from product/scripts/pod-build-number.sh, the number Sparkle compares.
+# Versions: CFBundleShortVersionString is <version> in both apps, and so is one numeric CFBundleVersion
+# from product/scripts/pod-build-number.sh (the number Sparkle compares in the outer).
 # Assets: Pod-<version>.dmg (the download and the Sparkle update), Pod-<version>.zip, appcast.xml,
-# SHA256SUMS. The feed is the `appcast` prerelease's asset, not releases/latest: GitHub's latest skips
-# prereleases, and RCs are prereleases. A real release takes the key from this Mac's login keychain through sparkle-appcast.sh,
-# and the outer's public key from PodNative's scripts/sparkle-ed-public-key.txt.
+# SHA256SUMS. The feed is the `appcast` prerelease's asset, not releases/latest: GitHub's latest
+# skips prereleases, and RCs are prereleases. A real release signs with the key in this Mac's login
+# keychain (sparkle-appcast.sh); the outer's public key is PodNative's scripts/sparkle-ed-public-key.txt.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -43,13 +46,13 @@ while [ $# -gt 0 ]; do
     --feed-url) feed_url=${2:?--feed-url needs a URL}; shift 2 ;;
     --download-url-prefix) url_prefix=${2:?--download-url-prefix needs a URL}; shift 2 ;;
     --out) out=${2:?--out needs a directory}; shift 2 ;;
-    -h | --help) sed -n '2,25p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,29p' "$0"; exit 0 ;;
     -*) die "unknown option $1" ;;
     *) [ -z "$version" ] || die "one version only"; version="${1#v}"; shift ;;
   esac
 done
-[ -n "$version" ] && [ -n "$native_checkout" ] ||
-  die "usage: product/release-one-app.sh <version> --native-checkout <PodNative checkout> [--dry-run]"
+[ -n "$version" ] && [ -n "$native_checkout" ] && [ -n "$out" ] ||
+  die "usage: product/release-one-app.sh <version> --native-checkout <PodNative checkout> --out <dir> [--dry-run]"
 build=$(product/scripts/pod-build-number.sh "$version")
 tag="v$version"
 [ "$dry_run" = 1 ] || { [ -z "$feed_url" ] && [ -z "$url_prefix" ]; } ||
@@ -60,9 +63,14 @@ native_checkout=$(cd "$native_checkout" && pwd)
 
 display_name="$(node -p "require('./product/identity.json').displayName")"
 app_id="$(node -p "require('./product/identity.json').appId")"
-out="${out:-dist/release-$version}"
-assembled="dist/one-app-$version"
-for dir in "$out" "$assembled"; do [ ! -e "$dir" ] || die "$dir already exists"; done
+[ ! -e "$out" ] || die "$out already exists"
+[ -d "$(dirname "$out")" ] || die "$(dirname "$out") does not exist"
+out="$(cd "$(dirname "$out")" && pwd -P)/$(basename "$out")"
+# Why outside: electron-builder packs the checkout into app.asar, and the next release would carry this one.
+case "$out/" in "$(pwd -P)/"*) die "--out must be outside $(pwd -P)" ;; esac
+mkdir "$out"
+assembled="$out/one-app"
+release_dir="$out/release"
 plist() { /usr/libexec/PlistBuddy -c "Print :$2" "$1/Contents/Info.plist" 2>/dev/null || true; }
 
 # The signing key: a throwaway in memory for a dry-run, else the release key's public half as
@@ -126,20 +134,20 @@ check_outer "$assembled/$display_name.app"
 
 # 4. The release directory and the appcast. The DMG is both the download and Sparkle's update: it is
 # Developer ID signed, Sparkle's way back if the EdDSA key is ever lost.
-mkdir -p "$out"
-dmg="$out/$display_name-$version.dmg"
+mkdir -p "$release_dir"
+dmg="$release_dir/$display_name-$version.dmg"
 cp -c "$assembled/$display_name-$version.dmg" "$dmg"
-cp -c "$assembled/$display_name-$version.zip" "$out/$display_name-$version.zip"
+cp -c "$assembled/$display_name-$version.zip" "$release_dir/$display_name-$version.zip"
 log "appcast"
 if [ "$dry_run" = 1 ]; then
   appcast_env=(SPARKLE_KEY_ON_STDIN=1)
   [ -n "$url_prefix" ] && appcast_env+=(SPARKLE_DOWNLOAD_URL_PREFIX="$url_prefix")
-  printf '%s' "$seed" | env "${appcast_env[@]}" product/scripts/sparkle-appcast.sh "$dmg" "$tag" "$out"
+  printf '%s' "$seed" | env "${appcast_env[@]}" product/scripts/sparkle-appcast.sh "$dmg" "$tag" "$release_dir"
   unset seed
 else
-  product/scripts/sparkle-appcast.sh "$dmg" "$tag" "$out"
+  product/scripts/sparkle-appcast.sh "$dmg" "$tag" "$release_dir"
 fi
-python3 -I - "$out/appcast.xml" "$build" "$version" <<'PY'
+python3 -I - "$release_dir/appcast.xml" "$build" "$version" <<'PY'
 import sys
 import xml.etree.ElementTree as ET
 path, build, version = sys.argv[1:]
@@ -153,24 +161,24 @@ assert not got["channel"], f"appcast item is on channel {got['channel']}"
 enclosure = item.find("enclosure")
 assert enclosure.get("{%s}edSignature" % ns["sparkle"]), "the DMG has no EdDSA signature"
 PY
-node product/release-feed-gate.cjs "$app_id" "$assembled/$display_name.app" "$out"/*
+node product/release-feed-gate.cjs "$app_id" "$assembled/$display_name.app" "$release_dir"/*
 
 # 5. Checksums and the list of what the GitHub release takes.
-(cd "$out" && shasum -a 256 "$display_name-$version.dmg" "$display_name-$version.zip" appcast.xml >SHA256SUMS)
+(cd "$release_dir" && shasum -a 256 "$display_name-$version.dmg" "$display_name-$version.zip" appcast.xml >SHA256SUMS)
 {
   echo "Pod $version (CFBundleVersion $build), tag $tag$([ "$dry_run" = 1 ] && echo ', DRY RUN: throwaway key, never publish')"
-  echo "runtime  $(plist "$runtime" CFBundleShortVersionString) from $runtime"
+  echo "runtime  $(plist "$runtime" CFBundleShortVersionString) ($(plist "$runtime" CFBundleVersion)) from $runtime"
   echo "outer    PodNative $(plist "$assembled/$display_name.app" PodNativeRevision)"
   echo "feed     $expected_feed"
   echo "key      $public_key"
-  (cd "$out" && for f in "$display_name-$version.dmg" "$display_name-$version.zip" appcast.xml SHA256SUMS; do
+  (cd "$release_dir" && for f in "$display_name-$version.dmg" "$display_name-$version.zip" appcast.xml SHA256SUMS; do
     printf '%-28s %12s  %s\n' "$f" "$(stat -f %z "$f")" "$(shasum -a 256 "$f" | cut -d' ' -f1)"
   done)
-} | tee "$out/artifacts.txt"
+} | tee "$release_dir/artifacts.txt"
 remove=$(command -v pod-tmp-rm || echo "$HOME/.local/bin/pod-tmp-rm")
 [ -x "$remove" ] && "$remove" "$native_out" >/dev/null || true
 
-log "done: $out"
+log "done: $release_dir"
 if [ "$dry_run" = 1 ]; then
   echo "dry run: these assets carry a throwaway key; never publish them"
 else
@@ -178,6 +186,6 @@ else
   prerelease=""
   [[ "$version" == *-rc* ]] && prerelease=" --prerelease"
   echo "publish (RELEASE-RUNBOOK.md), in this order:"
-  echo "  gh release create $tag \"$out/$display_name-$version.dmg\" \"$out/$display_name-$version.zip\" \"$out/SHA256SUMS\" --repo outof-place/pod --title \"$display_name $version\" --notes-file <notes.md>$prerelease"
-  echo "  gh release upload appcast \"$out/appcast.xml\" --repo outof-place/pod --clobber"
+  echo "  gh release create $tag \"$release_dir/$display_name-$version.dmg\" \"$release_dir/$display_name-$version.zip\" \"$release_dir/SHA256SUMS\" --repo outof-place/pod --title \"$display_name $version\" --notes-file <notes.md>$prerelease"
+  echo "  gh release upload appcast \"$release_dir/appcast.xml\" --repo outof-place/pod --clobber"
 fi

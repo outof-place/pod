@@ -90,6 +90,14 @@ check_input() {
 }
 check_input "$runtime" "$app_id"
 check_input "$native" "$NATIVE_APP_ID"
+# One CFBundleVersion in both halves; a release version's is numeric (pod-build-number.sh), as
+# Apple's format wants. LaunchServices registers the nested app too, and Sparkle compares the outer.
+bundle_version="$(plist_value "$native" CFBundleVersion)"
+[ "$(plist_value "$runtime" CFBundleVersion)" = "$bundle_version" ] ||
+  die "CFBundleVersion differs: outer $bundle_version, runtime $(plist_value "$runtime" CFBundleVersion)"
+if release_build="$(product/scripts/pod-build-number.sh "$version" 2>/dev/null)"; then
+  [ "$bundle_version" = "$release_build" ] || die "CFBundleVersion is $bundle_version, release $version needs $release_build"
+fi
 [ -d "$runtime/Contents/Frameworks" ] || die "$runtime is not an Electron runtime"
 # PodNative's safe quit needs ui-host protocol 2; a version 1 runtime makes it fall back.
 node product/scripts/verify-ui-host-protocol.mjs "$runtime"

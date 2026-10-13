@@ -40,12 +40,14 @@ gh release create appcast --repo outof-place/pod --prerelease --title "Pod updat
 ## Each release
 
 1. **Dry run first**, same chain, throwaway key:
-   `product/release-one-app.sh 1.0.0-rc1 --native-checkout <clean PodNative checkout at the pinned revision> --dry-run`
+   `PATH=~/.local/share/pod-release/net-shims:$PATH product/release-one-app.sh 1.0.0-rc1 --native-checkout <clean PodNative checkout at the pinned revision> --out ~/pod-releases/1.0.0-rc1-dry --dry-run`
+   - `--out` must be outside the Pod checkout (electron-builder packs the checkout). The net-shims retry codesign's timestamp and notarytool/stapler on network errors.
 2. **The release**, on the release Mac, at low load, one build at a time:
-   `product/release-one-app.sh 1.0.0-rc1 --native-checkout <same checkout>`
+   `PATH=~/.local/share/pod-release/net-shims:$PATH product/release-one-app.sh 1.0.0-rc1 --native-checkout <same checkout> --out ~/pod-releases/1.0.0-rc1`
+   - release.sh also leaves `latest-mac.yml` in the checkout's `dist/`: never publish it, and move `dist/` out of the checkout afterwards.
    - macOS asks once for access to "Private key for signing Sparkle updates": choose **Allow** (the tools run from a fresh temp directory each time, so "Always Allow" doesn't stick).
    - Notarization runs five times (runtime app and DMG, PodNative, the assembled app and its DMG).
-3. **Check** `dist/release-1.0.0-rc1/artifacts.txt`: version, build number, feed, public key, the assets and their sha256.
+3. **Check** `~/pod-releases/1.0.0-rc1/release/artifacts.txt`: version, build number, feed, public key, the assets and their sha256.
 4. **Publish**, from Terminal with `gh auth status` green, with the two commands the script prints, in this order:
    - the release: `gh release create v1.0.0-rc1 Pod-1.0.0-rc1.dmg Pod-1.0.0-rc1.zip SHA256SUMS --repo outof-place/pod --title "Pod 1.0.0-rc1" --notes-file notes.md --prerelease`. An RC is a prerelease; 1.0.0 is not, so it becomes "latest" for the website and the cask.
    - then the feed: `gh release upload appcast appcast.xml --repo outof-place/pod --clobber`. `--clobber` deletes the old asset and uploads the new one (GitHub refuses a second asset with the same name). The download URL is addressed by tag and file name, so it stays the same. Between the delete and the upload the URL answers 404; an app that checks right then tries again at its next check. The release goes first because the feed points at its DMG.
