@@ -85,17 +85,16 @@ Pod is not affiliated with or endorsed by Stably AI or Lovecast Inc. Orca is the
   GitHub Actions checks all passed.
 - [`upstream.json`](../upstream.json) records that commit, its date and the nearest Orca release
   tag. Pod's release notes use the tag as the "Based on Orca vX" label.
-- A daily job moves Pod to the newest green Orca commit. It runs the typecheck, the unit tests and
-  the macOS build, then opens a pull request, or one tracking issue when the rebase needs a hand.
+- Moving Pod to a newer green Orca commit is a manual step. The Pod check workflow runs the
+  typecheck, the unit tests and the macOS build on the result before it ships.
 - We aim to ship Orca's security fixes in Pod within 48 hours of the fix landing on Orca's `main`.
 
 | Branch | What it is |
 | --- | --- |
 | `main` (default) | The product: a green Orca `main` commit plus the Pod stack. |
-| `orca-main` | An untouched mirror of Orca's `main`, updated daily. |
+| `orca-main` | A copy of Orca's `main` from the last upstream sync, no longer updated. |
 | `feat/*`, `fix/*`, `perf/*` and other Orca-style names | One branch per Orca pull request. |
 | `pod/*` | Pod-only work, one branch per change. |
-| `sync/orca-main` | The next rebase, prepared by the sync job and waiting for review. |
 
 ## Build from source
 

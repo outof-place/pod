@@ -1,0 +1,124 @@
+# Runs Pod's checks on a branch or commit: typecheck, unit tests and the macOS build. Nothing
+# else: no rebase, no pull request, no issue, and nothing from Orca.
+#
+#   gh workflow run pod-check.yml -R outof-place/pod -f ref=<branch or commit>
+#
+# GITHUB_TOKEN reads the repository; no other secret is needed.
+name: Pod check
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or commit to check.
+        required: false
+        type: string
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pod-check-${{ inputs.ref }}
+  cancel-in-progress: false
+
+env:
+  UNIT_SHARDS: '5'
+
+jobs:
+  target:
+    name: Resolve the ref to check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      head_sha: ${{ steps.resolve.outputs.head_sha }}
+    steps:
+      - name: Resolve
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECK_REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$CHECK_REF" --jq .sha)
+          echo "Checking $CHECK_REF at $sha" >> "$GITHUB_STEP_SUMMARY"
+          echo "head_sha=$sha" >> "$GITHUB_OUTPUT"
+
+  typecheck:
+    name: Typecheck
+    needs: target
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.target.outputs.head_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+      - run: pnpm tc
+
+  unit:
+    name: Unit tests ${{ matrix.shard }}
+    needs: target
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.target.outputs.head_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+          cache-electron-package: 'true'
+      - run: node config/scripts/install-electron-package-binary.mjs
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/.bun-version
+      # The product packaging tests load the release config, which ships this pinned payload.
+      - name: Fetch the claude-acc payload
+        run: |
+          if [ -f config/scripts/fetch-claude-acc-payload.mjs ]; then
+            node config/scripts/fetch-claude-acc-payload.mjs
+          fi
+      # ORCA_BALANCE_UNIT_SHARDS selects the balanced CI file list, which leaves out the
+      # cross-version harness and the live-shell tests.
+      # One retry: a few grammar-loading tests time out under full-suite load.
+      - name: Test shard
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_BALANCE_UNIT_SHARDS: '1'
+        run: |
+          ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
+          export ORCA_SHARD_SOURCE_SHA
+          node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
+            "--shard=${{ matrix.shard }}/$UNIT_SHARDS" --maxWorkers=4 --retry=1
+
+  build:
+    name: macOS build
+    needs: target
+    # The free 3-core macos-15 may run short of memory on `pnpm build`; POD_MAC_RUNNER switches it (CONTRIBUTING.md).
+    runs-on: ${{ vars.POD_MAC_RUNNER || 'macos-15' }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.target.outputs.head_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+      - uses: ./.github/actions/install-mobile-dependencies
+      - name: Build
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: pnpm build
