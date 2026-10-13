@@ -398,6 +398,24 @@ describe('pod-hook-relay server', () => {
     expect(spooled).toEqual([{ hook_event_name: 'Stop' }])
   })
 
+  it('logs its event counts every 100 events and when it closes', async () => {
+    const logs: unknown[][] = []
+    const { relay, port, token } = await startRelay(async () => 'delivered', { logs })
+    const headers = {
+      [POD_HOOK_RELAY_TOKEN_HEADER]: token,
+      [POD_HOOK_RELAY_PANE_HEADER]: encodePane(pane())
+    }
+    for (let i = 0; i < 101; i++) {
+      await post(port, headers, `{"hook_event_name":"PreToolUse","i":${i}}`)
+    }
+    await relay.idle()
+    await relay.close()
+    expect(logs).toEqual([
+      ['pod-hook-relay-events', { received: 100, delivered: expect.any(Number), spooled: 0 }],
+      ['pod-hook-relay-events', { received: 101, delivered: 101, spooled: 0 }]
+    ])
+  })
+
   it('logs a payload over 16 MiB with its size', async () => {
     const logs: unknown[][] = []
     const seen: PodHookRelayEvent[] = []
