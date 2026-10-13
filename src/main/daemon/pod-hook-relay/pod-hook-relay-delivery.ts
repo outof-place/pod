@@ -240,7 +240,9 @@ async function post(event: PodHookRelayEvent, endpoint: Endpoint): Promise<boole
       req.end(body.at(-1))
     })
   const sent = await send()
-  // Why once more: the runtime closed an idle connection just as this event went out on it.
+  // Why once more: the runtime closed an idle connection just as this event went out on it. A
+  // runtime that took the event and then reset without answering gets it twice, but still before
+  // the pane's next one (the pane's queue waits), so a rare repeat only restates that status.
   return sent === 'reset' ? (await send()) === true : sent
 }
 
