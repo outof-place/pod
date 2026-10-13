@@ -152,7 +152,8 @@ branch=${branch:-${manifest_branch:-main}}
 
 if [ "$fetch" -eq 1 ]; then
   printf 'Fetching origin...\n'
-  git fetch --quiet origin
+  # Why the frozen refs: no branch or tag holds the commits pod-stack-orca.json names any more.
+  git fetch --quiet origin '+refs/heads/*:refs/remotes/origin/*' '+refs/pod-stack/frozen/*:refs/pod-stack/frozen/*'
 fi
 
 # The pinned base: upstream.json at the root of this checkout, which every assembled commit carries.
@@ -168,11 +169,11 @@ base_sha=$(git rev-parse --verify --quiet "$onto^{commit}") \
 [ -f "$root/pod-stack-orca.json" ] || die "no pod-stack-orca.json at $root (run from a checkout of main or pod/infra)"
 orca_main=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).orcaMain || "")' "$root/pod-stack-orca.json")
 [[ "$orca_main" =~ ^[0-9a-f]{40}$ ]] || die "pod-stack-orca.json \"orcaMain\" must be a full SHA"
-git cat-file -e "$orca_main^{commit}" 2>/dev/null \
-  || die "frozen Orca main $orca_main is not in this repository; fetch it once: git fetch https://github.com/stablyai/orca $orca_main"
-# Why only the present ones: a commit this repository lacks is in no entry's history.
-orca_excludes=$(node -e 'const p=JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write([p.orcaMain, ...(p.releaseTips || [])].join("\n") + "\n")' "$root/pod-stack-orca.json" \
-  | git cat-file --batch-check='%(objectname) %(objecttype)' | awk '$2 == "commit" { print "^" $1 }')
+orca_frozen=$(node -e 'const p=JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write([p.orcaMain, ...(p.releaseTips || [])].join("\n") + "\n")' "$root/pod-stack-orca.json")
+# Why all of them: an entry can hold a release branch's older commits without its tip.
+orca_missing=$(printf '%s\n' "$orca_frozen" | git cat-file --batch-check='%(objectname) %(objecttype)' | awk '$2 != "commit" { print $1 }')
+[ -z "$orca_missing" ] || die "$(printf '%s\n' "$orca_missing" | wc -l | tr -d ' ') commit(s) of pod-stack-orca.json are not here; fetch them: git fetch origin '+refs/pod-stack/frozen/*:refs/pod-stack/frozen/*'"
+orca_excludes=$(printf '%s\n' "$orca_frozen" | sed 's/^/^/')
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
