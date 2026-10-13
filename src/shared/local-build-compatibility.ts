@@ -1,6 +1,9 @@
 import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from './local-build-compatibility-contract'
 
 export const LOCAL_BUILD_COMPATIBILITY_FILENAME = 'orca-local-build.json'
+/** Fork-only (Pod): what builds from before pod-decouple carry; the codemod keeps this line. Typed
+ * string, so the comparison with the renamed name type-checks on both sides of the codemod. */
+export const LEGACY_LOCAL_BUILD_COMPATIBILITY_FILENAME: string = 'orca-local-build.json' // pod-decouple:keep
 export const LOCAL_BUILD_COMPATIBILITY_FORMAT_VERSION =
   LOCAL_BUILD_COMPATIBILITY_CONTRACT.formatVersion
 export const ORCA_APP_ID = LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId
