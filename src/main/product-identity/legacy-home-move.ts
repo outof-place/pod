@@ -12,11 +12,11 @@ import { join } from 'node:path'
 /** One-time record in the product's userData, so a legacy app that runs again keeps its folder. */
 export const PRODUCT_HOME_MOVE_RECORD = 'product-home-move.json'
 
-// The product writes these afresh at startup, so an existing product home never takes them.
+// The product writes these afresh at startup, and sessions started before the move keep running
+// them from the legacy folder (Claude's settings.json hooks, Agent Teams shims), so they stay.
 const REGENERATED_ENTRIES = new Set(['agent-hooks', 'claude-agent-teams-bin'])
 
 export type LegacyHomeMoveResult =
-  | { status: 'moved' }
   | { status: 'merged'; moved: string[]; skipped: string[] }
   | {
       status: 'not-needed'
@@ -43,8 +43,8 @@ function readRecord(path: string): unknown {
 }
 
 /**
- * Moves `~/<legacy>` (hook scripts, keybindings, saved API keys) to `~/<product>` once. A rename
- * when the product has no home yet; otherwise entry by entry, never over the product's own.
+ * Moves `~/<legacy>` (keybindings, saved API keys) to `~/<product>` once, entry by entry: never
+ * over the product's own, and never the hook scripts and shims the product regenerates.
  */
 export function moveLegacyHome(options: LegacyHomeMoveOptions): LegacyHomeMoveResult {
   const recordPath = join(options.productUserData, PRODUCT_HOME_MOVE_RECORD)
@@ -73,19 +73,16 @@ export function moveLegacyHome(options: LegacyHomeMoveOptions): LegacyHomeMoveRe
   if (options.legacyAppPid !== null) {
     return { status: 'deferred', reason: 'legacy-app-running', pid: options.legacyAppPid }
   }
-  if (existsSync(productHome)) {
-    const moved: string[] = []
-    const skipped: string[] = []
-    for (const entry of readdirSync(legacyHome).sort()) {
-      if (REGENERATED_ENTRIES.has(entry) || existsSync(join(productHome, entry))) {
-        skipped.push(entry)
-        continue
-      }
-      renameSync(join(legacyHome, entry), join(productHome, entry))
-      moved.push(entry)
+  mkdirSync(productHome, { recursive: true })
+  const moved: string[] = []
+  const skipped: string[] = []
+  for (const entry of readdirSync(legacyHome).sort()) {
+    if (REGENERATED_ENTRIES.has(entry) || existsSync(join(productHome, entry))) {
+      skipped.push(entry)
+      continue
     }
-    return record({ status: 'merged', moved, skipped })
+    renameSync(join(legacyHome, entry), join(productHome, entry))
+    moved.push(entry)
   }
-  renameSync(legacyHome, productHome)
-  return record({ status: 'moved' })
+  return record({ status: 'merged', moved, skipped })
 }
