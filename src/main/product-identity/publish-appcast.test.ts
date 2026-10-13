@@ -125,7 +125,8 @@ describe('publish-appcast.sh', () => {
     const run = release({ 'appcast.xml': appcast('1000001') })
     const result = publish(run)
     expect(result.status, result.out).toBe(0)
-    expect(result.out).toContain('offers sparkle:version 1000002')
+    expect(result.out).toContain('serves')
+    expect(result.out).toContain('(sparkle:version 1000002)')
     expect(assets(run.state)).toEqual({ 'appcast.xml': appcast('1000002') })
     const calls = readFileSync(join(run.state, 'calls.log'), 'utf8')
       .split('\n')
@@ -167,6 +168,28 @@ describe('publish-appcast.sh', () => {
     expect(result.status).toBe(1)
     expect(result.out).toContain('the old feed is back')
     expect(assets(run.state)['appcast.xml']).toBe(appcast('1000001'))
+  })
+
+  it('rolls the swap back while the feed URL still serves the old file, and only then keeps the old asset', () => {
+    const run = release({ 'appcast.xml': appcast('1000001') })
+    // A download URL that never follows the rename keeps answering with the old feed.
+    const stale = join(run.state, '..', 'stale')
+    mkdirSync(stale)
+    writeFileSync(join(stale, 'appcast.xml'), appcast('1000001'))
+    const result = publish(run, { POD_FEED_URL: `file://${stale}/appcast.xml` })
+    expect(result.status).toBe(1)
+    expect(result.out).toContain('the swap is rolled back')
+    expect(assets(run.state)).toEqual({
+      'appcast.xml': appcast('1000001'),
+      'appcast.xml.new': appcast('1000002')
+    })
+  })
+
+  it('says so when a first feed never shows up', () => {
+    const run = release({})
+    const result = publish(run, { POD_FEED_URL: `file://${run.state}/nowhere/appcast.xml` })
+    expect(result.status).toBe(1)
+    expect(result.out).toContain('no old feed to go back to')
   })
 
   it('stops on a half-done earlier run', () => {
