@@ -44,6 +44,9 @@ export function buildLocalPtySpawnEnvironment(args: {
   removeChromiumDisabledSessionBus(spawnEnv)
   removeInheritedNoColor(spawnEnv)
   removeInheritedTerminalSessionEnv(spawnEnv)
+  // Pod: the runtime's http hook A/B (pod-claude-launch-settings.ts) stays this runtime's; the
+  // daemon drops it from its terminals the same way (pod-hook-relay-daemon-wiring.ts).
+  delete spawnEnv.POD_CLAUDE_HTTP_HOOKS
   for (const key of spawn.envToDelete ?? []) {
     delete spawnEnv[key]
   }
