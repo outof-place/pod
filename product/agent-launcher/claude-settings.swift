@@ -1,7 +1,7 @@
 // In a Pod pane, `claude` gets Pod's agent-status hooks with the launch (`--settings`), so
 // ~/.claude/settings.json holds none of Pod's (src/main/pod/agent-hook/pod-claude-launch-settings.ts).
-// The runtime writes the templates: the launcher fills the http one (the terminal daemon's relay,
-// which answers at once) or, without a relay, passes the command one (Pod's hook client). Each comes
+// The runtime writes the templates: the launcher passes the command one (Pod's hook client), or fills
+// the http one where the runtime wrote it (an A/B) and the terminal daemon's relay answers. Each comes
 // with Pod's statusLine too, taken only while the user has none. A user's own --settings gets a
 // merged file, since Claude keeps only the last one. The JSON merge and the statusLine lookup are
 // agent-api's (pod/claude-hooks-flag-settings 6859217697).
@@ -329,11 +329,13 @@ func podLaunchSettings(prefix: String, pane: String, statusLine: Bool, write: Bo
   let variant = statusLine ? "-statusline" : ""
   let commandTemplate = "\(prefix).command\(variant).json"
   let fallback = readBytes(commandTemplate).map { (commandTemplate, $0) }
+  // Why the http template first: by default the runtime writes none, and the relay isn't asked.
   // Why the endpoint file: the relay reads only that; without it the C client uses the pane's env.
-  guard let endpoint = env("ORCA_AGENT_HOOK_ENDPOINT"), access(endpoint, R_OK) == 0,
+  guard let template = readText("\(prefix).http\(variant).json"),
+    let endpoint = env("ORCA_AGENT_HOOK_ENDPOINT"), access(endpoint, R_OK) == 0,
     let relayPath = env(relayEnv), let relay = readText(relayPath).map(keyValues),
     let port = relay["POD_HOOK_RELAY_PORT"], let token = relay["POD_HOOK_RELAY_TOKEN"], relayAlive(port),
-    let template = readText("\(prefix).http\(variant).json"), let process = agentProcess()
+    let process = agentProcess()
   else { return fallback }
   let fields = [pane, env("ORCA_TAB_ID") ?? "", env("ORCA_AGENT_LAUNCH_TOKEN") ?? "",
     env("ORCA_WORKTREE_ID") ?? "", env("ORCA_AGENT_HOOK_ENV") ?? "", env("ORCA_AGENT_HOOK_VERSION") ?? "",

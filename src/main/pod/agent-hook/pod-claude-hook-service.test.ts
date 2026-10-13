@@ -212,19 +212,30 @@ describe("Pod's Claude hooks with each launch", () => {
     expect(readdirSync(hooksDir).sort()).toEqual(files)
   })
 
-  it('gives the http template the command hooks unless POD_CLAUDE_HTTP_HOOKS=1', async () => {
+  it('writes the http template only while POD_CLAUDE_HTTP_HOOKS=1', async () => {
     legacyInstall({})
     const { cut } = testCut({ pids: [] })
-    new PodClaudeHookService(() => cut).install({ claudeVersion: '2.1.296' })
+    const service = new PodClaudeHookService(() => cut)
+    service.install({ claudeVersion: '2.1.296' })
     await cut.settled()
-    expect(readFileSync(template('http'), 'utf8')).toBe(readFileSync(template('command'), 'utf8'))
-    expect(readFileSync(template('http-statusline'), 'utf8')).toBe(
-      readFileSync(template('command-statusline'), 'utf8')
-    )
+    // The launcher then passes the command template as it is: no relay, no file per launch.
+    expect(existsSync(template('http'))).toBe(false)
+    expect(existsSync(template('http-statusline'))).toBe(false)
+    expect(existsSync(template('command-statusline'))).toBe(true)
     expect(readJson(template('command')).hooks?.PreToolUse?.[0]?.hooks?.[0]).toMatchObject({
       args: ['--launch'],
       async: true
     })
+    vi.stubEnv('POD_CLAUDE_HTTP_HOOKS', '1')
+    service.install({ claudeVersion: '2.1.296' })
+    expect(readJson(template('http')).hooks?.PostCompact?.[0]?.hooks?.[0]?.type).toBe('http')
+    expect(existsSync(template('http-statusline'))).toBe(true)
+    // An A/B arm's runtime gone: the next start takes its http files back.
+    vi.stubEnv('POD_CLAUDE_HTTP_HOOKS', '')
+    service.install({ claudeVersion: '2.1.296' })
+    expect(existsSync(template('http'))).toBe(false)
+    expect(existsSync(template('http-statusline'))).toBe(false)
+    expect(existsSync(template('command'))).toBe(true)
   })
 
   it("cuts at once when no older claude runs, and leaves a user's own statusLine", async () => {
@@ -257,14 +268,14 @@ describe("Pod's Claude hooks with each launch", () => {
     const service = new PodClaudeHookService(() => cut)
     service.install({ claudeVersion: '2.1.296' })
     await cut.settled()
-    const http = readFileSync(template('http'), 'utf8')
+    const command = readFileSync(template('command'), 'utf8')
     expect(service.install({}).state).toBe('installed')
-    expect(readFileSync(template('http'), 'utf8')).toBe(http)
+    expect(readFileSync(template('command'), 'utf8')).toBe(command)
     // The CLI's `agent-hooks install`: no bundle next to it, and Pod's hooks stay moved.
     vi.stubEnv('POD_AGENT_LAUNCHER_BINARY', '')
     vi.stubEnv('POD_AGENT_HOOK_BINARY', '')
     expect(service.install({ claudeVersion: '2.1.296' }).state).toBe('installed')
-    expect(readFileSync(template('http'), 'utf8')).toBe(http)
+    expect(readFileSync(template('command'), 'utf8')).toBe(command)
     expect(readFileSync(settingsPath, 'utf8')).not.toContain('pod-agent-hook')
   })
 
@@ -282,12 +293,14 @@ describe("Pod's Claude hooks with each launch", () => {
   })
 
   it('is ClaudeHookService when switched off, and remove() takes the templates', async () => {
+    vi.stubEnv('POD_CLAUDE_HTTP_HOOKS', '1')
     legacyInstall({})
     const { cut } = testCut({ pids: [] })
     const service = new PodClaudeHookService(() => cut)
     service.install({ claudeVersion: '2.1.296' })
     await cut.settled()
     expect(existsSync(template('command'))).toBe(true)
+    expect(existsSync(template('http-statusline'))).toBe(true)
     service.remove()
     expect(existsSync(template('command'))).toBe(false)
     expect(existsSync(template('http-statusline'))).toBe(false)
