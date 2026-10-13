@@ -76,6 +76,29 @@ describe('copyLegacyHome', () => {
     expect(readFileSync(join(home, PRODUCT, 'keybindings.json'), 'utf8')).toBe('[]')
   })
 
+  it('keeps every mode, owner-only folders and key files included', () => {
+    const { home, copy } = scratch()
+    const legacy = join(home, LEGACY)
+    mkdirSync(join(legacy, 'tokens', 'nested'), { recursive: true })
+    writeFileSync(join(legacy, 'tokens', 'nested', 'site.enc'), 'secret')
+    writeFileSync(join(legacy, 'keybindings.json'), '[]')
+    const modes: [string, number][] = [
+      [join('tokens', 'nested', 'site.enc'), 0o600],
+      [join('tokens', 'nested'), 0o700],
+      ['tokens', 0o700],
+      ['keybindings.json', 0o644]
+    ]
+    for (const [path, mode] of modes) {
+      chmodSync(join(legacy, path), mode)
+    }
+    chmodSync(legacy, 0o700)
+    expect(copy()).toMatchObject({ status: 'copied', copied: ['keybindings.json', 'tokens'] })
+    for (const [path, mode] of modes) {
+      expect([path, statSync(join(home, PRODUCT, path)).mode & 0o777]).toEqual([path, mode])
+    }
+    expect(statSync(join(home, PRODUCT)).mode & 0o777).toBe(0o700)
+  })
+
   it('never overwrites the product folder or takes regenerated files', () => {
     const { home, copy } = scratch()
     mkdirSync(join(home, LEGACY, 'agent-hooks'), { recursive: true })
