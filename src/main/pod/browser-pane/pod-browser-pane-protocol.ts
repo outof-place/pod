@@ -217,6 +217,21 @@ export type PodBrowserPaneServerMessage =
       height: number
       items: { label: string; enabled: boolean; selected: boolean; group: string }[]
     }
+  // Feature browserContextMenu: a right-click on the page, for Pod's page menu. x, y are Electron's
+  // params: the page view's coordinates, the space browserInput's mouse x, y use (CSS px only at
+  // page zoom 1). selectionComplete false: the selection was cut to fit the line.
+  | {
+      type: 'browserContextMenu'
+      pageId: string
+      x: number
+      y: number
+      pageUrl: string
+      linkUrl: string | null
+      selectionText: string
+      selectionComplete: boolean
+      canGoBack: boolean
+      canGoForward: boolean
+    }
 
 export function isPodBrowserPaneMessage(message: {
   type: string
