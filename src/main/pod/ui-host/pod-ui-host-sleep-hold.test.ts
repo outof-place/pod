@@ -52,4 +52,17 @@ describe('pod-ui-host-sleep-hold', () => {
     endPodUiHostWindowSleep(WT)
     expect(podUiHostWindowSleepSpawns(WT).size).toBe(0)
   })
+
+  it('ends only the window sleep its set came from, not one begun after', () => {
+    beginPodUiHostWindowSleep(WT, 1_000)
+    const first = podUiHostWindowSleepSpawns(WT)
+    beginPodUiHostWindowSleep(WT, 2_000)
+    const second = podUiHostWindowSleepSpawns(WT)
+    endPodUiHostWindowSleep(WT, first)
+    expect(podUiHostWorktreeSleepHeld(WT, false, true, 2_100)).toBe(true)
+    notePodUiHostWindowSleepSpawn(WT, 'woken', 2_100)
+    expect([...second]).toEqual(['woken'])
+    endPodUiHostWindowSleep(WT, second)
+    expect(podUiHostWorktreeSleepHeld(WT, false, true, 2_100)).toBe(false)
+  })
 })
