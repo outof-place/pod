@@ -1,6 +1,8 @@
 import { spawn, execFileSync } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
 import {
+  chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -203,6 +205,19 @@ describe.runIf(process.platform === 'darwin')('pod-agent-hook statusline', () =>
     }
   })
 
+  it('is the same as pod-agent-statusline, its copy, with no arguments', async () => {
+    const copy = join(dir, 'pod-agent-statusline')
+    copyFileSync(client, copy)
+    chmodSync(copy, 0o755)
+    for (const scenario of [cases[0], cases[8]]) {
+      const viaCopy = await run([copy], scenario, 'copy')
+      const viaClient = await run([client, 'statusline'], scenario, 'client')
+      expect(viaCopy.stdout).toBe('')
+      expect({ ...viaCopy, stamp: null }).toEqual({ ...viaClient, stamp: null })
+      expect(viaCopy.stamp).toBe(viaClient.stamp)
+    }
+  })
+
   it('sends what the runtime parses for a post', async () => {
     const native = await run([client, 'statusline'], cases[8], 'native')
     expect(native.requests).toHaveLength(1)
@@ -225,10 +240,11 @@ describe.runIf(process.platform === 'darwin')('pod-agent-hook statusline', () =>
 })
 
 describe('the managed statusLine command', () => {
-  it('execs the client, else the script, else drains stdin', () => {
+  it('execs the statusline copy, else the client, else the script, else drains stdin', () => {
     const command = podStatusLineCommand('claude-statusline.sh')
     expect(command).toBe(
-      'if [ -x "${HOME-}/.orca/agent-hooks/pod-agent-hook" ]; then exec "${HOME-}/.orca/agent-hooks/pod-agent-hook" statusline; fi; ' +
+      'if [ -x "${HOME-}/.orca/agent-hooks/pod-agent-statusline" ]; then exec "${HOME-}/.orca/agent-hooks/pod-agent-statusline"; fi; ' +
+        'if [ -x "${HOME-}/.orca/agent-hooks/pod-agent-hook" ]; then exec "${HOME-}/.orca/agent-hooks/pod-agent-hook" statusline; fi; ' +
         'if [ -f "${HOME-}/.orca/agent-hooks/claude-statusline.sh" ]; then exec /bin/sh "${HOME-}/.orca/agent-hooks/claude-statusline.sh"; fi; ' +
         '{ command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :'
     )
@@ -267,9 +283,15 @@ describe('installing the managed statusLine', () => {
   it('uses the client once it is copied beside the hooks, else the shell wrapper', () => {
     freshHome()
     expect(podManagedStatusLineCommand({ agent: 'claude' }, scriptPath(), bundled)).toBe(native)
-    const installed = join(home, '.orca', 'agent-hooks', 'pod-agent-hook')
-    expect(readFileSync(installed, 'utf8')).toBe(readFileSync(bundled, 'utf8'))
-    expect(statSync(installed).mode & 0o777).toBe(0o755)
+    for (const name of ['pod-agent-hook', 'pod-agent-statusline']) {
+      const installed = join(home, '.orca', 'agent-hooks', name)
+      expect(readFileSync(installed, 'utf8')).toBe(readFileSync(bundled, 'utf8'))
+      expect(statSync(installed).mode & 0o777).toBe(0o755)
+    }
+    // Its own file, not a second name for the client's: the watcher reads one path per process.
+    expect(statSync(join(home, '.orca', 'agent-hooks', 'pod-agent-statusline')).ino).not.toBe(
+      statSync(join(home, '.orca', 'agent-hooks', 'pod-agent-hook')).ino
+    )
     const shell = getManagedCommand(scriptPath())
     expect(podManagedStatusLineCommand({ agent: 'openclaude' }, scriptPath(), bundled)).toBe(shell)
     expect(podManagedStatusLineCommand({ agent: 'claude' }, scriptPath(), null)).toBe(shell)

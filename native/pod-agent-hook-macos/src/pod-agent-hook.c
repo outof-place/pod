@@ -4,6 +4,7 @@
 // runtime's hook server, spooled when the server can't be reached.
 // `pod-agent-hook statusline` is claude-statusline.sh (src/main/claude/statusline-script.ts) the
 // same way: nothing on stdout, the payload's rate limits POSTed at most once per pane per interval.
+// A copy named pod-agent-statusline is that alone, so a process table tells it apart by its path.
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -366,6 +367,9 @@ static int statusline_main(void) {
 }
 
 int main(int argc, char **argv) {
+  const char *slash = argc > 0 ? strrchr(argv[0], '/') : NULL;
+  const char *name = slash ? slash + 1 : (argc > 0 ? argv[0] : "");
+  if (!strcmp(name, "pod-agent-statusline")) return statusline_main();
   if (argc > 1 && !strcmp(argv[1], "statusline")) return statusline_main();
   // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
   ssize_t ignored = write(1, "{}\n", 3);
