@@ -300,6 +300,26 @@ function renameEnv(file, text, renames, contract, counts) {
   return text.includes(KEEP_MARKER) ? text.split('\n').map(renameLine).join('\n') : renameLine(text)
 }
 
+const renameTarget = (envTable, from) => envTable.map?.[from] ?? `POD_${from.slice('ORCA_'.length)}`
+
+/**
+ * The env stage backwards, for tests that need code as it ran before the decouple (an adopted
+ * daemon, an old hook client): each renamed name in its ORCA_ spelling again, keep lines as they
+ * are. Upper case only, the spelling POSIX env names use.
+ */
+export function createEnvUnrenamer({ tableDir = TABLE_DIR } = {}) {
+  const envTable = loadJson(join(tableDir, 'env-names.json'))
+  const renames = envTable.rename.map((from) => ({
+    from,
+    pattern: tokenPattern(renameTarget(envTable, from))
+  }))
+  const unrenameLine = (line) =>
+    !line.includes('POD_') || line.includes(KEEP_MARKER)
+      ? line
+      : renames.reduce((next, env) => next.replace(env.pattern, env.from), line)
+  return (text) => text.split('\n').map(unrenameLine).join('\n')
+}
+
 // A rule that matches nothing is drift unless its result is already in the tree (a rerun).
 function isAlreadyApplied(rule, results) {
   if (!rule.applied) {
@@ -408,7 +428,7 @@ export function run(root, mode, { tableDir = TABLE_DIR, log = console } = {}) {
   }
   const renames = envTable.rename.map((from) => ({
     from,
-    to: envTable.map?.[from] ?? `POD_${from.slice('ORCA_'.length)}`,
+    to: renameTarget(envTable, from),
     pattern: tokenPattern(from)
   }))
   const contract = {
