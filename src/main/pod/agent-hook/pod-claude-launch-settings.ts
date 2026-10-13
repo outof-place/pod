@@ -1,8 +1,9 @@
 // Fork-only (Pod): Claude's agent-status hooks come with each launch in a Pod pane, not from
 // ~/.claude/settings.json. Pod's launcher (product/agent-launcher/claude-settings.swift, `claude`
 // first on every pane's PATH) passes `--settings` from templates written here: http hooks to the
-// terminal daemon's relay (no process per event; the relay answers at once), or Pod's command hook
-// client where the relay is missing; each also with Pod's statusLine. Written by
+// terminal daemon's relay for the events Claude waits on (no process per event; the relay answers
+// at once), Pod's command hook client for the rest and where the relay is missing; each also with
+// Pod's statusLine. Written by
 // pod-claude-hook-service.ts, which takes Pod's entries out of settings.json once.
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -67,8 +68,8 @@ export function getPodClaudeLaunchSettingsPrefix(): string {
   return getSharedManagedScriptPath(PREFIX_NAME)
 }
 
-/** The command hooks, with an http hook for every measured event: the relay's address and the pane
- *  come from the launcher. */
+/** The command hooks, with an http hook for every measured event Claude waits on: the relay's
+ *  address and the pane come from the launcher. */
 function httpVariant(command: HooksConfig): { hooks: Record<string, unknown[]> } {
   const hooks: Record<string, unknown[]> = {}
   for (const [event, definitions] of Object.entries(command.hooks ?? {})) {
@@ -76,18 +77,24 @@ function httpVariant(command: HooksConfig): { hooks: Record<string, unknown[]> }
       ? definitions
       : definitions.map((definition) => ({
           ...definition,
-          hooks: (definition.hooks ?? []).map((hook) => ({
-            type: 'http',
-            url: '@@POD_RELAY_URL@@',
-            timeout: hook.timeout ?? MANAGED_HOOK_TIMEOUT_SECONDS,
-            headers: {
-              'X-Pod-Hook-Relay-Token': '@@POD_RELAY_TOKEN@@',
-              'X-Pod-Hook-Relay-Pane': '@@POD_RELAY_PANE@@',
-              'X-Orca-Agent-Process': '@@POD_AGENT_PROCESS@@',
-              'X-Pod-Hook-Relay-Job-Dir': '$CLAUDE_JOB_DIR'
-            },
-            allowedEnvVars: ['CLAUDE_JOB_DIR']
-          }))
+          // Why an async one stays: Claude 2.1.296 waits on an http hook even with `async`, never
+          // on an async command (agent-api, bench-m2a m2-async.sh; slot 2: +6 ms per tool turn).
+          hooks: (definition.hooks ?? []).map((hook) =>
+            hook.async
+              ? hook
+              : {
+                  type: 'http',
+                  url: '@@POD_RELAY_URL@@',
+                  timeout: hook.timeout ?? MANAGED_HOOK_TIMEOUT_SECONDS,
+                  headers: {
+                    'X-Pod-Hook-Relay-Token': '@@POD_RELAY_TOKEN@@',
+                    'X-Pod-Hook-Relay-Pane': '@@POD_RELAY_PANE@@',
+                    'X-Orca-Agent-Process': '@@POD_AGENT_PROCESS@@',
+                    'X-Pod-Hook-Relay-Job-Dir': '$CLAUDE_JOB_DIR'
+                  },
+                  allowedEnvVars: ['CLAUDE_JOB_DIR']
+                }
+          )
         }))
   }
   return { hooks }
