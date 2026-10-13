@@ -44,8 +44,9 @@ drop_cache() {
   [ -d "$cache" ] || return 0
   if [ "$cached_before" = none ]; then /usr/bin/trash "$cache" 2>/dev/null || true; return 0; fi
   local entry
-  for entry in $(ls "$cache"); do
-    grep -qxF "$entry" <<<"$cached_before" || /usr/bin/trash "$cache/$entry" 2>/dev/null || true
+  for entry in "$cache"/*; do
+    [ -e "$entry" ] || continue
+    grep -qxF "${entry##*/}" <<<"$cached_before" || /usr/bin/trash "$entry" 2>/dev/null || true
   done
 }
 # The work directory is this run's own and regenerable: removed for good through pod-tmp-rm (owner,
