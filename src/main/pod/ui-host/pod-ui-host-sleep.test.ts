@@ -23,7 +23,9 @@ describe('sleepPodUiHostRuntimeTerminals', () => {
     const host = runtime()
     beginPodUiHostWindowSleep('repo::/w')
     await sleepPodUiHostRuntimeTerminals(host, 'repo::/w', true)
-    expect(host.sleepTerminalsForWorktree).toHaveBeenCalledWith('id:repo::/w')
+    expect(host.sleepTerminalsForWorktree).toHaveBeenCalledWith('id:repo::/w', {
+      sparePtyIds: new Set()
+    })
     expect(host.touchMobileSessionTabsForWorktree).toHaveBeenCalledWith('repo::/w', {
       immediate: true
     })
