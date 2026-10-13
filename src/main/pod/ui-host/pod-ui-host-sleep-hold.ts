@@ -16,7 +16,11 @@ export function beginPodUiHostWindowSleep(worktreeId: string, now: number = Date
   windowSleepSpawns.set(worktreeId, new Set())
 }
 
-export function endPodUiHostWindowSleep(worktreeId: string): void {
+/** `only`: end it only if it is still the sleep that set was taken from, not a later one. */
+export function endPodUiHostWindowSleep(worktreeId: string, only?: ReadonlySet<string>): void {
+  if (only && windowSleepSpawns.get(worktreeId) !== only) {
+    return
+  }
   windowSleepStartedAt.delete(worktreeId)
   windowSleepSpawns.delete(worktreeId)
 }
