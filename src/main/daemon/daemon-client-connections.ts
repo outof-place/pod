@@ -6,6 +6,7 @@ import type { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import { createNdjsonParser, encodeNdjson } from './ndjson'
 import { BINARY_STREAM_FRAMING, type DaemonStreamFraming } from './daemon-stream-binary-framing'
 import type { DaemonRequest } from './types'
+import { TERMINAL_HANDLE_ENV } from '../pod/decouple/legacy-daemon-env'
 
 // Idle time before the first probe. How long the close then takes is the OS's probe schedule, not
 // ours, which is why the producer-stall watchdog never waits on it.
@@ -167,7 +168,8 @@ export class DaemonClientConnections {
                 launchNonce: identity.launchNonce,
                 ...(identity.entryPath ? { entryPath: identity.entryPath } : {}),
                 ...(identity.appVersion ? { appVersion: identity.appVersion } : {}),
-                ...(identity.spawnerExecPath ? { spawnerExecPath: identity.spawnerExecPath } : {})
+                ...(identity.spawnerExecPath ? { spawnerExecPath: identity.spawnerExecPath } : {}),
+                terminalHandleEnv: TERMINAL_HANDLE_ENV
               }
             }
           : {})
