@@ -25,7 +25,7 @@ import { waitForCondition } from './helpers/daemon-generation-processes'
 const LEGACY_PROTOCOL = 41
 // The daemon's endpoint watchdog polls every 30 s and needs two misses before it calls the name lost.
 const OWNERSHIP_LOSS_MS = 65_000
-const RESTORE_SCRIPT = path.join(process.cwd(), 'product/scripts/restore-orca-terminals.mjs')
+const RESTORE_SCRIPT = path.join(process.cwd(), 'product/scripts/restore-legacy-terminals.mjs')
 
 type Attached = { adapter: DaemonPtyAdapter; output(): string }
 
