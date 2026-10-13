@@ -27,13 +27,13 @@ export function createDaemonPodHookRelay(deps: {
   log: DaemonFileLog
 }): DaemonPodHookRelay | null {
   const switchedOff = process.env[POD_AGENT_HOOK_RELAY_ENV] === '0'
-  // Why: a value inherited from an outer Pod names that Pod's daemon.
+  const httpHooks = process.env[POD_CLAUDE_HTTP_HOOKS_ENV] === '1'
+  // Why: the daemon's env seeds its PTYs'. A relay file inherited from an outer Pod names that
+  // Pod's daemon, and a Pod or dev runtime started in one of these terminals must not inherit
+  // this Pod's A/B. An adopted daemon keeps what it read at its own start.
   delete process.env[POD_AGENT_HOOK_RELAY_ENV]
-  if (
-    process.platform !== 'darwin' ||
-    switchedOff ||
-    process.env[POD_CLAUDE_HTTP_HOOKS_ENV] !== '1'
-  ) {
+  delete process.env[POD_CLAUDE_HTTP_HOOKS_ENV]
+  if (process.platform !== 'darwin' || switchedOff || !httpHooks) {
     return null
   }
   const relayFilePath = podHookRelayFilePath(deps.socketPath, deps.protocolVersion)
