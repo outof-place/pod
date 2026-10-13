@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   cpSync,
   existsSync,
   lstatSync,
@@ -34,6 +35,21 @@ export type LegacyHomeCopyOptions = {
   /** Live pid of the legacy app, or null; a copy taken while it writes could be torn. */
   legacyAppPid: number | null
   now?: () => Date
+}
+
+// Why: fs.cpSync documents no mode guarantee, and saved keys (0600) or private folders (0700) must
+// not widen. Children first, so a folder without owner write is chmodded last.
+function keepModes(source: string, copy: string): void {
+  const stat = lstatSync(source)
+  if (stat.isSymbolicLink()) {
+    return
+  }
+  if (stat.isDirectory()) {
+    for (const entry of readdirSync(source)) {
+      keepModes(join(source, entry), join(copy, entry))
+    }
+  }
+  chmodSync(copy, stat.mode & 0o7777)
 }
 
 function readRecord(path: string): unknown {
@@ -77,7 +93,8 @@ export function copyLegacyHome(options: LegacyHomeCopyOptions): LegacyHomeCopyRe
   if (options.legacyAppPid !== null) {
     return { status: 'deferred', reason: 'legacy-app-running', pid: options.legacyAppPid }
   }
-  mkdirSync(productHome, { recursive: true })
+  // Mode applies only when the folder is new: a product folder that exists keeps its own.
+  mkdirSync(productHome, { recursive: true, mode: lstatSync(legacyHome).mode & 0o777 })
   const copied: string[] = []
   const skipped: string[] = []
   for (const entry of readdirSync(legacyHome).sort()) {
@@ -96,6 +113,7 @@ export function copyLegacyHome(options: LegacyHomeCopyOptions): LegacyHomeCopyRe
       preserveTimestamps: true,
       verbatimSymlinks: true
     })
+    keepModes(join(legacyHome, entry), staging)
     renameSync(staging, target)
     copied.push(entry)
   }
