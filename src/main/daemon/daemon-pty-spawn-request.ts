@@ -17,6 +17,7 @@ import {
 } from './terminal-history-seed-chunks'
 import type { CreateOrAttachResult, GetSnapshotResult } from './types'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import { spawnOptionsForDaemon } from '../pod/decouple/legacy-daemon-env'
 
 export type DaemonPtySpawnContext = {
   opts: PtySpawnOptions
@@ -102,7 +103,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
       historySeed: string | undefined,
       historySeedTransferId: string | undefined
     ) => {
-      const { opts } = context
+      const opts = spawnOptionsForDaemon(context.opts, this.client.getDaemonIdentity())
       if (opts.signal?.aborted) {
         throw new Error('client_disconnected')
       }
