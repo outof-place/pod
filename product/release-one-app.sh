@@ -208,7 +208,10 @@ else
   # The release first, then the feed that points at it (RELEASE-RUNBOOK.md); an RC is a prerelease.
   prerelease=""
   [[ "$version" == *-rc* ]] && prerelease=" --prerelease"
+  # The notes carry the release's known issues (product/release-notes/<version>.md).
+  notes="$repo_root/product/release-notes/$version.md"
+  [ -f "$notes" ] || { echo "no release notes at $notes: write them before publishing"; notes="<notes.md>"; }
   echo "publish (RELEASE-RUNBOOK.md), in this order:"
-  echo "  gh release create $tag \"$release_dir/$display_name-$version.dmg\" \"$release_dir/$display_name-$version.zip\" \"$release_dir/SHA256SUMS\" --repo $release_repo --target $pod_commit --title \"$display_name $version\" --notes-file <notes.md>$prerelease"
+  echo "  gh release create $tag \"$release_dir/$display_name-$version.dmg\" \"$release_dir/$display_name-$version.zip\" \"$release_dir/SHA256SUMS\" --repo $release_repo --target $pod_commit --title \"$display_name $version\" --notes-file \"$notes\"$prerelease"
   echo "  product/scripts/publish-appcast.sh \"$release_dir/appcast.xml\""
 fi
