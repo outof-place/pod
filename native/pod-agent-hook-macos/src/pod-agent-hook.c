@@ -41,8 +41,21 @@ static void buf_put(buf_t *b, const char *s, size_t n) {
 }
 static void buf_str(buf_t *b, const char *s) { buf_put(b, s, strlen(s)); }
 
+// Fork-only (Pod): an unset name is read in the other spelling too. The decouple renames this
+// file's names to POD_, but a terminal opened before that update keeps only the ORCA_ ones, and a
+// new claude in it runs this client: so the POD_ spelling, else the ORCA_ one (and before the
+// decouple, the reverse).
+// TODO(pod): drop the fallback after 2026-12-31, and no earlier than the release after the decouple.
 static const char *env(const char *name) {
   const char *v = getenv(name);
+  static const char current[] = "POD_", legacy[] = "ORCA_";  // pod-decouple:keep
+  const char *from = NULL, *to = NULL;
+  if (!v && !strncmp(name, current, sizeof current - 1)) { from = current; to = legacy; }
+  if (!v && !strncmp(name, legacy, sizeof legacy - 1)) { from = legacy; to = current; }
+  char other[128];
+  if (from && snprintf(other, sizeof other, "%s%s", to, name + strlen(from)) < (int)sizeof other) {
+    v = getenv(other);
+  }
   return v ? v : "";
 }
 
