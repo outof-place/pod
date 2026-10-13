@@ -62,7 +62,7 @@ release_repo=outof-place/pod
   die "--feed-url and --download-url-prefix are for --dry-run only: a release reads Pod's own feed"
 # The real path signs with the release owner's keychain key, which an agent never touches.
 [ "$dry_run" = 1 ] || [ -z "${CLAUDECODE:-}" ] ||
-  die "a real release runs from the release owner's Terminal, not from an agent: use --dry-run"
+  die "run this in your own Terminal: a real release signs with your keychain's Sparkle key (agents: --dry-run)"
 [ -z "$(git status --porcelain)" ] || die "the Pod checkout is dirty: electron-builder would pack what no commit has"
 pod_commit=$(git rev-parse HEAD)
 # Why both: clones that fetch upstream carry Orca's own v1.0.1 and up, which GitHub's repo does not.
@@ -210,5 +210,5 @@ else
   [[ "$version" == *-rc* ]] && prerelease=" --prerelease"
   echo "publish (RELEASE-RUNBOOK.md), in this order:"
   echo "  gh release create $tag \"$release_dir/$display_name-$version.dmg\" \"$release_dir/$display_name-$version.zip\" \"$release_dir/SHA256SUMS\" --repo $release_repo --target $pod_commit --title \"$display_name $version\" --notes-file <notes.md>$prerelease"
-  echo "  gh release upload appcast \"$release_dir/appcast.xml\" --repo $release_repo --clobber"
+  echo "  product/scripts/publish-appcast.sh \"$release_dir/appcast.xml\""
 fi
