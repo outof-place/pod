@@ -21,7 +21,6 @@
   <a href="../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-004046?style=flat&labelColor=0d1016"></a>
   <a href="../upstream.json"><img alt="Built on Orca" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Foutof-place%2Fpod%2Fmain%2Fupstream.json&query=%24.nearestTag&label=built%20on%20Orca&suffix=%2B&color=004046&labelColor=0d1016"></a>
   <img alt="Platform: macOS" src="https://img.shields.io/badge/platform-macOS-004046?style=flat&labelColor=0d1016">
-  <a href="https://github.com/stablyai/orca/pulls?q=is%3Apr+author%3Aoutof-place"><img alt="Pull requests sent to Orca" src="https://img.shields.io/github/issues-search?query=repo%3Astablyai%2Forca%20is%3Apr%20author%3Aoutof-place&label=PRs%20to%20Orca&color=004046&labelColor=0d1016"></a>
 </p>
 
 ```sh
@@ -165,7 +164,7 @@ on the `pod/bench` branch.
 - When a pane moves or resizes, the renderer sends its rectangle on the next frame, with the holes
   that menus need, so a popover still shows over a native pane.
 - Keys go the other way: Ghostty encodes them, and main and the renderer pass them on as `pty:write`.
-- Experimental and macOS only. It goes upstream as [stablyai/orca#26914](https://github.com/stablyai/orca/pull/26914).
+- Experimental and macOS only.
 
 ### Code search for agents
 
@@ -194,7 +193,7 @@ Pod differs. Every cell links to its source. As of 2026-10-09.
 
 | | Integrated terminal | Parallel agents in worktrees | Agent CLIs | Usage telemetry |
 | --- | --- | --- | --- | --- |
-| **Pod** | [Ghostty on Metal, in a native view](https://github.com/stablyai/orca/pull/26914) (experimental), or Orca's xterm.js | [Yes, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L51) | [Any CLI agent, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L171-L210) | [None, and no calls to Stably's servers (0.1)](https://github.com/outof-place/pod/blob/main/src/main/product-identity/product-overlay.ts) |
+| **Pod** | [Ghostty on Metal, in a native view](#the-native-terminal) (experimental), or Orca's xterm.js | [Yes, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L51) | [Any CLI agent, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L171-L210) | [None, and no calls to Stably's servers (0.1)](https://github.com/outof-place/pod/blob/main/src/main/product-identity/product-overlay.ts) |
 | **Orca** | [xterm.js, WebGL renderer](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/package.json#L266-L274) | [Yes](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L51) | [Any CLI agent](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L171-L210) | [Anonymous usage events in official builds, opt-out](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/src/main/telemetry/client.ts#L21-L36) |
 | **Conductor** | [xterm.js, DOM renderer](https://www.conductor.build/changelog/0.49.0-conductor-allegro-gpt-5-5) | [Yes](https://www.conductor.build/docs/concepts/git-worktrees) | [Claude Code, Codex, Cursor, OpenCode](https://www.conductor.build/docs/reference/harnesses) | [PostHog analytics; default not documented](https://www.conductor.build/docs/account/privacy) |
 | **Claude Squad** | [Your own terminal, a tmux session per agent](https://github.com/smtg-ai/claude-squad/blob/main/README.md) | [Yes](https://github.com/smtg-ai/claude-squad/blob/main/README.md) | [Claude Code, Codex, Gemini, Aider and others](https://github.com/smtg-ai/claude-squad/blob/main/README.md) | [None found in its source](https://github.com/smtg-ai/claude-squad/blob/main/go.mod) |
@@ -217,71 +216,16 @@ Pod differs. Every cell links to its source. As of 2026-10-09.
 | **Warp** | [AGPL-3.0 client, MIT UI framework](https://github.com/warpdotdev/warp/blob/main/README.md#licensing) | [macOS, Linux, Windows](https://www.warp.dev/pricing) | [Free plan; Build $20/mo](https://www.warp.dev/pricing) |
 
 What Pod adds to Orca, in short: the native Ghostty terminal, claude-acc, no telemetry and macOS-first
-packaging in the first release, then indexed search for agents, Pod Workspace and OrbStack VMs. Everything generic goes back to
-Orca as a pull request (below). Spotted a cell that is out of date?
+packaging in the first release, then indexed search for agents, Pod Workspace and OrbStack VMs. Spotted a
+cell that is out of date?
 [Open an issue](https://github.com/outof-place/pod/issues) and we'll fix it.
 
-## Relationship to Orca
+## Where to report bugs
 
-Pod is a downstream macOS distribution of [Orca](https://github.com/stablyai/orca) by Stably AI,
-released under the MIT license. Orca does the heavy lifting. Pod is the newest commit on Orca's
-`main` that passed Orca's own CI, plus a short, linear stack of patches that adds:
-
-- the native Ghostty terminal and other macOS-only work;
-- the Pod identity: name, icon, bundle id `codes.pod.app`, `pod://` links and the `podx` CLI;
-- no telemetry, and no calls to Stably's servers;
-- claude-acc built in (in progress);
-- its own signed builds and update feed.
-
-### What we send upstream
-
-Anything generic goes to Orca as a pull request first. Status updates live:
-
-| Orca pull request | Change | Status |
-| --- | --- | --- |
-| [#26914](https://github.com/stablyai/orca/pull/26914) | Experimental native Ghostty terminal view on macOS | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26914?label=) |
-| [#26927](https://github.com/stablyai/orca/pull/26927) | Name Multipass recipe VMs and emit an SSH connection | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26927?label=) |
-| [#26945](https://github.com/stablyai/orca/pull/26945) | Build the Computer Use helper with Swift 6.4's default build system | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26945?label=) |
-| [#26953](https://github.com/stablyai/orca/pull/26953) | Status bar items and live panel messaging for plugins | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26953?label=) |
-| [#26956](https://github.com/stablyai/orca/pull/26956) | Keep xterm parse barriers, and the output behind them, across a resize | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26956?label=) |
-| [#26973](https://github.com/stablyai/orca/pull/26973) | Derive the bundle id from one runtime constant | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26973?label=) |
-| [#26975](https://github.com/stablyai/orca/pull/26975) | Plugin manifest platforms field and an official publisher allowlist | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26975?label=) |
-| [#26979](https://github.com/stablyai/orca/pull/26979) | Let Git's untracked cache answer status polls | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26979?label=) |
-| [#26980](https://github.com/stablyai/orca/pull/26980) | Keep per-source usage caches off the main thread | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26980?label=) |
-| [#26985](https://github.com/stablyai/orca/pull/26985) | Read pane process info from the macOS kernel instead of forking ps | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26985?label=) |
-| [#26991](https://github.com/stablyai/orca/pull/26991) | Plugin settings pages in Settings | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26991?label=) |
-| [#27005](https://github.com/stablyai/orca/pull/27005) | Read ps under a pinned locale, so process start times parse in every locale | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27005?label=) |
-| [#27006](https://github.com/stablyai/orca/pull/27006) | Send PTY output from the daemon to main as raw bytes, not NDJSON | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27006?label=) |
-| [#27009](https://github.com/stablyai/orca/pull/27009) | Reuse watched transcript trees instead of walking them again | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27009?label=) |
-| [#27011](https://github.com/stablyai/orca/pull/27011) | One helper for Orca's home directory | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27011?label=) |
-| [#27014](https://github.com/stablyai/orca/pull/27014) | Let a local index answer quick open and file search first | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27014?label=) |
-| [#27016](https://github.com/stablyai/orca/pull/27016) | Choose where new worktrees go: nested, flat or next to the repository | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27016?label=) |
-| [#27018](https://github.com/stablyai/orca/pull/27018) | Relink a moved repository instead of adding it again | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27018?label=) |
-| [#27020](https://github.com/stablyai/orca/pull/27020) | Flag merged, stale-agent, prunable and stray worktree folders | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27020?label=) |
-| [#27028](https://github.com/stablyai/orca/pull/27028) | Opt-in recommended Git performance settings for large repositories | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27028?label=) |
-| [#27033](https://github.com/stablyai/orca/pull/27033) | Send hidden sidecar bytes past the view, so throttled renderers can't pace agents | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27033?label=) |
-| [#27039](https://github.com/stablyai/orca/pull/27039) | Never replace a newer build's managed agent-hook script | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27039?label=) |
-| [#27051](https://github.com/stablyai/orca/pull/27051) | Keep the Vercel skill recipe working with an empty `vercel_args` on macOS's bash 3.2 | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27051?label=) |
-| [#27053](https://github.com/stablyai/orca/pull/27053) | Pin the sqlite3 prompt in the daemon's exec-replaced shell test | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27053?label=) |
-| [#27065](https://github.com/stablyai/orca/pull/27065) | Translate the main process's startup and recovery dialogs | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/27065?label=) |
-
-All of them: [pull requests from outof-place on stablyai/orca](https://github.com/stablyai/orca/pulls?q=is%3Apr+author%3Aoutof-place).
-
-### Upstream first
-
-- A change that would help Orca users goes to Orca as a pull request before, or alongside, Pod.
-- Pod carries a patch only until it lands on Orca's `main`, then drops it on the next rebase.
-- Only Pod's identity, packaging, update feed and product decisions stay fork-only.
-- Every commit on `main` says which kind it is, in a trailer:
-  `Upstream: <Orca pull request URL>` or `Fork-only: <reason>`.
-
-### Where to report bugs
-
-1. Reproduce the problem on the official [Orca](https://onorca.dev) build first.
-2. If it happens there too, it is an Orca bug: report it to
-   [stablyai/orca](https://github.com/stablyai/orca/issues). Please don't send Pod reports to the Orca team.
-3. If it happens only in Pod, open an issue [here](https://github.com/outof-place/pod/issues).
-4. Report security problems privately through
+1. Bugs in Pod: open an issue [here](https://github.com/outof-place/pod/issues).
+2. Bugs in Claude Code itself, also when it runs in Pod: report them to
+   [anthropics/claude-code](https://github.com/anthropics/claude-code/issues).
+3. Report security problems privately through
    [a security advisory](https://github.com/outof-place/pod/security/advisories/new), not in a public issue.
 
 Pod is not affiliated with or endorsed by Stably AI or Lovecast Inc. Orca is their trademark.
@@ -319,12 +263,12 @@ pnpm dev            # run from source
 pnpm build:unpack   # build an unsigned, unpacked app
 ```
 
-Orca's [contributing guide](CONTRIBUTING.md) covers the toolchain in depth; all of it applies to Pod.
+Orca's [contributing guide](CONTRIBUTING.md) covers the toolchain in depth.
 
 ## Contributing
 
-Read [CONTRIBUTING.md](../CONTRIBUTING.md) first. The short version: if your change would help every
-Orca user, it belongs in [Orca](https://github.com/stablyai/orca), and Pod picks it up from there.
+Read [CONTRIBUTING.md](../CONTRIBUTING.md) first. The short version: Pod work goes on a `pod/*`
+branch in this repository, one branch per change.
 
 ## License
 
