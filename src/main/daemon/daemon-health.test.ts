@@ -415,8 +415,9 @@ describe('startTimeMatches', () => {
     if (actual === null) {
       return
     }
-    // Shift expected by 10s — clearly outside the ±1500ms tolerance.
-    expect(startTimeMatches(process.pid, actual + 10_000)).toBe(false)
+    // Fork-only (Pod): the window is [reported - 30 s, reported + 1.5 s] (selfReportedStartMatches).
+    expect(startTimeMatches(process.pid, actual + 31_000)).toBe(false)
+    expect(startTimeMatches(process.pid, actual - 2_000)).toBe(false)
   })
 })
 
