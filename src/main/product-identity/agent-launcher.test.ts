@@ -27,6 +27,28 @@ function script(dir: string, name: string, body: string): void {
   chmodSync(join(dir, name), 0o755)
 }
 
+// Stand-in for Pod's statusline client: a binary, since a script's program is /bin/sh. It reports
+// its own priority once the watcher has had time to react to its exec.
+let statusLineClientPath = ''
+function statusLineClient(dir: string): string {
+  if (statusLineClientPath === join(dir, 'pod-agent-statusline')) {
+    return statusLineClientPath
+  }
+  mkdirSync(dir, { recursive: true })
+  const source = join(root, 'statusline-client.c')
+  writeFileSync(
+    source,
+    '#include <stdio.h>\n#include <unistd.h>\nint main(void) { char pid[16]; usleep(100000); snprintf(pid, sizeof pid, "%d", getpid()); execl("/bin/ps", "ps", "-o", "pri=", "-p", pid, (char *)0); return 127; }\n'
+  )
+  const path = join(dir, 'pod-agent-statusline')
+  const result = spawnSync('cc', ['-O2', '-o', path, source], { encoding: 'utf8' })
+  if (result.status !== 0) {
+    throw new Error(`cc: ${result.stderr}`)
+  }
+  statusLineClientPath = path
+  return path
+}
+
 function run(
   command: string,
   args: string[],
@@ -76,12 +98,12 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
   it("gives the agent's tools and hooks its priority, not Pod's statusline, and its watcher leaves with it", () => {
     const hooks = join(root, 'home', '.orca', 'agent-hooks')
     script(hooks, 'claude-hook.sh', 'ps -o pri= -p $$')
-    script(hooks, 'claude-statusline.sh', 'ps -o pri= -p $$')
+    const client = statusLineClient(hooks)
     // The agent, a tool's shell and the command it runs (two levels down), a hook, the statusline.
     script(
       join(root, 'tree'),
       'claude',
-      `echo $$; ps -o pri= -p $$; sh -c "sh -c \\"ps -o pri= -p \\\\$\\\\$\\""; ${join(hooks, 'claude-hook.sh')}; ${join(hooks, 'claude-statusline.sh')}`
+      `echo $$; ps -o pri= -p $$; sh -c "sh -c \\"ps -o pri= -p \\\\$\\\\$\\""; ${join(hooks, 'claude-hook.sh')}; ${client}`
     )
     const tree = run('claude', [], [binDir, join(root, 'tree')])
     const own = run('claude', [], [binDir, join(root, 'tree')], { POD_AGENT_TREE: '0' })
@@ -102,6 +124,31 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
       spawnSync('sleep', ['0.05'])
     }
     expect(watching()).toBe(false)
+  })
+
+  it("keeps Pod's statusline client at default by its program, through sh -c or directly, never by argv", () => {
+    const hooks = join(root, 'home', '.orca', 'agent-hooks')
+    const client = statusLineClient(hooks)
+    script(hooks, 'pod-agent-hook', 'ps -o pri= -p $$')
+    // As Pod's statusLine runs it (sh -c, then exec), with no shell in between, and the older
+    // `pod-agent-hook statusline` form, which only argv would tell apart: it keeps the role.
+    // `exec -a` pins "by program": the client under another argv[0] is the statusline, and another
+    // program under the client's path as argv[0] is not.
+    script(
+      join(root, 'native'),
+      'claude',
+      `ps -o pri= -p $$; sh -c 'exec "${client}"'; "${client}"; sh -c 'exec "${join(hooks, 'pod-agent-hook')}" statusline'; /bin/bash -c 'exec -a status "${client}"'; /bin/bash -c 'exec -a "${client}" /bin/ps -o pri= -p $$'`
+    )
+    const result = run('claude', [], [binDir, join(root, 'native')])
+    const [agent, viaShell, direct, byArgv, renamed, impostor] = result.stdout
+      .split('\n')
+      .map(Number)
+    expect(result.status).toBe(0)
+    expect(viaShell).toBeLessThan(agent)
+    expect(direct).toBeLessThan(agent)
+    expect(byArgv).toBe(agent)
+    expect(renamed).toBeLessThan(agent)
+    expect(impostor).toBe(agent)
   })
 
   it('takes the role back from a tool that has used a second of CPU', () => {
