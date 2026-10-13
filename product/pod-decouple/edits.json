@@ -150,6 +150,15 @@
       "applied": "https://pod\\.codes/docs"
     },
     {
+      "id": "local-build-file",
+      "stage": "pre-env",
+      "why": "the build-compatibility file the packaged app carries in Resources: the build writes it, a local-build candidate is read through it, and a test plants it",
+      "files": "^(src|config)/",
+      "find": "(?<![\\w.-])orca-local-build\\.json",
+      "replace": "pod-local-build.json",
+      "applied": "(?<![\\w.-])pod-local-build\\.json"
+    },
+    {
       "id": "local-cli-command",
       "stage": "post-env",
       "why": "local terminals name the CLI, so agents and skills never fall back to a bare `orca`",
