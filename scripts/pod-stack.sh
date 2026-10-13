@@ -218,10 +218,30 @@ pin_blob=$(git hash-object -w "$root/upstream.json")
 pin_tree() {
   GIT_INDEX_FILE=$tmp/index git read-tree "$1"
   GIT_INDEX_FILE=$tmp/index git update-index --add --cacheinfo "100644,$pin_blob,upstream.json"
-  GIT_INDEX_FILE=$tmp/index git write-tree
+  # Why --missing-ok: in a blob:none clone the tree's other blobs live on origin, and write-tree
+  # would fetch each to check it exists.
+  GIT_INDEX_FILE=$tmp/index git write-tree --missing-ok
 }
 
 short() { git rev-parse --short "$1"; }
+
+# git merge-tree --write-tree --name-only --no-messages "$@", fetching the blobs it reports missing.
+# Rename detection reads blobs no prefetch names; a fresh blob:none clone lacks them.
+merge_tree() {
+  local out status missing tries=0
+  while :; do
+    out=$(git merge-tree --write-tree --name-only --no-messages "$@" 2>"$tmp/merge-tree.err")
+    status=$?
+    missing=$(grep -oE 'could not fetch [0-9a-f]{40} from promisor' "$tmp/merge-tree.err" | awk '{ print $4 }' | sort -u || true)
+    if [ "$status" -le 1 ] || [ -z "$missing" ] || [ "$tries" -ge 200 ]; then
+      [ "$status" -le 1 ] || cat "$tmp/merge-tree.err" >&2
+      printf '%s\n' "$out"
+      return "$status"
+    fi
+    printf '%s\n' "$missing" | ensure_blobs
+    tries=$((tries + 1))
+  done
+}
 
 # Patch id of one commit, or of the change between two; empty when nothing changes.
 patch_id() { git diff-tree -p --no-commit-id -r "$@" | git patch-id --stable | cut -d' ' -f1; }
@@ -313,7 +333,7 @@ while IFS=$'\t' read -r -u 3 topic key value base pin squash src src_since hold;
       || printf '    ! %s has merged Orca main past %s; its net change may rely on newer Orca code\n' "$topic" "$(short "$base_sha")"
     printf '%s %s\n' "$squash_base" "$ref_sha" | prefetch_replay "$tip"
     set +e
-    merge_out=$(git merge-tree --write-tree --name-only --no-messages --merge-base="$squash_base" "$tip" "$ref_sha")
+    merge_out=$(merge_tree --merge-base="$squash_base" "$tip" "$ref_sha")
     merge_status=$?
     set -e
     if [ "$merge_status" -eq 1 ] && [ "$(printf '%s\n' "$merge_out" | tail -n +2 | grep -v '^$')" = upstream.json ]; then
@@ -406,12 +426,12 @@ while IFS=$'\t' read -r -u 3 topic key value base pin squash src src_since hold;
 
     parent=$(git rev-parse "$commit^")
     set +e
-    merge_out=$(git merge-tree --write-tree --name-only --no-messages --merge-base="$parent" "$tip" "$commit")
+    merge_out=$(merge_tree --merge-base="$parent" "$tip" "$commit")
     merge_status=$?
     if [ "$merge_status" -gt 1 ]; then
       # A blob the entry's prefetch missed (the stack's side of a file an earlier commit merged).
       printf '%s %s\n' "$parent" "$commit" | prefetch_replay "$tip"
-      merge_out=$(git merge-tree --write-tree --name-only --no-messages --merge-base="$parent" "$tip" "$commit")
+      merge_out=$(merge_tree --merge-base="$parent" "$tip" "$commit")
       merge_status=$?
     fi
     set -e
