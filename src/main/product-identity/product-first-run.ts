@@ -21,11 +21,6 @@ import { offerLegacyDaemonHandover } from './legacy-daemon-handover-prompt'
 import { watchMovedDaemons, type DaemonLoss } from './legacy-daemon-loss-watch'
 import { moveLegacyHome } from './legacy-home-move'
 import {
-  legacyImportRequestPath,
-  setProfileAside,
-  takeLegacyImportRequest
-} from './legacy-import-request'
-import {
   liveSingletonOwner,
   migrateLegacyProfile,
   type SafeStorageKeychainPort
@@ -59,8 +54,8 @@ export function applyProductIdentityPreReady(
   installProductCopyBoundaries()
   // Why before the instance lock: Chromium writes its lock files into userData.
   if (isServeMode) {
-    // Fork-only (Pod): one-app Pod's runtime is a serve host, so it moves the home (the gate turns
-    // other serve hosts away) but never offers an import, which needs the app menu.
+    // Fork-only (Pod): one-app Pod's runtime is a serve host, so it moves the home too (the gate
+    // turns other serve hosts away).
     const legacy = identity.legacyProfile
     if (legacy) {
       moveLegacyHomeOnce(identity, join(app.getPath('appData'), legacy.userDataName))
@@ -71,10 +66,9 @@ export function applyProductIdentityPreReady(
 }
 
 /**
- * Pre-ready product setup: the profile import ("Import from Orca…" restarts into it; never on its
- * own), then the one-time move of the legacy home folder. Returns false when startup must stop.
- * `scratch` points an E2E run at a disposable legacy profile (imported when asked) and keeps the
- * login keychain out of it.
+ * Pre-ready product setup: the one-time move of the legacy home folder. Pod never imports the
+ * legacy profile; only an E2E run does, through `scratch`, which points it at a disposable legacy
+ * profile and keeps the login keychain out of it. Returns false when startup must stop.
  */
 export function runProductFirstRun(
   identity: ProductIdentity,
@@ -88,12 +82,9 @@ export function runProductFirstRun(
   if (!legacy) {
     return true
   }
-  const appData = app.getPath('appData')
-  const legacyUserData = scratch?.legacyUserData ?? join(appData, legacy.userDataName)
-  const requested = scratch
-    ? scratch.importLegacyProfile
-    : takeLegacyImportRequest(legacyImportRequestPath(appData, identity.userDataName)) !== null
-  if (requested && !importLegacyProfile(identity, legacyUserData, scratch)) {
+  const legacyUserData =
+    scratch?.legacyUserData ?? join(app.getPath('appData'), legacy.userDataName)
+  if (scratch?.importLegacyProfile && !importLegacyProfile(identity, legacyUserData, scratch)) {
     return false
   }
   moveLegacyHomeOnce(identity, legacyUserData)
@@ -126,31 +117,16 @@ function moveLegacyHomeOnce(identity: ProductIdentity, legacyUserData: string): 
   }
 }
 
+/** E2E only: imports the scratch legacy profile into the product's. */
 function importLegacyProfile(
   identity: ProductIdentity,
   legacyUserData: string,
-  scratch: { keychain: SafeStorageKeychainPort | null } | null
+  scratch: { keychain: SafeStorageKeychainPort | null }
 ): boolean {
   const legacyPid = liveSingletonOwner(legacyUserData)
   if (legacyPid !== null) {
-    dialog.showErrorBox(
-      `${identity.displayName} can't import your Orca profile yet`,
-      `Orca is running (pid ${legacyPid}). Quit Orca, then choose Import from Orca… again.`
-    )
+    console.error(`[product-migration] legacy profile in use by pid ${legacyPid}; not imported`)
     return true
-  }
-  const appData = app.getPath('appData')
-  if (!scratch) {
-    const ownPid = liveSingletonOwner(app.getPath('userData'))
-    if (ownPid !== null && ownPid !== process.pid) {
-      dialog.showErrorBox(
-        `${identity.displayName} can't import your Orca profile yet`,
-        `Another ${identity.displayName} process (pid ${ownPid}) is using the profile. Quit it, then choose Import from Orca… again.`
-      )
-      return true
-    }
-    const aside = setProfileAside(appData, identity.userDataName, new Date())
-    console.log(`[product-migration] previous profile kept at ${aside ?? '(none)'}`)
   }
   const started = performance.now()
   const result = migrateLegacyProfile({
@@ -159,11 +135,7 @@ function importLegacyProfile(
     legacyKeychainName: identity.legacyProfile?.keychainName ?? identity.keychainName,
     productKeychainName: identity.keychainName,
     trustedAppPath: appBundlePathFromExecPath(process.execPath),
-    keychain: scratch
-      ? scratch.keychain
-      : process.platform === 'darwin'
-        ? createMacSafeStorageKeychain()
-        : null,
+    keychain: scratch.keychain,
     attachableDaemonProtocols: PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
     appVersion: app.getVersion()
   })
@@ -171,12 +143,7 @@ function importLegacyProfile(
     `[product-migration] ${JSON.stringify(result)} in ${Math.round(performance.now() - started)}ms`
   )
   if (result.status === 'blocked') {
-    dialog.showErrorBox(
-      `${identity.displayName} can't import your Orca profile yet`,
-      result.reason === 'legacy-app-running'
-        ? `Orca is running (pid ${result.pid}). Quit Orca, then choose Import from Orca… again.`
-        : `Another ${identity.displayName} process (pid ${result.pid}) is importing the Orca profile. Wait for it to finish, then try again.`
-    )
+    console.error(`[product-migration] import blocked: ${result.reason} (pid ${result.pid})`)
     app.exit(0)
     return false
   }
