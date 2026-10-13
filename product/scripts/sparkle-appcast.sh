@@ -32,7 +32,7 @@ out=${3:?usage: sparkle-appcast.sh <archive> <tag> <out dir>}
 [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]] || { echo "tag '$tag' is not v<semver>" >&2; exit 2; }
 # The keychain's key is the release owner's: an agent (CLAUDECODE) signs only with a stdin throwaway.
 [ "${SPARKLE_KEY_ON_STDIN:-0}" = 1 ] || [ -z "${CLAUDECODE:-}" ] ||
-  { echo "sparkle-appcast.sh: an agent never signs with the keychain key; use SPARKLE_KEY_ON_STDIN=1" >&2; exit 2; }
+  { echo "sparkle-appcast.sh: run this in your own Terminal: it signs with your keychain's Sparkle key (agents: SPARKLE_KEY_ON_STDIN=1)" >&2; exit 2; }
 mkdir -p "$out"
 
 work=$(mktemp -d /tmp/pod-appcast.XXXXXX)
