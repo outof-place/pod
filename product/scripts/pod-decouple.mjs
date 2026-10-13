@@ -29,7 +29,8 @@ export const TABLE_DIR = join(repoRoot, 'product', 'pod-decouple')
 const KEEP_MARKER = 'pod-decouple:keep'
 
 // What the app, its CLI, its relay, its helpers and its bundled skills are built from.
-// mobile/ and cloud/ are other products; docs/ and .github/ do not ship.
+// mobile/ and cloud/ are other products; docs/ and .github/ do not ship. product/agent-launcher
+// is the `claude` launcher Pod ships, which reads the pane's env names.
 const SCOPES = [
   'src/',
   'tests/',
@@ -39,7 +40,8 @@ const SCOPES = [
   'skill-guides/',
   'skill-stubs/',
   'native/',
-  'scripts/'
+  'scripts/',
+  'product/agent-launcher/'
 ]
 const TEXT_EXTENSIONS = new Set(
   (
