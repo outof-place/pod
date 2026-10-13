@@ -2,9 +2,9 @@
 // Moves the terminal daemons the product took over from Orca (first-run "Move running terminals
 // from Orca") back into Orca's profile, so Orca reopens those terminals again.
 //
-//   node product/scripts/restore-orca-terminals.mjs [<product userData>]
+//   node product/scripts/restore-legacy-terminals.mjs [<product userData>]
 //   ELECTRON_RUN_AS_NODE=1 /Applications/Pod.app/Contents/MacOS/Pod \
-//     /Applications/Pod.app/Contents/Resources/restore-orca-terminals.mjs
+//     /Applications/Pod.app/Contents/Resources/restore-legacy-terminals.mjs
 //
 // Quit the product first: it refuses while the product runs, since its terminals hold those daemons.
 // A daemon is skipped, never overwritten, when Orca already started a fresh one at the same path.
@@ -53,7 +53,7 @@ function runningPid(userData) {
 }
 
 /** Restores every recorded daemon it can; returns { restored, skipped } or { blocked }. */
-export function restoreOrcaTerminals(userData) {
+export function restoreLegacyTerminals(userData) {
   const pid = runningPid(userData)
   if (pid !== null) {
     return { blocked: `the product is running (pid ${pid}); quit it first` }
@@ -96,9 +96,9 @@ export function restoreOrcaTerminals(userData) {
 if (process.argv[1] === import.meta.filename) {
   const userData =
     process.argv[2] ?? join(homedir(), 'Library', 'Application Support', identityUserDataName())
-  const result = restoreOrcaTerminals(userData)
+  const result = restoreLegacyTerminals(userData)
   if (result.blocked) {
-    console.error(`restore-orca-terminals: ${result.blocked}`)
+    console.error(`restore-legacy-terminals: ${result.blocked}`)
     process.exit(2)
   }
   console.log(`restored daemon protocols: ${result.restored.join(', ') || 'none'}`)

@@ -13,7 +13,7 @@ import { join } from 'node:path'
 // link: the legacy app's next launch finds no endpoint at its own path and starts a fresh daemon
 // instead of sharing PTYs with the product. A moved daemon's endpoint watchdog marks its name lost
 // within ~60 s; it then refuses new terminals, keeps attaching existing ones, and exits once they
-// end. Restore with product/scripts/restore-orca-terminals.mjs.
+// end. Restore with product/scripts/restore-legacy-terminals.mjs.
 
 const DAEMON_PID_FILE = /^daemon-v(\d+)\.pid$/
 const ENDPOINT_EXTENSIONS = ['sock', 'token', 'pid'] as const
