@@ -249,25 +249,10 @@ func programPath(_ pid: pid_t) -> String? {
 
 /// Pod's statusline, which Claude runs about once a second per agent and doesn't wait for: it
 /// stays at default, so it doesn't compete with the tool's shell. (Pod's hooks get the role: a
-/// PreToolUse hook runs before every tool.)
+/// PreToolUse hook runs before every tool.) Known by the program it runs, never by argv: the
+/// runtime installs its client as a copy of its own (a link's path would be ambiguous).
 func isPodStatusLine(_ pid: pid_t) -> Bool {
-  var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
-  var buffer = [UInt8](repeating: 0, count: 16384)
-  var size = buffer.count
-  guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0, size > 4 else { return false }
-  let argc = buffer.withUnsafeBytes { $0.load(as: Int32.self) }
-  // argc, the exec path, NULs, then argc arguments (the environment follows: never read).
-  var index = 4
-  while index < size && buffer[index] != 0 { index += 1 }
-  while index < size && buffer[index] == 0 { index += 1 }
-  for _ in 0..<max(argc, 0) where index < size {
-    let start = index
-    while index < size && buffer[index] != 0 { index += 1 }
-    let argument = String(decoding: buffer[start..<index], as: UTF8.self)
-    if argument.contains("/agent-hooks/"), argument.contains("statusline") { return true }
-    index += 1
-  }
-  return false
+  programPath(pid)?.hasSuffix("/agent-hooks/pod-agent-statusline") ?? false
 }
 
 /// CPU time a process has used so far, in nanoseconds.
