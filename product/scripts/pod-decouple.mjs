@@ -21,7 +21,7 @@
 // - post-env edits: changes whose anchors only exist once names are POD_*. Lines marked
 //   `pod-decouple:keep` are never renamed, so a deliberate ORCA_* alias can survive.
 import { execFileSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const repoRoot = join(import.meta.dirname, '..', '..')
@@ -30,7 +30,8 @@ const KEEP_MARKER = 'pod-decouple:keep'
 
 // What the app, its CLI, its relay, its helpers and its bundled skills are built from.
 // mobile/ and cloud/ are other products; docs/ and .github/ do not ship. product/agent-launcher
-// is the `claude` launcher Pod ships, which reads the pane's env names.
+// is the `claude` launcher Pod ships, which reads the pane's env names; e2e.yml sets the app's
+// names for the E2E jobs, and a unit test reads them back.
 const SCOPES = [
   'src/',
   'tests/',
@@ -41,8 +42,43 @@ const SCOPES = [
   'skill-stubs/',
   'native/',
   'scripts/',
-  'product/agent-launcher/'
+  'product/agent-launcher/',
+  '.github/workflows/e2e.yml'
 ]
+
+// Generated from files this codemod rewrites (skill packages): rebuilt after --apply, verified by
+// --check. Each needs nothing but node, since the codemod runs in a checkout without node_modules.
+const GENERATORS = [
+  {
+    script: 'config/scripts/generate-skill-bundle-manifest.mjs',
+    write: ['--write'],
+    verify: []
+  }
+]
+
+function runGenerators(root, mode, log) {
+  for (const generator of GENERATORS) {
+    const script = join(root, generator.script)
+    if (!existsSync(script)) {
+      continue
+    }
+    try {
+      execFileSync(
+        process.execPath,
+        [script, ...(mode === 'apply' ? generator.write : generator.verify)],
+        {
+          cwd: root,
+          stdio: ['ignore', 'pipe', 'pipe']
+        }
+      )
+    } catch (error) {
+      const output = `${error.stdout ?? ''}${error.stderr ?? ''}`.trim()
+      log.error(`pod-decouple: ${generator.script} failed after the rewrite: ${output}`)
+      return 1
+    }
+  }
+  return 0
+}
 const TEXT_EXTENSIONS = new Set(
   (
     'ts tsx mts cts js mjs cjs jsx json jsonc md sh bash zsh fish ps1 psm1 cmd bat py swift c h m ' +
@@ -416,10 +452,13 @@ export function run(root, mode, { tableDir = TABLE_DIR, log = console } = {}) {
     for (const { file } of changed) {
       log.error(`pod-decouple: not applied: ${file}`)
     }
-    return changed.length > 0 ? 1 : 0
+    return changed.length > 0 ? 1 : runGenerators(root, mode, log)
   }
   for (const { file, next } of changed) {
     writeFileSync(join(root, file), next)
+  }
+  if (runGenerators(root, mode, log) !== 0) {
+    return 1
   }
   const renamed = renames.filter((env) => counts.has(env.from)).length
   log.log(`pod-decouple: ${changed.length} files changed; ${renamed} env names renamed`)
