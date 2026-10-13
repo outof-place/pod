@@ -20,6 +20,8 @@ const PANE_QUEUE_MAX_BYTES = 8 * 1024 * 1024
 /** How long a closing relay spends spooling its backlog. */
 const CLOSE_SPOOL_BUDGET_MS = 200
 const HOOK_PATH = /^\/hook\/([a-z0-9-]+)$/
+/** Events between two `pod-hook-relay-events` lines: a gate counts them from the log. */
+const EVENTS_LOG_EVERY = 100
 
 export const POD_HOOK_RELAY_TOKEN_HEADER = 'x-pod-hook-relay-token'
 export const POD_HOOK_RELAY_PANE_HEADER = 'x-pod-hook-relay-pane'
@@ -53,6 +55,7 @@ export class PodHookRelay {
   private readonly paneQueues = new Map<string, PaneQueue>()
   private readonly pendingSpools = new Set<Promise<unknown>>()
   private refusedEndpoints = 0
+  private readonly events = { received: 0, delivered: 0, spooled: 0 }
 
   constructor(private readonly options: PodHookRelayOptions) {}
 
@@ -100,6 +103,9 @@ export class PodHookRelay {
     const server = this.server
     this.server = null
     this.spoolBacklog()
+    if (this.events.received > 0) {
+      this.options.log('pod-hook-relay-events', { ...this.events })
+    }
     await unlink(this.options.relayFilePath).catch(() => {})
     if (server) {
       server.closeAllConnections()
@@ -182,6 +188,9 @@ export class PodHookRelay {
 
   /** One pane's events reach the runtime in the order Claude sent them. */
   private enqueue(event: PodHookRelayEvent): void {
+    if (++this.events.received % EVENTS_LOG_EVERY === 0) {
+      this.options.log('pod-hook-relay-events', { ...this.events })
+    }
     const key = event.pane.paneKey
     const queue = this.paneQueues.get(key)
     if (!queue) {
@@ -218,7 +227,10 @@ export class PodHookRelay {
     const deliver = this.options.deliver ?? deliverPodHookRelayEvent
     for (let event = queue.events[0]; event; event = queue.events[0]) {
       try {
-        await deliver(event)
+        const outcome = await deliver(event)
+        if (outcome === 'delivered' || outcome === 'spooled') {
+          this.events[outcome] += 1
+        }
       } catch (error) {
         this.options.log('pod-hook-relay-delivery-failed', {
           error: error instanceof Error ? error.message : String(error)
