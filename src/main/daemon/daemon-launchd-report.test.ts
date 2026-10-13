@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  dropLaunchdJobEnv,
   readDaemonLaunchdReport,
   reportToLaunchd,
   takeLaunchdReportPath
@@ -30,6 +31,16 @@ describe('the launchd report of a daemon', () => {
     expect(statSync(path).mode & 0o777).toBe(0o600)
     // Whole records only: no temporary file is left beside it.
     expect(readdirSync(dir)).toEqual(['report.json'])
+  })
+
+  it("drops launchd's job variables, which every PTY would inherit, only when launchd started it", () => {
+    const env = { XPC_SERVICE_NAME: 'codes.pod.daemon.x', XPC_FLAGS: '0x0', PATH: '/bin' }
+    takeLaunchdReportPath(['--socket', '/tmp/s'])
+    expect(dropLaunchdJobEnv(env)).toBeUndefined()
+    expect(env.XPC_SERVICE_NAME).toBe('codes.pod.daemon.x')
+    takeLaunchdReportPath(['--launchd-report', join(dir, 'report.json')])
+    expect(dropLaunchdJobEnv(env)).toBe('codes.pod.daemon.x')
+    expect(env).toEqual({ PATH: '/bin' })
   })
 
   it('never throws where it cannot write', () => {
