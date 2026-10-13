@@ -252,6 +252,36 @@ describe('daemon process identity evidence', () => {
     ).resolves.toMatchObject({ state: 'unknown', reason: 'macos_start_time_mismatch' })
   })
 
+  it.each([
+    ['3.5 s earlier (the live daemon 1047)', -3_500, 'present'],
+    ['29 s earlier', -29_000, 'present'],
+    ['31 s earlier', -31_000, 'unknown'],
+    ['1.4 s later', 1_400, 'present'],
+    ['2 s later (a reused pid)', 2_000, 'unknown']
+  ])(
+    'an OS start %s than the hello says: %s on macOS and Linux without ticks',
+    async (_label, offsetMs, state) => {
+      const readProcessStartedAtMs = async () => exactIncarnation.identity.startedAtMs + offsetMs
+      const readCommandLine = async () =>
+        `node daemon-entry --socket ${endpoint.socketPath} --token ${endpoint.tokenPath}`
+      await expect(
+        probeDaemonProcessIdentity(exactIncarnation, endpoint, {
+          platform: 'darwin',
+          signalProcess: () => 'occupied',
+          readCommandLine,
+          readProcessStartedAtMs
+        })
+      ).resolves.toMatchObject({ state })
+      await expect(
+        probeDaemonProcessIdentity(
+          { identity: exactIncarnation.identity },
+          endpoint,
+          linuxDependencies({ readProcessStartedAtMs })
+        )
+      ).resolves.toMatchObject({ state })
+    }
+  )
+
   it('accepts ESRCH as conclusive POSIX process disappearance', async () => {
     await expect(
       probeDaemonProcessIdentity(exactIncarnation, endpoint, {

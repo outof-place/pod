@@ -1,6 +1,6 @@
 import { parseLinuxStartTicks, readBootIdentity } from '../agent-hooks/managed-hook-owner-identity'
 import { commandLineMatchesDaemon } from './daemon-pid-identity'
-import { startTimesWithinTolerance } from './daemon-process-start-time'
+import { selfReportedStartMatches, startTimesWithinTolerance } from './daemon-process-start-time'
 import {
   WINDOWS_CREATION_TIME_TOLERANCE_MS,
   type DaemonEvidenceSources,
@@ -30,8 +30,6 @@ export {
   type ProcessSignalEvidence,
   type WindowsProcessEvidence
 } from './daemon-incarnation-evidence-types'
-
-const POSIX_START_TIME_TOLERANCE_MS = 1_500
 
 export async function probeDaemonProcessIdentity(
   exactIncarnation: ExactDaemonIncarnation | null,
@@ -142,11 +140,8 @@ async function probeLinuxProcess(
   if (startedAtMs === null) {
     return unknown('process_start_time_unavailable', ['process_start_time'])
   }
-  return startTimesWithinTolerance(
-    startedAtMs,
-    exactIncarnation.identity.startedAtMs,
-    POSIX_START_TIME_TOLERANCE_MS
-  )
+  // Why self-reported: identity.startedAtMs comes from the daemon's hello.
+  return selfReportedStartMatches(startedAtMs, exactIncarnation.identity.startedAtMs)
     ? present('linux_identity_match', [
         'process_command_line',
         'process_start_time',
@@ -180,11 +175,8 @@ async function probeMacosProcess(
   if (startedAtMs === null) {
     return unknown('process_start_time_unavailable', ['process_start_time'])
   }
-  return startTimesWithinTolerance(
-    startedAtMs,
-    exactIncarnation.identity.startedAtMs,
-    POSIX_START_TIME_TOLERANCE_MS
-  )
+  // Why self-reported: identity.startedAtMs comes from the daemon's hello.
+  return selfReportedStartMatches(startedAtMs, exactIncarnation.identity.startedAtMs)
     ? present('macos_identity_match', [
         'process_command_line',
         'process_start_time',
