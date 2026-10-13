@@ -7,6 +7,9 @@ import {
 import { getPsProcessIdentity } from './daemon-process-identity-query'
 
 export const START_TIME_TOLERANCE_MS = 1_500
+/** How long a daemon's OS start may precede the start it reports (`Date.now() - uptime`): dyld,
+ *  Electron and node init, 3.52 s on a cold boot; capped at the daemon's first-start budget. */
+export const SELF_REPORTED_START_LEAD_MS = 30_000
 
 function getLinuxProcessStartedAtMs(pid: number): number | null {
   try {
@@ -69,11 +72,23 @@ export function getProcessStartedAtMs(pid: number): number | null {
   return getPsProcessIdentity(pid)?.startedAtMs ?? null
 }
 
+/** `expectedStartedAtMs` is the daemon's self-reported start (pid file or hello). */
 export function startTimeMatches(pid: number, expectedStartedAtMs: number | null): boolean {
-  return startTimesWithinTolerance(
-    getProcessStartedAtMs(pid),
-    expectedStartedAtMs,
-    START_TIME_TOLERANCE_MS
+  return selfReportedStartMatches(getProcessStartedAtMs(pid), expectedStartedAtMs)
+}
+
+// Why asymmetric: the OS start always precedes the self-reported one, while a reused pid's
+// process starts after the original died, so later. Fails open on null, like the symmetric check.
+export function selfReportedStartMatches(
+  osStartedAtMs: number | null,
+  reportedStartedAtMs: number | null
+): boolean {
+  if (osStartedAtMs === null || reportedStartedAtMs === null) {
+    return true
+  }
+  return (
+    osStartedAtMs >= reportedStartedAtMs - SELF_REPORTED_START_LEAD_MS &&
+    osStartedAtMs <= reportedStartedAtMs + START_TIME_TOLERANCE_MS
   )
 }
 

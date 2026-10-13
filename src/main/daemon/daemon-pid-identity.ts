@@ -6,7 +6,7 @@ import {
   queryWindowsProcessIdentity
 } from './daemon-process-identity-query'
 import {
-  START_TIME_TOLERANCE_MS,
+  selfReportedStartMatches,
   startTimeMatches,
   startTimesWithinTolerance
 } from './daemon-process-start-time'
@@ -17,6 +17,7 @@ import { PROTOCOL_VERSION } from './types'
 // the gap between them is the exe bootstrap, which AV/disk pressure can
 // stretch to seconds. Pid recycling differs by minutes-to-days, so a wide
 // tolerance keeps the guard effective without false mismatches.
+// Symmetric unlike POSIX (selfReportedStartMatches): the same lag, but Pod ships macOS only.
 const WIN32_START_TIME_TOLERANCE_MS = 10_000
 
 export function commandLineMatchesDaemon(
@@ -85,7 +86,7 @@ export async function inspectDaemonProcessIdentity(
     }
     return verdict(
       commandLineMatchesDaemon(identity.commandLine, socketPath, tokenPath) &&
-        startTimesWithinTolerance(identity.startedAtMs, startedAtMs, START_TIME_TOLERANCE_MS)
+        selfReportedStartMatches(identity.startedAtMs, startedAtMs)
     )
   }
 }
