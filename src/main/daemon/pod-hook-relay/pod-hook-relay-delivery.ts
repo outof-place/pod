@@ -1,8 +1,9 @@
 // Fork-only (Pod): what the relay does with one hook event, as Pod's command hook does it
 // (native/pod-agent-hook-macos/src/pod-agent-hook.c): the same request to the runtime's hook
 // server, read from the endpoint file at send time, or the same spool line when nothing answers.
+import { statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { request } from 'node:http'
+import { Agent, request } from 'node:http'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 import { spoolPodHookRelayEventAsync } from './pod-hook-relay-spool'
 
@@ -54,12 +55,31 @@ const ENDPOINT_SLOTS: [string, keyof Endpoint, number][] = [
   ['ORCA_AGENT_HOOK_TRANSPORT', 'transport', 64]
 ]
 
+/** Each endpoint file's text while its inode, mtime and size stay: the runtime replaces it by rename. */
+const endpointTexts = new Map<string, { stamp: string; text: string }>()
+
+async function readEndpointText(path: string): Promise<string | null> {
+  try {
+    // Why sync: one stat of a local file costs less than the loop turn an async one takes.
+    const stats = statSync(path, { bigint: true })
+    const stamp = `${stats.ino}:${stats.mtimeNs}:${stats.size}`
+    const cached = endpointTexts.get(path)
+    if (cached?.stamp === stamp) {
+      return cached.text
+    }
+    const text = await readFile(path, 'utf8')
+    endpointTexts.set(path, { stamp, text })
+    return text
+  } catch {
+    endpointTexts.delete(path)
+    return null
+  }
+}
+
 /** The endpoint file's KEY=value lines over the pane's own values, as the C client reads them. */
 async function readEndpoint(pane: PodHookRelayPane): Promise<Endpoint | null> {
-  let text: string
-  try {
-    text = await readFile(pane.endpoint, 'utf8')
-  } catch {
+  const text = await readEndpointText(pane.endpoint)
+  if (text === null) {
     return null
   }
   const endpoint: Endpoint = {
@@ -142,6 +162,9 @@ async function formBody(event: PodHookRelayEvent, endpoint: Endpoint): Promise<B
   return parts
 }
 
+/** One pool for every runtime: an event goes out on the connection the one before it left open. */
+const runtimeAgent = new Agent({ keepAlive: true })
+
 async function post(event: PodHookRelayEvent, endpoint: Endpoint): Promise<boolean> {
   const { pane } = event
   const raw = endpoint.transport === 'raw-json-v1'
@@ -167,43 +190,58 @@ async function post(event: PodHookRelayEvent, endpoint: Endpoint): Promise<boole
       }
   const body = raw ? [event.payload] : await formBody(event, endpoint)
   const length = body.reduce((sum, part) => sum + part.length, 0)
-  return new Promise((resolve) => {
-    const req = request(
-      {
-        host: '127.0.0.1',
-        port: Number(endpoint.port),
-        method: 'POST',
-        path: `/hook/${event.agent}`,
-        agent: false,
-        timeout: REQUEST_TIMEOUT_MS,
-        // As the C client's request, header for header (pod-hook-relay-parity.test.ts).
-        headers: {
-          'User-Agent': 'pod-agent-hook/1',
-          Accept: '*/*',
-          ...headers,
-          'Content-Length': String(length),
-          Connection: 'close'
+  const send = (): Promise<boolean | 'reset'> =>
+    new Promise((resolve) => {
+      let timedOut = false
+      const req = request(
+        {
+          host: '127.0.0.1',
+          port: Number(endpoint.port),
+          method: 'POST',
+          path: `/hook/${event.agent}`,
+          agent: runtimeAgent,
+          timeout: REQUEST_TIMEOUT_MS,
+          // As the C client's request, header for header (pod-hook-relay-parity.test.ts), but
+          // kept open: a fresh connection per event was a third of the relay's CPU.
+          headers: {
+            'User-Agent': 'pod-agent-hook/1',
+            Accept: '*/*',
+            ...headers,
+            'Content-Length': String(length)
+          }
+        },
+        (res) => {
+          // As curl -sS without -f: any answer is delivered. Read to the end: the socket goes back then.
+          res.resume()
+          resolve(true)
         }
-      },
-      (res) => {
-        // As curl -sS without -f: any answer is delivered.
-        res.resume()
-        resolve(true)
+      )
+      const giveUp = (): void => {
+        timedOut = true
+        req.destroy()
       }
-    )
-    const connectTimer = setTimeout(() => req.destroy(), CONNECT_TIMEOUT_MS)
-    req.on('socket', (socket) => socket.once('connect', () => clearTimeout(connectTimer)))
-    req.on('timeout', () => req.destroy())
-    req.on('error', () => {
-      clearTimeout(connectTimer)
-      resolve(false)
+      const connectTimer = setTimeout(giveUp, CONNECT_TIMEOUT_MS)
+      req.on('socket', (socket) => {
+        if (socket.connecting) {
+          socket.once('connect', () => clearTimeout(connectTimer))
+        } else {
+          clearTimeout(connectTimer)
+        }
+      })
+      req.on('timeout', giveUp)
+      req.on('error', (error: NodeJS.ErrnoException) => {
+        clearTimeout(connectTimer)
+        resolve(!timedOut && req.reusedSocket && error.code === 'ECONNRESET' ? 'reset' : false)
+      })
+      req.on('close', () => clearTimeout(connectTimer))
+      for (const part of body.slice(0, -1)) {
+        req.write(part)
+      }
+      req.end(body.at(-1))
     })
-    req.on('close', () => clearTimeout(connectTimer))
-    for (const part of body.slice(0, -1)) {
-      req.write(part)
-    }
-    req.end(body.at(-1))
-  })
+  const sent = await send()
+  // Why once more: the runtime closed an idle connection just as this event went out on it.
+  return sent === 'reset' ? (await send()) === true : sent
 }
 
 /** Delivered, or spooled when the runtime didn't answer. */
@@ -215,6 +253,8 @@ export async function deliverPodHookRelayEvent(
   if (endpoint && (await post(event, endpoint))) {
     return 'delivered'
   }
+  // The next event reads the file again, whatever its stamp says.
+  endpointTexts.delete(event.pane.endpoint)
   await spoolPodHookRelayEventAsync(event, now())
   return 'spooled'
 }
