@@ -7,6 +7,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -14,11 +15,11 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { claudeProfileKeychainServices } from '../claude-accounts/claude-profile-keychain-services'
 import {
+  copyClaudeProfileCredentials,
   listClaudeProfileIds,
-  moveClaudeProfileCredentials,
   type ClaudeCredentialsKeychainPort
-} from './claude-credentials-move'
-import { moveLegacyHome, PRODUCT_HOME_MOVE_RECORD } from './legacy-home-move'
+} from './claude-credentials-copy'
+import { copyLegacyHome, PRODUCT_HOME_COPY_RECORD } from './legacy-home-copy'
 
 // Why: this test never reaches a keychain. The port below is a map, every subprocess helper
 // throws, and a `security` shim first on PATH logs any call that slips past both.
@@ -82,8 +83,7 @@ function memoryKeychain(items: Record<string, string>, denied: string[] = []) {
       expect(account).toBe(ACCOUNT)
       store.set(service, secret)
       trusted.push(trustedAppPath)
-    },
-    deleteItem: (service, account) => account === ACCOUNT && store.delete(service)
+    }
   }
   return { keychain, store, trusted }
 }
@@ -98,14 +98,19 @@ function seedMac(options: { productHomeExists: boolean }) {
   mkdirSync(join(legacyHome, 'claude-agent-teams-bin'))
   writeFileSync(join(legacyHome, 'claude-agent-teams-bin', 'claude'), '#!/bin/sh\n')
   writeFileSync(join(legacyHome, 'keybindings.json'), '[]')
+  // State a running daemon or session may hold open: the copy must leave it where it is.
+  mkdirSync(join(legacyHome, 'terminal-history'))
+  writeFileSync(join(legacyHome, 'terminal-history', 'pane-1.log'), 'echo hi\n')
+  writeFileSync(join(legacyHome, 'daemon.pid'), '1329\n')
   if (options.productHomeExists) {
     mkdirSync(join(home, PRODUCT_HOME, 'bench'), { recursive: true })
   }
-  // The hooks Claude sessions started before the move run, as settings.json names them.
+  // The hooks running Claude sessions use, as settings.json names them, next to a foreign entry.
   mkdirSync(join(home, '.claude'))
+  const foreignHook = { type: 'command', command: join(home, 'bin', 'user-hook'), async: true }
   writeFileSync(
     join(home, '.claude', 'settings.json'),
-    `${JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: hookScript }] }] } })}\n`
+    `${JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: hookScript }, foreignHook] }] } }, null, 2)}\n`
   )
   const appData = join(home, 'Library', 'Application Support')
   const legacyUserData = join(appData, 'legacy')
@@ -118,8 +123,8 @@ function seedMac(options: { productHomeExists: boolean }) {
   return { legacyHome, hookScript, legacyUserData, productUserData, legacy, product }
 }
 
-function moveHome(productUserData: string, legacyAppPid: number | null = null) {
-  return moveLegacyHome({
+function copyHome(productUserData: string, legacyAppPid: number | null = null) {
+  return copyLegacyHome({
     home,
     legacyHomeDirName: LEGACY_HOME,
     productHomeDirName: PRODUCT_HOME,
@@ -128,12 +133,12 @@ function moveHome(productUserData: string, legacyAppPid: number | null = null) {
   })
 }
 
-function moveSignIns(
+function copySignIns(
   mac: ReturnType<typeof seedMac>,
   keychain: ClaudeCredentialsKeychainPort,
   legacyAppPid: number | null = null
 ) {
-  return moveClaudeProfileCredentials({
+  return copyClaudeProfileCredentials({
     profiles: listClaudeProfileIds(mac.productUserData).map((id) => ({
       id,
       legacyServices: claudeProfileKeychainServices(mac.legacyUserData, id, home).spellings,
@@ -146,6 +151,19 @@ function moveSignIns(
   })
 }
 
+/** Every file under `dir` with its bytes and mode, to prove a tree was left exactly as it was. */
+function snapshot(dir: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const entry of readdirSync(dir, { recursive: true, withFileTypes: true })) {
+    if (entry.isFile()) {
+      const path = join(entry.parentPath, entry.name)
+      const mode = (statSync(path).mode & 0o777).toString(8)
+      out[path.slice(dir.length)] = `${mode} ${readFileSync(path, 'base64')}`
+    }
+  }
+  return out
+}
+
 function settingsHookCommands(): string[] {
   const settings = JSON.parse(readFileSync(join(home, '.claude', 'settings.json'), 'utf8'))
   return settings.hooks.Stop.flatMap((group: { hooks: { command: string }[] }) =>
@@ -154,87 +172,97 @@ function settingsHookCommands(): string[] {
 }
 
 describe('pod-decouple migration in an isolated HOME', () => {
-  it('moves user state and sign-ins once, and live sessions keep their hooks', () => {
+  it('copies user state and sign-ins once, and leaves the legacy home and settings.json alone', () => {
     const mac = seedMac({ productHomeExists: true })
     const legacyAlias = mac.legacy.spellings.find((service) => service !== mac.legacy.canonical)
     expect(legacyAlias).toBeDefined()
     expect(mac.product.canonical).not.toBe(mac.legacy.canonical)
-    const { keychain, store, trusted } = memoryKeychain({
+    const legacyItems = {
       [mac.legacy.canonical]: TOKEN,
       [legacyAlias ?? '']: TOKEN,
       'Claude Code-credentials': 'the default profile, never touched'
-    })
+    }
+    const { keychain, store, trusted } = memoryKeychain(legacyItems)
+    const legacyBefore = snapshot(mac.legacyHome)
+    const settingsBefore = readFileSync(join(home, '.claude', 'settings.json'))
 
-    expect(moveHome(mac.productUserData)).toEqual({
-      status: 'merged',
-      moved: ['keybindings.json'],
+    expect(copyHome(mac.productUserData)).toEqual({
+      status: 'copied',
+      copied: ['daemon.pid', 'keybindings.json', 'terminal-history'],
       skipped: ['agent-hooks', 'claude-agent-teams-bin']
     })
-    expect(readdirSync(join(home, PRODUCT_HOME)).sort()).toEqual(['bench', 'keybindings.json'])
-    for (const command of settingsHookCommands()) {
-      expect(existsSync(command)).toBe(true)
-    }
+    expect(readdirSync(join(home, PRODUCT_HOME)).sort()).toEqual([
+      'bench',
+      'daemon.pid',
+      'keybindings.json',
+      'terminal-history'
+    ])
+    expect(snapshot(mac.legacyHome)).toEqual(legacyBefore)
+    // Running sessions still find every hook script settings.json names in the legacy home.
+    const legacyCommands = settingsHookCommands().filter((command) =>
+      command.startsWith(mac.legacyHome)
+    )
+    expect(legacyCommands).toEqual([mac.hookScript])
+    expect(existsSync(mac.hookScript)).toBe(true)
 
-    expect(moveSignIns(mac, keychain)).toEqual({
-      status: 'moved',
-      moved: [PROFILE],
-      denied: [],
-      legacyKept: []
-    })
-    expect(Object.fromEntries(store)).toEqual({
-      [mac.product.canonical]: TOKEN,
-      'Claude Code-credentials': 'the default profile, never touched'
-    })
+    expect(copySignIns(mac, keychain)).toEqual({ status: 'copied', copied: [PROFILE], denied: [] })
+    expect(Object.fromEntries(store)).toEqual({ ...legacyItems, [mac.product.canonical]: TOKEN })
     expect(trusted).toEqual([null])
 
     // A second launch changes nothing.
-    expect(moveHome(mac.productUserData)).toEqual({
+    expect(copyHome(mac.productUserData)).toEqual({
       status: 'not-needed',
       reason: 'already-recorded'
     })
-    expect(moveSignIns(mac, keychain)).toEqual({
+    expect(copySignIns(mac, keychain)).toEqual({
       status: 'not-needed',
       reason: 'no-legacy-sign-ins'
     })
-    expect(store.size).toBe(2)
+    expect(store.size).toBe(4)
+    expect(snapshot(mac.legacyHome)).toEqual(legacyBefore)
+    expect(readFileSync(join(home, '.claude', 'settings.json'))).toEqual(settingsBefore)
   })
 
-  it('creates the product home on a Mac without one and still leaves the hook scripts', () => {
+  it('creates the product home on a Mac without one, and records what to delete to undo', () => {
     const mac = seedMac({ productHomeExists: false })
-    expect(moveHome(mac.productUserData)).toMatchObject({
-      status: 'merged',
-      moved: ['keybindings.json']
+    expect(copyHome(mac.productUserData)).toMatchObject({
+      status: 'copied',
+      copied: ['daemon.pid', 'keybindings.json', 'terminal-history']
     })
     expect(existsSync(join(home, PRODUCT_HOME, 'keybindings.json'))).toBe(true)
+    expect(existsSync(join(home, PRODUCT_HOME, 'agent-hooks'))).toBe(false)
     expect(existsSync(mac.hookScript)).toBe(true)
     expect(
-      JSON.parse(readFileSync(join(mac.productUserData, PRODUCT_HOME_MOVE_RECORD), 'utf8'))
-    ).toMatchObject({ from: mac.legacyHome, to: join(home, PRODUCT_HOME) })
+      JSON.parse(readFileSync(join(mac.productUserData, PRODUCT_HOME_COPY_RECORD), 'utf8'))
+    ).toMatchObject({
+      from: mac.legacyHome,
+      to: join(home, PRODUCT_HOME),
+      result: { copied: ['daemon.pid', 'keybindings.json', 'terminal-history'] }
+    })
   })
 
-  it('touches nothing while the legacy app runs, and keeps a sign-in it may not read', () => {
+  it('touches nothing while the legacy app runs, and copies no sign-in it may not read', () => {
     const mac = seedMac({ productHomeExists: true })
     const running = memoryKeychain({ [mac.legacy.canonical]: TOKEN })
-    expect(moveHome(mac.productUserData, 501)).toEqual({
+    expect(copyHome(mac.productUserData, 501)).toEqual({
       status: 'deferred',
       reason: 'legacy-app-running',
       pid: 501
     })
-    expect(moveSignIns(mac, running.keychain, 501)).toEqual({
+    expect(copySignIns(mac, running.keychain, 501)).toEqual({
       status: 'deferred',
       reason: 'legacy-app-running',
       pid: 501
     })
-    expect(existsSync(join(mac.legacyHome, 'keybindings.json'))).toBe(true)
-    expect(existsSync(join(mac.productUserData, PRODUCT_HOME_MOVE_RECORD))).toBe(false)
+    expect(readdirSync(join(home, PRODUCT_HOME))).toEqual(['bench'])
+    expect(existsSync(join(mac.productUserData, PRODUCT_HOME_COPY_RECORD))).toBe(false)
     expect([...running.store.keys()]).toEqual([mac.legacy.canonical])
 
     const denied = memoryKeychain({ [mac.legacy.canonical]: TOKEN }, [mac.legacy.canonical])
-    expect(moveSignIns(mac, denied.keychain)).toEqual({
-      status: 'moved',
-      moved: [],
-      denied: [PROFILE],
-      legacyKept: []
+    expect(copySignIns(mac, denied.keychain)).toEqual({
+      status: 'copied',
+      copied: [],
+      denied: [PROFILE]
     })
     expect([...denied.store.keys()]).toEqual([mac.legacy.canonical])
   })

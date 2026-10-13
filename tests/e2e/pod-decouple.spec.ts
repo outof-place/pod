@@ -66,6 +66,6 @@ test('a fresh product profile keeps per-user state in its own home and exports o
   expect(existsSync(path.join(home, LEGACY_HOME))).toBe(false)
   const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   expect(
-    JSON.parse(readFileSync(path.join(userData, 'product-home-move.json'), 'utf8'))
+    JSON.parse(readFileSync(path.join(userData, 'product-home-copy.json'), 'utf8'))
   ).toMatchObject({ result: { status: 'not-needed', reason: 'no-legacy-home' } })
 })
