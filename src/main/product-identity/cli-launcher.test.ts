@@ -20,6 +20,10 @@ const installer: unknown = require('../../../product/cli-launchers/install-cli-l
 const installCliLaunchers: unknown = Reflect.get(Object(installer), 'installCliLaunchers')
 const patchCliLauncher: unknown = Reflect.get(Object(installer), 'patchCliLauncher')
 const UPSTREAM_LAUNCHER = join(__dirname, '../../../resources/darwin/bin/orca')
+// Why from the launcher: POD_ once pod-decouple has run over the tree, ORCA_ before.
+const TREE_PREFIX = readFileSync(UPSTREAM_LAUNCHER, 'utf8').includes('POD_NODE_OPTIONS')
+  ? 'POD_'
+  : 'ORCA_'
 
 // Real path: the launcher resolves /var to /private/var.
 const root = realpathSync(mkdtempSync(join(tmpdir(), 'pod-cli-launcher-')))
@@ -40,7 +44,8 @@ function bundle(appPath: string, executableName: string): string {
   }
   installCliLaunchers(join(contents, 'Resources'), executableName, {
     cliName: 'podx',
-    userDataName: 'Pod'
+    userDataName: 'Pod',
+    envPrefix: 'POD_'
   })
   return bin
 }
@@ -71,7 +76,9 @@ describe.skipIf(process.platform === 'win32')('Pod CLI launcher', () => {
   it('ships the CLI under its product name only, with the env prefix the tree uses', () => {
     const bin = bundle(join(root, 'Named.app'), 'Pod')
     expect(existsSync(join(bin, 'orca'))).toBe(false)
-    expect(readFileSync(join(bin, 'podx'), 'utf8')).toContain('export ORCA_USER_DATA_PATH=')
+    expect(readFileSync(join(bin, 'podx'), 'utf8')).toContain(
+      `export ${TREE_PREFIX}USER_DATA_PATH=`
+    )
     if (typeof patchCliLauncher !== 'function') {
       throw new Error('install-cli-launchers.cjs exports no patchCliLauncher')
     }
