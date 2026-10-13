@@ -18,6 +18,7 @@
     "../src/main/qwen-code/hook-service.ts",
     "../src/main/codebuddy/hook-service.ts",
     "../src/main/agent-hooks/hook-stdin-contract.ts",
+    "../src/main/pod/decouple/legacy-hook-env.ts",
     "../src/main/agent-hooks/hook-post-command.ts",
     "../src/main/agent-hooks/hook-process-capture.ts",
     "../src/main/agent-hooks/hook-config-write-path.ts",
