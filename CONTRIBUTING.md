@@ -1,8 +1,8 @@
 # Contributing to Pod
 
 Pod is Orca's code at a pinned `main` commit plus a stack of Pod patches; the sync with Orca ended
-on 2026-10-13. Orca's [contributing guide](.github/CONTRIBUTING.md) covers setup, code standards and
-pull requests, and all of it applies here. This file adds what is specific to Pod.
+on 2026-10-13. Orca's [contributing guide](.github/CONTRIBUTING.md) covers setup and code standards,
+which apply here; its pull request process does not. This file adds what is specific to Pod.
 
 ## Branch model
 
@@ -55,9 +55,9 @@ New entries are `Fork-only`. `Upstream` stays only on the older entries that wer
   change), the run stops and names the files. Rebase the branch, or give its entry a `base` that
   excludes the old copy. An entry's `base` may be one ref or a list, and `ref` pins an entry to a
   commit for a snapshot run.
-- An upstream pull request branch that maintainers update by merging Orca `main` into it gets
-  `"squash": true`: it is stacked as one commit, its net change since the Orca commit it last
-  merged, because a commit-by-commit replay would lose the merges' conflict resolutions.
+- An entry with `"squash": true`, an older branch with Orca `main` merged into it, is stacked as one
+  commit: its net change since the Orca commit it last merged, because a commit-by-commit replay
+  would lose the merges' conflict resolutions.
 - Before it changes any ref, `pod-stack.sh` checks coverage. A pinned `ref` must contain its branch
   tip, unless the entry says why in `"hold"`. A `stack/*` copy names its `"source"` branch, and every
   commit of that branch must be in the result. A miss exits with code 4.
@@ -66,8 +66,6 @@ New entries are `Fork-only`. `Upstream` stays only on the older entries that wer
   Every assembly drops the old layer and runs the codemod again, so the layer never conflicts. A
   codemod that fails, or whose `check` command finds work left, stops the run with nothing
   committed.
-- A pull request that Orca has merged leaves the manifest. Squash merges are not caught by the
-  patch-id dedupe, so check that the merged commit matches the branch, then drop the entry.
 - The [Pod check](.github/workflows/pod-check.yml) workflow runs the typecheck, the unit tests and
   the macOS build on a branch or commit, on demand only:
   `gh workflow run pod-check.yml -R outof-place/pod -f ref=main`.
