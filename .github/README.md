@@ -37,8 +37,8 @@ brew install --cask outof-place/tap/pod
 ## Relationship to Orca
 
 Pod is a downstream macOS distribution of [Orca](https://github.com/stablyai/orca) by Stably AI,
-released under the MIT license. Orca does the heavy lifting. Pod is the newest commit on Orca's
-`main` that passed Orca's own CI, plus a short, linear stack of patches that adds:
+released under the MIT license. Orca does the heavy lifting. Pod is one commit on Orca's `main`
+that passed Orca's own CI, plus a linear stack of patches that adds:
 
 - the native Ghostty terminal and other macOS-only work;
 - the Pod identity: name, icon, bundle id `codes.pod.app`, `pod://` links and the `podx` CLI;
@@ -46,35 +46,12 @@ released under the MIT license. Orca does the heavy lifting. Pod is the newest c
 - claude-acc built in (in progress);
 - its own signed builds and update feed.
 
-### What we send upstream
-
-Anything generic goes to Orca as a pull request first. Status updates live:
-
-| Orca pull request | Change | Status |
-| --- | --- | --- |
-| [#26914](https://github.com/stablyai/orca/pull/26914) | Experimental native Ghostty terminal view on macOS | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26914?label=) |
-| [#26927](https://github.com/stablyai/orca/pull/26927) | Name Multipass recipe VMs and emit an SSH connection | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26927?label=) |
-| [#26945](https://github.com/stablyai/orca/pull/26945) | Build the Computer Use helper with Swift 6.4's default build system | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26945?label=) |
-| [#26953](https://github.com/stablyai/orca/pull/26953) | Status bar items and live panel messaging for plugins | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26953?label=) |
-| [#26956](https://github.com/stablyai/orca/pull/26956) | Keep xterm parse barriers, and the output behind them, across a resize | ![status](https://img.shields.io/github/pulls/detail/state/stablyai/orca/26956?label=) |
-
-All of them: [pull requests from outof-place on stablyai/orca](https://github.com/stablyai/orca/pulls?q=is%3Apr+author%3Aoutof-place).
-
-### Upstream first
-
-- A change that would help Orca users goes to Orca as a pull request before, or alongside, Pod.
-- Pod carries a patch only until it lands on Orca's `main`, then drops it on the next rebase.
-- Only Pod's identity, packaging, update feed and product decisions stay fork-only.
-- Every commit on `main` says which kind it is, in a trailer:
-  `Upstream: <Orca pull request URL>` or `Fork-only: <reason>`.
-
 ### Where to report bugs
 
-1. Reproduce the problem on the official [Orca](https://onorca.dev) build first.
-2. If it happens there too, it is an Orca bug: report it to
-   [stablyai/orca](https://github.com/stablyai/orca/issues). Please don't send Pod reports to the Orca team.
-3. If it happens only in Pod, open an issue [here](https://github.com/outof-place/pod/issues).
-4. Report security problems privately through
+1. Bugs in Pod: open an issue [here](https://github.com/outof-place/pod/issues).
+2. Bugs in Claude Code itself, also when it runs in Pod: report them to
+   [anthropics/claude-code](https://github.com/anthropics/claude-code/issues).
+3. Report security problems privately through
    [a security advisory](https://github.com/outof-place/pod/security/advisories/new), not in a public issue.
 
 Pod is not affiliated with or endorsed by Stably AI or Lovecast Inc. Orca is their trademark.
@@ -89,7 +66,7 @@ Pod is not affiliated with or endorsed by Stably AI or Lovecast Inc. Orca is the
 | Branch | What it is |
 | --- | --- |
 | `main` (default) | The product: a green Orca `main` commit plus the Pod stack. |
-| `feat/*`, `fix/*`, `perf/*` and other Orca-style names | One branch per Orca pull request. |
+| `feat/*`, `fix/*`, `perf/*` and other Orca-style names | Older changes once sent to Orca, still in the stack. |
 | `pod/*` | Pod-only work, one branch per change. |
 
 ## Build from source
@@ -107,12 +84,12 @@ pnpm dev            # run from source
 pnpm build:unpack   # build an unsigned, unpacked app
 ```
 
-Orca's [contributing guide](CONTRIBUTING.md) covers the toolchain in depth; all of it applies to Pod.
+Orca's [contributing guide](CONTRIBUTING.md) covers the toolchain in depth.
 
 ## Contributing
 
-Read [CONTRIBUTING.md](../CONTRIBUTING.md) first. The short version: if your change would help every
-Orca user, it belongs in [Orca](https://github.com/stablyai/orca), and Pod picks it up from there.
+Read [CONTRIBUTING.md](../CONTRIBUTING.md) first. The short version: Pod work goes on a `pod/*`
+branch in this repository, one branch per change.
 
 ## License
 
