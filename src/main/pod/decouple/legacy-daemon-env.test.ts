@@ -9,6 +9,7 @@ import {
   startDaemonAdapterHarness,
   type DaemonAdapterHarness
 } from '../../daemon/daemon-pty-adapter-test-harness'
+import { ENV_DECOUPLED } from '../../../shared/pod-legacy-env-names'
 import {
   daemonReadsLegacyEnv,
   spawnOptionsForDaemon,
@@ -36,9 +37,10 @@ describe('spawn env for a daemon from before the decouple', () => {
     expect(daemonReadsLegacyEnv({ ...IDENTITY, terminalHandleEnv: 'OTHER_HANDLE' })).toBe(true)
   })
 
-  it('adds the ORCA_ twin of each POD_ name and keeps a twin the env sets itself', () => {
+  it.runIf(ENV_DECOUPLED)('adds the ORCA_ twin of each renamed name, keeping one the env sets', () => {
     expect(
       withLegacyEnvTwins({
+        [current('AGENT_TREE')]: '1',
         [current('TERMINAL_HANDLE')]: 'term-1',
         [current('HISTFILE')]: '/h/zsh_history',
         [current('PANE_KEY')]: 'tab-1:pane',
@@ -46,6 +48,8 @@ describe('spawn env for a daemon from before the decouple', () => {
         SHELL: '/bin/zsh'
       })
     ).toEqual({
+      // Fork-only: POD_ before the decouple too, so no daemon reads an ORCA_ spelling of it.
+      [current('AGENT_TREE')]: '1',
       [current('TERMINAL_HANDLE')]: 'term-1',
       [legacy('TERMINAL_HANDLE')]: 'term-1',
       [current('HISTFILE')]: '/h/zsh_history',
@@ -86,17 +90,17 @@ describe('a spawn through the adapter', () => {
     received = []
   })
 
-  async function spawnThroughAdapter(): Promise<void> {
+  async function spawnThroughAdapter(
+    request: { env: Record<string, string>; envToDelete: string[] } = {
+      env: { [current('TERMINAL_HANDLE')]: 'term-1', [current('SHELL_FEATURES')]: 'history' },
+      envToDelete: [current('HISTFILE')]
+    }
+  ): Promise<void> {
     harness = await startDaemonAdapterHarness((opts: HostSpawnOptions) => {
       received.push({ env: opts.env, envToDelete: opts.envToDelete })
       return createMockSubprocess()
     })
-    await harness.adapter.spawn({
-      cols: 80,
-      rows: 24,
-      env: { [current('TERMINAL_HANDLE')]: 'term-1', [current('SHELL_FEATURES')]: 'history' },
-      envToDelete: [current('HISTFILE')]
-    })
+    await harness.adapter.spawn({ cols: 80, rows: 24, ...request })
   }
 
   it("sends POD_ only to a daemon whose hello names this build's handle env", async () => {
@@ -109,7 +113,7 @@ describe('a spawn through the adapter', () => {
     ])
   })
 
-  it('sends both spellings to a daemon whose hello names no handle env', async () => {
+  it.runIf(ENV_DECOUPLED)('sends both spellings to a daemon whose hello names no handle env', async () => {
     const real = DaemonClient.prototype.getDaemonIdentity
     vi.spyOn(DaemonClient.prototype, 'getDaemonIdentity').mockImplementation(function (
       this: DaemonClient
