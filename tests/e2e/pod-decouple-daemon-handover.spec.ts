@@ -220,6 +220,67 @@ test.describe('an update that adopts a daemon from before the decouple', () => {
     )
   })
 
+  test("a daemon started from a live Pod's pane keeps that pane's ORCA_ env out", async () => {
+    test.setTimeout(120_000)
+    const requests: HookRequest[] = []
+    const { server, port } = await startHookServer(requests)
+    try {
+      // The live Pod's hook server, published as that Pod publishes it.
+      const liveDir = path.join(runtime.rootDir, 'live-pod', 'agent-hooks')
+      mkdirSync(liveDir, { recursive: true })
+      const liveEndpoint = path.join(liveDir, getEndpointFileName())
+      expect(
+        writeEndpointFile(liveDir, liveEndpoint, {
+          port,
+          token: 'live-pod-token',
+          env: 'production',
+          version: '1'
+        })
+      ).toBe(true)
+      const inherited = ['AGENT_HOOK_ENDPOINT', 'PANE_KEY', 'AGENT_LAUNCH_TOKEN']
+      const fresh = await launchFixtureDaemon({
+        runtime,
+        entryPath: runtime.entryPath,
+        label: 'decoupled',
+        protocolVersion: PROTOCOL,
+        inheritedEnv: {
+          [legacy('AGENT_HOOK_ENDPOINT')]: liveEndpoint,
+          [legacy('PANE_KEY')]: 'tab-9:live-pane',
+          [legacy('AGENT_LAUNCH_TOKEN')]: 'live-launch'
+        }
+      })
+      daemons.push(fresh)
+      // A dev receiver without an endpoint file names none.
+      const terminal = await spawnShell(
+        fresh,
+        shellEnv(runtime, {
+          [current('AGENT_HOOK_ENV')]: 'development',
+          [current('AGENT_HOOK_VERSION')]: '1',
+          [current('PANE_KEY')]: PANE,
+          [current('TAB_ID')]: 'tab-1'
+        }),
+        runtime.rootDir
+      )
+      terminals.push(terminal)
+      for (const [index, name] of inherited.entries()) {
+        expect(await shellValue(terminal, `IN${index}`, `\${${legacy(name)}-none}`)).toBe('none')
+      }
+      const client = await compileHookClient(
+        path.join(runtime.rootDir, 'pod-agent-hook'),
+        'current'
+      )
+      terminal.adapter.write(
+        terminal.id,
+        `printf '%s' '{"hook_event_name":"Stop"}' | '${client}'\r`
+      )
+      // The client answers synchronously, so once the shell runs the next line it is done.
+      await shellValue(terminal, 'SENT', '${?}')
+      expect(requests).toEqual([])
+    } finally {
+      await new Promise((resolve) => server.close(resolve))
+    }
+  })
+
   test('claude in a terminal from before the update still reports its status', async () => {
     test.setTimeout(120_000)
     const old = await launchFixtureDaemon({

@@ -88,6 +88,8 @@ export async function launchFixtureDaemon(options: {
   entryPath: string
   label: string
   protocolVersion: number
+  /** Env the daemon inherits on purpose, e.g. what a live Pod's pane gives a dev runtime. */
+  inheritedEnv?: Record<string, string>
 }): Promise<FixtureDaemon> {
   const { runtime, entryPath, label, protocolVersion } = options
   const daemonDir = path.join(runtime.rootDir, `${label}-daemon`)
@@ -122,6 +124,7 @@ export async function launchFixtureDaemon(options: {
       execPath: runtime.electronPath,
       env: {
         ...env,
+        ...options.inheritedEnv,
         ELECTRON_RUN_AS_NODE: '1',
         NODE_PATH: path.join(process.cwd(), 'node_modules'),
         [legacy('USER_DATA_PATH')]: runtime.userDataDir,

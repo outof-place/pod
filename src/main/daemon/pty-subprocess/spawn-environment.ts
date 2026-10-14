@@ -27,6 +27,7 @@ import {
   expandWindowsPathEnvironmentVariables
 } from '../../../shared/windows-environment-expansion'
 import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-scrub-safe-env'
+import { stripInheritedLegacyEnv } from '../../../shared/pod-legacy-env-names'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { PtySubprocessOptions } from '../pty-subprocess'
 
@@ -171,6 +172,8 @@ function removeInheritedDevAgentHookEndpoint(
 /** A persistent daemon's inherited environment cannot supply ownership for a new pane. */
 export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<string, string> {
   const inheritedEnv = stripInheritedBuildModeEnv(process.env)
+  // Fork-only (Pod): inherited ORCA_ spellings would reach the dual-read hook clients (pod-decouple).
+  stripInheritedLegacyEnv(inheritedEnv)
   restoreManagedDataAccountEnvironment(inheritedEnv)
   const env: Record<string, string> = {
     ...mergeGitConfigEnvProtocol(inheritedEnv, opts.env),

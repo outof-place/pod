@@ -12,6 +12,7 @@ import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeInheritedTerminalSessionEnv } from '../pty/terminal-session-env'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { applyScrubSafeAgentEnvAliases } from '../../shared/agent-hook-scrub-safe-env'
+import { stripInheritedLegacyEnv } from '../../shared/pod-legacy-env-names'
 import { removeUnspecifiedPaneIdentityEnv } from './local-pty-launch-helpers'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
@@ -26,6 +27,8 @@ export function buildLocalPtySpawnEnvironment(args: {
 }): Record<string, string> | Promise<Record<string, string>> {
   const { id, spawn, getOptions, plan } = args
   const inheritedEnv = stripInheritedBuildModeEnv(process.env)
+  // Fork-only (Pod): inherited ORCA_ spellings would reach the dual-read hook clients (pod-decouple).
+  stripInheritedLegacyEnv(inheritedEnv)
   restoreManagedDataAccountEnvironment(inheritedEnv)
   const spawnEnv: Record<string, string> = {
     ...mergeGitConfigEnvProtocol(inheritedEnv, spawn.env),
