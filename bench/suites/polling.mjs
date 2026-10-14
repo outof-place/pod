@@ -159,6 +159,10 @@ const methods = {
   'node-ps-all': async () => ({
     us: await nodePs(['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command='])
   }),
+  // Orca's cheap tier (CHEAP_PS_ARGS) from Node: what Pod's listProcesses() replaces.
+  'node-ps-cheap': async () => ({
+    us: await nodePs(['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,lstart='])
+  }),
   ...(addon
     ? {
         'addon-read-process': async () => ({ us: addonCalls(() => addon.readProcess(rootPid)) }),
@@ -170,6 +174,22 @@ const methods = {
     : {})
 }
 
+// run-final.sh --runtime-only: only the reads Pod's runtime makes, against the ps forks Orca makes
+// for the same reads. Pod 1.0 reads a pane's terminal rows with listTerminalProcesses(tty) on every
+// poll and the cheap process table with listProcesses(); its terminal lookup is once per pane and
+// falls back to ps on a cold tty-name cache, and the full table still forks ps, so those rows and
+// the reference C implementations (ttyprobe) are left out.
+const RUNTIME_METHODS = ['node-ps-rows', 'addon-list-terminal', 'node-ps-cheap', 'addon-list-processes']
+if (process.env.POD_BENCH_SCOPE === 'runtime') {
+  if (!addon) {
+    throw new Error('--runtime-only needs the Pod build\'s proc-info addon')
+  }
+  for (const name of Object.keys(methods)) {
+    if (!RUNTIME_METHODS.includes(name)) {
+      delete methods[name]
+    }
+  }
+}
 const perCall = Object.fromEntries(Object.keys(methods).map((name) => [name, []]))
 const correctness = {}
 const samples = await collectSamples({
@@ -244,6 +264,10 @@ const subjects = {
     'Orca 1.4.223 way from Node: execFile `ps -axo ...` (PS_ARGS)',
     'whole process table (PS_ARGS)'
   ],
+  'node-ps-cheap': [
+    'Orca 1.4.223 cheap tier from Node: execFile `ps -axo pid=,ppid=,pgid=,tpgid=,stat=,lstart=`',
+    'cheap process table (no tty or command)'
+  ],
   'addon-read-process': ['Pod proc-info addon: readProcess(pid) from Node', 'terminal lookup'],
   'addon-list-terminal': [
     'Pod proc-info addon: listTerminalProcesses(tty) from Node',
@@ -251,7 +275,9 @@ const subjects = {
   ],
   'addon-list-processes': [
     'Pod proc-info addon: listProcesses() from Node',
-    'whole process table (PS_ARGS)'
+    process.env.POD_BENCH_SCOPE === 'runtime'
+      ? 'cheap process table (no tty or command)'
+      : 'whole process table (PS_ARGS)'
   ]
 }
 const metrics = Object.keys(methods).map((name) => ({
@@ -275,10 +301,29 @@ const metrics = Object.keys(methods).map((name) => ({
           'A reference C implementation in bench/tools/ttyprobe.c, not code that ships in Pod.'
         ]
       }
+    : {}),
+  ...(name === 'addon-list-processes' && process.env.POD_BENCH_SCOPE === 'runtime'
+    ? {
+        caveats: [
+          "Pod's runtime makes this call on a worker thread; the row times the addon call itself, without the worker message."
+        ]
+      }
     : {})
 }))
 
-const comparisons = [
+const RUNTIME_COMPARISONS = [
+  {
+    baseline: 'polling.node-ps-rows',
+    candidate: 'polling.addon-list-terminal',
+    label: 'terminal process rows, every poll: Orca forks ps vs Pod addon'
+  },
+  {
+    baseline: 'polling.node-ps-cheap',
+    candidate: 'polling.addon-list-processes',
+    label: 'cheap process table: Orca forks ps vs Pod addon'
+  }
+]
+const fullComparisons = [
   {
     baseline: 'polling.c-ps-tty',
     candidate: 'polling.c-sysctl-tty',
@@ -314,6 +359,7 @@ const comparisons = [
       ]
     : [])
 ]
+const comparisons = process.env.POD_BENCH_SCOPE === 'runtime' ? RUNTIME_COMPARISONS : fullComparisons
 
 writeSuiteResult(SUITE, {
   // ps' tty= cost follows the open terminals: label which machine state each suite stands for.
