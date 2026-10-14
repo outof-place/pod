@@ -138,8 +138,9 @@ node -e '
 ' "$POD_BENCH_OUT/run.json" "$pod" "$pod_commit" "$pod_profile" "$orca" "$inputs" "$coming" "$scope"
 
 if [ "$runtime_only" = 1 ]; then
-  # Only the subjects the runtime suites launch (browser).
-  node "$here/suites/preflight.mjs" --subjects orca,pod-native
+  # Only the subjects the runtime suites launch (browser). The runtime's own Electron terminal
+  # setting does not matter there, so Pod runs with its default (pod-xterm: setting off).
+  node "$here/suites/preflight.mjs" --subjects orca,pod-xterm
 else
   node "$here/suites/preflight.mjs"
 fi
@@ -168,7 +169,11 @@ if [ "$runtime_only" = 0 ]; then
   run_suite panes
   run_suite throughput
 fi
-run_suite browser
+if [ "$runtime_only" = 1 ]; then
+  run_suite browser --subjects orca,pod-xterm
+else
+  run_suite browser
+fi
 if [ "$runtime_only" = 0 ]; then
   echo "==> claude-acc (historical + fresh)"
   node "$here/suites/claude-acc.mjs" --fresh
