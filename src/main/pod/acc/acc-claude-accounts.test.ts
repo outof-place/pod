@@ -10,6 +10,8 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { runProcess, spawnProcess } from '@orca/process-host'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import {
   claudeAccMessage,
   claudeAccPaths,
@@ -110,6 +112,7 @@ describe('parseClaudeAccSnapshot', () => {
   })
 
   it('is null for anything but a snapshot', () => {
+    expect(parseClaudeAccSnapshot({ accounts: [], orca_selected: 'a@x' })?.podSelected).toBe('a@x')
     expect(parseClaudeAccSnapshot({ accounts: 'no' })).toBeNull()
     expect(parseClaudeAccSnapshot(null)).toBeNull()
   })
@@ -127,7 +130,12 @@ describe('PodClaudeAccAccounts', () => {
     const { accounts, paths } = claudeAcc()
     expect((await accounts.list()).accounts.map((a) => a.email)).toEqual(['a@x', 'b@x', 'p@x'])
     rmSync(join(paths.state, 'status.json'))
-    expect(await accounts.list()).toEqual({ available: false, generatedAt: null, accounts: [] })
+    expect(await accounts.list()).toEqual({
+      available: false,
+      generatedAt: null,
+      accounts: [],
+      podSelected: null
+    })
   })
 
   it('adds through `claude-acc add` and shows the fresh status right away', async () => {
@@ -166,6 +174,32 @@ describe('PodClaudeAccAccounts', () => {
     expect(result.ok).toBe(false)
     expect(result.message).toContain('c@x')
     expect(result.state.accounts.map((a) => a.email)).toEqual(['a@x', 'b@x', 'p@x'])
+  })
+
+  it('refuses without $STATE/python instead of falling back to /usr/bin/python3', async () => {
+    const { accounts, paths } = claudeAcc()
+    rmSync(paths.python)
+
+    for (const result of [await accounts.add(), await accounts.switchTo('b@x')]) {
+      expect(result.ok).toBe(false)
+      expect(result.message).toContain("claude-acc isn't installed")
+    }
+  })
+
+  it('runs switch and status with no timeout, so nothing kills them mid-write', async () => {
+    const { paths } = claudeAcc()
+    const specs: ProcessSpec[] = []
+    const accounts = new PodClaudeAccAccounts(paths, spawnProcess, (spec, capture) => {
+      specs.push(spec)
+      return runProcess(spec, capture)
+    })
+
+    expect((await accounts.switchTo('b@x')).ok).toBe(true)
+
+    expect(specs.map((spec) => [spec.args?.at(2), spec.timeoutMs])).toEqual([
+      ['switch', null],
+      ['status', null]
+    ])
   })
 
   it('switches by address only: a flag never reaches accswitch', async () => {

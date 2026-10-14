@@ -37,6 +37,8 @@ export type PodClaudeAccState = {
   /** Unix seconds of the snapshot. */
   generatedAt: number | null
   accounts: PodClaudeAccAccount[]
+  /** An account Pod itself has selected: claude-acc's auto-switch stands still while it is. */
+  podSelected: string | null
 }
 
 export type PodClaudeAccResult = {
