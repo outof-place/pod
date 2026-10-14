@@ -2,6 +2,7 @@
 // host selection left from before (which halts claude-acc's switching) is cleared at start.
 import type { ClaudeAccountStore } from '../../claude-accounts/claude-account-selection'
 import type { ClaudeAccountService } from '../../claude-accounts/service'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { getProductIdentity } from '../../product-identity/product-identity'
 import { PodClaudeAccountsManagedError } from '../../../shared/pod-claude-accounts-managed'
 
@@ -58,4 +59,33 @@ export function clearPodClaudeHostSelection(
     `cleared Pod's Claude account selection (host ${host ?? 'none'}, legacy ${legacy ?? 'none'}): claude-acc picks the account`
   )
   return true
+}
+
+let loggedSelectionDrop = false
+
+/** settings:set and podSettings.set take any partial: none may store a host selection in Pod. */
+export function podDropClaudeHostSelection(
+  args: Partial<GlobalSettings>,
+  isPod = getProductIdentity() !== null,
+  log: (message: string) => void = (message) => console.log(`[pod] ${message}`)
+): Partial<GlobalSettings> {
+  if (
+    !isPod ||
+    !('activeClaudeManagedAccountId' in args || 'activeClaudeManagedAccountIdsByRuntime' in args)
+  ) {
+    return args
+  }
+  const next = { ...args }
+  delete next.activeClaudeManagedAccountId
+  if (next.activeClaudeManagedAccountIdsByRuntime) {
+    next.activeClaudeManagedAccountIdsByRuntime = {
+      host: null,
+      wsl: { ...next.activeClaudeManagedAccountIdsByRuntime.wsl }
+    }
+  }
+  if (!loggedSelectionDrop) {
+    loggedSelectionDrop = true
+    log('dropped a Claude account selection from a settings write: claude-acc picks the account')
+  }
+  return next
 }
