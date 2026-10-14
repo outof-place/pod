@@ -4,8 +4,14 @@ import type { Store } from '../../persistence'
 import { registerSettingsHandlersOnce } from './pod-settings-registration'
 import { getPodSettingsWriter, podSettingsWritePath } from './pod-settings-writer'
 
-const { registerSettingsHandlers } = vi.hoisted(() => ({ registerSettingsHandlers: vi.fn() }))
+const { registerSettingsHandlers, identity } = vi.hoisted(() => ({
+  registerSettingsHandlers: vi.fn(),
+  identity: { pod: false }
+}))
 vi.mock('../../ipc/settings', () => ({ registerSettingsHandlers }))
+vi.mock('../../product-identity/product-identity', () => ({
+  getProductIdentity: () => (identity.pod ? { displayName: 'Pod' } : null)
+}))
 
 function stubStore(): Store {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registerSettingsHandlers is mocked; the store is only a WeakSet key here.
@@ -20,6 +26,21 @@ describe('podSettings write path', () => {
     expect(write).toHaveBeenLastCalledWith({ theme: 'dark' }, 7)
     await getPodSettingsWriter()?.({ theme: 'light' })
     expect(write).toHaveBeenLastCalledWith({ theme: 'light' })
+  })
+
+  it('drops a Claude host selection from both writes in Pod', async () => {
+    identity.pod = true
+    const write = vi.fn(async () => getDefaultSettings('/Users/e2e'))
+    const listener = podSettingsWritePath(write)
+    await listener({ sender: { id: 7 } }, { theme: 'dark', activeClaudeManagedAccountId: 'p1' })
+    expect(write).toHaveBeenLastCalledWith({ theme: 'dark' }, 7)
+    await getPodSettingsWriter()?.({
+      activeClaudeManagedAccountIdsByRuntime: { host: 'p1', wsl: {} }
+    })
+    expect(write).toHaveBeenLastCalledWith({
+      activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+    })
+    identity.pod = false
   })
 
   it('registers the settings handlers once per store', () => {
