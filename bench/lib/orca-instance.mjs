@@ -41,8 +41,10 @@ const REAL_PROFILE = path.join(HOME, 'Library/Application Support/orca')
 // at the end (pod-tmp-rm), so nothing is deleted while the run goes on.
 // Without run-final.sh's base, each process gets its own run dir: a shared base would let one run's
 // argv sweep reach another's processes.
+// The dir is created on first use (createProfile), not at import.
 export const PROFILE_BASE =
-  process.env.POD_BENCH_PROFILE_BASE ?? path.join(mkdtempSync('/private/tmp/pod-bench.'), 'p')
+  process.env.POD_BENCH_PROFILE_BASE ??
+  `/private/tmp/pod-bench.${process.pid}.${Date.now().toString(36)}/p`
 // Never signal a program under these, whatever its argv says.
 const PROTECTED_PROGRAMS = ['/Applications/', path.join(HOME, 'Library/Application Support/Pod/')]
 const REPO_ROOT = path.dirname(BENCH_ROOT)
