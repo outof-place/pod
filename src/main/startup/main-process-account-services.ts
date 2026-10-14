@@ -31,10 +31,8 @@ import { prewarmStructuredAgentModelCatalogs } from '../runtime/structured-agent
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createAgentModelCatalogSettingsExpiry } from '../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
 import { mainProcessState as state } from './main-process-state'
-import {
-  clearPodClaudeHostSelection,
-  podGuardClaudeAccounts
-} from '../pod/acc/pod-claude-accounts-gate'
+import { podGuardClaudeAccounts } from '../pod/acc/pod-claude-accounts-gate'
+import { clearPodClaudeHostSelection } from '../claude-accounts/pod-claude-host-selection'
 
 // Settings that change which account or binary a new chat's agent runs under.
 const MODEL_CATALOG_ACCOUNT_SETTINGS = [
