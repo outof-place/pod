@@ -10,6 +10,7 @@ import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { OldTerminalDialog } from './OldTerminalDialog'
 import { openTerminalBesideTab } from './open-terminal-beside-tab'
 import { PaneBannerLearnMore, PaneTopWarningBanner } from './PaneTopWarningBanner'
+import { isPodClaudeAccAccounts } from '../settings/pod-claude-acc-accounts-section'
 
 // Why module scope: a pane remounts on tab switches, and Dismiss must hold for the app session.
 const dismissedPtyIds = new Set<string>()
@@ -18,7 +19,8 @@ const dismissedPtyIds = new Set<string>()
 // matches a new one. A key, so a switch asks again whether this terminal runs another account.
 function selectedClaudeAccountKey(state: AppState): string | null {
   const settings = state.settings
-  if (!settings || settings.claudeManagedAccounts.length === 0) {
+  // Fork-only (Pod): claude-acc switches System default's login itself, so every terminal follows it.
+  if (!settings || isPodClaudeAccAccounts() || settings.claudeManagedAccounts.length === 0) {
     return null
   }
   const selection = settings.activeClaudeManagedAccountIdsByRuntime

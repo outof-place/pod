@@ -31,6 +31,10 @@ import { prewarmStructuredAgentModelCatalogs } from '../runtime/structured-agent
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createAgentModelCatalogSettingsExpiry } from '../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
 import { mainProcessState as state } from './main-process-state'
+import {
+  clearPodClaudeHostSelection,
+  podGuardClaudeAccounts
+} from '../pod/acc/pod-claude-accounts-gate'
 
 // Settings that change which account or binary a new chat's agent runs under.
 const MODEL_CATALOG_ACCOUNT_SETTINGS = [
@@ -76,8 +80,12 @@ export function initializeMainProcessAccountServices(): void {
   // Why: migrate historical shared-home sessions after startup; compatibility
   // launches re-arm the non-destructive pass for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
+  // Fork-only (Pod): claude-acc owns Claude accounts; cleared before the router publishes it.
+  clearPodClaudeHostSelection(store)
   state.claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
-  state.claudeAccounts = new ClaudeAccountService(store, state.rateLimits, state.claudeRuntimeAuth)
+  state.claudeAccounts = podGuardClaudeAccounts(
+    new ClaudeAccountService(store, state.rateLimits, state.claudeRuntimeAuth)
+  )
   state.rateLimits.setCodexHomePathResolver((target) =>
     state.codexRuntimeHome!.prepareForRateLimitFetch(target)
   )
