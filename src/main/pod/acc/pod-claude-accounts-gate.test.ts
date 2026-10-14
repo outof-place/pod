@@ -9,8 +9,6 @@ import {
 import { ClaudeAccountService } from '../../claude-accounts/service'
 import { mapRuntimeError } from '../../runtime/rpc/errors'
 import {
-  clearPodClaudeHostSelection,
-  podDropClaudeHostSelection,
   podGuardClaudeAccounts,
   POD_REFUSED_CLAUDE_ACCOUNT_CALLS
 } from './pod-claude-accounts-gate'
@@ -125,59 +123,5 @@ describe("Pod's Claude account gate", () => {
         message: POD_CLAUDE_ACCOUNTS_MANAGED_MESSAGE
       }
     })
-  })
-
-  it('clears a stored host selection once in Pod, keeping WSL picks and the profiles', () => {
-    const f = fixture({
-      activeClaudeManagedAccountId: 'p1',
-      activeClaudeManagedAccountIdsByRuntime: { host: 'p1', wsl: { Ubuntu: 'w1' } }
-    })
-    const log = vi.fn()
-    expect(clearPodClaudeHostSelection(f.store, true, log)).toBe(true)
-    expect(f.settings().activeClaudeManagedAccountId).toBeNull()
-    expect(f.settings().activeClaudeManagedAccountIdsByRuntime).toEqual({
-      host: null,
-      wsl: { Ubuntu: 'w1' }
-    })
-    expect(f.settings().claudeManagedAccounts).toEqual([profile])
-    expect(log).toHaveBeenCalledOnce()
-    expect(log.mock.calls[0][0]).toContain('host p1, legacy p1')
-    // The next start finds nothing to clear and writes nothing.
-    expect(clearPodClaudeHostSelection(f.store, true, log)).toBe(false)
-    expect(f.store.updateSettings).toHaveBeenCalledOnce()
-    expect(log).toHaveBeenCalledOnce()
-  })
-
-  it('clears a legacy-only selection, and never runs outside Pod', () => {
-    const legacy = fixture({ activeClaudeManagedAccountId: 'p1' })
-    expect(clearPodClaudeHostSelection(legacy.store, true, vi.fn())).toBe(true)
-    expect(legacy.settings().activeClaudeManagedAccountId).toBeNull()
-    const upstream = fixture({
-      activeClaudeManagedAccountId: 'p1',
-      activeClaudeManagedAccountIdsByRuntime: { host: 'p1', wsl: {} }
-    })
-    expect(clearPodClaudeHostSelection(upstream.store, false, vi.fn())).toBe(false)
-    expect(upstream.store.updateSettings).not.toHaveBeenCalled()
-  })
-
-  it('drops a host selection from a generic settings write in Pod, keeping WSL picks, and logs once', () => {
-    const log = vi.fn()
-    const write = {
-      theme: 'dark' as const,
-      activeClaudeManagedAccountId: 'p1',
-      activeClaudeManagedAccountIdsByRuntime: { host: 'p1', wsl: { Ubuntu: 'w1' } }
-    }
-    expect(podDropClaudeHostSelection(write, true, log)).toEqual({
-      theme: 'dark',
-      activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'w1' } }
-    })
-    expect(podDropClaudeHostSelection({ activeClaudeManagedAccountId: 'p2' }, true, log)).toEqual(
-      {}
-    )
-    expect(log).toHaveBeenCalledOnce()
-    const other = { theme: 'light' as const }
-    expect(podDropClaudeHostSelection(other, true, log)).toBe(other)
-    expect(podDropClaudeHostSelection(write, false, log)).toBe(write)
-    expect(log).toHaveBeenCalledOnce()
   })
 })

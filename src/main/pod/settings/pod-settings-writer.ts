@@ -1,6 +1,6 @@
 // Fork-only (Pod): settings:set's write path, kept for podSettings.set.
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { podDropClaudeHostSelection } from '../acc/pod-claude-accounts-gate'
+import { podDropClaudeHostSelection } from '../../claude-accounts/pod-claude-host-selection'
 
 type SettingsWrite = (
   args: Partial<GlobalSettings>,
