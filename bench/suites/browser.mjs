@@ -274,8 +274,9 @@ for (const name of names) {
   const accepted = samples[name].filter((sample) => !sample.warmup)
   // A one-app runtime started on its own runs in classic mode (a hidden window and a renderer);
   // Pod 1.0 starts it headless under PodNative. The label says which one was measured.
-  const label = versions[name].oneApp
-    ? `${SUBJECTS[name].label}, runtime in classic mode (not the headless mode Pod ${versions[name].oneApp.version} starts in by default)`
+  const oneApp = versions[name].oneApp
+  const label = oneApp
+    ? `Pod ${oneApp.version} runtime, started on its own in classic mode (not the headless mode Pod starts it in by default)`
     : SUBJECTS[name].label
   for (const [key, metric] of [
     ...Object.entries(ROWS).map(([key, row]) => [key, row.metric]),
