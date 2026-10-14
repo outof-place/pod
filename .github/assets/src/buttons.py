@@ -60,7 +60,7 @@ def _button(
         + pad
         - (4 if coming else 0)
     )
-    doc = Doc(w, H, title + (" (coming with the first release)" if coming else ""))
+    doc = Doc(w, H, title + (" (coming)" if coming else ""))
     d = squircle(0.5, 0.5, w - 1, H - 1, (H - 1) / 2)
     if primary:
         fill = theme.ink
