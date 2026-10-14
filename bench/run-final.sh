@@ -118,6 +118,8 @@ fi
 scope="full"
 if [ "$runtime_only" = 1 ]; then
   scope="runtime"
+  # polling.mjs keeps only the reads Pod's runtime makes.
+  export POD_BENCH_SCOPE=runtime
   coming="${coming:+$coming,}startup,panes,throughput,latency,git-status"
   [ -n "$og_sha" ] || coming="$coming,search"
 fi
