@@ -50,12 +50,29 @@ function bundle(appPath: string, executableName: string): string {
   return bin
 }
 
-function run(launcher: string): string {
+function run(launcher: string, env: Record<string, string> = {}): string {
   const result = spawnSync('/bin/bash', [launcher, 'terminal', 'create'], {
     encoding: 'utf8',
-    env: { PATH: '/usr/bin:/bin', HOME: root }
+    env: { PATH: '/usr/bin:/bin', HOME: root, ...env }
   })
   return `${result.stdout}${result.stderr}`.trim()
+}
+
+/** The launcher after pod-decouple, in a bundle whose executable prints the user data it got. */
+function decoupledLauncher(appPath: string): string {
+  const contents = join(appPath, 'Contents')
+  const bin = join(contents, 'Resources', 'bin')
+  mkdirSync(bin, { recursive: true })
+  mkdirSync(join(contents, 'MacOS'), { recursive: true })
+  const executable = join(contents, 'MacOS', 'Pod')
+  writeFileSync(executable, '#!/bin/sh\necho "user data $POD_USER_DATA_PATH"\n')
+  chmodSync(executable, 0o755)
+  if (typeof patchCliLauncher !== 'function') {
+    throw new Error('install-cli-launchers.cjs exports no patchCliLauncher')
+  }
+  const decoupled = readFileSync(UPSTREAM_LAUNCHER, 'utf8').replaceAll('ORCA_', 'POD_')
+  writeFileSync(join(bin, 'podx'), patchCliLauncher(decoupled, 'Pod', 'Pod', 'POD_'))
+  return join(bin, 'podx')
 }
 
 describe.skipIf(process.platform === 'win32')('Pod CLI launcher', () => {
@@ -79,14 +96,42 @@ describe.skipIf(process.platform === 'win32')('Pod CLI launcher', () => {
     expect(readFileSync(join(bin, 'podx'), 'utf8')).toContain(
       `export ${TREE_PREFIX}USER_DATA_PATH=`
     )
-    if (typeof patchCliLauncher !== 'function') {
-      throw new Error('install-cli-launchers.cjs exports no patchCliLauncher')
+  })
+
+  // A terminal from before the decouple has only the legacy name; Orca.app's names Orca's data.
+  it("takes a Pod terminal's ORCA_ user data and refuses another app's", () => {
+    const launcher = decoupledLauncher(join(root, 'Decoupled.app'))
+    const legacy = { legacy: 'ORCA_', current: 'POD_' } as const // pod-decouple:keep
+    const name = `${legacy.legacy}USER_DATA_PATH`
+    const support = join(root, 'Library', 'Application Support')
+    for (const folder of ['Pod/profile', 'Pod Dev', 'Pod2', 'orca']) {
+      mkdirSync(join(support, folder), { recursive: true })
     }
-    const decoupled = readFileSync(UPSTREAM_LAUNCHER, 'utf8').replaceAll('ORCA_', 'POD_')
-    expect(patchCliLauncher(decoupled, 'Pod', 'Pod', 'POD_')).toContain(
-      // A terminal from before the decouple has only the legacy name.
-      'export POD_USER_DATA_PATH="${POD_USER_DATA_PATH:-${ORCA_USER_DATA_PATH:-$HOME/Library/Application Support/Pod}}"' // pod-decouple:keep
-    )
+    symlinkSync(join(support, 'orca'), join(support, 'Pod', 'to-orca'))
+    // Spelled through /var while HOME is /private/var: both sides are compared resolved.
+    for (const pods of [
+      join(support, 'Pod'),
+      join(support, 'Pod', 'profile').replace(/^\/private/, '')
+    ]) {
+      expect(run(launcher, { [name]: pods })).toBe(`user data ${pods}`)
+    }
+    // Orca.app's terminal, a dev Pod's, one whose name only starts with Pod's, and a symlink out
+    // of Pod's folder into Orca's.
+    for (const other of ['orca', 'Pod Dev', 'Pod2', 'Pod/to-orca'].map((folder) =>
+      join(support, folder)
+    )) {
+      expect(run(launcher, { [name]: other })).toBe(
+        `podx: no Pod runtime in env: ${name} is another app's data (${other})`
+      )
+    }
+    const explicit = join(root, 'explicit')
+    expect(
+      run(launcher, {
+        [name]: join(support, 'orca'),
+        [`${legacy.current}USER_DATA_PATH`]: explicit
+      })
+    ).toBe(`user data ${explicit}`)
+    expect(run(launcher)).toBe(`user data ${join(support, 'Pod')}`)
   })
 
   it('follows a symlink on PATH to the bundle', () => {

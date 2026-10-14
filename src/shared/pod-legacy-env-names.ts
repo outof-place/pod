@@ -30,8 +30,17 @@ export function renamedLegacyEnvName(name: string): string | null {
   return LEGACY_SPELLING.get(name) ?? null
 }
 
+/** Pod's data folder name, product/identity.json's userDataName (pod-legacy-env-names.test.ts). */
+export const POD_USER_DATA_NAME = 'Pod'
+
+/** Whether a resolved `path` is the resolved `folder` or lies below it. The ORCA_ env of a
+ *  terminal counts only in this Pod's data folder: an Orca.app terminal's points at Orca's. */
+export function isInFolder(path: string, folder: string): boolean {
+  return path === folder || path.startsWith(folder.endsWith('/') ? folder : `${folder}/`)
+}
+
 /** In place: each unset renamed POD_ name takes the value of its ORCA_ spelling, as in a terminal
- *  opened before the update. */
+ *  opened before the update. Callers check first that the env is a Pod terminal's. */
 export function adoptLegacyEnvNames(env: Record<string, string | undefined>): void {
   for (const [current, legacy] of LEGACY_SPELLING) {
     const value = env[legacy]

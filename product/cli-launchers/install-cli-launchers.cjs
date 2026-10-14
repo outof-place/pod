@@ -23,18 +23,34 @@ function patchCliLauncher(text, executableName, userDataName, envPrefix) {
   }
   const prefix = envPrefix && text.includes(`${envPrefix}NODE_OPTIONS`) ? envPrefix : 'ORCA_'
   const defaultUserData = `$HOME/Library/Application Support/${userDataName}`
-  // A terminal opened before the decouple update has only ORCA_USER_DATA_PATH.
-  // TODO(pod): drop the fallback after 2026-12-31, no earlier than the release after the decouple.
-  const userData =
-    prefix === 'ORCA_' ? defaultUserData : `\${ORCA_USER_DATA_PATH:-${defaultUserData}}`
   return text
     .replace(APP_PATH_ANCHOR, () => APP_PATH_INNERMOST)
     .replace(CLI_LAUNCHER_ANCHOR, () =>
       [
         `ELECTRON="$CONTENTS/MacOS/${executableName}"`,
-        `export ${prefix}USER_DATA_PATH="\${${prefix}USER_DATA_PATH:-${userData}}"`
+        ...(prefix === 'ORCA_' ? [] : legacyUserDataLines(prefix, defaultUserData, userDataName)),
+        `export ${prefix}USER_DATA_PATH="\${${prefix}USER_DATA_PATH:-${defaultUserData}}"`
       ].join('\n')
     )
+}
+
+// A terminal opened before the decouple update has only ORCA_USER_DATA_PATH. It counts only in a
+// Pod terminal, both paths resolved: an Orca.app terminal's names Orca's runtime and token, so
+// the CLI refuses it.
+// TODO(pod): drop the fallback after 2026-12-31, no earlier than the release after the decouple.
+function legacyUserDataLines(prefix, defaultUserData, userDataName) {
+  return [
+    `if [ -z "\${${prefix}USER_DATA_PATH-}" ] && [ -n "\${ORCA_USER_DATA_PATH-}" ]; then`,
+    '\tlegacy_user_data=$(cd -P -- "$ORCA_USER_DATA_PATH" 2>/dev/null && pwd -P) || legacy_user_data=',
+    `\tpod_user_data=$(cd -P -- "${defaultUserData}" 2>/dev/null && pwd -P) || pod_user_data=`,
+    '\tif [ -n "$pod_user_data" ] && case "$legacy_user_data/" in "$pod_user_data"/*) true ;; *) false ;; esac; then',
+    `\t\t${prefix}USER_DATA_PATH=$ORCA_USER_DATA_PATH`,
+    '\telse',
+    `\t\techo "\${0##*/}: no ${userDataName} runtime in env: ORCA_USER_DATA_PATH is another app's data ($ORCA_USER_DATA_PATH)" >&2`,
+    '\t\texit 1',
+    '\tfi',
+    'fi'
+  ]
 }
 
 function installCliLaunchers(resourcesDir, executableName, identity) {
