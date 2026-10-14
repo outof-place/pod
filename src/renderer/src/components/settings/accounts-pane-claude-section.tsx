@@ -18,8 +18,16 @@ import {
   ClaudeSignInLinkMenu,
   withCopiedClaudeLink
 } from './claude-sign-in-link-menu'
+import {
+  isPodClaudeAccAccounts,
+  PodClaudeAccAccountsSection
+} from './pod-claude-acc-accounts-section'
 
 export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
+  // Fork-only (Pod): claude-acc owns Claude accounts, so Pod adds none of its own here.
+  if (isPodClaudeAccAccounts()) {
+    return <PodClaudeAccAccountsSection key="claude-accounts" />
+  }
   const {
     accountRuntime,
     accountRuntimeSentenceLabel,
