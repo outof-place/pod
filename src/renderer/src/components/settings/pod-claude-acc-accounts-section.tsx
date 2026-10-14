@@ -145,6 +145,14 @@ export function PodClaudeAccAccountsSection(): React.JSX.Element {
           </div>
         </div>
 
+        {state?.podSelected ? (
+          <p className="text-xs text-muted-foreground">
+            Auto-switch is paused: Pod has {state.podSelected} selected for new Claude sessions.
+            Choose System default in the Claude menu of the status bar to hand switching back to
+            claude-acc.
+          </p>
+        ) : null}
+
         {notice ? (
           <p className={cn('text-xs', notice.error ? 'text-destructive' : 'text-muted-foreground')}>
             {notice.text}
