@@ -46,7 +46,7 @@ for (const name of names) {
   const instance = await launchInstance(subject.app, profile)
   await openTerminal(instance)
   await waitForPrompts(profile, 1)
-  await closeInstance(instance, { keepProfile: true })
+  await closeInstance(instance)
   profiles[name] = profile
   log(`template ready: ${name}`)
 }
@@ -69,7 +69,7 @@ async function launchOnce(name, mode) {
       firstPromptMs: promptAt - instance.spawnedAt
     }
   } finally {
-    await closeInstance(instance, { keepProfile: true })
+    await closeInstance(instance)
   }
 }
 

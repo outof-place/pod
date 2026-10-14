@@ -398,6 +398,31 @@ The steps, in order:
 
 `--no-visible` stops before the desktop is needed.
 
+### One-app Pod (1.0 and later)
+
+Pod 1.0 is a native app (PodNative, bundle `codes.pod.native`) with Pod's Electron runtime nested
+at `Contents/Helpers/Pod Runtime.app`. `--pod` takes the one-app bundle; the suites resolve it to
+the runtime and record the outer app's version and `PodNativeRevision` under `versions.*.oneApp`.
+The suites drive the runtime's Electron UI, which Pod 1.0 does not show, so for a 1.0 build run:
+
+```sh
+bench/run-final.sh --pod <copy of Pod.app> --pod-commit <main SHA> --orca <copy of Orca.app> --runtime-only
+```
+
+`--runtime-only` measures what the runtime runs for every user (polling, search, browser) and lists
+startup, panes, throughput, the visible run and git-status under `coming`: native UI rows pending a
+PodNative driver, and git-status pending a suite that replays the status strategy Pod 1.0 runs. It
+implies `--no-visible` and skips claude-acc.
+
+Every run keeps its profiles under one `/private/tmp/pod-bench.XXXXXX` dir, printed at the start.
+Nothing is deleted while the run goes on (cold starts move the caches aside); remove the dir with
+`pod-tmp-rm` afterwards. Processes are stopped by pid: the app's own child, then every process whose
+argv names its profile, never a program under `/Applications` or Pod's data dir. Before the first
+CLI call, `status` must report the instance's own runtime id, or the run stops before any change.
+Pod's terminals start without the macOS `/usr/bin/login` wrapper (`ORCA_DISABLE_MACOS_LOGIN_SHELL=1`),
+which keeps each shell inside its throwaway `HOME`. Run the apps from copies (`cp -c`) outside
+`/Applications`, so the published bundle stays untouched.
+
 Pieces on their own:
 
 ```sh
