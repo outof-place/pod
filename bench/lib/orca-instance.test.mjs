@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test } from 'node:test'
-import { PROFILE_BASE, cli, describeApp, profilePids } from './orca-instance.mjs'
+import { PROFILE_BASE, cli, describeApp, launchInstance, profilePids } from './orca-instance.mjs'
 
 function testDir(prefix) {
   mkdirSync(PROFILE_BASE, { recursive: true })
@@ -99,8 +99,7 @@ function plist(file, entries) {
   )
 }
 
-test('a one-app bundle is described by its nested runtime, with the outer app recorded', () => {
-  const dir = testDir('oneapp-')
+function fakeOneApp(dir) {
   const outer = path.join(dir, 'Pod.app')
   const runtime = path.join(outer, 'Contents/Helpers/Pod Runtime.app')
   plist(path.join(outer, 'Contents/Info.plist'), {
@@ -121,6 +120,11 @@ test('a one-app bundle is described by its nested runtime, with the outer app re
     JSON.stringify({ commit: 'b9b9850092d3', buildId: '1.0.0-rc1-b9b9850092d3-arm64' })
   )
   writeFileSync(path.join(runtime, 'Contents/Resources/bin/podx'), '')
+  return { outer, runtime }
+}
+
+test('a one-app bundle is described by its nested runtime, with the outer app recorded', () => {
+  const { outer, runtime } = fakeOneApp(testDir('oneapp-'))
   const info = describeApp(outer)
   assert.equal(info.bundleId, 'codes.pod.app')
   assert.ok(info.executable.endsWith('/Pod Runtime.app/Contents/MacOS/Pod'), info.executable)
@@ -135,4 +139,14 @@ test('a one-app bundle is described by its nested runtime, with the outer app re
   // Naming the nested runtime directly gives the same record.
   assert.equal(describeApp(runtime).oneApp.bundleId, 'codes.pod.native')
   assert.ok(existsSync(info.realPath))
+})
+
+test('a visible launch of a one-app runtime is refused before anything starts', async () => {
+  const dir = testDir('oneapp-visible-')
+  const { outer } = fakeOneApp(dir)
+  const profile = { ud: dir, home: path.join(dir, 'home') }
+  await assert.rejects(
+    launchInstance(outer, profile, { visible: true }),
+    /refusing a visible launch of a one-app runtime/
+  )
 })
