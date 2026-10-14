@@ -5,6 +5,12 @@ import PodxCore
 // directly; everything else, and POD_NATIVE_CLI=0, execs the Node CLI unchanged.
 
 func run(_ args: [String]) -> Never {
+  // Fork-only (Pod): an Orca.app terminal's env names Orca's runtime and token (pod-decouple).
+  if let foreign = refusedLegacyUserData() {
+    let name = envSpellings.legacy + "USER_DATA_PATH"
+    writeAll(2, Array("podx: no Pod runtime in env: \(name) is another app's data (\(foreign))\n".utf8))
+    exit(1)
+  }
   if env("POD_NATIVE_CLI") == "0" {
     execNodeCli(args)
   }

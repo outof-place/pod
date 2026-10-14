@@ -161,10 +161,12 @@ export async function launchFixtureDaemon(options: {
   return { label, child, identity, socketPath, tokenPath }
 }
 
-/** Pod's native hook client, as built now or as it was before the decouple. */
+/** Pod's native hook client, as built now or as it was before the decouple. `userData` is the
+ *  data folder its installing Pod records beside it, the one an ORCA_ endpoint may lie in. */
 export async function compileHookClient(
   outPath: string,
-  era: 'current' | 'pre-decouple'
+  era: 'current' | 'pre-decouple',
+  userData?: string
 ): Promise<string> {
   const source = readFileSync(HOOK_CLIENT_SOURCE, 'utf8')
   const sourcePath = `${outPath}.c`
@@ -179,5 +181,8 @@ export async function compileHookClient(
     '-o',
     outPath
   ])
+  if (userData !== undefined) {
+    writeFileSync(`${outPath}.user-data`, `${userData}\n`)
+  }
   return outPath
 }
