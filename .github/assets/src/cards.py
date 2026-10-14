@@ -41,7 +41,7 @@ TERMINAL = Card(
     "Native terminal",
     "Each pane runs Ghostty's engine in a native macOS view, drawn with Metal, while xterm.js "
     "stays behind as the model.",
-    "0.1",
+    "1.0",
 )
 SEARCH = Card(
     "Search",
@@ -67,12 +67,12 @@ PRIVACY = Card(
     "EyeSlash",
     "Zero telemetry",
     "Pod sends no telemetry and makes no calls to Stably's servers.",
-    "0.1",
+    "1.0",
 )
-LEGEND = "0.1 marks what the first release brings; Coming, what follows it. Per-worktree setup via orca.yaml is inherited from Orca."
+LEGEND = "1.0 marks what Pod 1.0 brings, out now as 1.0.0-rc1; Coming, what follows it. Per-worktree setup via orca.yaml is inherited from Orca."
 ACC_TITLE = "claude-acc, built in"
 ACC_BODY = "The studio's toolkit for running many Claude Code agents on one Mac, now part of the IDE."
-ACC_TAG = "0.1"
+ACC_TAG = "1.0"
 ACC_ITEMS = (
     (
         "Rotate",

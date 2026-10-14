@@ -12,8 +12,8 @@
 </picture>
 
 <p align="center">
-  <a href="https://github.com/outof-place/pod/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-download-dark.svg"><img alt="Download for macOS (coming with the first release)" src="assets/button-download-light.svg" height="44"></picture></a>
-  <a href="https://github.com/outof-place/homebrew-tap"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-brew-dark.svg"><img alt="Install with Homebrew (coming with the first release)" src="assets/button-brew-light.svg" height="44"></picture></a>
+  <a href="https://github.com/outof-place/pod/releases/download/v1.0.0-rc1/Pod-1.0.0-rc1.dmg"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-download-dark.svg"><img alt="Download Pod 1.0.0-rc1 for macOS" src="assets/button-download-light.svg" height="44"></picture></a>
+  <a href="https://github.com/outof-place/homebrew-tap"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-brew-dark.svg"><img alt="Install with Homebrew (coming)" src="assets/button-brew-light.svg" height="44"></picture></a>
   <a href="https://pod.codes"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-site-dark.svg"><img alt="pod.codes" src="assets/button-site-light.svg" height="44"></picture></a>
 </p>
 
@@ -23,13 +23,10 @@
   <img alt="Platform: macOS" src="https://img.shields.io/badge/platform-macOS-004046?style=flat&labelColor=0d1016">
 </p>
 
-```sh
-brew install --cask outof-place/tap/pod
-```
-
 > [!NOTE]
-> Pod is early. The signed, notarized DMG and the Homebrew cask arrive with the first release;
-> until then, [build from source](#build-from-source). The [changelog](../CHANGELOG.md) lists what has shipped.
+> Pod 1.0.0-rc1, the first release candidate of Pod 1.0, is out: [download the DMG](https://github.com/outof-place/pod/releases/download/v1.0.0-rc1/Pod-1.0.0-rc1.dmg), signed with
+> the studio's Developer ID and notarized by Apple. It needs a Mac with Apple silicon and macOS 27 or later.
+> The [release notes](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc1) list the known issues. The Homebrew cask follows; see [Install](#install).
 
 <picture>
   <source media="(prefers-color-scheme: dark) and (max-width: 600px)" srcset="assets/window-narrow-dark.svg">
@@ -38,7 +35,7 @@ brew install --cask outof-place/tap/pod
   <img alt="Illustration of the Pod window: four agents at work in their own worktrees, a sidebar of worktrees, and claude-acc's status in the status bar." src="assets/window-light.svg" width="100%">
 </picture>
 
-<p align="center"><sub>An illustration of the Pod window. Screenshots arrive with the first release.</sub></p>
+<p align="center"><sub>An illustration of the Pod window; screenshots follow.</sub></p>
 
 ## Why Pod
 
@@ -46,30 +43,30 @@ brew install --cask outof-place/tap/pod
   <source media="(prefers-color-scheme: dark) and (max-width: 600px)" srcset="assets/why-narrow-dark.svg">
   <source media="(max-width: 600px)" srcset="assets/why-narrow-light.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/why-dark.svg">
-  <img alt="Agents got fast. The tools around them didn't. In the first release (0.1): the native terminal, claude-acc built in and zero telemetry. Coming after it: indexed code search, Pod Workspace and OrbStack VMs. The same list follows as text." src="assets/why-light.svg" width="100%">
+  <img alt="Agents got fast. The tools around them didn't. In Pod 1.0, out now as 1.0.0-rc1: the native terminal, claude-acc built in and zero telemetry. Coming after it: indexed code search, Pod Workspace and OrbStack VMs. The same list follows as text." src="assets/why-light.svg" width="100%">
 </picture>
 
 <details>
 <summary>The same, as text</summary>
 
-- **Native terminal** (0.1). Each pane runs Ghostty's engine in a native macOS view, drawn with
+- **Native terminal** (1.0). Each pane runs Ghostty's engine in a native macOS view, drawn with
   Metal, while xterm.js stays behind as the model.
-- **claude-acc, built in** (0.1). Subscription rotation, a dev-server memory guard, memory-aware
+- **claude-acc, built in** (1.0). Subscription rotation, a dev-server memory guard, memory-aware
   builds, cleanup, stay awake (lid closed included) and fan control. [More below](#claude-acc-built-in).
 - **Indexed code search** (coming). A native trigram index that agents query instead of walking the
   disk, with ripgrep as the fallback.
 - **Pod Workspace** (coming). A managed `~/pod` root for your repositories, with git tuned for many
   worktrees and the worktrees kept tidy.
 - **OrbStack VMs** (coming). A clean Linux machine for a task that should not touch your Mac.
-- **Zero telemetry** (0.1). Pod sends no telemetry and makes no calls to Stably's servers: one
+- **Zero telemetry** (1.0). Pod sends no telemetry and makes no calls to Stably's servers: one
   [switch](https://github.com/outof-place/pod/blob/main/src/main/product-identity/product-overlay.ts)
   gates every service, and an
   [end-to-end test](https://github.com/outof-place/pod/blob/main/tests/e2e/pod-stably-services-offline.spec.ts)
   checks that no request reaches a Stably host. Marketplace installs are off by default in Pod (no
   remote plugin revocation).
 
-0.1 marks what the first release brings; coming, what follows it. Per-worktree setup through
-`orca.yaml` is inherited from Orca.
+1.0 marks what Pod 1.0 brings, out now as release candidate 1.0.0-rc1; coming, what follows it.
+Per-worktree setup through `orca.yaml` is inherited from Orca.
 
 </details>
 
@@ -193,7 +190,7 @@ Pod differs. Every cell links to its source. As of 2026-10-09.
 
 | | Integrated terminal | Parallel agents in worktrees | Agent CLIs | Usage telemetry |
 | --- | --- | --- | --- | --- |
-| **Pod** | [Ghostty on Metal, in a native view](#the-native-terminal) (experimental), or Orca's xterm.js | [Yes, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L51) | [Any CLI agent, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L171-L210) | [None, and no calls to Stably's servers (0.1)](https://github.com/outof-place/pod/blob/main/src/main/product-identity/product-overlay.ts) |
+| **Pod** | [Ghostty on Metal, in a native view](#the-native-terminal) (experimental), or Orca's xterm.js | [Yes, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L51) | [Any CLI agent, from Orca](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L171-L210) | [None, and no calls to Stably's servers (1.0)](https://github.com/outof-place/pod/blob/main/src/main/product-identity/product-overlay.ts) |
 | **Orca** | [xterm.js, WebGL renderer](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/package.json#L266-L274) | [Yes](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L51) | [Any CLI agent](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md#L171-L210) | [Anonymous usage events in official builds, opt-out](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/src/main/telemetry/client.ts#L21-L36) |
 | **Conductor** | [xterm.js, DOM renderer](https://www.conductor.build/changelog/0.49.0-conductor-allegro-gpt-5-5) | [Yes](https://www.conductor.build/docs/concepts/git-worktrees) | [Claude Code, Codex, Cursor, OpenCode](https://www.conductor.build/docs/reference/harnesses) | [PostHog analytics; default not documented](https://www.conductor.build/docs/account/privacy) |
 | **Claude Squad** | [Your own terminal, a tmux session per agent](https://github.com/smtg-ai/claude-squad/blob/main/README.md) | [Yes](https://github.com/smtg-ai/claude-squad/blob/main/README.md) | [Claude Code, Codex, Gemini, Aider and others](https://github.com/smtg-ai/claude-squad/blob/main/README.md) | [None found in its source](https://github.com/smtg-ai/claude-squad/blob/main/go.mod) |
@@ -206,7 +203,7 @@ Pod differs. Every cell links to its source. As of 2026-10-09.
 
 | | License | Platforms | Price |
 | --- | --- | --- | --- |
-| **Pod** | [MIT](../LICENSE) | [macOS](#build-from-source) | [Free](../LICENSE) |
+| **Pod** | [MIT](../LICENSE) | [macOS on Apple silicon, 27 or later](#install) | [Free](../LICENSE) |
 | **Orca** | [MIT](https://github.com/stablyai/orca/blob/main/LICENSE) | [macOS, Windows, Linux](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md) | [Free](https://www.onorca.dev/) |
 | **Conductor** | [Proprietary](https://www.conductor.build/terms) | [macOS](https://www.conductor.build/docs/installation) | [Free tier; Pro $50/mo](https://www.conductor.build/pricing) |
 | **Claude Squad** | [AGPL-3.0](https://github.com/smtg-ai/claude-squad/blob/main/LICENSE.md) | [macOS, Linux and Windows builds; needs tmux](https://github.com/smtg-ai/claude-squad/blob/main/.goreleaser.yaml) | [Free](https://github.com/smtg-ai/claude-squad) |
@@ -242,6 +239,19 @@ Pod is not affiliated with or endorsed by Stably AI or Lovecast Inc. Orca is the
 | `main` (default) | The product: a green Orca `main` commit plus the Pod stack. |
 | `feat/*`, `fix/*`, `perf/*` and other Orca-style names | Older topic branches, still stacked under their names. |
 | `pod/*` | Pod-only work, one branch per change. |
+
+## Install
+
+- **DMG.** Download [Pod-1.0.0-rc1.dmg](https://github.com/outof-place/pod/releases/download/v1.0.0-rc1/Pod-1.0.0-rc1.dmg) from the [1.0.0-rc1 release](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc1),
+  open it and drag Pod to Applications. Its SHA-256 is in `SHA256SUMS` on the release page. Later
+  versions arrive through Pod's "Check for Updates…".
+- **Homebrew** (coming: the cask follows the release in the studio's tap):
+
+  ```sh
+  brew install --cask outof-place/tap/pod
+  ```
+
+- Pod needs a Mac with Apple silicon and macOS 27 or later.
 
 ## Build from source
 
