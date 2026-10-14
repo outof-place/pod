@@ -5,6 +5,7 @@ import {
   ENV_SPELLINGS,
   legacyEnvName,
   renamedLegacyEnvName,
+  stripInheritedLegacyEnv,
   withCurrentEnvSpelling,
   withCurrentEnvSpellingToDelete
 } from './pod-legacy-env-names'
@@ -22,6 +23,7 @@ describe('the env names on both sides of the decouple', () => {
   it.runIf(!ENV_DECOUPLED)('changes nothing before the codemod', () => {
     const env = { [legacy('PANE_KEY')]: 'tab-1:old', HOME: '/h' }
     adoptLegacyEnvNames(env)
+    stripInheritedLegacyEnv(env)
     expect(env).toEqual({ [legacy('PANE_KEY')]: 'tab-1:old', HOME: '/h' })
     expect(withCurrentEnvSpelling(env)).toBe(env)
     const names = [legacy('CODEX_HOME')]
@@ -86,5 +88,22 @@ describe.runIf(ENV_DECOUPLED)('the overlap after the codemod', () => {
     ])
     const names = [current('CODEX_HOME')]
     expect(withCurrentEnvSpellingToDelete(names, undefined)).toBe(names)
+  })
+
+  it('drops the inherited ORCA_ spelling of each renamed name, and only that', () => {
+    const env: Record<string, string | undefined> = {
+      [legacy('AGENT_HOOK_ENDPOINT')]: '/live-pod/agent-hooks/endpoint.env',
+      [legacy('PANE_KEY')]: 'tab-9:live-pane',
+      [legacy('AGENT_LAUNCH_TOKEN')]: 'live-launch',
+      [current('PANE_KEY')]: 'tab-1:own',
+      [legacy('BACKGROUND_LAUNCH')]: '1',
+      HOME: '/h'
+    }
+    stripInheritedLegacyEnv(env)
+    expect(env).toEqual({
+      [current('PANE_KEY')]: 'tab-1:own',
+      [legacy('BACKGROUND_LAUNCH')]: '1',
+      HOME: '/h'
+    })
   })
 })
