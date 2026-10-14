@@ -15,10 +15,10 @@
 # --vdisplay adds a virtual display for 20 s, which moves the user's display layout, so it is off
 # unless asked for. --runtime-only (one-app Pod 1.0: PodNative with the Electron runtime inside)
 # keeps the rows that do not depend on the runtime's Electron UI, which Pod 1.0 does not show:
-# polling (process reads the runtime makes), browser (the runtime started on its own, in classic
-# mode; labelled so) and search (a ripgrep baseline, the same in any terminal). Startup, panes,
-# throughput, the visible run and git-status (it replays a strategy, not Pod's own) are listed as
-# coming. It implies --no-visible and skips claude-acc.
+# polling (process reads the runtime makes) and browser (the runtime started on its own, in
+# classic mode; labelled so). Startup, panes, throughput, the visible run, git-status (it replays
+# a strategy, not Pod's own) and search (without og it is plain ripgrep, not Pod code) are listed
+# as coming. It implies --no-visible and skips claude-acc.
 #
 # Profiles, workspaces and the copies a run makes live under one /private/tmp dir (printed at the
 # start); nothing is deleted while the run goes on. Remove that dir afterwards with pod-tmp-rm.
@@ -119,6 +119,7 @@ scope="full"
 if [ "$runtime_only" = 1 ]; then
   scope="runtime"
   coming="${coming:+$coming,}startup,panes,throughput,latency,git-status"
+  [ -n "$og_sha" ] || coming="$coming,search"
 fi
 node -e '
   const fs = require("fs"), [out, podApp, podCommit, podProfile, orcaApp, inputs, comingList, scope] = process.argv.slice(1)
@@ -129,7 +130,8 @@ node -e '
     panes: { suite: "panes", subject: "Pod terminal panes", reason: "native UI rows pending a PodNative driver" },
     throughput: { suite: "throughput", subject: "Pod terminal throughput", reason: "native UI rows pending a PodNative driver" },
     latency: { suite: "latency", subject: "keystroke latency and visible throughput, with Ghostty and Terminal.app", reason: "native UI rows pending a PodNative driver; the visible run needs the desktop and keyboard focus" },
-    "git-status": { suite: "git-status", subject: "Source Control status poll", reason: "pending a suite that replays the status strategy Pod 1.0 runs" }
+    "git-status": { suite: "git-status", subject: "Source Control status poll", reason: "pending a suite that replays the status strategy Pod 1.0 runs" },
+    search: { suite: "search", subject: "code search (ripgrep baseline)", reason: "without og it is plain ripgrep from PATH, not Pod code" }
   }
   const coming = comingList ? comingList.split(",").map((id) => ({ id, status: "coming", ...reasons[id] })) : []
   const home = require("os").homedir()
@@ -158,7 +160,9 @@ run_suite polling --extra-ptys 80
 if [ -n "$og_sha" ]; then
   run_suite search --repo "$search_repo" --engines rg,og --og "$(field og)" --ogd "$(field ogd)" \
     --ogctl "$(field ogctl)" --og-sha "$(field ogSha)"
-else
+elif [ "$runtime_only" = 0 ]; then
+  # Without og the rows are plain ripgrep from PATH: a full run keeps them as a labelled
+  # baseline; --runtime-only publishes nothing that is not Pod's own code.
   run_suite search --repo "$search_repo"
 fi
 if [ -n "$og_sha" ] && [ -n "$client_sha" ]; then
