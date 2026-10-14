@@ -14,6 +14,8 @@ import type {
 } from '../../../../../shared/managed-account-types'
 import { getFeatureWallUsageProviderConnection } from '../feature-wall-usage-tracking'
 import { translate } from '@/i18n/i18n'
+import { addClaudeAccAccount } from '@/lib/pod-claude-acc-sign-in'
+import { isPodClaudeAccAccounts } from '../../settings/pod-claude-acc-accounts-section'
 
 type ConnectAction = 'idle' | 'adding'
 
@@ -149,6 +151,13 @@ export function UsageAccountsCard(props: {
     }
     setClaudeAction('adding')
     try {
+      // Fork-only (Pod): claude-acc adds Claude accounts; Pod makes no profile of its own.
+      if (isPodClaudeAccAccounts()) {
+        if ((await addClaudeAccAccount()) && mountedRef.current) {
+          await onAccountStateChange?.()
+        }
+        return
+      }
       const next = await window.api.claudeAccounts.add()
       if (mountedRef.current) {
         setClaudeAccounts(next)
