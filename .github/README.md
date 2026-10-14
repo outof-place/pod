@@ -13,7 +13,7 @@
 
 <p align="center">
   <a href="https://github.com/outof-place/pod/releases/download/v1.0.0-rc1/Pod-1.0.0-rc1.dmg"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-download-dark.svg"><img alt="Download Pod 1.0.0-rc1 for macOS" src="assets/button-download-light.svg" height="44"></picture></a>
-  <a href="https://github.com/outof-place/homebrew-tap"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-brew-dark.svg"><img alt="Install with Homebrew (coming)" src="assets/button-brew-light.svg" height="44"></picture></a>
+  <a href="https://github.com/outof-place/homebrew-tap"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-brew-dark.svg"><img alt="Install with Homebrew" src="assets/button-brew-light.svg" height="44"></picture></a>
   <a href="https://pod.codes"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-site-dark.svg"><img alt="pod.codes" src="assets/button-site-light.svg" height="44"></picture></a>
 </p>
 
@@ -26,7 +26,7 @@
 > [!NOTE]
 > Pod 1.0.0-rc1, the first release candidate of Pod 1.0, is out: [download the DMG](https://github.com/outof-place/pod/releases/download/v1.0.0-rc1/Pod-1.0.0-rc1.dmg), signed with
 > the studio's Developer ID and notarized by Apple. It needs a Mac with Apple silicon and macOS 27 or later.
-> The [release notes](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc1) list the known issues. The Homebrew cask follows; see [Install](#install).
+> The [release notes](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc1) list the known issues. It also installs with Homebrew; see [Install](#install).
 
 <picture>
   <source media="(prefers-color-scheme: dark) and (max-width: 600px)" srcset="assets/window-narrow-dark.svg">
@@ -247,11 +247,13 @@ Pod is not affiliated with or endorsed by Stably AI or Lovecast Inc. Orca is the
 - **DMG.** Download [Pod-1.0.0-rc1.dmg](https://github.com/outof-place/pod/releases/download/v1.0.0-rc1/Pod-1.0.0-rc1.dmg) from the [1.0.0-rc1 release](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc1),
   open it and drag Pod to Applications. Its SHA-256 is in `SHA256SUMS` on the release page. Later
   versions arrive through Pod's "Check for Updates…".
-- **Homebrew** (coming: the cask follows the release in the studio's tap):
+- **Homebrew**, from the studio's tap:
 
   ```sh
   brew install --cask outof-place/tap/pod
   ```
+
+  Pod updates itself after that, as it does from the DMG.
 
 - Pod needs a Mac with Apple silicon and macOS 27 or later.
 
