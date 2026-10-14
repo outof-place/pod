@@ -20,6 +20,10 @@ import {
   isAgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import { type DaemonRequest, TerminalAttachCanceledError } from './types'
+import {
+  withCurrentEnvSpelling,
+  withCurrentEnvSpellingToDelete
+} from '../../shared/pod-legacy-env-names'
 
 type CreateOrAttachRequest = Extract<DaemonRequest, { type: 'createOrAttach' }>
 
@@ -93,13 +97,15 @@ export class DaemonTerminalAdmission {
           : payload.historySeed !== undefined
             ? [payload.historySeed]
             : undefined
+      // Fork-only (Pod): a runtime from before the decouple (a rollback) sends ORCA_ env names.
+      const env = withCurrentEnvSpelling(payload.env)
       result = await this.options.host.createOrAttach({
         sessionId: payload.sessionId,
         cols: payload.cols,
         rows: payload.rows,
         cwd: payload.cwd,
-        env: payload.env,
-        envToDelete: payload.envToDelete,
+        env,
+        envToDelete: withCurrentEnvSpellingToDelete(payload.envToDelete, env),
         command: payload.command,
         startupCommandDelivery: payload.startupCommandDelivery,
         ...(attachOnly ? { attachOnly: true } : {}),

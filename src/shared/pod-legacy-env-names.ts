@@ -12,14 +12,15 @@ export function legacyEnvName(name: string): string | null {
     : null
 }
 
-// Renamed name to its ORCA_ spelling. Before the codemod the list is ORCA_ already, so the map is
-// empty and every function below changes nothing.
+// Renamed name to its ORCA_ spelling and back. Before the codemod the list is ORCA_ already, so
+// both are empty and every function below changes nothing.
 const LEGACY_SPELLING = new Map(
   RENAMED_ENV_NAMES.flatMap((name) => {
     const legacy = legacyEnvName(name)
     return legacy === null ? [] : [[name, legacy] as const]
   })
 )
+const CURRENT_SPELLING = new Map([...LEGACY_SPELLING].map(([current, legacy]) => [legacy, current]))
 
 /** Whether this tree is past the codemod, so the overlap has names to work on. */
 export const ENV_DECOUPLED = LEGACY_SPELLING.size > 0
@@ -38,4 +39,40 @@ export function adoptLegacyEnvNames(env: Record<string, string | undefined>): vo
       env[current] ??= value
     }
   }
+}
+
+/** A spawn request from a runtime before the decouple (a rollback that adopts this daemon) names
+ *  its env ORCA_: each renamed POD_ name it leaves unset takes the ORCA_ value, which stays too. */
+export function withCurrentEnvSpelling(
+  env: Record<string, string> | undefined
+): Record<string, string> | undefined {
+  if (!env) {
+    return env
+  }
+  let adopted: Record<string, string> | undefined
+  for (const [name, value] of Object.entries(env)) {
+    const current = CURRENT_SPELLING.get(name)
+    if (current !== undefined && !Object.hasOwn(env, current)) {
+      adopted ??= { ...env }
+      adopted[current] = value
+    }
+  }
+  return adopted ?? env
+}
+
+/** The same request's deletions: an ORCA_ name deletes its POD_ spelling too, unless env sets it. */
+export function withCurrentEnvSpellingToDelete(
+  names: string[] | undefined,
+  env: Record<string, string> | undefined
+): string[] | undefined {
+  if (!names) {
+    return names
+  }
+  const added = names.flatMap((name) => {
+    const current = CURRENT_SPELLING.get(name)
+    return current !== undefined && !names.includes(current) && !Object.hasOwn(env ?? {}, current)
+      ? [current]
+      : []
+  })
+  return added.length > 0 ? [...names, ...added] : names
 }
