@@ -12,7 +12,7 @@ const add = vi.fn(async () => ({
   ok: true,
   message: '',
   cancelled: false,
-  state: { available: true, generatedAt: 1, accounts: [] }
+  state: { available: true, generatedAt: 1, accounts: [], podSelected: null }
 }))
 
 vi.mock('../settings/pod-claude-acc-accounts-section', () => ({
@@ -56,7 +56,7 @@ describe("Pod's Claude chat sign-in", () => {
       ok: false,
       message: 'browser closed',
       cancelled: false,
-      state: { available: true, generatedAt: 1, accounts: [] }
+      state: { available: true, generatedAt: 1, accounts: [], podSelected: null }
     })
     const failure = {}
     const { result } = renderHook(() =>
