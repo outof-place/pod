@@ -409,10 +409,14 @@ The suites drive the runtime's Electron UI, which Pod 1.0 does not show, so for 
 bench/run-final.sh --pod <copy of Pod.app> --pod-commit <main SHA> --orca <copy of Orca.app> --runtime-only
 ```
 
-`--runtime-only` measures what the runtime runs for every user (polling, search, browser) and lists
-startup, panes, throughput, the visible run and git-status under `coming`: native UI rows pending a
-PodNative driver, and git-status pending a suite that replays the status strategy Pod 1.0 runs. It
-implies `--no-visible` and skips claude-acc.
+`--runtime-only` keeps the rows that do not depend on the runtime's Electron UI: polling (process
+reads the runtime makes for every user), browser (the runtime started on its own, in classic mode
+with a hidden window, not the headless mode Pod 1.0 starts it in; the rows say so) and search (a
+ripgrep baseline, the same in any terminal, until og is benched). It lists startup, panes,
+throughput, the visible run and git-status under `coming`: native UI rows pending a PodNative
+driver, and git-status pending a suite that replays the status strategy Pod 1.0 runs. It implies
+`--no-visible` and skips claude-acc. A visible launch of a one-app runtime is refused: in the
+foreground the runtime opens its outer PodNative through LaunchServices, outside the bench's env.
 
 Every run keeps its profiles under one `/private/tmp/pod-bench.XXXXXX` dir, printed at the start.
 Nothing is deleted while the run goes on (cold starts move the caches aside); remove the dir with

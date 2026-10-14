@@ -214,6 +214,13 @@ async function measureInstance(name, count) {
     const worktree = `id:${tree.id}`
     await rpcOk(meta, 'browser.tabCreate', { url, worktree }, 90_000)
     await loadedAfter(meta, worktree, null)
+    // Pod 1.0 renders browser tabs offscreen; record whether this launch does too.
+    renderers[name] ??= await instance.app.evaluate(({ webContents }) =>
+      webContents
+        .getAllWebContents()
+        .filter((contents) => contents.getType() !== 'window')
+        .map((contents) => ({ type: contents.getType(), offscreen: contents.isOffscreen() }))
+    )
     const build = buildOf(instance.info)
     return await collectSamples({
       label: `browser ${name}`,
@@ -241,6 +248,7 @@ async function measureInstance(name, count) {
 }
 
 const samples = Object.fromEntries(names.map((name) => [name, []]))
+const renderers = {}
 const perPass = Math.ceil(rounds / passes)
 for (let pass = 0; pass < passes; pass += 1) {
   // Alternate the order so neither app always runs first.
@@ -264,7 +272,11 @@ const conditions = `windowless instance, background throttling off, local ${PAGE
 for (const name of names) {
   versions[name] = describeApp(SUBJECTS[name].app)
   const accepted = samples[name].filter((sample) => !sample.warmup)
-  const label = SUBJECTS[name].label
+  // A one-app runtime started on its own runs in classic mode (a hidden window and a renderer);
+  // Pod 1.0 starts it headless under PodNative. The label says which one was measured.
+  const label = versions[name].oneApp
+    ? `${SUBJECTS[name].label}, runtime in classic mode (not the headless mode Pod ${versions[name].oneApp.version} starts in by default)`
+    : SUBJECTS[name].label
   for (const [key, metric] of [
     ...Object.entries(ROWS).map(([key, row]) => [key, row.metric]),
     [AFTER_GOTO.key, AFTER_GOTO.metric]
@@ -289,6 +301,7 @@ for (const name of names) {
       ),
       extra: {
         acted: `${acted.length}/${accepted.length}`,
+        browserContents: renderers[name] ?? null,
         ...(key === AFTER_GOTO.key
           ? {
               immediateClickLanded: `${accepted.filter((s) => s.immediateClickLanded).length}/${accepted.length}`
