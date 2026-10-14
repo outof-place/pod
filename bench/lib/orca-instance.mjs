@@ -8,7 +8,7 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
-  rmSync,
+  renameSync,
   writeFileSync
 } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -26,12 +26,22 @@ import { BENCH_ROOT, TOOLS_BIN, log, sleep } from './bench-session.mjs'
 
 const HOME = os.homedir()
 export const ORCA_APP = process.env.POD_BENCH_ORCA_APP ?? '/Applications/Orca.app'
-export const POD_APP =
+// One-app Pod (1.0 and later) is the native PodNative app with the Electron runtime nested inside;
+// the suites drive the runtime, so a one-app bundle resolves to it.
+const ONE_APP_RUNTIME = 'Contents/Helpers/Pod Runtime.app'
+export const POD_OUTER_APP =
   process.env.POD_BENCH_POD_APP ??
   path.join(HOME, 'Library/Application Support/orca-native/builds/latest/Orca.app')
+export const POD_APP = existsSync(path.join(POD_OUTER_APP, ONE_APP_RUNTIME))
+  ? path.join(POD_OUTER_APP, ONE_APP_RUNTIME)
+  : POD_OUTER_APP
 const REAL_PROFILE = path.join(HOME, 'Library/Application Support/orca')
-// Short base: the daemon socket <userData>/daemon/daemon-v<N>.sock must fit in 104 bytes.
-export const PROFILE_BASE = path.join(HOME, 'Library/Application Support/orca-native/bench')
+// Short base under the run's own /private/tmp dir: the daemon socket
+// <userData>/daemon/daemon-v<N>.sock must fit in 104 bytes, and the run dir is removed as a whole
+// at the end (pod-tmp-rm), so nothing is deleted while the run goes on.
+export const PROFILE_BASE = process.env.POD_BENCH_PROFILE_BASE ?? '/private/tmp/pod-bench/p'
+// Never signal a program under these, whatever its argv says.
+const PROTECTED_PROGRAMS = ['/Applications/', path.join(HOME, 'Library/Application Support/Pod/')]
 const REPO_ROOT = path.dirname(BENCH_ROOT)
 const run = promisify(execFile)
 
@@ -96,9 +106,27 @@ function describeDevCheckout(dir) {
   }
 }
 
+/** The one-app bundle around a nested Pod runtime, or null for a standalone app. */
+function oneAppOf(real) {
+  if (!real.endsWith(`/${ONE_APP_RUNTIME}`)) {
+    return null
+  }
+  const outer = real.slice(0, -(ONE_APP_RUNTIME.length + 1))
+  const key = (name) => plistValue(`${outer}/Contents/Info.plist`, name)
+  return {
+    bundleId: key('CFBundleIdentifier'),
+    version: key('CFBundleShortVersionString'),
+    build: key('CFBundleVersion'),
+    podNativeRevision: key('PodNativeRevision')
+  }
+}
+
 export function describeApp(appPath) {
   if (existsSync(path.join(appPath, 'out/main/index.js'))) {
     return describeDevCheckout(appPath)
+  }
+  if (existsSync(path.join(appPath, ONE_APP_RUNTIME))) {
+    return describeApp(path.join(appPath, ONE_APP_RUNTIME))
   }
   const real = realpathSync(appPath)
   let build = null
@@ -124,17 +152,15 @@ export function describeApp(appPath) {
     // Pod renames the CLI (product/identity.json cliName); since pod/decouple it ships only podx.
     cli: ['podx', 'orca']
       .map((name) => `${real}/Contents/Resources/bin/${name}`)
-      .find((candidate) => existsSync(candidate))
+      .find((candidate) => existsSync(candidate)),
+    // The suites drive the nested runtime's Electron UI, not PodNative's native UI.
+    oneApp: oneAppOf(real)
   }
 }
 
 /** playwright-core from this checkout, or from POD_BENCH_CHECKOUT when this one has no node_modules. */
 export function loadPlaywright() {
-  for (const root of [
-    process.env.POD_BENCH_CHECKOUT,
-    REPO_ROOT,
-    path.join(HOME, 'Documents/orca-native')
-  ]) {
+  for (const root of [process.env.POD_BENCH_CHECKOUT, REPO_ROOT]) {
     if (root && existsSync(path.join(root, 'node_modules/playwright-core/package.json'))) {
       const require = createRequire(path.join(root, 'package.json'))
       return {
@@ -155,6 +181,8 @@ function completedOnboardingSeed() {
   if (seedCache) {
     return structuredClone(seedCache)
   }
+  // The seed comes from the checkout that provides Playwright (POD_BENCH_CHECKOUT): point it at the
+  // benched Pod's own source tree, so the profile matches that build's state schema.
   const { root } = loadPlaywright()
   const tsx = path.join(root, 'node_modules/.bin/tsx')
   const out = execFileSync(
@@ -163,7 +191,7 @@ function completedOnboardingSeed() {
       '-e',
       "import { getE2ECompletedOnboardingProfile } from './tests/e2e/helpers/e2e-completed-onboarding-profile.ts'; console.log(JSON.stringify(getE2ECompletedOnboardingProfile()))"
     ],
-    { cwd: REPO_ROOT, encoding: 'utf8' }
+    { cwd: root, encoding: 'utf8' }
   )
   seedCache = JSON.parse(out)
   return structuredClone(seedCache)
@@ -243,6 +271,9 @@ export function launchEnv(profile, { visible = false } = {}) {
     ORCA_E2E_USER_DATA_DIR: profile.ud,
     ORCA_E2E_HOME_DIR: profile.home,
     ...presentation,
+    // Pod's daemon starts shells through /usr/bin/login on macOS, which resets HOME from the user
+    // database: the panes would leave the throwaway HOME for the real one.
+    ORCA_DISABLE_MACOS_LOGIN_SHELL: '1',
     ZDOTDIR: profile.zdot,
     POD_BENCH_PROMPT_LOG: profile.promptLog,
     // Never let the packaged Pod run claude-acc's setup.sh (acc-guard.mjs).
@@ -250,9 +281,55 @@ export function launchEnv(profile, { visible = false } = {}) {
   }
 }
 
+/**
+ * The pids of the profile's processes: argv names the profile dir (in its /tmp or /private/tmp
+ * spelling), never this process, never a program under /Applications or Pod's own data dir. The
+ * terminal daemon and crashpad are reparented to launchd, so a walk from the app's pid misses them.
+ */
+export function profilePids(ud) {
+  const spellings = new Set([ud, ud.replace(/^\/private\/tmp\//, '/tmp/'), ud.replace(/^\/tmp\//, '/private/tmp/')])
+  const listing = execFileSync('/bin/ps', ['-axww', '-o', 'pid=,command='], {
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024
+  })
+  const pids = []
+  for (const line of listing.split('\n')) {
+    const match = line.match(/^\s*(\d+)\s+(.*)$/)
+    if (!match) {
+      continue
+    }
+    const [pid, command] = [Number(match[1]), match[2]]
+    if (
+      pid === process.pid ||
+      PROTECTED_PROGRAMS.some((prefix) => command.startsWith(prefix)) ||
+      ![...spellings].some((spelling) => command.includes(`${spelling}/`) || command.endsWith(spelling))
+    ) {
+      continue
+    }
+    pids.push(pid)
+  }
+  return pids
+}
+
+function signalProfile(ud, signal) {
+  const pids = profilePids(ud)
+  for (const pid of pids) {
+    try {
+      process.kill(pid, signal)
+    } catch {}
+  }
+  return pids.length
+}
+
 // If the guard trips, it must stop the instance synchronously before exiting.
 function guard(pid, profile) {
-  guardInstance(pid, () => execFileSync('/usr/bin/pkill', ['-KILL', '-f', '--', profile.ud]))
+  guardInstance(pid, () => {
+    // The app's main process is this run's own child; its argv does not name the profile.
+    try {
+      process.kill(pid, 'SIGKILL')
+    } catch {}
+    signalProfile(profile.ud, 'SIGKILL')
+  })
 }
 
 const CHROMIUM_ARGS = [
@@ -321,6 +398,29 @@ export async function launchInstance(appPath, profile, { visible = false } = {})
 /** The instance's own CLI against its own profile; returns the parsed `result`. */
 export async function cli(instance, args, timeoutMs = 120_000) {
   assertIsolated(instance.profile)
+  instance.cliTarget ??= checkCliTarget(instance)
+  await instance.cliTarget
+  return cliCall(instance, args, timeoutMs)
+}
+
+/**
+ * Before the first call: the CLI must reach this instance's runtime, never the user's own Pod or
+ * Orca (a CLI that ignored the userData override would). `status` is read-only.
+ */
+async function checkCliTarget(instance) {
+  await waitForRuntime(instance)
+  const file = path.join(instance.profile.ud, 'orca-runtime.json')
+  const expected = JSON.parse(readFileSync(file, 'utf8')).runtimeId
+  const status = await cliCall(instance, ['status'], 60_000)
+  const reached = status?.runtime?.runtimeId
+  if (!expected || reached !== expected) {
+    throw new Error(
+      `the CLI reached runtime ${reached ?? 'none'}, not this instance's ${expected ?? 'unknown'}: stopping before any change`
+    )
+  }
+}
+
+async function cliCall(instance, args, timeoutMs) {
   let stdout
   try {
     ;({ stdout } = await run(
@@ -468,14 +568,12 @@ export function appUsage(before, after) {
 }
 
 async function killProfileProcesses(profile) {
-  for (const signal of ['TERM', 'KILL']) {
-    try {
-      execFileSync('/usr/bin/pkill', [`-${signal}`, '-f', '--', profile.ud])
-    } catch {}
+  for (const signal of ['SIGTERM', 'SIGKILL']) {
+    if (signalProfile(profile.ud, signal) === 0) {
+      return
+    }
     for (let i = 0; i < 30; i += 1) {
-      try {
-        execFileSync('/usr/bin/pgrep', ['-f', '--', profile.ud])
-      } catch {
+      if (profilePids(profile.ud).length === 0) {
         return
       }
       await sleep(100)
@@ -483,8 +581,21 @@ async function killProfileProcesses(profile) {
   }
 }
 
-/** Quits the instance, kills its terminal daemon and shells, and (for non-/Applications builds) unregisters it from LaunchServices. */
-export async function closeInstance(instance, { keepProfile = false } = {}) {
+function lsUnregister(appPath) {
+  try {
+    execFileSync(
+      '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister',
+      ['-u', appPath]
+    )
+  } catch {}
+}
+
+/**
+ * Quits the instance, kills its terminal daemon and shells, and (for non-/Applications builds)
+ * unregisters it from LaunchServices. The profile stays on disk (nothing is deleted during a run);
+ * the run's /private/tmp dir is removed as a whole afterwards.
+ */
+export async function closeInstance(instance) {
   if (instance.app) {
     const proc = instance.app.process()
     await Promise.race([instance.app.close().catch(() => {}), sleep(30_000)])
@@ -501,25 +612,19 @@ export async function closeInstance(instance, { keepProfile = false } = {}) {
   releaseInstance(instance.pid)
   checkAcc(`after closing ${instance.info.realPath}`)
   if (!instance.info.dev && !instance.info.realPath.startsWith('/Applications/')) {
-    try {
-      execFileSync(
-        '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister',
-        ['-u', instance.info.realPath]
-      )
-    } catch {}
-  }
-  if (!keepProfile) {
-    rmSync(instance.profile.ud, { recursive: true, force: true })
+    lsUnregister(instance.info.realPath)
+    if (instance.info.oneApp) {
+      lsUnregister(instance.info.realPath.slice(0, -(ONE_APP_RUNTIME.length + 1)))
+    }
   }
 }
 
-/** Kills anything still running for the profile and deletes it. */
+/** Kills anything still running for the profile; the files stay until the run dir goes. */
 export async function removeProfile(profile) {
   await killProfileProcesses(profile)
-  rmSync(profile.ud, { recursive: true, force: true })
 }
 
-/** Chromium caches a first launch builds; deleting them makes the next launch "cold". */
+/** Chromium caches a first launch builds; moving them aside makes the next launch "cold". */
 export const CHROMIUM_CACHE_DIRS = [
   'Cache',
   'Code Cache',
@@ -531,11 +636,15 @@ export const CHROMIUM_CACHE_DIRS = [
 ]
 
 export function dropCaches(profile) {
+  const aside = path.join(profile.ud, 'dropped', String(Date.now()))
+  mkdirSync(aside, { recursive: true })
   for (const dir of CHROMIUM_CACHE_DIRS) {
-    rmSync(path.join(profile.ud, dir), { recursive: true, force: true })
+    if (existsSync(path.join(profile.ud, dir))) {
+      renameSync(path.join(profile.ud, dir), path.join(aside, dir))
+    }
   }
 }
 
 export function resetPromptLog(profile) {
-  rmSync(profile.promptLog, { force: true })
+  writeFileSync(profile.promptLog, '')
 }
