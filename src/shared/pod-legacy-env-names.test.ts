@@ -1,9 +1,13 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   adoptLegacyEnvNames,
   ENV_DECOUPLED,
   ENV_SPELLINGS,
+  isInFolder,
   legacyEnvName,
+  POD_USER_DATA_NAME,
   renamedLegacyEnvName,
   stripInheritedLegacyEnv,
   withCurrentEnvSpelling,
@@ -18,6 +22,19 @@ describe('the env names on both sides of the decouple', () => {
     expect(legacyEnvName(current('TERMINAL_HANDLE'))).toBe(legacy('TERMINAL_HANDLE'))
     expect(legacyEnvName(legacy('TERMINAL_HANDLE'))).toBeNull()
     expect(legacyEnvName('HISTFILE')).toBeNull()
+  })
+
+  it("knows Pod's data folder as product/identity.json names it", () => {
+    const identity: { userDataName: string } = JSON.parse(
+      readFileSync(join(process.cwd(), 'product', 'identity.json'), 'utf8')
+    )
+    expect(POD_USER_DATA_NAME).toBe(identity.userDataName)
+    const pods = '/h/Library/Application Support/Pod'
+    expect(isInFolder(pods, pods)).toBe(true)
+    expect(isInFolder(`${pods}/agent-hooks`, pods)).toBe(true)
+    expect(isInFolder(`${pods}/agent-hooks`, `${pods}/`)).toBe(true)
+    expect(isInFolder(`${pods} Dev`, pods)).toBe(false)
+    expect(isInFolder('/h/Library/Application Support/orca', pods)).toBe(false)
   })
 
   it.runIf(!ENV_DECOUPLED)('changes nothing before the codemod', () => {
@@ -46,6 +63,7 @@ describe.runIf(ENV_DECOUPLED)('the overlap after the codemod', () => {
       [current('PANE_KEY')]: 'tab-1:new',
       // A kept name: the CLI must not turn it into the fork's own POD_ name.
       [legacy('E2E_USER_DATA_DIR')]: '/e2e',
+      [legacy('USER_DATA_PATH')]: '/h/Library/Application Support/Pod',
       HOME: '/h'
     }
     adoptLegacyEnvNames(env)
@@ -55,6 +73,8 @@ describe.runIf(ENV_DECOUPLED)('the overlap after the codemod', () => {
       [legacy('PANE_KEY')]: 'tab-1:old',
       [current('PANE_KEY')]: 'tab-1:new',
       [legacy('E2E_USER_DATA_DIR')]: '/e2e',
+      [legacy('USER_DATA_PATH')]: '/h/Library/Application Support/Pod',
+      [current('USER_DATA_PATH')]: '/h/Library/Application Support/Pod',
       HOME: '/h'
     })
   })

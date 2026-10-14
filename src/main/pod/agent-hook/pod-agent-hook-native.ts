@@ -21,6 +21,7 @@ import {
   getManagedLifecycleHook,
   type ClaudeCompatibleHookSettings
 } from '../../claude/hook-settings'
+import { bakedPodUserData } from '../decouple/legacy-hook-env'
 
 export const POD_AGENT_HOOK_FILE_NAME = 'pod-agent-hook'
 /** Claude's exec form (`args`) on command hooks, from its changelog. */
@@ -66,28 +67,52 @@ export function podAgentHookEntry(installPath: string): HookCommandConfig {
   return { type: 'command', command: installPath, args: [], timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
 }
 
-/** Copies the client when its bytes differ; temp + rename, since an in-place overwrite gets the
+/** Writes `path` when its bytes differ; temp + rename, since an in-place overwrite gets the
  *  binary's next launches SIGKILLed on macOS. */
+function replaceWhenChanged(path: string, content: Buffer, mode: number): void {
+  if (existsSync(path) && readFileSync(path).equals(content)) {
+    return
+  }
+  mkdirSync(dirname(path), { recursive: true })
+  const temp = `${path}.${process.pid}-${randomUUID()}.tmp`
+  try {
+    writeFileSync(temp, content, { mode })
+    chmodSync(temp, mode)
+    renameSync(temp, path)
+  } finally {
+    rmSync(temp, { force: true })
+  }
+}
+
+/** Beside the client: the data folder of the Pod that installed it, the only one an ORCA_
+ *  endpoint from a terminal before the decouple may lie in. Without it the client takes no ORCA_
+ *  name (pod-decouple). TODO(pod): drop with that fallback, after 2026-12-31. */
+export const POD_AGENT_HOOK_USER_DATA_SUFFIX = '.user-data'
+
+function recordPodAgentHookUserData(installPath: string): void {
+  const path = `${installPath}${POD_AGENT_HOOK_USER_DATA_SUFFIX}`
+  try {
+    const userData = bakedPodUserData()
+    if (userData === null) {
+      rmSync(path, { force: true })
+    } else {
+      replaceWhenChanged(path, Buffer.from(`${userData}\n`), 0o644)
+    }
+  } catch (error) {
+    console.warn('[agent-hooks] pod-agent-hook data folder not recorded:', error)
+  }
+}
+
+/** Copies the client when its bytes differ. */
 export function installPodAgentHookBinary(bundled: string, installPath: string): boolean {
   try {
-    const content = readFileSync(bundled)
-    if (existsSync(installPath) && readFileSync(installPath).equals(content)) {
-      return true
-    }
-    mkdirSync(dirname(installPath), { recursive: true })
-    const temp = `${installPath}.${process.pid}-${randomUUID()}.tmp`
-    try {
-      writeFileSync(temp, content, { mode: 0o755 })
-      chmodSync(temp, 0o755)
-      renameSync(temp, installPath)
-    } finally {
-      rmSync(temp, { force: true })
-    }
-    return true
+    replaceWhenChanged(installPath, readFileSync(bundled), 0o755)
   } catch (error) {
     console.warn('[agent-hooks] pod-agent-hook not installed, keeping claude-hook.sh:', error)
     return false
   }
+  recordPodAgentHookUserData(installPath)
+  return true
 }
 
 /** Claude's managed entry: the native client once it's in place (copied on install), else the

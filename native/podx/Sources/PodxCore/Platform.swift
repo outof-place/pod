@@ -4,13 +4,17 @@ import Darwin
 
 // Fork-only (Pod): an unset name is read in the other spelling too. The decouple renames this
 // front's names to POD_, but a terminal opened before that update keeps only the ORCA_ ones: so
-// the POD_ spelling, else the ORCA_ one (and before the decouple, the reverse).
+// the POD_ spelling, else the ORCA_ one (and before the decouple, the reverse). The ORCA_ one
+// counts only in a Pod terminal: an Orca.app terminal's names Orca's runtime and token.
 // TODO(pod): drop the fallback after 2026-12-31, and no earlier than the release after the decouple.
+public let envSpellings = (current: "POD_", legacy: "ORCA_")  // pod-decouple:keep
+
 public func env(_ name: String) -> String? {
   if let value = getenv(name) { return String(cString: value) }
-  let current = "POD_", legacy = "ORCA_"  // pod-decouple:keep
+  let (current, legacy) = envSpellings
   let other: String
   if name.hasPrefix(current) {
+    guard legacyEnvIsPods() else { return nil }
     other = legacy + String(name.dropFirst(current.count))
   } else if name.hasPrefix(legacy) {
     other = current + String(name.dropFirst(legacy.count))
@@ -19,6 +23,37 @@ public func env(_ name: String) -> String? {
   }
   guard let value = getenv(other) else { return nil }
   return String(cString: value)
+}
+
+/// `path` with every symlink resolved; nil when it doesn't exist.
+public func resolvedPath(_ path: String) -> String? {
+  guard let resolved = realpath(path, nil) else { return nil }
+  defer { free(resolved) }
+  return String(cString: resolved)
+}
+
+/// Whether `path` lies in Pod's own data folder under `home`, both resolved.
+public func isInPodUserData(_ path: String, home: String) -> Bool {
+  guard let path = resolvedPath(path),
+    let root = resolvedPath(home + "/Library/Application Support/" + PRODUCT_USER_DATA_NAME)
+  else { return false }
+  return path == root || path.hasPrefix(root.hasSuffix("/") ? root : root + "/")
+}
+
+/// A terminal's ORCA_ env is a Pod's when its user data lies in Pod's data folder.
+public func legacyEnvIsPods() -> Bool {
+  guard let home = getenv("HOME"), let named = getenv(envSpellings.legacy + "USER_DATA_PATH")
+  else { return false }
+  return isInPodUserData(String(cString: named), home: String(cString: home))
+}
+
+/// After the decouple, the ORCA_ user data of a terminal that isn't a Pod's (Orca.app's), when
+/// nothing names Pod's: podx refuses it rather than talk to that app's runtime.
+public func refusedLegacyUserData() -> String? {
+  guard USER_DATA_ENV.hasPrefix(envSpellings.current), getenv(USER_DATA_ENV) == nil,
+    let named = getenv(envSpellings.legacy + "USER_DATA_PATH"), !legacyEnvIsPods()
+  else { return nil }
+  return String(cString: named)
 }
 
 /// `process.env[name]` is truthy.
