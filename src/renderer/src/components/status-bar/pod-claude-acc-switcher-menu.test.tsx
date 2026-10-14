@@ -44,7 +44,8 @@ const state: PodClaudeAccState = {
     row('b@example.com'),
     row('c@example.com', { needsSignIn: true }),
     row('profile@example.com', { podProfile: true, usable: false })
-  ]
+  ],
+  podSelected: null
 }
 
 function result(ok = true): PodClaudeAccResult {
