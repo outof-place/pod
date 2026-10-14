@@ -76,3 +76,12 @@ export function withCurrentEnvSpellingToDelete(
   })
   return added.length > 0 ? [...names, ...added] : names
 }
+
+/** In place, on a copy of the env a new terminal inherits: the ORCA_ spelling of each renamed name
+ *  goes. The dual-read clients would take it for this runtime's, e.g. the hook endpoint a dev
+ *  runtime inherits from a live Pod's pane. A request that sets one still wins: it merges after. */
+export function stripInheritedLegacyEnv(env: Record<string, string | undefined>): void {
+  for (const legacy of LEGACY_SPELLING.values()) {
+    delete env[legacy]
+  }
+}
