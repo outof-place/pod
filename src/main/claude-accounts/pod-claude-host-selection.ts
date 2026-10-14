@@ -56,7 +56,7 @@ export function podDropClaudeHostSelection(
   }
   if (!loggedSelectionDrop) {
     loggedSelectionDrop = true
-    log('dropped a Claude account selection from a settings write: claude-acc picks the account')
+    log('dropped a Claude account selection from a settings update; claude-acc picks the account')
   }
   return next
 }
