@@ -1,10 +1,10 @@
 // Fork-only (Pod): pod-decouple renames the daemon's env names to POD_ without a protocol bump, so
 // an adopted daemon from before the update still reads ORCA_ ones. A daemon whose hello names no
-// handle env, or another one, gets the ORCA_ twin of every POD_ name too; one that reads POD_ only.
+// handle env, or another one, gets the ORCA_ twin of every renamed POD_ name too.
 // TODO(pod): drop after 2026-12-31, and no earlier than the release after the decouple.
 import type { DaemonEndpointIdentity } from '../../daemon/daemon-hello-protocol'
 import type { PtySpawnOptions } from '../../providers/types'
-import { legacyEnvName } from '../../../shared/pod-legacy-env-names'
+import { renamedLegacyEnvName } from '../../../shared/pod-legacy-env-names'
 
 /** Where this build's daemon reads a terminal's handle; the codemod renames it with the rest. */
 export const TERMINAL_HANDLE_ENV = 'ORCA_TERMINAL_HANDLE'
@@ -13,11 +13,11 @@ export function daemonReadsLegacyEnv(identity: DaemonEndpointIdentity | null): b
   return identity?.terminalHandleEnv !== TERMINAL_HANDLE_ENV
 }
 
-/** The env plus the ORCA_ twin of each POD_ name; a twin the env sets itself keeps its value. */
+/** The env plus the ORCA_ twin of each renamed name; a twin the env sets itself keeps its value. */
 export function withLegacyEnvTwins(env: Record<string, string>): Record<string, string> {
   const twins: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) {
-    const twin = legacyEnvName(name)
+    const twin = renamedLegacyEnvName(name)
     if (twin !== null && !Object.hasOwn(env, twin)) {
       twins[twin] = value
     }
@@ -27,7 +27,7 @@ export function withLegacyEnvTwins(env: Record<string, string>): Record<string, 
 
 export function withLegacyEnvTwinsToDelete(names: readonly string[]): string[] {
   const twins = names
-    .map(legacyEnvName)
+    .map(renamedLegacyEnvName)
     .filter((twin): twin is string => twin !== null && !names.includes(twin))
   return [...names, ...twins]
 }
