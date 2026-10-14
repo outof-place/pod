@@ -37,33 +37,36 @@ describe('spawn env for a daemon from before the decouple', () => {
     expect(daemonReadsLegacyEnv({ ...IDENTITY, terminalHandleEnv: 'OTHER_HANDLE' })).toBe(true)
   })
 
-  it.runIf(ENV_DECOUPLED)('adds the ORCA_ twin of each renamed name, keeping one the env sets', () => {
-    expect(
-      withLegacyEnvTwins({
+  it.runIf(ENV_DECOUPLED)(
+    'adds the ORCA_ twin of each renamed name, keeping one the env sets',
+    () => {
+      expect(
+        withLegacyEnvTwins({
+          [current('AGENT_TREE')]: '1',
+          [current('TERMINAL_HANDLE')]: 'term-1',
+          [current('HISTFILE')]: '/h/zsh_history',
+          [current('PANE_KEY')]: 'tab-1:pane',
+          [legacy('PANE_KEY')]: 'explicit',
+          SHELL: '/bin/zsh'
+        })
+      ).toEqual({
+        // Fork-only: POD_ before the decouple too, so no daemon reads an ORCA_ spelling of it.
         [current('AGENT_TREE')]: '1',
         [current('TERMINAL_HANDLE')]: 'term-1',
+        [legacy('TERMINAL_HANDLE')]: 'term-1',
         [current('HISTFILE')]: '/h/zsh_history',
+        [legacy('HISTFILE')]: '/h/zsh_history',
         [current('PANE_KEY')]: 'tab-1:pane',
         [legacy('PANE_KEY')]: 'explicit',
         SHELL: '/bin/zsh'
       })
-    ).toEqual({
-      // Fork-only: POD_ before the decouple too, so no daemon reads an ORCA_ spelling of it.
-      [current('AGENT_TREE')]: '1',
-      [current('TERMINAL_HANDLE')]: 'term-1',
-      [legacy('TERMINAL_HANDLE')]: 'term-1',
-      [current('HISTFILE')]: '/h/zsh_history',
-      [legacy('HISTFILE')]: '/h/zsh_history',
-      [current('PANE_KEY')]: 'tab-1:pane',
-      [legacy('PANE_KEY')]: 'explicit',
-      SHELL: '/bin/zsh'
-    })
-    expect(withLegacyEnvTwinsToDelete([current('CODEX_HOME'), 'CODEX_HOME'])).toEqual([
-      current('CODEX_HOME'),
-      'CODEX_HOME',
-      legacy('CODEX_HOME')
-    ])
-  })
+      expect(withLegacyEnvTwinsToDelete([current('CODEX_HOME'), 'CODEX_HOME'])).toEqual([
+        current('CODEX_HOME'),
+        'CODEX_HOME',
+        legacy('CODEX_HOME')
+      ])
+    }
+  )
 
   it("leaves the request alone for a daemon that reads this build's names", () => {
     const opts = { cols: 80, rows: 24, env: { [current('HISTFILE')]: '/h' } }
@@ -113,31 +116,55 @@ describe('a spawn through the adapter', () => {
     ])
   })
 
-  it.runIf(ENV_DECOUPLED)('sends both spellings to a daemon whose hello names no handle env', async () => {
-    const real = DaemonClient.prototype.getDaemonIdentity
-    vi.spyOn(DaemonClient.prototype, 'getDaemonIdentity').mockImplementation(function (
-      this: DaemonClient
-    ) {
-      const identity = real.call(this)
-      return (
-        identity && {
-          pid: identity.pid,
-          startedAtMs: identity.startedAtMs,
-          launchNonce: identity.launchNonce
+  it.runIf(ENV_DECOUPLED)(
+    'sends both spellings to a daemon whose hello names no handle env',
+    async () => {
+      const real = DaemonClient.prototype.getDaemonIdentity
+      vi.spyOn(DaemonClient.prototype, 'getDaemonIdentity').mockImplementation(function (
+        this: DaemonClient
+      ) {
+        const identity = real.call(this)
+        return (
+          identity && {
+            pid: identity.pid,
+            startedAtMs: identity.startedAtMs,
+            launchNonce: identity.launchNonce
+          }
+        )
+      })
+      await spawnThroughAdapter()
+      expect(received).toEqual([
+        {
+          env: {
+            [current('TERMINAL_HANDLE')]: 'term-1',
+            [current('SHELL_FEATURES')]: 'history',
+            [legacy('TERMINAL_HANDLE')]: 'term-1',
+            [legacy('SHELL_FEATURES')]: 'history'
+          },
+          envToDelete: [current('HISTFILE'), legacy('HISTFILE')]
         }
-      )
-    })
-    await spawnThroughAdapter()
-    expect(received).toEqual([
-      {
-        env: {
-          [current('TERMINAL_HANDLE')]: 'term-1',
-          [current('SHELL_FEATURES')]: 'history',
-          [legacy('TERMINAL_HANDLE')]: 'term-1',
-          [legacy('SHELL_FEATURES')]: 'history'
-        },
-        envToDelete: [current('HISTFILE'), legacy('HISTFILE')]
-      }
-    ])
-  })
+      ])
+    }
+  )
+
+  it.runIf(ENV_DECOUPLED)(
+    'gives a request from a runtime before the decouple (a rollback) the POD_ names too',
+    async () => {
+      await spawnThroughAdapter({
+        env: { [legacy('TERMINAL_HANDLE')]: 'term-old', [legacy('SHELL_FEATURES')]: 'history' },
+        envToDelete: [legacy('HISTFILE')]
+      })
+      expect(received).toEqual([
+        {
+          env: {
+            [legacy('TERMINAL_HANDLE')]: 'term-old',
+            [legacy('SHELL_FEATURES')]: 'history',
+            [current('TERMINAL_HANDLE')]: 'term-old',
+            [current('SHELL_FEATURES')]: 'history'
+          },
+          envToDelete: [legacy('HISTFILE'), current('HISTFILE')]
+        }
+      ])
+    }
+  )
 })

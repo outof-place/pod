@@ -4,7 +4,9 @@ import {
   ENV_DECOUPLED,
   ENV_SPELLINGS,
   legacyEnvName,
-  renamedLegacyEnvName
+  renamedLegacyEnvName,
+  withCurrentEnvSpelling,
+  withCurrentEnvSpellingToDelete
 } from './pod-legacy-env-names'
 
 const current = (name: string): string => `${ENV_SPELLINGS.current}${name}`
@@ -21,6 +23,9 @@ describe('the env names on both sides of the decouple', () => {
     const env = { [legacy('PANE_KEY')]: 'tab-1:old', HOME: '/h' }
     adoptLegacyEnvNames(env)
     expect(env).toEqual({ [legacy('PANE_KEY')]: 'tab-1:old', HOME: '/h' })
+    expect(withCurrentEnvSpelling(env)).toBe(env)
+    const names = [legacy('CODEX_HOME')]
+    expect(withCurrentEnvSpellingToDelete(names, env)).toBe(names)
   })
 })
 
@@ -50,5 +55,36 @@ describe.runIf(ENV_DECOUPLED)('the overlap after the codemod', () => {
       [legacy('E2E_USER_DATA_DIR')]: '/e2e',
       HOME: '/h'
     })
+  })
+
+  it('reads a spawn request from a runtime before the decouple in both spellings', () => {
+    const env = {
+      [legacy('TERMINAL_HANDLE')]: 'term-old',
+      [legacy('PANE_KEY')]: 'tab-1:old',
+      [current('PANE_KEY')]: 'tab-1:explicit',
+      [legacy('E2E_HEADLESS')]: '1',
+      SHELL: '/bin/zsh'
+    }
+    expect(withCurrentEnvSpelling(env)).toEqual({
+      ...env,
+      [current('TERMINAL_HANDLE')]: 'term-old'
+    })
+    expect(withCurrentEnvSpelling({ SHELL: '/bin/zsh' })).toEqual({ SHELL: '/bin/zsh' })
+    expect(withCurrentEnvSpelling(undefined)).toBeUndefined()
+    expect(
+      withCurrentEnvSpellingToDelete(
+        [legacy('CODEX_HOME'), legacy('HISTFILE'), legacy('AGENT_HOOK_ENDPOINT'), 'CODEX_HOME'],
+        { [current('HISTFILE')]: '/h/zsh_history' }
+      )
+    ).toEqual([
+      legacy('CODEX_HOME'),
+      legacy('HISTFILE'),
+      legacy('AGENT_HOOK_ENDPOINT'),
+      'CODEX_HOME',
+      current('CODEX_HOME'),
+      current('AGENT_HOOK_ENDPOINT')
+    ])
+    const names = [current('CODEX_HOME')]
+    expect(withCurrentEnvSpellingToDelete(names, undefined)).toBe(names)
   })
 })

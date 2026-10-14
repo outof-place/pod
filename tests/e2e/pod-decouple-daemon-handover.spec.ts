@@ -191,6 +191,35 @@ test.describe('an update that adopts a daemon from before the decouple', () => {
     expect(await shellValue(terminal, 'TW', `\${${legacy('TERMINAL_HANDLE')}-none}`)).toBe('none')
   })
 
+  test('a runtime from before the decouple (a rollback) on a decoupled daemon', async () => {
+    test.setTimeout(120_000)
+    const fresh = await launchFixtureDaemon({
+      runtime,
+      entryPath: runtime.entryPath,
+      label: 'decoupled',
+      protocolVersion: PROTOCOL
+    })
+    daemons.push(fresh)
+    const histFile = path.join(runtime.rootDir, 'history', 'zsh_history')
+    // What the app before the update sends: its ORCA_ names only.
+    const terminal = await spawnShell(
+      fresh,
+      shellEnv(runtime, {
+        HISTFILE: histFile,
+        [legacy('HISTFILE')]: histFile,
+        [legacy('TERMINAL_HANDLE')]: 'term-before-update'
+      }),
+      runtime.rootDir
+    )
+    terminals.push(terminal)
+    expect((await terminalHandles(fresh)).get(terminal.id)).toBe('term-before-update')
+    expect(await shellValue(terminal, 'HF', '${HISTFILE}')).toBe(histFile)
+    // That app's own hook scripts still read the ORCA_ spelling.
+    expect(await shellValue(terminal, 'TL', `\${${legacy('TERMINAL_HANDLE')}-none}`)).toBe(
+      'term-before-update'
+    )
+  })
+
   test('claude in a terminal from before the update still reports its status', async () => {
     test.setTimeout(120_000)
     const old = await launchFixtureDaemon({
