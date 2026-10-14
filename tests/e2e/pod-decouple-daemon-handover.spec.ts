@@ -41,6 +41,11 @@ test.skip(
   'the native hook client and the zsh history repair are macOS-only'
 )
 
+/** Pod's data folder in the test shells' HOME: the only place an ORCA_ endpoint counts. */
+function podDataFolder(runtime: DaemonGenerationRuntime): string {
+  return path.join(runtime.rootDir, 'home', 'Library', 'Application Support', 'Pod')
+}
+
 function shellEnv(runtime: DaemonGenerationRuntime, names: Record<string, string>) {
   const home = path.join(runtime.rootDir, 'home')
   mkdirSync(home, { recursive: true })
@@ -226,7 +231,7 @@ test.describe('an update that adopts a daemon from before the decouple', () => {
     const { server, port } = await startHookServer(requests)
     try {
       // The live Pod's hook server, published as that Pod publishes it.
-      const liveDir = path.join(runtime.rootDir, 'live-pod', 'agent-hooks')
+      const liveDir = path.join(podDataFolder(runtime), 'agent-hooks')
       mkdirSync(liveDir, { recursive: true })
       const liveEndpoint = path.join(liveDir, getEndpointFileName())
       expect(
@@ -267,7 +272,8 @@ test.describe('an update that adopts a daemon from before the decouple', () => {
       }
       const client = await compileHookClient(
         path.join(runtime.rootDir, 'pod-agent-hook'),
-        'current'
+        'current',
+        podDataFolder(runtime)
       )
       terminal.adapter.write(
         terminal.id,
@@ -293,7 +299,8 @@ test.describe('an update that adopts a daemon from before the decouple', () => {
     const requests: HookRequest[] = []
     const { server, port } = await startHookServer(requests)
     try {
-      const endpointDir = path.join(runtime.userDataDir, 'agent-hooks')
+      // Pod's own data folder: the client takes an ORCA_ endpoint only from there.
+      const endpointDir = path.join(podDataFolder(runtime), 'agent-hooks')
       const endpoint = path.join(endpointDir, getEndpointFileName())
       // What the app before the update gave the pane: ORCA_ names, its own server's coordinates.
       const terminal = await spawnShell(
@@ -324,7 +331,11 @@ test.describe('an update that adopts a daemon from before the decouple', () => {
 
       // A claude started now runs the new client; one running since before, the old client.
       const clients = {
-        current: await compileHookClient(path.join(runtime.rootDir, 'pod-agent-hook'), 'current'),
+        current: await compileHookClient(
+          path.join(runtime.rootDir, 'pod-agent-hook'),
+          'current',
+          podDataFolder(runtime)
+        ),
         old: await compileHookClient(
           path.join(runtime.rootDir, 'pod-agent-hook-old'),
           'pre-decouple'

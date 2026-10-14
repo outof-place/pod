@@ -1,9 +1,10 @@
 import { execFileSync, spawn } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { ENV_DECOUPLED } from '../../../shared/pod-legacy-env-names'
 
 // The decouple renames Pod's ORCA_ names to POD_, but a terminal opened before that update keeps
 // the ORCA_ ones, and a new claude in it runs the new client: it reads either spelling
@@ -27,6 +28,16 @@ beforeAll(async () => {
   if (process.platform === 'darwin') {
     execFileSync('clang', ['-O2', '-std=c11', '-Wall', '-Wextra', '-Werror', source, '-o', client])
   }
+  // Pod's data folder in the test HOME, as the installing runtime records it beside the client;
+  // tmpdir() resolves to /private/var, and the client compares resolved paths.
+  for (const folder of ['Pod', 'Pod Dev', 'Pod2', 'orca']) {
+    mkdirSync(join(dir, 'Library', 'Application Support', folder), { recursive: true })
+  }
+  symlinkSync(
+    join(dir, 'Library', 'Application Support', 'orca'),
+    join(dir, 'Library', 'Application Support', 'Pod', 'to-orca')
+  )
+  writeFileSync(`${client}.user-data`, `${join(dir, 'Library', 'Application Support', 'Pod')}\n`)
   server = createServer((req, res) => {
     let body = ''
     req.on('data', (chunk) => (body += chunk))
@@ -49,11 +60,21 @@ afterAll(async () => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-/** A terminal's env with Pod's names in one spelling only. */
+/** An app's agent-hooks folder in the test HOME; an ORCA_ endpoint counts only in Pod's. */
+function hooksDir(dataFolder: string): string {
+  const hooks = join(dir, 'Library', 'Application Support', dataFolder, 'agent-hooks')
+  mkdirSync(hooks, { recursive: true })
+  return hooks
+}
+
+/** A terminal's env with Pod's names in one spelling only, its endpoint in Pod's data folder. */
 function terminalEnv(spelling: Spelling, names: Record<string, string>): Record<string, string> {
   const tmp = mkdtempSync(join(dir, `${spelling}-`))
   const env: Record<string, string> = { PATH: '/usr/bin:/bin', HOME: dir, TMPDIR: tmp }
-  for (const [name, value] of Object.entries(names)) {
+  for (const [name, value] of Object.entries({
+    AGENT_HOOK_ENDPOINT: join(hooksDir('Pod'), 'no-endpoint-file.env'),
+    ...names
+  })) {
     env[`${SPELLINGS[spelling]}${name}`] = value
   }
   return env
@@ -68,12 +89,22 @@ const paneNames = () => ({
   AGENT_HOOK_VERSION: '7'
 })
 
-async function run(argv: string[], env: Record<string, string>, payload: string) {
+async function runWithStatus(
+  argv: readonly string[],
+  env: Record<string, string>,
+  payload: string
+) {
   requests = []
-  const child = spawn(client, argv, { env, stdio: ['pipe', 'ignore', 'ignore'] })
+  const child = spawn(client, argv, { env, stdio: ['pipe', 'ignore', 'pipe'] })
+  let stderr = ''
+  child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')))
   child.stdin.end(payload)
-  await new Promise((resolve) => child.on('close', resolve))
-  return [...requests]
+  const code = await new Promise((resolve) => child.on('close', resolve))
+  return { requests: [...requests], code, stderr }
+}
+
+async function run(argv: string[], env: Record<string, string>, payload: string) {
+  return (await runWithStatus(argv, env, payload)).requests
 }
 
 describe.runIf(process.platform === 'darwin')(
@@ -107,7 +138,7 @@ describe.runIf(process.platform === 'darwin')(
       "reads the endpoint file named by only %s names, in the runtime's two spellings",
       async (spelling) => {
         const env = terminalEnv(spelling, paneNames())
-        const endpoint = join(dir, `endpoint-${spelling}.env`)
+        const endpoint = join(hooksDir('Pod'), `endpoint-${spelling}.env`)
         const keys = (prefix: string) =>
           `${prefix}AGENT_HOOK_PORT=${port}\n${prefix}AGENT_HOOK_TOKEN=tok-2\n`
         writeFileSync(endpoint, `${keys(SPELLINGS.current)}${keys(SPELLINGS.legacy)}`)
@@ -135,5 +166,45 @@ describe.runIf(process.platform === 'darwin')(
         expect(new URLSearchParams(request?.body).get('paneKey')).toBe(PANE)
       }
     )
+
+    // Orca.app's terminal, a dev Pod's, one whose name only starts with Pod's, a folder symlinked
+    // out of Pod's into Orca's, and an endpoint file in Pod's folder symlinked to Orca's. Hooks
+    // fail open: no output, exit 0.
+    it.runIf(ENV_DECOUPLED).each([
+      ['orca', () => join(hooksDir('orca'), 'endpoint.env')],
+      ['Pod Dev', () => join(hooksDir('Pod Dev'), 'endpoint.env')],
+      ['Pod2', () => join(hooksDir('Pod2'), 'endpoint.env')],
+      ['Pod/to-orca', () => join(hooksDir('Pod/to-orca'), 'endpoint.env')],
+      [
+        'a symlinked endpoint file',
+        () => {
+          const target = join(hooksDir('orca'), 'linked-endpoint.env')
+          writeFileSync(target, '')
+          const link = join(hooksDir('Pod'), 'linked-endpoint.env')
+          symlinkSync(target, link)
+          return link
+        }
+      ]
+    ] as const)('sends nothing, silently, from %s', async (_label, endpoint) => {
+      const env = terminalEnv('legacy', {
+        ...paneNames(),
+        AGENT_HOOK_PORT: String(port),
+        AGENT_HOOK_TOKEN: 'orca-token',
+        AGENT_HOOK_ENDPOINT: endpoint()
+      })
+      for (const [argv, payload] of [
+        [[], '{"hook_event_name":"Stop"}'],
+        [
+          ['statusline'],
+          '{"rate_limits":{"five_hour":{"used_percentage":12.5,"resets_at":1791800000}}}'
+        ]
+      ] as const) {
+        expect(await runWithStatus(argv, env, payload)).toEqual({
+          requests: [],
+          code: 0,
+          stderr: ''
+        })
+      }
+    })
   }
 )

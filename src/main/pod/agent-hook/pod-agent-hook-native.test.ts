@@ -1,4 +1,13 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as osModule from 'node:os'
@@ -21,6 +30,7 @@ import {
   installPodAgentHookBinary,
   podAgentHookEntry,
   podManagedClaudeHook,
+  POD_AGENT_HOOK_USER_DATA_SUFFIX,
   resolveBundledPodAgentHook
 } from './pod-agent-hook-native'
 
@@ -117,6 +127,21 @@ describe('pod-agent-hook, the native managed Claude hook', () => {
     expect(installPodAgentHookBinary(bundled, installPath)).toBe(true)
     expect(statSync(installPath).ino).not.toBe(first.ino)
     expect(readFileSync(installPath, 'utf8')).toContain('new')
+  })
+
+  // Fork-only (Pod): the one data folder an ORCA_ endpoint may lie in (pod-decouple).
+  it('records the resolved data folder of the Pod that installed it, beside the client', () => {
+    const userData = join(home, 'Library', 'Application Support', 'Pod')
+    mkdirSync(userData, { recursive: true })
+    vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+    const installPath = getPodAgentHookInstallPath()
+    const record = `${installPath}${POD_AGENT_HOOK_USER_DATA_SUFFIX}`
+    expect(installPodAgentHookBinary(bundled, installPath)).toBe(true)
+    expect(readFileSync(record, 'utf8')).toBe(`${realpathSync(userData)}\n`)
+    vi.stubEnv('ORCA_USER_DATA_PATH', '')
+    expect(installPodAgentHookBinary(bundled, installPath)).toBe(true)
+    expect(existsSync(record)).toBe(false)
+    vi.unstubAllEnvs()
   })
 
   it("is one of Claude's managed entries, and no other agent's", () => {
