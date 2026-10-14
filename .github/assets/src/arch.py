@@ -711,7 +711,7 @@ def fit(nd: Node) -> Node:
 def acc(narrow: bool = False) -> Diagram:
     """
     Today, from pod/acc: src/main/pod/acc/acc-lifecycle.ts, acc-menu-helper.ts, acc-supervisor.ts,
-    config/claude-acc-payload.json, resources/plugins/distro/outof-place.pod-acc; claude-acc v1.28:
+    config/claude-acc-payload.json; PodNative AccChrome.swift and Mac/ on AccKit's AccStore; claude-acc v1.28:
     setup.sh, app/Sources (Awake.swift, fanctl/Lid.swift, hook/main.swift), sched.py.
     Planned, from the merge plan (scratchpad brand/acc-merge-plan.md, sections 1 and 7).
     """
@@ -725,7 +725,7 @@ def acc(narrow: bool = False) -> Diagram:
         "helper": dict(eyebrow="Menu bar helper", title="Claude Acc.app", body="Stay awake and dictation. Pod hides its own tray icon while it runs."),
         "root": dict(eyebrow="LaunchDaemons, root", title="Fans and lid", body="Installed apart with Touch ID, never by Pod's setup."),
         "hook": dict(eyebrow="Agents' commands", title="Hook and sched", body="Dev servers go to the memory guard, builds to the memory-aware scheduler."),
-        "plugin": dict(eyebrow="Pod plugin", title="Status bar and panel", body="Account, memory and awake at the window's foot.", pod=True),
+        "plugin": dict(eyebrow="PodNative", title="Toolbar and Mac window", body="A usage ring, then accounts, dev servers and builds, read through AccKit.", pod=True),
     }
     planned = {
         "menu": dict(eyebrow="Login item in Pod.app", title="Pod Menu.app", body="Claude Acc.app moved inside Pod; same bundle id, so its grants carry over.", planned=True),
@@ -751,7 +751,7 @@ def acc(narrow: bool = False) -> Diagram:
             Edge("supervisor", "payload", "setup.sh", fa=0.42, fb=0.42, packet=3.0, label_side="above"),
             Edge("payload", "agents", "launchctl\nbootstrap", fa=0.42, fb=0.42, packet=3.0, delay=0.6, label_side="above"),
             Edge("agents", "state", "writes", fa=0.42, fb=0.42, packet=3.0, delay=1.2, label_side="above"),
-            Edge("state", "plugin", "polls", sides="bt", packet=3.0, delay=1.8, label_side="right"),
+            Edge("state", "plugin", "watches", sides="bt", packet=3.0, delay=1.8, label_side="right"),
             Edge("supervisor", "helper", "is it\nrunning?", sides="bt", fa=0.4, fb=0.4, quiet=True, label_side="right"),
             Edge("payload", "helper", "installs, opens", sides="bt", fa=0.3, fb=0.86, packet=3.0, delay=0.9, label_side="above"),
             Edge("helper", "root", "awake.json", fa=0.5, fb=0.5, quiet=True, label_side="above"),
@@ -762,7 +762,7 @@ def acc(narrow: bool = False) -> Diagram:
         bands = [(24, band_y, W - 48, y3 + ph + 24 - band_y, "Planned, after the first release")]
         return Diagram("arch-acc", title, W, y3 + ph + 24 + 76, nodes, edges, legend=legend, bands=bands)
     specs = [(k_, spec[k_]) for k_ in ("supervisor", "payload", "agents", "state", "plugin")]
-    flow = [("supervisor", "payload", "setup.sh"), ("payload", "agents", "launchctl bootstrap"), ("agents", "state", "writes"), ("state", "plugin", "polls")]
+    flow = [("supervisor", "payload", "setup.sh"), ("payload", "agents", "launchctl bootstrap"), ("agents", "state", "writes"), ("state", "plugin", "watches")]
     note = "Setup also installs the menu helper, Claude Acc.app. Fans and the lid run as root daemons, installed apart with Touch ID."
     return _phone("arch-acc", title, specs, flow, note, legend, planned=[(k_, planned[k_]) for k_ in ("menu", "rootd", "pagents", "python")])
 

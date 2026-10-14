@@ -106,19 +106,21 @@ looked after while the agents work.
   <source media="(prefers-color-scheme: dark) and (max-width: 600px)" srcset="assets/arch-acc-narrow-dark.svg">
   <source media="(max-width: 600px)" srcset="assets/arch-acc-narrow-light.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/arch-acc-dark.svg">
-  <img alt="claude-acc inside Pod: Pod's acc supervisor runs the bundled claude-acc setup, which bootstraps the LaunchAgents (subscription rotation, memory guard, cleanup, perf) and installs the menu helper; the jobs write state files that Pod's plugin polls for the status bar and panel. Agents' commands pass a hook into the memory guard and the build scheduler. Fans and lid run as root daemons installed separately. A planned layer, after the first release: Pod Menu.app as a login item, codes.pod.app.acc LaunchAgents, an embedded Python and a single pod-rootd helper in place of the root daemons." src="assets/arch-acc-light.svg" width="100%">
+  <img alt="claude-acc inside Pod: Pod's acc supervisor runs the bundled claude-acc setup, which bootstraps the LaunchAgents (subscription rotation, memory guard, cleanup, perf) and installs the menu helper; the jobs write state files that PodNative watches through AccKit for its toolbar and Mac window. Agents' commands pass a hook into the memory guard and the build scheduler. Fans and lid run as root daemons installed separately. A planned layer, after the first release: Pod Menu.app as a login item, codes.pod.app.acc LaunchAgents, an embedded Python and a single pod-rootd helper in place of the root daemons." src="assets/arch-acc-light.svg" width="100%">
 </picture>
 
 - Pod carries a pinned claude-acc release inside the app; the build checks its sha256.
 - On launch, Pod's supervisor runs the bundled `setup.sh --owner pod`, and only when the version, the
   owner or the app's path has changed. Setup installs the LaunchAgents (subscription rotation, the
   dev-server memory guard, cleanup, perf) and the menu helper.
-- A Pod plugin shows claude-acc's state in the status bar and a panel, from the state files the jobs write.
+- PodNative shows claude-acc's state in the window's toolbar (a usage ring, and a popover with the Claude
+  accounts, dev servers and builds) and in its Mac window. AccKit watches the state files the jobs write
+  and reads only what a view shows.
 - Agents' commands pass a hook that sends dev servers through the memory guard and builds through the
   memory-aware scheduler.
 - Fans, and staying awake with the lid closed, run as root daemons that you install separately with
   Touch ID. Pod's setup doesn't install them.
-- **First release:** the supervisor, setup and the plugin, with claude-acc's own menu helper,
+- **First release:** the supervisor, setup and PodNative's views, with claude-acc's own menu helper,
   LaunchAgents and root daemons as they ship today.
 - **Planned, after the first release** (the dashed layer): Claude Acc.app moves inside Pod as
   `Pod Menu.app`, a login item that keeps its bundle id so its permissions carry over; the jobs move to
