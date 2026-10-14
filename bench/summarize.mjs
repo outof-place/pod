@@ -19,6 +19,13 @@ const GLOBAL_CAVEATS = [
   'Orca is the latest official release; Pod is the build named in versions. Pod sits on a newer Orca main commit than the Orca release, so part of any difference can come from upstream changes; the Pod (xterm.js) rows separate the native terminal from the rest of the build.',
   'Historical rows (provenance.kind "historical") were measured earlier, under the conditions in their note, and are not re-measured in this run.'
 ]
+// run-final.sh --runtime-only: one-app Pod 1.0, where the suites reach only the Electron runtime.
+const RUNTIME_SCOPE_CAVEATS = [
+  'One Mac, one subject at a time in rotating order; every fresh sample started at a 1-minute load average of 8 or less.',
+  'Pod 1.0 is a native app with Pod\'s Electron runtime inside. These rows measure that runtime, which runs for every Pod user; native UI rows pending a PodNative driver.',
+  'Orca is the latest official release; Pod is the build named in versions. Pod forked Orca and is maintained separately, so part of any difference can come from code either side changed since.',
+  'Pod\'s terminals run without the macOS /usr/bin/login wrapper here (ORCA_DISABLE_MACOS_LOGIN_SHELL), which keeps each shell inside its throwaway HOME.'
+]
 
 const dir = path.resolve(
   process.argv[2] ?? path.join(BENCH_ROOT, 'results', new Date().toISOString().slice(0, 10))
@@ -210,7 +217,10 @@ const summary = {
   podStack: stack,
   // The Pod build every pod-* row measured, and the pinned inputs of the search suites.
   run: runInfo,
-  caveats: [...GLOBAL_CAVEATS, ...buildCaveats()],
+  caveats: [
+    ...(runInfo?.scope === 'runtime' ? RUNTIME_SCOPE_CAVEATS : GLOBAL_CAVEATS),
+    ...buildCaveats()
+  ],
   groups: {
     pod: 'Pod vs Orca and other terminals, measured in this run',
     'claude-acc': 'claude-acc, which ships inside Pod: re-measured rows plus historical ones'

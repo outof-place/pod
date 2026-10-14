@@ -5,7 +5,7 @@
 #
 #   bench/run-final.sh --pod /path/to/Pod.app [--pod-commit SHA] [--orca /Applications/Orca.app]
 #                      [--og-sha SHA] [--og-features pcre2] [--search-client-sha SHA]
-#                      [--pod-profile pod|orca] [--no-visible] [--vdisplay]
+#                      [--pod-profile pod|orca] [--no-visible] [--vdisplay] [--runtime-only]
 #
 # --pod-commit is the main commit the Pod build came from (read from the bundle when it records
 # one); every Pod row and the stack check use it. --pod-profile is the POD_BUILD_PROFILE it was
@@ -13,7 +13,14 @@
 # bench-ready: its ogd must advertise search.full_lines and search.max_filesize, checked before
 # anything is measured. Without it the og and ogd rows are listed as "coming", with no numbers.
 # --vdisplay adds a virtual display for 20 s, which moves the user's display layout, so it is off
-# unless asked for.
+# unless asked for. --runtime-only (one-app Pod 1.0: PodNative with the Electron runtime inside)
+# measures only what that runtime runs for every user: polling, search and browser. The suites
+# drive the runtime's Electron UI, which Pod 1.0 does not show, so startup, panes, throughput and
+# the visible run are listed as coming; git-status is too (it replays a strategy, not Pod's own).
+# It implies --no-visible and skips claude-acc.
+#
+# Profiles, workspaces and the copies a run makes live under one /private/tmp dir (printed at the
+# start); nothing is deleted while the run goes on. Remove that dir afterwards with pod-tmp-rm.
 #
 # Every sample still waits for a 1-minute load average <= POD_BENCH_MAX_LOAD (default 8).
 set -euo pipefail
@@ -27,6 +34,7 @@ og_features="pcre2"
 client_sha=""
 visible=1
 vdisplay=0
+runtime_only=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --pod) pod="${2:?}"; shift 2 ;;
@@ -38,7 +46,8 @@ while [ $# -gt 0 ]; do
     --search-client-sha) client_sha="${2:?}"; shift 2 ;;
     --no-visible) visible=0; shift ;;
     --vdisplay) vdisplay=1; shift ;;
-    -h | --help) sed -n '2,19p' "$0"; exit 0 ;;
+    --runtime-only) runtime_only=1; visible=0; shift ;;
+    -h | --help) sed -n '2,29p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -56,6 +65,12 @@ export POD_BENCH_POD_APP="$pod" POD_BENCH_ORCA_APP="$orca"
 export POD_BENCH_OUT="${POD_BENCH_OUT:-$here/results/$(date -u +%F)}"
 mkdir -p "$POD_BENCH_OUT"
 echo "==> results: $POD_BENCH_OUT"
+# A short base: the daemon socket <profile>/daemon/daemon-v<N>.sock must fit in 104 bytes.
+run_dir="$(mktemp -d /private/tmp/pod-bench.XXXXXX)"
+export POD_BENCH_PROFILE_BASE="$run_dir/p"
+echo "==> run dir (remove with pod-tmp-rm when done): $run_dir"
+# The polling rows publish the addon as the benched Pod's own.
+export POD_BENCH_REQUIRE_POD_ADDON=1
 # The user's claude-acc install as it is now; every launch and every step is checked against it,
 # and a change stops the run (lib/acc-guard.mjs).
 export POD_BENCH_ACC_BASELINE="$POD_BENCH_OUT/acc-baseline.raw"
@@ -64,7 +79,9 @@ acc_check() { node "$here/lib/acc-guard.mjs" --check "$POD_BENCH_ACC_BASELINE"; 
 echo "==> Pod:  $pod ($(plutil -extract CFBundleShortVersionString raw -o - "$pod/Contents/Info.plist"))"
 echo "==> Orca: $orca ($(plutil -extract CFBundleShortVersionString raw -o - "$orca/Contents/Info.plist"))"
 if [ -z "$pod_commit" ]; then
-  pod_commit="$(plutil -extract commit raw -o - "$pod/Contents/Resources/orca-local-build.json" 2>/dev/null || true)"
+  build_json="$pod/Contents/Resources/orca-local-build.json"
+  [ -f "$build_json" ] || build_json="$pod/Contents/Helpers/Pod Runtime.app/Contents/Resources/orca-local-build.json"
+  pod_commit="$(plutil -extract commit raw -o - "$build_json" 2>/dev/null || true)"
 fi
 [ -n "$pod_commit" ] || { echo "the Pod bundle records no commit: pass --pod-commit <main SHA>" >&2; exit 2; }
 git -C "$here/.." fetch -q origin
@@ -97,19 +114,34 @@ if [ -z "$og_sha" ]; then
 elif [ -z "$client_sha" ]; then
   coming="ogd"
 fi
+scope="full"
+if [ "$runtime_only" = 1 ]; then
+  scope="runtime"
+  coming="${coming:+$coming,}startup,panes,throughput,latency,git-status"
+fi
 node -e '
-  const fs = require("fs"), [out, podApp, podCommit, podProfile, orcaApp, inputs, comingList] = process.argv.slice(1)
+  const fs = require("fs"), [out, podApp, podCommit, podProfile, orcaApp, inputs, comingList, scope] = process.argv.slice(1)
   const reasons = {
     og: { suite: "search", subject: "og (pod-search)", reason: "no bench-ready pod-search build was confirmed for this run" },
-    ogd: { suite: "ogd", subject: "Pod search on ogd", reason: "needs a bench-ready pod-search build and a pinned pod/search-client" }
+    ogd: { suite: "ogd", subject: "Pod search on ogd", reason: "needs a bench-ready pod-search build and a pinned pod/search-client" },
+    startup: { suite: "startup", subject: "Pod startup", reason: "native UI rows pending a PodNative driver" },
+    panes: { suite: "panes", subject: "Pod terminal panes", reason: "native UI rows pending a PodNative driver" },
+    throughput: { suite: "throughput", subject: "Pod terminal throughput", reason: "native UI rows pending a PodNative driver" },
+    latency: { suite: "latency", subject: "keystroke latency and visible throughput, with Ghostty and Terminal.app", reason: "native UI rows pending a PodNative driver; the visible run needs the desktop and keyboard focus" },
+    "git-status": { suite: "git-status", subject: "Source Control status poll", reason: "pending a suite that replays the status strategy Pod 1.0 runs" }
   }
   const coming = comingList ? comingList.split(",").map((id) => ({ id, status: "coming", ...reasons[id] })) : []
   const home = require("os").homedir()
   const publicPaths = (_key, value) => (typeof value === "string" ? value.replaceAll(home, "~") : value)
-  fs.writeFileSync(out, JSON.stringify({ podApp, podCommit, podProfile, orcaApp, startedAt: new Date().toISOString(), search: JSON.parse(fs.readFileSync(inputs, "utf8")), coming }, publicPaths, 2) + "\n")
-' "$POD_BENCH_OUT/run.json" "$pod" "$pod_commit" "$pod_profile" "$orca" "$inputs" "$coming"
+  fs.writeFileSync(out, JSON.stringify({ podApp, podCommit, podProfile, orcaApp, scope, startedAt: new Date().toISOString(), search: JSON.parse(fs.readFileSync(inputs, "utf8")), coming }, publicPaths, 2) + "\n")
+' "$POD_BENCH_OUT/run.json" "$pod" "$pod_commit" "$pod_profile" "$orca" "$inputs" "$coming" "$scope"
 
-node "$here/suites/preflight.mjs"
+if [ "$runtime_only" = 1 ]; then
+  # Only the subjects the runtime suites launch (browser).
+  node "$here/suites/preflight.mjs" --subjects orca,pod-native
+else
+  node "$here/suites/preflight.mjs"
+fi
 acc_check
 run_suite() {
   echo "==> $*"
@@ -119,7 +151,8 @@ run_suite() {
 }
 run_suite polling
 run_suite polling --extra-ptys 80
-run_suite git-status
+# The same repo the search suites read: a local clone, never the user's own checkout.
+[ "$runtime_only" = 1 ] || run_suite git-status --repo "$search_repo"
 if [ -n "$og_sha" ]; then
   run_suite search --repo "$search_repo" --engines rg,og --og "$(field og)" --ogd "$(field ogd)" \
     --ogctl "$(field ogctl)" --og-sha "$(field ogSha)"
@@ -129,14 +162,18 @@ fi
 if [ -n "$og_sha" ] && [ -n "$client_sha" ]; then
   run_suite ogd --inputs "$inputs"
 fi
-run_suite startup
-run_suite panes
-run_suite throughput
+if [ "$runtime_only" = 0 ]; then
+  run_suite startup
+  run_suite panes
+  run_suite throughput
+fi
 run_suite browser
-echo "==> claude-acc (historical + fresh)"
-node "$here/suites/claude-acc.mjs" --fresh
-acc_check
-node "$here/summarize.mjs" "$POD_BENCH_OUT"
+if [ "$runtime_only" = 0 ]; then
+  echo "==> claude-acc (historical + fresh)"
+  node "$here/suites/claude-acc.mjs" --fresh
+  acc_check
+  node "$here/summarize.mjs" "$POD_BENCH_OUT"
+fi
 
 if [ "$visible" = 1 ]; then
   if [ "$vdisplay" = 1 ]; then
