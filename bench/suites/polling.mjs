@@ -361,10 +361,16 @@ const fullComparisons = [
 ]
 const comparisons = process.env.POD_BENCH_SCOPE === 'runtime' ? RUNTIME_COMPARISONS : fullComparisons
 
+// Where each runtime-scope row comes from: the same read in both apps, at the same frequency.
+const RUNTIME_SOURCES = [
+  'Terminal process rows, every poll. Orca 1.4.225: src/main/runtime/terminal-foreground-group.ts:56 runs `ps -o pid=,ppid=,pgid=,tpgid=,stat=,command= -t TTY` through runProcess (a Node spawn); the tty is cached per pane root pid (:15-48). Pod 1.0.0-rc1 (b9b9850092): the same file, :72, calls listTerminalProcesses(tty) with the same per-pane tty cache (:18-36). The Orca row runs the same ps arguments from Node with execFile, without runProcess\'s PATH lookup.',
+  'Cheap process table. Orca 1.4.225: src/shared/cheap-process-table-snapshot-reader.ts:20-27 forks `ps` with CHEAP_PS_ARGS (src/shared/process-table-snapshot.ts:35-39, `-axo pid=,ppid=,pgid=,tpgid=,stat=,lstart=` on macOS) inside the shared reader\'s coalescing and TTL. Pod 1.0.0-rc1: the same reader (:22-24) asks listProcesses() first (:51-57) and keeps ps as the fallback, with the same coalescing and TTL, so both rows time one capture each.'
+]
 writeSuiteResult(SUITE, {
   // ps' tty= cost follows the open terminals: label which machine state each suite stands for.
   condition: extraPtys > 0 ? 'agent-heavy' : 'quiet',
   caveats: [
+    ...(process.env.POD_BENCH_SCOPE === 'runtime' ? RUNTIME_SOURCES : []),
     extraPtys > 0
       ? `Agent-heavy: ${extraPtys} idle ptys added to the quiet window, about the number of terminals this Mac keeps open in normal agent work. This is the condition that matches daily use.`
       : 'Quiet window: agents parked and few terminals open, so ps has few tty rows to resolve. polling-ptys80 is the agent-heavy condition.'
