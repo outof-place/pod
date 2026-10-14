@@ -36,6 +36,7 @@ import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../shared/agent-launc
 import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../shared/agent-launch-session-already-exists'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-closed'
 import { AGENT_LAUNCH_TARGET_FORBIDDEN_CODE } from '../../../shared/agent-launch-target-forbidden'
+import { POD_CLAUDE_ACCOUNTS_MANAGED_CODE } from '../../../shared/pod-claude-accounts-managed'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -166,7 +167,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   // Why: an owner conflict is a distinct client decision (reload the host, re-adopt,
   // stop offering the action) — flattened to runtime_error it can only be guessed at.
   ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES),
-  ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES)
+  ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES),
+  // Fork-only (Pod): Pod's Claude account RPCs refuse; claude-acc owns the accounts.
+  POD_CLAUDE_ACCOUNTS_MANAGED_CODE
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {

@@ -43,10 +43,23 @@ import {
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { getClaudeAccountSyncKey } from './provider-account-sync-key'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
+import { isPodClaudeAccAccounts } from '../settings/pod-claude-acc-accounts-section'
+import { PodClaudeAccSwitcherMenu } from './pod-claude-acc-switcher-menu'
 
 // Exported so its account-switch/reset logic is preserved for row drill-in even
 // though the footer now opens the consolidated UsageRosterPanel first.
-export function ClaudeSwitcherMenu({
+export function ClaudeSwitcherMenu(
+  props: React.ComponentProps<typeof OrcaClaudeSwitcherMenu>
+): React.JSX.Element {
+  // Fork-only (Pod): claude-acc's accounts, switched through claude-acc; Pod stores no selection.
+  return isPodClaudeAccAccounts() ? (
+    <PodClaudeAccSwitcherMenu {...props} />
+  ) : (
+    <OrcaClaudeSwitcherMenu {...props} />
+  )
+}
+
+function OrcaClaudeSwitcherMenu({
   claude,
   compact,
   iconOnly,
