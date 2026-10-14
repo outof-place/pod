@@ -34,6 +34,7 @@ import { inspectPtyChildProcesses, processHasChildren } from './pty-child-proces
 import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
 import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
 import { applyScrubSafeAgentEnvAliases } from '../shared/agent-hook-scrub-safe-env'
+import { stripInheritedLegacyEnv } from '../shared/pod-legacy-env-names'
 import { addWslEnvKeys } from '../shared/wsl-env'
 import {
   OPENCODE_STARTUP_PROMPT_SHA256_ENV,
@@ -895,6 +896,8 @@ export class PtyHandler {
     envToDelete: readonly string[] = []
   ): Promise<Record<string, string>> {
     const inheritedEnv = stripInheritedBuildModeEnv(process.env)
+    // Fork-only (Pod): inherited ORCA_ spellings would reach the dual-read hook clients (pod-decouple).
+    stripInheritedLegacyEnv(inheritedEnv)
     restoreManagedDataAccountEnvironment(inheritedEnv)
     const explicitEnv = { ...rendererEnv }
     restoreManagedDataAccountEnvironment(explicitEnv, false)
