@@ -39,7 +39,10 @@ const REAL_PROFILE = path.join(HOME, 'Library/Application Support/orca')
 // Short base under the run's own /private/tmp dir: the daemon socket
 // <userData>/daemon/daemon-v<N>.sock must fit in 104 bytes, and the run dir is removed as a whole
 // at the end (pod-tmp-rm), so nothing is deleted while the run goes on.
-export const PROFILE_BASE = process.env.POD_BENCH_PROFILE_BASE ?? '/private/tmp/pod-bench/p'
+// Without run-final.sh's base, each process gets its own run dir: a shared base would let one run's
+// argv sweep reach another's processes.
+export const PROFILE_BASE =
+  process.env.POD_BENCH_PROFILE_BASE ?? path.join(mkdtempSync('/private/tmp/pod-bench.'), 'p')
 // Never signal a program under these, whatever its argv says.
 const PROTECTED_PROGRAMS = ['/Applications/', path.join(HOME, 'Library/Application Support/Pod/')]
 const REPO_ROOT = path.dirname(BENCH_ROOT)
@@ -370,6 +373,11 @@ export function spawnInstance(appPath, profile) {
 export async function launchInstance(appPath, profile, { visible = false } = {}) {
   assertIsolated(profile)
   const info = describeApp(appPath)
+  // A foreground one-app runtime opens its outer PodNative through LaunchServices, without this
+  // env: the real HOME, the real Pod profile and a window on screen.
+  if (visible && info.oneApp) {
+    throw new Error(`refusing a visible launch of a one-app runtime: ${info.realPath}`)
+  }
   const { playwright } = loadPlaywright()
   const env = launchEnv(profile, { visible })
   assertAccOff(env)
@@ -430,7 +438,8 @@ async function cliCall(instance, args, timeoutMs) {
         env: {
           PATH: '/usr/bin:/bin',
           HOME: instance.profile.home,
-          // Orca's CLI reads ORCA_USER_DATA_PATH; Pod's reads POD_USER_DATA_PATH since pod/decouple.
+          // Orca's CLI and Pod 1.0's read ORCA_USER_DATA_PATH; POD_USER_DATA_PATH is pod/decouple's
+          // name for it, after 1.0. Both are set.
           ORCA_USER_DATA_PATH: instance.profile.ud,
           POD_USER_DATA_PATH: instance.profile.ud,
           ...ACC_OFF_ENV

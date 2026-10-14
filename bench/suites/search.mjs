@@ -254,8 +254,13 @@ const conditions = `${repoFacts.trackedFiles} tracked files, ${QUERIES.length} q
 const subjectOf = (engine) =>
   engine === 'og'
     ? `og (pod-search ${(options['og-sha'] ?? 'unpinned').slice(0, 9)}, ripgrep 15.2.0 fork, warm ogd index)`
-    : (versions.rg ?? 'rg')
+    : `${versions.rg ?? 'rg'} (a baseline: agents run the same rg in any terminal)`
 const suiteCaveats = []
+if (!engines.includes('og')) {
+  suiteCaveats.push(
+    'Without og these rows are a ripgrep baseline, not Pod code: agents run the same ripgrep in Pod, Orca or any other terminal. Pod\'s indexed search (og, ogd) is listed as coming.'
+  )
+}
 for (const engine of engines) {
   const accepted = samples[engine].filter((sample) => !sample.warmup)
   // og falls back to the real rg when it cannot answer; say how often that happened.

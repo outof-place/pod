@@ -14,10 +14,11 @@
 # anything is measured. Without it the og and ogd rows are listed as "coming", with no numbers.
 # --vdisplay adds a virtual display for 20 s, which moves the user's display layout, so it is off
 # unless asked for. --runtime-only (one-app Pod 1.0: PodNative with the Electron runtime inside)
-# measures only what that runtime runs for every user: polling, search and browser. The suites
-# drive the runtime's Electron UI, which Pod 1.0 does not show, so startup, panes, throughput and
-# the visible run are listed as coming; git-status is too (it replays a strategy, not Pod's own).
-# It implies --no-visible and skips claude-acc.
+# keeps the rows that do not depend on the runtime's Electron UI, which Pod 1.0 does not show:
+# polling (process reads the runtime makes), browser (the runtime started on its own, in classic
+# mode; labelled so) and search (a ripgrep baseline, the same in any terminal). Startup, panes,
+# throughput, the visible run and git-status (it replays a strategy, not Pod's own) are listed as
+# coming. It implies --no-visible and skips claude-acc.
 #
 # Profiles, workspaces and the copies a run makes live under one /private/tmp dir (printed at the
 # start); nothing is deleted while the run goes on. Remove that dir afterwards with pod-tmp-rm.
@@ -178,17 +179,16 @@ fi
 if [ "$visible" = 1 ]; then
   if [ "$vdisplay" = 1 ]; then
     echo "==> virtual display check (adds a display for 20 s)"
-    "$here/.build/bin/vdisplay" --create --hold 20 > "$POD_BENCH_OUT/vdisplay.raw" &
+    "$here/.build/bin/vdisplay" --create --hold 20 > "$run_dir/vdisplay.raw" &
     vd=$!
     sleep 5
-    "$here/.build/bin/keylat" --preflight > "$POD_BENCH_OUT/vdisplay-preflight.raw" || true
+    "$here/.build/bin/keylat" --preflight > "$run_dir/vdisplay-preflight.raw" || true
     wait "$vd" || true
     node -e '
       const fs = require("fs"), [created, preflight, out] = process.argv.slice(1)
       const read = (f) => { try { return JSON.parse(fs.readFileSync(f, "utf8")) } catch { return null } }
       fs.writeFileSync(out, JSON.stringify({ suite: "vdisplay", writtenAt: new Date().toISOString(), created: read(created), displaysWhileCreated: read(preflight)?.displays ?? null, metrics: [] }, null, 2) + "\n")
-    ' "$POD_BENCH_OUT/vdisplay.raw" "$POD_BENCH_OUT/vdisplay-preflight.raw" "$POD_BENCH_OUT/vdisplay.json"
-    rm -f "$POD_BENCH_OUT/vdisplay.raw" "$POD_BENCH_OUT/vdisplay-preflight.raw"
+    ' "$run_dir/vdisplay.raw" "$run_dir/vdisplay-preflight.raw" "$POD_BENCH_OUT/vdisplay.json"
   fi
   echo "==> visible windows: latency and throughput (takes the desktop)"
   node "$here/suites/latency.mjs" --confirm-visible --throughput
