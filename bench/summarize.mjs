@@ -22,7 +22,8 @@ const GLOBAL_CAVEATS = [
 // run-final.sh --runtime-only: one-app Pod 1.0, where the suites reach only the Electron runtime.
 const RUNTIME_SCOPE_CAVEATS = [
   'One Mac, one subject at a time in rotating order; every fresh sample started at a 1-minute load average of 8 or less.',
-  'Pod 1.0 is a native app (PodNative) with Pod\'s Electron runtime inside. The polling rows time process reads that runtime makes for every Pod user. The browser rows start the runtime on its own, in classic mode with a hidden window, not in the headless mode Pod 1.0 starts it in by default. The search rows are a ripgrep baseline, the same in any terminal. Native UI rows pending a PodNative driver.',
+  'Pod 1.0 is a native app (PodNative) with Pod\'s Electron runtime inside. The polling rows time process reads that runtime makes for every Pod user. The browser rows start the runtime on its own, in classic mode with a hidden window, not in the headless mode Pod 1.0 starts it in by default. Native UI rows pending a PodNative driver.',
+  'The runtime\'s Electron terminal renderer (ghostty_terminal.node) is not in Pod 1.0, where PodNative draws the terminals; the runtime ran with its default terminal setting, which the polling and browser rows do not depend on.',
   'Orca is the latest official release; Pod is the build named in versions. Pod forked Orca and is maintained separately, so part of any difference can come from code either side changed since.',
   'Pod\'s terminals run without the macOS /usr/bin/login wrapper here (ORCA_DISABLE_MACOS_LOGIN_SHELL), which keeps each shell inside its throwaway HOME.'
 ]
