@@ -12,13 +12,14 @@ import { parseArgs } from 'node:util'
 import { promisify } from 'node:util'
 import {
   TOOLS_BIN,
+  appVersion,
   collectSamples,
   commandVersion,
   log,
   sleep,
   writeSuiteResult
 } from '../lib/bench-session.mjs'
-import { POD_APP } from '../lib/orca-instance.mjs'
+import { ORCA_APP, POD_APP } from '../lib/orca-instance.mjs'
 import { summarize } from '../lib/sample-stats.mjs'
 
 const { values: options } = parseArgs({
@@ -47,12 +48,25 @@ const holder = spawn(
 const extraHolders = Array.from({ length: extraPtys }, () =>
   spawn('/usr/bin/script', ['-q', '/dev/null', '/bin/sleep', '86400'], { stdio: 'ignore' })
 )
+// Every process under one of this run's own children (a pgrep -P walk), deepest first.
+function descendants(pid) {
+  let children = []
+  try {
+    children = execFileSync('/usr/bin/pgrep', ['-P', String(pid)], { encoding: 'utf8' })
+      .split('\n')
+      .filter(Boolean)
+      .map(Number)
+  } catch {}
+  return children.flatMap((child) => [...descendants(child), child])
+}
 // The load gate can wait for hours; never leave the ptys behind.
 const stopHolder = () => {
   for (const child of [holder, ...extraHolders]) {
-    try {
-      execFileSync('/usr/bin/pkill', ['-TERM', '-P', String(child.pid)])
-    } catch {}
+    for (const pid of descendants(child.pid)) {
+      try {
+        process.kill(pid, 'SIGTERM')
+      } catch {}
+    }
     child.kill('SIGTERM')
   }
 }
@@ -101,6 +115,10 @@ const addonPath =
   process.env.POD_BENCH_PROC_INFO_ADDON ?? [podAddon, devAddon].find((file) => existsSync(file))
 const addonSource =
   addonPath === podAddon ? `the Pod build (${POD_APP})` : 'a local development build'
+// The final run publishes the addon as the benched Pod's: never a development build in its place.
+if (process.env.POD_BENCH_REQUIRE_POD_ADDON === '1' && addonPath !== podAddon) {
+  throw new Error(`the Pod build has no ${path.relative(realpathSync(POD_APP), podAddon)}`)
+}
 let addon = null
 if (addonPath && existsSync(addonPath)) {
   try {
@@ -238,7 +256,8 @@ const subjects = {
 }
 const metrics = Object.keys(methods).map((name) => ({
   id: `${SUITE}.${name}`,
-  subject: subjects[name][0],
+  // The labels name the Orca release the run compared against (run-final.sh checks it still forks ps).
+  subject: subjects[name][0].replace('Orca 1.4.223', `Orca ${appVersion(ORCA_APP)}`),
   metric: `${subjects[name][1]} per call`,
   unit: 'µs',
   better: 'lower',

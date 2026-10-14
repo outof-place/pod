@@ -4,7 +4,7 @@
 //
 //   node bench/suites/preflight.mjs [--subjects orca,pod-native,pod-xterm]
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { TOOLS_BIN, log, sleep, writeSuiteResult } from '../lib/bench-session.mjs'
@@ -61,7 +61,6 @@ for (const name of options.subjects.split(',')) {
       await sleep(50)
     }
     const result = existsSync(out) ? JSON.parse(readFileSync(out, 'utf8')) : null
-    rmSync(out, { force: true })
     if (!result?.synced) {
       throw new Error('termload did not sync (no device-attributes reply)')
     }
