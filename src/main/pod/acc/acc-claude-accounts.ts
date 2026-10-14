@@ -21,12 +21,19 @@ export function claudeAccPaths(home = homedir()): ClaudeAccPaths {
   return { home, state, python: join(state, 'python'), launcher: join(state, 'acc.py') }
 }
 
-const EMPTY: PodClaudeAccState = { available: false, generatedAt: null, accounts: [] }
+const EMPTY: PodClaudeAccState = {
+  available: false,
+  generatedAt: null,
+  accounts: [],
+  podSelected: null
+}
 // Why: `switch --auto` and other flags are commands too; only an address reaches accswitch.
 const EMAIL = /^[^\s@-][^\s@]*@[^\s@]+$/
 // accswitch gives the browser 600 s, then cleans up itself.
 const SIGN_IN_TIMEOUT_MS = 11 * 60_000
 const MAX_OUTPUT_CHARS = 64_000
+const NOT_INSTALLED =
+  "claude-acc isn't installed here: ~/.local/share/claude-acc/python is missing. Pod installs it with Pod Menu."
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -66,7 +73,8 @@ export function parseClaudeAccSnapshot(value: unknown): PodClaudeAccState | null
       weekly: usageWindow(row.weekly)
     })
   }
-  return { available: true, generatedAt: finite(snapshot.generated_at), accounts }
+  const podSelected = typeof snapshot.orca_selected === 'string' ? snapshot.orca_selected : null
+  return { available: true, generatedAt: finite(snapshot.generated_at), accounts, podSelected }
 }
 
 /** The script's last line, without the CLI's "błąd: " prefix. */
@@ -113,11 +121,17 @@ export class PodClaudeAccAccounts {
     if (!EMAIL.test(email)) {
       return this.refused(email)
     }
+    const python = await this.interpreter()
+    if (!python) {
+      return this.finish(false, NOT_INSTALLED, false)
+    }
+    // Why no timeout: runProcess ends one with SIGTERM then SIGKILL, and a switch killed between
+    // its two Keychain writes leaves the runtime entries on different accounts.
     const result = await this.run({
-      program: await this.interpreter(),
+      program: python,
       args: [this.paths.launcher, 'accswitch', 'switch', email],
       env: this.env(),
-      timeoutMs: 90_000,
+      timeoutMs: null,
       maxOutputBytes: MAX_OUTPUT_CHARS
     })
     return this.finish(result.code === 0, claudeAccMessage(result.stdout, result.stderr), false)
@@ -141,9 +155,13 @@ export class PodClaudeAccAccounts {
         false
       )
     }
+    const python = await this.interpreter()
+    if (!python) {
+      return this.finish(false, NOT_INSTALLED, false)
+    }
     this.cancelled = false
     const child = this.spawn({
-      program: await this.interpreter(),
+      program: python,
       args: [this.paths.launcher, 'accswitch', ...args],
       env: this.env(),
       stdio: ['ignore', 'pipe', 'pipe']
@@ -186,12 +204,17 @@ export class PodClaudeAccAccounts {
   }
 
   private async fresh(): Promise<PodClaudeAccState | null> {
+    const python = await this.interpreter()
+    if (!python) {
+      return null
+    }
     try {
+      // Why no timeout: `status --json` may write a refreshed token back (sync_back).
       const result = await this.run({
-        program: await this.interpreter(),
+        program: python,
         args: [this.paths.launcher, 'accswitch', 'status', '--json'],
         env: this.env(),
-        timeoutMs: 60_000,
+        timeoutMs: null,
         maxOutputBytes: 4 * 1024 * 1024
       })
       return result.code === 0 ? parseClaudeAccSnapshot(JSON.parse(result.stdout)) : null
@@ -204,12 +227,13 @@ export class PodClaudeAccAccounts {
     return this.finish(false, `Not an account address: ${email}`, false)
   }
 
-  private async interpreter(): Promise<string> {
+  // Why no /usr/bin/python3 fallback: without the Command Line Tools it opens their install dialog.
+  private async interpreter(): Promise<string | null> {
     try {
       await access(this.paths.python, constants.X_OK)
       return this.paths.python
     } catch {
-      return '/usr/bin/python3'
+      return null
     }
   }
 
