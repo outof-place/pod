@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
+import { addClaudeAccAccount } from '@/lib/pod-claude-acc-sign-in'
+import { isPodClaudeAccAccounts } from '../settings/pod-claude-acc-accounts-section'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 
 /** The chat failures a sign-in to the selected Claude account fixes. */
@@ -29,6 +31,9 @@ export function nativeChatClaudeSignInLabel(signIn: NativeChatClaudeSignIn): str
     : translate('accounts.claude.signIn', 'Sign in')
 }
 
+// Fork-only (Pod): claude-acc owns the account a chat runs under, so its sign-in is `claude-acc add`.
+const POD_CLAUDE_ACC_ACCOUNT = 'claude-acc'
+
 /** Null unless a local Claude chat runs under a selected account, and after a sign-in until a new
  *  failure (a different `failure`, or another `failureRows`), so a resend is what follows it. */
 export function useNativeChatClaudeSignIn(input: {
@@ -38,11 +43,14 @@ export function useNativeChatClaudeSignIn(input: {
   failureRows: number
 }): NativeChatClaudeSignIn | null {
   // Why local only: the hidden sign-in runs on this device, and Claude chats run on its host.
+  const pod = isPodClaudeAccAccounts()
   const accountId = useAppStore((s) =>
     input.agent === 'claude' && input.target.kind === 'local'
-      ? (s.settings?.activeClaudeManagedAccountIdsByRuntime?.host ??
-        s.settings?.activeClaudeManagedAccountId ??
-        null)
+      ? pod
+        ? POD_CLAUDE_ACC_ACCOUNT
+        : (s.settings?.activeClaudeManagedAccountIdsByRuntime?.host ??
+          s.settings?.activeClaudeManagedAccountId ??
+          null)
       : null
   )
   const [signingIn, setSigningIn] = useState(false)
@@ -56,7 +64,7 @@ export function useNativeChatClaudeSignIn(input: {
     }
     signingInRef.current = true
     setSigningIn(true)
-    void signInToClaudeAccount(accountId)
+    void (pod ? addClaudeAccAccount() : signInToClaudeAccount(accountId))
       .then((signedIn) => {
         if (signedIn) {
           setSignedInFor({ failure, rows: failureRows })
@@ -66,7 +74,7 @@ export function useNativeChatClaudeSignIn(input: {
         signingInRef.current = false
         setSigningIn(false)
       })
-  }, [accountId, failure, failureRows])
+  }, [accountId, pod, failure, failureRows])
   const signedInSinceFailure =
     signedInFor !== null && signedInFor.failure === failure && signedInFor.rows === failureRows
   // Why memoized: rows read it through context, and a chat re-renders on every streamed token.
