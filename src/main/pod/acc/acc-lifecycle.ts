@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
+import { compareAccVersions, readInstalledAppVersion } from './acc-installed-version'
 import { failedSetup } from './acc-lifecycle-record'
 
 /**
@@ -8,11 +9,14 @@ import { failedSetup } from './acc-lifecycle-record'
  * claude-acc stays its own Python/Swift toolkit under ~/.local/share/claude-acc; Pod only runs the
  * payload's setup.sh (with `--owner pod`) when the payload's VERSION, the owner or the app path
  * differ from `owner.json`, and never otherwise. setup.sh writes owner.json itself, after which
- * Homebrew's claude-acc-setup refuses to overwrite Pod's copy.
+ * Homebrew's claude-acc-setup refuses to overwrite Pod's copy. Pod never installs a payload older
+ * than the installed claude-acc, and stays aside once claude-acc was handed back (a tombstone).
  */
 
 export const ACC_STATE_DIR = '.local/share/claude-acc'
 const OWNER = 'pod'
+// owner.py's tombstones: handed back to Homebrew or the sources ("brew"), or uninstalled ("none")
+const TOMBSTONES = new Set(['brew', 'none'])
 const LOCK = 'pod-setup.lock'
 // setup.sh builds bytecode, rewrites hooks and restarts launchd jobs: a minute is normal, five is stuck
 const SETUP_TIMEOUT_MS = 5 * 60_000
@@ -51,6 +55,8 @@ export type AccLifecycleSkipReason =
   | 'home-override'
   | 'custom-profile'
   | 'setup-backoff'
+  | 'handed-back'
+  | 'newer-installed'
 
 type AccInstallReason =
   | 'first-install'
@@ -155,6 +161,14 @@ export function decideAccLifecycle(input: AccLifecycleInput): AccLifecycleDecisi
     return { action: 'skip', reason: 'no-payload' }
   }
   const owner = readOwnerRecord(input.home)
+  if (owner && TOMBSTONES.has(owner.owner)) {
+    return { action: 'skip', reason: 'handed-back' }
+  }
+  // never a downgrade: rc1's 1.31.15 replaced an install.sh 1.33.0 that had no owner.json (2026-10-15)
+  const installed = owner?.owner === OWNER ? owner.version : readInstalledAppVersion(input.home)
+  if (installed && compareAccVersions(version, installed) === -1) {
+    return { action: 'skip', reason: 'newer-installed' }
+  }
   const reason = installReason(owner, version, input.appPath)
   // a setup that failed may have written owner.json before it stopped (test3, 2026-10-10)
   const failed = failedSetup(join(input.home, ACC_STATE_DIR), version)

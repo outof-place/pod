@@ -18,7 +18,7 @@ const APP = '/Applications/Pod.app'
 const roots: string[] = []
 
 function fixture(
-  options: { version?: string | null; owner?: object | null } = {}
+  options: { version?: string | null; owner?: object | null; installedApp?: string } = {}
 ): AccLifecycleInput {
   const root = mkdtempSync(join(tmpdir(), 'pod-acc-lifecycle-'))
   roots.push(root)
@@ -32,6 +32,15 @@ function fixture(
   }
   if (options.owner) {
     writeFileSync(join(home, ACC_STATE_DIR, 'owner.json'), JSON.stringify(options.owner))
+  }
+  if (options.installedApp) {
+    // what brew's claude-acc-setup and install.sh leave: the menu app, whose version is the install's
+    const contents = join(home, 'Applications/Claude Acc.app/Contents')
+    mkdirSync(contents, { recursive: true })
+    writeFileSync(
+      join(contents, 'Info.plist'),
+      `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n\t<key>CFBundleShortVersionString</key>\n\t<string>${options.installedApp}</string>\n</dict>\n</plist>\n`
+    )
   }
   const profile = join(home, 'Library/Application Support/Pod')
   return {
@@ -161,8 +170,47 @@ describe('claude-acc lifecycle', () => {
   })
 
   it.each([
+    [
+      'a claude-acc installed outside Pod (rc1 put 1.31.15 over 1.33.0 on 2026-10-15)',
+      { version: '1.31.15', installedApp: '1.33.0' }
+    ],
+    [
+      'its own newer install, after Pod.app was downgraded',
+      { version: '1.31.15', owner: { owner: 'pod', version: '1.34.1', app: APP } }
+    ],
+    ['a newer install, compared as numbers', { version: '1.9.0', installedApp: '1.10.0' }]
+  ])('never installs a payload older than %s', (_name, options) => {
+    expect(decideAccLifecycle(fixture(options))).toEqual({
+      action: 'skip',
+      reason: 'newer-installed'
+    })
+  })
+
+  it.each([
+    ['brew', { owner: 'brew' }],
+    ['none', { owner: 'none' }]
+  ])('stays aside once claude-acc was handed back (%s tombstone)', (_name, owner) => {
+    expect(decideAccLifecycle(fixture({ owner, installedApp: '1.20.0' }))).toEqual({
+      action: 'skip',
+      reason: 'handed-back'
+    })
+  })
+
+  it.each([
+    ['first-install', { version: '1.34.1', installedApp: '1.31.15' }],
+    ['first-install', { version: '1.10.0', installedApp: '1.9.0' }],
+    ['first-install', { version: '1.34.1', installedApp: 'dev' }],
+    [
+      'version-changed',
+      { version: '1.34.1', owner: { owner: 'pod', version: '1.31.15', app: APP } }
+    ]
+  ])('takes a newer or unordered payload as %s', (reason, options) => {
+    expect(decideAccLifecycle(fixture(options))).toMatchObject({ action: 'install', reason })
+  })
+
+  it.each([
     ['first-install', null],
-    ['owner-changed', { owner: 'brew', version: '1.27.0', app: APP }],
+    ['owner-changed', { owner: 'another-app', version: '1.27.0', app: APP }],
     ['version-changed', { owner: 'pod', version: '1.26.0', app: APP }],
     ['app-moved', { owner: 'pod', version: '1.27.0', app: '/Users/me/Downloads/Pod.app' }]
   ])('installs on %s', (reason, owner) => {
