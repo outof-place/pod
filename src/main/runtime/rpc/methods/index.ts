@@ -2,6 +2,7 @@ import { STATUS_METHODS } from './status'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad-terminal-census'
 import { ORCAD_MIGRATION_METHODS } from './orcad-migration'
 import { AI_VAULT_METHODS } from './ai-vault'
+import { POD_AI_VAULT_METHODS } from './pod-ai-vault-delete'
 import { AUTOMATION_METHODS } from './automations'
 import { REPO_METHODS } from './repo'
 import { WORKTREE_METHODS } from './worktree'
@@ -77,6 +78,8 @@ export const ALL_RPC_METHODS = [
   ...ORCAD_MIGRATION_METHODS,
   ...AGENT_HOOK_METHODS,
   ...AI_VAULT_METHODS,
+  // Fork-only (Pod): the AI vault's Delete, which the desktop did over IPC only.
+  ...POD_AI_VAULT_METHODS,
   ...ARTIFACT_METHODS,
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,

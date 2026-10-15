@@ -432,6 +432,7 @@ import {
   PluginSetEnabledParams,
   PluginsPanelActionParams
 } from './plugins-params'
+import { AiVaultDeleteSessionParams } from './pod-ai-vault-params'
 import { PodTerminalOpenedBeforeClaudeAccountsParams } from './pod-claude-old-terminal-params'
 import { PodClientEventsSubscribeParams } from './pod-client-events-params'
 import { PodComputerActionsUnsubscribeParams } from './pod-computer-actions-params'
@@ -696,6 +697,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSessionAttachment.uploadStart': AttachmentUploadStartParams,
   'agentTeams.prepareLaunch': AgentTeamsPrepareLaunch,
   'agentTeams.tmuxCompat': AgentTeamsTmuxCompat,
+  'aiVault.deleteSession': AiVaultDeleteSessionParams,
   'aiVault.listSessions': AiVaultListSessionsParams,
   'aiVault.prepareSessionResume': AiVaultPrepareSessionResumeParams,
   'aiVault.resolveSessionTitles': AiVaultSessionTitlesParams,
