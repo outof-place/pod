@@ -50,7 +50,8 @@ export function installPodBrowserPanes(options: {
   addPodCdpProxySink({ request: (webContentsId) => panes.noteAgentCommand(webContentsId) })
   setPodBrowserPaneHooks({
     agentCommand: (webContentsId) => panes.noteAgentCommand(webContentsId),
-    download: (event) => panes.noteDownload(event)
+    download: (event) => panes.noteDownload(event),
+    openLink: (browserPageId, url, activate) => panes.openLink(browserPageId, url, activate)
   })
   app.once('will-quit', () => setPodBrowserPaneHooks(null))
   return panes

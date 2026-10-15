@@ -33,7 +33,7 @@ export function describePaneContextMenu(
     x: params.x,
     y: params.y,
     pageUrl: pageUrl.length <= MAX_URL_LENGTH ? pageUrl : '',
-    linkUrl: describeLink(params.linkURL || ''),
+    linkUrl: describePaneLink(params.linkURL || ''),
     selectionText: '',
     selectionComplete: true,
     ...readGuestNavigationState(wc)
@@ -41,7 +41,8 @@ export function describePaneContextMenu(
   return fitSelection(menu, params.selectionText ?? '')
 }
 
-function describeLink(raw: string): string | null {
+/** A link as Pod's renderer menu takes it: normalized (http, https or file), within the URL bound. */
+export function describePaneLink(raw: string): string | null {
   // Why: an empty linkURL normalizes to the blank page, an "Open Link…" on every right-click.
   if (raw.length === 0 || raw.length > MAX_URL_LENGTH) {
     return null

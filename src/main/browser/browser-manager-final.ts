@@ -1,12 +1,14 @@
 import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
+import { openPodPaneLink } from '../pod/browser-pane/pod-browser-pane-hooks'
 import { BrowserManagerEventForwarding } from './browser-manager-event-forwarding'
 
 export abstract class BrowserManagerFinal extends BrowserManagerEventForwarding {
   protected openLinkInOrcaTab(browserTabId: string, rawUrl: string, activate?: boolean): boolean {
     const renderer = this.resolveRendererForBrowserTab(browserTabId)
     if (!renderer) {
-      return false
+      // Fork-only (Pod): a one-app page in a PodNative pane has no renderer; PodNative opens it.
+      return openPodPaneLink(browserTabId, rawUrl, activate !== false)
     }
     const normalizedUrl = normalizeBrowserNavigationUrl(rawUrl)
     if (!normalizedUrl || normalizedUrl === ORCA_BROWSER_BLANK_URL) {

@@ -14,6 +14,7 @@ import { PaneInputState } from './pod-browser-pane-input'
 import { navigatePanePage } from './pod-browser-pane-navigation'
 import { PaneSelectMenus } from './pod-browser-pane-select'
 import { describePaneContextMenu } from './pod-browser-pane-context-menu'
+import { PaneLinks } from './pod-browser-pane-links'
 import { PaneFramePump, type PodBrowserFrames } from './pod-browser-pane-frames'
 const PANE_FRAME_RATE = 60
 // A page nobody sees and no agent drives. Why 10: a rate change waits for the next tick, so a
@@ -32,6 +33,7 @@ type Page = {
   seq: number
   input: PaneInputState
   select: PaneSelectMenus
+  links: PaneLinks
   agentDrivingUntil: number
   agentTimer: ReturnType<typeof setTimeout> | null
 }
@@ -68,10 +70,11 @@ export class PodBrowserPaneController {
       input: new PaneInputState(),
       // Why not while an agent drives: its clicks on a select must not open a menu on the screen.
       select: new PaneSelectMenus(wc, (menu) => {
-        if (page.token !== null && Date.now() >= page.agentDrivingUntil) {
+        if (this.userDriven(page)) {
           this.deps.send({ type: 'browserPopupMenu', pageId, ...menu })
         }
       }),
+      links: new PaneLinks(pageId, (message) => this.deps.send(message)),
       agentDrivingUntil: 0,
       agentTimer: null
     }
@@ -81,10 +84,14 @@ export class PodBrowserPaneController {
     wc.on('paint', (event) => this.frames.paint(page, event.texture))
     // Why not while an agent drives: its right-clicks must not open a menu on the screen.
     wc.on('context-menu', (_event, params) => {
-      if (page.token !== null && Date.now() >= page.agentDrivingUntil) {
+      if (this.userDriven(page)) {
         this.deps.send(describePaneContextMenu(pageId, wc, params))
       }
     })
+    // Why not while an agent drives: its pointer must not show links on the screen.
+    wc.on('update-target-url', (_event, url) => page.links.hover(url, this.userDriven(page)))
+    // Why: the link under the pointer was the old page's; the next page's hover starts afresh.
+    wc.on('did-navigate', () => page.links.hover('', false))
     wc.on('cursor-changed', (_event, cursor) => {
       if (page.token !== null) {
         this.deps.send({ type: 'browserCursor', pageId, cursor })
@@ -134,6 +141,7 @@ export class PodBrowserPaneController {
         this.sendState(pageId)
       }, AGENT_DRIVING_MS)
       page.agentTimer.unref?.()
+      page.links.noteAgentCommand()
       if (!wasDriving) {
         this.pace(page)
         this.sendState(pageId)
@@ -148,6 +156,17 @@ export class PodBrowserPaneController {
     if (record) {
       this.deps.send(record)
     }
+  }
+
+  /** A new-tab open of one of these pages, which no renderer takes: PodNative's after the user's own click or key. */
+  openLink(pageId: string, url: string, activate: boolean): boolean {
+    const page = this.pages.get(pageId)
+    return (
+      page !== undefined &&
+      !page.wc.isDestroyed() &&
+      this.userDriven(page) &&
+      page.links.open(url, activate)
+    )
   }
 
   handle(message: PodBrowserPaneClientMessage): void {
@@ -172,6 +191,7 @@ export class PodBrowserPaneController {
         // A newer attach of the same page replaces the older one.
         page.token = message.token
         page.input.reset()
+        page.links.reset()
         this.resize(page, message.width, message.height)
         this.show(page, true)
         this.sendState(message.pageId)
@@ -193,6 +213,7 @@ export class PodBrowserPaneController {
         this.resize(page, message.width, message.height)
         return
       case 'browserInput': {
+        page.links.noteInput(message.event)
         const action = page.input.map(message.event)
         if (action.kind === 'send') {
           wc.sendInputEvent(action.input)
@@ -233,6 +254,11 @@ export class PodBrowserPaneController {
     this.frames.disconnect()
   }
 
+  // Why: what an agent does to a page must not open menus or show links on the user's screen.
+  private userDriven(page: Page): boolean {
+    return page.token !== null && Date.now() >= page.agentDrivingUntil
+  }
+
   private refuse(pageId: string, reason: string): void {
     this.deps.send({ type: 'browserAttachFailed', pageId, reason })
   }
@@ -263,6 +289,7 @@ export class PodBrowserPaneController {
   private detach(page: Page): void {
     page.token = null
     page.input.reset()
+    page.links.reset()
     this.show(page, false)
   }
 

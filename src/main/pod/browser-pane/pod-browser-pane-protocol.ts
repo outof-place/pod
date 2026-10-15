@@ -232,6 +232,15 @@ export type PodBrowserPaneServerMessage =
       canGoBack: boolean
       canGoForward: boolean
     }
+  // Feature browserTargetUrl: the link under the pointer (or keyboard focus) of an attached page the
+  // user drives, as the context menu's linkUrl and Kagi-redacted; '' when it leaves the link.
+  | { type: 'browserTargetUrl'; pageId: string; url: string }
+  // Feature browserOpenLink: the page opened a link in a new tab (⌘-click, middle-click,
+  // target=_blank, window.open); `target` is where, from the click that did it. http(s) only.
+  | { type: 'browserOpenLink'; pageId: string; url: string; target: PodBrowserLinkTarget }
+
+/** ⌘-click: the default browser; ⌘⇧-click and target=_blank: a tab shown; middle-click: one behind. */
+export type PodBrowserLinkTarget = 'defaultBrowser' | 'foregroundTab' | 'backgroundTab'
 
 export function isPodBrowserPaneMessage(message: {
   type: string

@@ -29,17 +29,23 @@ export type PodBrowserDownloadEvent =
       error: string | null
     }
 
+/** A new-tab open of an offscreen page; true once PodNative has it. */
+type LinkOpenSink = (browserPageId: string, url: string, activate: boolean) => boolean
+
 let agentCommandSink: AgentCommandSink | null = null
 let downloadSink: ((event: PodBrowserDownloadEvent) => void) | null = null
+let linkOpenSink: LinkOpenSink | null = null
 
 export function setPodBrowserPaneHooks(
   hooks: {
     agentCommand: AgentCommandSink
     download: (event: PodBrowserDownloadEvent) => void
+    openLink: LinkOpenSink
   } | null
 ): void {
   agentCommandSink = hooks?.agentCommand ?? null
   downloadSink = hooks?.download ?? null
+  linkOpenSink = hooks?.openLink ?? null
 }
 
 /** True once one-app's panes own browser pages: browser commands then take the offscreen path. */
@@ -55,4 +61,9 @@ export function forwardPodBrowserDownload(event: PodBrowserDownloadEvent): void 
 /** An agent's command reached `webContentsId`; a no-op outside one-app. */
 export function notePodAgentBrowserCommand(webContentsId: number): void {
   agentCommandSink?.(webContentsId)
+}
+
+/** A link a page opens in a new tab while no renderer hosts it; false outside one-app. */
+export function openPodPaneLink(browserPageId: string, url: string, activate: boolean): boolean {
+  return linkOpenSink?.(browserPageId, url, activate) ?? false
 }

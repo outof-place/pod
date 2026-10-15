@@ -83,9 +83,13 @@ export type PodUiHostQuitReason = z.infer<typeof Quit>['reason']
 // `headless`: no classic window posts agent notifications or sets the Dock badge; PodNative does.
 // `surfaceSection`: openSurface takes a section; an older runtime refuses the unknown keys.
 // `browserContextMenu`: a right-click on an attached page comes as browserContextMenu.
+// `browserOpenLink`: a page's new-tab link (⌘-click, middle-click, target=_blank) comes as browserOpenLink.
+// `browserTargetUrl`: the link under an attached page's pointer comes as browserTargetUrl.
 export const POD_UI_HOST_FEATURES = [
   'browser',
   'browserContextMenu',
+  'browserOpenLink',
+  'browserTargetUrl',
   'headless',
   'surfaceSection'
 ] as const

@@ -487,6 +487,112 @@ describe('PodBrowserPaneController', () => {
     )
   })
 
+  it("sends an attached page's hovered link for the status bubble, and none while an agent drives", () => {
+    const { panes, wc, sent } = setup()
+    wc.emit('update-target-url', {}, 'https://example.com/a')
+    expect(sent).toEqual([])
+    panes.handle(attach)
+    sent.length = 0
+    wc.emit('update-target-url', {}, 'https://kagi.com/search?q=pod&token=secret')
+    wc.emit('update-target-url', {}, '')
+    expect(sent).toEqual([
+      {
+        type: 'browserTargetUrl',
+        pageId: 'page-1',
+        url: 'https://kagi.com/search?q=pod'
+      },
+      { type: 'browserTargetUrl', pageId: 'page-1', url: '' }
+    ])
+    // A navigation ends the hover; the same link on the next page shows again.
+    wc.emit('update-target-url', {}, 'https://example.com/a')
+    wc.emit('did-navigate')
+    wc.emit('update-target-url', {}, 'https://example.com/a')
+    expect(sent.filter((message) => message.type === 'browserTargetUrl').slice(-3)).toEqual([
+      { type: 'browserTargetUrl', pageId: 'page-1', url: 'https://example.com/a' },
+      { type: 'browserTargetUrl', pageId: 'page-1', url: '' },
+      { type: 'browserTargetUrl', pageId: 'page-1', url: 'https://example.com/a' }
+    ])
+    sent.length = 0
+    // An agent starts: the bubble goes, and its own hovers show nothing.
+    panes.noteAgentCommand(wc.id)
+    wc.emit('update-target-url', {}, 'https://example.com/b')
+    expect(sent.filter((message) => message.type === 'browserTargetUrl')).toEqual([
+      { type: 'browserTargetUrl', pageId: 'page-1', url: '' }
+    ])
+  })
+
+  it("opens a page's new-tab link the way the user's click asked: ⌘ the default browser, else a tab", () => {
+    const { panes, wc, sent } = setup()
+    const metaClick = (['down', 'up'] as const).map((action) => ({
+      type: 'browserInput' as const,
+      pageId: 'page-1',
+      event: {
+        kind: 'mouse' as const,
+        action,
+        x: 5,
+        y: 6,
+        button: 'left' as const,
+        clickCount: 1,
+        modifiers: ['meta' as const]
+      }
+    }))
+    // No pane: nothing to open it in.
+    expect(panes.openLink('page-1', 'https://example.com/a', false)).toBe(false)
+    panes.handle(attach)
+    sent.length = 0
+    metaClick.forEach((message) => panes.handle(message))
+    expect(panes.openLink('page-1', 'https://example.com/a', false)).toBe(true)
+    // One click, one open.
+    expect(panes.openLink('page-1', 'https://example.com/b', true)).toBe(false)
+    panes.handle({ ...metaClick[0], event: { ...metaClick[0].event, modifiers: [] } })
+    expect(panes.openLink('page-1', 'https://example.com/b', true)).toBe(true)
+    expect(panes.openLink('other-page', 'https://example.com/c', true)).toBe(false)
+    expect(sent).toEqual([
+      {
+        type: 'browserOpenLink',
+        pageId: 'page-1',
+        url: 'https://example.com/a',
+        target: 'defaultBrowser'
+      },
+      {
+        type: 'browserOpenLink',
+        pageId: 'page-1',
+        url: 'https://example.com/b',
+        target: 'foregroundTab'
+      }
+    ])
+    // An agent's clicks open nothing on the screen.
+    panes.noteAgentCommand(wc.id)
+    expect(panes.openLink('page-1', 'https://example.com/a', true)).toBe(false)
+  })
+
+  it("opens nothing from an agent's input, nor from the user's click before the agent took over", () => {
+    vi.useFakeTimers()
+    const { panes, wc, sent } = setup()
+    panes.handle(attach)
+    panes.handle({
+      type: 'browserInput',
+      pageId: 'page-1',
+      event: {
+        kind: 'mouse',
+        action: 'down',
+        x: 5,
+        y: 6,
+        button: 'left',
+        clickCount: 1,
+        modifiers: []
+      }
+    })
+    // CDP input reaches the page as its own input events.
+    panes.noteAgentCommand(wc.id)
+    wc.emit('input-event', {}, { type: 'mouseDown' })
+    wc.emit('input-event', {}, { type: 'mouseUp' })
+    vi.advanceTimersByTime(3_000)
+    sent.length = 0
+    expect(panes.openLink('page-1', 'https://example.com/a', true)).toBe(false)
+    expect(sent).toEqual([])
+  })
+
   it('measures a link after normalizing it and sends lone surrogates as U+FFFD', () => {
     const { panes, wc, sent } = setup()
     panes.handle(attach)
