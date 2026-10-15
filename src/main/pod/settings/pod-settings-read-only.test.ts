@@ -3,7 +3,6 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { RuntimeClientSettingsController } from '../../runtime/runtime-client-settings'
 import {
-  PodSettingsRefusedError,
   PodSettingsService,
   setPodSettingsService,
   type PodSettingsChange
@@ -37,10 +36,11 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('settings a native client reads but never writes', () => {
-  it('podSettings and settings.get carry openLinksInApp and sourceControlAi.enabled, read only', async () => {
+// PodNative before R1 reads these from `readOnly` and never writes them; since R1 they are fields.
+describe('the read-only mirror older native clients follow', () => {
+  it('podSettings and settings.get still carry openLinksInApp and sourceControlAi.enabled', () => {
     vi.useFakeTimers()
-    const { store, write, service } = setup({
+    const { store, service } = setup({
       openLinksInApp: true,
       sourceControlAi: { ...getDefaultSettings('/Users/e2e').sourceControlAi!, enabled: true }
     })
@@ -59,14 +59,13 @@ describe('settings a native client reads but never writes', () => {
       promptCacheTimerEnabled: false,
       promptCacheTtlMs: 300_000
     })
-    expect(snapshot.values).not.toHaveProperty('openLinksInApp')
     expect(clientSettings.get()).toMatchObject({
       openLinksInApp: true,
       openLinksInAppModifierInverts: false,
       sourceControlAi: { enabled: true, actions: expect.any(Object) }
     })
 
-    // Pod's window changes them: a subscriber hears it under a new revision.
+    // A change elsewhere reaches a subscriber as the field and, for older clients, the mirror.
     const changes: PodSettingsChange[] = []
     service.subscribe((change) => changes.push(change))
     store.updateSettings({
@@ -76,61 +75,46 @@ describe('settings a native client reads but never writes', () => {
     vi.advanceTimersByTime(100)
     expect(changes).toEqual([
       expect.objectContaining({
-        values: {},
-        readOnly: {
-          openLinksInApp: true,
+        values: {
           openLinksInAppModifierInverts: true,
-          sourceControlAi: { enabled: false },
-          promptCacheTimerEnabled: false,
-          promptCacheTtlMs: 300_000
-        }
+          sourceControlAi: expect.objectContaining({ enabled: false })
+        },
+        readOnly: expect.objectContaining({
+          openLinksInAppModifierInverts: true,
+          sourceControlAi: { enabled: false }
+        })
       })
     ])
-    expect(service.get().revision).not.toBe(snapshot.revision)
     expect(clientSettings.get()).toMatchObject({
       openLinksInAppModifierInverts: true,
       sourceControlAi: { enabled: false }
     })
-
-    // A client can't write them.
-    const { revision } = service.get()
-    for (const values of [{ openLinksInApp: false }, { sourceControlAi: { enabled: true } }]) {
-      await expect(service.set(values, revision)).rejects.toThrow(PodSettingsRefusedError)
-    }
-    expect(write).not.toHaveBeenCalled()
   })
 
-  it("podSettings carries Claude's prompt cache timer, read only", async () => {
-    vi.useFakeTimers()
-    const { store, write, service } = setup({
-      promptCacheTimerEnabled: true,
-      promptCacheTtlMs: 3_600_000
-    })
-    setPodSettingsService(service)
-    expect(service.get().readOnly).toMatchObject({
-      promptCacheTimerEnabled: true,
-      promptCacheTtlMs: 3_600_000
-    })
-    expect(service.get().values).not.toHaveProperty('promptCacheTimerEnabled')
-
-    const changes: PodSettingsChange[] = []
-    service.subscribe((change) => changes.push(change))
-    // A value the desktop wouldn't use falls back to its default lifetime.
-    store.updateSettings({ promptCacheTimerEnabled: false, promptCacheTtlMs: -1 })
-    vi.advanceTimersByTime(100)
-    expect(changes).toEqual([
-      expect.objectContaining({
-        readOnly: expect.objectContaining({
-          promptCacheTimerEnabled: false,
-          promptCacheTtlMs: 300_000
-        })
-      })
-    ])
-
-    const { revision } = service.get()
-    await expect(service.set({ promptCacheTtlMs: 60_000 }, revision)).rejects.toThrow(
-      PodSettingsRefusedError
+  it('a native pane writes them now, and the mirror follows', async () => {
+    const { store, write, service } = setup({ promptCacheTtlMs: 300_000 })
+    const result = await service.set(
+      { openLinksInApp: true, promptCacheTimerEnabled: true, promptCacheTtlMs: 3_600_000 },
+      service.get().revision
     )
-    expect(write).not.toHaveBeenCalled()
+    expect(write).toHaveBeenCalledWith({
+      openLinksInApp: true,
+      promptCacheTimerEnabled: true,
+      promptCacheTtlMs: 3_600_000
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      values: { openLinksInApp: true, promptCacheTimerEnabled: true, promptCacheTtlMs: 3_600_000 },
+      readOnly: { openLinksInApp: true, promptCacheTimerEnabled: true, promptCacheTtlMs: 3_600_000 }
+    })
+    expect(store.getSettings().openLinksInApp).toBe(true)
+  })
+
+  it("mirrors the desktop's reading of a lifetime it wouldn't use", () => {
+    const { store, service } = setup({})
+    store.updateSettings({ promptCacheTimerEnabled: true, promptCacheTtlMs: -1 })
+    const snapshot = service.get()
+    expect(snapshot.readOnly).toMatchObject({ promptCacheTtlMs: 300_000 })
+    expect(snapshot.values).not.toHaveProperty('promptCacheTtlMs')
   })
 })

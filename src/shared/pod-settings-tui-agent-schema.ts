@@ -1,0 +1,53 @@
+// Fork-only (Pod): the agents a podSettings field may name.
+import { z } from 'zod'
+import type { TuiAgent } from './tui-agent'
+
+// Why `satisfies`: an agent Orca adds fails to compile here until a native client can offer it.
+const TUI_AGENTS = {
+  claude: 'claude',
+  'claude-agent-teams': 'claude-agent-teams',
+  codebuddy: 'codebuddy',
+  openclaude: 'openclaude',
+  codex: 'codex',
+  autohand: 'autohand',
+  opencode: 'opencode',
+  opencode2: 'opencode2',
+  'mimo-code': 'mimo-code',
+  pi: 'pi',
+  omp: 'omp',
+  qoder: 'qoder',
+  'qoder-cn': 'qoder-cn',
+  gemini: 'gemini',
+  antigravity: 'antigravity',
+  aider: 'aider',
+  goose: 'goose',
+  amp: 'amp',
+  kilo: 'kilo',
+  kiro: 'kiro',
+  crush: 'crush',
+  aug: 'aug',
+  cline: 'cline',
+  codebuff: 'codebuff',
+  freebuff: 'freebuff',
+  'command-code': 'command-code',
+  continue: 'continue',
+  cursor: 'cursor',
+  droid: 'droid',
+  kimi: 'kimi',
+  'mistral-vibe': 'mistral-vibe',
+  'qwen-code': 'qwen-code',
+  rovo: 'rovo',
+  hermes: 'hermes',
+  openclaw: 'openclaw',
+  copilot: 'copilot',
+  grok: 'grok',
+  devin: 'devin',
+  ante: 'ante',
+  trae: 'trae',
+  muse: 'muse',
+  zcode: 'zcode',
+  'prime-agent': 'prime-agent',
+  dsh: 'dsh',
+  jcode: 'jcode'
+} as const satisfies { [K in TuiAgent]: K }
+export const TuiAgentSchema = z.enum(TUI_AGENTS)

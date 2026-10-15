@@ -25,9 +25,17 @@ export const POD_SSH_TARGET_SETTINGS_RUNTIME_CAPABILITY = 'pod.ssh.target-settin
 export const POD_AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY =
   'pod.ai-vault.delete-session.v1' as const
 
+/**
+ * podSettings.getNetworkProxy and setNetworkProxy: the proxy URL, a secret podSettings' fields leave
+ * out, for this machine's own clients.
+ */
+export const POD_SETTINGS_NETWORK_PROXY_RUNTIME_CAPABILITY =
+  'pod.settings.network-proxy.v1' as const
+
 export const POD_RUNTIME_CAPABILITIES = [
   POD_CREATE_TERMINAL_AGENT_ARGS_RUNTIME_CAPABILITY,
   POD_TERMINAL_OPENED_BEFORE_CLAUDE_ACCOUNTS_RUNTIME_CAPABILITY,
   POD_SSH_TARGET_SETTINGS_RUNTIME_CAPABILITY,
-  POD_AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY
+  POD_AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY,
+  POD_SETTINGS_NETWORK_PROXY_RUNTIME_CAPABILITY
 ] as const

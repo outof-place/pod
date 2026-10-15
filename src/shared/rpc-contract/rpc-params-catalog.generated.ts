@@ -449,7 +449,11 @@ import {
   PodOrbstackUnsubscribeParams,
   PodOrbstackWorktreeParams
 } from './pod-orbstack-params'
-import { PodSettingsSetParams, PodSettingsUnsubscribeParams } from './pod-settings-params'
+import {
+  PodSettingsSetNetworkProxyParams,
+  PodSettingsSetParams,
+  PodSettingsUnsubscribeParams
+} from './pod-settings-params'
 import {
   SshAddTargetParams,
   SshImportConfigParams,
@@ -1170,8 +1174,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'podMcpLazy.restoreBackup': null,
   'podMcpLazy.status': null,
   'podSettings.get': null,
+  'podSettings.getNetworkProxy': null,
   'podSettings.schema': null,
   'podSettings.set': PodSettingsSetParams,
+  'podSettings.setNetworkProxy': PodSettingsSetNetworkProxyParams,
   'podSettings.subscribe': null,
   'podSettings.unsubscribe': PodSettingsUnsubscribeParams,
   'podWorkspace.adopt': PodWorkspaceAdoptParams,

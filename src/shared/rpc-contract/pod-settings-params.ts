@@ -16,3 +16,11 @@ export const PodSettingsSetParams = z
 export const PodSettingsUnsubscribeParams = z
   .object({ subscriptionId: z.string().min(1).max(256) })
   .strict()
+
+/** The proxy URL as typed: the runtime checks and trims it as Pod's network settings do; '' clears it. */
+export const PodSettingsSetNetworkProxyParams = z
+  .object({
+    httpProxyUrl: z.string().max(4096),
+    reason: UserIntent
+  })
+  .strict()

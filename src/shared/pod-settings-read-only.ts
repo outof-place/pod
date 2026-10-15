@@ -1,6 +1,6 @@
-// Fork-only (Pod): settings a native Pod client follows but never edits; Pod's own window owns
-// them. podSettings.get and subscribe carry them in `readOnly`, settings.get beside its own
-// fields (pod-client-settings-extras.ts), and podSettings.set refuses them.
+// Fork-only (Pod): a mirror of settings PodNative before R1 followed but never edited. They are
+// podSettings fields now; podSettings.get and subscribe still carry the mirror in `readOnly`, and
+// settings.get beside its own fields (pod-client-settings-extras.ts), so those clients keep working.
 import { z } from 'zod'
 import type { GlobalSettings } from './global-settings-types'
 import { normalizeSourceControlAiSettings } from './source-control-ai-settings'
@@ -20,22 +20,14 @@ export const PodSettingsReadOnlySchema = z
 
 export type PodSettingsReadOnly = z.output<typeof PodSettingsReadOnlySchema>
 
-export const POD_SETTINGS_READ_ONLY_KEYS = [
-  'openLinksInApp',
-  'openLinksInAppModifierInverts',
-  'sourceControlAi',
-  'promptCacheTimerEnabled',
-  'promptCacheTtlMs'
-] as const satisfies readonly (keyof GlobalSettings & keyof PodSettingsReadOnly)[]
-
-export type PodSettingsReadOnlyKey = (typeof POD_SETTINGS_READ_ONLY_KEYS)[number]
+type MirroredKey = keyof PodSettingsReadOnly
 
 // Pod's default cache lifetime (default-global-settings.ts).
 const DEFAULT_PROMPT_CACHE_TTL_MS = 300_000
 
 /** The values as the desktop reads them: unset is off, and source control AI as migrated. */
 export function projectPodSettingsReadOnly(
-  settings: Partial<Pick<GlobalSettings, PodSettingsReadOnlyKey | 'commitMessageAi'>>
+  settings: Partial<Pick<GlobalSettings, MirroredKey | 'commitMessageAi'>>
 ): PodSettingsReadOnly {
   const ttl = settings.promptCacheTtlMs
   return {

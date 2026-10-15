@@ -5,6 +5,7 @@ import {
   POD_SETTINGS_HIDDEN,
   POD_SETTINGS_SECRET_KEYS
 } from '../../../shared/pod-settings-classification'
+import { POD_SETTINGS_FIELDS } from '../../../shared/pod-settings-schema'
 import { PROTECTED_SECRET_SLOT } from '../../protected-secret-persistence'
 import {
   POD_SETTINGS_COALESCE_MS,
@@ -180,6 +181,142 @@ describe('PodSettingsService.set', () => {
     const { service, store } = setup()
     store.update({ computerAwakeMode: undefined, keepComputerAwakeWhileAgentsRun: true })
     expect(service.get().values.computerAwakeMode).toBe('auto')
+  })
+})
+
+describe('PodSettingsService fields that were Electron-only', () => {
+  it('shows a fresh profile every field it has a default for', () => {
+    const { service } = setup()
+    const defaults = getDefaultSettings('/Users/e2e')
+    const values = service.get().values
+    for (const key of Object.keys(POD_SETTINGS_FIELDS)) {
+      if (Reflect.get(defaults, key) !== undefined) {
+        expect(values, key).toHaveProperty(key)
+      }
+    }
+  })
+
+  it('merges a partial object write into what is stored', async () => {
+    const { service, store, write } = setup()
+    const fixChecks = { agentId: 'codex' as const, commandInputTemplate: 'Fix {checks}' }
+    store.update({
+      sourceControlAi: {
+        ...store.getSettings().sourceControlAi!,
+        agentId: 'codex',
+        actions: { fixChecks }
+      },
+      codexSessionSourceHome: { wsl: { Ubuntu: '/home/me/.codex' } }
+    })
+    const result = await service.set(
+      { sourceControlAi: { enabled: true }, codexSessionSourceHome: { host: '/Users/me/.codex' } },
+      service.get().revision
+    )
+    // The real store would normalize a bare `{ enabled }` to defaults, dropping the agent and recipes.
+    expect(write).toHaveBeenCalledWith({
+      sourceControlAi: expect.objectContaining({
+        enabled: true,
+        agentId: 'codex',
+        actions: expect.objectContaining({ fixChecks })
+      }),
+      codexSessionSourceHome: { wsl: { Ubuntu: '/home/me/.codex' }, host: '/Users/me/.codex' }
+    })
+    expect(result.values.sourceControlAi).toMatchObject({ enabled: true, agentId: 'codex' })
+    expect(result.values.sourceControlAi).not.toHaveProperty('actions')
+    expect(result.values.codexSessionSourceHome).toEqual({ host: '/Users/me/.codex' })
+  })
+
+  it('writes a per-agent map whole, so a removed override goes', async () => {
+    const { service, store, write } = setup()
+    store.update({ agentCmdOverrides: { claude: 'claude-beta', codex: 'codex --profile work' } })
+    await service.set({ agentCmdOverrides: { codex: 'codex' } }, service.get().revision)
+    expect(write).toHaveBeenCalledWith({ agentCmdOverrides: { codex: 'codex' } })
+    expect(store.getSettings().agentCmdOverrides).toEqual({ codex: 'codex' })
+  })
+
+  it('keeps a per-agent map visible when it names an agent Pod no longer has', () => {
+    const { service, store } = setup()
+    const agentCmdOverrides = Object.fromEntries([
+      ['claude', 'claude-beta'],
+      ['retired-agent', 'old']
+    ])
+    store.update({ agentCmdOverrides })
+    expect(service.get().values.agentCmdOverrides).toEqual({ claude: 'claude-beta' })
+  })
+
+  it("compares only the written fields of source control's AI", async () => {
+    const { service, store } = setup()
+    const base = service.get().revision
+    store.update({ sourceControlAi: { ...store.getSettings().sourceControlAi!, agentId: 'codex' } })
+    expect((await service.set({ sourceControlAi: { enabled: true } }, base)).ok).toBe(true)
+    const clash = await service.set({ sourceControlAi: { agentId: 'claude' } }, base)
+    expect(clash).toMatchObject({ ok: false, conflictingKeys: ['sourceControlAi'] })
+  })
+
+  it("reads source control's AI as migrated from the legacy commit message key", () => {
+    const { service, store } = setup()
+    store.update({
+      sourceControlAi: undefined,
+      commitMessageAi: { ...getDefaultSettings('/Users/e2e').commitMessageAi!, enabled: true }
+    })
+    expect(service.get().values.sourceControlAi).toMatchObject({ enabled: true })
+  })
+
+  it("refuses values the desktop's own controls can't produce", async () => {
+    const { service, write } = setup()
+    const { revision } = service.get()
+    const nine = Array.from({ length: 9 }, (_, i) => ({ id: `a${i}`, label: 'A', command: 'a' }))
+    for (const values of [
+      { terminalScrollSensitivity: 50 },
+      { terminalTuiScrollSensitivity: 1.5 },
+      { promptCacheTtlMs: 60_000 },
+      { agentHibernationIdleMs: 1_000 },
+      { openInApplications: nine },
+      { agentCmdOverrides: { 'not-an-agent': 'x' } },
+      { terminalDividerColorDark: 'red; background: url(x)' }
+    ]) {
+      await expect(service.set(values, revision), JSON.stringify(values)).rejects.toThrow(
+        PodSettingsRefusedError
+      )
+    }
+    expect(write).not.toHaveBeenCalled()
+  })
+})
+
+describe('PodSettingsService network proxy', () => {
+  it("reads the proxy as Pod's network settings show it", () => {
+    const { service, store } = setup()
+    store.update({ httpProxyBypassRules: 'localhost;*.internal' })
+    expect(service.networkProxy()).toEqual({
+      httpProxyUrl: SECRETS.httpProxyUrl,
+      httpProxyBypassRules: 'localhost;*.internal'
+    })
+  })
+
+  it('writes a valid URL in the form the settings pane stores', async () => {
+    const { service, write } = setup()
+    await expect(
+      service.setNetworkProxy('  socks5://proxy.example.invalid:1080  ')
+    ).resolves.toEqual({
+      httpProxyUrl: 'socks5://proxy.example.invalid:1080',
+      httpProxyBypassRules: ''
+    })
+    expect(write).toHaveBeenCalledWith({ httpProxyUrl: 'socks5://proxy.example.invalid:1080' })
+  })
+
+  it("refuses what the pane refuses, with the pane's message, and keeps the stored proxy", async () => {
+    const { service, store, write } = setup()
+    await expect(service.setNetworkProxy('ftp://proxy.example.invalid')).rejects.toThrow(
+      'Use an http, https, socks, socks4, or socks5 proxy URL.'
+    )
+    await expect(service.setNetworkProxy('not a url')).rejects.toThrow('Enter a valid proxy URL.')
+    expect(write).not.toHaveBeenCalled()
+    expect(store.getSettings().httpProxyUrl).toBe(SECRETS.httpProxyUrl)
+  })
+
+  it('clears the proxy with an empty URL', async () => {
+    const { service, write } = setup()
+    await expect(service.setNetworkProxy('')).resolves.toMatchObject({ httpProxyUrl: '' })
+    expect(write).toHaveBeenCalledWith({ httpProxyUrl: '' })
   })
 })
 

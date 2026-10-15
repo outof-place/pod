@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { PodSettingsSetParams } from '../../../shared/rpc-contract/pod-settings-params'
+import {
+  PodSettingsSetNetworkProxyParams,
+  PodSettingsSetParams
+} from '../../../shared/rpc-contract/pod-settings-params'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../../runtime/rpc/core'
+import { POD_RUNTIME_CAPABILITIES } from '../../../shared/pod-runtime-capabilities'
 import { POD_SETTINGS_METHODS } from './pod-settings-rpc-methods'
 import { PodSettingsService, setPodSettingsService } from './pod-settings-service'
 import { isPodSettingsRpcEnabled } from './install-pod-settings'
@@ -19,12 +23,17 @@ const ctx = { runtime, connectionId: 'conn-1' } as unknown as RpcContext
 
 const methods = eraseRpcMethods(POD_SETTINGS_METHODS)
 
-function call(name: string, params?: unknown): unknown {
+function call(name: string, params?: unknown, context: RpcContext = ctx): unknown {
   const entry = methods.find((candidate) => candidate.name === name)
   if (!entry || isStreamingMethod(entry)) {
     throw new Error(`missing ${name}`)
   }
-  return entry.handler(entry.params ? entry.params.parse(params) : undefined, ctx)
+  return entry.handler(entry.params ? entry.params.parse(params) : undefined, context)
+}
+
+function from(kind: 'local-cli' | 'paired-device'): RpcContext {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the proxy methods read only the caller's kind.
+  return { ...ctx, caller: { kind } } as unknown as RpcContext
 }
 
 function install() {
@@ -64,7 +73,9 @@ describe('podSettings.* RPC methods', () => {
       'podSettings.get',
       'podSettings.set',
       'podSettings.subscribe',
-      'podSettings.unsubscribe'
+      'podSettings.unsubscribe',
+      'podSettings.getNetworkProxy',
+      'podSettings.setNetworkProxy'
     ])
   })
 
@@ -128,6 +139,59 @@ describe('podSettings.* RPC methods', () => {
     await done
     expect(events.at(-1)).toEqual({ type: 'end' })
     vi.useRealTimers()
+  })
+})
+
+describe('podSettings network proxy methods', () => {
+  it('is advertised, so a client shows the proxy row only where it works', () => {
+    expect(POD_RUNTIME_CAPABILITIES).toContain('pod.settings.network-proxy.v1')
+  })
+
+  it("shows and changes the proxy for this machine's own clients", async () => {
+    const { write } = install()
+    expect(call('podSettings.getNetworkProxy', undefined, from('local-cli'))).toEqual({
+      httpProxyUrl: '',
+      httpProxyBypassRules: ''
+    })
+    await expect(
+      call(
+        'podSettings.setNetworkProxy',
+        { httpProxyUrl: 'http://user:pw@proxy.example.invalid:3128', reason: 'user' },
+        from('local-cli')
+      )
+    ).resolves.toEqual({
+      httpProxyUrl: 'http://user:pw@proxy.example.invalid:3128',
+      httpProxyBypassRules: ''
+    })
+    expect(write).toHaveBeenCalledTimes(1)
+  })
+
+  it('never hands the proxy URL, which can carry a password, to a paired device', async () => {
+    const { write } = install()
+    for (const [name, params] of [
+      ['podSettings.getNetworkProxy', undefined],
+      ['podSettings.setNetworkProxy', { httpProxyUrl: '', reason: 'user' }]
+    ] as const) {
+      let refused: unknown
+      try {
+        await call(name, params, from('paired-device'))
+      } catch (error) {
+        refused = error
+      }
+      expect(refused, name).toMatchObject({ code: 'forbidden' })
+    }
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it("takes a proxy change only as the user's", () => {
+    const valid = { httpProxyUrl: 'http://proxy.example.invalid', reason: 'user' }
+    expect(PodSettingsSetNetworkProxyParams.safeParse(valid).success).toBe(true)
+    expect(PodSettingsSetNetworkProxyParams.safeParse({ ...valid, reason: 'agent' }).success).toBe(
+      false
+    )
+    expect(
+      PodSettingsSetNetworkProxyParams.safeParse({ ...valid, httpProxyBypassRules: '' }).success
+    ).toBe(false)
   })
 })
 

@@ -3,23 +3,21 @@ import { z } from 'zod'
 import { getDefaultSettings } from './constants'
 import { POD_SETTINGS_HIDDEN, POD_SETTINGS_SECRET_KEYS } from './pod-settings-classification'
 import { POD_SETTINGS_PAGES } from './pod-settings-pages'
-import { POD_SETTINGS_READ_ONLY_KEYS } from './pod-settings-read-only'
 import { POD_SETTINGS_FIELDS, PodSettingsValuesSchema } from './pod-settings-schema'
 
 const fields = Object.keys(POD_SETTINGS_FIELDS)
 const hidden = Object.keys(POD_SETTINGS_HIDDEN)
 const secrets: readonly string[] = POD_SETTINGS_SECRET_KEYS
-const readOnly: readonly string[] = POD_SETTINGS_READ_ONLY_KEYS
 
 describe('podSettings classification', () => {
   // The compile-time checks in pod-settings-classification.ts cover optional keys too.
   it('classifies every default setting exactly once', () => {
     for (const key of Object.keys(getDefaultSettings('/Users/e2e'))) {
-      const places = [fields, hidden, secrets, readOnly].filter((list) => list.includes(key))
+      const places = [fields, hidden, secrets].filter((list) => list.includes(key))
       expect(places, key).toHaveLength(1)
     }
-    expect(new Set([...fields, ...hidden, ...secrets, ...readOnly]).size).toBe(
-      fields.length + hidden.length + secrets.length + readOnly.length
+    expect(new Set([...fields, ...hidden, ...secrets]).size).toBe(
+      fields.length + hidden.length + secrets.length
     )
   })
 
@@ -43,5 +41,31 @@ describe('podSettings classification', () => {
     for (const key of fields) {
       expect(Reflect.get(properties ?? {}, key), key).toHaveProperty('title')
     }
+  })
+
+  // PodNative never sends anyone to Pod's classic window: what Pod keeps sits on a native page.
+  it('puts the settings Pod keeps on native pages', () => {
+    for (const key of [
+      'agentCmdOverrides',
+      'agentDefaultArgs',
+      'openInApplications',
+      'openLinksInApp',
+      'openLinksInAppModifierInverts',
+      'terminalScrollSensitivity',
+      'terminalFastScrollSensitivity',
+      'terminalTuiScrollSensitivity',
+      'httpProxyBypassRules',
+      'experimentalTerminalAttention',
+      'experimentalAgentHibernation',
+      'experimentalActivity',
+      'sourceControlAi',
+      'promptCacheTimerEnabled'
+    ]) {
+      expect(fields, key).toContain(key)
+    }
+  })
+
+  it("leaves nothing hidden only because Pod's own window showed it", () => {
+    expect(Object.values(POD_SETTINGS_HIDDEN)).not.toContain('electron-ui')
   })
 })

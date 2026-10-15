@@ -3,6 +3,9 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { normalizeComputerAwakeMode } from '../../../shared/computer-awake-mode'
+import { normalizeProxyUrl } from '../../../shared/network-proxy'
+import { normalizeSourceControlAiSettings } from '../../../shared/source-control-ai-settings'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import {
   POD_SETTINGS_FIELDS,
   PodSettingsValuesSchema,
@@ -12,7 +15,6 @@ import {
 import { POD_SETTINGS_PAGES } from '../../../shared/pod-settings-pages'
 import { POD_SETTINGS_SECRET_KEYS } from '../../../shared/pod-settings-classification'
 import {
-  POD_SETTINGS_READ_ONLY_KEYS,
   projectPodSettingsReadOnly,
   type PodSettingsReadOnly
 } from '../../../shared/pod-settings-read-only'
@@ -25,7 +27,7 @@ export type PodSettingsStore = {
 /** The write path `settings:set` uses (pod-settings-writer.ts): same sanitizing and side effects. */
 export type PodSettingsWrite = (values: Partial<GlobalSettings>) => Promise<GlobalSettings>
 
-/** `readOnly`: settings a client follows but can't write (pod-settings-read-only.ts). */
+/** `readOnly`: a mirror of fields for clients from before they were fields (pod-settings-read-only.ts). */
 export type PodSettingsSnapshot = {
   revision: string
   values: PodSettingsValues
@@ -40,6 +42,9 @@ export type PodSettingsSetResult =
       /** The written keys someone else changed since `baseRevision` (all of them when unknown). */
       conflictingKeys: PodSettingsKey[]
     } & PodSettingsSnapshot)
+
+/** What Pod's network settings show; the URL can carry a password. */
+export type PodNetworkProxy = { httpProxyUrl: string; httpProxyBypassRules: string }
 
 export type PodSettingsChange = {
   revision: string
@@ -56,7 +61,10 @@ const FIELD_KEYS: readonly PodSettingsKey[] = POD_SETTINGS_PAGES.flatMap((page) 
 )
 const FIELD_SET = new Set<string>(FIELD_KEYS)
 const SECRET_KEYS = new Set<string>(POD_SETTINGS_SECRET_KEYS)
-const READ_ONLY_KEYS = new Set<string>(POD_SETTINGS_READ_ONLY_KEYS)
+/** Written as partial updates merged into what is stored; every other field is written whole. */
+const OBJECT_KEYS = new Set<PodSettingsKey>(
+  FIELD_KEYS.filter((key) => POD_SETTINGS_FIELDS[key] instanceof z.ZodObject)
+)
 /** Snapshots kept to tell which keys moved since a client's revision. */
 const REMEMBERED_REVISIONS = 64
 /** A burst of writes (a slider drag, an import) reaches a subscriber as one change. */
@@ -110,10 +118,6 @@ export class PodSettingsService {
     if (secret.length > 0) {
       throw new PodSettingsRefusedError(`podSettings.set refuses ${secret.join(', ')}`)
     }
-    const readOnly = keys.filter((key) => READ_ONLY_KEYS.has(key))
-    if (readOnly.length > 0) {
-      throw new PodSettingsRefusedError(`podSettings.set refuses read-only ${readOnly.join(', ')}`)
-    }
     const unknown = keys.filter((key) => !FIELD_SET.has(key))
     if (unknown.length > 0) {
       throw new PodSettingsRefusedError(
@@ -132,17 +136,43 @@ export class PodSettingsService {
     // settings:set from a window bypasses this queue. From this check to the store update the write
     // doesn't yield, so nothing lands between, except for alwaysForceDeleteWorktrees: it waits for
     // the durable write queue, and a window's write to it in that wait wins unseen.
-    const { notifications, ...rest } = parsed.data
-    // The store merges a partial notifications object too; spelled out, the update is whole.
-    await this.write(
-      notifications
-        ? {
-            ...rest,
-            notifications: { ...this.store.getSettings().notifications, ...notifications }
-          }
-        : rest
-    )
+    const settings = this.store.getSettings()
+    const update: Partial<GlobalSettings> = {}
+    for (const key of FIELD_KEYS) {
+      const value = parsed.data[key]
+      if (value !== undefined) {
+        // Spelled out whole: the store replaces most objects, and normalizes a partial one to defaults.
+        const merged = OBJECT_KEYS.has(key)
+          ? { ...asRecord(stored(settings, key)), ...asRecord(value) }
+          : value
+        Object.assign(update, { [key]: merged })
+      }
+    }
+    await this.write(update)
     return { ok: true, ...this.get() }
+  }
+
+  /** For this machine's own clients only (the RPC refuses paired devices). */
+  networkProxy(): PodNetworkProxy {
+    const settings = this.store.getSettings()
+    return {
+      httpProxyUrl: settings.httpProxyUrl ?? '',
+      httpProxyBypassRules: settings.httpProxyBypassRules ?? ''
+    }
+  }
+
+  /** The URL as the network settings pane commits it: trimmed and checked, or refused with its message. */
+  setNetworkProxy(url: string): Promise<PodNetworkProxy> {
+    const run = this.writes.then(async () => {
+      const normalized = normalizeProxyUrl(url)
+      if (!normalized.ok) {
+        throw new PodSettingsRefusedError(normalized.message)
+      }
+      await this.write({ httpProxyUrl: normalized.value })
+      return this.networkProxy()
+    })
+    this.writes = run.catch(() => {})
+    return run
   }
 
   /** The written keys (and, for an object, its written fields) that differ from `base`'s values. */
@@ -160,12 +190,12 @@ export class PodSettingsService {
         : keys
     }
     return keys.filter((key) => {
-      if (key === 'notifications') {
-        const fields = Object.keys(written.notifications ?? {})
+      if (OBJECT_KEYS.has(key)) {
+        const fields = Object.keys(asRecord(written[key]))
         return fields.some(
           (field) =>
-            JSON.stringify(Reflect.get(base.notifications ?? {}, field)) !==
-            JSON.stringify(Reflect.get(current.notifications ?? {}, field))
+            JSON.stringify(asRecord(base[key])[field]) !==
+            JSON.stringify(asRecord(current[key])[field])
         )
       }
       return JSON.stringify(base[key]) !== JSON.stringify(current[key])
@@ -227,34 +257,61 @@ export class PodSettingsService {
 
 /** The fields' current values: valid ones only, so a client never decodes a value its schema lacks. */
 function project(settings: GlobalSettings): PodSettingsValues {
-  const raw: Record<string, unknown> = {}
-  for (const key of FIELD_KEYS) {
-    raw[key] =
-      key === 'computerAwakeMode'
-        ? normalizeComputerAwakeMode(
-            settings.computerAwakeMode,
-            settings.keepComputerAwakeWhileAgentsRun
-          )
-        : key === 'notifications'
-          ? pickNotifications(settings.notifications)
-          : settings[key]
-  }
   const values: Record<string, unknown> = {}
   for (const key of FIELD_KEYS) {
-    const parsed = POD_SETTINGS_FIELDS[key].safeParse(raw[key])
-    if (raw[key] !== undefined && parsed.success) {
+    const raw = shown(settings, key)
+    const parsed = POD_SETTINGS_FIELDS[key].safeParse(raw)
+    if (raw !== undefined && parsed.success) {
       values[key] = parsed.data
     }
   }
   return PodSettingsValuesSchema.parse(values)
 }
 
-function pickNotifications(value: GlobalSettings['notifications'] | undefined): unknown {
-  if (!value) {
+/** A key's stored value as the desktop reads it. */
+function stored(settings: GlobalSettings, key: PodSettingsKey): unknown {
+  switch (key) {
+    case 'computerAwakeMode':
+      return normalizeComputerAwakeMode(
+        settings.computerAwakeMode,
+        settings.keepComputerAwakeWhileAgentsRun
+      )
+    case 'sourceControlAi':
+      return normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi)
+    default:
+      return settings[key]
+  }
+}
+
+/** What a client sees of it: an object's own fields, and agents this build still knows. */
+function shown(settings: GlobalSettings, key: PodSettingsKey): unknown {
+  const value = stored(settings, key)
+  if (value === undefined || !OBJECT_KEYS.has(key)) {
+    return key === 'agentCmdOverrides' || key === 'agentDefaultArgs' ? knownAgents(value) : value
+  }
+  const object = asRecord(value)
+  const schema = POD_SETTINGS_FIELDS[key]
+  const fields = schema instanceof z.ZodObject ? Object.keys(schema.shape) : []
+  return Object.fromEntries(
+    fields.map((field) => [
+      field,
+      field === 'selectedModelByAgent' ? knownAgents(object[field]) : object[field]
+    ])
+  )
+}
+
+/** A per-agent map without agents Pod no longer has, so one stale entry doesn't hide the rest. */
+function knownAgents(value: unknown): unknown {
+  if (value === undefined) {
     return undefined
   }
-  const shape = POD_SETTINGS_FIELDS.notifications.shape
-  return Object.fromEntries(Object.keys(shape).map((key) => [key, Reflect.get(value, key)]))
+  return Object.fromEntries(Object.entries(asRecord(value)).filter(([agent]) => isTuiAgent(agent)))
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value))
+    : {}
 }
 
 function diff(

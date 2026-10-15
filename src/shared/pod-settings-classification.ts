@@ -1,7 +1,6 @@
 // Fork-only (Pod): every settings key podSettings.* leaves out, and why.
 import type { GlobalSettings } from './global-settings-types'
 import type { PodSettingsKey, PodSettingsValues } from './pod-settings-schema'
-import type { PodSettingsReadOnlyKey } from './pod-settings-read-only'
 
 /** Never in podSettings.schema, get or subscribe; set refuses them. */
 export const POD_SETTINGS_SECRET_KEYS = [
@@ -29,10 +28,10 @@ export type PodSettingsHiddenReason =
   | 'internal'
   /** Superseded by another key. */
   | 'legacy'
-  /** A preference no native page shows yet. */
+  /** A preference Pod keeps that no native page shows yet; each says why. */
   | 'later'
-  /** Shapes only Electron's own window: its sidebar, editor, browser, chat and diff views. */
-  | 'electron-ui'
+  /** A feature Pod dropped, or chrome that means nothing without Orca's window. */
+  | 'dropped'
 
 export const POD_SETTINGS_HIDDEN = {
   autoRenameBranchFromWorkDefaultedOn: 'migration',
@@ -136,96 +135,81 @@ export const POD_SETTINGS_HIDDEN = {
   keepComputerAwakeWhileAgentsRun: 'legacy',
   experimentalSidekick: 'legacy',
   experimentalCompactWorktreeCards: 'legacy',
-  terminalScrollSensitivity: 'later',
-  terminalFastScrollSensitivity: 'later',
-  terminalTuiScrollSensitivity: 'later',
+  commitMessageAi: 'legacy',
+  // Kept, with no native page yet:
+  // native-panes-shim turns Claude's tmux splits into Orca panes; unverified with PodNative's splits.
   claudeAgentTeamsMode: 'later',
-  httpProxyBypassRules: 'later',
+  // Labels in Orca's browser tab; PodNative's browser has none yet.
   localhostWorktreeLabelsEnabled: 'later',
-  openInApplications: 'later',
-  agentCmdOverrides: 'later',
-  codexSessionSourceHome: 'later',
-  agentDefaultArgs: 'later',
+  // The banner it hides is drawn by Orca's renderer; PodNative shows no such banner yet.
   codexSharedServerWarning: 'later',
-  tabAutoGenerateTitle: 'later',
+  // Mobile and emulator panes: native simulators are planned separately.
   experimentalMobile: 'later',
   mobileEmulatorEnabled: 'later',
   mobileEmulatorDefaultDeviceUdid: 'later',
   androidSdkPath: 'later',
   mobileAutoRestoreFitMs: 'later',
-  experimentalAgentHibernation: 'later',
-  agentHibernationIdleMs: 'later',
+  // On-demand environments have no native flow yet.
   experimentalEphemeralVms: 'later',
-  commitMessageAi: 'later',
-  nativeChatAppearance: 'electron-ui',
-  nativeChatAutoName: 'electron-ui',
-  leftSidebarAppearanceMode: 'electron-ui',
-  leftSidebarTintColor: 'electron-ui',
-  leftSidebarTintOpacity: 'electron-ui',
-  appIcon: 'electron-ui',
-  appFontFamily: 'electron-ui',
-  editorMinimapEnabled: 'electron-ui',
-  richMarkdownSpellcheckEnabled: 'electron-ui',
-  markdownReviewToolsEnabled: 'electron-ui',
-  primarySelectionMiddleClickPaste: 'electron-ui',
-  terminalGpuAcceleration: 'electron-ui',
-  terminalLigatures: 'electron-ui',
-  terminalInlineImages: 'electron-ui',
-  terminalDividerColorDark: 'electron-ui',
-  terminalDividerColorLight: 'electron-ui',
-  terminalInactivePaneOpacity: 'electron-ui',
-  terminalActivePaneOpacity: 'electron-ui',
-  terminalPaneOpacityTransitionMs: 'electron-ui',
-  terminalDividerThicknessPx: 'electron-ui',
-  windowBackgroundBlur: 'electron-ui',
-  terminalLinkActionPopoverEnabled: 'electron-ui',
-  terminalLinkClickBehavior: 'electron-ui',
-  terminalUrlMiddleClickBehavior: 'electron-ui',
-  experimentalNativeChat: 'electron-ui',
-  nativeChatResumeWorkOnRestart: 'electron-ui',
-  nativeChatQueueFollowUps: 'electron-ui',
-  nativeChatInlineVisuals: 'electron-ui',
-  nativeChatInheritShellEnvironment: 'electron-ui',
-  nativeChatShellEnvironmentVariables: 'electron-ui',
-  sourceControlViewMode: 'electron-ui',
-  sourceControlGroupOrder: 'electron-ui',
-  showTitlebarAppName: 'electron-ui',
-  showTasksButton: 'electron-ui',
-  showAutomationsButton: 'electron-ui',
-  showArtifactsButton: 'electron-ui',
-  showSkillsButton: 'electron-ui',
-  showMobileButton: 'electron-ui',
-  showPinnedWorktreesInGroups: 'electron-ui',
-  ctrlTabOrderMode: 'electron-ui',
-  terminalShortcutPolicy: 'electron-ui',
-  browserSshWorkspaceRoutingEnabled: 'electron-ui',
-  floatingTerminalTriggerLocation: 'electron-ui',
-  diffDefaultView: 'electron-ui',
-  diffWordWrap: 'electron-ui',
-  diffShowWhitespace: 'electron-ui',
-  diffCollapseUnchangedRegions: 'electron-ui',
-  combinedDiffFileTreeVisibleByDefault: 'electron-ui',
-  skipDeleteAutomationConfirm: 'electron-ui',
-  skipDeleteArtifactConfirm: 'electron-ui',
-  skipCodexRateLimitResetConfirm: 'electron-ui',
-  confirmClosePinnedTab: 'electron-ui',
-  editorPreviewTabsEnabled: 'electron-ui',
-  experimentalPet: 'electron-ui',
-  experimentalActivity: 'electron-ui',
-  experimentalAgentDashboardPopout: 'electron-ui',
-  experimentalAgentDashboardMode: 'electron-ui',
-  experimentalAgentDashboardShowIdle: 'electron-ui',
-  experimentalTerminalAttention: 'electron-ui',
-  experimentalNativeTerminal: 'electron-ui',
-  experimentalNewWorktreeCardStyle: 'electron-ui',
-  compactWorktreeCards: 'electron-ui'
+  // Orca's chat view; whether PodNative gets one is open. Its shell variables can hold secrets.
+  experimentalNativeChat: 'later',
+  nativeChatAppearance: 'later',
+  nativeChatAutoName: 'later',
+  nativeChatResumeWorkOnRestart: 'later',
+  nativeChatQueueFollowUps: 'later',
+  nativeChatInlineVisuals: 'later',
+  nativeChatInheritShellEnvironment: 'later',
+  nativeChatShellEnvironmentVariables: 'later',
+  // How a terminal link click and middle click act: settled with PodNative's link handling.
+  terminalLinkActionPopoverEnabled: 'later',
+  terminalLinkClickBehavior: 'later',
+  terminalUrlMiddleClickBehavior: 'later',
+  // Routes Orca's browser tabs through SSH; PodNative's browser doesn't yet.
+  browserSshWorkspaceRoutingEnabled: 'later',
+  // PodNative's editor has no preview tabs.
+  editorPreviewTabsEnabled: 'later',
+  // Orca's window chrome, sidebar, Monaco editor and diff views; PodNative keeps its own
+  // (sourceControlViewMode and the diff toggles in UserDefaults).
+  leftSidebarAppearanceMode: 'dropped',
+  leftSidebarTintColor: 'dropped',
+  leftSidebarTintOpacity: 'dropped',
+  appIcon: 'dropped',
+  appFontFamily: 'dropped',
+  windowBackgroundBlur: 'dropped',
+  showTitlebarAppName: 'dropped',
+  showTasksButton: 'dropped',
+  showAutomationsButton: 'dropped',
+  showArtifactsButton: 'dropped',
+  showSkillsButton: 'dropped',
+  showMobileButton: 'dropped',
+  showPinnedWorktreesInGroups: 'dropped',
+  floatingTerminalTriggerLocation: 'dropped',
+  compactWorktreeCards: 'dropped',
+  experimentalNewWorktreeCardStyle: 'dropped',
+  experimentalAgentDashboardPopout: 'dropped',
+  experimentalAgentDashboardMode: 'dropped',
+  experimentalAgentDashboardShowIdle: 'dropped',
+  experimentalPet: 'dropped',
+  editorMinimapEnabled: 'dropped',
+  richMarkdownSpellcheckEnabled: 'dropped',
+  markdownReviewToolsEnabled: 'dropped',
+  sourceControlViewMode: 'dropped',
+  sourceControlGroupOrder: 'dropped',
+  diffDefaultView: 'dropped',
+  diffWordWrap: 'dropped',
+  diffShowWhitespace: 'dropped',
+  diffCollapseUnchangedRegions: 'dropped',
+  combinedDiffFileTreeVisibleByDefault: 'dropped',
+  // xterm.js renderer options and addons; PodNative's terminal draws its own.
+  terminalGpuAcceleration: 'dropped',
+  terminalLigatures: 'dropped',
+  terminalInlineImages: 'dropped',
+  terminalPaneOpacityTransitionMs: 'dropped',
+  // Orca's own terminal experiment inside Electron.
+  experimentalNativeTerminal: 'dropped'
 } as const satisfies { [K in keyof GlobalSettings]?: PodSettingsHiddenReason }
 
-type Classified =
-  | PodSettingsKey
-  | keyof typeof POD_SETTINGS_HIDDEN
-  | PodSettingsSecretKey
-  | PodSettingsReadOnlyKey
+type Classified = PodSettingsKey | keyof typeof POD_SETTINGS_HIDDEN | PodSettingsSecretKey
 type Unclassified = Exclude<keyof GlobalSettings, Classified>
 /** Fails to compile, naming the keys, when Orca or Pod adds a setting nobody classified here. */
 export const POD_SETTINGS_ALL_CLASSIFIED: [Unclassified] extends [never] ? true : Unclassified =

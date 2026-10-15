@@ -1,9 +1,11 @@
 // Fork-only (Pod): podSettings.* — the settings a native Pod client renders from one schema.
 import { defineMethod, defineStreamingMethod } from '../../runtime/rpc/core'
 import {
+  PodSettingsSetNetworkProxyParams,
   PodSettingsSetParams,
   PodSettingsUnsubscribeParams
 } from '../../../shared/rpc-contract/pod-settings-params'
+import { assertLocalRpcCaller } from '../../runtime/rpc/methods/pod-local-caller'
 import { getPodSettingsService, type PodSettingsService } from './pod-settings-service'
 
 function service(): PodSettingsService {
@@ -76,6 +78,25 @@ export const POD_SETTINGS_METHODS = [
       }
       runtime.cleanupSubscription(params.subscriptionId)
       return { unsubscribed: true }
+    }
+  }),
+  // Why apart from the fields: the URL can carry a password, so only this machine reads or sets it.
+  defineMethod({
+    name: 'podSettings.getNetworkProxy',
+    permission: 'host-admin',
+    params: null,
+    handler: (_params, ctx) => {
+      assertLocalRpcCaller(ctx, 'podSettings.getNetworkProxy')
+      return service().networkProxy()
+    }
+  }),
+  defineMethod({
+    name: 'podSettings.setNetworkProxy',
+    permission: 'host-admin',
+    params: PodSettingsSetNetworkProxyParams,
+    handler: (params, ctx) => {
+      assertLocalRpcCaller(ctx, 'podSettings.setNetworkProxy')
+      return service().setNetworkProxy(params.httpProxyUrl)
     }
   })
 ]

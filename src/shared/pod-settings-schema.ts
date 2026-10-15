@@ -1,6 +1,5 @@
 // Fork-only (Pod): the settings a native Pod client renders and edits over podSettings.*.
 import { z } from 'zod'
-import type { TuiAgent } from './tui-agent'
 import {
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX,
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MIN
@@ -16,68 +15,27 @@ import {
   MAX_TERMINAL_CONTRAST_RATIO,
   MIN_TERMINAL_CONTRAST_RATIO
 } from './terminal-minimum-contrast-settings'
-
-// Why `satisfies`: an agent Orca adds fails to compile here until a native client can offer it.
-const TUI_AGENTS = {
-  claude: 'claude',
-  'claude-agent-teams': 'claude-agent-teams',
-  codebuddy: 'codebuddy',
-  openclaude: 'openclaude',
-  codex: 'codex',
-  autohand: 'autohand',
-  opencode: 'opencode',
-  opencode2: 'opencode2',
-  'mimo-code': 'mimo-code',
-  pi: 'pi',
-  omp: 'omp',
-  qoder: 'qoder',
-  'qoder-cn': 'qoder-cn',
-  gemini: 'gemini',
-  antigravity: 'antigravity',
-  aider: 'aider',
-  goose: 'goose',
-  amp: 'amp',
-  kilo: 'kilo',
-  kiro: 'kiro',
-  crush: 'crush',
-  aug: 'aug',
-  cline: 'cline',
-  codebuff: 'codebuff',
-  freebuff: 'freebuff',
-  'command-code': 'command-code',
-  continue: 'continue',
-  cursor: 'cursor',
-  droid: 'droid',
-  kimi: 'kimi',
-  'mistral-vibe': 'mistral-vibe',
-  'qwen-code': 'qwen-code',
-  rovo: 'rovo',
-  hermes: 'hermes',
-  openclaw: 'openclaw',
-  copilot: 'copilot',
-  grok: 'grok',
-  devin: 'devin',
-  ante: 'ante',
-  trae: 'trae',
-  muse: 'muse',
-  zcode: 'zcode',
-  'prime-agent': 'prime-agent',
-  dsh: 'dsh',
-  jcode: 'jcode'
-} as const satisfies { [K in TuiAgent]: K }
-const TuiAgentSchema = z.enum(TUI_AGENTS)
+import { OPEN_IN_APPLICATIONS_MAX } from './open-in-applications'
+import { POD_SETTINGS_AGENT_FIELDS } from './pod-settings-agent-fields'
+import { row } from './pod-settings-row'
+import { TuiAgentSchema } from './pod-settings-tui-agent-schema'
 
 const UiLanguageSchema = z.union([
   z.enum(['system', 'en', 'zh', 'ko', 'ja', 'es', 'fr']),
   z.templateLiteral(['plugin:', z.string().min(1)])
 ])
 
-/** `.meta()` with the row's title and an optional one-line explanation. */
-function row<T extends z.ZodType>(schema: T, title: string, description?: string): T {
-  return schema.meta(description ? { title, description } : { title })
-}
-
 const opacity = z.number().min(0).max(1)
+
+const hexColor = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/)
+
+const OpenInApplicationSchema = z
+  .object({
+    id: z.string().min(1).max(256),
+    label: z.string().min(1).max(256),
+    command: z.string().min(1).max(4096)
+  })
+  .strict()
 
 const McpLazyStartSchema = z.object({
   enabled: row(z.boolean(), 'Lazy-start heavy MCP servers'),
@@ -267,7 +225,76 @@ export const POD_SETTINGS_FIELDS = {
   alwaysForceDeleteWorktrees: row(z.boolean(), 'Discard changes when deleting a worktree'),
   sourceControlCompareAgainstUpstream: row(z.boolean(), 'Compare against the upstream branch'),
   showGitIgnoredFiles: row(z.boolean(), 'Show ignored files'),
-  followSymlinkedDirectories: row(z.boolean(), 'Follow symlinked folders')
+  followSymlinkedDirectories: row(z.boolean(), 'Follow symlinked folders'),
+
+  // Read by Orca's renderer until now: PodNative implements what each one does.
+  ctrlTabOrderMode: row(
+    z.enum(['mru', 'sequential']),
+    'Ctrl-Tab order',
+    'Most recently used, or left to right.'
+  ),
+  confirmClosePinnedTab: row(z.boolean(), 'Ask before closing a pinned tab'),
+  tabAutoGenerateTitle: row(
+    z.boolean(),
+    'Name tabs after their work',
+    'A manual rename always wins.'
+  ),
+  skipDeleteAutomationConfirm: row(z.boolean(), 'Delete automations without asking'),
+  skipDeleteArtifactConfirm: row(z.boolean(), 'Delete artifacts without asking'),
+  skipCodexRateLimitResetConfirm: row(z.boolean(), 'Reset Codex rate limits without asking'),
+  openInApplications: row(
+    z.array(OpenInApplicationSchema).max(OPEN_IN_APPLICATIONS_MAX),
+    'Open In',
+    "Extra apps in a worktree's Open In menu; VS Code is always first."
+  ),
+  terminalShortcutPolicy: row(
+    z.enum(['orca-first', 'terminal-first']),
+    'Shortcuts in terminals',
+    "Pod first keeps Pod's shortcuts from terminal programs; terminal first lets them win."
+  ),
+  primarySelectionMiddleClickPaste: row(z.boolean(), 'Middle-click pastes the selection'),
+  // Bounds: the renderer's own normalizers (pane-terminal-options.ts, pane-terminal-tui-wheel-reports.ts).
+  terminalScrollSensitivity: row(z.number().min(0.1).max(10), 'Scroll speed'),
+  terminalFastScrollSensitivity: row(
+    z.number().min(1).max(20),
+    'Fast scroll speed',
+    'While Option is held.'
+  ),
+  terminalTuiScrollSensitivity: row(
+    z.number().int().min(1).max(10),
+    'Scroll speed in full-screen programs',
+    'Wheel steps sent to programs like vim or an agent.'
+  ),
+  terminalInactivePaneOpacity: row(opacity, 'Inactive pane opacity'),
+  terminalActivePaneOpacity: row(opacity, 'Active pane opacity'),
+  terminalDividerThicknessPx: row(z.number().int().min(1).max(32), 'Divider thickness (px)'),
+  terminalDividerColorDark: row(hexColor, 'Divider color'),
+  terminalDividerColorLight: row(hexColor, 'Divider color in light mode'),
+  openLinksInApp: row(z.boolean(), "Open terminal links in Pod's browser"),
+  openLinksInAppModifierInverts: row(
+    z.boolean(),
+    'Shift flips where a link opens',
+    'Off: Shift-click always opens the system browser.'
+  ),
+  // network-proxy.ts's normalizer keeps 4096 characters.
+  httpProxyBypassRules: row(
+    z.string().max(4096),
+    'Bypass the proxy for',
+    'Hosts separated by commas, semicolons or new lines.'
+  ),
+  experimentalTerminalAttention: row(z.boolean(), 'Terminal attention'),
+  experimentalAgentHibernation: row(
+    z.boolean(),
+    'Agent sleep',
+    'Puts finished, resumable background agents to sleep.'
+  ),
+  // Bounds: agent-hibernation-planner.ts.
+  agentHibernationIdleMs: row(
+    z.number().int().min(60_000).max(86_400_000),
+    'Idle time before sleep (ms)'
+  ),
+  experimentalActivity: row(z.boolean(), 'Activity page'),
+  ...POD_SETTINGS_AGENT_FIELDS
 }
 
 export type PodSettingsKey = keyof typeof POD_SETTINGS_FIELDS

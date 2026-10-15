@@ -2,7 +2,17 @@
 import type { PodSettingsKey } from './pod-settings-schema'
 
 export type PodSettingsPage = {
-  id: 'general' | 'terminal' | 'notifications' | 'accounts' | 'git' | 'claude'
+  id:
+    | 'general'
+    | 'terminal'
+    | 'agents'
+    | 'browser'
+    | 'notifications'
+    | 'accounts'
+    | 'git'
+    | 'claude'
+    | 'advanced'
+    | 'experimental'
   title: string
   /** A page whose content comes from another RPC namespace (Accounts: `accounts.*`). */
   source?: string
@@ -35,13 +45,21 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
         ]
       },
       {
+        title: 'Tabs',
+        keys: ['ctrlTabOrderMode', 'confirmClosePinnedTab', 'tabAutoGenerateTitle']
+      },
+      {
         title: 'Behavior',
         keys: [
           'computerAwakeMode',
           'skipDeleteWorktreeConfirm',
-          'skipCloseTerminalWithRunningProcessConfirm'
+          'skipCloseTerminalWithRunningProcessConfirm',
+          'skipDeleteAutomationConfirm',
+          'skipDeleteArtifactConfirm',
+          'skipCodexRateLimitResetConfirm'
         ]
       },
+      { title: 'Open In', keys: ['openInApplications'] },
       {
         title: 'Editor',
         keys: ['editorWordWrap', 'editorAutoSave', 'editorAutoSaveDelayMs', 'editorFontFamily']
@@ -85,7 +103,16 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
           'terminalJISYenToBackslash',
           'terminalMouseHideWhileTyping',
           'terminalFocusFollowsMouse',
-          'terminalWordSeparator'
+          'terminalWordSeparator',
+          'terminalShortcutPolicy'
+        ]
+      },
+      {
+        title: 'Scrolling',
+        keys: [
+          'terminalScrollSensitivity',
+          'terminalFastScrollSensitivity',
+          'terminalTuiScrollSensitivity'
         ]
       },
       {
@@ -93,7 +120,18 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
         keys: [
           'terminalClipboardOnSelect',
           'terminalCopyTrimsGutter',
-          'terminalAllowOsc52Clipboard'
+          'terminalAllowOsc52Clipboard',
+          'primarySelectionMiddleClickPaste'
+        ]
+      },
+      {
+        title: 'Split panes',
+        keys: [
+          'terminalInactivePaneOpacity',
+          'terminalActivePaneOpacity',
+          'terminalDividerThicknessPx',
+          'terminalDividerColorDark',
+          'terminalDividerColorLight'
         ]
       },
       {
@@ -110,6 +148,21 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
         keys: ['floatingTerminalEnabled', 'floatingTerminalCwd']
       }
     ]
+  },
+  // Each agent's launch environment is a secret here: settings.get and settings.update carry it.
+  {
+    id: 'agents',
+    title: 'Agents',
+    sections: [
+      { title: 'Launch', keys: ['agentCmdOverrides', 'agentDefaultArgs'] },
+      { title: 'Prompt cache', keys: ['promptCacheTimerEnabled', 'promptCacheTtlMs'] },
+      { title: 'Codex', keys: ['codexSessionSourceHome'] }
+    ]
+  },
+  {
+    id: 'browser',
+    title: 'Browser',
+    sections: [{ title: 'Links', keys: ['openLinksInApp', 'openLinksInAppModifierInverts'] }]
   },
   {
     id: 'notifications',
@@ -139,7 +192,8 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
           'showGitIgnoredFiles',
           'followSymlinkedDirectories'
         ]
-      }
+      },
+      { title: 'AI', keys: ['sourceControlAi'] }
     ]
   },
   // Its own page: podMcpLazy.status lists the servers the setting picks from.
@@ -148,5 +202,26 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
     title: 'Claude',
     source: 'podMcpLazy',
     sections: [{ title: 'MCP servers', keys: ['mcpLazyStart'] }]
+  },
+  // The proxy URL can carry a password: podSettings.getNetworkProxy and setNetworkProxy, local only.
+  {
+    id: 'advanced',
+    title: 'Advanced',
+    sections: [{ title: 'Network proxy', keys: ['httpProxyBypassRules'] }]
+  },
+  {
+    id: 'experimental',
+    title: 'Experimental',
+    sections: [
+      {
+        title: 'Experimental',
+        keys: [
+          'experimentalTerminalAttention',
+          'experimentalAgentHibernation',
+          'agentHibernationIdleMs',
+          'experimentalActivity'
+        ]
+      }
+    ]
   }
 ]
