@@ -67,20 +67,13 @@ describe('podSettings writes on a real profile', () => {
     expect(service(reopened).get().readOnly.sourceControlAi).toEqual({ enabled: true })
   })
 
-  it('keeps Open In apps, overrides and the proxy bypass across a restart', async () => {
+  it('keeps agent overrides and the proxy bypass across a restart', async () => {
     const store = createStore()
     const settings = service(store)
-    const openInApplications = [
-      { id: 'vscode', label: 'VS Code', command: 'code' },
-      { id: 'zed', label: 'Zed', command: 'zed' }
-    ]
     const result = await settings.set(
       {
-        openInApplications,
         agentCmdOverrides: { codex: 'codex --profile work' },
-        httpProxyBypassRules: 'localhost;*.internal',
-        terminalScrollSensitivity: 2.5,
-        experimentalAgentHibernation: true
+        httpProxyBypassRules: 'localhost;*.internal'
       },
       settings.get().revision
     )
@@ -88,11 +81,8 @@ describe('podSettings writes on a real profile', () => {
 
     const values = service(await reopen()).get().values
     expect(values).toMatchObject({
-      openInApplications,
       agentCmdOverrides: { codex: 'codex --profile work' },
-      httpProxyBypassRules: 'localhost;*.internal',
-      terminalScrollSensitivity: 2.5,
-      experimentalAgentHibernation: true
+      httpProxyBypassRules: 'localhost;*.internal'
     })
   })
 

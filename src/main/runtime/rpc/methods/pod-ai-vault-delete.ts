@@ -9,10 +9,11 @@ import {
 import { assertLocalRpcCaller } from './pod-local-caller'
 
 export const POD_AI_VAULT_METHODS = [
-  // Why workspace: the AI vault's own family; a paired device is refused below, as its IPC was local.
+  // Why host-admin: it deletes files, and an SSH host's CLI with remote control on holds `workspace`.
+  // A paired device is refused below as well, since the IPC it twins was local.
   defineMethod({
     name: 'aiVault.deleteSession',
-    permission: 'workspace',
+    permission: 'host-admin',
     params: AiVaultDeleteSessionParams,
     handler: (params, ctx) => {
       assertLocalRpcCaller(ctx, 'aiVault.deleteSession')

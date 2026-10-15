@@ -48,16 +48,9 @@ describe('podSettings classification', () => {
     for (const key of [
       'agentCmdOverrides',
       'agentDefaultArgs',
-      'openInApplications',
       'openLinksInApp',
       'openLinksInAppModifierInverts',
-      'terminalScrollSensitivity',
-      'terminalFastScrollSensitivity',
-      'terminalTuiScrollSensitivity',
       'httpProxyBypassRules',
-      'experimentalTerminalAttention',
-      'experimentalAgentHibernation',
-      'experimentalActivity',
       'sourceControlAi',
       'promptCacheTimerEnabled'
     ]) {

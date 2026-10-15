@@ -168,6 +168,34 @@ export const POD_SETTINGS_HIDDEN = {
   browserSshWorkspaceRoutingEnabled: 'later',
   // PodNative's editor has no preview tabs.
   editorPreviewTabsEnabled: 'later',
+  // Row bounds lived in pod-settings-schema.ts at commit ed129568dd; restore them with the control.
+  // N1 (native settings): PodNative reads none of these yet, so a row would change nothing.
+  terminalScrollSensitivity: 'later',
+  terminalFastScrollSensitivity: 'later',
+  terminalTuiScrollSensitivity: 'later',
+  terminalInactivePaneOpacity: 'later',
+  terminalActivePaneOpacity: 'later',
+  terminalDividerThicknessPx: 'later',
+  terminalDividerColorDark: 'later',
+  terminalDividerColorLight: 'later',
+  terminalShortcutPolicy: 'later',
+  // N1: the middle-click paste is fixed behavior in PodNative's terminal, not driven by this key.
+  primarySelectionMiddleClickPaste: 'later',
+  // N1: PodNative's Open In menu has no custom apps; its "Edit in Pod" row opens the classic window.
+  openInApplications: 'later',
+  // N1: PodNative has no delete or reset confirmations for these yet.
+  skipDeleteAutomationConfirm: 'later',
+  skipDeleteArtifactConfirm: 'later',
+  skipCodexRateLimitResetConfirm: 'later',
+  // N3 (editor and tabs): PodNative's tab strip has its own order, pinning and titles.
+  ctrlTabOrderMode: 'later',
+  confirmClosePinnedTab: 'later',
+  tabAutoGenerateTitle: 'later',
+  // Phase 6 (experiments): only Orca's renderer reads these; PodNative has no such feature yet.
+  experimentalTerminalAttention: 'later',
+  experimentalAgentHibernation: 'later',
+  agentHibernationIdleMs: 'later',
+  experimentalActivity: 'later',
   // Orca's window chrome, sidebar, Monaco editor and diff views; PodNative keeps its own
   // (sourceControlViewMode and the diff toggles in UserDefaults).
   leftSidebarAppearanceMode: 'dropped',

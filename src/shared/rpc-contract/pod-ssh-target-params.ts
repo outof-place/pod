@@ -5,6 +5,7 @@ import {
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
   SSH_REMOTE_RUNTIMES
 } from '../ssh-types'
+import { parseSshHostInput, SSH_PORT_INVALID_MESSAGE } from '../ssh-host-input'
 
 const text = (max: number) => z.string().trim().max(max)
 
@@ -18,9 +19,9 @@ export const SshTargetSettingsInput = z
     host: text(1024).min(1, 'Host or SSH config alias is required'),
     port: z
       .number()
-      .int('Port must be between 1 and 65535')
-      .min(1, 'Port must be between 1 and 65535')
-      .max(65535, 'Port must be between 1 and 65535'),
+      .int(SSH_PORT_INVALID_MESSAGE)
+      .min(1, SSH_PORT_INVALID_MESSAGE)
+      .max(65535, SSH_PORT_INVALID_MESSAGE),
     username: text(256).optional(),
     identityFile: text(4096).optional(),
     gssapiAuthentication: z.boolean().optional(),
@@ -45,6 +46,11 @@ export const SshTargetSettingsInput = z
     allowRemoteCliControl: z.boolean().optional()
   })
   .strict()
+  // A pasted `host:port` the pane would refuse (the host is also read as `user@host:port` or an ssh:// URL).
+  .refine((form) => parseSshHostInput(form.host)?.invalidPort !== true, {
+    message: SSH_PORT_INVALID_MESSAGE,
+    path: ['host']
+  })
 
 export type SshTargetSettingsInput = z.output<typeof SshTargetSettingsInput>
 

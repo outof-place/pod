@@ -12,7 +12,6 @@ export type PodSettingsPage = {
     | 'git'
     | 'claude'
     | 'advanced'
-    | 'experimental'
   title: string
   /** A page whose content comes from another RPC namespace (Accounts: `accounts.*`). */
   source?: string
@@ -45,21 +44,13 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
         ]
       },
       {
-        title: 'Tabs',
-        keys: ['ctrlTabOrderMode', 'confirmClosePinnedTab', 'tabAutoGenerateTitle']
-      },
-      {
         title: 'Behavior',
         keys: [
           'computerAwakeMode',
           'skipDeleteWorktreeConfirm',
-          'skipCloseTerminalWithRunningProcessConfirm',
-          'skipDeleteAutomationConfirm',
-          'skipDeleteArtifactConfirm',
-          'skipCodexRateLimitResetConfirm'
+          'skipCloseTerminalWithRunningProcessConfirm'
         ]
       },
-      { title: 'Open In', keys: ['openInApplications'] },
       {
         title: 'Editor',
         keys: ['editorWordWrap', 'editorAutoSave', 'editorAutoSaveDelayMs', 'editorFontFamily']
@@ -103,16 +94,7 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
           'terminalJISYenToBackslash',
           'terminalMouseHideWhileTyping',
           'terminalFocusFollowsMouse',
-          'terminalWordSeparator',
-          'terminalShortcutPolicy'
-        ]
-      },
-      {
-        title: 'Scrolling',
-        keys: [
-          'terminalScrollSensitivity',
-          'terminalFastScrollSensitivity',
-          'terminalTuiScrollSensitivity'
+          'terminalWordSeparator'
         ]
       },
       {
@@ -120,18 +102,7 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
         keys: [
           'terminalClipboardOnSelect',
           'terminalCopyTrimsGutter',
-          'terminalAllowOsc52Clipboard',
-          'primarySelectionMiddleClickPaste'
-        ]
-      },
-      {
-        title: 'Split panes',
-        keys: [
-          'terminalInactivePaneOpacity',
-          'terminalActivePaneOpacity',
-          'terminalDividerThicknessPx',
-          'terminalDividerColorDark',
-          'terminalDividerColorLight'
+          'terminalAllowOsc52Clipboard'
         ]
       },
       {
@@ -208,20 +179,5 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
     id: 'advanced',
     title: 'Advanced',
     sections: [{ title: 'Network proxy', keys: ['httpProxyBypassRules'] }]
-  },
-  {
-    id: 'experimental',
-    title: 'Experimental',
-    sections: [
-      {
-        title: 'Experimental',
-        keys: [
-          'experimentalTerminalAttention',
-          'experimentalAgentHibernation',
-          'agentHibernationIdleMs',
-          'experimentalActivity'
-        ]
-      }
-    ]
   }
 ]

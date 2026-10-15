@@ -264,15 +264,14 @@ describe('PodSettingsService fields that were Electron-only', () => {
   it("refuses values the desktop's own controls can't produce", async () => {
     const { service, write } = setup()
     const { revision } = service.get()
-    const nine = Array.from({ length: 9 }, (_, i) => ({ id: `a${i}`, label: 'A', command: 'a' }))
     for (const values of [
-      { terminalScrollSensitivity: 50 },
-      { terminalTuiScrollSensitivity: 1.5 },
+      { terminalFontSize: 500 },
       { promptCacheTtlMs: 60_000 },
-      { agentHibernationIdleMs: 1_000 },
-      { openInApplications: nine },
+      { httpProxyBypassRules: 'x'.repeat(4097) },
       { agentCmdOverrides: { 'not-an-agent': 'x' } },
-      { terminalDividerColorDark: 'red; background: url(x)' }
+      // Hidden as `later` until PodNative applies them: not writable meanwhile.
+      { terminalScrollSensitivity: 2 },
+      { openInApplications: [] }
     ]) {
       await expect(service.set(values, revision), JSON.stringify(values)).rejects.toThrow(
         PodSettingsRefusedError

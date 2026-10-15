@@ -91,6 +91,25 @@ describe('Pod SSH settings RPC methods', () => {
     ])
   })
 
+  it("refuses an SSH host's orca CLI, even with remote control on, so a remote host cannot edit hosts", async () => {
+    const ops = installOps()
+    const bridge = new RpcDispatcher({
+      runtime,
+      methods: POD_SSH_TARGET_METHODS,
+      callerScope: { kind: 'ssh-bridge', targetId: 'ssh-1', remoteCliControl: true }
+    })
+
+    const response = await bridge.dispatch({
+      id: 'req-1',
+      authToken: 'tok',
+      method: 'ssh.removeTarget',
+      params: { targetId: 'ssh-1' }
+    })
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'forbidden' } })
+    expect(ops.remove).not.toHaveBeenCalled()
+  })
+
   it('validates the form as the settings pane does', async () => {
     installOps()
     const cases: [unknown, string][] = [
@@ -132,6 +151,51 @@ describe('Pod SSH settings RPC methods', () => {
     }
     expect(notifyReposChangedForRemoteClients).not.toHaveBeenCalled()
   })
+
+  it.each(['me@dev.example.com:2222', 'ssh://me@dev.example.com:2222'])(
+    'splits %s into user, host and port as the pane does, on add and on save',
+    async (host) => {
+      const ops = installOps()
+
+      await dispatch('ssh.addTarget', { target: { host, port: 22 } })
+      await dispatch('ssh.updateTarget', { targetId: 'ssh-1', target: { host, port: 22 } })
+
+      const expected = {
+        label: 'me@dev.example.com',
+        configHost: 'dev.example.com',
+        host: 'dev.example.com',
+        port: 2222,
+        username: 'me'
+      }
+      expect(ops.add).toHaveBeenCalledWith(expect.objectContaining(expected))
+      expect(ops.update).toHaveBeenCalledWith('ssh-1', expect.objectContaining(expected))
+    }
+  )
+
+  it('lets an explicit user or non-default port win over the pasted ones', async () => {
+    const ops = installOps()
+
+    await dispatch('ssh.addTarget', {
+      target: { host: 'me@dev.example.com:2222', port: 2200, username: 'bob' }
+    })
+
+    expect(ops.add).toHaveBeenCalledWith(
+      expect.objectContaining({ host: 'dev.example.com', port: 2200, username: 'bob' })
+    )
+  })
+
+  it.each(['h:99999', 'me@h:0', 'ssh://me@h:99999'])(
+    'refuses %s with the pane message and stores nothing',
+    async (host) => {
+      const ops = installOps()
+
+      const response = await dispatch('ssh.addTarget', { target: { host, port: 22 } })
+
+      expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+      expect(JSON.stringify(response)).toContain('Port must be between 1 and 65535')
+      expect(ops.add).not.toHaveBeenCalled()
+    }
+  )
 
   it('tells clients when a re-added host took its old workspaces back', async () => {
     const readoption = { oldTargetId: 'ssh-0', newTargetId: 'ssh-1', repoIds: ['repo-1'] }

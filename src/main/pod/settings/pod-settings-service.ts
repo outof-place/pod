@@ -270,17 +270,16 @@ function project(settings: GlobalSettings): PodSettingsValues {
 
 /** A key's stored value as the desktop reads it. */
 function stored(settings: GlobalSettings, key: PodSettingsKey): unknown {
-  switch (key) {
-    case 'computerAwakeMode':
-      return normalizeComputerAwakeMode(
-        settings.computerAwakeMode,
-        settings.keepComputerAwakeWhileAgentsRun
-      )
-    case 'sourceControlAi':
-      return normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi)
-    default:
-      return settings[key]
+  if (key === 'computerAwakeMode') {
+    return normalizeComputerAwakeMode(
+      settings.computerAwakeMode,
+      settings.keepComputerAwakeWhileAgentsRun
+    )
   }
+  if (key === 'sourceControlAi') {
+    return normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi)
+  }
+  return settings[key]
 }
 
 /** What a client sees of it: an object's own fields, and agents this build still knows. */

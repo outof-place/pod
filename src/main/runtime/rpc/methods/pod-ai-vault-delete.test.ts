@@ -28,10 +28,30 @@ describe('aiVault.deleteSession', () => {
     expect(POD_RUNTIME_CAPABILITIES).toContain('pod.ai-vault.delete-session.v1')
   })
 
-  it('sits in the AI vault family with workspace permission', () => {
+  it('declares host-admin: it destroys files, so no SSH host CLI may reach it', () => {
     expect(POD_AI_VAULT_METHODS.map((method) => [method.name, method.permission])).toEqual([
-      ['aiVault.deleteSession', 'workspace']
+      ['aiVault.deleteSession', 'host-admin']
     ])
+  })
+
+  it("refuses an SSH host's orca CLI, even with remote control on, before anything is deleted", async () => {
+    const remove = vi.fn()
+    setPodAiVaultSessionDelete(remove)
+    const bridge = new RpcDispatcher({
+      runtime,
+      methods: POD_AI_VAULT_METHODS,
+      callerScope: { kind: 'ssh-bridge', targetId: 'ssh-1', remoteCliControl: true }
+    })
+
+    await expect(
+      bridge.dispatch({
+        id: 'req-1',
+        authToken: 'tok',
+        method: 'aiVault.deleteSession',
+        params: row
+      })
+    ).resolves.toMatchObject({ ok: false, error: { code: 'forbidden' } })
+    expect(remove).not.toHaveBeenCalled()
   })
 
   it('refuses a payload the IPC handler would have rejected', async () => {

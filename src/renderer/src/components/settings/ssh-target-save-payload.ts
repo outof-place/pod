@@ -9,6 +9,7 @@ import {
   parseRelayGracePeriodSeconds,
   type EditingTarget
 } from './ssh-target-draft'
+import { buildSshTargetPayloads } from '../../../../shared/ssh-target-save-payload'
 import { translate } from '../../i18n/i18n'
 
 type SshTargetSavePayload = {
@@ -54,45 +55,22 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     }
   }
 
-  const identityFile = form.identityFile.trim() || undefined
-  const proxyCommand = form.proxyCommand.trim() || undefined
-  const jumpHost = form.jumpHost.trim() || undefined
-  const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
-  const remoteRuntime = form.remoteRuntime === 'auto' ? undefined : form.remoteRuntime
-
-  const target: SshTargetCreateInput = {
-    label: form.label.trim() || (username ? `${username}@${host}` : configHost),
-    configHost,
-    host,
-    port,
-    username,
-    ...(form.gssapiAuthentication ? { gssapiAuthentication: true } : {}),
-    relayGracePeriodSeconds: graceSeconds,
-    ...(identityFile ? { identityFile } : {}),
-    ...(proxyCommand ? { proxyCommand } : {}),
-    ...(jumpHost ? { jumpHost } : {}),
-    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
-    ...(remoteRuntime ? { remoteRuntime } : {}),
-    ...(form.allowRemoteCliControl ? { allowRemoteCliControl: true } : {})
-  }
-
   return {
     ok: true,
-    payload: {
-      target,
-      updates: {
-        ...target,
-        // Why: updateTarget merges partially, so explicit undefined values are
-        // required to clear optional fields inherited from ~/.ssh/config.
-        identityFile,
-        gssapiAuthentication: form.gssapiAuthentication || undefined,
-        proxyCommand,
-        jumpHost,
-        systemSshConnectionReuse,
-        remoteRuntime,
-        allowRemoteCliControl: form.allowRemoteCliControl || undefined,
-        source: 'manual'
-      }
-    }
+    payload: buildSshTargetPayloads({
+      label: form.label,
+      configHost,
+      host,
+      port,
+      username,
+      identityFile: form.identityFile,
+      gssapiAuthentication: form.gssapiAuthentication,
+      proxyCommand: form.proxyCommand,
+      jumpHost: form.jumpHost,
+      systemSshConnectionReuse: form.systemSshConnectionReuse,
+      relayGracePeriodSeconds: graceSeconds,
+      remoteRuntime: form.remoteRuntime === 'auto' ? undefined : form.remoteRuntime,
+      allowRemoteCliControl: form.allowRemoteCliControl
+    })
   }
 }

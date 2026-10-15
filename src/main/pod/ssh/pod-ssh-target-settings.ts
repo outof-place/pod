@@ -8,6 +8,11 @@ import {
   type SshTargetUpdateInput
 } from '../../../shared/ssh-types'
 import type { SshTargetSettingsInput } from '../../../shared/rpc-contract/pod-ssh-target-params'
+import {
+  resolveSshConnectionFields,
+  SSH_PORT_INVALID_MESSAGE
+} from '../../../shared/ssh-host-input'
+import { buildSshTargetPayloads } from '../../../shared/ssh-target-save-payload'
 import { isManagedOrcadSshTarget } from '../../ssh/ssh-connection-store'
 
 /** The same calls SSH settings' IPC handlers make (ssh-target-crud-handlers.ts). */
@@ -82,49 +87,37 @@ export function toSshTargetConfig(target: SshTarget): SshTargetConfig {
 }
 
 /**
- * The pane's save payload (buildSshTargetSavePayload) from a validated form: what Add stores, and
- * what Save writes over an existing host. Cleared optional fields are written as undefined, since
- * the store merges an update; a saved host becomes `manual` so ~/.ssh/config sync leaves it alone.
+ * The pane's save payload (shared buildSshTargetPayloads) from a validated form: what Add stores,
+ * and what Save writes over an existing host.
  */
 export function buildSshTargetSettingsPayload(input: SshTargetSettingsInput): {
   target: SshTargetCreateInput
   updates: SshTargetUpdateInput
 } {
-  const host = input.host
-  const configHost = input.configHost || host
-  const username = input.username ?? ''
-  const identityFile = input.identityFile || undefined
-  const proxyCommand = input.proxyCommand || undefined
-  const jumpHost = input.jumpHost || undefined
-  const systemSshConnectionReuse = input.systemSshConnectionReuse === false ? false : undefined
-  const target: SshTargetCreateInput = {
-    label: input.label || (username ? `${username}@${host}` : configHost),
+  // As the pane does: a pasted `user@host:port` fills what the form left blank or at its default.
+  const { host, configHost, username, port } = resolveSshConnectionFields({
+    host: input.host,
+    configHost: input.configHost ?? '',
+    username: input.username ?? '',
+    port: String(input.port)
+  })
+  if (Number.isNaN(port) || port < 1 || port > 65535) {
+    throw new Error(SSH_PORT_INVALID_MESSAGE)
+  }
+  return buildSshTargetPayloads({
+    label: input.label ?? '',
     configHost,
     host,
-    port: input.port,
+    port,
     username,
-    ...(input.gssapiAuthentication ? { gssapiAuthentication: true } : {}),
+    identityFile: input.identityFile ?? '',
+    gssapiAuthentication: input.gssapiAuthentication === true,
+    proxyCommand: input.proxyCommand ?? '',
+    jumpHost: input.jumpHost ?? '',
+    systemSshConnectionReuse: input.systemSshConnectionReuse !== false,
     relayGracePeriodSeconds:
       input.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
-    ...(identityFile ? { identityFile } : {}),
-    ...(proxyCommand ? { proxyCommand } : {}),
-    ...(jumpHost ? { jumpHost } : {}),
-    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
-    ...(input.remoteRuntime ? { remoteRuntime: input.remoteRuntime } : {}),
-    ...(input.allowRemoteCliControl ? { allowRemoteCliControl: true } : {})
-  }
-  return {
-    target,
-    updates: {
-      ...target,
-      identityFile,
-      gssapiAuthentication: input.gssapiAuthentication || undefined,
-      proxyCommand,
-      jumpHost,
-      systemSshConnectionReuse,
-      remoteRuntime: input.remoteRuntime,
-      allowRemoteCliControl: input.allowRemoteCliControl || undefined,
-      source: 'manual'
-    }
-  }
+    remoteRuntime: input.remoteRuntime,
+    allowRemoteCliControl: input.allowRemoteCliControl === true
+  })
 }
