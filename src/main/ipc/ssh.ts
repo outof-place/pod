@@ -56,6 +56,8 @@ import {
 } from './ssh-connect-attempt-registry'
 import { createSshConnectionCallbacks } from './ssh-connection-state-callbacks'
 import { registerSshConnectionHandlers } from './ssh-connection-handlers'
+import { installPodSshTargetSettings } from '../pod/ssh/install-pod-ssh-target-settings'
+import { setPodSshTargetSettingsOps } from '../pod/ssh/pod-ssh-target-settings'
 import {
   registerPowerMonitorReconnect,
   unregisterPowerMonitorReconnect
@@ -223,6 +225,8 @@ export function registerSshHandlers(
   setSshConnectionManagerResolver(() => connectionManager)
 
   registerSshTargetCrudHandlers()
+  // Fork-only (Pod): the same host operations for PodNative's SSH settings over runtime RPC.
+  installPodSshTargetSettings()
   registerSshConnectionHandlers()
   registerSshPortForwardHandlers()
 
@@ -270,6 +274,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   setSshTargetRegistryStore(null)
   setPersistedStore(null)
   setSshTargetRegistryHandlers({ connect: null, getState: null })
+  setPodSshTargetSettingsOps(null)
   setCurrentGetMainWindow(() => null)
   setCurrentRuntime(undefined)
 }

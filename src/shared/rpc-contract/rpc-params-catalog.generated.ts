@@ -449,6 +449,11 @@ import {
   PodOrbstackWorktreeParams
 } from './pod-orbstack-params'
 import { PodSettingsSetParams, PodSettingsUnsubscribeParams } from './pod-settings-params'
+import {
+  SshAddTargetParams,
+  SshImportConfigParams,
+  SshUpdateTargetParams
+} from './pod-ssh-target-params'
 import { PodTerminalDirectLaneParams } from './pod-terminal-lane-params'
 import {
   PodWorkspaceAdoptParams,
@@ -1262,11 +1267,17 @@ export const RPC_PARAMS_BY_METHOD = {
   'speech.models.delete': SpeechModelAction,
   'speech.models.download': SpeechModelAction,
   'speech.models.list': null,
+  'ssh.addTarget': SshAddTargetParams,
   'ssh.connect': SshTarget,
+  'ssh.disconnect': SshTarget,
   'ssh.getState': SshTarget,
+  'ssh.importConfig': SshImportConfigParams,
   'ssh.listRemovedTargetLabels': null,
+  'ssh.listTargetConfigs': null,
   'ssh.listTargetSummaries': null,
   'ssh.listTargets': null,
+  'ssh.removeTarget': SshTarget,
+  'ssh.updateTarget': SshUpdateTargetParams,
   'stats.summary': null,
   'status.get': null,
   'terminal.adoptOrphans': TerminalAdoptOrphans,

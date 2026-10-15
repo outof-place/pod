@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import type {
   SshConfigHostListArgs,
   SshRepoReadoption,
+  SshTarget,
   SshTargetCreateInput,
   SshTargetUpdateInput
 } from '../../shared/ssh-types'
@@ -97,6 +98,69 @@ export function assertNotManagedServerHost(targetId: string): void {
   }
 }
 
+/** What SSH settings may remove: no runtime-owned target and no managed server's host. */
+export function assertSshTargetRemovable(targetId: string): void {
+  assertNotRuntimeOwned(targetId, 'removed')
+  assertNotManagedServerHost(targetId)
+}
+
+/** SSH settings' Add (`ssh:addTarget`); Pod's runtime RPC adds through it too. */
+export function addSshTargetFromSettings(target: SshTargetCreateInput): {
+  target: SshTarget
+  repoReadoptions: SshRepoReadoption[]
+} {
+  const added = getSshTargetRegistryStore()!.addTarget(omitRendererSshTargetGeneration(target))
+  // Why: re-adding a removed host can re-adopt orphaned workspaces; refresh the renderer's repo list so they move back onto the live host.
+  const repoReadoptions = takeRepoReadoptions()
+  return { target: added, repoReadoptions }
+}
+
+/** SSH settings' Save on an existing host (`ssh:updateTarget`). */
+export function updateSshTargetFromSettings(
+  id: string,
+  updates: SshTargetUpdateInput
+): SshTarget | null {
+  assertNotRuntimeOwned(id, 'edited')
+  const before = getSshTargetRegistryStore()!.getTarget(id)
+  // The fence and generation are stripped, so a managed host keeps its server binding.
+  const updated = getSshTargetRegistryStore()!.updateTarget(
+    id,
+    omitRendererSshTargetGeneration(updates)
+  )
+  const environmentId = getManagedOrcadFenceEnvironmentId(updated ?? undefined)
+  if (environmentId && updated) {
+    // Why: the tunnel and the SSH transport under it were built from the old fields, so both go
+    // and the next use dials the edited target. Only a host reached through its managed server:
+    // one an older build changed runs on the relay directly, whose session owns the transport.
+    const redial =
+      !allowsDirectSshRelay(updated) &&
+      (!before || fingerprintRuntimeSshTarget(before) !== fingerprintRuntimeSshTarget(updated))
+    void runTargetLifecycle(id, async () => {
+      await closeOrcadManagedTunnel(environmentId)
+      if (redial) {
+        await connectionManager?.disconnect(id)
+      }
+    }).catch(() => undefined)
+  }
+  return updated
+}
+
+/** SSH settings' Remove (`ssh:removeTarget`), after the pane ended the host's terminals. */
+export async function removeSshTargetFromSettings(id: string): Promise<void> {
+  assertSshTargetRemovable(id)
+  await removeRegisteredSshTarget(id)
+}
+
+/** SSH settings' sync with ~/.ssh/config (`ssh:importConfig`). */
+export function importSshTargetsFromConfig(args?: { reAdopt?: boolean }): {
+  targets: SshTarget[]
+  repoReadoptions: SshRepoReadoption[]
+} {
+  const targets = getSshTargetRegistryStore()!.importFromSshConfig(args)
+  const repoReadoptions = takeRepoReadoptions()
+  return { targets, repoReadoptions }
+}
+
 export function registerSshTargetCrudHandlers(): void {
   ipcMain.handle('ssh:listTargets', () => {
     return getSshTargetRegistryStore()!.listTargets()
@@ -106,55 +170,23 @@ export function registerSshTargetCrudHandlers(): void {
     return getSshTargetRegistryStore()!.listRemovedTargetLabels()
   })
 
-  ipcMain.handle('ssh:addTarget', (_event, args: { target: SshTargetCreateInput }) => {
-    const target = getSshTargetRegistryStore()!.addTarget(
-      omitRendererSshTargetGeneration(args.target)
-    )
-    // Why: re-adding a removed host can re-adopt orphaned workspaces; refresh the renderer's repo list so they move back onto the live host.
-    const repoReadoptions = takeRepoReadoptions()
-    return { target, repoReadoptions }
-  })
+  ipcMain.handle('ssh:addTarget', (_event, args: { target: SshTargetCreateInput }) =>
+    addSshTargetFromSettings(args.target)
+  )
 
   ipcMain.handle(
     'ssh:updateTarget',
-    (_event, args: { id: string; updates: SshTargetUpdateInput }) => {
-      assertNotRuntimeOwned(args.id, 'edited')
-      const before = getSshTargetRegistryStore()!.getTarget(args.id)
-      // The fence and generation are stripped, so a managed host keeps its server binding.
-      const updated = getSshTargetRegistryStore()!.updateTarget(
-        args.id,
-        omitRendererSshTargetGeneration(args.updates)
-      )
-      const environmentId = getManagedOrcadFenceEnvironmentId(updated ?? undefined)
-      if (environmentId && updated) {
-        // Why: the tunnel and the SSH transport under it were built from the old fields, so both go
-        // and the next use dials the edited target. Only a host reached through its managed server:
-        // one an older build changed runs on the relay directly, whose session owns the transport.
-        const redial =
-          !allowsDirectSshRelay(updated) &&
-          (!before || fingerprintRuntimeSshTarget(before) !== fingerprintRuntimeSshTarget(updated))
-        void runTargetLifecycle(args.id, async () => {
-          await closeOrcadManagedTunnel(environmentId)
-          if (redial) {
-            await connectionManager?.disconnect(args.id)
-          }
-        }).catch(() => undefined)
-      }
-      return updated
-    }
+    (_event, args: { id: string; updates: SshTargetUpdateInput }) =>
+      updateSshTargetFromSettings(args.id, args.updates)
   )
 
   ipcMain.handle('ssh:removeTarget', async (_event, args: { id: string }) => {
-    assertNotRuntimeOwned(args.id, 'removed')
-    assertNotManagedServerHost(args.id)
-    await removeRegisteredSshTarget(args.id)
+    await removeSshTargetFromSettings(args.id)
   })
 
-  ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) => {
-    const targets = getSshTargetRegistryStore()!.importFromSshConfig(args)
-    const repoReadoptions = takeRepoReadoptions()
-    return { targets, repoReadoptions }
-  })
+  ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) =>
+    importSshTargetsFromConfig(args)
+  )
 
   // Why: add-host dialog picks one config entry to prefill the form; does not
   // mutate the target store (bulk sync stays on Settings → Import).
