@@ -37,6 +37,20 @@ const extraPtys = Number(options['extra-ptys'])
 const SUITE = extraPtys > 0 ? `polling-ptys${extraPtys}` : 'polling'
 const run = promisify(execFile)
 
+// The runtime-scope rows cite each app's source at these builds only (RUNTIME_SOURCES below): a
+// run on any other build stops here, before measuring, instead of citing another version's code.
+const CITED_BUILDS = { orca: '1.4.227', pod: '1.0.0-rc3' }
+if (process.env.POD_BENCH_SCOPE === 'runtime') {
+  const benched = { orca: appVersion(ORCA_APP), pod: appVersion(POD_APP) }
+  for (const app of Object.keys(CITED_BUILDS)) {
+    if (benched[app] !== CITED_BUILDS[app]) {
+      throw new Error(
+        `the polling sources cite ${app} ${CITED_BUILDS[app]}, this run benches ${benched[app]}: re-check them first`
+      )
+    }
+  }
+}
+
 // A pane-like terminal: a shell holding the pty with two children, as `login -> zsh -> agent`.
 const holder = spawn(
   '/usr/bin/script',
@@ -363,8 +377,9 @@ const comparisons = process.env.POD_BENCH_SCOPE === 'runtime' ? RUNTIME_COMPARIS
 
 // Where each runtime-scope row comes from: the same read in both apps, at the same frequency.
 const RUNTIME_SOURCES = [
-  'Terminal process rows, every poll. Orca 1.4.225: src/main/runtime/terminal-foreground-group.ts:56 runs `ps -o pid=,ppid=,pgid=,tpgid=,stat=,command= -t TTY` through runProcess (a Node spawn); the tty is cached per pane root pid (:15-48). Pod 1.0.0-rc1 (b9b9850092): the same file, :72, calls listTerminalProcesses(tty) with the same per-pane tty cache (:18-36). The Orca row runs the same ps arguments from Node with execFile, without runProcess\'s PATH lookup.',
-  'Cheap process table. Orca 1.4.225: src/shared/cheap-process-table-snapshot-reader.ts:20-27 forks `ps` with CHEAP_PS_ARGS (src/shared/process-table-snapshot.ts:35-39, `-axo pid=,ppid=,pgid=,tpgid=,stat=,lstart=` on macOS) inside the shared reader\'s coalescing and TTL. Pod 1.0.0-rc1: the same reader (:22-24) asks listProcesses() first (:51-57) and keeps ps as the fallback, with the same coalescing and TTL, so both rows time one capture each.'
+  `Terminal process rows, every poll. Orca ${CITED_BUILDS.orca}: src/main/runtime/terminal-foreground-group.ts:56 runs \`ps -o pid=,ppid=,pgid=,tpgid=,stat=,command= -t TTY\` through runProcess (a Node spawn); the tty is cached per pane root pid (:15-48). Pod ${CITED_BUILDS.pod} (795854fc00): the same file, :72, calls listTerminalProcesses(tty) with the same per-pane tty cache (:18-36). The Orca row runs the same ps arguments from Node with execFile, without runProcess's PATH lookup.`,
+  `Cheap process table. Orca ${CITED_BUILDS.orca}: src/shared/cheap-process-table-snapshot-reader.ts:20-27 forks \`ps\` with CHEAP_PS_ARGS (src/shared/process-table-snapshot.ts:35-39, \`-axo pid=,ppid=,pgid=,tpgid=,stat=,lstart=\` on macOS) inside the shared reader's coalescing and TTL. Pod ${CITED_BUILDS.pod}: the same reader (:22-24) asks listProcesses() first (:51-57) and keeps ps as the fallback, with the same coalescing and TTL, so both rows time one capture each.`,
+  `The Orca ${CITED_BUILDS.orca} bundle records commit 7c19f712f7, 2 commits behind the v${CITED_BUILDS.orca} tag's commit f51e82c4c2; the source files these rows cite are identical at both.`
 ]
 writeSuiteResult(SUITE, {
   // ps' tty= cost follows the open terminals: label which machine state each suite stands for.
