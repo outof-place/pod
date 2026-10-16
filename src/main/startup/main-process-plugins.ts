@@ -37,6 +37,9 @@ import {
 } from '../../shared/distro/distro-plugin-policy'
 import { getPodDistroConfig } from '../pod/pod-distro-config'
 import { approveDistroBundledPlugins, enablePluginSystemOnce } from '../pod/pod-plugin-defaults'
+import { setPodPluginManage } from '../pod/plugins/pod-plugin-manage'
+import { installPlugin, removePlugin } from '../plugins/plugin-install-mutations'
+import { pluginMarketplaceCalls } from '../plugins/plugin-marketplace-calls'
 
 export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService): Promise<void> {
   const store = state.store
@@ -176,6 +179,16 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
       applyPluginConsent({ store, pluginService: state.pluginService!, ...request }),
     applyEnablement: (pluginKey, enabled) =>
       applyPluginEnablement({ store, pluginService: state.pluginService!, pluginKey, enabled })
+  })
+  // Fork-only (Pod): install, remove and the marketplace over RPC, through the IPC's own functions.
+  const pluginService = state.pluginService
+  setPodPluginManage({
+    install: (source) => installPlugin(pluginService, source),
+    remove: (pluginKey) => removePlugin({ store, pluginService, pluginKey }),
+    marketplace: pluginMarketplaceCalls(pluginService, {
+      marketplace: state.pluginMarketplaceService,
+      installer: state.pluginMarketplaceInstaller
+    })
   })
   // Lazy kernel: initialize() only discovers manifests — no worker forks, no
   // panel reads. Zero plugin code runs before an explicit trigger.
