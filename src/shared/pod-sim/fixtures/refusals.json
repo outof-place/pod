@@ -1,0 +1,364 @@
+[
+  {
+    "input": {
+      "code": "not_leased",
+      "worktreeRoot": "/Users/dev/portivo-wt/maps",
+      "verb": "tap"
+    },
+    "refusal": {
+      "code": "not_leased",
+      "message": "You hold no simulator for /Users/dev/portivo-wt/maps. Run: podx sim lease",
+      "next": "podx sim lease",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "not_leased",
+      "worktreeRoot": "/Users/dev/portivo-wt/payments",
+      "verb": "wait --mine",
+      "heldElsewhere": [
+        {
+          "worktreeRoot": "/Users/dev/portivo-wt/maps",
+          "device": "Portivo-Pod-1"
+        },
+        {
+          "worktreeRoot": "/Users/dev/portivo-wt/storefront",
+          "device": "Portivo-Pod-3"
+        }
+      ]
+    },
+    "refusal": {
+      "code": "not_leased",
+      "message": "You hold no simulator for /Users/dev/portivo-wt/payments, but you hold Portivo-Pod-1 for /Users/dev/portivo-wt/maps (and 1 more). Repeat your command with --worktree path:/Users/dev/portivo-wt/maps to use it, or run podx sim lease for a device of this worktree's own. Run: podx sim wait --mine --worktree path:/Users/dev/portivo-wt/maps",
+      "next": "podx sim wait --mine --worktree path:/Users/dev/portivo-wt/maps",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "lease_waiting",
+      "position": 2
+    },
+    "refusal": {
+      "code": "lease_waiting",
+      "message": "You are queued for a simulator (position 2). Run: podx sim wait --mine",
+      "next": "podx sim wait --mine",
+      "waitable": true
+    }
+  },
+  {
+    "input": {
+      "code": "lease_expired",
+      "reason": "idleForWaiter"
+    },
+    "refusal": {
+      "code": "lease_expired",
+      "message": "Your simulator lease ended: it sat idle while another agent waited. Run: podx sim lease",
+      "next": "podx sim lease",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "lease_expired",
+      "reason": "memoryBrake"
+    },
+    "refusal": {
+      "code": "lease_expired",
+      "message": "Your simulator lease ended: the Mac ran short of memory. Run: podx sim lease",
+      "next": "podx sim lease",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "lease_expired",
+      "reason": "abandoned"
+    },
+    "refusal": {
+      "code": "lease_expired",
+      "message": "Your simulator lease ended: it stayed queued 18 minutes with no lease or wait --mine call, so its place went to the next agent. Run: podx sim lease",
+      "next": "podx sim lease",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "lease_expired",
+      "reason": "deviceLost"
+    },
+    "refusal": {
+      "code": "lease_expired",
+      "message": "Your simulator lease ended: its simulator went away and could not be brought back. Run: podx sim lease",
+      "next": "podx sim lease",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "held_by_human"
+    },
+    "refusal": {
+      "code": "held_by_human",
+      "message": "Someone took over this simulator in Pod; input waits until it is given back. Run: podx sim wait --mine",
+      "next": "podx sim wait --mine",
+      "waitable": true
+    }
+  },
+  {
+    "input": {
+      "code": "held_by_other",
+      "device": "Portivo-Pod-2",
+      "holder": {
+        "kind": "agent",
+        "id": "agent:claude:51870:1760599000",
+        "agent": "claude",
+        "pid": 51870,
+        "startedAt": 1760599000
+      },
+      "worktreeRoot": "/Users/dev/portivo-wt/payments"
+    },
+    "refusal": {
+      "code": "held_by_other",
+      "message": "Portivo-Pod-2 is leased by claude 51870 in /Users/dev/portivo-wt/payments. Run: podx sim lease",
+      "next": "podx sim lease",
+      "waitable": false,
+      "holder": {
+        "kind": "agent",
+        "id": "agent:claude:51870:1760599000",
+        "agent": "claude",
+        "pid": 51870,
+        "startedAt": 1760599000
+      }
+    }
+  },
+  {
+    "input": {
+      "code": "device_busy",
+      "state": "resetting"
+    },
+    "refusal": {
+      "code": "device_busy",
+      "message": "Your simulator is resetting. Run: podx sim wait --mine",
+      "next": "podx sim wait --mine",
+      "waitable": true
+    }
+  },
+  {
+    "input": {
+      "code": "device_down",
+      "device": "Portivo-Pod-1",
+      "state": "lost"
+    },
+    "refusal": {
+      "code": "device_down",
+      "message": "Portivo-Pod-1 was shut down or deleted outside Pod; Pod brings it back for your lease. Run: podx sim wait --mine",
+      "next": "podx sim wait --mine",
+      "waitable": true
+    }
+  },
+  {
+    "input": {
+      "code": "device_down",
+      "device": "Portivo-Pod-4",
+      "state": "failed",
+      "problem": "launchd_sim exited during a reset"
+    },
+    "refusal": {
+      "code": "device_down",
+      "message": "Portivo-Pod-4 failed (launchd_sim exited during a reset); Pod restarts it for your lease. Run: podx sim wait --mine",
+      "next": "podx sim wait --mine",
+      "waitable": true
+    }
+  },
+  {
+    "input": {
+      "code": "build_failed",
+      "buildId": "sb_mobile_9a8b7c",
+      "logPath": "/Users/dev/.cache/pod-sim/builds/sb_mobile_9a8b7c.log",
+      "app": "mobile"
+    },
+    "refusal": {
+      "code": "build_failed",
+      "message": "The dev-client build sb_mobile_9a8b7c failed and ended your lease; its log is /Users/dev/.cache/pod-sim/builds/sb_mobile_9a8b7c.log. Fix the build, then run: podx sim lease --app mobile",
+      "next": "podx sim lease --app mobile",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "no_worktree"
+    },
+    "refusal": {
+      "code": "no_worktree",
+      "message": "This directory is in no worktree or Pod workspace. Run: podx sim lease --worktree path:<root>",
+      "next": "podx sim lease --worktree path:<root>",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "no_holder"
+    },
+    "refusal": {
+      "code": "no_holder",
+      "message": "No agent, Pod terminal or shell above this call can hold a lease; name a holder for it. Run: podx sim lease --holder <name>",
+      "next": "podx sim lease --holder <name>",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "no_recipe",
+      "worktreeRoot": "/Users/dev/portivo"
+    },
+    "refusal": {
+      "code": "no_recipe",
+      "message": "No simulators recipe in /Users/dev/portivo/orca.yaml; add a simulators: section first. Run: podx sim lease",
+      "next": "podx sim lease",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "bad_recipe",
+      "path": "simulators.apps.mobile.bundleId",
+      "problem": "a bundle id is required"
+    },
+    "refusal": {
+      "code": "bad_recipe",
+      "message": "orca.yaml simulators.apps.mobile.bundleId: a bundle id is required. Fix it, then run: podx sim lease",
+      "next": "podx sim lease",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "unknown_app",
+      "app": "web",
+      "apps": ["mobile", "charter-mobile"]
+    },
+    "refusal": {
+      "code": "unknown_app",
+      "message": "No app named web in the simulators recipe (apps: mobile, charter-mobile). Run: podx sim lease --app mobile",
+      "next": "podx sim lease --app mobile",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "ambiguous_app",
+      "apps": ["mobile", "charter-mobile", "storefront-mobile"]
+    },
+    "refusal": {
+      "code": "ambiguous_app",
+      "message": "The simulators recipe has several apps (mobile, charter-mobile, storefront-mobile). Run: podx sim lease --app mobile",
+      "next": "podx sim lease --app mobile",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "unavailable",
+      "problem": "Pod's simulator helper does not support Xcode 28.0 (28A100) yet."
+    },
+    "refusal": {
+      "code": "unavailable",
+      "message": "Simulators are off: Pod's simulator helper does not support Xcode 28.0 (28A100) yet. Run: podx sim status",
+      "next": "podx sim status",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "capability_unavailable",
+      "verb": "state",
+      "capability": "accessibility",
+      "fallback": "podx sim screenshot"
+    },
+    "refusal": {
+      "code": "capability_unavailable",
+      "message": "podx sim state is unavailable here: accessibility failed the helper's self-test on this Xcode build. Run: podx sim screenshot",
+      "next": "podx sim screenshot",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "element_not_found",
+      "query": {
+        "by": "label",
+        "text": "Sign in"
+      }
+    },
+    "refusal": {
+      "code": "element_not_found",
+      "message": "No element with label \"Sign in\" is on screen. Run: podx sim state",
+      "next": "podx sim state",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "element_ambiguous",
+      "query": {
+        "by": "label",
+        "text": "OK"
+      },
+      "indexes": [4, 9, 12]
+    },
+    "refusal": {
+      "code": "element_ambiguous",
+      "message": "3 elements have label \"OK\" (indexes 4, 9, 12). Run: podx sim tap --index 4",
+      "next": "podx sim tap --index 4",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "element_offscreen",
+      "query": {
+        "by": "id",
+        "text": "submit"
+      },
+      "direction": "down"
+    },
+    "refusal": {
+      "code": "element_offscreen",
+      "message": "The element with id \"submit\" is off screen. Run: podx sim scroll --direction down",
+      "next": "podx sim scroll --direction down",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "path_outside_worktree",
+      "verb": "screenshot",
+      "worktreeRoot": "/Users/dev/portivo-wt/maps",
+      "evidenceDir": "/Users/dev/Library/Application Support/Pod/sim/evidence"
+    },
+    "refusal": {
+      "code": "path_outside_worktree",
+      "message": "--out must be inside /Users/dev/portivo-wt/maps or Pod's evidence folder; without --out it goes to /Users/dev/Library/Application Support/Pod/sim/evidence, which no git add picks up. Run: podx sim screenshot",
+      "next": "podx sim screenshot",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "wait_timeout",
+      "condition": {
+        "by": "text",
+        "text": "Welcome"
+      },
+      "seconds": 10
+    },
+    "refusal": {
+      "code": "wait_timeout",
+      "message": "Text \"Welcome\" did not appear within 10 s. Run: podx sim state",
+      "next": "podx sim state",
+      "waitable": false
+    }
+  }
+]

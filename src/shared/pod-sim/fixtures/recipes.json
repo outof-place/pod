@@ -1,0 +1,112 @@
+{
+  "valid": [
+    {
+      "name": "Portivo's three Expo apps",
+      "simulators": {
+        "device": "iphone",
+        "slimProfile": "scripts/audit-mobile/simslim-portivo.json",
+        "default": "mobile",
+        "apps": {
+          "mobile": {
+            "bundleId": "eu.portivo.app",
+            "scheme": "portivo",
+            "path": "apps/mobile",
+            "metro": {
+              "port": 8083,
+              "command": "./node_modules/.bin/expo start --dev-client --port {port}"
+            },
+            "fingerprint": "./node_modules/.bin/fingerprint fingerprint:generate --platform ios",
+            "build": {
+              "command": "pnpm exec expo run:ios --configuration Debug --no-install",
+              "output": "ios/build/Build/Products/Debug-iphonesimulator/*.app"
+            },
+            "clientCache": "~/.cache/portivo-mobile/clients/eu.portivo.app",
+            "appDefaults": {
+              "EXDevMenuIsOnboardingFinished": true,
+              "EXDevMenuShowsAtLaunch": false,
+              "EXDevMenuShowFloatingActionButton": false
+            }
+          },
+          "charter-mobile": {
+            "bundleId": "eu.portivo.operator",
+            "scheme": "portivo-operator",
+            "path": "apps/charter-mobile",
+            "metro": { "port": 8084 }
+          },
+          "storefront-mobile": {
+            "bundleId": "eu.portivo.storefront.dev",
+            "scheme": "portivo-tenant-dev",
+            "path": "apps/storefront-mobile",
+            "metro": { "port": 8085 },
+            "env": { "APP_VARIANT": "dev" }
+          }
+        }
+      },
+      "diagnostics": []
+    },
+    {
+      "name": "one app, nothing optional",
+      "simulators": { "apps": { "app": { "bundleId": "com.example.app", "path": "." } } },
+      "diagnostics": []
+    },
+    {
+      "name": "a key this Pod does not know yet is a warning, not a failure",
+      "simulators": {
+        "apps": { "app": { "bundleId": "com.example.app", "path": ".", "watch": true } },
+        "orientation": "landscape"
+      },
+      "diagnostics": [
+        { "path": "simulators.apps.app.watch", "severity": "warning" },
+        { "path": "simulators.orientation", "severity": "warning" }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "name": "an app without a bundle id names that key",
+      "simulators": { "apps": { "mobile": { "path": "apps/mobile" } } },
+      "diagnostics": [{ "path": "simulators.apps.mobile.bundleId", "severity": "error" }]
+    },
+    {
+      "name": "a path that leaves the repo",
+      "simulators": {
+        "apps": { "mobile": { "bundleId": "eu.portivo.app", "path": "../elsewhere" } }
+      },
+      "diagnostics": [{ "path": "simulators.apps.mobile.path", "severity": "error" }]
+    },
+    {
+      "name": "a default that names no app",
+      "simulators": {
+        "default": "web",
+        "apps": { "mobile": { "bundleId": "eu.portivo.app", "path": "apps/mobile" } }
+      },
+      "diagnostics": [{ "path": "simulators.default", "severity": "error" }]
+    },
+    {
+      "name": "no apps",
+      "simulators": { "apps": {} },
+      "diagnostics": [{ "path": "simulators.apps", "severity": "error" }]
+    },
+    {
+      "name": "an app id outside the id rule",
+      "simulators": {
+        "apps": { "Mobile App": { "bundleId": "eu.portivo.app", "path": "apps/mobile" } }
+      },
+      "diagnostics": [{ "path": "simulators.apps.Mobile App", "severity": "error" }]
+    },
+    {
+      "name": "a Metro port out of range",
+      "simulators": {
+        "apps": {
+          "mobile": { "bundleId": "eu.portivo.app", "path": "apps/mobile", "metro": { "port": 80 } }
+        }
+      },
+      "diagnostics": [{ "path": "simulators.apps.mobile.metro.port", "severity": "error" }]
+    },
+    {
+      "name": "simulators is not a mapping",
+      "simulators": ["mobile"],
+      "diagnostics": [{ "path": "simulators", "severity": "error" }]
+    }
+  ]
+}

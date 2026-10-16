@@ -1,0 +1,328 @@
+[
+  {
+    "name": "off: the helper does not know this Xcode build",
+    "snapshot": {
+      "revision": 1,
+      "at": 1760600000000,
+      "available": false,
+      "unavailable": {
+        "reason": "helperUnsupported",
+        "message": "Pod's simulator helper does not support Xcode 28.0 (28A100) yet."
+      },
+      "helper": {
+        "state": "unsupported",
+        "xcodeBuild": "28A100",
+        "coreSimulator": "1200.1",
+        "simulatorKit": "17.0",
+        "capabilities": {
+          "display": "unsupported",
+          "screenshot": "unsupported",
+          "input": "unsupported",
+          "accessibility": "unsupported",
+          "settle": "unsupported",
+          "record": "ok"
+        }
+      },
+      "budget": {
+        "source": "claudeAcc",
+        "cap": 2,
+        "booted": 0,
+        "agentsInUse": 0,
+        "brake": "calm",
+        "bootsAllowed": true
+      },
+      "devices": [],
+      "leases": [],
+      "builds": []
+    }
+  },
+  {
+    "name": "quiet: a golden device and one pool device, nothing booted",
+    "snapshot": {
+      "revision": 7,
+      "at": 1760600100000,
+      "available": true,
+      "helper": {
+        "state": "ok",
+        "xcodeBuild": "27A266a",
+        "coreSimulator": "1171.7",
+        "simulatorKit": "16.0",
+        "capabilities": {
+          "display": "ok",
+          "screenshot": "ok",
+          "input": "ok",
+          "accessibility": "ok",
+          "settle": "ok",
+          "record": "ok"
+        }
+      },
+      "budget": {
+        "source": "claudeAcc",
+        "cap": 2,
+        "booted": 0,
+        "agentsInUse": 0,
+        "brake": "calm",
+        "bootsAllowed": true
+      },
+      "devices": [
+        {
+          "udid": "8F1C2A3B-4D5E-6F70-8192-A3B4C5D6E7F8",
+          "name": "Portivo-Pod-Golden-iPhone-16-Pro",
+          "role": "golden",
+          "deviceType": "iPhone 16 Pro",
+          "deviceClass": "iphone",
+          "runtime": "iOS 26.5",
+          "state": "shutdown",
+          "since": 1760500000000,
+          "slim": "verified"
+        },
+        {
+          "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+          "name": "Portivo-Pod-1",
+          "role": "pool",
+          "deviceType": "iPhone 16 Pro",
+          "deviceClass": "iphone",
+          "runtime": "iOS 26.5",
+          "state": "shutdown",
+          "since": 1760590000000,
+          "affinity": "/Users/dev/portivo-wt/maps",
+          "slim": "verified"
+        }
+      ],
+      "leases": [],
+      "builds": []
+    }
+  },
+  {
+    "name": "busy: booting, building at 40%, held by an agent, driven by Filip, two queued, brake on",
+    "snapshot": {
+      "revision": 42,
+      "at": 1760600400000,
+      "available": true,
+      "helper": {
+        "state": "unverified",
+        "xcodeBuild": "27A266b",
+        "coreSimulator": "1171.8",
+        "simulatorKit": "16.0",
+        "capabilities": {
+          "display": "ok",
+          "screenshot": "ok",
+          "input": "unverified",
+          "accessibility": "unverified",
+          "settle": "ok",
+          "record": "ok"
+        }
+      },
+      "budget": {
+        "source": "claudeAcc",
+        "cap": 4,
+        "booted": 4,
+        "agentsInUse": 4,
+        "brake": "brake",
+        "bootsAllowed": false,
+        "footprintMb": 4630
+      },
+      "devices": [
+        {
+          "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+          "name": "Portivo-Pod-1",
+          "role": "pool",
+          "deviceType": "iPhone 16 Pro",
+          "deviceClass": "iphone",
+          "runtime": "iOS 26.5",
+          "state": "leased",
+          "since": 1760600200000,
+          "leaseId": "sl_4f2a9c",
+          "affinity": "/Users/dev/portivo-wt/maps",
+          "app": {
+            "bundleId": "eu.portivo.app",
+            "running": true
+          },
+          "footprintMb": 1790,
+          "slim": "verified"
+        },
+        {
+          "udid": "2B3C4D5E-6F70-8192-A3B4-C5D6E7F8091A",
+          "name": "Portivo-Pod-2",
+          "role": "pool",
+          "deviceType": "iPhone 16 Pro",
+          "deviceClass": "iphone",
+          "runtime": "iOS 26.5",
+          "state": "leased",
+          "since": 1760600250000,
+          "leaseId": "sl_7b1e03",
+          "affinity": "/Users/dev/portivo-wt/payments",
+          "app": {
+            "bundleId": "eu.portivo.operator",
+            "running": true
+          },
+          "footprintMb": 1480,
+          "slim": "verified"
+        },
+        {
+          "udid": "3C4D5E6F-7081-92A3-B4C5-D6E7F8091A2B",
+          "name": "Portivo-Pod-3",
+          "role": "pool",
+          "deviceType": "iPhone 16 Pro",
+          "deviceClass": "iphone",
+          "runtime": "iOS 26.5",
+          "state": "booting",
+          "since": 1760600390000,
+          "reservedFor": "sl_c3d4e5",
+          "footprintMb": 1360,
+          "slim": "verified"
+        },
+        {
+          "udid": "4D5E6F70-8192-A3B4-C5D6-E7F8091A2B3C",
+          "name": "Portivo-Pod-4",
+          "role": "pool",
+          "deviceType": "iPhone 16 Pro",
+          "deviceClass": "iphone",
+          "runtime": "iOS 26.5",
+          "state": "failed",
+          "since": 1760600300000,
+          "slim": "unverified",
+          "failure": {
+            "message": "simslim verify failed: 3 of 113 overrides missing after the clone."
+          }
+        }
+      ],
+      "leases": [
+        {
+          "leaseId": "sl_4f2a9c",
+          "key": "agent:claude:41233:1760600000@/Users/dev/portivo-wt/maps",
+          "state": "active",
+          "holder": {
+            "kind": "agent",
+            "id": "agent:claude:41233:1760600000",
+            "agent": "claude",
+            "pid": 41233,
+            "startedAt": 1760600000,
+            "sessionId": "8c1f4d2e-5b7a-4c3e-9f10-2a6b7c8d9e01",
+            "terminalHandle": "term_7f3a"
+          },
+          "worktreeRoot": "/Users/dev/portivo-wt/maps",
+          "worktreeId": "repo-portivo::/Users/dev/portivo-wt/maps",
+          "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+          "app": {
+            "id": "mobile",
+            "bundleId": "eu.portivo.app"
+          },
+          "metroPort": 8183,
+          "since": 1760600200000,
+          "lastActivity": 1760600395000
+        },
+        {
+          "leaseId": "sl_7b1e03",
+          "key": "agent:claude:51870:1760599000@/Users/dev/portivo-wt/payments",
+          "state": "takeover",
+          "holder": {
+            "kind": "agent",
+            "id": "agent:claude:51870:1760599000",
+            "agent": "claude",
+            "pid": 51870,
+            "startedAt": 1760599000,
+            "terminalHandle": "term_22aa"
+          },
+          "worktreeRoot": "/Users/dev/portivo-wt/payments",
+          "udid": "2B3C4D5E-6F70-8192-A3B4-C5D6E7F8091A",
+          "app": {
+            "id": "charter-mobile",
+            "bundleId": "eu.portivo.operator"
+          },
+          "metroPort": 8184,
+          "since": 1760600250000,
+          "lastActivity": 1760600330000,
+          "takeover": {
+            "since": 1760600340000,
+            "lastInput": 1760600398000
+          }
+        },
+        {
+          "leaseId": "sl_c3d4e5",
+          "key": "session:0d9e3c55-7a1b-4f2c-8e6d-3b4a5c6d7e8f@/Users/dev/portivo-wt/storefront",
+          "state": "reserved",
+          "holder": {
+            "kind": "agentSession",
+            "id": "session:0d9e3c55-7a1b-4f2c-8e6d-3b4a5c6d7e8f",
+            "agent": "codex",
+            "sessionId": "0d9e3c55-7a1b-4f2c-8e6d-3b4a5c6d7e8f",
+            "terminalHandle": "term_91bc"
+          },
+          "worktreeRoot": "/Users/dev/portivo-wt/storefront",
+          "udid": "3C4D5E6F-7081-92A3-B4C5-D6E7F8091A2B",
+          "app": {
+            "id": "storefront-mobile",
+            "bundleId": "eu.portivo.storefront.dev"
+          },
+          "since": 1760600380000,
+          "lastActivity": 1760600380000,
+          "reservedUntil": 1760600450000
+        },
+        {
+          "leaseId": "sl_d4e5f6",
+          "key": "agent:claude:61002:1760601000/flow-a@/Users/dev/portivo-wt/onboarding",
+          "state": "waiting",
+          "holder": {
+            "kind": "agent",
+            "id": "agent:claude:61002:1760601000/flow-a",
+            "name": "flow-a",
+            "agent": "claude",
+            "pid": 61002,
+            "startedAt": 1760601000,
+            "terminalHandle": "term_3c3c"
+          },
+          "worktreeRoot": "/Users/dev/portivo-wt/onboarding",
+          "app": {
+            "id": "mobile",
+            "bundleId": "eu.portivo.app"
+          },
+          "since": 1760600385000,
+          "lastActivity": 1760600385000,
+          "queue": {
+            "position": 1,
+            "since": 1760600385000,
+            "waitingFor": "build",
+            "buildId": "sb_mobile_9a8b7c"
+          }
+        },
+        {
+          "leaseId": "sl_e5f607",
+          "key": "terminal:term_4d4d@/Users/dev/portivo",
+          "state": "waiting",
+          "holder": {
+            "kind": "terminal",
+            "id": "terminal:term_4d4d",
+            "terminalHandle": "term_4d4d"
+          },
+          "worktreeRoot": "/Users/dev/portivo",
+          "app": {
+            "id": "charter-mobile",
+            "bundleId": "eu.portivo.operator"
+          },
+          "since": 1760600390000,
+          "lastActivity": 1760600390000,
+          "queue": {
+            "position": 2,
+            "since": 1760600390000,
+            "waitingFor": "brake"
+          }
+        }
+      ],
+      "builds": [
+        {
+          "buildId": "sb_mobile_9a8b7c",
+          "appId": "mobile",
+          "bundleId": "eu.portivo.app",
+          "fingerprint": "9a8b7c6d5e4f30211203f4e5d6c7b8a9",
+          "state": "building",
+          "startedAt": 1760600150000,
+          "progress": 0.4,
+          "phase": "Compiling RNReanimated",
+          "waiting": ["sl_d4e5f6"],
+          "logPath": "/Users/dev/.cache/pod-sim/builds/sb_mobile_9a8b7c.log"
+        }
+      ]
+    }
+  }
+]

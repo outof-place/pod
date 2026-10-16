@@ -5,6 +5,7 @@ import { createServer, type Server, type Socket } from 'node:net'
 import { dirname } from 'node:path'
 import type { PodBrowserPaneClientMessage } from '../browser-pane/pod-browser-pane-protocol'
 import { isPodBrowserPaneMessage } from '../browser-pane/pod-browser-pane-protocol'
+import { isPodSimPaneMessage } from '../sim-pane/pod-sim-pane-protocol'
 import type { PodPeerVerifier } from './pod-peer-identity'
 import {
   encodePodUiHostServerMessage,
@@ -276,6 +277,10 @@ export class PodUiHostServer {
         return
       }
       this.options.onBrowser(message)
+    } else if (isPodSimPaneMessage(message)) {
+      // No runtime offers the simulator feature until the live pane lands.
+      this.options.log('ui-host: refused a simulator verb this runtime did not offer')
+      socket.destroy()
     } else {
       // Version 2 may answer needsConfirmation; its quit commits later (noteQuitCommitted).
       if (this.uiVersion < 2) {

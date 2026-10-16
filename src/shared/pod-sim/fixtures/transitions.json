@@ -1,0 +1,590 @@
+{
+  "device": [
+    {
+      "from": "absent",
+      "event": "create",
+      "to": "preparing"
+    },
+    {
+      "from": "absent",
+      "event": "clone",
+      "to": "cloning"
+    },
+    {
+      "from": "cloning",
+      "event": "cloned",
+      "to": "preparing"
+    },
+    {
+      "from": "cloning",
+      "event": "fail",
+      "to": "failed"
+    },
+    {
+      "from": "preparing",
+      "event": "prepared",
+      "to": "shutdown"
+    },
+    {
+      "from": "preparing",
+      "event": "fail",
+      "to": "failed"
+    },
+    {
+      "from": "shutdown",
+      "event": "boot",
+      "to": "booting"
+    },
+    {
+      "from": "shutdown",
+      "event": "delete",
+      "to": "absent"
+    },
+    {
+      "from": "booting",
+      "event": "booted",
+      "to": "ready"
+    },
+    {
+      "from": "booting",
+      "event": "fail",
+      "to": "failed"
+    },
+    {
+      "from": "booting",
+      "event": "lost",
+      "to": "lost"
+    },
+    {
+      "from": "ready",
+      "event": "lease",
+      "to": "leased"
+    },
+    {
+      "from": "ready",
+      "event": "shutDown",
+      "to": "shuttingDown"
+    },
+    {
+      "from": "ready",
+      "event": "fail",
+      "to": "failed"
+    },
+    {
+      "from": "ready",
+      "event": "lost",
+      "to": "lost"
+    },
+    {
+      "from": "leased",
+      "event": "release",
+      "to": "releasing"
+    },
+    {
+      "from": "leased",
+      "event": "reset",
+      "to": "resetting"
+    },
+    {
+      "from": "leased",
+      "event": "fail",
+      "to": "failed"
+    },
+    {
+      "from": "leased",
+      "event": "lost",
+      "to": "lost"
+    },
+    {
+      "from": "resetting",
+      "event": "resetDone",
+      "to": "leased"
+    },
+    {
+      "from": "resetting",
+      "event": "fail",
+      "to": "failed"
+    },
+    {
+      "from": "resetting",
+      "event": "lost",
+      "to": "lost"
+    },
+    {
+      "from": "releasing",
+      "event": "released",
+      "to": "ready"
+    },
+    {
+      "from": "releasing",
+      "event": "shutDown",
+      "to": "shuttingDown"
+    },
+    {
+      "from": "releasing",
+      "event": "fail",
+      "to": "failed"
+    },
+    {
+      "from": "releasing",
+      "event": "lost",
+      "to": "lost"
+    },
+    {
+      "from": "shuttingDown",
+      "event": "shutDownDone",
+      "to": "shutdown"
+    },
+    {
+      "from": "shuttingDown",
+      "event": "fail",
+      "to": "failed"
+    },
+    {
+      "from": "shuttingDown",
+      "event": "lost",
+      "to": "lost"
+    },
+    {
+      "from": "failed",
+      "event": "shutDown",
+      "to": "shuttingDown"
+    },
+    {
+      "from": "failed",
+      "event": "recover",
+      "to": "shutdown"
+    },
+    {
+      "from": "failed",
+      "event": "lost",
+      "to": "lost"
+    },
+    {
+      "from": "failed",
+      "event": "delete",
+      "to": "absent"
+    },
+    {
+      "from": "lost",
+      "event": "recover",
+      "to": "shutdown"
+    },
+    {
+      "from": "lost",
+      "event": "forget",
+      "to": "absent"
+    }
+  ],
+  "lease": [
+    {
+      "from": "waiting",
+      "event": "reserve",
+      "to": "reserved"
+    },
+    {
+      "from": "waiting",
+      "event": "abandon",
+      "to": "expired"
+    },
+    {
+      "from": "waiting",
+      "event": "buildFailed",
+      "to": "expired"
+    },
+    {
+      "from": "waiting",
+      "event": "release",
+      "to": "released"
+    },
+    {
+      "from": "waiting",
+      "event": "holderExited",
+      "to": "released"
+    },
+    {
+      "from": "reserved",
+      "event": "claim",
+      "to": "active"
+    },
+    {
+      "from": "reserved",
+      "event": "lapse",
+      "to": "waiting"
+    },
+    {
+      "from": "reserved",
+      "event": "buildFailed",
+      "to": "expired"
+    },
+    {
+      "from": "reserved",
+      "event": "release",
+      "to": "released"
+    },
+    {
+      "from": "reserved",
+      "event": "holderExited",
+      "to": "released"
+    },
+    {
+      "from": "active",
+      "event": "takeover",
+      "to": "takeover"
+    },
+    {
+      "from": "active",
+      "event": "revoke",
+      "to": "expired"
+    },
+    {
+      "from": "active",
+      "event": "release",
+      "to": "released"
+    },
+    {
+      "from": "active",
+      "event": "holderExited",
+      "to": "released"
+    },
+    {
+      "from": "takeover",
+      "event": "giveBack",
+      "to": "active"
+    },
+    {
+      "from": "takeover",
+      "event": "release",
+      "to": "released"
+    },
+    {
+      "from": "takeover",
+      "event": "holderExited",
+      "to": "takeover"
+    }
+  ],
+  "illegal": [
+    {
+      "machine": "device",
+      "from": "leased",
+      "event": "boot",
+      "refused": "device_leased"
+    },
+    {
+      "machine": "device",
+      "from": "booting",
+      "event": "lease",
+      "refused": "device_booting"
+    },
+    {
+      "machine": "device",
+      "from": "shutdown",
+      "event": "lease",
+      "refused": "device_shut_down"
+    },
+    {
+      "machine": "device",
+      "from": "lost",
+      "event": "lease",
+      "refused": "device_lost"
+    },
+    {
+      "machine": "device",
+      "from": "failed",
+      "event": "boot",
+      "refused": "device_failed"
+    },
+    {
+      "machine": "device",
+      "from": "absent",
+      "event": "boot",
+      "refused": "device_absent"
+    },
+    {
+      "machine": "device",
+      "from": "shuttingDown",
+      "event": "boot",
+      "refused": "device_shutting_down"
+    },
+    {
+      "machine": "device",
+      "from": "resetting",
+      "event": "release",
+      "refused": "device_resetting"
+    },
+    {
+      "machine": "device",
+      "from": "cloning",
+      "event": "delete",
+      "refused": "device_cloning"
+    },
+    {
+      "machine": "device",
+      "from": "ready",
+      "event": "reset",
+      "refused": "device_ready"
+    },
+    {
+      "machine": "device",
+      "from": "preparing",
+      "event": "boot",
+      "refused": "device_preparing"
+    },
+    {
+      "machine": "device",
+      "from": "releasing",
+      "event": "lease",
+      "refused": "device_releasing"
+    },
+    {
+      "machine": "lease",
+      "from": "takeover",
+      "event": "revoke",
+      "refused": "lease_taken_over"
+    },
+    {
+      "machine": "lease",
+      "from": "takeover",
+      "event": "takeover",
+      "refused": "lease_taken_over"
+    },
+    {
+      "machine": "lease",
+      "from": "expired",
+      "event": "claim",
+      "refused": "lease_expired"
+    },
+    {
+      "machine": "lease",
+      "from": "expired",
+      "event": "release",
+      "refused": "lease_expired"
+    },
+    {
+      "machine": "lease",
+      "from": "released",
+      "event": "claim",
+      "refused": "lease_released"
+    },
+    {
+      "machine": "lease",
+      "from": "waiting",
+      "event": "takeover",
+      "refused": "lease_waiting"
+    },
+    {
+      "machine": "lease",
+      "from": "waiting",
+      "event": "revoke",
+      "refused": "lease_waiting"
+    },
+    {
+      "machine": "lease",
+      "from": "reserved",
+      "event": "revoke",
+      "refused": "lease_reserved"
+    },
+    {
+      "machine": "lease",
+      "from": "active",
+      "event": "claim",
+      "refused": "lease_active"
+    },
+    {
+      "machine": "lease",
+      "from": "active",
+      "event": "giveBack",
+      "refused": "lease_active"
+    },
+    {
+      "machine": "device",
+      "from": "shutdown",
+      "event": "fail",
+      "refused": "device_shut_down"
+    },
+    {
+      "machine": "lease",
+      "from": "active",
+      "event": "abandon",
+      "refused": "lease_active"
+    },
+    {
+      "machine": "lease",
+      "from": "expired",
+      "event": "abandon",
+      "refused": "lease_expired"
+    },
+    {
+      "machine": "lease",
+      "from": "takeover",
+      "event": "buildFailed",
+      "refused": "lease_taken_over"
+    }
+  ],
+  "walks": [
+    {
+      "name": "a device shut down from outside while leased comes back ready, its lease still live",
+      "machine": "device",
+      "start": "leased",
+      "events": ["lost", "recover", "boot", "booted", "lease"],
+      "states": ["lost", "shutdown", "booting", "ready", "leased"]
+    },
+    {
+      "name": "a failed booted device gives its slot back only once shut down",
+      "machine": "device",
+      "start": "ready",
+      "events": ["fail", "shutDown", "shutDownDone"],
+      "states": ["failed", "shuttingDown", "shutdown"]
+    },
+    {
+      "name": "a device that fails while shutting down is shut down again",
+      "machine": "device",
+      "start": "shuttingDown",
+      "events": ["fail", "shutDown", "shutDownDone"],
+      "states": ["failed", "shuttingDown", "shutdown"]
+    },
+    {
+      "name": "a silent waiter is abandoned",
+      "machine": "lease",
+      "start": "waiting",
+      "events": ["abandon"],
+      "states": ["expired"]
+    },
+    {
+      "name": "an unclaimed reservation lapses to the back of the queue, then a silent waiter is abandoned",
+      "machine": "lease",
+      "start": "waiting",
+      "events": ["reserve", "lapse", "abandon"],
+      "states": ["reserved", "waiting", "expired"]
+    },
+    {
+      "name": "the dev-client build a waiter needs fails",
+      "machine": "lease",
+      "start": "waiting",
+      "events": ["buildFailed"],
+      "states": ["expired"]
+    },
+    {
+      "name": "a takeover outlives its agent: the person drives until give back, then the lease is released",
+      "machine": "lease",
+      "start": "active",
+      "events": ["takeover", "holderExited", "giveBack", "holderExited"],
+      "states": ["takeover", "takeover", "active", "released"]
+    }
+  ],
+  "free": [
+    {
+      "name": "recovered while leased: back to ready, still its live lease's",
+      "device": {
+        "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+        "role": "pool",
+        "state": "ready"
+      },
+      "leases": [
+        {
+          "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+          "state": "active"
+        }
+      ],
+      "free": false
+    },
+    {
+      "name": "ready with its lease released",
+      "device": {
+        "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+        "role": "pool",
+        "state": "ready"
+      },
+      "leases": [
+        {
+          "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+          "state": "released"
+        },
+        {
+          "udid": "2B3C4D5E-6F70-8192-A3B4-C5D6E7F8091A",
+          "state": "active"
+        }
+      ],
+      "free": true
+    },
+    {
+      "name": "reserved for a waiter",
+      "device": {
+        "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+        "role": "pool",
+        "state": "ready"
+      },
+      "leases": [
+        {
+          "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+          "state": "reserved"
+        }
+      ],
+      "free": false
+    },
+    {
+      "name": "driven by a person after its agent exited",
+      "device": {
+        "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+        "role": "pool",
+        "state": "leased"
+      },
+      "leases": [
+        {
+          "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+          "state": "takeover"
+        }
+      ],
+      "free": false
+    },
+    {
+      "name": "shut down and nobody's: the pool boots it for a waiter",
+      "device": {
+        "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+        "role": "pool",
+        "state": "shutdown"
+      },
+      "leases": [
+        {
+          "state": "waiting"
+        }
+      ],
+      "free": true
+    },
+    {
+      "name": "shut down by the guard while its lease stayed live",
+      "device": {
+        "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+        "role": "pool",
+        "state": "shutdown"
+      },
+      "leases": [
+        {
+          "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+          "state": "active"
+        }
+      ],
+      "free": false
+    },
+    {
+      "name": "a golden device",
+      "device": {
+        "udid": "2B3C4D5E-6F70-8192-A3B4-C5D6E7F8091A",
+        "role": "golden",
+        "state": "shutdown"
+      },
+      "leases": [],
+      "free": false
+    },
+    {
+      "name": "failed",
+      "device": {
+        "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+        "role": "pool",
+        "state": "failed"
+      },
+      "leases": [],
+      "free": false
+    }
+  ]
+}

@@ -1,0 +1,298 @@
+{
+  "feature": "simulator",
+  "client": [
+    {
+      "type": "simRendezvous",
+      "service": "codes.pod.native.dev.sim.0123456789abcdef0123456789abcdef"
+    },
+    {
+      "type": "simAttach",
+      "leaseId": "sl_4f2a9c",
+      "token": 7
+    },
+    {
+      "type": "simPane",
+      "leaseId": "sl_4f2a9c",
+      "visible": false
+    },
+    {
+      "type": "simDetach",
+      "leaseId": "sl_4f2a9c"
+    },
+    {
+      "type": "simTakeover",
+      "leaseId": "sl_7b1e03",
+      "action": "take"
+    },
+    {
+      "type": "simTakeover",
+      "leaseId": "sl_7b1e03",
+      "action": "giveBack"
+    },
+    {
+      "type": "simInput",
+      "leaseId": "sl_7b1e03",
+      "event": {
+        "kind": "touch",
+        "phase": "began",
+        "points": [
+          {
+            "x": 0.5,
+            "y": 0.286
+          }
+        ]
+      }
+    },
+    {
+      "type": "simInput",
+      "leaseId": "sl_7b1e03",
+      "event": {
+        "kind": "touch",
+        "phase": "moved",
+        "points": [
+          {
+            "x": 0.41,
+            "y": 0.5
+          },
+          {
+            "x": 0.59,
+            "y": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "type": "simInput",
+      "leaseId": "sl_7b1e03",
+      "event": {
+        "kind": "touch",
+        "phase": "ended",
+        "points": [
+          {
+            "x": 0.004,
+            "y": 0.5
+          }
+        ],
+        "edge": "left"
+      }
+    },
+    {
+      "type": "simInput",
+      "leaseId": "sl_7b1e03",
+      "event": {
+        "kind": "key",
+        "action": "down",
+        "usage": 40,
+        "modifiers": []
+      }
+    },
+    {
+      "type": "simInput",
+      "leaseId": "sl_7b1e03",
+      "event": {
+        "kind": "key",
+        "action": "up",
+        "usage": 4,
+        "modifiers": ["shift"]
+      }
+    },
+    {
+      "type": "simInput",
+      "leaseId": "sl_7b1e03",
+      "event": {
+        "kind": "text",
+        "text": "zażółć"
+      }
+    },
+    {
+      "type": "simInput",
+      "leaseId": "sl_7b1e03",
+      "event": {
+        "kind": "button",
+        "button": "home"
+      }
+    },
+    {
+      "type": "simInput",
+      "leaseId": "sl_7b1e03",
+      "event": {
+        "kind": "scroll",
+        "x": 0.5,
+        "y": 0.5,
+        "deltaX": 0,
+        "deltaY": -42.5
+      }
+    }
+  ],
+  "invalidClient": [
+    {
+      "name": "a browser rendezvous name",
+      "message": {
+        "type": "simRendezvous",
+        "service": "codes.pod.native.browser.0123456789abcdef0123456789abcdef"
+      },
+      "sentAs": null
+    },
+    {
+      "name": "a token of zero",
+      "message": {
+        "type": "simAttach",
+        "leaseId": "sl_4f2a9c",
+        "token": 0
+      },
+      "sentAs": null
+    },
+    {
+      "name": "a touch outside the screen",
+      "message": {
+        "type": "simInput",
+        "leaseId": "sl_7b1e03",
+        "event": {
+          "kind": "touch",
+          "phase": "began",
+          "points": [
+            {
+              "x": 1.2,
+              "y": 0.5
+            }
+          ]
+        }
+      },
+      "sentAs": {
+        "type": "simInput",
+        "leaseId": "sl_7b1e03",
+        "event": {
+          "kind": "touch",
+          "phase": "began",
+          "points": [
+            {
+              "x": 1,
+              "y": 0.5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "three fingers",
+      "message": {
+        "type": "simInput",
+        "leaseId": "sl_7b1e03",
+        "event": {
+          "kind": "touch",
+          "phase": "began",
+          "points": [
+            {
+              "x": 0.1,
+              "y": 0.1
+            },
+            {
+              "x": 0.2,
+              "y": 0.2
+            },
+            {
+              "x": 0.3,
+              "y": 0.3
+            }
+          ]
+        }
+      },
+      "sentAs": {
+        "type": "simInput",
+        "leaseId": "sl_7b1e03",
+        "event": {
+          "kind": "touch",
+          "phase": "began",
+          "points": [
+            {
+              "x": 0.1,
+              "y": 0.1
+            },
+            {
+              "x": 0.2,
+              "y": 0.2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an unknown key",
+      "message": {
+        "type": "simTakeover",
+        "leaseId": "sl_7b1e03",
+        "action": "take",
+        "force": true
+      },
+      "sentAs": null
+    },
+    {
+      "name": "an unknown takeover action",
+      "message": {
+        "type": "simTakeover",
+        "leaseId": "sl_7b1e03",
+        "action": "steal"
+      },
+      "sentAs": null
+    },
+    {
+      "name": "text past 4096 code points in fewer Characters",
+      "message": {
+        "type": "simInput",
+        "leaseId": "sl_7b1e03",
+        "event": {
+          "kind": "text",
+          "text": "żżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżż"
+        }
+      },
+      "sentAs": {
+        "type": "simInput",
+        "leaseId": "sl_7b1e03",
+        "event": {
+          "kind": "text",
+          "text": "żżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżżż"
+        }
+      }
+    }
+  ],
+  "server": [
+    {
+      "type": "simAttached",
+      "leaseId": "sl_4f2a9c",
+      "token": 7,
+      "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+      "width": 1206,
+      "height": 2622,
+      "scale": 3
+    },
+    {
+      "type": "simAttachFailed",
+      "leaseId": "sl_4f2a9c",
+      "reason": "unavailable",
+      "message": "Pod's simulator helper is not running."
+    },
+    {
+      "type": "simAttachFailed",
+      "leaseId": "sl_9z9z9z",
+      "reason": "notLeased",
+      "message": "No live lease sl_9z9z9z."
+    },
+    {
+      "type": "simDetached",
+      "leaseId": "sl_4f2a9c",
+      "reason": "leaseEnded"
+    },
+    {
+      "type": "simTakeoverState",
+      "leaseId": "sl_7b1e03",
+      "driver": "human",
+      "since": 1760600340000
+    },
+    {
+      "type": "simTakeoverState",
+      "leaseId": "sl_7b1e03",
+      "driver": "agent",
+      "reason": "idle"
+    }
+  ]
+}

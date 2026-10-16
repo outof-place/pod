@@ -298,6 +298,26 @@ describe('PodUiHostServer', () => {
     })
   })
 
+  describe('simulator verbs', () => {
+    const attach = { type: 'simAttach', leaseId: 'sl_4f2a9c', token: 7 }
+
+    it('names no simulator feature until the live pane lands', async () => {
+      const { options } = await startServer({ onBrowser: vi.fn() })
+      const client = await hello(options.socketPath, TOKEN, 3)
+      expect(JSON.parse(client.lines[0]).features).not.toContain('simulator')
+    })
+
+    it('ends the connection on a simulator verb, however well-formed', async () => {
+      const { options } = await startServer()
+      const client = await hello(options.socketPath, TOKEN, 3)
+      send(client, attach)
+      await client.closed
+      expect(options.log).toHaveBeenCalledWith(
+        'ui-host: refused a simulator verb this runtime did not offer'
+      )
+    })
+  })
+
   describe('refuses', () => {
     it('a peer that is not PodNative, before reading a byte', async () => {
       const verifyPeer = vi.fn(() => ({ ok: false, pid: 77, error: 'peer fails the requirement' }))

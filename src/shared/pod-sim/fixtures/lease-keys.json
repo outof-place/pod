@@ -1,0 +1,369 @@
+[
+  {
+    "name": "an agent in its own worktree",
+    "facts": {
+      "holderName": null,
+      "worktreeFlagRoot": null,
+      "cwdGitToplevel": "/Users/dev/portivo-wt/maps",
+      "cwdWorkspaceRoot": null,
+      "envWorktreePath": "/Users/dev/portivo-wt/maps",
+      "agent": {
+        "agent": "claude",
+        "pid": 41233,
+        "startedAt": 1760600000
+      },
+      "paneAgentSession": {
+        "sessionId": "8c1f4d2e-5b7a-4c3e-9f10-2a6b7c8d9e01",
+        "agent": "claude"
+      },
+      "terminalHandle": "term_7f3a",
+      "parent": {
+        "pid": 41290,
+        "startedAt": 1760600410
+      }
+    },
+    "expect": {
+      "key": "agent:claude:41233:1760600000@/Users/dev/portivo-wt/maps",
+      "worktreeRoot": "/Users/dev/portivo-wt/maps",
+      "holder": {
+        "kind": "agent",
+        "id": "agent:claude:41233:1760600000",
+        "agent": "claude",
+        "pid": 41233,
+        "startedAt": 1760600000,
+        "sessionId": "8c1f4d2e-5b7a-4c3e-9f10-2a6b7c8d9e01",
+        "terminalHandle": "term_7f3a"
+      }
+    }
+  },
+  {
+    "name": "a subagent of the same agent working in another worktree: cwd wins over ORCA_WORKTREE_PATH",
+    "facts": {
+      "holderName": null,
+      "worktreeFlagRoot": null,
+      "cwdGitToplevel": "/Users/dev/portivo-wt/payments",
+      "cwdWorkspaceRoot": null,
+      "envWorktreePath": "/Users/dev/portivo-wt/maps",
+      "agent": {
+        "agent": "claude",
+        "pid": 41233,
+        "startedAt": 1760600000
+      },
+      "paneAgentSession": null,
+      "terminalHandle": "term_7f3a",
+      "parent": {
+        "pid": 41300,
+        "startedAt": 1760600500
+      }
+    },
+    "expect": {
+      "key": "agent:claude:41233:1760600000@/Users/dev/portivo-wt/payments",
+      "worktreeRoot": "/Users/dev/portivo-wt/payments",
+      "holder": {
+        "kind": "agent",
+        "id": "agent:claude:41233:1760600000",
+        "agent": "claude",
+        "pid": 41233,
+        "startedAt": 1760600000,
+        "terminalHandle": "term_7f3a"
+      }
+    }
+  },
+  {
+    "name": "two parallel holders in one agent process, first: --holder flow-a",
+    "facts": {
+      "holderName": "flow-a",
+      "worktreeFlagRoot": null,
+      "cwdGitToplevel": "/Users/dev/portivo-wt/maps",
+      "cwdWorkspaceRoot": null,
+      "envWorktreePath": "/Users/dev/portivo-wt/maps",
+      "agent": {
+        "agent": "claude",
+        "pid": 41233,
+        "startedAt": 1760600000
+      },
+      "paneAgentSession": null,
+      "terminalHandle": "term_7f3a",
+      "parent": {
+        "pid": 41301,
+        "startedAt": 1760600501
+      }
+    },
+    "expect": {
+      "key": "agent:claude:41233:1760600000/flow-a@/Users/dev/portivo-wt/maps",
+      "worktreeRoot": "/Users/dev/portivo-wt/maps",
+      "holder": {
+        "kind": "agent",
+        "id": "agent:claude:41233:1760600000/flow-a",
+        "name": "flow-a",
+        "agent": "claude",
+        "pid": 41233,
+        "startedAt": 1760600000,
+        "terminalHandle": "term_7f3a"
+      }
+    }
+  },
+  {
+    "name": "two parallel holders in one agent process, second: --holder flow-b",
+    "facts": {
+      "holderName": "flow-b",
+      "worktreeFlagRoot": null,
+      "cwdGitToplevel": "/Users/dev/portivo-wt/maps",
+      "cwdWorkspaceRoot": null,
+      "envWorktreePath": "/Users/dev/portivo-wt/maps",
+      "agent": {
+        "agent": "claude",
+        "pid": 41233,
+        "startedAt": 1760600000
+      },
+      "paneAgentSession": null,
+      "terminalHandle": "term_7f3a",
+      "parent": {
+        "pid": 41302,
+        "startedAt": 1760600502
+      }
+    },
+    "expect": {
+      "key": "agent:claude:41233:1760600000/flow-b@/Users/dev/portivo-wt/maps",
+      "worktreeRoot": "/Users/dev/portivo-wt/maps",
+      "holder": {
+        "kind": "agent",
+        "id": "agent:claude:41233:1760600000/flow-b",
+        "name": "flow-b",
+        "agent": "claude",
+        "pid": 41233,
+        "startedAt": 1760600000,
+        "terminalHandle": "term_7f3a"
+      }
+    }
+  },
+  {
+    "name": "a CLI in a Pod terminal with no agent ancestor: the agent-status store names the pane's session",
+    "facts": {
+      "holderName": null,
+      "worktreeFlagRoot": null,
+      "cwdGitToplevel": "/Users/dev/portivo-wt/maps",
+      "cwdWorkspaceRoot": null,
+      "envWorktreePath": "/Users/dev/portivo-wt/maps",
+      "agent": null,
+      "paneAgentSession": {
+        "sessionId": "0d9e3c55-7a1b-4f2c-8e6d-3b4a5c6d7e8f",
+        "agent": "codex"
+      },
+      "terminalHandle": "term_91bc",
+      "parent": {
+        "pid": 52010,
+        "startedAt": 1760601000
+      }
+    },
+    "expect": {
+      "key": "session:0d9e3c55-7a1b-4f2c-8e6d-3b4a5c6d7e8f@/Users/dev/portivo-wt/maps",
+      "worktreeRoot": "/Users/dev/portivo-wt/maps",
+      "holder": {
+        "kind": "agentSession",
+        "id": "session:0d9e3c55-7a1b-4f2c-8e6d-3b4a5c6d7e8f",
+        "agent": "codex",
+        "sessionId": "0d9e3c55-7a1b-4f2c-8e6d-3b4a5c6d7e8f",
+        "terminalHandle": "term_91bc"
+      }
+    }
+  },
+  {
+    "name": "a CLI in a Pod terminal with no agent at all: the terminal holds it, never the podx process",
+    "facts": {
+      "holderName": null,
+      "worktreeFlagRoot": null,
+      "cwdGitToplevel": "/Users/dev/portivo-wt/maps",
+      "cwdWorkspaceRoot": null,
+      "envWorktreePath": "/Users/dev/portivo-wt/maps",
+      "agent": null,
+      "paneAgentSession": null,
+      "terminalHandle": "term_91bc",
+      "parent": {
+        "pid": 52010,
+        "startedAt": 1760601000
+      }
+    },
+    "expect": {
+      "key": "terminal:term_91bc@/Users/dev/portivo-wt/maps",
+      "worktreeRoot": "/Users/dev/portivo-wt/maps",
+      "holder": {
+        "kind": "terminal",
+        "id": "terminal:term_91bc",
+        "terminalHandle": "term_91bc"
+      }
+    }
+  },
+  {
+    "name": "a script outside Pod with --worktree: held by the process that ran podx",
+    "facts": {
+      "holderName": null,
+      "worktreeFlagRoot": "/Users/dev/portivo",
+      "cwdGitToplevel": null,
+      "cwdWorkspaceRoot": null,
+      "envWorktreePath": null,
+      "agent": null,
+      "paneAgentSession": null,
+      "terminalHandle": null,
+      "parent": {
+        "pid": 60001,
+        "startedAt": 1760602000
+      }
+    },
+    "expect": {
+      "key": "process:60001:1760602000@/Users/dev/portivo",
+      "worktreeRoot": "/Users/dev/portivo",
+      "holder": {
+        "kind": "process",
+        "id": "process:60001:1760602000",
+        "pid": 60001,
+        "startedAt": 1760602000
+      }
+    }
+  },
+  {
+    "name": "--worktree wins over cwd",
+    "facts": {
+      "holderName": null,
+      "worktreeFlagRoot": "/Users/dev/portivo-wt/payments",
+      "cwdGitToplevel": "/Users/dev/portivo-wt/maps",
+      "cwdWorkspaceRoot": null,
+      "envWorktreePath": "/Users/dev/portivo-wt/maps",
+      "agent": {
+        "agent": "claude",
+        "pid": 41233,
+        "startedAt": 1760600000
+      },
+      "paneAgentSession": null,
+      "terminalHandle": null,
+      "parent": null
+    },
+    "expect": {
+      "key": "agent:claude:41233:1760600000@/Users/dev/portivo-wt/payments",
+      "worktreeRoot": "/Users/dev/portivo-wt/payments",
+      "holder": {
+        "kind": "agent",
+        "id": "agent:claude:41233:1760600000",
+        "agent": "claude",
+        "pid": 41233,
+        "startedAt": 1760600000
+      }
+    }
+  },
+  {
+    "name": "a folder workspace (no git): the Pod workspace that holds cwd",
+    "facts": {
+      "holderName": null,
+      "worktreeFlagRoot": null,
+      "cwdGitToplevel": null,
+      "cwdWorkspaceRoot": "/Users/dev/notes",
+      "envWorktreePath": "/Users/dev/other",
+      "agent": {
+        "agent": "claude",
+        "pid": 7001,
+        "startedAt": 1760603000
+      },
+      "paneAgentSession": null,
+      "terminalHandle": "term_0001",
+      "parent": null
+    },
+    "expect": {
+      "key": "agent:claude:7001:1760603000@/Users/dev/notes",
+      "worktreeRoot": "/Users/dev/notes",
+      "holder": {
+        "kind": "agent",
+        "id": "agent:claude:7001:1760603000",
+        "agent": "claude",
+        "pid": 7001,
+        "startedAt": 1760603000,
+        "terminalHandle": "term_0001"
+      }
+    }
+  },
+  {
+    "name": "cwd outside every worktree: the pane's worktree as the last resort",
+    "facts": {
+      "holderName": null,
+      "worktreeFlagRoot": null,
+      "cwdGitToplevel": null,
+      "cwdWorkspaceRoot": null,
+      "envWorktreePath": "/Users/dev/portivo-wt/maps",
+      "agent": {
+        "agent": "claude",
+        "pid": 41233,
+        "startedAt": 1760600000
+      },
+      "paneAgentSession": null,
+      "terminalHandle": "term_7f3a",
+      "parent": null
+    },
+    "expect": {
+      "key": "agent:claude:41233:1760600000@/Users/dev/portivo-wt/maps",
+      "worktreeRoot": "/Users/dev/portivo-wt/maps",
+      "holder": {
+        "kind": "agent",
+        "id": "agent:claude:41233:1760600000",
+        "agent": "claude",
+        "pid": 41233,
+        "startedAt": 1760600000,
+        "terminalHandle": "term_7f3a"
+      }
+    }
+  },
+  {
+    "name": "no worktree anywhere",
+    "facts": {
+      "holderName": null,
+      "worktreeFlagRoot": null,
+      "cwdGitToplevel": null,
+      "cwdWorkspaceRoot": null,
+      "envWorktreePath": null,
+      "agent": null,
+      "paneAgentSession": null,
+      "terminalHandle": null,
+      "parent": {
+        "pid": 60001,
+        "startedAt": 1760602000
+      }
+    },
+    "refused": "no_worktree"
+  },
+  {
+    "name": "nothing that outlives the call",
+    "facts": {
+      "holderName": null,
+      "worktreeFlagRoot": "/Users/dev/portivo",
+      "cwdGitToplevel": null,
+      "cwdWorkspaceRoot": null,
+      "envWorktreePath": null,
+      "agent": null,
+      "paneAgentSession": null,
+      "terminalHandle": null,
+      "parent": null
+    },
+    "refused": "no_holder"
+  },
+  {
+    "name": "nothing above the call but --holder: the name alone holds it, as a human holder",
+    "facts": {
+      "holderName": "nightly",
+      "worktreeFlagRoot": "/Users/dev/portivo",
+      "cwdGitToplevel": null,
+      "cwdWorkspaceRoot": null,
+      "envWorktreePath": null,
+      "agent": null,
+      "paneAgentSession": null,
+      "terminalHandle": null,
+      "parent": null
+    },
+    "expect": {
+      "key": "human:nightly@/Users/dev/portivo",
+      "worktreeRoot": "/Users/dev/portivo",
+      "holder": {
+        "kind": "human",
+        "id": "human:nightly",
+        "name": "nightly"
+      }
+    }
+  }
+]

@@ -1,0 +1,844 @@
+{
+  "valid": [
+    {
+      "method": "sim.lease",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        }
+      }
+    },
+    {
+      "method": "sim.lease",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "app": "charter-mobile",
+        "device": "iphone",
+        "wait": 100
+      }
+    },
+    {
+      "method": "sim.lease",
+      "params": {
+        "caller": {
+          "cwd": "/tmp",
+          "pid": 60010,
+          "worktree": "path:/Users/dev/portivo",
+          "holder": "nightly"
+        },
+        "device": "iPhone 16 Pro",
+        "wait": 0
+      }
+    },
+    {
+      "method": "sim.waitLease",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "wait": 540
+      }
+    },
+    {
+      "method": "sim.release",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        }
+      }
+    },
+    {
+      "method": "sim.udid",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        }
+      }
+    },
+    {
+      "method": "sim.status",
+      "params": {}
+    },
+    {
+      "method": "sim.status",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        }
+      }
+    },
+    {
+      "method": "sim.unsubscribe",
+      "params": {
+        "subscriptionId": "sim-conn-1-3"
+      }
+    },
+    {
+      "method": "sim.open",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        }
+      }
+    },
+    {
+      "method": "sim.open",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "port": 8183
+      }
+    },
+    {
+      "method": "sim.state",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        }
+      }
+    },
+    {
+      "method": "sim.state",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "screenshot": true,
+        "maxNodes": 120,
+        "filter": "Book",
+        "all": true
+      }
+    },
+    {
+      "method": "sim.tap",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "target": {
+          "by": "index",
+          "index": 7
+        }
+      }
+    },
+    {
+      "method": "sim.tap",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "target": {
+          "by": "label",
+          "text": "Sign in",
+          "exact": true
+        },
+        "screenshot": true
+      }
+    },
+    {
+      "method": "sim.tap",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "target": {
+          "by": "id",
+          "text": "login-submit"
+        }
+      }
+    },
+    {
+      "method": "sim.tap",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "target": {
+          "by": "point",
+          "x": 201,
+          "y": 250.5
+        }
+      }
+    },
+    {
+      "method": "sim.type",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "text": "test21@outofplace.space"
+      }
+    },
+    {
+      "method": "sim.type",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "text": "zażółć gęślą jaźń",
+        "nonAscii": "paste",
+        "submit": true
+      }
+    },
+    {
+      "method": "sim.key",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "key": "return"
+      }
+    },
+    {
+      "method": "sim.key",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "key": "a",
+        "modifiers": ["command"]
+      }
+    },
+    {
+      "method": "sim.swipe",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "from": {
+          "x": 2,
+          "y": 400
+        },
+        "to": {
+          "x": 300,
+          "y": 400
+        },
+        "durationMs": 300,
+        "edge": "left"
+      }
+    },
+    {
+      "method": "sim.scroll",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "direction": "down"
+      }
+    },
+    {
+      "method": "sim.scroll",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "direction": "up",
+        "target": {
+          "by": "id",
+          "text": "bookings-list"
+        },
+        "amount": 0.5
+      }
+    },
+    {
+      "method": "sim.button",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "button": "home"
+      }
+    },
+    {
+      "method": "sim.rotate",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "orientation": "landscapeLeft"
+      }
+    },
+    {
+      "method": "sim.wait",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "until": {
+          "by": "settle"
+        }
+      }
+    },
+    {
+      "method": "sim.wait",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "until": {
+          "by": "text",
+          "text": "Welcome"
+        },
+        "timeout": 10
+      }
+    },
+    {
+      "method": "sim.wait",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "until": {
+          "by": "gone",
+          "text": "Loading"
+        },
+        "timeout": 30
+      }
+    },
+    {
+      "method": "sim.screenshot",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        }
+      }
+    },
+    {
+      "method": "sim.screenshot",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "out": "/Users/dev/portivo-wt/maps/evidence/login.png",
+        "scale": 1,
+        "format": "png"
+      }
+    },
+    {
+      "method": "sim.logs",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        }
+      }
+    },
+    {
+      "method": "sim.logs",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "since": 120,
+        "grep": "Error",
+        "source": "metro",
+        "maxLines": 50
+      }
+    },
+    {
+      "method": "sim.openUrl",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "url": "portivo://bookings/123"
+      }
+    },
+    {
+      "method": "sim.push",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "payload": {
+          "aps": {
+            "alert": {
+              "title": "New booking",
+              "body": "Ana booked Saturday"
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "sim.location",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "latitude": 43.5081,
+        "longitude": 16.4402
+      }
+    },
+    {
+      "method": "sim.location",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "clear": true
+      }
+    },
+    {
+      "method": "sim.privacy",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "action": "grant",
+        "service": "photos",
+        "bundleId": "eu.portivo.app"
+      }
+    },
+    {
+      "method": "sim.privacy",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "action": "reset",
+        "service": "all"
+      }
+    },
+    {
+      "method": "sim.appearance",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "mode": "dark"
+      }
+    },
+    {
+      "method": "sim.pbcopy",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "text": "Split, Croatia"
+      }
+    },
+    {
+      "method": "sim.addMedia",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "paths": ["/Users/dev/portivo-wt/maps/fixtures/boat.jpg"]
+      }
+    },
+    {
+      "method": "sim.reset",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "scope": "app"
+      }
+    },
+    {
+      "method": "sim.record",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "action": "start",
+        "out": "/Users/dev/portivo-wt/maps/evidence/flow.mp4"
+      }
+    },
+    {
+      "method": "sim.record",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "action": "stop"
+      }
+    },
+    {
+      "method": "sim.logs",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "grep": "auth",
+        "maxBytes": 65536
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "no caller",
+      "method": "sim.lease",
+      "params": {},
+      "path": "caller"
+    },
+    {
+      "name": "a relative cwd",
+      "method": "sim.lease",
+      "params": {
+        "caller": {
+          "cwd": "apps/mobile",
+          "pid": 1
+        }
+      },
+      "path": "caller.cwd"
+    },
+    {
+      "name": "a holder name outside the rule",
+      "method": "sim.lease",
+      "params": {
+        "caller": {
+          "cwd": "/tmp",
+          "pid": 1,
+          "holder": "flow a"
+        }
+      },
+      "path": "caller.holder"
+    },
+    {
+      "name": "a wait past one call",
+      "method": "sim.lease",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "wait": 600
+      },
+      "path": "wait"
+    },
+    {
+      "name": "an unknown key",
+      "method": "sim.lease",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809"
+      },
+      "path": ""
+    },
+    {
+      "name": "a tap without a target",
+      "method": "sim.tap",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        }
+      },
+      "path": "target"
+    },
+    {
+      "name": "a tap target of an unknown kind",
+      "method": "sim.tap",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "target": {
+          "by": "xpath",
+          "text": "//x"
+        }
+      },
+      "path": "target.by"
+    },
+    {
+      "name": "a negative index",
+      "method": "sim.tap",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "target": {
+          "by": "index",
+          "index": -1
+        }
+      },
+      "path": "target.index"
+    },
+    {
+      "name": "empty text",
+      "method": "sim.type",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "text": ""
+      },
+      "path": "text"
+    },
+    {
+      "name": "a key Pod does not name",
+      "method": "sim.key",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "key": "hyper"
+      },
+      "path": "key"
+    },
+    {
+      "name": "a relative screenshot path",
+      "method": "sim.screenshot",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "out": "login.png"
+      },
+      "path": "out"
+    },
+    {
+      "name": "a screenshot scale above 1",
+      "method": "sim.screenshot",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "scale": 2
+      },
+      "path": "scale"
+    },
+    {
+      "name": "more log lines than the cap",
+      "method": "sim.logs",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "maxLines": 5000
+      },
+      "path": "maxLines"
+    },
+    {
+      "name": "more log bytes than the cap",
+      "method": "sim.logs",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "maxBytes": 1048576
+      },
+      "path": "maxBytes"
+    },
+    {
+      "name": "more nodes than the cap",
+      "method": "sim.state",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "maxNodes": 1000
+      },
+      "path": "maxNodes"
+    },
+    {
+      "name": "a location with one coordinate",
+      "method": "sim.location",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "latitude": 43.5
+      },
+      "path": ""
+    },
+    {
+      "name": "an unknown button",
+      "method": "sim.button",
+      "params": {
+        "caller": {
+          "cwd": "/Users/dev/portivo-wt/maps/apps/mobile",
+          "pid": 41290,
+          "terminalHandle": "term_7f3a",
+          "worktreePath": "/Users/dev/portivo-wt/maps"
+        },
+        "button": "power"
+      },
+      "path": "button"
+    },
+    {
+      "name": "a terminal handle that could break the key",
+      "method": "sim.udid",
+      "params": {
+        "caller": {
+          "cwd": "/tmp",
+          "pid": 1,
+          "terminalHandle": "term a@b"
+        }
+      },
+      "path": "caller.terminalHandle"
+    }
+  ]
+}

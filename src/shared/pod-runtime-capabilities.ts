@@ -32,6 +32,13 @@ export const POD_AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY =
 export const POD_SETTINGS_NETWORK_PROXY_RUNTIME_CAPABILITY =
   'pod.settings.network-proxy.v1' as const
 
+/**
+ * sim.*: iOS simulators for agents (lease, drive, release; the pool snapshot and its stream). A
+ * client shows simulator UI, and the CLI calls sim.*, only on a host that lists this. Not listed
+ * below until the sim.* handlers land (stage 7): a runtime never advertises what it cannot serve.
+ */
+export const POD_SIM_RUNTIME_CAPABILITY = 'pod.sim.v1' as const
+
 export const POD_RUNTIME_CAPABILITIES = [
   POD_CREATE_TERMINAL_AGENT_ARGS_RUNTIME_CAPABILITY,
   POD_TERMINAL_OPENED_BEFORE_CLAUDE_ACCOUNTS_RUNTIME_CAPABILITY,

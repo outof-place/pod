@@ -10,6 +10,10 @@ import {
   POD_BROWSER_PANE_CLIENT_MESSAGES,
   type PodBrowserPaneServerMessage
 } from '../browser-pane/pod-browser-pane-protocol'
+import {
+  POD_SIM_PANE_CLIENT_MESSAGES,
+  type PodSimPaneServerMessage
+} from '../sim-pane/pod-sim-pane-protocol'
 
 export const POD_UI_HOST_PROTOCOL_VERSION = 3
 // The oldest PodNative still admitted; its quit gets no answer (the version 1 behaviour).
@@ -72,7 +76,8 @@ export const PodUiHostClientMessage = z.discriminatedUnion('type', [
   Quit,
   OpenSurface,
   SecondInstance,
-  ...POD_BROWSER_PANE_CLIENT_MESSAGES
+  ...POD_BROWSER_PANE_CLIENT_MESSAGES,
+  ...POD_SIM_PANE_CLIENT_MESSAGES
 ])
 export type PodUiHostClientMessage = z.infer<typeof PodUiHostClientMessage>
 export type PodUiHostOpenSurface = z.infer<typeof OpenSurface>
@@ -120,6 +125,7 @@ export type PodUiHostServerMessage =
   // A committed quit was vetoed (the session could not be saved): this runtime keeps running.
   | { type: 'quitAborted'; reason: string }
   | PodBrowserPaneServerMessage
+  | PodSimPaneServerMessage
 
 /** One line from the client, or null when it isn't a message of this version. */
 export function parsePodUiHostClientLine(line: string): PodUiHostClientMessage | null {

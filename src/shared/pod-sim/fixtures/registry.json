@@ -1,0 +1,214 @@
+{
+  "valid": [
+    {
+      "name": "a golden and a pool device, one live lease",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1760600400000,
+        "devices": [
+          {
+            "udid": "8F1C2A3B-4D5E-6F70-8192-A3B4C5D6E7F8",
+            "name": "Portivo-Pod-Golden-iPhone-16-Pro",
+            "role": "golden",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760500000000
+          },
+          {
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "name": "Portivo-Pod-1",
+            "role": "pool",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760590000000,
+            "clonedFrom": "8F1C2A3B-4D5E-6F70-8192-A3B4C5D6E7F8",
+            "affinity": "/Users/dev/portivo-wt/maps"
+          }
+        ],
+        "leases": [
+          {
+            "leaseId": "sl_4f2a9c",
+            "key": "agent:claude:41233:1760600000@/Users/dev/portivo-wt/maps",
+            "state": "active",
+            "holder": {
+              "kind": "agent",
+              "id": "agent:claude:41233:1760600000",
+              "agent": "claude",
+              "pid": 41233,
+              "startedAt": 1760600000
+            },
+            "worktreeRoot": "/Users/dev/portivo-wt/maps",
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "since": 1760600200000,
+            "lastActivity": 1760600395000,
+            "servedBy": {
+              "pid": 70110,
+              "startedAt": 1760599900
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "a newer Pod wrote a field this one does not know: kept, not refused",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1760600400000,
+        "devices": [
+          {
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "name": "Portivo-Pod-1",
+            "role": "pool",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760590000000,
+            "warmApps": ["eu.portivo.app"]
+          }
+        ],
+        "leases": []
+      }
+    },
+    {
+      "name": "a newer Pod wrote nested fields this one does not know: all kept for the next write",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1760600400000,
+        "devices": [
+          {
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "name": "Portivo-Pod-1",
+            "role": "pool",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760590000000,
+            "op": {
+              "kind": "boot",
+              "by": {
+                "pid": 70110,
+                "startedAt": 1760599900,
+                "build": "1.1.0"
+              },
+              "since": 1760600390000,
+              "attempt": 2
+            }
+          }
+        ],
+        "leases": [
+          {
+            "leaseId": "sl_d4e5f6",
+            "key": "agent:claude:61002:1760601000/flow-a@/Users/dev/portivo-wt/onboarding",
+            "state": "waiting",
+            "holder": {
+              "kind": "agent",
+              "id": "agent:claude:61002:1760601000/flow-a",
+              "name": "flow-a",
+              "agent": "claude",
+              "pid": 61002,
+              "startedAt": 1760601000,
+              "model": "opus"
+            },
+            "worktreeRoot": "/Users/dev/portivo-wt/onboarding",
+            "since": 1760600385000,
+            "lastActivity": 1760600385000,
+            "queue": {
+              "position": 1,
+              "since": 1760600385000,
+              "waitingFor": "build",
+              "buildId": "sb_mobile_9a8b7c",
+              "etaS": 240
+            },
+            "servedBy": {
+              "pid": 70110,
+              "startedAt": 1760599900,
+              "profile": "pn-sim-dev"
+            },
+            "priority": "normal"
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "a device not named as Pod's",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1760600400000,
+        "devices": [
+          {
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "name": "Portivo-E2E-iPhone",
+            "role": "pool",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1
+          }
+        ],
+        "leases": []
+      },
+      "path": "devices.0.name"
+    },
+    {
+      "name": "a later version",
+      "registry": {
+        "version": 2,
+        "updatedAt": 1,
+        "devices": [],
+        "leases": []
+      },
+      "path": "version"
+    },
+    {
+      "name": "a lease state this version does not name: damage, since new values bump the version",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1,
+        "devices": [],
+        "leases": [
+          {
+            "leaseId": "sl_d4e5f6",
+            "key": "terminal:term_4d4d@/Users/dev/portivo",
+            "state": "parked",
+            "holder": {
+              "kind": "terminal",
+              "id": "terminal:term_4d4d",
+              "terminalHandle": "term_4d4d"
+            },
+            "worktreeRoot": "/Users/dev/portivo",
+            "since": 1,
+            "lastActivity": 1,
+            "servedBy": {
+              "pid": 70110,
+              "startedAt": 1760599900
+            }
+          }
+        ]
+      },
+      "path": "leases.0.state"
+    },
+    {
+      "name": "a lease no runtime serves",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1,
+        "devices": [],
+        "leases": [
+          {
+            "leaseId": "sl_d4e5f6",
+            "key": "terminal:term_4d4d@/Users/dev/portivo",
+            "state": "waiting",
+            "holder": {
+              "kind": "terminal",
+              "id": "terminal:term_4d4d",
+              "terminalHandle": "term_4d4d"
+            },
+            "worktreeRoot": "/Users/dev/portivo",
+            "since": 1,
+            "lastActivity": 1
+          }
+        ]
+      },
+      "path": "leases.0.servedBy"
+    }
+  ]
+}
