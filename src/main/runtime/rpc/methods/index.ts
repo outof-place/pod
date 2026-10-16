@@ -35,6 +35,7 @@ import { LINEAR_AGENT_ACCESS_METHODS } from './linear-agent-access'
 import { JIRA_METHODS } from './jira'
 import { SSH_METHODS } from './ssh'
 import { POD_SSH_TARGET_METHODS } from './pod-ssh-targets'
+import { POD_SSH_CREDENTIAL_METHODS } from './pod-ssh-credentials'
 import { POD_SSH_REMOTE_PROJECT_METHODS } from './pod-ssh-remote-projects'
 import { MANAGED_SERVER_METHODS } from './managed-server'
 import { SPEECH_METHODS } from './speech'
@@ -132,6 +133,8 @@ export const ALL_RPC_METHODS = [
   ...POD_SSH_TARGET_METHODS,
   // Fork-only (Pod): Add Project on an SSH host: browse its folders, register one.
   ...POD_SSH_REMOTE_PROJECT_METHODS,
+  // Fork-only (Pod): SSH connect prompts (passphrase, password, keyboard-interactive).
+  ...POD_SSH_CREDENTIAL_METHODS,
   ...MANAGED_SERVER_METHODS,
   ...SPEECH_METHODS,
   ...WORKSPACE_PORT_METHODS,
