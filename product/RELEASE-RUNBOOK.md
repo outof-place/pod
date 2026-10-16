@@ -45,10 +45,11 @@ gh release create appcast --repo outof-place/pod --prerelease --title "Pod updat
    - electron-builder 26.15.3 (@electron/get 3.1.0) reads neither `ELECTRON_CACHE` nor `electron_config_cache`; `ELECTRON_BUILDER_CACHE` moves only its own tools. No `ELECTRON_MIRROR`: it changes the cache directory.
    - The build still downloads `SHASUMS256.txt` from github.com (never cached), so GitHub must answer even with a full cache.
 1. **Dry run first**, same chain, throwaway key:
-   `PATH=~/.local/share/pod-release/net-shims:$PATH product/release-one-app.sh 1.0.0-rc1 --native-checkout <clean PodNative checkout at the pinned revision> --out ~/pod-releases/1.0.0-rc1-dry --dry-run`
-   - `--out` must be outside the Pod checkout (electron-builder packs the checkout). The net-shims retry codesign's timestamp and notarytool/stapler on network errors.
+   `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer PATH="$PWD/product/scripts/net-shims:$PATH" product/release-one-app.sh 1.0.0-rc1 --native-checkout <clean PodNative checkout at the pinned revision> --out ~/pod-releases/1.0.0-rc1-dry --dry-run`
+   - `--out` must be outside the Pod checkout (electron-builder packs the checkout). `product/scripts/net-shims` retries codesign's timestamp, and notarytool and stapler on network errors (a dropped upload is sent again; stdout stays notarytool's own JSON). On a slow uplink one release takes 40 minutes and its GitHub upload another 30: create the release as a draft, `gh release upload` the assets, then publish it.
+   - Release from clean clones outside your working checkouts (one for Pod, one for PodNative), so a build never packs or reads work in progress. PodNative needs Xcode 27 (`DEVELOPER_DIR`).
 2. **The release**, on the release Mac, at low load, one build at a time:
-   `PATH=~/.local/share/pod-release/net-shims:$PATH product/release-one-app.sh 1.0.0-rc1 --native-checkout <same checkout> --out ~/pod-releases/1.0.0-rc1`
+   `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer PATH="$PWD/product/scripts/net-shims:$PATH" product/release-one-app.sh 1.0.0-rc1 --native-checkout <same checkout> --out ~/pod-releases/1.0.0-rc1`
    - release.sh also leaves `latest-mac.yml` in the checkout's `dist/`: never publish it, and move `dist/` out of the checkout afterwards.
    - Run it from Terminal, not from an agent's shell: the real path refuses `CLAUDECODE`.
    - macOS asks **twice** for access to "Private key for signing Sparkle updates": once for `generate_appcast`, then for `sign_update`, which checks the feed's signature. Choose **Allow** both times, not "Always Allow", which would let these tools read the key without asking from then on.

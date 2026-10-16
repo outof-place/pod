@@ -1,0 +1,8 @@
+#!/bin/bash
+# Pod release net shim: retries codesign when Apple's timestamp service is unreachable.
+for attempt in 1 2 3 4 5; do
+  err=$(mktemp); /usr/bin/codesign "$@" 2>"$err"; status=$?; cat "$err" >&2
+  if [ "$status" = 0 ] || ! grep -q "timestamp service is not available" "$err"; then rm -f "$err"; exit "$status"; fi
+  rm -f "$err"; echo "net-shim: timestamp service unavailable, retrying (attempt $attempt)" >&2; sleep 15
+done
+exit "$status"

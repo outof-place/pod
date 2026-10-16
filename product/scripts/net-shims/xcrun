@@ -1,0 +1,46 @@
+#!/bin/bash
+# Pod release net shim: retries notarytool submit and stapler on network errors, else plain xcrun.
+# stdout stays notarytool's own (release-app.sh parses its --output-format json); notes go to stderr.
+real=/usr/bin/xcrun
+net_error='NSURLErrorDomain|offline|timed out|network connection was lost|Network Unavailable|Could not connect|-1009|-1001|-1005|deadlineExceeded|abortedUpload|HTTPClientError|connectTimeout|remoteConnectionClosed'
+accepted='status: Accepted|"status" *: *"Accepted"'
+if [ "${1:-}" = notarytool ] && [ "${2:-}" = submit ]; then
+  file=$3; rest=(); for a in "${@:4}"; do [ "$a" = --wait ] || rest+=("$a"); done
+  for attempt in 1 2 3; do
+    out=$(mktemp); err=$(mktemp)
+    "$real" notarytool submit "$file" "${rest[@]}" --wait >"$out" 2>"$err"; status=$?
+    cat "$out"; cat "$err" >&2
+    id=$(cat "$out" "$err" | grep -Eo '(id: |"id" *: *")[0-9a-f-]{36}' | head -1 | grep -Eo '[0-9a-f-]{36}')
+    both=$(cat "$out" "$err"); rm -f "$out" "$err"
+    [ "$status" = 0 ] && exit 0
+    echo "$both" | grep -Eq "$net_error" || exit "$status"
+    # An upload that never finished leaves a submission with no file: send it again instead.
+    echo "$both" | grep -q "Successfully uploaded file" || id=""
+    if [ -n "$id" ]; then
+      for poll in $(seq 1 40); do
+        echo "net-shim: network error, waiting on submission $id (try $poll)" >&2
+        sleep 30
+        "$real" notarytool wait "$id" "${rest[@]}" >&2 2>&1
+        info=$("$real" notarytool info "$id" "${rest[@]}" 2>/dev/null) || continue
+        if echo "$info" | grep -Eq "$accepted"; then echo "$info"; exit 0; fi
+        echo "$info" | grep -Eq '"status" *: *"In Progress"|status: In Progress' && continue
+        echo "$info"; exit 1
+      done
+      exit 1
+    fi
+    echo "net-shim: network error before a submission id, submitting again (attempt $attempt)" >&2
+    sleep 30
+  done
+  exit 1
+fi
+if [ "${1:-}" = stapler ]; then
+  for attempt in 1 2 3 4 5 6; do
+    out=$("$real" "$@" 2>&1); status=$?; echo "$out"
+    [ "$status" = 0 ] && exit 0
+    echo "$out" | grep -Eqi "$net_error|CloudKit" || exit "$status"
+    echo "net-shim: stapler network error, retrying (attempt $attempt)" >&2
+    sleep 20
+  done
+  exit "$status"
+fi
+exec "$real" "$@"
