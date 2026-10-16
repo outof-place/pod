@@ -1,27 +1,38 @@
 # Contributing to Pod
 
 Pod is Orca's code at a pinned `main` commit plus a stack of Pod patches; the sync with Orca ended
-on 2026-10-13. Orca's [contributing guide](.github/CONTRIBUTING.md) covers setup and code standards,
-which apply here; its pull request process does not. This file adds what is specific to Pod.
+on 2026-10-13, and since 2026-10-17 `main` only moves forward. Orca's
+[contributing guide](.github/CONTRIBUTING.md) covers setup and code standards, which apply here; its
+pull request process does not. This file adds what is specific to Pod.
 
 ## Branch model
 
 | Branch | What it is | Who writes it |
 | --- | --- | --- |
-| `main` (default) | The product. The pinned Orca commit plus a linear stack of Pod commits, each with a trailer. | `scripts/pod-stack.sh`, always with a lease. Don't commit to it directly. |
-| Orca-style topic branches: `feat/*`, `fix/*`, `perf/*`, `plugins/*`, `native-terminal/*` | Older changes once sent to Orca, still stacked under their names. No new ones: Pod sends no changes to Orca. | Nobody; they only leave the manifest. |
-| `pod/*` | Pod-only work, one branch per change. `pod/infra` holds these docs, `upstream.json`, the check workflow and the stack scripts. | You. |
-| `stack/<topic>` | A copy of a topic branch replayed onto the Pod stack, when two topic branches conflict with each other. Its `pod-stack.json` entry says what it was replayed onto. | Whoever settles the conflict. Refresh it when its source branch changes, or drop it once the source is rebased. |
+| `main` (default) | The product. The pinned Orca commit, the stack as last assembled, its generated layers, then every commit landed since, each with a trailer. | Fast-forward pushes only, after a green Pod check on the pushed commit. Never force, never rebuild it. |
+| Orca-style topic branches: `feat/*`, `fix/*`, `perf/*`, `plugins/*`, `native-terminal/*` | Older changes once sent to Orca, assembled into `main` under their names. No new ones: Pod sends no changes to Orca. | Nobody. |
+| `pod/*` | Pod-only work, one branch per change, landed on `main` by fast-forward. A branch you pushed is not rewritten: push a rebase under a new name. | You. |
+| `stack/<topic>` | A copy of a topic branch replayed onto the Pod stack while `main` was assembled, when two topic branches conflicted. Its `pod-stack.json` entry says what it was replayed onto. | Nobody now. |
 
 - `fork/no-official-updater` predates the `pod/*` convention and keeps its name.
 
 ## Making a change
 
-- Work on a `pod/*` branch. Changes to these docs and the Pod tooling go on `pod/infra`.
+- Work on a `pod/*` branch cut from the latest `origin/main`. Others land on `main` directly, so
+  run `git fetch` and read `git log origin/main` first.
 - Keep Pod code in its own files and directories, and touch Orca files only with thin hooks.
-  Every line changed in an Orca file is a possible conflict between stacked branches.
-- Make one logical change per commit.
-- Add the branch to `pod-stack.json` with `"forkOnly": "<reason>"`.
+- Make one logical change per commit, and give each its trailer (below).
+- Write code in the form the generated layers leave (see "Generated layers"): import subprocess
+  helpers from `@orca/process-host`, and never bring back a file `pod-prune` removed.
+- Land it:
+  1. Rebase onto the latest `origin/main`.
+  2. Run the [Pod check](.github/workflows/pod-check.yml) on the branch's last commit and get it
+     green.
+  3. `git push origin <sha>:refs/heads/main`, with no force. If it is refused as not a fast-forward,
+     someone landed first: rebase, check again, push again.
+- Never force-push `main`, and never rebuild it with `scripts/pod-stack.sh`: commits that landed
+  directly are in no manifest branch, so a rebuild would drop them. `pod-stack.sh` refuses that
+  (exit code 3) unless it is given `--allow-drop`; don't give it.
 
 ## Commit trailers
 
@@ -32,10 +43,14 @@ Fork-only: Pod identity: name, bundle id, icon
 Upstream: https://github.com/stablyai/orca/pull/26914
 ```
 
-New entries are `Fork-only`. `Upstream` stays only on the older entries that were sent to Orca.
-`scripts/pod-stack.sh` adds the trailers from the manifest, so topic branches do not have to.
+New commits are `Fork-only`, and their authors add the trailer. `Upstream` stays only on the older
+entries that were sent to Orca, whose trailers `scripts/pod-stack.sh` added from the manifest.
 
-## How `main` is built
+## How `main` was built
+
+Until 2026-10-17, `main` was assembled from topic branches. The files below record how its commits up
+to that day were put together; `scripts/pod-stack.sh` can still dry-run that assembly, and nothing
+else builds `main` now.
 
 - [`upstream.json`](upstream.json) pins the Orca commit `main` sits on: `ref`, its `date`, and
   `nearestTag`, the newest Orca release whose branch point that commit contains. Release notes use
@@ -63,21 +78,32 @@ New entries are `Fork-only`. `Upstream` stays only on the older entries that wer
   commit of that branch must be in the result. A miss exits with code 4.
 - Codemods over the whole stack are listed under `"generated"` in `pod-stack.json` and run by
   `scripts/pod-generated.sh`: one commit per layer on top of the stack, trailed `Pod-Generated:`.
-  Every assembly drops the old layer and runs the codemod again, so the layer never conflicts. A
-  codemod that fails, or whose `check` command finds work left, stops the run with nothing
+  A codemod that fails, or whose `check` command finds work left, stops the run with nothing
   committed.
-- The [Pod check](.github/workflows/pod-check.yml) workflow runs the typecheck, the unit tests and
-  the macOS build on a branch or commit, on demand only:
-  `gh workflow run pod-check.yml -R outof-place/pod -f ref=main`.
+
+## Checks
+
+The [Pod check](.github/workflows/pod-check.yml) workflow runs the generated-layer check, the
+typecheck, the unit tests and the macOS build on a branch or commit, on demand only:
+`gh workflow run pod-check.yml -R outof-place/pod -f ref=<branch or commit>`. Add `--ref <branch>`
+to run the workflow file of that branch instead of `main`'s.
+
+## Generated layers
+
+`main` carries the generated layers in its history, and commits land on top of them. Nothing reruns
+a codemod after a commit lands, so every commit must leave each layer current:
+`scripts/pod-generated.sh --check` runs each layer's `check` in the checkout and exits with code 5
+if one finds work left. The Pod check runs it before the typecheck. Fix a failure by running that
+layer's `run` command (listed in `pod-stack.json`) and committing the result with your change.
 
 ## Inherited Orca workflows
 
 The Orca workflows under `.github/workflows` are disabled in this repository: they need Stably's
 secrets, and some deploy Stably's infrastructure. A workflow file that first appears in a push is
-registered as active and starts at once, so every push `pod-stack.sh --push` makes is followed by
-`scripts/pod-workflow-quarantine.sh`. It disables every workflow Pod does not own and cancels their
-unfinished runs. If you push to `main` any other way, run it yourself. Pod's own workflows are the
-files named `pod-*.yml`; name new ones that way.
+registered as active and starts at once, so run `scripts/pod-workflow-quarantine.sh` after every
+push to `main` (`pod-stack.sh --push` ran it by itself). It disables every workflow Pod does not own
+and cancels their unfinished runs. Pod's own workflows are the files named `pod-*.yml`; name new
+ones that way.
 
 ## Maintainers: the macOS build runner
 
