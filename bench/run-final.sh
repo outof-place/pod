@@ -157,6 +157,8 @@ run_suite() {
 }
 run_suite polling
 run_suite polling --extra-ptys 80
+# The hook each app installs for the installed claude, over recorded payloads: no app launch.
+run_suite hooks
 # The same repo the search suites read: a local clone, never the user's own checkout.
 [ "$runtime_only" = 1 ] || run_suite git-status --repo "$search_repo"
 if [ -n "$og_sha" ]; then
