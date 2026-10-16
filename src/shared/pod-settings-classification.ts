@@ -85,7 +85,6 @@ export const POD_SETTINGS_HIDDEN = {
   nativeChatSessionOptions: 'owned',
   artifactSharingEnabled: 'owned',
   agentSkillSharingEnabled: 'owned',
-  nestedWorkerMaxDepth: 'owned',
   floatingTerminalTrustedCwds: 'owned',
   keybindings: 'owned',
   prBotAuthorOverrides: 'owned',
