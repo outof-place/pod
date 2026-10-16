@@ -58,6 +58,8 @@ import { createSshConnectionCallbacks } from './ssh-connection-state-callbacks'
 import { registerSshConnectionHandlers } from './ssh-connection-handlers'
 import { installPodSshTargetSettings } from '../pod/ssh/install-pod-ssh-target-settings'
 import { setPodSshTargetSettingsOps } from '../pod/ssh/pod-ssh-target-settings'
+import { installPodSshRemoteBrowse } from '../pod/ssh/install-pod-ssh-remote-browse'
+import { setPodSshRemoteBrowse } from '../pod/ssh/pod-ssh-remote-browse'
 import {
   registerPowerMonitorReconnect,
   unregisterPowerMonitorReconnect
@@ -227,6 +229,8 @@ export function registerSshHandlers(
   registerSshTargetCrudHandlers()
   // Fork-only (Pod): the same host operations for PodNative's SSH settings over runtime RPC.
   installPodSshTargetSettings()
+  // Fork-only (Pod): the remote folder browser for PodNative's Add Project on an SSH host.
+  installPodSshRemoteBrowse()
   registerSshConnectionHandlers()
   registerSshPortForwardHandlers()
 
@@ -275,6 +279,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   setPersistedStore(null)
   setSshTargetRegistryHandlers({ connect: null, getState: null })
   setPodSshTargetSettingsOps(null)
+  setPodSshRemoteBrowse(null)
   setCurrentGetMainWindow(() => null)
   setCurrentRuntime(undefined)
 }
