@@ -70,6 +70,7 @@ const APPLIED_FOR_PODNATIVE = [
   'codexSessionSourceHome',
   'promptCacheTimerEnabled',
   'promptCacheTtlMs',
+  'nestedWorkerMaxDepth',
   // Browser: PodNative's link handling reads them
   'openLinksInApp',
   'openLinksInAppModifierInverts',
