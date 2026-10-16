@@ -59,6 +59,9 @@ jobs:
         with:
           native-runtime: node
           node-version: '24'
+      # Commits land on main after the generated layers, so they must leave every codemod current.
+      - name: Generated layers are current
+        run: bash scripts/pod-generated.sh --check
       - run: pnpm tc
 
   unit:
