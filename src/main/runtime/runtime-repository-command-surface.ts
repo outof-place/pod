@@ -39,6 +39,8 @@ export type RuntimeRepositoryCommandSurface = {
   listProjectHostSetups: RuntimeProjectHostSetupController['listSetups']
   createProjectHostSetup: RuntimeProjectHostSetupController['createSetup']
   setupProjectExistingFolder: RuntimeProjectHostSetupController['setupExistingFolder']
+  // Fork-only (Pod): PodNative's Add Project on an SSH host.
+  addSshRepo: RuntimeProjectHostSetupController['addSshRepo']
   setupProjectClone: RuntimeProjectHostSetupController['setupClone']
   updateProjectHostSetup: RuntimeProjectHostSetupController['updateSetup']
   deleteProjectHostSetup: RuntimeProjectHostSetupController['deleteSetup']
@@ -114,6 +116,7 @@ export function installRuntimeRepositoryCommandSurface(
     listProjectHostSetups: host.listSetups.bind(host),
     createProjectHostSetup: host.createSetup.bind(host),
     setupProjectExistingFolder: host.setupExistingFolder.bind(host),
+    addSshRepo: host.addSshRepo.bind(host),
     setupProjectClone: host.setupClone.bind(host),
     updateProjectHostSetup: host.updateSetup.bind(host),
     deleteProjectHostSetup: host.deleteSetup.bind(host),

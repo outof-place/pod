@@ -11,7 +11,7 @@ export type RemoteDirEntry = {
   isDirectory: boolean
 }
 
-type RemoteBrowseResult = {
+export type RemoteBrowseResult = {
   entries: RemoteDirEntry[]
   resolvedPath: string
   pathFlavor: FilesystemPathFlavor
@@ -41,32 +41,38 @@ export function registerSshBrowseHandler(
 
   ipcMain.handle(
     'ssh:browseDir',
-    async (_event, args: { targetId: string; dirPath: string }): Promise<RemoteBrowseResult> => {
-      const mgr = getConnectionManager()
-      if (!mgr) {
-        throw new Error('SSH connection manager not initialized')
-      }
-      const conn = mgr.getConnection(args.targetId)
-      if (!conn) {
-        throw new Error(`SSH connection "${args.targetId}" not found`)
-      }
-
-      try {
-        return await browseWithPosixShell(conn, args.dirPath)
-      } catch (posixError) {
-        // Why: only a RemoteBrowseError (ran, non-zero exit) signals a Windows shell; don't retry transport errors/timeouts as Windows.
-        if (!(posixError instanceof RemoteBrowseError)) {
-          throw posixError
-        }
-        try {
-          return await browseWithWindowsPowerShell(conn, args.dirPath)
-        } catch (fallbackError) {
-          // Why: exit 127 (no powershell.exe) → host isn't Windows, surface the original POSIX failure; otherwise PowerShell's own error is the real cause.
-          throw isPosixCommandNotFound(fallbackError) ? posixError : fallbackError
-        }
-      }
-    }
+    (_event, args: { targetId: string; dirPath: string }): Promise<RemoteBrowseResult> =>
+      browseSshDirectory(getConnectionManager(), args)
   )
+}
+
+// Fork-only (Pod): exported for PodNative's ssh.browseDir (install-pod-ssh-remote-browse.ts).
+export async function browseSshDirectory(
+  mgr: SshConnectionManager | null,
+  args: { targetId: string; dirPath: string }
+): Promise<RemoteBrowseResult> {
+  if (!mgr) {
+    throw new Error('SSH connection manager not initialized')
+  }
+  const conn = mgr.getConnection(args.targetId)
+  if (!conn) {
+    throw new Error(`SSH connection "${args.targetId}" not found`)
+  }
+
+  try {
+    return await browseWithPosixShell(conn, args.dirPath)
+  } catch (posixError) {
+    // Why: only a RemoteBrowseError (ran, non-zero exit) signals a Windows shell; don't retry transport errors/timeouts as Windows.
+    if (!(posixError instanceof RemoteBrowseError)) {
+      throw posixError
+    }
+    try {
+      return await browseWithWindowsPowerShell(conn, args.dirPath)
+    } catch (fallbackError) {
+      // Why: exit 127 (no powershell.exe) → host isn't Windows, surface the original POSIX failure; otherwise PowerShell's own error is the real cause.
+      throw isPosixCommandNotFound(fallbackError) ? posixError : fallbackError
+    }
+  }
 }
 
 type SshBrowseConnection = NonNullable<ReturnType<SshConnectionManager['getConnection']>>
