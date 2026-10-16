@@ -725,7 +725,7 @@ def acc(narrow: bool = False) -> Diagram:
         "helper": dict(eyebrow="Menu bar helper", title="Claude Acc.app", body="Stay awake and dictation. Pod hides its own tray icon while it runs."),
         "root": dict(eyebrow="LaunchDaemons, root", title="Fans and lid", body="Installed apart with Touch ID, never by Pod's setup."),
         "hook": dict(eyebrow="Agents' commands", title="Hook and sched", body="Dev servers go to the memory guard, builds to the memory-aware scheduler."),
-        "plugin": dict(eyebrow="PodNative", title="Toolbar and Mac window", body="A usage ring, then accounts, dev servers and builds, read through AccKit.", pod=True),
+        "plugin": dict(eyebrow="PodNative", title="Mac window", body="Accounts, dev servers, builds, cleanup, awake and fans, read through AccKit.", pod=True),
     }
     planned = {
         "menu": dict(eyebrow="Login item in Pod.app", title="Pod Menu.app", body="Claude Acc.app moved inside Pod; same bundle id, so its grants carry over.", planned=True),

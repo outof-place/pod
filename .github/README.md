@@ -8,25 +8,25 @@
   <source media="(prefers-color-scheme: dark) and (max-width: 600px)" srcset="assets/hero-narrow-dark.svg">
   <source media="(max-width: 600px)" srcset="assets/hero-narrow-light.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.svg">
-  <img alt="Pod by outofplace. The agent-fleet IDE for macOS. Run a fleet of coding agents side by side in a native terminal, with your subscriptions, memory and builds looked after. Built on Orca, by the outofplace studio." src="assets/hero-light.svg" width="100%">
+  <img alt="Pod by outofplace. The agent-fleet IDE for macOS. Run a fleet of coding agents side by side in a native terminal, with your subscriptions, memory and builds looked after. Free and open source (MIT), by the outofplace studio." src="assets/hero-light.svg" width="100%">
 </picture>
 
 <p align="center">
-  <a href="https://github.com/outof-place/pod/releases/download/v1.0.0-rc1/Pod-1.0.0-rc1.dmg"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-download-dark.svg"><img alt="Download Pod 1.0.0-rc1 for macOS" src="assets/button-download-light.svg" height="44"></picture></a>
+  <a href="https://github.com/outof-place/pod/releases/download/v1.0.0-rc3/Pod-1.0.0-rc3.dmg"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-download-dark.svg"><img alt="Download Pod 1.0.0-rc3 for macOS" src="assets/button-download-light.svg" height="44"></picture></a>
   <a href="https://github.com/outof-place/homebrew-tap"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-brew-dark.svg"><img alt="Install with Homebrew" src="assets/button-brew-light.svg" height="44"></picture></a>
   <a href="https://pod.codes"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-site-dark.svg"><img alt="pod.codes" src="assets/button-site-light.svg" height="44"></picture></a>
 </p>
 
 <p align="center">
   <a href="../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-004046?style=flat&labelColor=0d1016"></a>
-  <a href="../upstream.json"><img alt="Built on Orca" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Foutof-place%2Fpod%2Fmain%2Fupstream.json&query=%24.nearestTag&label=built%20on%20Orca&suffix=%2B&color=004046&labelColor=0d1016"></a>
   <img alt="Platform: macOS" src="https://img.shields.io/badge/platform-macOS-004046?style=flat&labelColor=0d1016">
 </p>
 
 > [!NOTE]
-> Pod 1.0.0-rc1, the first release candidate of Pod 1.0, is out: [download the DMG](https://github.com/outof-place/pod/releases/download/v1.0.0-rc1/Pod-1.0.0-rc1.dmg), signed with
+> Pod 1.0.0-rc3, the third release candidate of Pod 1.0, is out: [download the DMG](https://github.com/outof-place/pod/releases/download/v1.0.0-rc3/Pod-1.0.0-rc3.dmg), signed with
 > the studio's Developer ID and notarized by Apple. It needs a Mac with Apple silicon and macOS 27 or later.
-> The [release notes](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc1) list the known issues. It also installs with Homebrew; see [Install](#install).
+> The [release notes](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc3) list the known issues. It also installs with Homebrew; see [Install](#install).
+> On 1.0.0-rc1, install it once by hand: rc1 can't update itself to a later release (see [Install](#install)).
 
 <picture>
   <source media="(prefers-color-scheme: dark) and (max-width: 600px)" srcset="assets/window-narrow-dark.svg">
@@ -43,7 +43,7 @@
   <source media="(prefers-color-scheme: dark) and (max-width: 600px)" srcset="assets/why-narrow-dark.svg">
   <source media="(max-width: 600px)" srcset="assets/why-narrow-light.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/why-dark.svg">
-  <img alt="Agents got fast. The tools around them didn't. In Pod 1.0, out now as 1.0.0-rc1: the native terminal, claude-acc built in and zero telemetry. Coming after it: indexed code search, Pod Workspace and OrbStack VMs. The same list follows as text." src="assets/why-light.svg" width="100%">
+  <img alt="Agents got fast. The tools around them didn't. In Pod 1.0, out now as 1.0.0-rc3: the native terminal, claude-acc built in and zero telemetry. Coming after it: indexed code search, Pod Workspace and OrbStack VMs. The same list follows as text." src="assets/why-light.svg" width="100%">
 </picture>
 
 <details>
@@ -65,7 +65,7 @@
   checks that no request reaches a Stably host. Marketplace installs are off by default in Pod (no
   remote plugin revocation).
 
-1.0 marks what Pod 1.0 brings, out now as release candidate 1.0.0-rc1; coming, what follows it.
+1.0 marks what Pod 1.0 brings, out now as release candidate 1.0.0-rc3; coming, what follows it.
 Per-worktree setup through `orca.yaml` is inherited from Orca.
 
 </details>
@@ -106,16 +106,17 @@ looked after while the agents work.
   <source media="(prefers-color-scheme: dark) and (max-width: 600px)" srcset="assets/arch-acc-narrow-dark.svg">
   <source media="(max-width: 600px)" srcset="assets/arch-acc-narrow-light.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/arch-acc-dark.svg">
-  <img alt="claude-acc inside Pod: Pod's acc supervisor runs the bundled claude-acc setup, which bootstraps the LaunchAgents (subscription rotation, memory guard, cleanup, perf) and installs the menu helper; the jobs write state files that PodNative watches through AccKit for its toolbar and Mac window. Agents' commands pass a hook into the memory guard and the build scheduler. Fans and lid run as root daemons installed separately. A planned layer, after the first release: Pod Menu.app as a login item, codes.pod.app.acc LaunchAgents, an embedded Python and a single pod-rootd helper in place of the root daemons." src="assets/arch-acc-light.svg" width="100%">
+  <img alt="claude-acc inside Pod: Pod's acc supervisor runs the bundled claude-acc setup, which bootstraps the LaunchAgents (subscription rotation, memory guard, cleanup, perf) and installs the menu helper; the jobs write state files that PodNative watches through AccKit for its Mac window. Agents' commands pass a hook into the memory guard and the build scheduler. Fans and lid run as root daemons installed separately. A planned layer, after the first release: Pod Menu.app as a login item, codes.pod.app.acc LaunchAgents, an embedded Python and a single pod-rootd helper in place of the root daemons." src="assets/arch-acc-light.svg" width="100%">
 </picture>
 
 - Pod carries a pinned claude-acc release inside the app; the build checks its sha256.
 - On launch, Pod's supervisor runs the bundled `setup.sh --owner pod`, and only when the version, the
   owner or the app's path has changed. Setup installs the LaunchAgents (subscription rotation, the
   dev-server memory guard, cleanup, perf) and the menu helper.
-- PodNative shows claude-acc's state in the window's toolbar (a usage ring, and a popover with the Claude
-  accounts, dev servers and builds) and in its Mac window. AccKit watches the state files the jobs write
-  and reads only what a view shows.
+- claude-acc's usage ring sits in the menu bar, with cards for the Claude accounts, dev servers and
+  builds. The menu helper (Pod Menu) draws it, or PodNative when Settings › claude-acc › Menu bar item
+  says so. PodNative's Mac window has a page for each part. AccKit watches the state files the jobs
+  write and reads only what a view shows.
 - Agents' commands pass a hook that sends dev servers through the memory guard and builds through the
   memory-aware scheduler.
 - Fans, and staying awake with the lid closed, run as root daemons that you install separately with
@@ -244,7 +245,7 @@ Pod is not affiliated with or endorsed by Stably AI or Lovecast Inc. Orca is the
 
 ## Install
 
-- **DMG.** Download [Pod-1.0.0-rc1.dmg](https://github.com/outof-place/pod/releases/download/v1.0.0-rc1/Pod-1.0.0-rc1.dmg) from the [1.0.0-rc1 release](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc1),
+- **DMG.** Download [Pod-1.0.0-rc3.dmg](https://github.com/outof-place/pod/releases/download/v1.0.0-rc3/Pod-1.0.0-rc3.dmg) from the [1.0.0-rc3 release](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc3),
   open it and drag Pod to Applications. Its SHA-256 is in `SHA256SUMS` on the release page. Later
   versions arrive through Pod's "Check for Updates…".
 - **Homebrew**, from the studio's tap:
@@ -253,7 +254,14 @@ Pod is not affiliated with or endorsed by Stably AI or Lovecast Inc. Orca is the
   brew install --cask outof-place/tap/pod
   ```
 
-  Pod updates itself after that, as it does from the DMG.
+  Pod updates itself after that, as it does from the DMG, so a plain `brew upgrade` leaves it alone.
+
+- **From 1.0.0-rc1**, install once by hand: 1.0.0-rc2 changed the update key, so rc1's "Check for
+  Updates…" can't install a later release. Drag Pod from the DMG into Applications and replace the old
+  one while Pod is still open; the old Pod quits as for an update and leaves the terminal sessions
+  running. Open the new one and they are there. Installed from Homebrew, run
+  `brew update && brew upgrade --cask --greedy pod` once instead. After that, "Check for Updates…"
+  brings later releases.
 
 - Pod needs a Mac with Apple silicon and macOS 27 or later.
 
