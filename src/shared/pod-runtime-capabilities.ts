@@ -21,6 +21,12 @@ export const POD_TERMINAL_OPENED_BEFORE_CLAUDE_ACCOUNTS_RUNTIME_CAPABILITY =
  */
 export const POD_SSH_TARGET_SETTINGS_RUNTIME_CAPABILITY = 'pod.ssh.target-settings.v1' as const
 
+/**
+ * ssh.browseDir and repo.addRemote: Add Project on an SSH host without Pod's window. A client offers
+ * a remote folder only on a host that lists this.
+ */
+export const POD_SSH_REMOTE_PROJECTS_RUNTIME_CAPABILITY = 'pod.ssh.remote-projects.v1' as const
+
 /** aiVault.deleteSession: the AI vault's Delete without Pod's window. */
 export const POD_AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY =
   'pod.ai-vault.delete-session.v1' as const
@@ -43,6 +49,7 @@ export const POD_RUNTIME_CAPABILITIES = [
   POD_CREATE_TERMINAL_AGENT_ARGS_RUNTIME_CAPABILITY,
   POD_TERMINAL_OPENED_BEFORE_CLAUDE_ACCOUNTS_RUNTIME_CAPABILITY,
   POD_SSH_TARGET_SETTINGS_RUNTIME_CAPABILITY,
+  POD_SSH_REMOTE_PROJECTS_RUNTIME_CAPABILITY,
   POD_AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY,
   POD_SETTINGS_NETWORK_PROXY_RUNTIME_CAPABILITY
 ] as const
