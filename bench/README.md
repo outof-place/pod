@@ -350,6 +350,44 @@ click, fill, get title and screenshot. There is also a row for the first click a
   of each launch warms agent-browser up and is not kept. Both apps are windowless, with background
   throttling off.
 
+### 10. Claude Code hooks (`suites/hooks.mjs`, `tools/hookrun.c`)
+
+Both apps install command hooks into Claude Code's settings, so that every session event (a
+prompt, each tool call before and after, a stop, a sub-agent) reaches the app. Claude runs the
+hook as a new process for each event. This suite measures what one event costs with the hook
+each app installs.
+
+- **Which hook.** Each app's own bundled installer writes it (`lib/hook-install.cjs` loads the
+  hook-service chunk from the app's `app.asar`), into a throwaway `HOME`, for the version of the
+  installed `claude`, read from its install path. `claude` itself never runs. The suite records
+  the plan, the form and the command each app wrote.
+  - Orca writes a shell-form command: Claude runs it through `/bin/sh -c`, and it runs
+    `/bin/sh ~/.orca/agent-hooks/claude-hook.sh`, which posts with `curl`.
+  - Pod writes an exec-form `pod-agent-hook` (`args: []`), a C client with no shell, and marks
+    the status-only events `async`.
+- **Payloads.** The events are hook payloads Claude Code wrote over a real PTY, from the fixtures
+  both repos carry in `src/shared/__fixtures__/` (the blobs are pinned in the suite). Recorded
+  events that neither app installs a hook for are left out, since Claude would run none for them.
+- **How an event runs.** `tools/hookrun.c` spawns the command as Claude does: exec form directly,
+  shell form as `/bin/sh -c`. It writes the payload to stdin and closes it, then reads stdout and
+  stderr to EOF and reaps the process. Events run one at a time, 25 ms apart.
+- **Receiver.** Both apps post to one loopback stub. It reads the body and answers 204, as the
+  runtime's hook server does, through the endpoint file and pane env the runtime publishes. Every
+  event has to arrive once, with the right token, as the raw payload, or the suite stops. The
+  runtime's handling of a post is not in these rows.
+- **Metrics, per event:**
+  - `cpu`: user and system CPU of the hook's whole process tree, read from the top process
+    after it exits and before it is reaped (its own time plus its reaped descendants'), plus
+    any process that outlived it;
+  - `processes`: the tree's processes, counted through kqueue from a suspended start. This is a
+    lower bound, since a grandchild can exit unseen. `extra.pidSpanMin`, the smallest gap
+    between consecutive hook pids, bounds it from above (other processes take pids too);
+  - `wall`: spawn to exit and stdout EOF, how long the hook process lives;
+  - `blocking`: the part of `wall` Claude waits for, as a mean per event per replay. It is 0 for
+    an event whose hook is installed `async`, since Claude does not wait for those.
+- **Runs.** The default is 6 replays of all events per app, alternating which app goes first.
+  A first pair is a discarded warmup.
+
 ## Running without taking the desktop
 
 Two questions decide whether the visible-window latency run can happen while someone uses the
