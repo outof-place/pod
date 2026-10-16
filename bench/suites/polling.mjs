@@ -1,5 +1,5 @@
 // Process polling: the reads behind Orca's per-pane "who holds this terminal" check
-// (src/main/runtime/terminal-foreground-group.ts), forking /bin/ps as Orca 1.4.223 does vs
+// (src/main/runtime/terminal-foreground-group.ts), forking /bin/ps as Orca does vs
 // reading the kernel's process table with sysctl.
 //
 //   node bench/suites/polling.mjs [--runs 7] [--calls 100]
@@ -39,13 +39,28 @@ const run = promisify(execFile)
 
 // The runtime-scope rows cite each app's source at these builds only (RUNTIME_SOURCES below): a
 // run on any other build stops here, before measuring, instead of citing another version's code.
-const CITED_BUILDS = { orca: '1.4.227', pod: '1.0.0-rc3' }
+const CITED_BUILDS = {
+  orca: { version: '1.4.227', commit: '7c19f712f7' },
+  pod: { version: '1.0.0-rc3', commit: '795854fc00' }
+}
 if (process.env.POD_BENCH_SCOPE === 'runtime') {
-  const benched = { orca: appVersion(ORCA_APP), pod: appVersion(POD_APP) }
-  for (const app of Object.keys(CITED_BUILDS)) {
-    if (benched[app] !== CITED_BUILDS[app]) {
+  for (const [app, bundle] of [
+    ['orca', ORCA_APP],
+    ['pod', POD_APP]
+  ]) {
+    // The version and the commit the bundle records (orca-local-build.json): a local rebuild
+    // carrying the same version string still stops here.
+    let commit = null
+    try {
+      commit = JSON.parse(
+        readFileSync(path.join(realpathSync(bundle), 'Contents/Resources/orca-local-build.json'), 'utf8')
+      ).commit
+    } catch {}
+    const benched = { version: appVersion(bundle), commit }
+    const cited = CITED_BUILDS[app]
+    if (benched.version !== cited.version || !benched.commit?.startsWith(cited.commit)) {
       throw new Error(
-        `the polling sources cite ${app} ${CITED_BUILDS[app]}, this run benches ${benched[app]}: re-check them first`
+        `the polling sources cite ${app} ${cited.version} (${cited.commit}), this run benches ${benched.version} (${benched.commit}): re-check them first`
       )
     }
   }
@@ -377,9 +392,9 @@ const comparisons = process.env.POD_BENCH_SCOPE === 'runtime' ? RUNTIME_COMPARIS
 
 // Where each runtime-scope row comes from: the same read in both apps, at the same frequency.
 const RUNTIME_SOURCES = [
-  `Terminal process rows, every poll. Orca ${CITED_BUILDS.orca}: src/main/runtime/terminal-foreground-group.ts:56 runs \`ps -o pid=,ppid=,pgid=,tpgid=,stat=,command= -t TTY\` through runProcess (a Node spawn); the tty is cached per pane root pid (:15-48). Pod ${CITED_BUILDS.pod} (795854fc00): the same file, :72, calls listTerminalProcesses(tty) with the same per-pane tty cache (:18-36). The Orca row runs the same ps arguments from Node with execFile, without runProcess's PATH lookup.`,
-  `Cheap process table. Orca ${CITED_BUILDS.orca}: src/shared/cheap-process-table-snapshot-reader.ts:20-27 forks \`ps\` with CHEAP_PS_ARGS (src/shared/process-table-snapshot.ts:35-39, \`-axo pid=,ppid=,pgid=,tpgid=,stat=,lstart=\` on macOS) inside the shared reader's coalescing and TTL. Pod ${CITED_BUILDS.pod}: the same reader (:22-24) asks listProcesses() first (:51-57) and keeps ps as the fallback, with the same coalescing and TTL, so both rows time one capture each.`,
-  `The Orca ${CITED_BUILDS.orca} bundle records commit 7c19f712f7, 2 commits behind the v${CITED_BUILDS.orca} tag's commit f51e82c4c2; the source files these rows cite are identical at both.`
+  `Terminal process rows, every poll. Orca ${CITED_BUILDS.orca.version}: src/main/runtime/terminal-foreground-group.ts:56 runs \`ps -o pid=,ppid=,pgid=,tpgid=,stat=,command= -t TTY\` through runProcess (a Node spawn); the tty is cached per pane root pid (:15-48). Pod ${CITED_BUILDS.pod.version} (${CITED_BUILDS.pod.commit}): the same file, :72, calls listTerminalProcesses(tty) with the same per-pane tty cache (:18-36). The Orca row runs the same ps arguments from Node with execFile, without runProcess's PATH lookup.`,
+  `Cheap process table. Orca ${CITED_BUILDS.orca.version}: src/shared/cheap-process-table-snapshot-reader.ts:20-27 forks \`ps\` with CHEAP_PS_ARGS (src/shared/process-table-snapshot.ts:35-39, \`-axo pid=,ppid=,pgid=,tpgid=,stat=,lstart=\` on macOS) inside the shared reader's coalescing and TTL. Pod ${CITED_BUILDS.pod.version}: the same reader (:22-24) asks listProcesses() first (:51-57) and keeps ps as the fallback, with the same coalescing and TTL, so both rows time one capture each.`,
+  `The Orca ${CITED_BUILDS.orca.version} bundle records commit ${CITED_BUILDS.orca.commit}, 2 commits behind the v${CITED_BUILDS.orca.version} tag's commit f51e82c4c2; the source files these rows cite are identical at both.`
 ]
 writeSuiteResult(SUITE, {
   // ps' tty= cost follows the open terminals: label which machine state each suite stands for.
