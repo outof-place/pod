@@ -117,4 +117,33 @@ describe('RuntimeProjectHostSetupController host routing', () => {
     ).rejects.toThrow(/Cloning onto an SSH host is not supported/)
     expect(cloneRepo).not.toHaveBeenCalled()
   })
+
+  it("registers a new project on an SSH host through the setup's own registration", async () => {
+    const { controller, addRepo, addRemoteRepo } = makeController()
+    const args = { connectionId: TARGET_ID, remotePath: '~/app', kind: 'git' as const }
+
+    await expect(controller.addSshRepo(args)).resolves.toBe(remoteRepo)
+
+    expect(addRemoteRepo).toHaveBeenCalledWith(args)
+    expect(addRepo).not.toHaveBeenCalled()
+  })
+
+  it('answers runtime_unavailable for a new SSH project before the store exists', async () => {
+    const addRemoteRepo = vi.fn()
+    const controller = new RuntimeProjectHostSetupController({
+      getStore: () => null,
+      listRepos: () => [],
+      addRepo: vi.fn(),
+      addRemoteRepo,
+      cloneRepo: vi.fn(),
+      invalidateResolvedWorktrees: vi.fn(),
+      invalidateWorktreeScan: vi.fn(),
+      notifyReposChanged: vi.fn()
+    })
+
+    await expect(
+      controller.addSshRepo({ connectionId: TARGET_ID, remotePath: '~', kind: 'folder' })
+    ).rejects.toThrow('runtime_unavailable')
+    expect(addRemoteRepo).not.toHaveBeenCalled()
+  })
 })
