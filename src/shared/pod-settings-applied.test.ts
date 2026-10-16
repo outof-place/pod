@@ -78,6 +78,9 @@ const APPLIED_FOR_PODNATIVE = [
   'followSymlinkedDirectories',
   'sourceControlAi',
   'mcpLazyStart',
+  // Plugins: discovery follows them (main-process-plugins.ts)
+  'pluginSystemEnabled',
+  'thirdPartyPluginsEnabled',
   // Advanced: the runtime's proxy applies it
   'httpProxyBypassRules'
 ]
