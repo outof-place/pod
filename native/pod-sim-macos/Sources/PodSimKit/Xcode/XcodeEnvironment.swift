@@ -25,8 +25,9 @@ public struct EnvironmentFacts: Sendable {
     public var coreSimulator: FrameworkInfo?
     public var simulatorKit: FrameworkInfo?
     public var problem: String?
-    /// The running macOS, which keys `ax` (its translator ships with macOS, not Xcode).
+    /// The running macOS, reported for information.
     public var macOS: MacOSInfo?
+    /// The translator `ax` runs, which ships with macOS: its build keys `ax` in the version table.
     public var accessibilityTranslation: FrameworkInfo?
 
     public var builds: FrameworkBuilds? {

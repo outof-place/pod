@@ -13,8 +13,9 @@ public struct AttachDisplayResult: Codable, Equatable, Sendable {
     public let alreadyAttached: Bool
 }
 
-/// Protocol v1's methods. Each runs on a concurrent work queue under its deadline (DeadlineDispatcher);
-/// per-device state lives in the display registry, so two devices never wait on each other.
+/// Protocol v1's methods. Each runs under its deadline (DeadlineDispatcher): `hid` on its device's
+/// lane in arrival order (InputLanes), the rest on a concurrent work queue. Per-device state lives in
+/// the display registry and the lanes, so two devices never wait on each other.
 public final class HelperMethods: MethodHandler, @unchecked Sendable {
     private let environment: [String: String]
     private let context: HelperContext
@@ -27,9 +28,18 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
     private let portLock = NSLock()
     private var ports: [String: DisplayPort] = [:]
     private let dispatcher = DeadlineDispatcher()
+    private let inputLanes = InputLanes()
+    let inputFallback: PublicInputFallback
+    let accessibilityFallback: PublicAccessibilityFallback
 
-    public init(environment: [String: String]) {
+    public convenience init(environment: [String: String]) {
+        self.init(environment: environment, inputFallback: NoPublicInputFallback(), accessibilityFallback: NoPublicAccessibilityFallback())
+    }
+
+    init(environment: [String: String], inputFallback: PublicInputFallback, accessibilityFallback: PublicAccessibilityFallback) {
         self.environment = environment
+        self.inputFallback = inputFallback
+        self.accessibilityFallback = accessibilityFallback
         context = HelperContext.discover(environment: environment)
         startup = SelftestRunner.run(SelftestOptions(environment: environment), context: context)
         startupJSON = (try? WireJSON.encoder.encode(startup)) ?? Data("{}".utf8)
@@ -44,6 +54,15 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
     public func detachAll() { displays.detachAll() }
 
     public func handle(_ request: Request, reply: @escaping @Sendable (Reply) -> Void) -> Bool {
+        let deadlineMs = HelperProtocol.deadlinesMs[request.method] ?? 5_000
+        // Decoded here, on the stdin reader, so a device's calls keep the order they arrived in; params
+        // that do not decode take the common path to their badParams answer.
+        if request.method == "hid", case .success(let params) = WireJSON.decode(HIDParams.self, from: request.params),
+           UUID(uuidString: params.udid) != nil {
+            let call = dispatcher.start("hid", deadlineMs: deadlineMs, reply: reply)
+            inputLanes.submit(udid: params.udid.uppercased(), call: call) { self.hid(params) }
+            return true
+        }
         let run: (@Sendable () -> Reply)?
         switch request.method {
         case "selftest": run = { self.selftest(request.params) }
@@ -56,7 +75,7 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
         default: run = nil
         }
         guard let run else { return false }
-        dispatcher.run(request.method, deadlineMs: HelperProtocol.deadlinesMs[request.method] ?? 5_000, run, reply: reply)
+        dispatcher.run(request.method, deadlineMs: deadlineMs, run, reply: reply)
         return true
     }
 

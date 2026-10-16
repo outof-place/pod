@@ -61,7 +61,7 @@ public struct SelftestReport: Codable, Equatable, Sendable {
     public let xcode: XcodeInfo?
     public let coreSimulator: FrameworkInfo?
     public let simulatorKit: FrameworkInfo?
-    /// The running macOS and its AccessibilityPlatformTranslation, which key `ax`.
+    /// The running macOS (information) and its AccessibilityPlatformTranslation, whose build keys `ax`.
     public var macOS: MacOSInfo? = nil
     public var accessibilityTranslation: FrameworkInfo? = nil
     /// Set when no usable Xcode, CoreSimulator or SimulatorKit was found.

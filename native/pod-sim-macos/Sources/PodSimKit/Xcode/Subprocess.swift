@@ -2,6 +2,9 @@ import Foundation
 
 /// A short-lived public tool (`xcode-select`, `xcrun simctl`) with a deadline.
 enum Subprocess {
+    /// How long a child that passed its timeout gets to end after SIGTERM.
+    static let terminateGrace: TimeInterval = 2
+
     struct Failure: Error, Sendable {
         let text: String
     }
@@ -51,7 +54,7 @@ enum Subprocess {
         }
         if exited.wait(timeout: .now() + timeout) == .timedOut {
             process.terminate()
-            _ = exited.wait(timeout: .now() + 2)
+            _ = exited.wait(timeout: .now() + terminateGrace)
             return .failure(Failure(text: "timed out after \(Int(timeout)) s"))
         }
         _ = readers.wait(timeout: .now() + 2)

@@ -33,7 +33,12 @@ export const SIM_HELPER_ERROR_CODES = [
   'notAttached',
   'writeFailed',
   'simctlFailed',
+  // Past the method's deadline. For hid the work may still have reached the device: read state
+  // (ax, a screenshot) before retrying. A hid still waiting in its device's queue was never sent.
   'timeout',
+  // The device's hid queue is full (16 calls running or waiting); nothing was sent. Coalesce touch
+  // moves, and resend a touch up, which a dropped one would leave the finger down.
+  'busy',
   'internal'
 ] as const
 export type SimHelperErrorCode = (typeof SIM_HELPER_ERROR_CODES)[number]
@@ -161,7 +166,8 @@ const Edge = z.enum(['left', 'right', 'top', 'bottom'])
  * 1000, swipe durationMs 300, drag pressMs 600 / durationMs 500 / releaseMs 200, pinch durationMs
  * 400, button holdMs 100); `touch` is one raw contact phase for a person's pointer (stage 8). Text
  * goes as US keys when it is printable ASCII (plus newline and tab) of at most 250 characters, else
- * through the device pasteboard and Cmd+V; `via` forces one. No action plans over 10 s.
+ * through the device pasteboard and Cmd+V; `via` forces one. No action plans over 8 s. A device's
+ * calls run one at a time in the order they arrive.
  */
 export const SimHelperHidAction = z.discriminatedUnion('kind', [
   z.object({
@@ -237,7 +243,7 @@ export const SimHelperHidResult = z.object({
   typed: z.number().int().optional(),
   // With waitForFrameMs: the first frame after the first event; absent when none came in time.
   frameAfterMs: z.number().optional(),
-  // A public fallback did the work instead of the private path, and why (none ships yet).
+  // A public fallback did the work instead of the private path: the version table's reason (none ships yet).
   degraded: z.string().optional(),
   // After a paste, iOS asks whether the app may paste (no `simctl privacy <udid> grant pasteboard
   // <bundle>` for it): the text lands once "Allow Paste", which `ax` lists, is tapped.
@@ -252,7 +258,15 @@ export const SimHelperHidResult = z.object({
  */
 export const SimHelperAxResult = z.object({
   udid: z.string(),
-  screen: z.object({ width: z.number(), height: z.number(), scale: z.number() }),
+  screen: z.object({
+    // Points in the app's orientation.
+    width: z.number(),
+    height: z.number(),
+    scale: z.number(),
+    // From the application element's size; absent when it fits neither way (a Slide Over window).
+    // hid refuses taps and gestures while a device's latest snapshot says landscape.
+    orientation: z.enum(['portrait', 'landscape']).optional()
+  }),
   app: z.object({ pid: z.number().int() }).optional(),
   nodes: z.array(SimNode),
   total: z.number().int(),
@@ -264,7 +278,10 @@ export const SimHelperAxResult = z.object({
   alertSuspected: z.boolean(),
   fingerprint: z.string(),
   ms: z.number().int(),
-  transport: z.enum(['bridge', 'coreSimulator'])
+  // `fallback`: a public driver read the tree (with `degraded`); none ships yet.
+  transport: z.enum(['bridge', 'coreSimulator', 'fallback']),
+  // A public fallback read the tree instead of the translator: the version table's reason.
+  degraded: z.string().optional()
 })
 export type SimHelperAxResult = z.infer<typeof SimHelperAxResult>
 
@@ -291,7 +308,8 @@ export const SIM_HELPER_METHODS = {
     params: z.object({
       udid: z.string(),
       action: SimHelperHidAction,
-      // 1 to 2000: report the first frame after the first event (input-to-damage), waiting this long.
+      // 1 to 2000: report the first frame after the first event (input-to-damage), waiting at most
+      // this long after it. Refused with text that goes in by paste.
       waitForFrameMs: z.number().int().optional()
     }),
     result: SimHelperHidResult
@@ -328,7 +346,7 @@ export const SIM_HELPER_DEADLINES_MS = {
   detachDisplay: 5_000,
   // The framebuffer read, else simctl io screenshot (6 s cap).
   screenshot: 8_000,
-  // Connecting (a 4 s liveness reply at most) plus an action of at most 10 s.
+  // Connecting (4.2 s at most), an action of at most 8 s or a paste, and the closing barrier (2 s).
   hid: 15_000,
   // A 2.5 s walk budget plus one request in flight.
   ax: 5_000

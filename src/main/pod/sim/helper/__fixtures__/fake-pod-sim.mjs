@@ -15,7 +15,8 @@
 //   noisy         writes junk and an oversized line on stdout before each reply
 //   hidHang       hid's private call never returns: the helper answers its own timeout after
 //                 `hidTimeoutMs` (default 400) while other calls go on being answered
-// `screenshotDelayMs` delays every screenshot answer (any mode).
+// `screenshotDelayMs` delays every screenshot answer (any mode). `hidLog` appends each hid call to
+// `<dir>/hid.log` as it arrives (`<kind> <phase> <x>`); `hidDelayFirstMs` holds the first hid answer.
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -50,6 +51,7 @@ const send = (frame) => {
 const error = (id, code, message) => send({ id, error: { code, message } })
 let authenticated = false
 let held = null
+let hidCalls = 0
 
 function screenshot(id, params) {
   if (mode === 'hang') {
@@ -119,14 +121,23 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       return
     }
     const kind = params.action.kind
-    return send({
-      id,
-      result: {
-        ...fixture.results[kind === 'text' ? 'hidText' : 'hidTap'],
-        udid: params.udid,
-        kind
-      }
-    })
+    if (config.hidLog) {
+      const x = params.action.points?.[0]?.x ?? params.action.x ?? ''
+      appendFileSync(join(dir, 'hid.log'), `${kind} ${params.action.phase ?? ''} ${x}\n`)
+    }
+    hidCalls += 1
+    const answer = () =>
+      send({
+        id,
+        result: {
+          ...fixture.results[kind === 'text' ? 'hidText' : 'hidTap'],
+          udid: params.udid,
+          kind
+        }
+      })
+    return hidCalls === 1 && config.hidDelayFirstMs
+      ? setTimeout(answer, config.hidDelayFirstMs)
+      : answer()
   }
   if (method === 'ax') {
     return send({ id, result: { ...fixture.results.ax, udid: params.udid } })

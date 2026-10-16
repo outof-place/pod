@@ -17,7 +17,7 @@ final class AXTranslatorBridge: NSObject, @unchecked Sendable {
         let transport: AXTransport
         let requestTimeout: TimeInterval
         private let lock = NSLock()
-        private var counts = (sent: 0, unanswered: 0)
+        private var counts = (sent: 0, unanswered: 0, nanos: UInt64(0))
 
         init(transport: AXTransport, requestTimeout: TimeInterval) {
             self.transport = transport
@@ -25,15 +25,20 @@ final class AXTranslatorBridge: NSObject, @unchecked Sendable {
         }
 
         func send(_ request: AnyObject) -> AnyObject? {
+            let started = DispatchTime.now().uptimeNanoseconds
             let response = transport.send(request, timeout: requestTimeout)
+            let took = DispatchTime.now().uptimeNanoseconds - started
             lock.withLock {
                 counts.sent += 1
+                counts.nanos += took
                 if response == nil { counts.unanswered += 1 }
             }
             return response
         }
 
         var sent: Int { lock.withLock { counts.sent } }
+        /// Time spent waiting on the transport (the round trips to the device), in ms.
+        var transportMs: Double { lock.withLock { Double(counts.nanos) / 1_000_000 } }
         var unanswered: Int { lock.withLock { counts.unanswered } }
     }
 

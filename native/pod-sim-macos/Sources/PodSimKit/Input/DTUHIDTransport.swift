@@ -9,6 +9,9 @@ final class DTUHIDTransport: @unchecked Sendable {
     static let service = "com.apple.coredevice.feature.remote.hid.digitizer"
     /// A connect-time liveness reply demand-launches `dtuhidd`; idb allows 4 s.
     static let livenessTimeout: TimeInterval = 4
+    /// After a fresh connect's first reply the device still opens its HID device: idb v1.7.2 waits
+    /// `DTUHIDTiming.replyTail` (200 ms) before the first event, so a cold first tap is not dropped.
+    static let replyTailMs: UInt32 = 200
 
     private var connection: xpc_connection_t?
     private let lock = NSLock()
@@ -31,6 +34,7 @@ final class DTUHIDTransport: @unchecked Sendable {
             transport.close()
             return .failure(HelperError(.failed, "dtuhidd in \(device.name) did not answer within \(Int(livenessTimeout)) s (the device may still be starting)"))
         }
+        usleep(replyTailMs * 1_000)
         return .success(transport)
     }
 

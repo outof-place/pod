@@ -168,6 +168,28 @@ struct InputPlanTests {
         }
     }
 
+    @Test("a running hid call ends inside its deadline on both routes, from the constants that bound each step")
+    func worstCaseFitsDeadline() throws {
+        let deadline = Double(try #require(HelperProtocol.deadlinesMs["hid"])) / 1_000
+        let worst = InputRun.worstCaseSeconds
+        #expect(worst.action < deadline, "connect, an action of plannedMaxMs and the barrier: \(worst.action) s")
+        #expect(worst.paste < deadline, "connect, pbcopy, the frontmost app, Cmd+V, the alert watch and the barrier: \(worst.paste) s")
+    }
+
+    @Test("waitForFrameMs with text that goes in by paste is refused before anything is looked up; typed text keeps it")
+    func pasteRefusesFrameWait() {
+        let methods = HelperMethods(environment: ["DEVELOPER_DIR": "/Applications/Xcode.app/Contents/Developer", "POD_SIM_FORCE_UNKNOWN_BUILD": "1"])
+        let udid = "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0"
+        func code(_ text: String) -> HelperErrorCode? {
+            let reply = methods.hid(Data(#"{"udid":"\#(udid)","waitForFrameMs":200,"action":{"kind":"text","text":"\#(text)"}}"#.utf8))
+            if case .error(let error) = reply { return error.code }
+            return nil
+        }
+        #expect(code("zażółć") == .badParams)
+        // Typed: past the params check, to the table's refusal (the build is forced unknown here).
+        #expect(code("hello") == .unsupported)
+    }
+
     @Test("simctl pbcopy reads UTF-8 whatever locale the helper started with (none from Finder, C, Latin-1)")
     func pasteboardLocale() {
         for base in [[:], ["LC_ALL": "C"], ["LANG": "pl_PL.ISO8859-2", "LC_ALL": "pl_PL.ISO8859-2"]] {

@@ -18,6 +18,7 @@
     "writeFailed",
     "simctlFailed",
     "timeout",
+    "busy",
     "internal"
   ],
   "methods": [
@@ -393,7 +394,7 @@
       },
       "fallbacks": { "screenshot": { "via": "simctl", "status": "ok", "ms": 382 } }
     },
-    "selftestAxUnknownMacOS": {
+    "selftestAxUnknownTranslator": {
       "protocol": 1,
       "helper": { "version": "0.1.0", "pid": 4246 },
       "xcode": {
@@ -431,7 +432,7 @@
         "ax": {
           "status": "unsupported",
           "checked": "table",
-          "reason": "macOS 26B5040e is not in the version table for ax"
+          "reason": "AccessibilityPlatformTranslation 601 is not in the version table for ax"
         }
       }
     },
@@ -458,7 +459,7 @@
     },
     "ax": {
       "udid": "01C2D240-07BE-4772-AB65-D00D78C451A0",
-      "screen": { "width": 402, "height": 874, "scale": 3 },
+      "screen": { "width": 402, "height": 874, "scale": 3, "orientation": "portrait" },
       "app": { "pid": 559 },
       "nodes": [
         {
@@ -505,6 +506,26 @@
       "fingerprint": "33ef18e57b51af54",
       "ms": 85,
       "transport": "bridge"
+    },
+    "hidDegraded": {
+      "udid": "01C2D240-07BE-4772-AB65-D00D78C451A0",
+      "kind": "tap",
+      "ms": 410,
+      "degraded": "hid: CoreSimulator 1200.1 with SimulatorKit 1050.3 is not in the version table"
+    },
+    "axDegraded": {
+      "udid": "01C2D240-07BE-4772-AB65-D00D78C451A0",
+      "screen": { "width": 402, "height": 874, "scale": 3 },
+      "nodes": [],
+      "total": 0,
+      "shown": 0,
+      "omitted": 0,
+      "notVisible": 0,
+      "alertSuspected": true,
+      "fingerprint": "e3b0c44298fc1c14",
+      "ms": 1290,
+      "transport": "fallback",
+      "degraded": "ax: AccessibilityPlatformTranslation 601 is not in the version table for ax"
     }
   }
 }

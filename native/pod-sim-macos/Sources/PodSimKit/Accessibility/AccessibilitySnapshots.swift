@@ -22,8 +22,11 @@ public struct AXSnapshotResult: Codable, Equatable, Sendable {
     /// Changes only when what is on screen changes (AXFingerprint); stage 2b's settle compares two.
     public let fingerprint: String
     public let ms: Int
-    /// Which path carried the requests: `bridge` (straight to the device) or `coreSimulator`.
+    /// Which path carried the requests: `bridge` (straight to the device), `coreSimulator`, or
+    /// `fallback` (a public driver, with `degraded`).
     public let transport: String
+    /// Set when a public fallback read the tree instead of the translator: the version table's reason.
+    public var degraded: String? = nil
 }
 
 /// Reads one device's tree under a time budget. Walks of different devices take turns on the
@@ -35,6 +38,13 @@ enum AccessibilitySnapshots {
     static let requestTimeout: TimeInterval = 1.5
 
     static func take(_ device: SimDeviceHandle, options: AXSnapshotOptions, hitTest: Bool) -> Result<AXSnapshotResult, HelperError> {
+        timed(device, options: options, hitTest: hitTest).map(\.result)
+    }
+
+    /// The snapshot and where its time went (for probes and tests; not on the wire).
+    static func timed(
+        _ device: SimDeviceHandle, options: AXSnapshotOptions, hitTest: Bool
+    ) -> Result<(result: AXSnapshotResult, timings: AXWalkTimings, requests: Int, transportMs: Double), HelperError> {
         let started = DispatchTime.now()
         let bridge: AXTranslatorBridge
         switch AXTranslatorBridge.shared() {
@@ -48,7 +58,7 @@ enum AccessibilitySnapshots {
         let walked = AXTranslatorBridge.queue.sync {
             AXTreeReader.walk(
                 bridge: bridge, token: token, screenPoints: deviceScreen.points,
-                limits: .init(deadline: started + .milliseconds(walkBudgetMs), hitTest: hitTest))
+                limits: .init(deadline: started + .milliseconds(walkBudgetMs), hitTest: hitTest, filter: options.filter))
         }
         // Nothing answered: the service may have gone (CoreSimulatorBridge restarts); connect again next time.
         if route.sent > 0, route.unanswered == route.sent { AXTransports.shared.discard(device.udid) }
@@ -57,26 +67,59 @@ enum AccessibilitySnapshots {
             return .failure(HelperError(error.code, "\(error.message) (\(route.unanswered) of \(route.sent) requests unanswered via \(transport.kind))"))
         case .success(let walk):
             // The application element spans the screen in the orientation the app is in.
-            let points = walk.rootFrame.flatMap { $0.width > 0 && $0.height > 0 ? $0.size : nil } ?? deviceScreen.points
-            let screen = AXScreen(width: Double(points.width), height: Double(points.height), scale: deviceScreen.scale)
+            let root = walk.rootFrame.flatMap { AXNormalizer.finite($0).size }.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
+            let points = root ?? deviceScreen.points
+            let orientation = root.flatMap { InterfaceOrientation.of(root: $0, native: deviceScreen.points) }
+            DeviceOrientations.shared.record(orientation, for: device)
+            let screen = AXScreen(
+                width: Double(points.width), height: Double(points.height), scale: deviceScreen.scale, orientation: orientation)
             let normalized = AXNormalizer.normalize(walk.elements, screen: screen, options: options)
             let ms = Int((DispatchTime.now().uptimeNanoseconds - started.uptimeNanoseconds) / 1_000_000)
-            return .success(AXSnapshotResult(
+            let result = AXSnapshotResult(
                 udid: device.udid, screen: screen, app: walk.appPid.map { AXSnapshotResult.App(pid: Int($0)) },
                 nodes: normalized.nodes, total: normalized.total, shown: normalized.shown, omitted: normalized.omitted,
                 notVisible: normalized.notVisible, alertSuspected: normalized.alertSuspected,
-                fingerprint: normalized.fingerprint, ms: ms, transport: transport.kind))
+                fingerprint: normalized.fingerprint, ms: ms, transport: transport.kind)
+            return .success((result, walk.timings, route.sent, route.transportMs))
         }
     }
 }
 
 extension AccessibilitySnapshots {
-    /// The frontmost application's pid, or nil when the translator does not answer within `timeout`.
+    /// The frontmost application's pid, or nil when it is not known within `timeout`, waiting for
+    /// the translator queue included (another device's walk may hold it for its whole budget).
     static func frontmostPid(_ device: SimDeviceHandle, timeout: TimeInterval) -> Int32? {
         guard case .success(let bridge) = AXTranslatorBridge.shared() else { return nil }
-        let (token, _) = bridge.register(AXTransports.shared.transport(for: device), requestTimeout: timeout)
-        defer { bridge.unregister(token) }
-        return AXTranslatorBridge.queue.sync { AXTreeReader.frontmostPid(bridge: bridge, token: token) }
+        let transport = AXTransports.shared.transport(for: device)
+        let answer = PidAnswer()
+        AXTranslatorBridge.queue.async {
+            guard !answer.abandoned else { return }
+            let (token, _) = bridge.register(transport, requestTimeout: timeout)
+            defer { bridge.unregister(token) }
+            answer.set(AXTreeReader.frontmostPid(bridge: bridge, token: token))
+        }
+        return answer.wait(timeout: timeout)
+    }
+}
+
+/// A pid read on the translator queue; a waiter that gave up stops a read that has not started.
+private final class PidAnswer: @unchecked Sendable {
+    private let lock = NSLock()
+    private let done = DispatchSemaphore(value: 0)
+    private var pid: Int32?
+    private var gaveUp = false
+
+    var abandoned: Bool { lock.withLock { gaveUp } }
+
+    func set(_ value: Int32?) {
+        lock.withLock { pid = value }
+        done.signal()
+    }
+
+    func wait(timeout: TimeInterval) -> Int32? {
+        if done.wait(timeout: .now() + timeout) == .success { return lock.withLock { pid } }
+        lock.withLock { gaveUp = true }
+        return nil
     }
 }
 

@@ -38,12 +38,16 @@ public struct VersionTable: Sendable {
     }
 
     /// `ax` also runs AccessibilityPlatformTranslation, which ships with macOS, not Xcode: it is
-    /// supported only where the row names it and a macOS build is listed for the same implementation.
+    /// supported only where the row names it and the translator's build is listed for the same
+    /// implementation. Keyed by the framework's own build, so a macOS update that leaves it alone
+    /// leaves `ax` on.
     public struct AccessibilityEntry: Codable, Equatable, Sendable {
         public let name: String
-        /// `ProductBuildVersion` of /System/Library/CoreServices/SystemVersion.plist.
-        public let macOS: String
+        /// CFBundleVersion of AccessibilityPlatformTranslation.framework.
+        public let translator: String
         public let ax: String
+        /// The macOS builds it was seen on: information, never a key.
+        public let macOS: String?
         public let verified: String?
     }
 
@@ -86,16 +90,16 @@ public struct VersionTable: Sendable {
     /// The override's rows replace rows for the same builds and come first; the rest stay.
     public func overlaid(by override: VersionTable) -> VersionTable {
         let replaced = Set(override.entries.map { "\($0.coreSimulator)|\($0.simulatorKit)" })
-        let replacedMacOS = Set(override.accessibility.map(\.macOS))
+        let replacedTranslators = Set(override.accessibility.map(\.translator))
         return VersionTable(
             entries: override.entries + entries.filter { !replaced.contains("\($0.coreSimulator)|\($0.simulatorKit)") },
-            accessibility: override.accessibility + accessibility.filter { !replacedMacOS.contains($0.macOS) })
+            accessibility: override.accessibility + accessibility.filter { !replacedTranslators.contains($0.translator) })
     }
 
-    /// `implemented`: the implementation names this binary has, per capability. `macOSBuild` decides
-    /// `ax` together with the row (AccessibilityEntry).
+    /// `implemented`: the implementation names this binary has, per capability. `translatorBuild`
+    /// decides `ax` together with the row (AccessibilityEntry).
     public func lookup(
-        _ builds: FrameworkBuilds, forcedUnknown: Bool, implemented: [Capability: Set<String>], macOSBuild: String? = nil
+        _ builds: FrameworkBuilds, forcedUnknown: Bool, implemented: [Capability: Set<String>], translatorBuild: String? = nil
     ) -> TableLookup {
         let entry = forcedUnknown
             ? nil
@@ -120,8 +124,13 @@ public struct VersionTable: Sendable {
             }
         }
         // Both halves must be known: the row's CoreSimulator side and this macOS's translator.
-        if case .implementation(let name) = verdicts[.ax], !accessibility.contains(where: { $0.macOS == macOSBuild && $0.ax == name }) {
-            verdicts[.ax] = .unsupported("macOS \(macOSBuild ?? "(build unknown)") is not in the version table for ax")
+        if case .implementation(let name) = verdicts[.ax] {
+            let translator = "AccessibilityPlatformTranslation \(translatorBuild ?? "(build unknown)")"
+            switch accessibility.first(where: { $0.translator == translatorBuild })?.ax {
+            case nil: verdicts[.ax] = .unsupported("\(translator) is not in the version table for ax")
+            case name?: break
+            case let other?: verdicts[.ax] = .unsupported("\(translator) is listed for ax \(other), not \(name)")
+            }
         }
         return TableLookup(entry: entry, verdicts: verdicts)
     }

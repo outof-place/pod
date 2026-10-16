@@ -1,7 +1,7 @@
 import Foundation
 
 /// Protocol v1 between Pod's runtime and pod-sim: newline-delimited JSON over the helper's stdio.
-/// Frozen for stages 2b and 3 in README.md and Fixtures/protocol-v1.json.
+/// Frozen for stages 2b, 3, 4, 7 and 8 in README.md and Fixtures/protocol-v1.json.
 public enum HelperProtocol {
     public static let version = 1
     /// Bytes before the newline, both directions.
@@ -33,7 +33,12 @@ public enum HelperErrorCode: String, CaseIterable, Codable, Sendable {
     case unsupported
     /// The table picked an implementation, and it failed here (a moved symbol, no surface).
     case failed
-    case deviceNotFound, deviceNotBooted, notAttached, writeFailed, simctlFailed, timeout, `internal`
+    case deviceNotFound, deviceNotBooted, notAttached, writeFailed, simctlFailed
+    /// Past the method's deadline: the work may still have reached the device (`hid`: read state before retrying).
+    case timeout
+    /// The device's `hid` lane is full (InputLanes.maxDepth); nothing was sent.
+    case busy
+    case `internal`
 }
 
 public struct HelperError: Error, Equatable, Sendable {

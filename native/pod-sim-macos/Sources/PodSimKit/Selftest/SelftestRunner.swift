@@ -40,7 +40,7 @@ public struct HelperContext: Sendable {
         let tableSource = VersionTableSource.load(overridePath: overridePath)
         let forcedUnknown = environment[VersionTable.forceUnknownEnvironmentKey] == "1"
         let lookup = facts.builds.map {
-            tableSource.table.lookup($0, forcedUnknown: forcedUnknown, implemented: SelftestRunner.implemented, macOSBuild: facts.macOS?.build)
+            tableSource.table.lookup($0, forcedUnknown: forcedUnknown, implemented: SelftestRunner.implemented, translatorBuild: facts.accessibilityTranslation?.build)
         }
         let picksAny = lookup?.verdicts.values.contains { if case .implementation = $0 { true } else { false } } ?? false
         return HelperContext(

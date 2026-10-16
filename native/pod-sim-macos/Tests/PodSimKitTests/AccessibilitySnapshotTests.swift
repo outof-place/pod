@@ -115,6 +115,66 @@ struct AccessibilitySnapshotTests {
         #expect(normalize(raw).nodes.map(\.label) == ["Shown"])
     }
 
+    @Test("a NaN or infinite frame from the translator becomes zero-size and not visible; the rest of the snapshot stands and encodes")
+    func nonFiniteFrame() throws {
+        var raw = AgendaFixture.raw
+        raw.append(AXRawElement(role: "AXButton", label: "Mid-animation", frame: CGRect(x: CGFloat.nan, y: 10, width: 100, height: 44)))
+        raw.append(AXRawElement(role: "AXButton", label: "Unbounded", frame: CGRect(x: 0, y: 0, width: CGFloat.infinity, height: 44)))
+        let result = normalize(raw, AXSnapshotOptions(maxNodes: 500, all: true))
+        let odd = result.nodes.filter { $0.label == "Mid-animation" || $0.label == "Unbounded" }
+        #expect(odd.map(\.visible) == [false, false])
+        #expect(odd.map(\.frame) == Array(repeating: AXRect(x: 0, y: 0, width: 0, height: 0), count: 2))
+        #expect(AgendaFixture.node("Start", in: result.nodes)?.visible == true)
+        _ = try WireJSON.encoder.encode(result.nodes)
+    }
+
+    @Test("only elements that could be listed are hit-tested: on screen, not hidden, and matching the filter")
+    func hitTestCandidates() {
+        let screenRect = CGRect(x: 0, y: 0, width: 402, height: 874)
+        let start = AXRawElement(role: "AXButton", label: "Start", frame: CGRect(x: 16, y: 786, width: 74, height: 62))
+        #expect(AXTreeReader.hitPoint(start, screen: screenRect, filter: nil) == CGPoint(x: 53, y: 817))
+        #expect(AXTreeReader.hitPoint(start, screen: screenRect, filter: "start") == CGPoint(x: 53, y: 817))
+        #expect(AXTreeReader.hitPoint(start, screen: screenRect, filter: "Bookings") == nil)
+        let tab = AXRawElement(role: "AXButton", label: "Tab", identifier: "tab-more", frame: CGRect(x: 312, y: 786, width: 74, height: 62))
+        #expect(AXTreeReader.hitPoint(tab, screen: screenRect, filter: "MORE") != nil)
+        var hidden = start
+        hidden.hidden = true
+        #expect(AXTreeReader.hitPoint(hidden, screen: screenRect, filter: nil) == nil)
+        let below = AXRawElement(role: "AXButton", label: "Cancel", frame: CGRect(x: 16, y: 1210, width: 370, height: 44))
+        #expect(AXTreeReader.hitPoint(below, screen: screenRect, filter: nil) == nil)
+        // Half off the bottom: the middle of the part that shows, where a tap would land.
+        let seeMore = AXRawElement(role: "AXButton", label: "See more", frame: CGRect(x: 32, y: 852, width: 338, height: 44))
+        #expect(AXTreeReader.hitPoint(seeMore, screen: screenRect, filter: nil) == CGPoint(x: 201, y: 863))
+    }
+
+    @Test("a hit test runs only where an element outside the node's own family spans its centre")
+    func hitTestOnlyPossibleCovers() {
+        let screenRect = CGRect(x: 0, y: 0, width: 402, height: 874)
+        let elements = [
+            AXRawElement(role: "AXApplication", frame: CGRect(x: 0, y: 0, width: 402, height: 874), depth: 0),
+            AXRawElement(role: "AXGroup", label: "List", frame: CGRect(x: 0, y: 100, width: 402, height: 700)),
+            AXRawElement(role: "AXButton", label: "Row", frame: CGRect(x: 16, y: 120, width: 370, height: 44), depth: 2),
+            AXRawElement(role: "AXButton", label: "Card", frame: CGRect(x: 32, y: 776, width: 338, height: 64), depth: 2),
+            AXRawElement(role: "AXGroup", label: "Tab bar", frame: CGRect(x: 0, y: 786, width: 402, height: 88)),
+            AXRawElement(role: "AXButton", label: "Start", frame: CGRect(x: 16, y: 786, width: 74, height: 62), depth: 2),
+            AXRawElement(role: "AXGroup", label: "Dimming", frame: CGRect(x: 0, y: 100, width: 402, height: 100), hidden: true),
+        ]
+        let parents = [-1, 0, 1, 1, 0, 4, 0]
+        let points = AXTreeReader.hitPoints(elements, parents: parents, screen: screenRect, filter: nil)
+        // The application, the list (only its own rows inside it), and a row inside its list (the
+        // hidden dimming view does not count) need none.
+        #expect(points[0] == nil)
+        #expect(points[1] == nil)
+        #expect(points[2] == nil)
+        // The card runs under the tab bar, and the tab bar and its Start tab overlap the card.
+        #expect(points[3] == CGPoint(x: 201, y: 808))
+        #expect(points[4] == CGPoint(x: 201, y: 830))
+        #expect(points[5] == CGPoint(x: 53, y: 817))
+        #expect(points[6] == nil)
+        let filtered = AXTreeReader.hitPoints(elements, parents: parents, screen: screenRect, filter: "card")
+        #expect(filtered.compactMap { $0 } == [CGPoint(x: 201, y: 808)])
+    }
+
     @Test("a node a hit test found covered (the card under the tab bar) is not offered")
     func coveredNotOffered() throws {
         var raw = AgendaFixture.raw

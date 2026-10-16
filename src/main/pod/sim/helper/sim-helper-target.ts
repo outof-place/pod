@@ -1,7 +1,9 @@
 // Fork-only (Pod): where a tap on a `sim.*` target lands, from one `ax` snapshot. Pure: the RPC
-// (stage 7) takes the snapshot with `all: true` and the target's text as `filter`, so off-screen
-// matches are in it and can be named in the refusal. A tap lands on a node's centre (the middle of
-// its on-screen part), never on its frame's origin, and only on a node the snapshot says is visible.
+// (stage 7) takes the snapshot with `all: true`, `maxNodes: SIM_STATE_MAX_NODES` and the target's
+// text as `filter`, so off-screen matches are in it and can be named in the refusal. A tap lands on a
+// node's centre (the middle of its on-screen part), never on its frame's origin, and only on a node
+// the snapshot says is visible. When the cap still cut nodes (`omitted`), a label that only matches
+// loosely is refused: the exact match that would win may be among the cut ones.
 import type { z } from 'zod'
 import type { SimRefusalInput } from '../../../../shared/pod-sim/sim-refusals'
 import type { SimNode } from '../../../../shared/pod-sim/sim-results'
@@ -24,7 +26,7 @@ export type SimTargetResolution =
   | { ok: false; refusal: ElementRefusal }
 
 export function resolveSimTarget(
-  snapshot: Pick<SimHelperAxResult, 'nodes' | 'screen'>,
+  snapshot: Pick<SimHelperAxResult, 'nodes' | 'screen' | 'omitted'>,
   target: Target
 ): SimTargetResolution {
   if (target.by === 'point') {
@@ -48,6 +50,15 @@ export function resolveSimTarget(
     return { ok: false, refusal: { code: 'element_not_found', query } }
   }
   const tappable = matches.filter((node) => node.visible)
+  if (snapshot.omitted > 0 && tiers[0]?.length === 0) {
+    const named = tappable.length >= 2 ? tappable : matches
+    return named.length >= 2
+      ? {
+          ok: false,
+          refusal: { code: 'element_ambiguous', query, indexes: named.map((each) => each.index) }
+        }
+      : { ok: false, refusal: { code: 'element_not_found', query } }
+  }
   const [node] = tappable
   if (!node) {
     return {

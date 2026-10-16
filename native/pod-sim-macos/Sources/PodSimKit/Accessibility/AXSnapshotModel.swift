@@ -77,10 +77,12 @@ public struct AXNode: Codable, Equatable, Sendable {
 }
 
 public struct AXScreen: Codable, Equatable, Sendable {
-    /// Device points.
+    /// Device points, in the app's orientation.
     public let width: Double
     public let height: Double
     public let scale: Double
+    /// Absent when the tree does not tell (InterfaceOrientation).
+    public var orientation: InterfaceOrientation? = nil
 }
 
 /// The output budget of the frozen contract (src/shared/pod-sim/sim-call-limits.ts).
@@ -127,13 +129,17 @@ public enum AXNormalizer {
     public static func normalize(_ raw: [AXRawElement], screen: AXScreen, options: AXSnapshotOptions) -> AXNormalized {
         let screenRect = CGRect(x: 0, y: 0, width: screen.width, height: screen.height)
         // The application element spans the screen and is never a target.
-        let elements = raw.filter { $0.role != "AXApplication" }
+        let elements = raw.filter { $0.role != "AXApplication" }.map { element in
+            var element = element
+            element.frame = finite(element.frame)
+            return element
+        }
         var all: [AXNode] = []
         all.reserveCapacity(elements.count)
         for (index, element) in elements.enumerated() {
             all.append(node(element, index: index, screen: screenRect))
         }
-        let matching = all.filter { node in options.filter.map { matches(node, elements[node.index], $0) } ?? true }
+        let matching = all.filter { node in options.filter.map { matches(elements[node.index], $0) } ?? true }
         let eligible = options.all ? matching : matching.filter(\.visible)
         let shown = Array(eligible.prefix(options.maxNodes))
         return AXNormalized(
@@ -165,7 +171,8 @@ public enum AXNormalizer {
             focused: element.focused)
     }
 
-    private static func matches(_ node: AXNode, _ element: AXRawElement, _ filter: String) -> Bool {
+    /// `filter` as the snapshot applies it (the walk hit-tests only these).
+    static func matches(_ element: AXRawElement, _ filter: String) -> Bool {
         [element.label, element.value, element.identifier].contains { text in
             text?.range(of: filter, options: [.caseInsensitive, .diacriticInsensitive]) != nil
         }
@@ -188,5 +195,11 @@ public enum AXNormalizer {
 
     static func rounded(_ value: CGFloat) -> Double {
         (Double(value) * 100).rounded() / 100
+    }
+
+    /// A frame with a NaN or infinite part (the translator passes on what the app reports) has no place on
+    /// screen: zero-size, so it is not visible, and it encodes, so the snapshot does not fail.
+    static func finite(_ frame: CGRect) -> CGRect {
+        [frame.origin.x, frame.origin.y, frame.size.width, frame.size.height].allSatisfy(\.isFinite) ? frame : .zero
     }
 }

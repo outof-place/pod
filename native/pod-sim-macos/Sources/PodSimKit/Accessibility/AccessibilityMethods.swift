@@ -1,7 +1,8 @@
 import Foundation
 
 /// A public driver's snapshot when the version table has no translator path for this build
-/// (pre-mortem triage 6). None ships yet; see `PublicInputFallback`.
+/// (pre-mortem triage 6). None ships yet; see `PublicInputFallback`. The seam marks what a fallback
+/// answers `degraded` with the table's reason.
 protocol PublicAccessibilityFallback: Sendable {
     func snapshot(udid: String, options: AXSnapshotOptions) -> Result<AXSnapshotResult, HelperError>
 }
@@ -23,7 +24,7 @@ struct AXParams: Decodable {
 }
 
 extension HelperMethods {
-    func ax(_ params: Data, fallback: PublicAccessibilityFallback = NoPublicAccessibilityFallback()) -> Reply {
+    func ax(_ params: Data) -> Reply {
         decode(AXParams.self, params) { params in
             guard UUID(uuidString: params.udid) != nil else { return .error(HelperError(.badParams, "udid is not a UUID")) }
             if let maxNodes = params.maxNodes, !(1...AXBudget.maxNodes).contains(maxNodes) {
@@ -36,7 +37,12 @@ extension HelperMethods {
             let taken: Result<AXSnapshotResult, HelperError>
             // Before any device lookup: with the table unknown CoreSimulator is not even loaded.
             if let refused = refusal(for: startupReport.capabilities.ax, .ax) {
-                taken = fallback.snapshot(udid: params.udid.uppercased(), options: options)
+                taken = accessibilityFallback.snapshot(udid: params.udid.uppercased(), options: options)
+                    .map { snapshot in
+                        var marked = snapshot
+                        marked.degraded = refused.message
+                        return marked
+                    }
                     .mapError { HelperError(refused.code, "\(refused.message); \($0.message)") }
             } else {
                 switch booted(params.udid.uppercased()) {

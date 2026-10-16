@@ -33,9 +33,10 @@ final class FrameWaiter: @unchecked Sendable {
         lock.withLock { armedAt = DispatchTime.now().uptimeNanoseconds }
     }
 
-    /// Milliseconds from `arm` to the first frame, waiting up to `limitMs` after the call; nil when none came.
+    /// Milliseconds from `arm` to the first frame, waiting until `limitMs` after `arm`; nil when none came.
     func wait(limitMs: Int) -> Double? {
-        _ = arrived.wait(timeout: .now() + .milliseconds(limitMs))
+        let armed = lock.withLock { armedAt } ?? DispatchTime.now().uptimeNanoseconds
+        _ = arrived.wait(timeout: DispatchTime(uptimeNanoseconds: armed + UInt64(limitMs) * 1_000_000))
         port.unregisterCallbacks(token: token)
         queue.sync {}
         return lock.withLock {

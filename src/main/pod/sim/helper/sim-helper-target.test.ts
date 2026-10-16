@@ -63,6 +63,7 @@ const zazolc = node(9, {
 })
 const snapshot = {
   screen,
+  omitted: 0,
   nodes: [start, search, zazolc, covered, seeMore, bartek, more, belowFold]
 }
 
@@ -106,7 +107,7 @@ describe('where a tap on a sim target lands', () => {
   it('prefers the visible one when the same label is also off screen', () => {
     const twin = { ...belowFold, index: 41, label: 'Start' }
     expect(
-      resolveSimTarget({ screen, nodes: [twin, start] }, { by: 'label', text: 'Start' })
+      resolveSimTarget({ screen, omitted: 0, nodes: [twin, start] }, { by: 'label', text: 'Start' })
     ).toMatchObject({ ok: true, point: { x: 53, y: 817 } })
   })
 
@@ -118,7 +119,10 @@ describe('where a tap on a sim target lands', () => {
       centre: { x: 153, y: 817 }
     }
     expect(
-      resolveSimTarget({ screen, nodes: [start, second] }, { by: 'label', text: 'Start' })
+      resolveSimTarget(
+        { screen, omitted: 0, nodes: [start, second] },
+        { by: 'label', text: 'Start' }
+      )
     ).toEqual({
       ok: false,
       refusal: {
@@ -169,6 +173,47 @@ describe('where a tap on a sim target lands', () => {
       ok: false,
       refusal: { code: 'element_not_found', query: { by: 'index', text: '99' } }
     })
+  })
+
+  it('with nodes cut by the cap, refuses a label that matches only loosely: the exact one may be cut', () => {
+    const capped = { ...snapshot, omitted: 12 }
+    // "more" is only inside "See more" here; the cut nodes may hold a "More" tab, which would win.
+    const onlyLoose = { ...capped, nodes: [start, seeMore] }
+    expect(resolveSimTarget(onlyLoose, { by: 'label', text: 'more' })).toEqual({
+      ok: false,
+      refusal: { code: 'element_not_found', query: { by: 'label', text: 'more' } }
+    })
+    expect(
+      resolveSimTarget({ ...onlyLoose, omitted: 0 }, { by: 'label', text: 'more' })
+    ).toMatchObject({ ok: true, resolved: { index: 16 } })
+    const reports = node(17, {
+      label: 'See more reports',
+      frame: { x: 16, y: 700, width: 370, height: 44 },
+      centre: { x: 201, y: 722 }
+    })
+    expect(
+      resolveSimTarget({ ...capped, nodes: [seeMore, reports] }, { by: 'label', text: 'more' })
+    ).toEqual({
+      ok: false,
+      refusal: {
+        code: 'element_ambiguous',
+        query: { by: 'label', text: 'more' },
+        indexes: [16, 17]
+      }
+    })
+  })
+
+  it('with nodes cut by the cap, still taps an exact label, id or index it has', () => {
+    const capped = { ...snapshot, omitted: 12 }
+    expect(resolveSimTarget(capped, { by: 'label', text: 'More' })).toMatchObject({
+      ok: true,
+      resolved: { index: 30 }
+    })
+    expect(resolveSimTarget(capped, { by: 'id', text: 'agenda-search' })).toMatchObject({
+      ok: true,
+      point: { x: 201, y: 82 }
+    })
+    expect(resolveSimTarget(capped, { by: 'index', index: 4 })).toMatchObject({ ok: true })
   })
 
   it('passes a point through for the helper to check', () => {

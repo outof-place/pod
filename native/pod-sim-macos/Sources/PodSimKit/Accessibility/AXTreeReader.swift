@@ -9,11 +9,23 @@ struct AXWalk {
     /// Points the root reports for the screen (the application element spans it).
     var rootFrame: CGRect?
     var requests: Int
+    var timings = AXWalkTimings()
+}
+
+/// Where one snapshot's time went, per phase: each translator call costs at least one round trip to
+/// the device's accessibility server.
+struct AXWalkTimings: Equatable {
+    var frontmostMs = 0.0
+    var attributeCalls = 0
+    var attributesMs = 0.0
+    var hitTests = 0
+    var hitTestsMs = 0.0
 }
 
 /// Reads the frontmost application's tree through the translator: one batched attribute request per
-/// element (`accessibilityMultipleAttributes:`, as idb v1.7.2 `AXElementSnapshot` reads), then one hit
-/// test per on-screen element so a covered one is not offered as tappable. Runs on the translator queue.
+/// element (`accessibilityMultipleAttributes:`, as idb v1.7.2 `AXElementSnapshot` reads), then a hit
+/// test where an element may be covered (`hitPoints`) so a covered one is not offered as tappable.
+/// Runs on the translator queue.
 enum AXTreeReader {
     static let attributeNames = ["AXFrame", "AXRole", "AXDescription", "AXValue", "AXIdentifier", "AXEnabled", "AXFocused", "AXHidden", "AXTraits", "AXChildren"]
     static let maxElements = 2_000
@@ -22,6 +34,9 @@ enum AXTreeReader {
     struct Limits {
         var deadline: DispatchTime
         var hitTest: Bool
+        /// With a filter only the elements it matches are hit-tested: the others are never listed,
+        /// and covering changes nothing the fingerprint reads.
+        var filter: String? = nil
     }
 
     private final class Node {
@@ -42,6 +57,13 @@ enum AXTreeReader {
     static func walk(bridge: AXTranslatorBridge, token: String, screenPoints: CGSize, limits: Limits) -> Result<AXWalk, HelperError> {
         guard let translator = bridge.translator else { return .failure(HelperError(.failed, "the translator is not loaded")) }
         return ObjCGuard.attempt("accessibility walk") { () -> Result<AXWalk, HelperError> in
+            var timings = AXWalkTimings()
+            var phaseStart = DispatchTime.now()
+            func phaseMs() -> Double {
+                let now = DispatchTime.now()
+                defer { phaseStart = now }
+                return Double(now.uptimeNanoseconds - phaseStart.uptimeNanoseconds) / 1_000_000
+            }
             typealias Front = @convention(c) (AnyObject, Selector, UInt32, NSString) -> AnyObject?
             let frontSelector = NSSelectorFromString("frontmostApplicationWithDisplayId:bridgeDelegateToken:")
             let front = unsafeBitCast(translator.method(for: frontSelector), to: Front.self)
@@ -72,9 +94,12 @@ enum AXTreeReader {
                 }
                 return true
             }
+            timings.frontmostMs = phaseMs()
             guard visit(root, depth: 0, parent: nil) else {
                 return .failure(HelperError(.failed, "the accessibility walk passed its time budget after \(nodes.count) elements"))
             }
+            timings.attributeCalls = nodes.count
+            timings.attributesMs = phaseMs()
             // Each element's own id plus its descendants' and ancestors': a hit on any of them lands on
             // it (a container answers for children that are not hit-testable themselves).
             for index in nodes.indices.reversed() {
@@ -86,20 +111,59 @@ enum AXTreeReader {
                 nodes[index].ancestors = parent.ancestors.union(parent.objectID.map { [$0] } ?? [])
             }
             let appPid = nodes.first?.pid
-            let screen = CGRect(origin: .zero, size: screenPoints)
+            // The application element spans the screen in the app's orientation, the frames' space.
+            let rootSize = nodes.first.map { AXNormalizer.finite($0.raw.frame).size }.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
+            let screen = CGRect(origin: .zero, size: rootSize ?? screenPoints)
             if limits.hitTest {
-                for node in nodes.dropFirst() where !node.raw.hidden {
-                    let visiblePart = node.raw.frame.standardized.intersection(screen)
-                    guard !visiblePart.isNull, visiblePart.width >= 1, visiblePart.height >= 1 else { continue }
+                let points = hitPoints(nodes.map(\.raw), parents: parents, screen: screen, filter: limits.filter)
+                for (node, point) in zip(nodes, points) {
+                    guard let point else { continue }
                     if DispatchTime.now() > limits.deadline { break }
-                    let hit = hitTest(CGPoint(x: visiblePart.midX, y: visiblePart.midY), translator: translator, token: token)
+                    let hit = hitTest(point, translator: translator, token: token)
                     requests += 1
+                    timings.hitTests += 1
                     if let hit { node.raw.hitsItself = lands(hit, on: node, root: nodes.first?.objectID) }
                 }
             }
+            timings.hitTestsMs = phaseMs()
             return .success(AXWalk(
-                elements: nodes.map(\.raw), appPid: appPid, rootFrame: nodes.first?.raw.frame, requests: requests))
+                elements: nodes.map(\.raw), appPid: appPid, rootFrame: nodes.first?.raw.frame, requests: requests, timings: timings))
         }.flatMap { $0 }
+    }
+
+    /// Where to hit-test each element (index 0 is the application), or nil where the answer could
+    /// change nothing: the element is not listed (hidden, off screen, outside the filter), or no other
+    /// element of the walk outside its own ancestors and descendants spans that point, so a hit could
+    /// only land on its own family. Each hit test is a round trip to the device (about 4 ms in
+    /// Settings on iOS 26.5), so testing only where something may cover saves most of them.
+    static func hitPoints(_ elements: [AXRawElement], parents: [Int], screen: CGRect, filter: String?) -> [CGPoint?] {
+        func isAncestor(_ ancestor: Int, of index: Int) -> Bool {
+            var at = parents[index]
+            while at >= 0 {
+                if at == ancestor { return true }
+                at = parents[at]
+            }
+            return false
+        }
+        let frames = elements.map { AXNormalizer.finite($0.frame).standardized }
+        return elements.indices.map { index in
+            guard index > 0, let point = hitPoint(elements[index], screen: screen, filter: filter) else { return nil }
+            let mayCover = elements.indices.contains { other in
+                other > 0 && other != index && !elements[other].hidden && frames[other].width > 0 && frames[other].height > 0
+                    && frames[other].contains(point) && !isAncestor(other, of: index) && !isAncestor(index, of: other)
+            }
+            return mayCover ? point : nil
+        }
+    }
+
+    /// The middle of an element's on-screen part, as its centre, when it could be listed: not hidden,
+    /// on screen, matching the filter.
+    static func hitPoint(_ element: AXRawElement, screen: CGRect, filter: String?) -> CGPoint? {
+        guard !element.hidden else { return nil }
+        if let filter, !AXNormalizer.matches(element, filter) { return nil }
+        let visiblePart = AXNormalizer.finite(element.frame).standardized.intersection(screen)
+        guard !visiblePart.isNull, visiblePart.width >= 1, visiblePart.height >= 1 else { return nil }
+        return CGPoint(x: visiblePart.midX, y: visiblePart.midY)
     }
 
     /// The frontmost application's process: one request, for callers that only need to know whether

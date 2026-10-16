@@ -47,11 +47,13 @@ describe('pod-sim protocol v1 as the runtime reads it', () => {
     ['screenshot', SIM_HELPER_METHODS.screenshot.result],
     ['screenshotSimctl', SIM_HELPER_METHODS.screenshot.result],
     ['selftestInput', SimHelperReport],
-    ['selftestAxUnknownMacOS', SimHelperReport],
+    ['selftestAxUnknownTranslator', SimHelperReport],
     ['hidTap', SIM_HELPER_METHODS.hid.result],
     ['hidText', SIM_HELPER_METHODS.hid.result],
     ['hidPasteAlert', SIM_HELPER_METHODS.hid.result],
-    ['ax', SIM_HELPER_METHODS.ax.result]
+    ['hidDegraded', SIM_HELPER_METHODS.hid.result],
+    ['ax', SIM_HELPER_METHODS.ax.result],
+    ['axDegraded', SIM_HELPER_METHODS.ax.result]
   ] as const)('keeps every key of the fixture result %s, optional ones too', (key, schema) => {
     // zod drops keys it does not know, so a key only one side has fails here.
     expect(schema.parse(fixture.results[key])).toEqual(fixture.results[key])
@@ -74,9 +76,9 @@ describe('pod-sim protocol v1 as the runtime reads it', () => {
     const input = SimHelperReport.parse(fixture.results.selftestInput)
     expect([input.capabilities.hid.status, input.capabilities.ax.status]).toEqual(['ok', 'ok'])
     expect(input.macOS?.build).toBe('26A434')
-    // ax is keyed by the macOS build too: a new macOS turns ax alone unsupported.
-    const newMacOS = SimHelperReport.parse(fixture.results.selftestAxUnknownMacOS)
-    expect([newMacOS.capabilities.hid.status, newMacOS.capabilities.ax.status]).toEqual([
+    // ax is keyed by the translator's build too: an unlisted one turns ax alone unsupported.
+    const newTranslator = SimHelperReport.parse(fixture.results.selftestAxUnknownTranslator)
+    expect([newTranslator.capabilities.hid.status, newTranslator.capabilities.ax.status]).toEqual([
       'ok',
       'unsupported'
     ])
@@ -84,6 +86,8 @@ describe('pod-sim protocol v1 as the runtime reads it', () => {
     const ax = SIM_HELPER_METHODS.ax.result.parse(fixture.results.ax)
     expect(ax.nodes.map((node) => node.label)).toEqual(['Search bookings', 'October', 'More'])
     expect(ax.shown + ax.omitted).toBe(ax.total)
+    expect(ax.screen.orientation).toBe('portrait')
+    expect(SIM_HELPER_METHODS.ax.result.parse(fixture.results.axDegraded).degraded).toMatch(/^ax: /)
   })
 
   it('keeps every hid action the helper decodes', () => {

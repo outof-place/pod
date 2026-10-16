@@ -13,6 +13,7 @@ protocol AXTransport: AnyObject, Sendable {
     var kind: String { get }
     var brokenReason: String? { get }
     func send(_ request: AnyObject, timeout: TimeInterval) -> AnyObject?
+    func close()
 }
 
 final class AXBridgeTransport: AXTransport, @unchecked Sendable {
@@ -95,6 +96,9 @@ final class AXCoreSimulatorTransport: AXTransport, @unchecked Sendable {
         self.device = device
     }
 
+    /// Nothing of its own to close: CoreSimulator's client owns the connection.
+    func close() {}
+
     func send(_ request: AnyObject, timeout: TimeInterval) -> AnyObject? {
         let answered = DispatchSemaphore(value: 0)
         let box = ObjectBox()
@@ -115,30 +119,51 @@ final class AXCoreSimulatorTransport: AXTransport, @unchecked Sendable {
 
 /// One transport per device, kept while its device object and connection last.
 final class AXTransports: @unchecked Sendable {
-    static let shared = AXTransports()
+    static let shared = AXTransports(connect: AXTransports.connect)
 
+    private let connect: @Sendable (SimDeviceHandle) -> AXTransport
     private let lock = NSLock()
     private var byDevice: [String: (device: NSObject, transport: AXTransport)] = [:]
 
-    func transport(for device: SimDeviceHandle) -> AXTransport {
-        if let kept = lock.withLock({ byDevice[device.udid] }), kept.device === device.object, kept.transport.brokenReason == nil {
-            return kept.transport
-        }
-        let made: AXTransport
+    init(connect: @escaping @Sendable (SimDeviceHandle) -> AXTransport) {
+        self.connect = connect
+    }
+
+    /// The bridge when the device's service connects; CoreSimulator's client otherwise.
+    private static func connect(_ device: SimDeviceHandle) -> AXTransport {
         switch AXBridgeTransport.connect(device) {
-        case .success(let bridge): made = bridge
+        case .success(let bridge): return bridge
         case .failure(let error):
             HelperLog.note("ax \(device.udid): \(error.message); using CoreSimulator's client")
-            made = AXCoreSimulatorTransport(device: device.object)
+            return AXCoreSimulatorTransport(device: device.object)
         }
-        lock.withLock { byDevice[device.udid] = (device.object, made) }
-        return made
+    }
+
+    func transport(for device: SimDeviceHandle) -> AXTransport {
+        if let kept = lock.withLock({ usable(device) }) { return kept }
+        // Connecting runs outside the lock; when two calls race, the first one stored wins and the
+        // other's connection is closed, not leaked.
+        let made = connect(device)
+        let (chosen, dropped) = lock.withLock { () -> (AXTransport, AXTransport?) in
+            if let kept = usable(device) { return (kept, made) }
+            let replaced = byDevice[device.udid]?.transport
+            byDevice[device.udid] = (device.object, made)
+            return (made, replaced)
+        }
+        dropped?.close()
+        return chosen
+    }
+
+    /// Under the lock: the kept transport when it is this boot's and not broken.
+    private func usable(_ device: SimDeviceHandle) -> AXTransport? {
+        guard let kept = byDevice[device.udid], kept.device === device.object, kept.transport.brokenReason == nil else { return nil }
+        return kept.transport
     }
 
     /// After a walk whose requests went unanswered: the next one connects again.
     func discard(_ udid: String) {
         let gone = lock.withLock { byDevice.removeValue(forKey: udid) }
-        (gone?.transport as? AXBridgeTransport)?.close()
+        gone?.transport.close()
     }
 }
 

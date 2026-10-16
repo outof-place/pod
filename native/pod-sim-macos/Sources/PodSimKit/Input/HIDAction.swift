@@ -74,8 +74,9 @@ public enum HIDLimits {
     public static let keysTextMaxChars = 250
     /// The frozen contract's `SIM_TYPE_MAX_CHARS`.
     public static let pasteTextMaxChars = 4096
-    /// No action may plan more time than this: `hid`'s deadline covers it plus connecting.
-    public static let plannedMaxMs = 10_000
+    /// No action may plan more time than this: with connecting (4.2 s at most) and the closing
+    /// barrier (2 s) it ends inside `hid`'s 15 s deadline.
+    public static let plannedMaxMs = 8_000
 }
 
 /// `hid`'s params as they arrive on the wire.

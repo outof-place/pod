@@ -12,16 +12,22 @@ final class DeadlineDispatcher: @unchecked Sendable {
     }
 
     func run(_ method: String, deadlineMs: Int, _ body: @escaping @Sendable () -> Reply, reply: @escaping @Sendable (Reply) -> Void) {
-        let once = OnceReply(reply)
+        let call = start(method, deadlineMs: deadlineMs, reply: reply)
+        work.async { call.finish(body()) }
+    }
+
+    /// Starts the deadline clock now, for a caller that runs the work on its own queue.
+    func start(_ method: String, deadlineMs: Int, reply: @escaping @Sendable (Reply) -> Void) -> DeadlineCall {
+        let call = DeadlineCall(reply)
         timers.asyncAfter(deadline: .now() + .milliseconds(deadlineMs)) {
-            once.send(.error(HelperError(.timeout, "\(method) passed its \(deadlineMs) ms deadline in the helper")))
+            call.finish(.error(HelperError(.timeout, "\(method) passed its \(deadlineMs) ms deadline in the helper")))
         }
-        work.async { once.send(body()) }
+        return call
     }
 }
 
-/// The first answer goes out; a later one is dropped.
-private final class OnceReply: @unchecked Sendable {
+/// One call's answer: the first one goes out, a later one is dropped.
+final class DeadlineCall: @unchecked Sendable {
     private let lock = NSLock()
     private var reply: (@Sendable (Reply) -> Void)?
 
@@ -29,7 +35,10 @@ private final class OnceReply: @unchecked Sendable {
         self.reply = reply
     }
 
-    func send(_ outcome: Reply) {
+    /// True once an answer went out (the work's, or the deadline's `timeout`).
+    var answered: Bool { lock.withLock { reply == nil } }
+
+    func finish(_ outcome: Reply) {
         let first = lock.withLock { () -> (@Sendable (Reply) -> Void)? in
             defer { reply = nil }
             return reply

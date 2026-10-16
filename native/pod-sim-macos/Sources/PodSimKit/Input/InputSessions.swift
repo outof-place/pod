@@ -2,15 +2,14 @@ import Foundation
 
 /// One warm DTUHID connection per device, so a tap costs its events and not a connect (stage 0: the
 /// liveness barrier answers in milliseconds once the daemon runs, and up to seconds while it starts).
-/// Each device has its own serial queue: events of one gesture never interleave with another's, and
-/// a device whose connection hangs holds only its own queue.
+/// Sends come only from the device's `hid` lane (InputLanes), so one gesture's events never
+/// interleave with another's, and a device whose connection hangs holds only its own lane.
 final class InputSessions: @unchecked Sendable {
     static let shared = InputSessions()
 
     final class Session: @unchecked Sendable {
         let udid: String
         let transport: DTUHIDTransport
-        let queue: DispatchQueue
         /// The device object the connection was made from; a reboot hands out another.
         let device: NSObject
 
@@ -18,7 +17,6 @@ final class InputSessions: @unchecked Sendable {
             self.udid = udid
             self.transport = transport
             self.device = device
-            queue = DispatchQueue(label: "pod-sim.input.\(udid)", qos: .userInteractive)
         }
     }
 
@@ -68,26 +66,24 @@ final class InputSessions: @unchecked Sendable {
         session.transport.close()
     }
 
-    /// Sends the steps in order on the session's queue, waiting between them.
+    /// Sends the steps in order, waiting between them.
     func run(_ steps: [HIDStep], on session: Session, onFirstSend: (() -> Void)? = nil) -> Result<Void, HelperError> {
-        session.queue.sync {
-            var first = true
-            for step in steps {
-                switch step {
-                case .wait(let ms):
-                    if ms > 0 { usleep(useconds_t(ms * 1_000)) }
-                case .send(let event):
-                    if let broken = session.transport.brokenReason {
-                        return .failure(HelperError(.failed, "\(broken) while sending to \(session.udid)"))
-                    }
-                    session.transport.send(event)
-                    if first {
-                        first = false
-                        onFirstSend?()
-                    }
+        var first = true
+        for step in steps {
+            switch step {
+            case .wait(let ms):
+                if ms > 0 { usleep(useconds_t(ms * 1_000)) }
+            case .send(let event):
+                if let broken = session.transport.brokenReason {
+                    return .failure(HelperError(.failed, "\(broken) while sending to \(session.udid)"))
+                }
+                session.transport.send(event)
+                if first {
+                    first = false
+                    onFirstSend?()
                 }
             }
-            return .success(())
         }
+        return .success(())
     }
 }

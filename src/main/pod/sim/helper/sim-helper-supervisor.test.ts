@@ -22,6 +22,8 @@ type FakeConfig = {
   liveMs?: number
   screenshotDelayMs?: number
   hidTimeoutMs?: number
+  hidLog?: boolean
+  hidDelayFirstMs?: number
 }
 
 function harness(config: string | FakeConfig, options: Partial<SimHelperSupervisorOptions> = {}) {
@@ -64,7 +66,7 @@ function harness(config: string | FakeConfig, options: Partial<SimHelperSupervis
   }
   const envOf = (spawn: number): Record<string, string> =>
     JSON.parse(readFileSync(join(dir, `env-${spawn}.json`), 'utf8'))
-  return { supervisor, states, spawns, envOf, binary }
+  return { supervisor, states, spawns, envOf, binary, dir }
 }
 
 // Generous: each fake spawn is a Node start, slow on a loaded machine.
@@ -153,6 +155,31 @@ describe('pod-sim helper supervisor', () => {
     expect(tap).toMatchObject({ ok: true, value: { udid: UDID, kind: 'tap' } })
     const ax = await supervisor.call('ax', { udid: UDID, filter: 'more' })
     expect(ax.ok && ax.value.nodes.map((node) => node.centre)).toContainEqual({ x: 349, y: 817 })
+  })
+
+  it('pipelined touch calls reach the helper in the order they were made, before it is ready and after', async () => {
+    const { supervisor, dir } = harness({ mode: 'ok', hidLog: true, hidDelayFirstMs: 200 })
+    const stream = (from: number) =>
+      (['down', 'move', 'move', 'up'] as const).map((phase, offset) =>
+        supervisor.call('hid', {
+          udid: UDID,
+          action: { kind: 'touch', phase, points: [{ x: from + offset, y: 20 }] }
+        })
+      )
+    // Made while the helper starts: they wait for hello, then go out without waiting for answers.
+    const starting = await Promise.all(stream(10))
+    const ready = await Promise.all(stream(20))
+    expect([...starting, ...ready].every((result) => result.ok)).toBe(true)
+    expect(readFileSync(join(dir, 'hid.log'), 'utf8').trim().split('\n')).toEqual([
+      'touch down 10',
+      'touch move 11',
+      'touch move 12',
+      'touch up 13',
+      'touch down 20',
+      'touch move 21',
+      'touch move 22',
+      'touch up 23'
+    ])
   })
 
   it('a hung hid on one device does not hold back a screenshot of another, and ends at the helper timeout without a restart', async () => {
