@@ -127,6 +127,7 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
     sections: [
       { title: 'Launch', keys: ['agentCmdOverrides', 'agentDefaultArgs'] },
       { title: 'Prompt cache', keys: ['promptCacheTimerEnabled', 'promptCacheTtlMs'] },
+      { title: 'Orchestration', keys: ['nestedWorkerMaxDepth'] },
       { title: 'Codex', keys: ['codexSessionSourceHome'] }
     ]
   },
