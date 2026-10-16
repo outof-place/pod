@@ -195,6 +195,9 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/orcad/orcad-local-serve-selection.test.ts',
   'src/main/orcad/serve-profile-ssh-targets.test.ts',
   'src/main/pi/rpc-launch-resolution.test.ts',
+  // Fork-only (Pod): settings stores on the persistence test harness.
+  'src/main/pod/settings/pod-settings-store.test.ts',
+  'src/main/pod/ssh/pod-ssh-target-settings-store.test.ts',
   'src/main/runtime/agent-session-conversation-clear-commit.test.ts',
   'src/main/runtime/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/agent-session-death-evidence-persistence.test.ts',
