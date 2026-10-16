@@ -1,0 +1,325 @@
+[
+  {
+    "name": "an agent whose claude still runs with the same start",
+    "holder": {
+      "kind": "agent",
+      "id": "agent:claude:41233:1760600000",
+      "agent": "claude",
+      "pid": 41233,
+      "startedAt": 1760600000
+    },
+    "facts": {
+      "process": {
+        "found": true,
+        "startedAt": 1760600000
+      },
+      "session": "notServedHere",
+      "terminal": "notServedHere"
+    },
+    "liveness": "live"
+  },
+  {
+    "name": "an agent whose start reads 2 s off (claude-acc's tolerance)",
+    "holder": {
+      "kind": "agent",
+      "id": "agent:claude:41233:1760600000",
+      "agent": "claude",
+      "pid": 41233,
+      "startedAt": 1760600000
+    },
+    "facts": {
+      "process": {
+        "found": true,
+        "startedAt": 1760600002
+      },
+      "session": "notServedHere",
+      "terminal": "notServedHere"
+    },
+    "liveness": "live"
+  },
+  {
+    "name": "an agent whose pid now belongs to another process (start 3 s off): exited from either runtime",
+    "holder": {
+      "kind": "agent",
+      "id": "agent:claude:41233:1760600000",
+      "agent": "claude",
+      "pid": 41233,
+      "startedAt": 1760600000
+    },
+    "facts": {
+      "process": {
+        "found": true,
+        "startedAt": 1760600003
+      },
+      "session": "notServedHere",
+      "terminal": "notServedHere"
+    },
+    "liveness": "exited"
+  },
+  {
+    "name": "an agent whose pid runs nothing",
+    "holder": {
+      "kind": "agent",
+      "id": "agent:claude:41233:1760600000",
+      "agent": "claude",
+      "pid": 41233,
+      "startedAt": 1760600000
+    },
+    "facts": {
+      "process": {
+        "found": false
+      },
+      "session": "notServedHere",
+      "terminal": "notServedHere"
+    },
+    "liveness": "exited"
+  },
+  {
+    "name": "an agent whose pid lookup failed: loss of contact, not death",
+    "holder": {
+      "kind": "agent",
+      "id": "agent:claude:41233:1760600000",
+      "agent": "claude",
+      "pid": 41233,
+      "startedAt": 1760600000
+    },
+    "facts": {
+      "process": "unknown",
+      "session": "notServedHere",
+      "terminal": "notServedHere"
+    },
+    "liveness": "unverifiable"
+  },
+  {
+    "name": "an agent served by the other runtime: pid plus start reads the same from any runtime",
+    "holder": {
+      "kind": "agent",
+      "id": "agent:claude:41233:1760600000",
+      "agent": "claude",
+      "pid": 41233,
+      "startedAt": 1760600000
+    },
+    "facts": {
+      "process": {
+        "found": false
+      },
+      "session": "notServedHere",
+      "terminal": "notServedHere"
+    },
+    "liveness": "exited"
+  },
+  {
+    "name": "a process holder still running",
+    "holder": {
+      "kind": "process",
+      "id": "process:52001:1760600100",
+      "pid": 52001,
+      "startedAt": 1760600100
+    },
+    "facts": {
+      "process": {
+        "found": true,
+        "startedAt": 1760600100
+      },
+      "session": "notServedHere",
+      "terminal": "notServedHere"
+    },
+    "liveness": "live"
+  },
+  {
+    "name": "a process holder gone",
+    "holder": {
+      "kind": "process",
+      "id": "process:52001:1760600100",
+      "pid": 52001,
+      "startedAt": 1760600100
+    },
+    "facts": {
+      "process": {
+        "found": false
+      },
+      "session": "notServedHere",
+      "terminal": "notServedHere"
+    },
+    "liveness": "exited"
+  },
+  {
+    "name": "a process holder whose pid was reused",
+    "holder": {
+      "kind": "process",
+      "id": "process:52001:1760600100",
+      "pid": 52001,
+      "startedAt": 1760600100
+    },
+    "facts": {
+      "process": {
+        "found": true,
+        "startedAt": 1760609999
+      },
+      "session": "notServedHere",
+      "terminal": "notServedHere"
+    },
+    "liveness": "exited"
+  },
+  {
+    "name": "a process holder whose lookup failed",
+    "holder": {
+      "kind": "process",
+      "id": "process:52001:1760600100",
+      "pid": 52001,
+      "startedAt": 1760600100
+    },
+    "facts": {
+      "process": "unknown",
+      "session": "notServedHere",
+      "terminal": "notServedHere"
+    },
+    "liveness": "unverifiable"
+  },
+  {
+    "name": "an agent session served by the other runtime, which has its panes and sessions",
+    "holder": {
+      "kind": "agentSession",
+      "id": "session:8c1f4d2e",
+      "sessionId": "8c1f4d2e",
+      "agent": "codex"
+    },
+    "facts": {
+      "process": "unknown",
+      "session": "notServedHere",
+      "terminal": "notServedHere"
+    },
+    "liveness": "unverifiable"
+  },
+  {
+    "name": "an agent session right after this runtime restarted, its status store still empty",
+    "holder": {
+      "kind": "agentSession",
+      "id": "session:8c1f4d2e",
+      "sessionId": "8c1f4d2e",
+      "agent": "codex"
+    },
+    "facts": {
+      "process": "unknown",
+      "session": "storeWarming",
+      "terminal": "notServedHere"
+    },
+    "liveness": "unverifiable"
+  },
+  {
+    "name": "an agent session the status store lists",
+    "holder": {
+      "kind": "agentSession",
+      "id": "session:8c1f4d2e",
+      "sessionId": "8c1f4d2e",
+      "agent": "codex"
+    },
+    "facts": {
+      "process": "unknown",
+      "session": "present",
+      "terminal": "notServedHere"
+    },
+    "liveness": "live"
+  },
+  {
+    "name": "an agent session the status store saw end",
+    "holder": {
+      "kind": "agentSession",
+      "id": "session:8c1f4d2e",
+      "sessionId": "8c1f4d2e",
+      "agent": "codex"
+    },
+    "facts": {
+      "process": "unknown",
+      "session": "ended",
+      "terminal": "notServedHere"
+    },
+    "liveness": "exited"
+  },
+  {
+    "name": "a pane served by the other runtime",
+    "holder": {
+      "kind": "terminal",
+      "id": "terminal:term_7f3a",
+      "terminalHandle": "term_7f3a"
+    },
+    "facts": {
+      "process": "unknown",
+      "session": "notServedHere",
+      "terminal": "notServedHere"
+    },
+    "liveness": "unverifiable"
+  },
+  {
+    "name": "a pane right after this runtime restarted",
+    "holder": {
+      "kind": "terminal",
+      "id": "terminal:term_7f3a",
+      "terminalHandle": "term_7f3a"
+    },
+    "facts": {
+      "process": "unknown",
+      "session": "notServedHere",
+      "terminal": "storeWarming"
+    },
+    "liveness": "unverifiable"
+  },
+  {
+    "name": "a pane still open",
+    "holder": {
+      "kind": "terminal",
+      "id": "terminal:term_7f3a",
+      "terminalHandle": "term_7f3a"
+    },
+    "facts": {
+      "process": "unknown",
+      "session": "notServedHere",
+      "terminal": "open"
+    },
+    "liveness": "live"
+  },
+  {
+    "name": "a pane closed",
+    "holder": {
+      "kind": "terminal",
+      "id": "terminal:term_7f3a",
+      "terminalHandle": "term_7f3a"
+    },
+    "facts": {
+      "process": "unknown",
+      "session": "notServedHere",
+      "terminal": "closed"
+    },
+    "liveness": "exited"
+  },
+  {
+    "name": "a person: no fact makes one exit",
+    "holder": {
+      "kind": "human",
+      "id": "human:filip",
+      "name": "filip"
+    },
+    "facts": {
+      "process": {
+        "found": false
+      },
+      "session": "ended",
+      "terminal": "closed"
+    },
+    "liveness": "live"
+  },
+  {
+    "name": "a person with nothing known",
+    "holder": {
+      "kind": "human",
+      "id": "human:filip",
+      "name": "filip"
+    },
+    "facts": {
+      "process": "unknown",
+      "session": "notServedHere",
+      "terminal": "notServedHere"
+    },
+    "liveness": "live"
+  }
+]

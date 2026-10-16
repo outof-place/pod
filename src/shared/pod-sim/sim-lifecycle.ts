@@ -52,7 +52,9 @@ export type SimDeviceEvent = (typeof SIM_DEVICE_EVENTS)[number]
  * the back. A waiter silent for SIM_WAITER_ABANDON_S is abandoned, and one whose dev-client build
  * failed ends too. `expired` (Pod ended it: `ended.reason` says why) and `released` are final.
  * A takeover outlives its agent: the person keeps driving, and once they give the device back
- * (or go idle) the lease is active again and the next liveness check releases it.
+ * (or go idle) the lease is active again and the next liveness check releases it. A removed
+ * worktree ends any live lease, and a device deleted outside Pod ends the lease that held it (a
+ * takeover too): both `expired`, with `ended.reason` naming why.
  */
 export const SIM_LEASE_STATES = [
   'waiting',
@@ -76,7 +78,9 @@ export const SIM_LEASE_EVENTS = [
   'abandon',
   'buildFailed',
   'release',
-  'holderExited'
+  'holderExited',
+  'worktreeRemoved',
+  'deviceLost'
 ] as const
 export type SimLeaseEvent = (typeof SIM_LEASE_EVENTS)[number]
 
@@ -89,6 +93,7 @@ export const SIM_DEVICE_TRANSITIONS: readonly SimTransition<SimDeviceState, SimD
   { from: 'cloning', event: 'fail', to: 'failed' },
   { from: 'preparing', event: 'prepared', to: 'shutdown' },
   { from: 'preparing', event: 'fail', to: 'failed' },
+  { from: 'preparing', event: 'lost', to: 'lost' },
   { from: 'shutdown', event: 'boot', to: 'booting' },
   { from: 'shutdown', event: 'delete', to: 'absent' },
   { from: 'booting', event: 'booted', to: 'ready' },
@@ -126,18 +131,24 @@ export const SIM_LEASE_TRANSITIONS: readonly SimTransition<SimLeaseState, SimLea
   { from: 'waiting', event: 'buildFailed', to: 'expired' },
   { from: 'waiting', event: 'release', to: 'released' },
   { from: 'waiting', event: 'holderExited', to: 'released' },
+  { from: 'waiting', event: 'worktreeRemoved', to: 'expired' },
   { from: 'reserved', event: 'claim', to: 'active' },
   { from: 'reserved', event: 'lapse', to: 'waiting' },
   { from: 'reserved', event: 'buildFailed', to: 'expired' },
   { from: 'reserved', event: 'release', to: 'released' },
   { from: 'reserved', event: 'holderExited', to: 'released' },
+  { from: 'reserved', event: 'worktreeRemoved', to: 'expired' },
   { from: 'active', event: 'takeover', to: 'takeover' },
   { from: 'active', event: 'revoke', to: 'expired' },
   { from: 'active', event: 'release', to: 'released' },
   { from: 'active', event: 'holderExited', to: 'released' },
+  { from: 'active', event: 'worktreeRemoved', to: 'expired' },
+  { from: 'active', event: 'deviceLost', to: 'expired' },
   { from: 'takeover', event: 'giveBack', to: 'active' },
   { from: 'takeover', event: 'release', to: 'released' },
-  { from: 'takeover', event: 'holderExited', to: 'takeover' }
+  { from: 'takeover', event: 'holderExited', to: 'takeover' },
+  { from: 'takeover', event: 'worktreeRemoved', to: 'expired' },
+  { from: 'takeover', event: 'deviceLost', to: 'expired' }
 ]
 
 /** Why a device refuses an event: the state it is in. */
@@ -207,6 +218,7 @@ export function simLeaseIsFinal(state: SimLeaseState): boolean {
 }
 
 const BOOTED_STATES: ReadonlySet<SimDeviceState> = new Set([
+  'preparing',
   'booting',
   'ready',
   'leased',
@@ -216,7 +228,10 @@ const BOOTED_STATES: ReadonlySet<SimDeviceState> = new Set([
   'failed'
 ])
 
-/** Whether the device holds a boot slot: its launchd_sim may exist (a stopped one counts too). */
+/**
+ * Whether the device holds a boot slot: its launchd_sim may exist. `preparing` does, since simslim
+ * boots a device to slim it.
+ */
 export function simDeviceCountsTowardCap(state: SimDeviceState): boolean {
   return BOOTED_STATES.has(state)
 }

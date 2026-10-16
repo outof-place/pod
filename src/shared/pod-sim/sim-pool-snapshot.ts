@@ -56,6 +56,10 @@ export const SimBudget = z.object({
   footprintMb: z.number().nonnegative().optional()
 })
 
+/** iPhones and iPads queue apart: a waiter for one never waits behind a waiter for the other. */
+export const SIM_DEVICE_CLASSES = ['iphone', 'ipad'] as const
+export type SimDeviceClass = (typeof SIM_DEVICE_CLASSES)[number]
+
 export const SimAppRef = z.looseObject({
   id: z.string().min(1).max(64),
   bundleId: z.string().min(1).max(256)
@@ -68,7 +72,7 @@ export const SimDevice = z.object({
   // are its clones.
   role: z.enum(['golden', 'pool']),
   deviceType: z.string().min(1).max(128),
-  deviceClass: z.enum(['iphone', 'ipad']),
+  deviceClass: z.enum(SIM_DEVICE_CLASSES),
   runtime: z.string().min(1).max(64),
   state: z.enum(SIM_DEVICE_STATES),
   since: EpochMs,
@@ -101,6 +105,13 @@ export const SIM_LEASE_END_REASONS = [
 ] as const
 export type SimLeaseEndReason = (typeof SIM_LEASE_END_REASONS)[number]
 
+export const SimLeaseEnded = z.looseObject({
+  at: EpochMs,
+  reason: z.enum(SIM_LEASE_END_REASONS),
+  // buildFailed: the build whose log the holder is pointed at.
+  buildId: SimBuildId.optional()
+})
+
 export const SimLease = z.looseObject({
   leaseId: SimLeaseId,
   key: z.string().min(1).max(8192),
@@ -129,12 +140,13 @@ export const SimLease = z.looseObject({
     })
     .optional(),
   takeover: z.looseObject({ since: EpochMs, lastInput: EpochMs }).optional(),
-  ended: z
+  ended: SimLeaseEnded.optional(),
+  // What `lease --device` asked for (iphone when it asked nothing): one queue per device class,
+  // and a model, when named, picks among that class's devices.
+  wants: z
     .looseObject({
-      at: EpochMs,
-      reason: z.enum(SIM_LEASE_END_REASONS),
-      // buildFailed: the build whose log the holder is pointed at.
-      buildId: SimBuildId.optional()
+      deviceClass: z.enum(SIM_DEVICE_CLASSES),
+      deviceType: z.string().min(1).max(128).optional()
     })
     .optional()
 })

@@ -284,6 +284,10 @@
             "since": 1760600385000,
             "waitingFor": "build",
             "buildId": "sb_mobile_9a8b7c"
+          },
+          "wants": {
+            "deviceClass": "iphone",
+            "deviceType": "iPhone 16 Pro"
           }
         },
         {

@@ -198,8 +198,10 @@ describe('the frozen transition tables', () => {
     })
   }
 
+  // simslim boots a device to slim it, so a preparing device holds a slot too.
   it('a device counts toward the boot cap whenever its launchd_sim may exist', () => {
     expect(SIM_DEVICE_STATES.filter(simDeviceCountsTowardCap)).toEqual([
+      'preparing',
       'booting',
       'ready',
       'leased',

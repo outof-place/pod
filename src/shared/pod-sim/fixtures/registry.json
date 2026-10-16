@@ -126,6 +126,101 @@
           }
         ]
       }
+    },
+    {
+      "name": "lifecycle states, a failure with its count, a waiter's device class and ended leases kept as tombstones",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1760600400000,
+        "devices": [
+          {
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "name": "Portivo-Pod-1",
+            "role": "pool",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760590000000,
+            "state": "preparing",
+            "op": {
+              "kind": "prepare",
+              "by": {
+                "pid": 70110,
+                "startedAt": 1760599900
+              },
+              "since": 1760600390000
+            }
+          },
+          {
+            "udid": "2B3C4D5E-6F70-8192-A3B4-C5D6E7F8091A",
+            "name": "Portivo-Pod-2",
+            "role": "pool",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760590000000,
+            "state": "failed",
+            "failure": {
+              "at": 1760600300000,
+              "message": "boot passed its 180 s deadline",
+              "op": "boot",
+              "count": 1
+            }
+          }
+        ],
+        "leases": [
+          {
+            "leaseId": "sl_7a8b9c",
+            "key": "session:5c1d2e3f@/Users/dev/portivo-wt/ipad",
+            "state": "waiting",
+            "holder": {
+              "kind": "agentSession",
+              "id": "session:5c1d2e3f",
+              "sessionId": "5c1d2e3f",
+              "agent": "claude"
+            },
+            "worktreeRoot": "/Users/dev/portivo-wt/ipad",
+            "since": 1760600350000,
+            "lastActivity": 1760600390000,
+            "queue": {
+              "position": 1,
+              "since": 1760600350000,
+              "waitingFor": "device"
+            },
+            "wants": {
+              "deviceClass": "ipad"
+            },
+            "servedBy": {
+              "pid": 70110,
+              "startedAt": 1760599900
+            }
+          }
+        ],
+        "tombstones": [
+          {
+            "leaseId": "sl_4f2a9c",
+            "key": "agent:claude:41233:1760600000@/Users/dev/portivo-wt/maps",
+            "state": "expired",
+            "holder": {
+              "kind": "agent",
+              "id": "agent:claude:41233:1760600000",
+              "agent": "claude",
+              "pid": 41233,
+              "startedAt": 1760600000
+            },
+            "worktreeRoot": "/Users/dev/portivo-wt/maps",
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "since": 1760596000000,
+            "lastActivity": 1760597000000,
+            "ended": {
+              "at": 1760599000000,
+              "reason": "idleForWaiter"
+            },
+            "servedBy": {
+              "pid": 70110,
+              "startedAt": 1760599900
+            }
+          }
+        ]
+      }
     }
   ],
   "invalid": [
@@ -209,6 +304,92 @@
         ]
       },
       "path": "leases.0.servedBy"
+    },
+    {
+      "name": "a device state this version does not name",
+      "path": "devices.0.state",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1760600400000,
+        "leases": [],
+        "devices": [
+          {
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "name": "Portivo-Pod-1",
+            "role": "pool",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760590000000,
+            "state": "hibernating"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a tombstone of a lease that is still live",
+      "path": "tombstones.0.state",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1760600400000,
+        "devices": [],
+        "leases": [],
+        "tombstones": [
+          {
+            "leaseId": "sl_4f2a9c",
+            "key": "agent:claude:41233:1760600000@/Users/dev/portivo-wt/maps",
+            "state": "active",
+            "holder": {
+              "kind": "agent",
+              "id": "agent:claude:41233:1760600000",
+              "agent": "claude",
+              "pid": 41233,
+              "startedAt": 1760600000
+            },
+            "worktreeRoot": "/Users/dev/portivo-wt/maps",
+            "since": 1760596000000,
+            "lastActivity": 1760597000000,
+            "ended": {
+              "at": 1760599000000,
+              "reason": "idleForWaiter"
+            },
+            "servedBy": {
+              "pid": 70110,
+              "startedAt": 1760599900
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "a waiter that wants a device class the pool does not name",
+      "path": "leases.0.wants.deviceClass",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1760600400000,
+        "devices": [],
+        "leases": [
+          {
+            "leaseId": "sl_7a8b9c",
+            "key": "session:5c1d2e3f@/Users/dev/portivo-wt/ipad",
+            "state": "waiting",
+            "holder": {
+              "kind": "agentSession",
+              "id": "session:5c1d2e3f",
+              "sessionId": "5c1d2e3f"
+            },
+            "worktreeRoot": "/Users/dev/portivo-wt/ipad",
+            "since": 1760600350000,
+            "lastActivity": 1760600390000,
+            "wants": {
+              "deviceClass": "watch"
+            },
+            "servedBy": {
+              "pid": 70110,
+              "startedAt": 1760599900
+            }
+          }
+        ]
+      }
     }
   ]
 }

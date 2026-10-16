@@ -31,6 +31,11 @@
       "to": "failed"
     },
     {
+      "from": "preparing",
+      "event": "lost",
+      "to": "lost"
+    },
+    {
       "from": "shutdown",
       "event": "boot",
       "to": "booting"
@@ -203,6 +208,11 @@
       "to": "released"
     },
     {
+      "from": "waiting",
+      "event": "worktreeRemoved",
+      "to": "expired"
+    },
+    {
       "from": "reserved",
       "event": "claim",
       "to": "active"
@@ -228,6 +238,11 @@
       "to": "released"
     },
     {
+      "from": "reserved",
+      "event": "worktreeRemoved",
+      "to": "expired"
+    },
+    {
       "from": "active",
       "event": "takeover",
       "to": "takeover"
@@ -248,6 +263,16 @@
       "to": "released"
     },
     {
+      "from": "active",
+      "event": "worktreeRemoved",
+      "to": "expired"
+    },
+    {
+      "from": "active",
+      "event": "deviceLost",
+      "to": "expired"
+    },
+    {
       "from": "takeover",
       "event": "giveBack",
       "to": "active"
@@ -261,6 +286,16 @@
       "from": "takeover",
       "event": "holderExited",
       "to": "takeover"
+    },
+    {
+      "from": "takeover",
+      "event": "worktreeRemoved",
+      "to": "expired"
+    },
+    {
+      "from": "takeover",
+      "event": "deviceLost",
+      "to": "expired"
     }
   ],
   "illegal": [
@@ -419,6 +454,12 @@
       "from": "takeover",
       "event": "buildFailed",
       "refused": "lease_taken_over"
+    },
+    {
+      "machine": "lease",
+      "from": "waiting",
+      "event": "deviceLost",
+      "refused": "lease_waiting"
     }
   ],
   "walks": [
@@ -470,6 +511,27 @@
       "start": "active",
       "events": ["takeover", "holderExited", "giveBack", "holderExited"],
       "states": ["takeover", "takeover", "active", "released"]
+    },
+    {
+      "name": "a device deleted outside Pod ends the lease Filip drives: deviceLost, not released",
+      "machine": "lease",
+      "start": "active",
+      "events": ["takeover", "holderExited", "deviceLost"],
+      "states": ["takeover", "takeover", "expired"]
+    },
+    {
+      "name": "a removed worktree ends a reserved lease before its holder claims",
+      "machine": "lease",
+      "start": "waiting",
+      "events": ["reserve", "worktreeRemoved"],
+      "states": ["reserved", "expired"]
+    },
+    {
+      "name": "a pool device deleted outside Pod while simslim prepares it",
+      "machine": "device",
+      "start": "absent",
+      "events": ["clone", "cloned", "lost", "forget"],
+      "states": ["cloning", "preparing", "lost", "absent"]
     }
   ],
   "free": [

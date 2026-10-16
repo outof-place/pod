@@ -76,7 +76,9 @@
     "abandon",
     "buildFailed",
     "release",
-    "holderExited"
+    "holderExited",
+    "worktreeRemoved",
+    "deviceLost"
   ],
   "holderKinds": ["agent", "agentSession", "terminal", "process", "human"],
   "brakes": ["calm", "tight", "brake", "emergency"],

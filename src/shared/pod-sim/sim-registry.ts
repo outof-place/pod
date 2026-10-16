@@ -7,13 +7,15 @@
 // work runs outside the lock behind the device's `op`, written before it starts and cleared after:
 //   grant   check simDeviceIsFree over the file's leases and no live `op` on the device, then
 //           write the lease with `servedBy` (this runtime). No op: it is one locked write.
-//   boot    check no live `op` and the cap (devices simctl lists booted plus boot ops in flight),
-//           write op `boot`, unlock, boot, lock, clear it.
+//   boot    check no live `op` and the cap (every device whose state counts toward it, plus boot,
+//           prepare and reset ops in flight, plus devices booted outside Pod), write op `boot`,
+//           unlock, boot, lock, clear it.
 //   clone   write the new device with op `clone` first, clone, then clear it.
 //   delete  check no live lease names it and no live `op`, write op `delete`, delete, then remove
 //           the entry.
 // An op or a lease whose runtime (`by`, `servedBy`) has exited (pid plus start time) is stale, and
-// the next runtime that takes the lock takes it over.
+// the next runtime that takes the lock takes it over. An op past its deadline fails its device
+// even while its runtime lives.
 //
 // Versions: a file this runtime cannot read, or one a newer Pod wrote, turns its pool off
 // (`registryUnreadable`) and this runtime never writes it. Any new value in a vocabulary the file
@@ -22,7 +24,8 @@
 // every level, on the next write.
 import { z } from 'zod'
 import { SimAbsolutePath } from './sim-holder'
-import { SIM_POD_DEVICE_NAME_PATTERN, SimLease, SimUdid } from './sim-pool-snapshot'
+import { SIM_DEVICE_STATES, SIM_LEASE_FINAL_STATES } from './sim-lifecycle'
+import { SIM_POD_DEVICE_NAME_PATTERN, SimLease, SimLeaseEnded, SimUdid } from './sim-pool-snapshot'
 
 export const SIM_REGISTRY_VERSION = 1
 /** Under the account's home, never under a Pod profile. */
@@ -59,17 +62,38 @@ export const SimRegistryDevice = z.looseObject({
   createdAt: EpochMs,
   clonedFrom: SimUdid.optional(),
   affinity: SimAbsolutePath.optional(),
-  op: z.looseObject({ kind: z.enum(SIM_DEVICE_OPS), by: SimRuntimeRef, since: EpochMs }).optional()
+  op: z.looseObject({ kind: z.enum(SIM_DEVICE_OPS), by: SimRuntimeRef, since: EpochMs }).optional(),
+  // Where the pool core last moved it through SIM_DEVICE_TRANSITIONS; the pool checks it against
+  // simctl on every poll.
+  state: z.enum(SIM_DEVICE_STATES).optional(),
+  // Why it is `failed` (an op past its deadline, a failed erase); `count` failures in a row, reset
+  // by a good boot.
+  failure: z
+    .looseObject({
+      at: EpochMs,
+      message: z.string().min(1).max(1024),
+      op: z.enum(SIM_DEVICE_OPS).optional(),
+      count: z.number().int().positive()
+    })
+    .optional()
 })
 
 // Live leases, restored after a runtime restart, each with the runtime that serves it.
 export const SimRegistryLease = SimLease.extend({ servedBy: SimRuntimeRef })
 
+// An ended lease, kept 24 hours or until its key leases again, so the holder's late call (from
+// either runtime, after a restart too) hears why it ended.
+export const SimRegistryTombstone = SimRegistryLease.extend({
+  state: z.enum(SIM_LEASE_FINAL_STATES),
+  ended: SimLeaseEnded
+})
+
 export const SimRegistryFile = z.looseObject({
   version: z.literal(SIM_REGISTRY_VERSION),
   updatedAt: EpochMs,
   devices: z.array(SimRegistryDevice),
-  leases: z.array(SimRegistryLease)
+  leases: z.array(SimRegistryLease),
+  tombstones: z.array(SimRegistryTombstone).optional()
 })
 export type SimRegistryFile = z.infer<typeof SimRegistryFile>
 

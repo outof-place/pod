@@ -1,0 +1,419 @@
+{
+  "taken": [
+    {
+      "machine": "device",
+      "from": "absent",
+      "event": "create",
+      "to": "preparing",
+      "when": "a waiter needs a device, none is free, a slot is open and there is no golden device: the pool creates one"
+    },
+    {
+      "machine": "device",
+      "from": "absent",
+      "event": "clone",
+      "to": "cloning",
+      "when": "the same with a golden device of the wanted model: the pool clones it"
+    },
+    {
+      "machine": "device",
+      "from": "cloning",
+      "event": "cloned",
+      "to": "preparing",
+      "when": "the clone finished; slimming starts once its slot fits"
+    },
+    {
+      "machine": "device",
+      "from": "cloning",
+      "event": "fail",
+      "to": "failed",
+      "when": "the clone failed or passed its deadline (the entry is then lost and forgotten: simctl never knew its UDID)"
+    },
+    {
+      "machine": "device",
+      "from": "preparing",
+      "event": "prepared",
+      "to": "shutdown",
+      "when": "slimming finished"
+    },
+    {
+      "machine": "device",
+      "from": "preparing",
+      "event": "fail",
+      "to": "failed",
+      "when": "slimming or creating failed (a device never slimmed is deleted once shut down)"
+    },
+    {
+      "machine": "device",
+      "from": "preparing",
+      "event": "lost",
+      "to": "lost",
+      "when": "a device not yet slimmed vanished from Pod's device set"
+    },
+    {
+      "machine": "device",
+      "from": "shutdown",
+      "event": "boot",
+      "to": "booting",
+      "when": "a waiter or a holder needs it and a slot is open, or simctl shows it booted outside Pod"
+    },
+    {
+      "machine": "device",
+      "from": "shutdown",
+      "event": "delete",
+      "to": "absent",
+      "when": "a shut-down device vanished from the set, or a hopeless one was deleted"
+    },
+    {
+      "machine": "device",
+      "from": "booting",
+      "event": "booted",
+      "to": "ready",
+      "when": "the boot finished, or simctl shows a listed device booted outside Pod (adopted: the registry is the marker)"
+    },
+    {
+      "machine": "device",
+      "from": "booting",
+      "event": "fail",
+      "to": "failed",
+      "when": "the boot failed, passed its deadline, or its runtime exited"
+    },
+    {
+      "machine": "device",
+      "from": "ready",
+      "event": "lease",
+      "to": "leased",
+      "when": "a reservation is claimed, or a held device that went down is up again"
+    },
+    {
+      "machine": "device",
+      "from": "ready",
+      "event": "shutDown",
+      "to": "shuttingDown",
+      "when": "nobody holds it and its warm window passed, the brake is tight, or it is the golden device"
+    },
+    {
+      "machine": "device",
+      "from": "ready",
+      "event": "lost",
+      "to": "lost",
+      "when": "simctl shows it shut down or gone, outside Pod"
+    },
+    {
+      "machine": "device",
+      "from": "leased",
+      "event": "release",
+      "to": "releasing",
+      "when": "its lease ended"
+    },
+    {
+      "machine": "device",
+      "from": "leased",
+      "event": "reset",
+      "to": "resetting",
+      "when": "the holder asked for a device reset (same UDID)"
+    },
+    {
+      "machine": "device",
+      "from": "leased",
+      "event": "lost",
+      "to": "lost",
+      "when": "simctl shows it shut down or gone, outside Pod"
+    },
+    {
+      "machine": "device",
+      "from": "resetting",
+      "event": "resetDone",
+      "to": "leased",
+      "when": "the reset finished"
+    },
+    {
+      "machine": "device",
+      "from": "resetting",
+      "event": "fail",
+      "to": "failed",
+      "when": "the reset failed or passed its deadline"
+    },
+    {
+      "machine": "device",
+      "from": "releasing",
+      "event": "released",
+      "to": "ready",
+      "when": "the release finished: the device stays warm"
+    },
+    {
+      "machine": "device",
+      "from": "releasing",
+      "event": "shutDown",
+      "to": "shuttingDown",
+      "when": "its lease ended for the brake (or at tight) and no waiter can take it"
+    },
+    {
+      "machine": "device",
+      "from": "releasing",
+      "event": "fail",
+      "to": "failed",
+      "when": "the release failed or passed its deadline"
+    },
+    {
+      "machine": "device",
+      "from": "shuttingDown",
+      "event": "shutDownDone",
+      "to": "shutdown",
+      "when": "the shutdown finished"
+    },
+    {
+      "machine": "device",
+      "from": "shuttingDown",
+      "event": "fail",
+      "to": "failed",
+      "when": "the shutdown failed or passed its deadline"
+    },
+    {
+      "machine": "device",
+      "from": "failed",
+      "event": "shutDown",
+      "to": "shuttingDown",
+      "when": "simctl still shows a failed device booted"
+    },
+    {
+      "machine": "device",
+      "from": "failed",
+      "event": "recover",
+      "to": "shutdown",
+      "when": "simctl shows a failed device shut down"
+    },
+    {
+      "machine": "device",
+      "from": "failed",
+      "event": "lost",
+      "to": "lost",
+      "when": "a failed device vanished from the set, or a clone or create failed"
+    },
+    {
+      "machine": "device",
+      "from": "lost",
+      "event": "recover",
+      "to": "shutdown",
+      "when": "a device shut down outside Pod (lost and recovered in one step, keeping its lease)"
+    },
+    {
+      "machine": "device",
+      "from": "lost",
+      "event": "forget",
+      "to": "absent",
+      "when": "a device gone from the set leaves the registry"
+    },
+    {
+      "machine": "lease",
+      "from": "waiting",
+      "event": "reserve",
+      "to": "reserved",
+      "when": "the head waiter of its class gets a free device"
+    },
+    {
+      "machine": "lease",
+      "from": "waiting",
+      "event": "abandon",
+      "to": "expired",
+      "when": "a waiter stopped calling for SIM_WAITER_ABANDON_S of watched time"
+    },
+    {
+      "machine": "lease",
+      "from": "waiting",
+      "event": "buildFailed",
+      "to": "expired",
+      "when": "the dev-client build it waits for failed"
+    },
+    {
+      "machine": "lease",
+      "from": "waiting",
+      "event": "release",
+      "to": "released",
+      "when": "the holder released it"
+    },
+    {
+      "machine": "lease",
+      "from": "waiting",
+      "event": "holderExited",
+      "to": "released",
+      "when": "its holder reads exited"
+    },
+    {
+      "machine": "lease",
+      "from": "waiting",
+      "event": "worktreeRemoved",
+      "to": "expired",
+      "when": "its worktree was removed"
+    },
+    {
+      "machine": "lease",
+      "from": "reserved",
+      "event": "claim",
+      "to": "active",
+      "when": "the holder called while its device is ready"
+    },
+    {
+      "machine": "lease",
+      "from": "reserved",
+      "event": "lapse",
+      "to": "waiting",
+      "when": "unclaimed 60 s after its device was ready (to the back), or its device failed or left (keeps its place)"
+    },
+    {
+      "machine": "lease",
+      "from": "reserved",
+      "event": "release",
+      "to": "released",
+      "when": "the holder released it"
+    },
+    {
+      "machine": "lease",
+      "from": "reserved",
+      "event": "holderExited",
+      "to": "released",
+      "when": "its holder reads exited"
+    },
+    {
+      "machine": "lease",
+      "from": "reserved",
+      "event": "worktreeRemoved",
+      "to": "expired",
+      "when": "its worktree was removed"
+    },
+    {
+      "machine": "lease",
+      "from": "active",
+      "event": "takeover",
+      "to": "takeover",
+      "when": "Filip took the device over"
+    },
+    {
+      "machine": "lease",
+      "from": "active",
+      "event": "revoke",
+      "to": "expired",
+      "when": "idle past the idle window while a waiter can use the device, or at tight or worse"
+    },
+    {
+      "machine": "lease",
+      "from": "active",
+      "event": "release",
+      "to": "released",
+      "when": "the holder released it, or a person gave their own lease back"
+    },
+    {
+      "machine": "lease",
+      "from": "active",
+      "event": "holderExited",
+      "to": "released",
+      "when": "its holder reads exited"
+    },
+    {
+      "machine": "lease",
+      "from": "active",
+      "event": "worktreeRemoved",
+      "to": "expired",
+      "when": "its worktree was removed"
+    },
+    {
+      "machine": "lease",
+      "from": "active",
+      "event": "deviceLost",
+      "to": "expired",
+      "when": "its device was deleted outside Pod"
+    },
+    {
+      "machine": "lease",
+      "from": "takeover",
+      "event": "giveBack",
+      "to": "active",
+      "when": "Filip gave the device back, or 120 s passed after his last input"
+    },
+    {
+      "machine": "lease",
+      "from": "takeover",
+      "event": "release",
+      "to": "released",
+      "when": "the agent released it while Filip drives"
+    },
+    {
+      "machine": "lease",
+      "from": "takeover",
+      "event": "holderExited",
+      "to": "takeover",
+      "when": "the agent exited while Filip drives: he keeps driving"
+    },
+    {
+      "machine": "lease",
+      "from": "takeover",
+      "event": "worktreeRemoved",
+      "to": "expired",
+      "when": "its worktree was removed"
+    },
+    {
+      "machine": "lease",
+      "from": "takeover",
+      "event": "deviceLost",
+      "to": "expired",
+      "when": "its device was deleted outside Pod"
+    }
+  ],
+  "notTaken": [
+    {
+      "machine": "device",
+      "from": "booting",
+      "event": "lost",
+      "to": "lost",
+      "why": "a booting device always carries its boot op, and reconcile leaves a device with an op in flight to the op's outcome or deadline"
+    },
+    {
+      "machine": "device",
+      "from": "ready",
+      "event": "fail",
+      "to": "failed",
+      "why": "only an op's outcome or deadline fails a device, and every op moves a ready device out of ready first"
+    },
+    {
+      "machine": "device",
+      "from": "leased",
+      "event": "fail",
+      "to": "failed",
+      "why": "only an op's outcome or deadline fails a device, and every op moves a leased device out of leased first"
+    },
+    {
+      "machine": "device",
+      "from": "resetting",
+      "event": "lost",
+      "to": "lost",
+      "why": "a resetting device carries its reset op; reconcile leaves it to the op's outcome or deadline"
+    },
+    {
+      "machine": "device",
+      "from": "releasing",
+      "event": "lost",
+      "to": "lost",
+      "why": "a releasing device carries its release op (or moves on to shutDown in the same step)"
+    },
+    {
+      "machine": "device",
+      "from": "shuttingDown",
+      "event": "lost",
+      "to": "lost",
+      "why": "a shutting-down device carries its shutdown op; reconcile leaves it to the op's outcome or deadline"
+    },
+    {
+      "machine": "device",
+      "from": "failed",
+      "event": "delete",
+      "to": "absent",
+      "why": "a failed device recovers to shutdown first (simctl shows it shut down) and is deleted from there when hopeless"
+    },
+    {
+      "machine": "lease",
+      "from": "reserved",
+      "event": "buildFailed",
+      "to": "expired",
+      "why": "a waiter whose build runs is never reserved (it is skipped in the queue), and a later call does not attach a build to a live lease"
+    }
+  ]
+}
