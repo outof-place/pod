@@ -115,6 +115,17 @@ export class RuntimeProjectHostSetupController {
     return this.completeSetup(args, repo, !knownRepoIds.has(repo.id))
   }
 
+  // Fork-only (Pod): a new project from a folder on an SSH host (the desktop's repos:addRemote),
+  // for PodNative's Add Project; the same registration setupExistingFolder routes `ssh:*` to.
+  async addSshRepo(
+    args: Parameters<RuntimeProjectHostSetupDependencies['addRemoteRepo']>[0]
+  ): Promise<Repo> {
+    if (!this.deps.getStore()) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.deps.addRemoteRepo(args)
+  }
+
   async setupClone(args: ProjectHostSetupCloneArgs): Promise<ProjectHostSetupResult> {
     assertCloneHostIsSupported(args.hostId)
     const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
