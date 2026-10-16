@@ -11,7 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.0.0-rc2] - 2026-10-16
 
 The second release candidate for Pod 1.0: [Pod-1.0.0-rc2.dmg](https://github.com/outof-place/pod/releases/download/v1.0.0-rc2/Pod-1.0.0-rc2.dmg).
-Pod 1.0.0-rc1 finds it through "Check for Updates…".
+Install it by hand, also over 1.0.0-rc1: rc2 is signed with a new update key, so rc1's "Check for Updates…"
+reports an improperly signed feed. Releases after rc2 arrive through "Check for Updates…" again.
 
 ### Added
 
@@ -38,6 +39,12 @@ Pod 1.0.0-rc1 finds it through "Check for Updates…".
   folded. The Dock badge counts agents that need you, and notifications say "Claude needs you".
 - claude-acc's usage moved from the window's toolbar to the menu bar (Pod Menu).
 - claude-acc 1.34.1 is built in (from `release/1.34.1`).
+- Updates are signed with a new Sparkle key.
+
+### Removed
+
+- Activity's Group By, Show Unread Only, Show Child Agents, Compact Mode and Show Search options.
+- The Close Tab toolbar button and the Pod mark with the branch name in the title bar.
 
 ### Fixed
 

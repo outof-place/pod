@@ -60,6 +60,7 @@ gh release create appcast --repo outof-place/pod --prerelease --title "Pod updat
 5. **Verify**:
    `curl -fsL https://github.com/outof-place/pod/releases/download/appcast/appcast.xml | grep -E 'sparkle:(version|shortVersionString)'`
    This must show the new build. An installed earlier RC then finds the update from Pod's "Check for Updates…" menu item.
+   - Not across a key change: an app with `SURequireSignedFeed` checks the feed only against its own `SUPublicEDKey`, and Sparkle 2.10.0 refuses another key's feed for 20 days from the first failure (`SUAppcastDriver.m`). rc2 rotated the key (rc1 `6Ru5s8…`, rc2 `rMnqNp…`, the old private key is gone), so rc1 installs rc2 by hand. `update-rehearsal.sh` uses one key for both builds and cannot catch this.
 6. **Homebrew** (outof-place/homebrew-tap), 1.0.0 and later only: `version`, `sha256` from `SHA256SUMS`, and `url` ending in `Pod-#{version}.dmg`.
 
 Never: run `generate_keys` with another account or from an agent, an E2E or a fake `HOME`; import the key into any other keychain; publish a `--dry-run` directory (its artifacts.txt says DRY RUN, and its key was thrown away); delete or re-tag the `appcast` release.
