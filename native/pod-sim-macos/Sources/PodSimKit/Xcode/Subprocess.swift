@@ -13,7 +13,10 @@ enum Subprocess {
     }
 
     /// Fails with a short description when the tool does not start, times out or exits non-zero.
-    static func run(_ executable: String, _ arguments: [String], environment: [String: String]?, timeout: TimeInterval) -> Result<Output, Failure> {
+    /// `input` goes to the tool's stdin, which is closed after it (`simctl pbcopy` reads to the end).
+    static func run(
+        _ executable: String, _ arguments: [String], environment: [String: String]?, timeout: TimeInterval, input: Data? = nil
+    ) -> Result<Output, Failure> {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
@@ -21,13 +24,20 @@ enum Subprocess {
         let out = Pipe(), err = Pipe()
         process.standardOutput = out
         process.standardError = err
-        process.standardInput = FileHandle.nullDevice
+        let stdin = input.map { _ in Pipe() }
+        process.standardInput = stdin ?? FileHandle.nullDevice
         let exited = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in exited.signal() }
         do {
             try process.run()
         } catch {
             return .failure(Failure(text: "did not start: \(error.localizedDescription)"))
+        }
+        if let stdin, let input {
+            DispatchQueue.global(qos: .userInitiated).async {
+                try? stdin.fileHandleForWriting.write(contentsOf: input)
+                try? stdin.fileHandleForWriting.close()
+            }
         }
         // Drained while it runs, so a chatty tool never blocks on a full pipe.
         let stdout = Collected(), stderr = Collected()

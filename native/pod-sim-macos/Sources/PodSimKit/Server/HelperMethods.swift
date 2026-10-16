@@ -37,6 +37,10 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
 
     public func helloResult() -> Data { startupJSON }
 
+    /// For the input and accessibility methods (Input/, Accessibility/).
+    var startupReport: SelftestReport { startup }
+    var helperContext: HelperContext { context }
+
     public func detachAll() { displays.detachAll() }
 
     public func handle(_ request: Request, reply: @escaping @Sendable (Reply) -> Void) -> Bool {
@@ -47,6 +51,8 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
         case "displayStats": run = { self.withAttachment(request.params) { .encoding($0.stats()) } }
         case "detachDisplay": run = { self.detachDisplay(request.params) }
         case "screenshot": run = { self.screenshot(request.params) }
+        case "hid": run = { self.hid(request.params) }
+        case "ax": run = { self.ax(request.params) }
         default: run = nil
         }
         guard let run else { return false }
@@ -183,14 +189,14 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
         if case .success = booted(udid) { true } else { false }
     }
 
-    private func booted(_ udid: String) -> Result<SimDeviceHandle, HelperError> {
+    func booted(_ udid: String) -> Result<SimDeviceHandle, HelperError> {
         guard UUID(uuidString: udid) != nil else { return .failure(HelperError(.badParams, "udid is not a UUID")) }
         return context.simulatorService.flatMap { $0.device(udid: udid) }.flatMap { device in
             device.isBooted ? .success(device) : .failure(HelperError(.deviceNotBooted, "\(device.name) (\(device.udid)) is \(device.state), not Booted"))
         }
     }
 
-    private func refusal(for report: CapabilityReport, _ capability: Capability) -> HelperError? {
+    func refusal(for report: CapabilityReport, _ capability: Capability) -> HelperError? {
         switch report.status {
         case .ok: nil
         case .unsupported: HelperError(.unsupported, "\(capability.rawValue): \(report.reason ?? "unsupported")")
@@ -198,7 +204,7 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
         }
     }
 
-    private func decode<T: Decodable>(_ type: T.Type, _ params: Data, _ body: (T) -> Reply) -> Reply {
+    func decode<T: Decodable>(_ type: T.Type, _ params: Data, _ body: (T) -> Reply) -> Reply {
         switch WireJSON.decode(type, from: params) {
         case .failure(let error): .error(error)
         case .success(let value): body(value)

@@ -9,6 +9,10 @@ public enum SelftestText {
         }
         if let core = report.coreSimulator { lines.append("CoreSimulator \(core.version) (\(core.build))") }
         if let kit = report.simulatorKit { lines.append("SimulatorKit \(kit.version) (\(kit.build)) at \(kit.path)") }
+        if let macOS = report.macOS {
+            let translator = report.accessibilityTranslation.map { ", AccessibilityPlatformTranslation \($0.version) (\($0.build))" } ?? ""
+            lines.append("macOS \(macOS.version) (\(macOS.build))\(translator)")
+        }
         if let problem = report.problem { lines.append("problem: \(problem)") }
         let table = report.table
         lines.append("version table (\(table.source.rawValue)): \(table.entry ?? (table.forcedUnknown ? "forced unknown" : "unknown build"))")

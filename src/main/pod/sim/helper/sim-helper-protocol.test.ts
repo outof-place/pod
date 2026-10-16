@@ -10,6 +10,7 @@ import {
   SIM_HELPER_METHODS,
   SIM_HELPER_PROTOCOL_VERSION,
   SIM_HELPER_TOKEN_ENV,
+  SimHelperHidAction,
   SimHelperReport
 } from './sim-helper-protocol'
 
@@ -44,7 +45,13 @@ describe('pod-sim protocol v1 as the runtime reads it', () => {
     ['attachDisplay', SIM_HELPER_METHODS.attachDisplay.result],
     ['displayStats', SIM_HELPER_METHODS.displayStats.result],
     ['screenshot', SIM_HELPER_METHODS.screenshot.result],
-    ['screenshotSimctl', SIM_HELPER_METHODS.screenshot.result]
+    ['screenshotSimctl', SIM_HELPER_METHODS.screenshot.result],
+    ['selftestInput', SimHelperReport],
+    ['selftestAxUnknownMacOS', SimHelperReport],
+    ['hidTap', SIM_HELPER_METHODS.hid.result],
+    ['hidText', SIM_HELPER_METHODS.hid.result],
+    ['hidPasteAlert', SIM_HELPER_METHODS.hid.result],
+    ['ax', SIM_HELPER_METHODS.ax.result]
   ] as const)('keeps every key of the fixture result %s, optional ones too', (key, schema) => {
     // zod drops keys it does not know, so a key only one side has fails here.
     expect(schema.parse(fixture.results[key])).toEqual(fixture.results[key])
@@ -64,6 +71,36 @@ describe('pod-sim protocol v1 as the runtime reads it', () => {
     expect(SIM_HELPER_METHODS.screenshot.result.parse(fixture.results.screenshot).source).toBe(
       'surface'
     )
+    const input = SimHelperReport.parse(fixture.results.selftestInput)
+    expect([input.capabilities.hid.status, input.capabilities.ax.status]).toEqual(['ok', 'ok'])
+    expect(input.macOS?.build).toBe('26A434')
+    // ax is keyed by the macOS build too: a new macOS turns ax alone unsupported.
+    const newMacOS = SimHelperReport.parse(fixture.results.selftestAxUnknownMacOS)
+    expect([newMacOS.capabilities.hid.status, newMacOS.capabilities.ax.status]).toEqual([
+      'ok',
+      'unsupported'
+    ])
+    expect(SIM_HELPER_METHODS.hid.result.parse(fixture.results.hidTap).frameAfterMs).toBe(26.5)
+    const ax = SIM_HELPER_METHODS.ax.result.parse(fixture.results.ax)
+    expect(ax.nodes.map((node) => node.label)).toEqual(['Search bookings', 'October', 'More'])
+    expect(ax.shown + ax.omitted).toBe(ax.total)
+  })
+
+  it('keeps every hid action the helper decodes', () => {
+    const actions = [
+      { kind: 'tap', x: 201, y: 82 },
+      { kind: 'longPress', x: 201, y: 82, durationMs: 800 },
+      { kind: 'swipe', from: { x: 201, y: 700 }, to: { x: 201, y: 200 }, edge: 'bottom' },
+      { kind: 'drag', from: { x: 50, y: 400 }, to: { x: 350, y: 400 }, pressMs: 600 },
+      { kind: 'pinch', centre: { x: 201, y: 437 }, fromSpan: 100, toSpan: 300, angle: 90 },
+      { kind: 'touch', phase: 'move', points: [{ x: 10, y: 20 }] },
+      { kind: 'text', text: 'zażółć gęślą jaźń', via: 'paste' },
+      { kind: 'key', key: 'return', modifiers: ['command'], phase: 'press' },
+      { kind: 'button', button: 'lock', holdMs: 100 }
+    ]
+    for (const action of actions) {
+      expect(SimHelperHidAction.parse(action)).toEqual(action)
+    }
   })
 
   it('every error an exchange expects is one the runtime knows', () => {

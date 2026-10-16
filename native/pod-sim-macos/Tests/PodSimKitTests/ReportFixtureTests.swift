@@ -22,7 +22,7 @@ struct ReportFixtureTests {
     }
 
     @Test("self-test reports keep the fixture's shape and its optional keys, no null keys",
-          arguments: ["hello", "selftestUnknownBuild", "selftestDevice", "selftestStaticScreen"])
+          arguments: ["hello", "selftestUnknownBuild", "selftestDevice", "selftestStaticScreen", "selftestInput", "selftestAxUnknownMacOS"])
     func reports(_ key: String) throws {
         try roundTrips(SelftestReport.self, key)
     }
@@ -35,5 +35,11 @@ struct ReportFixtureTests {
         case "displayStats": try roundTrips(DisplayStats.self, key)
         default: try roundTrips(ScreenshotResult.self, key)
         }
+    }
+
+    @Test("hid and ax results keep the fixture's shape and its optional keys",
+          arguments: ["hidTap", "hidText", "hidPasteAlert", "ax"])
+    func inputResults(_ key: String) throws {
+        if key == "ax" { try roundTrips(AXSnapshotResult.self, key) } else { try roundTrips(HIDResult.self, key) }
     }
 }

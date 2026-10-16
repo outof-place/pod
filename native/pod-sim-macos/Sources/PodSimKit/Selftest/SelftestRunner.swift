@@ -39,7 +39,9 @@ public struct HelperContext: Sendable {
         let overridePath = environment[VersionTable.overrideEnvironmentKey].flatMap { $0.isEmpty ? nil : $0 }
         let tableSource = VersionTableSource.load(overridePath: overridePath)
         let forcedUnknown = environment[VersionTable.forceUnknownEnvironmentKey] == "1"
-        let lookup = facts.builds.map { tableSource.table.lookup($0, forcedUnknown: forcedUnknown, implemented: SelftestRunner.implemented) }
+        let lookup = facts.builds.map {
+            tableSource.table.lookup($0, forcedUnknown: forcedUnknown, implemented: SelftestRunner.implemented, macOSBuild: facts.macOS?.build)
+        }
         let picksAny = lookup?.verdicts.values.contains { if case .implementation = $0 { true } else { false } } ?? false
         return HelperContext(
             facts: facts, tableSource: tableSource, forcedUnknown: forcedUnknown, overridePath: overridePath,
@@ -56,8 +58,10 @@ public struct HelperContext: Sendable {
 }
 
 public enum SelftestRunner {
-    /// What this binary implements; stage 3 adds `hid` and `ax`.
-    public static let implemented: [Capability: Set<String>] = [.display: ["screenCallbacks"], .screenshot: ["surface"]]
+    /// What this binary implements.
+    public static let implemented: [Capability: Set<String>] = [
+        .display: ["screenCallbacks"], .screenshot: ["surface"], .hid: ["dtuhid"], .ax: ["translatorWalk"],
+    ]
 
     public static func run(_ options: SelftestOptions, context: HelperContext) -> SelftestReport {
         var probes: [Capability: ProbeOutcome] = [:]
@@ -71,6 +75,8 @@ public enum SelftestRunner {
                 : .failed(checked: .symbols, reason: "missing \(missing.joined(separator: ", "))")
             probes[.display] = symbols
             probes[.screenshot] = symbols
+            if picked(.hid, context) { probes[.hid] = missing.isEmpty ? InputProbes.symbols() : symbols }
+            if picked(.ax, context) { probes[.ax] = missing.isEmpty ? AccessibilityProbes.symbols() : symbols }
             if missing.isEmpty, let udid = options.udid {
                 switch context.simulatorService.flatMap({ $0.device(udid: udid) }) {
                 case .failure(let error):
@@ -83,6 +89,8 @@ public enum SelftestRunner {
                         let display = DeviceProbes.display(handle, waitMs: options.waitMs)
                         probes[.display] = display
                         probes[.screenshot] = DeviceProbes.screenshot(handle)
+                        if picked(.hid, context), case .passed = probes[.hid] { probes[.hid] = InputProbes.device(handle) }
+                        if picked(.ax, context), case .passed = probes[.ax] { probes[.ax] = AccessibilityProbes.device(handle) }
                     }
                 }
             }
@@ -97,7 +105,7 @@ public enum SelftestRunner {
             SelftestReport.Fallbacks(screenshot: DeviceProbes.simctlScreenshot(
                 udid: $0, developerDir: context.facts.xcode?.developerDir, deviceSet: context.deviceSetPath))
         }
-        return SelftestReport(
+        var report = SelftestReport(
             protocol: HelperProtocol.version,
             helper: .init(version: HelperVersion.current, pid: Int(getpid())),
             xcode: context.facts.xcode, coreSimulator: context.facts.coreSimulator, simulatorKit: context.facts.simulatorKit,
@@ -108,5 +116,13 @@ public enum SelftestRunner {
             capabilities: .init(
                 display: reports[.display]!, screenshot: reports[.screenshot]!, hid: reports[.hid]!, ax: reports[.ax]!),
             deviceSet: context.deviceSetPath, device: device, fallbacks: fallbacks)
+        report.macOS = context.facts.macOS
+        report.accessibilityTranslation = context.facts.accessibilityTranslation
+        return report
+    }
+
+    /// The table picked an implementation: only then is its private code loaded or probed.
+    private static func picked(_ capability: Capability, _ context: HelperContext) -> Bool {
+        if case .implementation = context.lookup?.verdicts[capability] { true } else { false }
     }
 }

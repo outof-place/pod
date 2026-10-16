@@ -18,6 +18,10 @@ public enum HelperProtocol {
         "detachDisplay": 5_000,
         // The framebuffer read, else `simctl io screenshot` (6 s cap).
         "screenshot": 8_000,
+        // Connecting (a 4 s liveness reply at most) plus an action of at most 10 s (HIDLimits).
+        "hid": 15_000,
+        // A 2.5 s walk budget plus one request in flight; the first call also loads the translator.
+        "ax": 5_000,
     ]
     /// `simctl` children end before the methods that wait on them reach their deadline.
     static let simctlTimeout: TimeInterval = 6

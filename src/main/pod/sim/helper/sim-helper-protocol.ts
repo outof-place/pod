@@ -4,6 +4,7 @@
 // line on the helper's stdio, at most SIM_HELPER_MAX_FRAME_BYTES before the newline. The shared
 // fixture native/pod-sim-macos/Fixtures/protocol-v1.json is decoded by both sides' tests.
 import { z } from 'zod'
+import { SimNode } from '../../../../shared/pod-sim/sim-results'
 
 export const SIM_HELPER_PROTOCOL_VERSION = 1
 export const SIM_HELPER_MAX_FRAME_BYTES = 1_048_576
@@ -75,6 +76,9 @@ export const SimHelperReport = z.object({
     .optional(),
   coreSimulator: Framework.optional(),
   simulatorKit: Framework.optional(),
+  // The running macOS and its AccessibilityPlatformTranslation, which key `ax` (not Xcode).
+  macOS: z.object({ version: z.string(), build: z.string() }).optional(),
+  accessibilityTranslation: Framework.optional(),
   // No usable Xcode, CoreSimulator or SimulatorKit.
   problem: z.string().optional(),
   table: z.object({
@@ -147,6 +151,123 @@ export const SimHelperScreenshot = z.object({
 
 const Udid = z.object({ udid: z.string() })
 
+// Device points, origin top-left: the accessibility frames' space. The helper refuses points off
+// the screen (badParams) instead of clamping them.
+const DevicePoint = z.object({ x: z.number(), y: z.number() })
+const Edge = z.enum(['left', 'right', 'top', 'bottom'])
+
+/**
+ * What `hid` does. Gestures are timed by the helper (defaults: tap holdMs 60, longPress durationMs
+ * 1000, swipe durationMs 300, drag pressMs 600 / durationMs 500 / releaseMs 200, pinch durationMs
+ * 400, button holdMs 100); `touch` is one raw contact phase for a person's pointer (stage 8). Text
+ * goes as US keys when it is printable ASCII (plus newline and tab) of at most 250 characters, else
+ * through the device pasteboard and Cmd+V; `via` forces one. No action plans over 10 s.
+ */
+export const SimHelperHidAction = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('tap'),
+    x: z.number(),
+    y: z.number(),
+    holdMs: z.number().int().optional()
+  }),
+  z.object({
+    kind: z.literal('longPress'),
+    x: z.number(),
+    y: z.number(),
+    durationMs: z.number().int().optional()
+  }),
+  z.object({
+    kind: z.literal('swipe'),
+    from: DevicePoint,
+    to: DevicePoint,
+    durationMs: z.number().int().optional(),
+    // Flags every contact as starting on that edge: iOS reads a system gesture (back, home).
+    edge: Edge.optional()
+  }),
+  z.object({
+    kind: z.literal('drag'),
+    from: DevicePoint,
+    to: DevicePoint,
+    pressMs: z.number().int().optional(),
+    durationMs: z.number().int().optional(),
+    releaseMs: z.number().int().optional()
+  }),
+  z.object({
+    kind: z.literal('pinch'),
+    centre: DevicePoint,
+    fromSpan: z.number(),
+    toSpan: z.number(),
+    durationMs: z.number().int().optional(),
+    // Degrees; 0 puts the two fingers side by side.
+    angle: z.number().optional()
+  }),
+  z.object({
+    kind: z.literal('touch'),
+    phase: z.enum(['down', 'move', 'up']),
+    points: z.array(DevicePoint).min(1).max(2),
+    edge: Edge.optional()
+  }),
+  z.object({
+    kind: z.literal('text'),
+    text: z.string().min(1),
+    via: z.enum(['auto', 'keys', 'paste']).optional()
+  }),
+  z.object({
+    kind: z.literal('key'),
+    // A name from SIM_KEYS or one printable ASCII character; or a raw HID keyboard usage (page 7).
+    key: z.string().optional(),
+    usage: z.number().int().optional(),
+    modifiers: z.array(z.enum(['shift', 'control', 'option', 'command'])).optional(),
+    phase: z.enum(['press', 'down', 'up']).optional()
+  }),
+  z.object({
+    kind: z.literal('button'),
+    button: z.enum(['home', 'lock', 'siri', 'volumeUp', 'volumeDown']),
+    holdMs: z.number().int().optional()
+  })
+])
+export type SimHelperHidAction = z.infer<typeof SimHelperHidAction>
+
+export const SimHelperHidResult = z.object({
+  udid: z.string(),
+  kind: z.string(),
+  // Time spent sending, waits included.
+  ms: z.number().int(),
+  via: z.enum(['hid', 'paste']).optional(),
+  typed: z.number().int().optional(),
+  // With waitForFrameMs: the first frame after the first event; absent when none came in time.
+  frameAfterMs: z.number().optional(),
+  // A public fallback did the work instead of the private path, and why (none ships yet).
+  degraded: z.string().optional(),
+  // After a paste, iOS asks whether the app may paste (no `simctl privacy <udid> grant pasteboard
+  // <bundle>` for it): the text lands once "Allow Paste", which `ax` lists, is tapped.
+  alert: z.literal('pastePermission').optional()
+})
+
+/**
+ * `ax`'s answer: the frozen contract's `state` nodes (SimNode, field for field) and counts. `index`
+ * counts the whole walk, so it survives a filter; `centre` is the middle of a node's on-screen part;
+ * `visible` is on screen, not hidden and, when hit-tested, not covered. `fingerprint` changes only
+ * when what is on screen does (not for spinner values, focus or sub-point jitter): settle compares two.
+ */
+export const SimHelperAxResult = z.object({
+  udid: z.string(),
+  screen: z.object({ width: z.number(), height: z.number(), scale: z.number() }),
+  app: z.object({ pid: z.number().int() }).optional(),
+  nodes: z.array(SimNode),
+  total: z.number().int(),
+  shown: z.number().int(),
+  omitted: z.number().int(),
+  // Matching nodes left out for being off screen, hidden or covered (0 with `all`).
+  notVisible: z.number().int(),
+  // The tree collapsed to the application element: system UI no tree shows may cover the app.
+  alertSuspected: z.boolean(),
+  fingerprint: z.string(),
+  ms: z.number().int(),
+  transport: z.enum(['bridge', 'coreSimulator'])
+})
+export type SimHelperAxResult = z.infer<typeof SimHelperAxResult>
+
 /** Each method's params and result; params are what the runtime sends. */
 export const SIM_HELPER_METHODS = {
   selftest: {
@@ -165,6 +286,29 @@ export const SIM_HELPER_METHODS = {
       quality: z.number().optional()
     }),
     result: SimHelperScreenshot
+  },
+  hid: {
+    params: z.object({
+      udid: z.string(),
+      action: SimHelperHidAction,
+      // 1 to 2000: report the first frame after the first event (input-to-damage), waiting this long.
+      waitForFrameMs: z.number().int().optional()
+    }),
+    result: SimHelperHidResult
+  },
+  ax: {
+    params: z.object({
+      udid: z.string(),
+      // 1 to 500, default 60 (the contract's state budget); the rest is counted in `omitted`.
+      maxNodes: z.number().int().optional(),
+      // Case- and diacritic-insensitive substring of label, value or id.
+      filter: z.string().optional(),
+      // Off-screen, hidden and covered nodes too.
+      all: z.boolean().optional(),
+      // Hit-test each on-screen node so a covered one is not offered (default true).
+      hitTest: z.boolean().optional()
+    }),
+    result: SimHelperAxResult
   }
 } as const
 export type SimHelperMethod = keyof typeof SIM_HELPER_METHODS
@@ -183,7 +327,11 @@ export const SIM_HELPER_DEADLINES_MS = {
   displayStats: 2_000,
   detachDisplay: 5_000,
   // The framebuffer read, else simctl io screenshot (6 s cap).
-  screenshot: 8_000
+  screenshot: 8_000,
+  // Connecting (a 4 s liveness reply at most) plus an action of at most 10 s.
+  hid: 15_000,
+  // A 2.5 s walk budget plus one request in flight.
+  ax: 5_000
 } as const satisfies Record<SimHelperMethod, number>
 
 /** How far past its own deadline a helper may be silent before the runtime calls it hung. */

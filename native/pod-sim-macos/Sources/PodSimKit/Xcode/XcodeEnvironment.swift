@@ -25,6 +25,9 @@ public struct EnvironmentFacts: Sendable {
     public var coreSimulator: FrameworkInfo?
     public var simulatorKit: FrameworkInfo?
     public var problem: String?
+    /// The running macOS, which keys `ax` (its translator ships with macOS, not Xcode).
+    public var macOS: MacOSInfo?
+    public var accessibilityTranslation: FrameworkInfo?
 
     public var builds: FrameworkBuilds? {
         guard problem == nil, let coreSimulator, let simulatorKit else { return nil }
@@ -38,6 +41,8 @@ public enum XcodeEnvironmentResolver {
 
     public static func resolve(environment: [String: String]) -> EnvironmentFacts {
         var facts = EnvironmentFacts()
+        facts.macOS = MacOSInfo.running()
+        facts.accessibilityTranslation = framework(at: MacOSInfo.accessibilityTranslationPath)
         let developerDir: String
         let source: XcodeInfo.Source
         if let fromEnv = environment["DEVELOPER_DIR"], !fromEnv.isEmpty {

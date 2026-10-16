@@ -20,13 +20,24 @@
     "timeout",
     "internal"
   ],
-  "methods": ["hello", "selftest", "attachDisplay", "displayStats", "detachDisplay", "screenshot"],
+  "methods": [
+    "hello",
+    "selftest",
+    "attachDisplay",
+    "displayStats",
+    "detachDisplay",
+    "screenshot",
+    "hid",
+    "ax"
+  ],
   "deadlinesMs": {
     "selftest": 20000,
     "attachDisplay": 5000,
     "displayStats": 2000,
     "detachDisplay": 5000,
-    "screenshot": 8000
+    "screenshot": 8000,
+    "hid": 15000,
+    "ax": 5000
   },
   "checkLevels": ["table", "symbols", "surfaceOnly", "device"],
   "capabilities": ["display", "screenshot", "hid", "ax"],
@@ -315,6 +326,185 @@
       "source": "simctl",
       "ms": 402,
       "fallbackReason": "treated as unknown (POD_SIM_FORCE_UNKNOWN_BUILD=1)"
+    },
+    "selftestInput": {
+      "protocol": 1,
+      "helper": { "version": "0.1.0", "pid": 4245 },
+      "xcode": {
+        "developerDir": "/Applications/Xcode.app/Contents/Developer",
+        "source": "DEVELOPER_DIR",
+        "version": "27.0",
+        "build": "27A266a"
+      },
+      "coreSimulator": {
+        "path": "/Library/Developer/PrivateFrameworks/CoreSimulator.framework",
+        "version": "1171.7",
+        "build": "1171.7"
+      },
+      "simulatorKit": {
+        "path": "/Applications/Xcode.app/Contents/SharedFrameworks/SimulatorKit.framework",
+        "version": "16.0",
+        "build": "1005.2"
+      },
+      "macOS": { "version": "27.0.1", "build": "26A434" },
+      "accessibilityTranslation": {
+        "path": "/System/Library/PrivateFrameworks/AccessibilityPlatformTranslation.framework",
+        "version": "1.0",
+        "build": "587"
+      },
+      "table": {
+        "known": true,
+        "entry": "Xcode 27.0 (27A266a)",
+        "source": "bundled",
+        "forcedUnknown": false
+      },
+      "capabilities": {
+        "display": {
+          "status": "ok",
+          "implementation": "screenCallbacks",
+          "checked": "device",
+          "framesSeen": 0,
+          "note": "surface 1206x2622, 1 surface and 0 frame callbacks in 1500 ms; port 2 of 3 [class 1 no surface; class 0 1206x2622; class 1 no surface]"
+        },
+        "screenshot": {
+          "status": "ok",
+          "implementation": "surface",
+          "checked": "device",
+          "note": "1206x2622 PNG, 124769 bytes in 54 ms"
+        },
+        "hid": {
+          "status": "ok",
+          "implementation": "dtuhid",
+          "checked": "device",
+          "note": "dtuhidd answered a barrier through com.apple.coredevice.feature.remote.hid.digitizer in 3 ms"
+        },
+        "ax": {
+          "status": "ok",
+          "implementation": "translatorWalk",
+          "checked": "device",
+          "note": "22 elements under the frontmost application (app pid 559) in 85 ms"
+        }
+      },
+      "deviceSet": "/private/tmp/pod-sim-s3-set",
+      "device": {
+        "udid": "01C2D240-07BE-4772-AB65-D00D78C451A0",
+        "name": "Portivo-Pod-S3-Input",
+        "state": "Booted"
+      },
+      "fallbacks": { "screenshot": { "via": "simctl", "status": "ok", "ms": 382 } }
+    },
+    "selftestAxUnknownMacOS": {
+      "protocol": 1,
+      "helper": { "version": "0.1.0", "pid": 4246 },
+      "xcode": {
+        "developerDir": "/Applications/Xcode.app/Contents/Developer",
+        "source": "DEVELOPER_DIR",
+        "version": "27.0",
+        "build": "27A266a"
+      },
+      "coreSimulator": {
+        "path": "/Library/Developer/PrivateFrameworks/CoreSimulator.framework",
+        "version": "1171.7",
+        "build": "1171.7"
+      },
+      "simulatorKit": {
+        "path": "/Applications/Xcode.app/Contents/SharedFrameworks/SimulatorKit.framework",
+        "version": "16.0",
+        "build": "1005.2"
+      },
+      "macOS": { "version": "27.1", "build": "26B5040e" },
+      "accessibilityTranslation": {
+        "path": "/System/Library/PrivateFrameworks/AccessibilityPlatformTranslation.framework",
+        "version": "1.0",
+        "build": "601"
+      },
+      "table": {
+        "known": true,
+        "entry": "Xcode 27.0 (27A266a)",
+        "source": "bundled",
+        "forcedUnknown": false
+      },
+      "capabilities": {
+        "display": { "status": "ok", "implementation": "screenCallbacks", "checked": "symbols" },
+        "screenshot": { "status": "ok", "implementation": "surface", "checked": "symbols" },
+        "hid": { "status": "ok", "implementation": "dtuhid", "checked": "symbols" },
+        "ax": {
+          "status": "unsupported",
+          "checked": "table",
+          "reason": "macOS 26B5040e is not in the version table for ax"
+        }
+      }
+    },
+    "hidTap": {
+      "udid": "01C2D240-07BE-4772-AB65-D00D78C451A0",
+      "kind": "tap",
+      "ms": 134,
+      "frameAfterMs": 26.5
+    },
+    "hidText": {
+      "udid": "01C2D240-07BE-4772-AB65-D00D78C451A0",
+      "kind": "text",
+      "ms": 733,
+      "via": "hid",
+      "typed": 23
+    },
+    "hidPasteAlert": {
+      "udid": "01C2D240-07BE-4772-AB65-D00D78C451A0",
+      "kind": "text",
+      "ms": 912,
+      "via": "paste",
+      "typed": 17,
+      "alert": "pastePermission"
+    },
+    "ax": {
+      "udid": "01C2D240-07BE-4772-AB65-D00D78C451A0",
+      "screen": { "width": 402, "height": 874, "scale": 3 },
+      "app": { "pid": 559 },
+      "nodes": [
+        {
+          "index": 0,
+          "role": "AXButton",
+          "label": "Search bookings",
+          "centre": { "x": 201, "y": 82 },
+          "frame": { "x": 16, "y": 62, "width": 370, "height": 40 },
+          "visible": true,
+          "enabled": true,
+          "selected": false,
+          "focused": false
+        },
+        {
+          "index": 6,
+          "role": "AXButton",
+          "label": "October",
+          "value": "October 2026",
+          "centre": { "x": 326, "y": 321.67 },
+          "frame": { "x": 283, "y": 307.67, "width": 86, "height": 28 },
+          "visible": true,
+          "enabled": true,
+          "selected": false,
+          "focused": false
+        },
+        {
+          "index": 30,
+          "role": "AXButton",
+          "label": "More",
+          "id": "tab-more",
+          "centre": { "x": 349, "y": 817 },
+          "frame": { "x": 312, "y": 791, "width": 74, "height": 52 },
+          "visible": true,
+          "enabled": true,
+          "selected": false,
+          "focused": false
+        }
+      ],
+      "total": 22,
+      "shown": 3,
+      "omitted": 19,
+      "notVisible": 10,
+      "alertSuspected": false,
+      "fingerprint": "33ef18e57b51af54",
+      "ms": 85,
+      "transport": "bridge"
     }
   }
 }

@@ -37,11 +37,27 @@ public struct VersionTable: Sendable {
         public let verified: String?
     }
 
+    /// `ax` also runs AccessibilityPlatformTranslation, which ships with macOS, not Xcode: it is
+    /// supported only where the row names it and a macOS build is listed for the same implementation.
+    public struct AccessibilityEntry: Codable, Equatable, Sendable {
+        public let name: String
+        /// `ProductBuildVersion` of /System/Library/CoreServices/SystemVersion.plist.
+        public let macOS: String
+        public let ax: String
+        public let verified: String?
+    }
+
     public static let schema = 1
     public static let forceUnknownEnvironmentKey = "POD_SIM_FORCE_UNKNOWN_BUILD"
     public static let overrideEnvironmentKey = "POD_SIM_VERSION_TABLE"
 
     public let entries: [Entry]
+    public let accessibility: [AccessibilityEntry]
+
+    public init(entries: [Entry], accessibility: [AccessibilityEntry] = []) {
+        self.entries = entries
+        self.accessibility = accessibility
+    }
 
     public static func bundled() throws -> VersionTable {
         try decode(Data(bundledVersionTableJSON.utf8))
@@ -50,6 +66,8 @@ public struct VersionTable: Sendable {
     private struct File: Decodable {
         let schema: Int
         let builds: [Entry]
+        // Optional within schema 1: a table without it supports `ax` nowhere.
+        let accessibility: [AccessibilityEntry]?
     }
 
     public static func decode(_ data: Data) throws -> VersionTable {
@@ -62,17 +80,23 @@ public struct VersionTable: Sendable {
         guard file.schema == schema else {
             throw VersionTableError(message: "schema \(file.schema), this helper reads schema \(schema)")
         }
-        return VersionTable(entries: file.builds)
+        return VersionTable(entries: file.builds, accessibility: file.accessibility ?? [])
     }
 
     /// The override's rows replace rows for the same builds and come first; the rest stay.
     public func overlaid(by override: VersionTable) -> VersionTable {
         let replaced = Set(override.entries.map { "\($0.coreSimulator)|\($0.simulatorKit)" })
-        return VersionTable(entries: override.entries + entries.filter { !replaced.contains("\($0.coreSimulator)|\($0.simulatorKit)") })
+        let replacedMacOS = Set(override.accessibility.map(\.macOS))
+        return VersionTable(
+            entries: override.entries + entries.filter { !replaced.contains("\($0.coreSimulator)|\($0.simulatorKit)") },
+            accessibility: override.accessibility + accessibility.filter { !replacedMacOS.contains($0.macOS) })
     }
 
-    /// `implemented`: the implementation names this binary has, per capability.
-    public func lookup(_ builds: FrameworkBuilds, forcedUnknown: Bool, implemented: [Capability: Set<String>]) -> TableLookup {
+    /// `implemented`: the implementation names this binary has, per capability. `macOSBuild` decides
+    /// `ax` together with the row (AccessibilityEntry).
+    public func lookup(
+        _ builds: FrameworkBuilds, forcedUnknown: Bool, implemented: [Capability: Set<String>], macOSBuild: String? = nil
+    ) -> TableLookup {
         let entry = forcedUnknown
             ? nil
             : entries.first { $0.coreSimulator == builds.coreSimulator && $0.simulatorKit == builds.simulatorKit }
@@ -94,6 +118,10 @@ public struct VersionTable: Sendable {
             } else {
                 verdicts[capability] = .unsupported("CoreSimulator \(builds.coreSimulator) with SimulatorKit \(builds.simulatorKit) is not in the version table")
             }
+        }
+        // Both halves must be known: the row's CoreSimulator side and this macOS's translator.
+        if case .implementation(let name) = verdicts[.ax], !accessibility.contains(where: { $0.macOS == macOSBuild && $0.ax == name }) {
+            verdicts[.ax] = .unsupported("macOS \(macOSBuild ?? "(build unknown)") is not in the version table for ax")
         }
         return TableLookup(entry: entry, verdicts: verdicts)
     }

@@ -2,6 +2,7 @@
 // row needs no release: put the row in POD_SIM_VERSION_TABLE). Keys are CFBundleVersion builds, not
 // the version strings: Xcode 26.6 and 27.0 both ship SimulatorKit "16.0" (955.7 and 1005.2).
 // Values name an implementation this binary has; a capability left out of a row is unsupported there.
+// `ax` also needs its macOS build listed under `accessibility` (the translator ships with macOS).
 let bundledVersionTableJSON = #"""
 {
   "schema": 1,
@@ -12,9 +13,19 @@ let bundledVersionTableJSON = #"""
       "simulatorKit": "1005.2",
       "capabilities": {
         "display": "screenCallbacks",
-        "screenshot": "surface"
+        "screenshot": "surface",
+        "hid": "dtuhid",
+        "ax": "translatorWalk"
       },
-      "verified": "macOS 27.0.1 (26A434), iOS 26.5 (23F77): stage 0 spike 2026-10-15, stage 2a selftest 2026-10-16"
+      "verified": "macOS 27.0.1 (26A434), iOS 26.5 (23F77): stage 0 spike 2026-10-15, stage 2a selftest 2026-10-16, stage 3 hid and ax 2026-10-16"
+    }
+  ],
+  "accessibility": [
+    {
+      "name": "macOS 27.0.1 (26A434)",
+      "macOS": "26A434",
+      "ax": "translatorWalk",
+      "verified": "AccessibilityPlatformTranslation 1.0 (587): stage 0 spike 2026-10-15, stage 3 2026-10-16"
     }
   ]
 }

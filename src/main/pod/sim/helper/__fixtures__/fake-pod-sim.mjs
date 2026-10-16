@@ -13,6 +13,8 @@
 //   helperTimeout answers every screenshot with the helper's own `timeout` error
 //   reverse       holds the first screenshot until the second arrives, then answers both in reverse
 //   noisy         writes junk and an oversized line on stdout before each reply
+//   hidHang       hid's private call never returns: the helper answers its own timeout after
+//                 `hidTimeoutMs` (default 400) while other calls go on being answered
 // `screenshotDelayMs` delays every screenshot answer (any mode).
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -107,6 +109,27 @@ createInterface({ input: process.stdin }).on('line', (line) => {
           'display: CoreSimulator 1200.1 with SimulatorKit 1050.3 is not in the version table'
         )
       : send({ id, result: fixture.results.attachDisplay })
+  }
+  if (method === 'hid') {
+    if (mode === 'hidHang') {
+      setTimeout(
+        () => error(id, 'timeout', 'hid passed its 15000 ms deadline in the helper'),
+        config.hidTimeoutMs ?? 400
+      )
+      return
+    }
+    const kind = params.action.kind
+    return send({
+      id,
+      result: {
+        ...fixture.results[kind === 'text' ? 'hidText' : 'hidTap'],
+        udid: params.udid,
+        kind
+      }
+    })
+  }
+  if (method === 'ax') {
+    return send({ id, result: { ...fixture.results.ax, udid: params.udid } })
   }
   if (method === 'displayStats' || method === 'detachDisplay') {
     return send({ id, result: fixture.results.displayStats })

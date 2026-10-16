@@ -13,6 +13,7 @@ import {
 // A real child process speaking protocol v1 (see its header for the modes).
 const FAKE = join(__dirname, '__fixtures__', 'fake-pod-sim.mjs')
 const UDID = '8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0'
+const OTHER_UDID = '01C2D240-07BE-4772-AB65-D00D78C451A0'
 const running: { supervisor: SimHelperSupervisor; dir: string }[] = []
 
 type FakeConfig = {
@@ -20,6 +21,7 @@ type FakeConfig = {
   liveOnSpawns?: number[]
   liveMs?: number
   screenshotDelayMs?: number
+  hidTimeoutMs?: number
 }
 
 function harness(config: string | FakeConfig, options: Partial<SimHelperSupervisorOptions> = {}) {
@@ -141,6 +143,31 @@ describe('pod-sim helper supervisor', () => {
     const shot = await supervisor.call('screenshot', { udid: UDID, path: '/tmp/c.png' })
     expect(shot).toMatchObject({ ok: false, failure: { kind: 'error', code: 'timeout' } })
     expect((await supervisor.call('displayStats', { udid: UDID })).ok).toBe(true)
+    expect(spawns()).toHaveLength(1)
+    expect(supervisor.state()).toMatchObject({ state: 'ready', pid: spawns()[0]?.pid })
+  })
+
+  it('serves hid and ax as typed calls', async () => {
+    const { supervisor } = harness('ok')
+    const tap = await supervisor.call('hid', { udid: UDID, action: { kind: 'tap', x: 201, y: 82 } })
+    expect(tap).toMatchObject({ ok: true, value: { udid: UDID, kind: 'tap' } })
+    const ax = await supervisor.call('ax', { udid: UDID, filter: 'more' })
+    expect(ax.ok && ax.value.nodes.map((node) => node.centre)).toContainEqual({ x: 349, y: 817 })
+  })
+
+  it('a hung hid on one device does not hold back a screenshot of another, and ends at the helper timeout without a restart', async () => {
+    const { supervisor, spawns } = harness({ mode: 'hidHang', hidTimeoutMs: 1500 })
+    expect((await supervisor.hello()).ok).toBe(true)
+    let hidDone = false
+    const hid = supervisor
+      .call('hid', { udid: UDID, action: { kind: 'tap', x: 10, y: 10 } })
+      .finally(() => {
+        hidDone = true
+      })
+    const shot = await supervisor.call('screenshot', { udid: OTHER_UDID, path: '/tmp/other.png' })
+    expect(shot).toMatchObject({ ok: true, value: { path: '/tmp/other.png' } })
+    expect(hidDone).toBe(false)
+    expect(await hid).toMatchObject({ ok: false, failure: { kind: 'error', code: 'timeout' } })
     expect(spawns()).toHaveLength(1)
     expect(supervisor.state()).toMatchObject({ state: 'ready', pid: spawns()[0]?.pid })
   })
