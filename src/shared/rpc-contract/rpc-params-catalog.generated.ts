@@ -454,6 +454,7 @@ import {
   PodSettingsSetParams,
   PodSettingsUnsubscribeParams
 } from './pod-settings-params'
+import { RepoAddRemoteParams, SshBrowseDirParams } from './pod-ssh-remote-project-params'
 import {
   SshAddTargetParams,
   SshImportConfigParams,
@@ -1212,6 +1213,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'projectHostSetup.setupExistingFolder': ProjectHostSetupExistingFolder,
   'projectHostSetup.update': ProjectHostSetupUpdate,
   'repo.add': RepoPath,
+  'repo.addRemote': RepoAddRemoteParams,
   'repo.baseRefDefault': RepoSelector,
   'repo.clone': RepoClone,
   'repo.create': RepoCreate,
@@ -1276,6 +1278,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'speech.models.download': SpeechModelAction,
   'speech.models.list': null,
   'ssh.addTarget': SshAddTargetParams,
+  'ssh.browseDir': SshBrowseDirParams,
   'ssh.connect': SshTarget,
   'ssh.disconnect': SshTarget,
   'ssh.getState': SshTarget,
