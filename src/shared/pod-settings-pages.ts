@@ -11,6 +11,7 @@ export type PodSettingsPage = {
     | 'accounts'
     | 'git'
     | 'claude'
+    | 'plugins'
     | 'advanced'
   title: string
   /** A page whose content comes from another RPC namespace (Accounts: `accounts.*`). */
@@ -194,6 +195,13 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
     title: 'Claude',
     source: 'podMcpLazy',
     sections: [{ title: 'MCP servers', keys: ['mcpLazyStart'] }]
+  },
+  // Its own page: plugins.* lists, installs and removes the plugins these switches let run.
+  {
+    id: 'plugins',
+    title: 'Plugins',
+    source: 'plugins',
+    sections: [{ title: 'Plugins', keys: ['pluginSystemEnabled', 'thirdPartyPluginsEnabled'] }]
   },
   // The proxy URL can carry a password: podSettings.getNetworkProxy and setNetworkProxy, local only.
   {

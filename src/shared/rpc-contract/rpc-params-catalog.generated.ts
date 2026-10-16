@@ -450,6 +450,16 @@ import {
   PodOrbstackWorktreeParams
 } from './pod-orbstack-params'
 import {
+  PluginInstallParams,
+  PluginKeyParams,
+  PluginMarketplaceAddParams,
+  PluginMarketplaceInstallParams,
+  PluginMarketplaceInstalledParams,
+  PluginMarketplacePluginParams,
+  PluginMarketplaceRefreshParams,
+  PluginMarketplaceSourceParams
+} from './pod-plugins-manage-params'
+import {
   PodSettingsSetNetworkProxyParams,
   PodSettingsSetParams,
   PodSettingsUnsubscribeParams
@@ -1176,11 +1186,22 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerTerminalUserInput': OrchestrationWorkerTerminalUserInputParams,
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
+  'plugins.addMarketplace': PluginMarketplaceAddParams,
   'plugins.consent': pluginConsentRequestSchema,
+  'plugins.install': PluginInstallParams,
+  'plugins.installMarketplacePlugin': PluginMarketplaceInstallParams,
   'plugins.invokeCommand': PluginInvokeCommandParams,
   'plugins.list': null,
+  'plugins.listMarketplacePlugins': null,
+  'plugins.listMarketplaces': null,
   'plugins.panelAction': PluginsPanelActionParams,
+  'plugins.previewMarketplacePlugin': PluginMarketplacePluginParams,
+  'plugins.previewMarketplaceUpdate': PluginMarketplaceInstalledParams,
   'plugins.readPanelEntry': PluginReadPanelEntryParams,
+  'plugins.refreshMarketplaces': PluginMarketplaceRefreshParams,
+  'plugins.remove': PluginKeyParams,
+  'plugins.removeMarketplace': PluginMarketplaceSourceParams,
+  'plugins.rollbackMarketplacePlugin': PluginMarketplaceInstalledParams,
   'plugins.setEnabled': PluginSetEnabledParams,
   'pod.terminal.directLane': PodTerminalDirectLaneParams,
   'pod.terminal.openedBeforeClaudeAccounts': PodTerminalOpenedBeforeClaudeAccountsParams,
