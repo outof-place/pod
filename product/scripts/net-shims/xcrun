@@ -1,19 +1,24 @@
 #!/bin/bash
 # Pod release net shim: retries notarytool submit and stapler on network errors, else plain xcrun.
 # stdout stays notarytool's own (release-app.sh parses its --output-format json); notes go to stderr.
-real=/usr/bin/xcrun
+# Tests point POD_NET_SHIM_REAL_XCRUN at a fake.
+real=${POD_NET_SHIM_REAL_XCRUN:-/usr/bin/xcrun}
 net_error='NSURLErrorDomain|offline|timed out|network connection was lost|Network Unavailable|Could not connect|-1009|-1001|-1005|deadlineExceeded|abortedUpload|HTTPClientError|connectTimeout|remoteConnectionClosed'
 accepted='status: Accepted|"status" *: *"Accepted"'
 if [ "${1:-}" = notarytool ] && [ "${2:-}" = submit ]; then
   file=$3; rest=(); for a in "${@:4}"; do [ "$a" = --wait ] || rest+=("$a"); done
+  # Why only one answer reaches stdout: electron-builder parses it as one JSON document, so a
+  # retried attempt's output must not precede the answer that ends the run.
+  last=$(mktemp)
+  trap 'rm -f "$last"' EXIT
   for attempt in 1 2 3; do
-    out=$(mktemp); err=$(mktemp)
-    "$real" notarytool submit "$file" "${rest[@]}" --wait >"$out" 2>"$err"; status=$?
-    cat "$out"; cat "$err" >&2
-    id=$(cat "$out" "$err" | grep -Eo '(id: |"id" *: *")[0-9a-f-]{36}' | head -1 | grep -Eo '[0-9a-f-]{36}')
-    both=$(cat "$out" "$err"); rm -f "$out" "$err"
-    [ "$status" = 0 ] && exit 0
-    echo "$both" | grep -Eq "$net_error" || exit "$status"
+    err=$(mktemp)
+    "$real" notarytool submit "$file" "${rest[@]}" --wait >"$last" 2>"$err"; status=$?
+    cat "$err" >&2
+    id=$(cat "$last" "$err" | grep -Eo '(id: |"id" *: *")[0-9a-f-]{36}' | head -1 | grep -Eo '[0-9a-f-]{36}')
+    both=$(cat "$last" "$err"); rm -f "$err"
+    if [ "$status" = 0 ]; then cat "$last"; exit 0; fi
+    if ! echo "$both" | grep -Eq "$net_error"; then cat "$last"; exit "$status"; fi
     # An upload that never finished leaves a submission with no file: send it again instead.
     echo "$both" | grep -q "Successfully uploaded file" || id=""
     if [ -n "$id" ]; then
@@ -26,12 +31,12 @@ if [ "${1:-}" = notarytool ] && [ "${2:-}" = submit ]; then
         echo "$info" | grep -Eq '"status" *: *"In Progress"|status: In Progress' && continue
         echo "$info"; exit 1
       done
-      exit 1
+      cat "$last"; exit 1
     fi
     echo "net-shim: network error before a submission id, submitting again (attempt $attempt)" >&2
     sleep 30
   done
-  exit 1
+  cat "$last"; exit 1
 fi
 if [ "${1:-}" = stapler ]; then
   for attempt in 1 2 3 4 5 6; do
