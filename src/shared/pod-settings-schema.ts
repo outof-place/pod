@@ -262,6 +262,13 @@ export const POD_SETTINGS_FIELDS = {
     'Middle click on a URL',
     'None pastes the selection, as anywhere else in the terminal.'
   ),
+  // Plugin discovery follows both as they change (ipc/plugins.ts, main-process-plugins.ts).
+  pluginSystemEnabled: row(z.boolean(), 'Plugins', 'Off, no plugin code runs at all.'),
+  thirdPartyPluginsEnabled: row(
+    z.boolean(),
+    'Third-party plugins',
+    "Install plugins from marketplaces, Git and local folders. While this is off, only plugins bundled with Pod run. Remote revocation isn't available in Pod, so a plugin later found unsafe can't be blocked for you."
+  ),
   // network-proxy.ts's normalizer keeps 4096 characters.
   httpProxyBypassRules: row(
     z.string().max(4096),
