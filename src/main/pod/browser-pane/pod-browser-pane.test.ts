@@ -305,6 +305,22 @@ describe('PodBrowserPaneController', () => {
     expect(devTools).toHaveBeenCalledWith(wc)
   })
 
+  it("sends the page's declared icon and drops it when a new document loads", () => {
+    const { panes, wc, sent } = setup()
+    panes.handle(attach)
+    wc.emit('page-favicon-updated', {}, [
+      'https://example.com/icon-32.png',
+      'https://example.com/icon-16.png'
+    ])
+    expect(sent.at(-1)).toMatchObject({
+      type: 'browserState',
+      faviconUrl: 'https://example.com/icon-32.png'
+    })
+    wc.emit('did-navigate')
+    expect(sent.at(-1)).toMatchObject({ type: 'browserState' })
+    expect(sent.at(-1)).not.toHaveProperty('faviconUrl')
+  })
+
   it('forwards cursor and find results of an attached page only', () => {
     const { panes, wc, sent } = setup()
     wc.emit('cursor-changed', {}, 'pointer')

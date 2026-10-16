@@ -36,6 +36,8 @@ type Page = {
   links: PaneLinks
   agentDrivingUntil: number
   agentTimer: ReturnType<typeof setTimeout> | null
+  // The icon the current document declares; a new document starts without one.
+  favicon: string | undefined
 }
 
 export class PodBrowserPaneController {
@@ -76,7 +78,8 @@ export class PodBrowserPaneController {
       }),
       links: new PaneLinks(pageId, (message) => this.deps.send(message)),
       agentDrivingUntil: 0,
-      agentTimer: null
+      agentTimer: null,
+      favicon: undefined
     }
     this.pages.set(pageId, page)
     wc.stopPainting()
@@ -92,6 +95,13 @@ export class PodBrowserPaneController {
     wc.on('update-target-url', (_event, url) => page.links.hover(url, this.userDriven(page)))
     // Why: the link under the pointer was the old page's; the next page's hover starts afresh.
     wc.on('did-navigate', () => page.links.hover('', false))
+    wc.on('did-navigate', () => {
+      page.favicon = undefined
+    })
+    wc.on('page-favicon-updated', (_event, favicons) => {
+      page.favicon = favicons[0]
+      this.sendState(pageId)
+    })
     wc.on('cursor-changed', (_event, cursor) => {
       if (page.token !== null) {
         this.deps.send({ type: 'browserCursor', pageId, cursor })
@@ -314,7 +324,8 @@ export class PodBrowserPaneController {
       loading: wc.isLoading(),
       canGoBack: wc.navigationHistory.canGoBack(),
       canGoForward: wc.navigationHistory.canGoForward(),
-      agentDriving: Date.now() < page.agentDrivingUntil
+      agentDriving: Date.now() < page.agentDrivingUntil,
+      ...(page.favicon ? { faviconUrl: page.favicon } : {})
     })
   }
 }

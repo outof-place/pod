@@ -190,6 +190,8 @@ export type PodBrowserPaneServerMessage =
       canGoBack: boolean
       canGoForward: boolean
       agentDriving: boolean
+      // Optional so older native clients ignore it; absent until the page declares an icon.
+      faviconUrl?: string
     }
   | { type: 'browserCursor'; pageId: string; cursor: string }
   | { type: 'browserFound'; pageId: string; matches: number; active: number; final: boolean }
