@@ -56,6 +56,13 @@ export const POD_SETTINGS_AGENT_FIELDS = {
     'Prompt cache lifetime',
     '5 minutes, or an hour on plans with the extended cache.'
   ),
+  // The runtime's dispatch fence reads it (resolveNestedWorkerMaxDepth); podSettings is host-admin,
+  // so an agent's own paired client can't raise it.
+  nestedWorkerMaxDepth: row(
+    z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
+    'Nested worker depth',
+    'How many generations of dispatched workers may spawn their own workers. 1 keeps the agent tree flat: a coordinator dispatches workers, and those workers do not dispatch.'
+  ),
   codexSessionSourceHome: CodexSessionSourceHomeSchema.meta({
     title: 'Codex history folder',
     propertyOrder: Object.keys(CodexSessionSourceHomeSchema.shape)
