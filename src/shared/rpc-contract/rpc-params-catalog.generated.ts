@@ -454,6 +454,10 @@ import {
   PodSettingsSetParams,
   PodSettingsUnsubscribeParams
 } from './pod-settings-params'
+import {
+  SshCredentialPromptsUnsubscribeParams,
+  SshSubmitCredentialParams
+} from './pod-ssh-credential-params'
 import { RepoAddRemoteParams, SshBrowseDirParams } from './pod-ssh-remote-project-params'
 import {
   SshAddTargetParams,
@@ -1280,6 +1284,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'ssh.addTarget': SshAddTargetParams,
   'ssh.browseDir': SshBrowseDirParams,
   'ssh.connect': SshTarget,
+  'ssh.credentialPrompts.subscribe': null,
+  'ssh.credentialPrompts.unsubscribe': SshCredentialPromptsUnsubscribeParams,
   'ssh.disconnect': SshTarget,
   'ssh.getState': SshTarget,
   'ssh.importConfig': SshImportConfigParams,
@@ -1288,6 +1294,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'ssh.listTargetSummaries': null,
   'ssh.listTargets': null,
   'ssh.removeTarget': SshTarget,
+  'ssh.submitCredential': SshSubmitCredentialParams,
   'ssh.updateTarget': SshUpdateTargetParams,
   'stats.summary': null,
   'status.get': null,
