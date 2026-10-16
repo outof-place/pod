@@ -1,0 +1,320 @@
+{
+  "protocol": 1,
+  "maxFrameBytes": 1048576,
+  "tokenEnv": "POD_SIM_TOKEN",
+  "errorCodes": [
+    "badFrame",
+    "frameTooLarge",
+    "helloRequired",
+    "tokenMismatch",
+    "protocolMismatch",
+    "unknownMethod",
+    "badParams",
+    "unsupported",
+    "failed",
+    "deviceNotFound",
+    "deviceNotBooted",
+    "notAttached",
+    "writeFailed",
+    "simctlFailed",
+    "timeout",
+    "internal"
+  ],
+  "methods": ["hello", "selftest", "attachDisplay", "displayStats", "detachDisplay", "screenshot"],
+  "deadlinesMs": {
+    "selftest": 20000,
+    "attachDisplay": 5000,
+    "displayStats": 2000,
+    "detachDisplay": 5000,
+    "screenshot": 8000
+  },
+  "checkLevels": ["table", "symbols", "surfaceOnly", "device"],
+  "capabilities": ["display", "screenshot", "hid", "ax"],
+  "verdicts": ["ok", "unsupported", "failed"],
+  "exchanges": [
+    {
+      "name": "a request before hello is refused",
+      "token": "5f3a9c0e4b7d21865f3a9c0e4b7d2186",
+      "send": [{ "line": "{\"id\":1,\"method\":\"screenshot\",\"params\":{}}" }],
+      "expect": [{ "id": 1, "error": "helloRequired" }]
+    },
+    {
+      "name": "a hello with another spawn's token is refused and the session stays locked",
+      "token": "5f3a9c0e4b7d21865f3a9c0e4b7d2186",
+      "send": [
+        {
+          "line": "{\"id\":1,\"method\":\"hello\",\"params\":{\"token\":\"0000000000000000000000000000000\",\"protocol\":1}}"
+        },
+        {
+          "line": "{\"id\":2,\"method\":\"displayStats\",\"params\":{\"udid\":\"8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0\"}}"
+        }
+      ],
+      "expect": [
+        { "id": 1, "error": "tokenMismatch" },
+        { "id": 2, "error": "helloRequired" }
+      ]
+    },
+    {
+      "name": "a hello for another protocol version is refused",
+      "token": "5f3a9c0e4b7d21865f3a9c0e4b7d2186",
+      "send": [
+        {
+          "line": "{\"id\":1,\"method\":\"hello\",\"params\":{\"token\":\"5f3a9c0e4b7d21865f3a9c0e4b7d2186\",\"protocol\":2}}"
+        }
+      ],
+      "expect": [{ "id": 1, "error": "protocolMismatch" }]
+    },
+    {
+      "name": "a hello without its token is a bad request",
+      "token": "5f3a9c0e4b7d21865f3a9c0e4b7d2186",
+      "send": [{ "line": "{\"id\":1,\"method\":\"hello\",\"params\":{\"protocol\":1}}" }],
+      "expect": [{ "id": 1, "error": "badParams" }]
+    },
+    {
+      "name": "frames that are not requests get a typed error and the session goes on",
+      "token": "5f3a9c0e4b7d21865f3a9c0e4b7d2186",
+      "send": [
+        { "line": "{nope" },
+        { "line": "[1,2]" },
+        { "line": "{\"id\":\"7\",\"method\":\"hello\"}" },
+        { "line": "{\"id\":true,\"method\":\"hello\"}" },
+        { "line": "{\"id\":8}" },
+        {
+          "line": "{\"id\":9,\"method\":\"hello\",\"params\":{\"token\":\"5f3a9c0e4b7d21865f3a9c0e4b7d2186\",\"protocol\":1}}"
+        }
+      ],
+      "expect": [
+        { "id": null, "error": "badFrame" },
+        { "id": null, "error": "badFrame" },
+        { "id": null, "error": "badFrame" },
+        { "id": null, "error": "badFrame" },
+        { "id": 8, "error": "badFrame" },
+        { "id": 9, "result": "hello" }
+      ]
+    },
+    {
+      "name": "a frame over the limit is refused without its bytes and the next frame is answered",
+      "token": "5f3a9c0e4b7d21865f3a9c0e4b7d2186",
+      "send": [
+        { "oversizedBytes": 1048577 },
+        {
+          "line": "{\"id\":2,\"method\":\"hello\",\"params\":{\"token\":\"5f3a9c0e4b7d21865f3a9c0e4b7d2186\",\"protocol\":1}}"
+        }
+      ],
+      "expect": [
+        { "id": null, "error": "frameTooLarge" },
+        { "id": 2, "result": "hello" }
+      ]
+    },
+    {
+      "name": "after hello, unknown methods and non-object params are refused and known methods reach the helper",
+      "token": "5f3a9c0e4b7d21865f3a9c0e4b7d2186",
+      "send": [
+        {
+          "line": "{\"id\":1,\"method\":\"hello\",\"params\":{\"token\":\"5f3a9c0e4b7d21865f3a9c0e4b7d2186\",\"protocol\":1}}"
+        },
+        { "line": "{\"id\":2,\"method\":\"teleport\",\"params\":{}}" },
+        { "line": "{\"id\":3,\"method\":\"displayStats\",\"params\":\"8B1C2D3E\"}" },
+        {
+          "line": "{\"id\":4,\"method\":\"displayStats\",\"params\":{\"udid\":\"8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0\"}}"
+        }
+      ],
+      "expect": [
+        { "id": 1, "result": "hello" },
+        { "id": 2, "error": "unknownMethod" },
+        { "id": 3, "error": "badParams" },
+        { "id": 4, "result": "displayStats" }
+      ]
+    }
+  ],
+  "results": {
+    "hello": {
+      "protocol": 1,
+      "helper": { "version": "0.1.0", "pid": 4242 },
+      "xcode": {
+        "developerDir": "/Applications/Xcode.app/Contents/Developer",
+        "source": "DEVELOPER_DIR",
+        "version": "27.0",
+        "build": "27A266a"
+      },
+      "coreSimulator": {
+        "path": "/Library/Developer/PrivateFrameworks/CoreSimulator.framework",
+        "version": "1171.7",
+        "build": "1171.7"
+      },
+      "simulatorKit": {
+        "path": "/Applications/Xcode.app/Contents/SharedFrameworks/SimulatorKit.framework",
+        "version": "16.0",
+        "build": "1005.2"
+      },
+      "table": {
+        "known": true,
+        "entry": "Xcode 27.0 (27A266a)",
+        "source": "bundled",
+        "forcedUnknown": false
+      },
+      "capabilities": {
+        "display": { "status": "ok", "implementation": "screenCallbacks", "checked": "symbols" },
+        "screenshot": { "status": "ok", "implementation": "surface", "checked": "symbols" },
+        "hid": { "status": "unsupported", "checked": "table", "reason": "not in this helper yet" },
+        "ax": { "status": "unsupported", "checked": "table", "reason": "not in this helper yet" }
+      }
+    },
+    "selftestUnknownBuild": {
+      "protocol": 1,
+      "helper": { "version": "0.1.0", "pid": 4243 },
+      "xcode": {
+        "developerDir": "/Applications/Xcode-28.0.app/Contents/Developer",
+        "source": "xcode-select",
+        "version": "28.0",
+        "build": "28A100"
+      },
+      "coreSimulator": {
+        "path": "/Library/Developer/PrivateFrameworks/CoreSimulator.framework",
+        "version": "1200.1",
+        "build": "1200.1"
+      },
+      "simulatorKit": {
+        "path": "/Applications/Xcode-28.0.app/Contents/SharedFrameworks/SimulatorKit.framework",
+        "version": "17.0",
+        "build": "1050.3"
+      },
+      "table": { "known": false, "source": "bundled", "forcedUnknown": false },
+      "capabilities": {
+        "display": {
+          "status": "unsupported",
+          "checked": "table",
+          "reason": "CoreSimulator 1200.1 with SimulatorKit 1050.3 is not in the version table"
+        },
+        "screenshot": {
+          "status": "unsupported",
+          "checked": "table",
+          "reason": "CoreSimulator 1200.1 with SimulatorKit 1050.3 is not in the version table"
+        },
+        "hid": { "status": "unsupported", "checked": "table", "reason": "not in this helper yet" },
+        "ax": { "status": "unsupported", "checked": "table", "reason": "not in this helper yet" }
+      },
+      "device": {
+        "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
+        "name": "Portivo-Pod-1",
+        "state": "Booted"
+      },
+      "fallbacks": { "screenshot": { "via": "simctl", "status": "ok", "ms": 412 } }
+    },
+    "selftestDevice": {
+      "protocol": 1,
+      "helper": { "version": "0.1.0", "pid": 4244 },
+      "xcode": {
+        "developerDir": "/Applications/Xcode.app/Contents/Developer",
+        "source": "DEVELOPER_DIR",
+        "version": "27.0",
+        "build": "27A266a"
+      },
+      "coreSimulator": {
+        "path": "/Library/Developer/PrivateFrameworks/CoreSimulator.framework",
+        "version": "1171.7",
+        "build": "1171.7"
+      },
+      "simulatorKit": {
+        "path": "/Applications/Xcode.app/Contents/SharedFrameworks/SimulatorKit.framework",
+        "version": "16.0",
+        "build": "1005.2"
+      },
+      "table": {
+        "known": true,
+        "entry": "Xcode 27.0 (27A266a)",
+        "source": "bundled",
+        "override": "/Users/someone/.pod/sim/version-table.json",
+        "overrideError": "/Users/someone/.pod/sim/version-table.json: schema 2, this helper reads schema 1",
+        "forcedUnknown": false
+      },
+      "capabilities": {
+        "display": {
+          "status": "ok",
+          "implementation": "screenCallbacks",
+          "checked": "device",
+          "framesSeen": 41,
+          "note": "surface 1206x2622, 1 surface and 41 frame callbacks in 1500 ms; port 2 of 3 [class 1 no surface; class 0 1206x2622; class 1 no surface]"
+        },
+        "screenshot": {
+          "status": "ok",
+          "implementation": "surface",
+          "checked": "device",
+          "note": "1206x2622 PNG, 124769 bytes in 54 ms"
+        },
+        "hid": { "status": "unsupported", "checked": "table", "reason": "not in this helper yet" },
+        "ax": { "status": "unsupported", "checked": "table", "reason": "not in this helper yet" }
+      },
+      "deviceSet": "/private/tmp/pod-sim-probe-set",
+      "device": {
+        "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
+        "name": "PodSim-probe",
+        "state": "Booted"
+      },
+      "fallbacks": { "screenshot": { "via": "simctl", "status": "ok", "ms": 382 } }
+    },
+    "selftestStaticScreen": {
+      "protocol": 1,
+      "helper": { "version": "0.1.0", "pid": 4245 },
+      "table": {
+        "known": true,
+        "entry": "Xcode 27.0 (27A266a)",
+        "source": "bundled",
+        "forcedUnknown": false
+      },
+      "capabilities": {
+        "display": {
+          "status": "ok",
+          "implementation": "screenCallbacks",
+          "checked": "surfaceOnly",
+          "framesSeen": 0,
+          "note": "surface 1206x2622, 1 surface and 0 frame callbacks in 1500 ms: the screen did not change, so no frame proved a live view"
+        },
+        "screenshot": {
+          "status": "ok",
+          "implementation": "surface",
+          "checked": "device",
+          "note": "1206x2622 PNG, 124769 bytes in 54 ms"
+        },
+        "hid": { "status": "unsupported", "checked": "table", "reason": "not in this helper yet" },
+        "ax": { "status": "unsupported", "checked": "table", "reason": "not in this helper yet" }
+      },
+      "device": {
+        "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
+        "name": "PodSim-probe",
+        "state": "Booted"
+      }
+    },
+    "attachDisplay": {
+      "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
+      "surface": { "width": 1206, "height": 2622, "id": 77 },
+      "alreadyAttached": false
+    },
+    "displayStats": {
+      "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
+      "seconds": 20.01,
+      "frameCallbacks": 1123,
+      "surfaceCallbacks": 1,
+      "seedChanges": 1121
+    },
+    "screenshot": {
+      "path": "/Users/someone/project/.pod/sim/shot.png",
+      "format": "png",
+      "width": 1206,
+      "height": 2622,
+      "bytes": 112044,
+      "source": "surface",
+      "ms": 31
+    },
+    "screenshotSimctl": {
+      "path": "/Users/someone/project/.pod/sim/shot.png",
+      "format": "png",
+      "width": 1206,
+      "height": 2622,
+      "bytes": 118230,
+      "source": "simctl",
+      "ms": 402,
+      "fallbackReason": "treated as unknown (POD_SIM_FORCE_UNKNOWN_BUILD=1)"
+    }
+  }
+}
