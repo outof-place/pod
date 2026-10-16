@@ -6,6 +6,9 @@
 # Usage: scripts/pod-generated.sh [--manifest PATH] <commit>
 #   Generated commits already on top of <commit> (Pod-Generated trailer) are dropped first, so a
 #   re-run replaces them. Prints the resulting commit on stdout; progress goes to stderr.
+# Usage: scripts/pod-generated.sh [--manifest PATH] --check
+#   Runs every layer's "check" in this checkout and commits nothing: a commit on top of the layers
+#   must leave them current, or the next run of a codemod would change it.
 #
 # Manifest:
 #   "generated": [
@@ -18,7 +21,8 @@
 #   A layer runs only when the tree has its "requires" file. "run" changes the tree; a non-zero exit
 #   fails. "check" runs after it and must exit 0, which proves a second run would change nothing.
 #
-# Exit codes: 0 done, 1 usage or environment error, 5 a layer failed or is not idempotent.
+# Exit codes: 0 done, 1 usage or environment error, 5 a layer failed, is not idempotent, or (with
+# --check) has work left.
 set -euo pipefail
 
 die() {
@@ -28,24 +32,31 @@ die() {
 
 manifest=''
 commit=''
+check_only=0
 while [ $# -gt 0 ]; do
   case $1 in
     --manifest) manifest=${2:?--manifest needs a path}; shift 2 ;;
-    -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --check) check_only=1; shift ;;
+    -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *) [ -z "$commit" ] || die "one commit only"; commit=$1; shift ;;
   esac
 done
-[ -n "$commit" ] || die "usage: scripts/pod-generated.sh [--manifest PATH] <commit>"
+if [ "$check_only" -eq 1 ]; then
+  [ -z "$commit" ] || die "--check reads this checkout and takes no commit"
+else
+  [ -n "$commit" ] || die "usage: scripts/pod-generated.sh [--manifest PATH] <commit> | --check"
+fi
 root=$(git rev-parse --show-toplevel)
 manifest=${manifest:-$root/pod-stack.json}
 [ -f "$manifest" ] || die "no manifest at $manifest"
-tip=$(git rev-parse --verify "$commit^{commit}") || die "$commit is not a commit"
-
-while [ -n "$(git log -1 --format='%(trailers:key=Pod-Generated,valueonly)' "$tip")" ]; do
-  printf '    - dropping the old generated layer %s %s\n' "$(git rev-parse --short "$tip")" "$(git log -1 --format=%s "$tip")" >&2
-  tip=$(git rev-parse "$tip^")
-done
+if [ "$check_only" -eq 0 ]; then
+  tip=$(git rev-parse --verify "$commit^{commit}") || die "$commit is not a commit"
+  while [ -n "$(git log -1 --format='%(trailers:key=Pod-Generated,valueonly)' "$tip")" ]; do
+    printf '    - dropping the old generated layer %s %s\n' "$(git rev-parse --short "$tip")" "$(git log -1 --format=%s "$tip")" >&2
+    tip=$(git rev-parse "$tip^")
+  done
+fi
 
 # One layer per record: name, requires, subject, forkOnly, then run and check as NUL-separated argv.
 layers=$(node -e '
@@ -65,6 +76,29 @@ list.forEach((g, i) => {
 console.log(out.join("\n"))
 ' "$manifest")
 
+argv_of() { node -e 'for (const a of JSON.parse(Buffer.from(process.argv[1], "base64").toString())) process.stdout.write(a + "\0")' "$1"; }
+
+if [ "$check_only" -eq 1 ]; then
+  stale=0
+  while IFS=$'\t' read -r -u 3 name requires _ _ _ check_b64; do
+    [ -n "$name" ] || continue
+    if [ ! -e "$root/$requires" ]; then
+      printf '    (generated layer %s skipped: no %s in the tree)\n' "$name" "$requires" >&2
+      continue
+    fi
+    check=()
+    while IFS= read -r -d '' a; do check+=("$a"); done < <(argv_of "$check_b64")
+    if out=$(cd "$root" && "${check[@]}" 2>&1); then
+      printf '    = %s is current\n' "$name" >&2
+    else
+      printf '\nGENERATED LAYER STALE: %s (%s)\n%s\n' "$name" "${check[*]}" "$out" >&2
+      stale=1
+    fi
+  done 3<<<"$layers"
+  [ "$stale" -eq 0 ] || exit 5
+  exit 0
+fi
+
 if [ -z "$layers" ]; then
   printf '%s\n' "$tip"
   exit 0
@@ -73,8 +107,6 @@ fi
 wt=''
 cleanup() { [ -z "$wt" ] || git worktree remove --force "$wt" >/dev/null 2>&1 || rm -rf "$wt"; }
 trap cleanup EXIT
-
-argv_of() { node -e 'for (const a of JSON.parse(Buffer.from(process.argv[1], "base64").toString())) process.stdout.write(a + "\0")' "$1"; }
 
 while IFS=$'\t' read -r -u 3 name requires subject fork_only run_b64 check_b64; do
   [ -n "$name" ] || continue
