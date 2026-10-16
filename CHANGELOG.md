@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.0-rc3] - 2026-10-16
+
+A fix for 1.0.0-rc2: [Pod-1.0.0-rc3.dmg](https://github.com/outof-place/pod/releases/download/v1.0.0-rc3/Pod-1.0.0-rc3.dmg).
+From rc2, "Check for Updates…" installs it; from rc1, install it by hand over the running Pod.
+
+### Fixed
+
+- Pod no longer quits every minute or two while apps started from its terminals run: it kept watching an app it had
+  let go of, and macOS's next notice about that app crashed it.
+
 ## [1.0.0-rc2] - 2026-10-16
 
 The second release candidate for Pod 1.0: [Pod-1.0.0-rc2.dmg](https://github.com/outof-place/pod/releases/download/v1.0.0-rc2/Pod-1.0.0-rc2.dmg).
