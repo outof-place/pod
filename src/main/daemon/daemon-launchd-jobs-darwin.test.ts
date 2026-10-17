@@ -120,7 +120,7 @@ describe('launchd jobs of a profile', () => {
 
 describe('launchd job control', () => {
   it('signals a job by label through launchctl kill', async () => {
-    const launchctl = vi.fn(async () => result(0))
+    const launchctl = vi.fn(async (_args: string[]) => result(0))
     const jobs = createDarwinDaemonLaunchdJobs(jobsDir, launchctl, () => logs)
     await jobs.signal('codes.pod.daemon.x.1', 'SIGTERM')
     expect(launchctl.mock.calls[0]?.[0]).toEqual([
