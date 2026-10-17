@@ -47,8 +47,8 @@ export function isLaunchdDaemonLaunchEnabled(env: NodeJS.ProcessEnv = process.en
   if (env.POD_DAEMON_LAUNCHD === '1') {
     return true
   }
-  // Why on by default (Filip, 2026-10-17, from rc5): the TCC checks found the job's shells
-  // attributed to Pod Runtime, as a forked daemon's are today, so the job changes no grant.
+  // Why on by default from rc5 (Filip, 2026-10-17): the job's daemon runs from a copy of Pod Runtime
+  // (same bundle id, team and DR); whether TCC grants carry over is checked in rc5, before 1.0.
   // Why off under vitest and in E2E profiles unless asked for: a unit test or an agent's isolated
   // run must never load a job into the user's GUI domain on its own (the lead's rule).
   return !env.VITEST && !env.ORCA_E2E_USER_DATA_DIR
