@@ -271,7 +271,9 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
 
     function agentEnv(stdout: string): Record<string, string> {
       return Object.fromEntries(
-        stdout.split('\n').map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)])
+        stdout
+          .split('\n')
+          .map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)])
       )
     }
 
@@ -318,7 +320,11 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
 
     it("gives Claude's Bash og as its rg, turns the canary off and indexes the folder", async () => {
       rmSync(ogctlLog(), { force: true })
-      const env = launch('claude', { POD_INDEXED_SEARCH: '1', POD_TEST_SECRET: 'x', OG_CANARY_RATE: '0.5' })
+      const env = launch('claude', {
+        POD_INDEXED_SEARCH: '1',
+        POD_TEST_SECRET: 'x',
+        OG_CANARY_RATE: '0.5'
+      })
       expect(env.PATH.split(':')[0]).toBe(shim())
       expect(env.OG_REAL_RG).toBe(join(searchDir(), 'bin', 'rg'))
       expect(env.POD_SEARCH_SPAWN).toBe('1')
