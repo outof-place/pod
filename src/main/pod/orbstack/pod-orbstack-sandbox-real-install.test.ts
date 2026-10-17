@@ -226,7 +226,12 @@ describe.skipIf(!enabled)('real OrbStack sandbox', () => {
               .map((line) => line.split(/\s+/)[0])
               .filter(Boolean)
           )
-          expect([...addresses].sort()).toEqual(['127.0.0.1', '::1'])
+          // The pin: 127.0.0.2 (which OrbStack does not forward to the Mac) and its v4-mapped
+          // form, whichever of the two getaddrinfo lists; never 127.0.0.1, ::1 or a real address.
+          expect(addresses.has('127.0.0.2')).toBe(true)
+          expect(
+            [...addresses].filter((a) => a !== '127.0.0.2' && a !== '::ffff:127.0.0.2')
+          ).toEqual([])
           const claude = (
             extraEnv: string,
             credentialEnv = `ANTHROPIC_API_KEY=${SANDBOX_CREDENTIAL_PLACEHOLDER}`

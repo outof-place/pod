@@ -113,6 +113,36 @@ describe('relay frames', () => {
 })
 
 describe('host side', () => {
+  it('puts the API route where OrbStack does not forward it to the Mac', () => {
+    const spawned: (readonly string[])[] = []
+    const fake = Object.assign(new EventEmitter(), {
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: () => true
+    })
+    const relays = createSandboxRelays({
+      spawnAgent: (_machine, args) => {
+        spawned.push(args)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay touches only stdin/stdout/stderr, kill and events, all present on the fake.
+        return fake as unknown as ChildProcessWithoutNullStreams
+      }
+    })
+    relays.ensure('pod-x-sbx', {
+      hook: { vmPort: 41234, hostPort: 41234, hookToken: 'server-token', authorize: () => true },
+      anthropic: { route: { attach: () => undefined, caCertPem: 'ca' } }
+    })
+    const spec = JSON.parse(spawned[0]?.at(-1) ?? '{}')
+    // Never 127.0.0.1 or ::1 for 443: OrbStack would forward it to the Mac's `*:443`.
+    expect(spec.listen).toEqual([
+      ['127.0.0.1', 41234],
+      ['127.0.0.2', 443]
+    ])
+    expect(spec.hosts.addresses).toEqual(['127.0.0.2', '::ffff:127.0.0.2'])
+    expect(spec.hosts.names).toEqual(['api.anthropic.com'])
+    relays.stopAll()
+  })
+
   it('opens nothing for a route the VM invents', async () => {
     const stdin = new PassThrough()
     const stdout = new PassThrough()
@@ -278,11 +308,11 @@ describe.skipIf(process.platform === 'win32' || !hasPython())('relay agent over 
     const apiPort = await freePort()
     const handle = relays.ensure('pod-x-sbx', {
       hook: route,
-      anthropic: { route: anthropic, vmPort: apiPort }
+      anthropic: { route: anthropic, vmPort: apiPort, vmHost: '127.0.0.1' }
     })
     expect(await handle.ready).toBe(true)
     expect(readFileSync(hostsFile, 'utf8')).toBe(
-      '127.0.0.1 localhost\n# pod-sandbox-relay begin\n127.0.0.1 api.anthropic.com\n::1 api.anthropic.com\n# pod-sandbox-relay end\n'
+      '127.0.0.1 localhost\n# pod-sandbox-relay begin\n127.0.0.1 api.anthropic.com\n::ffff:127.0.0.1 api.anthropic.com\n# pod-sandbox-relay end\n'
     )
     expect(readFileSync(caPath, 'utf8')).toBe(ca.caCertPem)
 

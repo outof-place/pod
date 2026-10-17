@@ -81,7 +81,7 @@ describe('anthropic-api route', () => {
       onRow: (row) => rows.push(row),
       placeholder: () => placeholder
     })
-    // Stands in for the relay: each TCP connection is one VM connection to 127.0.0.1:443.
+    // Stands in for the relay: each TCP connection is one VM connection to 127.0.0.2:443.
     const front = createServer((socket) => route.attach(socket))
     const port = await listen(front)
     cleanups.push(() => {

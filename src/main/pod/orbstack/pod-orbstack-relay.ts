@@ -26,11 +26,21 @@ import { ANTHROPIC_API_HOST } from './pod-orbstack-sandbox-ca'
 
 const STOP_GRACE_MS = 3_000
 
-/** The VM's api.anthropic.com: pinned to its 127.0.0.1 and served by `route` on the Mac. */
+/**
+ * Where the VM's api.anthropic.com listens. Why not 127.0.0.1 or ::1: OrbStack forwards a machine's
+ * listeners on those to the Mac, isolated machines included, and a port under 1024 then listens on
+ * all of the Mac's interfaces (`*:443`), so the LAN reaches it. A listener on 127.0.0.2 is not
+ * forwarded (checked on OrbStack 2.2.4), and Linux routes all of 127/8 to lo with no setup.
+ */
+export const SANDBOX_API_VM_HOST = '127.0.0.2'
+
+/** The VM's api.anthropic.com: pinned to SANDBOX_API_VM_HOST and served by `route` on the Mac. */
 export type SandboxAnthropicRelayRoute = {
   route: Pick<AnthropicRoute, 'attach' | 'caCertPem'>
   /** 443 in a sandbox; tests use a free port. */
   vmPort?: number
+  /** SANDBOX_API_VM_HOST in a sandbox; tests on a Mac, whose lo0 has only 127.0.0.1, use that. */
+  vmHost?: string
 }
 
 export type SandboxRelayRoutes = {
@@ -76,7 +86,8 @@ function sameRoutes(a: SandboxRelayRoutes, b: SandboxRelayRoutes): boolean {
     a.hook.hostPort === b.hook.hostPort &&
     a.hook.hookToken === b.hook.hookToken &&
     a.anthropic?.route.caCertPem === b.anthropic?.route.caCertPem &&
-    a.anthropic?.vmPort === b.anthropic?.vmPort
+    a.anthropic?.vmPort === b.anthropic?.vmPort &&
+    a.anthropic?.vmHost === b.anthropic?.vmHost
   )
 }
 
@@ -96,14 +107,23 @@ function startRelay(
   const nonce = randomBytes(12).toString('hex')
   const { hook: route, anthropic } = routes
   const caPath = deps.caPath ?? SANDBOX_CA_PATH
+  const apiHost = anthropic?.vmHost ?? SANDBOX_API_VM_HOST
   const spec = JSON.stringify({
     nonce,
     stateDir: deps.stateDir ?? RELAY_STATE_DIR,
-    routes: [route.vmPort, ...(anthropic ? [anthropic.vmPort ?? 443] : [])],
-    // The pin names ::1 too, so the API route listens on both loopbacks.
-    ipv6Routes: anthropic ? [1] : [],
+    // The hook route stays on 127.0.0.1, where Orca's unchanged hook script posts. OrbStack
+    // forwards it to the Mac's 127.0.0.1 only (a port above 1023), where Pod's hook server holds it.
+    listen: [
+      ['127.0.0.1', route.vmPort],
+      ...(anthropic ? [[apiHost, anthropic.vmPort ?? 443] as const] : [])
+    ],
     // Rewritten on every start, so a relay without the route also removes an older pin and CA.
-    hosts: { file: deps.hostsFile ?? '/etc/hosts', names: anthropic ? [ANTHROPIC_API_HOST] : [] },
+    // The v4-mapped v6 address too: a resolver asking for IPv6 alone would otherwise go to DNS.
+    hosts: {
+      file: deps.hostsFile ?? '/etc/hosts',
+      names: anthropic ? [ANTHROPIC_API_HOST] : [],
+      addresses: [apiHost, `::ffff:${apiHost}`]
+    },
     files: { [caPath]: anthropic ? anthropic.route.caCertPem : null }
   })
   const child = deps.spawnAgent(machine, ['-I', '-c', SANDBOX_RELAY_AGENT_PY, spec])
