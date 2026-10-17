@@ -180,7 +180,6 @@ export const POD_SETTINGS_HIDDEN = {
   ctrlTabOrderMode: 'later',
   confirmClosePinnedTab: 'later',
   // Phase 6 (experiments): only Orca's renderer reads these; PodNative has no such feature yet.
-  experimentalTerminalAttention: 'later',
   experimentalAgentHibernation: 'later',
   agentHibernationIdleMs: 'later',
   experimentalActivity: 'later',
