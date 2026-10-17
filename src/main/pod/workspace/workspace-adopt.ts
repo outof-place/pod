@@ -5,7 +5,8 @@ import type {
   PodAdoptBlocker,
   PodAdoptPlan,
   PodAdoptRecord,
-  PodAdoptRelinkRecord
+  PodAdoptRelinkRecord,
+  PodAdoptSoftBlocker
 } from '../../../shared/pod-workspace-tidy-types'
 import type { Repo } from '../../../shared/repo-types'
 import {
@@ -17,6 +18,7 @@ import {
   type AdoptRelinkRuntime,
   type AdoptRelinkStore
 } from './workspace-adopt-relink'
+import { adoptWarnings, findOpenFilesInside } from './workspace-adopt-checks'
 import { createWorkspaceAdoptUndo, listWorktreePaths, stopWatchers } from './workspace-adopt-undo'
 import {
   POD_WORKSPACE_LOCAL_OWNER_DIR,
@@ -30,6 +32,10 @@ import { isPathInsideWorkspaceRoot } from './workspace-root-path'
 import { podWorktreesDirOf as worktreesDirOf } from './workspace-tidy-strays'
 
 export { claudeProjectKey }
+
+function isSoftBlocker(blocker: PodAdoptBlocker): blocker is PodAdoptSoftBlocker {
+  return blocker === 'process-inside' || blocker === 'files-open'
+}
 
 export type WorkspaceAdoptDeps = {
   git: WorkspaceGitExec
@@ -123,7 +129,9 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
         linkedWorktrees: [],
         worktreesDir: null,
         claudeProjectDir: null,
-        relink: relinkPlan
+        relink: relinkPlan,
+        openFiles: [],
+        warnings: []
       }
       return { inspected, inputs: null }
     }
@@ -152,6 +160,11 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
     if (processes.length > 0) {
       blockers.push('process-inside')
     }
+    const skip = new Set(processes.map((process) => process.pid))
+    const open = await findOpenFilesInside(deps.processes, folders, skip)
+    if (open.files.length > 0) {
+      blockers.push('files-open')
+    }
     const inputs: AdoptRelinkInputs = {
       repo,
       moves: movesOf(repo, from, to, siblings[0] ?? null),
@@ -173,16 +186,19 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
       linkedWorktrees,
       worktreesDir: siblings[0] ?? null,
       claudeProjectDir: (await pathExists(claude)) ? claude : null,
-      relink: relinkPlan
+      relink: relinkPlan,
+      openFiles: open.files,
+      warnings: await adoptWarnings(from, to, relinkPlan.claudeProjectDirs)
     }
     return { inspected, inputs }
   }
 
+  // Open files churn (indexers open and close them), so apply checks them afresh, not by fingerprint.
   const fingerprint = (plan: Inspected): string =>
     fingerprintOf([
       plan.from,
       plan.to,
-      [...plan.blockers].sort(),
+      plan.blockers.filter((blocker) => blocker !== 'files-open').sort(),
       plan.processes.map((process) => process.pid).sort((a, b) => a - b),
       plan.linkedWorktrees,
       plan.worktreesDir,
@@ -206,14 +222,14 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
    */
   const apply = async (
     planId: string,
-    acknowledged: readonly 'process-inside'[] = [],
+    acknowledged: readonly PodAdoptSoftBlocker[] = [],
     runtime: AdoptRelinkRuntime | null = null
   ): Promise<PodAdoptRecord> => {
     const repoId = deps.plans.subjectOf(planId, 'adopt')
     const { inspected: current, inputs } = await inspect(repoId, runtime)
     deps.plans.verify(planId, 'adopt', `adopt:${repoId}`, fingerprint(current))
     const refused = current.blockers.filter(
-      (blocker) => !(blocker === 'process-inside' && acknowledged.includes(blocker))
+      (blocker) => !(isSoftBlocker(blocker) && acknowledged.includes(blocker))
     )
     if (refused.length > 0 || !inputs) {
       throw new WorkspacePlanError(`Not moved: ${refused.join(', ')}`)
