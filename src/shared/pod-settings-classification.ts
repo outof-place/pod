@@ -43,6 +43,7 @@ export const POD_SETTINGS_HIDDEN = {
   localAccountRuntimeDefaultedToAutoForAllUsers: 'migration',
   terminalAllowOsc52ClipboardDefaultedOnForAllUsers: 'migration',
   floatingTerminalDefaultedForAllUsers: 'migration',
+  tabAutoGenerateTitleDefaultedOnForPod: 'migration',
   floatingTerminalCwdMigratedToAppWorkspace: 'migration',
   claudeAgentTeamsDefaultDisabledMigrated: 'migration',
   visibleTaskProvidersDefaultedForJira: 'migration',
@@ -178,7 +179,6 @@ export const POD_SETTINGS_HIDDEN = {
   // N3 (editor and tabs): PodNative's tab strip has its own order, pinning and titles.
   ctrlTabOrderMode: 'later',
   confirmClosePinnedTab: 'later',
-  tabAutoGenerateTitle: 'later',
   // Phase 6 (experiments): only Orca's renderer reads these; PodNative has no such feature yet.
   experimentalTerminalAttention: 'later',
   experimentalAgentHibernation: 'later',

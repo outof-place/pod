@@ -7,12 +7,16 @@ import { getProductIdentity, type ProductIdentity } from './product-identity'
 // Cursor blink defaults off: a blinking focused native pane redraws ~2 frames/s and keeps
 // ~230 MB of Metal buffers alive. Only a missing key takes it; a stored true stays on.
 // Main's terminal model stays live (see isMainTerminalModelDormancyEnabled).
+// Agent tabs take generated titles; the guard key makes a loaded profile's flip one-shot
+// (migrateLoadedProductSettings).
 export function productSettingDefaults(identity: ProductIdentity | null): Partial<GlobalSettings> {
   return identity
     ? {
         experimentalNativeTerminal: true,
         terminalCursorBlink: false,
-        podTerminalMainModelDormancy: false
+        podTerminalMainModelDormancy: false,
+        tabAutoGenerateTitle: true,
+        tabAutoGenerateTitleDefaultedOnForPod: true
       }
     : {}
 }
