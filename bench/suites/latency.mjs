@@ -320,7 +320,8 @@ function ghosttyAccountState(id = GHOSTTY_ID) {
   }
 }
 
-// How many processes run from the account's own Ghostty (lib/run-tree.mjs, by executable).
+// How many processes run from the account's own Ghostty, with their descendants (lib/run-tree.mjs,
+// by executable; only read).
 async function userGhosttyProcesses() {
   return (await runTree(GHOSTTY)).procs.length
 }
@@ -446,26 +447,35 @@ try {
     }
   }
 } finally {
-  // Also when a round threw: the clone's traces go either way.
+  // Also when a round threw: the clone's traces go first, either way.
   if (ghosttyBefore) {
+    // The clone's own domain: before the first round, and what its cleanup did after the last.
+    const bench = { id: BENCH_GHOSTTY_ID, before: benchBefore, ...clearBenchTraces(benchExistedBefore) }
     const ghosttyAfter = ghosttyAccountState()
+    // A count that fails is recorded as such, never thrown over a round's own error.
+    let userGhosttyAfter
+    try {
+      userGhosttyAfter = await userGhosttyProcesses()
+    } catch (error) {
+      userGhosttyAfter = `unknown (${error.message})`
+    }
     // The account's own Ghostty domain before and after: `changed` names what differs.
     ghosttyAccount = {
       before: ghosttyBefore,
       after: ghosttyAfter,
       changed: Object.keys(ghosttyBefore).filter((key) => JSON.stringify(ghosttyBefore[key]) !== JSON.stringify(ghosttyAfter[key])),
-      // Processes of /Applications/Ghostty.app (the account's own) at the first round and the last:
-      // with any, a change may be theirs, not the bench's.
-      userGhosttyProcesses: { before: userGhosttyBefore, after: await userGhosttyProcesses() },
-      // The clone's own domain: before the first round, and what its cleanup did after the last.
-      bench: { id: BENCH_GHOSTTY_ID, before: benchBefore, ...clearBenchTraces(benchExistedBefore) }
+      // Processes of /Applications/Ghostty.app (the account's own) and their descendants, its
+      // windows' shells among them, at the first round and the last: with any, a change may be
+      // theirs, not the bench's.
+      userGhosttyProcesses: { before: userGhosttyBefore, after: userGhosttyAfter },
+      bench
     }
   }
 }
 if (ghosttyAccount) {
   const users = ghosttyAccount.userGhosttyProcesses
   log(
-    `the account's Ghostty domain: ${ghosttyAccount.changed.length ? `CHANGED (${ghosttyAccount.changed.join(', ')})` : 'unchanged'}; its own Ghostty ran ${users.before}/${users.after} processes at the first/last round`
+    `the account's Ghostty domain: ${ghosttyAccount.changed.length ? `CHANGED (${ghosttyAccount.changed.join(', ')})` : 'unchanged'}; the account's own Ghostty and its children: ${users.before}/${users.after} processes at the first/last round`
   )
   const { bench } = ghosttyAccount
   log(
