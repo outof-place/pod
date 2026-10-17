@@ -81,7 +81,9 @@ jobs:
           fi
       # The hosted check's five shards, one after another: the same balanced file lists.
       # ORCA_BALANCE_UNIT_SHARDS selects them, which leaves out the cross-version harness and the
-      # live-shell tests. One retry: a few grammar-loading tests time out under full-suite load.
+      # live-shell tests. One retry: a few grammar-loading tests time out under full-suite load; the
+      # retry reporter lists every retried test in the summary. A --reporter replaces the config's
+      # reporters, so the timing reporter is named again.
       - name: Unit tests
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
@@ -93,7 +95,9 @@ jobs:
           for shard in $(seq 1 "$UNIT_SHARDS"); do
             echo "::group::Unit tests $shard/$UNIT_SHARDS"
             node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
-              "--shard=$shard/$UNIT_SHARDS" --maxWorkers=4 --retry=1 || failed=1
+              "--shard=$shard/$UNIT_SHARDS" --maxWorkers=4 --retry=1 --reporter=default \
+              "--reporter=$PWD/config/scripts/ci-unit-timing-reporter.mjs" \
+              "--reporter=$PWD/config/scripts/ci-unit-retry-summary-reporter.mjs" || failed=1
             echo "::endgroup::"
           done
           exit "$failed"
