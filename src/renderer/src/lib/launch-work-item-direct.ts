@@ -41,6 +41,7 @@ import {
   type AgentSessionLaunchPlan
 } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { workItemCreateSetupTrust } from '@/lib/create-setup-trust'
 
 /**
  * "Use" flow: create the workspace, activate it, launch the default agent,
@@ -164,11 +165,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     undefined,
     undefined,
     undefined,
-    {
-      baseRef: resolvedBaseBranch,
-      foreign: itemType === 'pr',
-      onTrusted: (hash) => (setupTrustHash = hash)
-    }
+    workItemCreateSetupTrust(itemType, resolvedBaseBranch, (hash) => (setupTrustHash = hash))
   )
   const finalSetupDecision: SetupDecision =
     trustDecision === 'skip' ? 'skip' : setupResolution.decision
