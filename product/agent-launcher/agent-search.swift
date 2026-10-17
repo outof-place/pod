@@ -47,8 +47,9 @@ func applyIndexedSearch(command: String) {
   setenv("OG_REAL_RG", dir + "/bin/rg", 1)
   setenv("POD_SEARCH_SPAWN", "1", 1)
   setenv("OG_CANARY_RATE", "0", 1)
-  setenv("OG_CANARY_KILL_FILE", (env("HOME") ?? "") + "/Library/Caches/" + launcherCacheName
-    + "/og-canary-off", 1)
+  if let home = env("HOME"), home.hasPrefix("/") {
+    setenv("OG_CANARY_KILL_FILE", home + "/Library/Caches/" + launcherCacheName + "/og-canary-off", 1)
+  }
   startIndexing(ogctl: dir + "/bin/ogctl")
 }
 
