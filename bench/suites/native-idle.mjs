@@ -96,6 +96,7 @@ function podNativeFile(rel) {
   })
 }
 
+const PROCSTAT = path.join(TOOLS_BIN, 'procstat')
 const PROTECTED = ['/Applications/', path.join(HOME, 'Library/Application Support/Pod/')]
 // An app LaunchServices starts gets the launchd session's environment beside what `open --env`
 // gives it: none of these may be set there.
@@ -121,11 +122,12 @@ if (sessionEnv.length > 0) {
   throw new Error(`refusing: the launchd session sets ${sessionEnv.join(', ')}, which an app started through LaunchServices would get`)
 }
 const DOMAINS = ['codes.pod.native', 'codes.pod.app', 'codes.pod.native.e2e', 'codes.pod.runtime.e2e']
+// The domain as `defaults export` writes it (XML: some values have no JSON form).
 function domainKeys(domain) {
   try {
-    return execFileSync('/bin/sh', ['-c', 'defaults export "$1" - 2>/dev/null | plutil -convert json -o - -', 'sh', domain], { encoding: 'utf8' })
+    return execFileSync('/usr/bin/defaults', ['export', domain, '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
   } catch {
-    return '{}'
+    return ''
   }
 }
 function securityAgents() {
@@ -217,8 +219,13 @@ async function snapshot(launch, { scan = false } = {}) {
   const args = ['--exe', launch.exe]
   for (const pid of profileRoots(launch)) args.push('--root', String(pid))
   if (scan) args.push('--argv', `${launch.work}/`, '--argv', `${launch.work.replace(/^\/private/, '')}/`)
-  const { stdout } = await run(path.join(TOOLS_BIN, 'procstat'), args, { maxBuffer: 16 << 20 })
-  return JSON.parse(stdout)
+  const { stdout } = await run(PROCSTAT, args, { maxBuffer: 16 << 20 })
+  const snap = JSON.parse(stdout)
+  // The harness's own processes that name the run's dir: procstat itself, `open -W`, the writer.
+  snap.procs = snap.procs.filter(
+    (proc) => proc.path !== PROCSTAT && proc.path !== '/usr/bin/open' && !proc.args.includes('live-writer.py')
+  )
+  return snap
 }
 
 // orca-runtime.json and the daemons' pid files in the profile; a pid counts once ps -E shows it
@@ -252,6 +259,8 @@ function profileRoots(launch) {
 function classify(launch, proc) {
   const exe = proc.path
   if (exe === launch.exe) return 'podnative'
+  // The runtime starts the terminal daemon from a copy of itself in the profile.
+  if (exe.startsWith(`${launch.profile}/daemon-host.noindex/`)) return 'daemon'
   if (!exe.startsWith(`${launch.app}/`)) return 'workload'
   const name = path.basename(exe)
   if (/Helper \(GPU\)/.test(name)) return 'runtime-gpu'
