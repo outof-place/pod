@@ -53,6 +53,27 @@ function legacyUserDataLines(prefix, defaultUserData, userDataName) {
   ]
 }
 
+// Marks the one-release `orca` name, so install-native-cli.cjs keeps it instead of linking it.
+const LEGACY_CLI_SHIM_MARKER = '# pod-legacy-cli-shim'
+
+// Skills, agent hooks and scripts from before the decouple still call `orca`: for one release the
+// name answers, tells the caller the podx command, and runs it.
+// TODO(pod): drop after 2026-12-31, and no earlier than the release after the decouple.
+function legacyCliShim(cliName) {
+  return [
+    '#!/bin/sh',
+    LEGACY_CLI_SHIM_MARKER,
+    'self=$0',
+    'while [ -L "$self" ]; do',
+    '\tlink=$(readlink "$self")',
+    '\tcase $link in /*) self=$link ;; *) self=$(dirname "$self")/$link ;; esac',
+    'done',
+    `echo "orca is now ${cliName}: ${cliName} $*" >&2`,
+    `exec "$(dirname "$self")/${cliName}" "$@"`,
+    ''
+  ].join('\n')
+}
+
 function installCliLaunchers(resourcesDir, executableName, identity) {
   const launcherPath = join(resourcesDir, 'bin', 'orca')
   const productLauncher = join(resourcesDir, 'bin', identity.cliName)
@@ -66,10 +87,12 @@ function installCliLaunchers(resourcesDir, executableName, identity) {
     )
   )
   execFileSync('chmod', ['755', productLauncher])
-  // Why drop it: a bare `orca` would be Orca's name for Pod's CLI.
+  // Why not Orca's launcher: a bare `orca` would be Orca's name for Pod's CLI; the shim only points on.
   if (identity.cliName !== 'orca') {
     unlinkSync(launcherPath)
+    writeFileSync(launcherPath, legacyCliShim(identity.cliName))
+    execFileSync('chmod', ['755', launcherPath])
   }
 }
 
-module.exports = { installCliLaunchers, patchCliLauncher }
+module.exports = { installCliLaunchers, patchCliLauncher, LEGACY_CLI_SHIM_MARKER }

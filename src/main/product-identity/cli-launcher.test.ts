@@ -90,12 +90,30 @@ describe.skipIf(process.platform === 'win32')('Pod CLI launcher', () => {
     )
   })
 
-  it('ships the CLI under its product name only, with the env prefix the tree uses', () => {
+  it('ships the CLI under its product name, with the env prefix the tree uses', () => {
     const bin = bundle(join(root, 'Named.app'), 'Pod')
-    expect(existsSync(join(bin, 'orca'))).toBe(false)
+    expect(readFileSync(join(bin, 'orca'), 'utf8')).not.toContain('ELECTRON=')
     expect(readFileSync(join(bin, 'podx'), 'utf8')).toContain(
       `export ${TREE_PREFIX}USER_DATA_PATH=`
     )
+  })
+
+  it('keeps `orca` for one release as a shim that names the podx command and runs it', () => {
+    const bin = bundle(join(root, 'Shim.app'), 'Pod')
+    // A podx that only echoes, so the test sees what the shim hands on.
+    writeFileSync(join(bin, 'podx'), '#!/bin/sh\necho "podx got $*"\n')
+    const link = join(root, 'linked-orca')
+    symlinkSync(join(bin, 'orca'), link)
+
+    for (const path of [join(bin, 'orca'), link]) {
+      const result = spawnSync('/bin/sh', [path, 'worktree', 'ps', '--json'], {
+        encoding: 'utf8',
+        env: { PATH: '/usr/bin:/bin', HOME: root }
+      })
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe('podx got worktree ps --json\n')
+      expect(result.stderr).toBe('orca is now podx: podx worktree ps --json\n')
+    }
   })
 
   // A terminal from before the decouple has only the legacy name; Orca.app's names Orca's data.
