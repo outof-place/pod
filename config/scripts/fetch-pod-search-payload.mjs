@@ -9,6 +9,9 @@
 //   node config/scripts/fetch-pod-search-payload.mjs --from X   X = an unpacked payload dir or a tarball
 //                                                               (local pod-search builds; checked against the
 //                                                               pin only when X is the pinned asset)
+//   node config/scripts/fetch-pod-search-payload.mjs --if-pinned   as the first form, but a pin without a sha256 yet
+//                                                               is a no-op (pod-check and release.sh: a build
+//                                                               before the first released payload ships without it)
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import {
@@ -56,8 +59,9 @@ export function sha256File(path) {
  */
 export function assertPayload(dir) {
   for (const name of BINARIES) {
-    const path = join(dir, 'bin', name)
-    if (!existsSync(path) || !statSync(path).isFile() || (statSync(path).mode & 0o111) === 0) {
+    // lstat: a link in bin/ would sign and seal whatever it points at.
+    const info = lstatSync(join(dir, 'bin', name), { throwIfNoEntry: false })
+    if (!info?.isFile() || (info.mode & 0o111) === 0) {
       throw new Error(`pod-search payload ${dir} has no executable bin/${name}`)
     }
   }
@@ -154,7 +158,16 @@ export async function fetchPayload({
   return { commit: assertPayload(into), source: url }
 }
 
+/** Whether the pin names a released payload yet (its sha256). */
+export function isPinned(pin = readPin()) {
+  return typeof pin.sha256 === 'string' && SHA256.test(pin.sha256)
+}
+
 if (process.argv[1] && import.meta.filename === process.argv[1]) {
+  if (process.argv.includes('--if-pinned') && !isPinned()) {
+    console.log('pod-search payload: config/pod-search-payload.json pins no release yet; nothing to fetch')
+    process.exit(0)
+  }
   const i = process.argv.indexOf('--from')
   fetchPayload({ from: i === -1 ? null : process.argv[i + 1] })
     .then(({ commit, source }) => console.log(`pod-search payload ${commit} from ${source}`))
