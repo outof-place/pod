@@ -123,7 +123,7 @@ function relativeWorktreesOptIn(
         ...base,
         available: true,
         active: false,
-        note: 'The repo and its worktrees can move together with nothing to repair; git older than 2.48 and some tools stop reading its worktrees.'
+        note: 'The repo and its worktrees can move together with nothing to repair. git turns on a repository extension: git older than 2.48 and tools built on libgit2 can no longer open this repository at all, main checkout included.'
       }
     : { ...base, available: false, active: false, note: 'Needs git 2.48 or newer.' }
 }
@@ -190,44 +190,61 @@ async function localValue(git: WorkspaceGitExec, repoPath: string, key: string) 
   return result.code === 0 ? result.stdout.trim() : null
 }
 
+export type RelativeWorktreesBefore = { extension: string | null; formatVersion: string | null }
+
+/** What relative-worktrees will change, read before it changes anything, for undo. */
+export async function readRelativeWorktreesBefore(
+  git: WorkspaceGitExec,
+  repoPath: string
+): Promise<RelativeWorktreesBefore> {
+  return {
+    extension: await localValue(git, repoPath, RELATIVE_EXTENSION),
+    formatVersion: await localValue(git, repoPath, FORMAT_VERSION)
+  }
+}
+
 /**
  * Sets the key through Pod's recorded writer, then has git rewrite every link; git turns on the
- * repository extension (format version 1) itself. Returns what undo needs to put back.
+ * repository extension (format version 1) itself. The caller records `before` first, so even a
+ * repair that fails part way can be undone.
  */
 export async function enableRelativeWorktrees(
   git: WorkspaceGitExec,
   setKey: (repoPath: string, key: string, value: string) => Promise<void>,
   repoPath: string
-): Promise<{ extension: string | null; formatVersion: string | null }> {
-  const before = {
-    extension: await localValue(git, repoPath, RELATIVE_EXTENSION),
-    formatVersion: await localValue(git, repoPath, FORMAT_VERSION)
-  }
+): Promise<void> {
   await setKey(repoPath, RELATIVE_KEY, 'true')
   const repair = await git(['worktree', 'repair', '--relative-paths'], repoPath)
   if (repair.code !== 0) {
     throw new Error(repair.stderr.trim() || 'git worktree repair --relative-paths failed')
   }
-  return before
 }
 
-/** Absolute links again; the extension and format version go back only to what Pod found. */
+async function restoreLocal(
+  git: WorkspaceGitExec,
+  repoPath: string,
+  key: string,
+  value: string | null
+): Promise<void> {
+  await git(['config', '--local', ...(value === null ? ['--unset', key] : [key, value])], repoPath)
+}
+
+/** Absolute links again; the extension and the format version go back to what Pod found. */
 export async function disableRelativeWorktrees(
   git: WorkspaceGitExec,
   repoPath: string,
-  before: { extension: string | null; formatVersion: string | null }
+  before: RelativeWorktreesBefore
 ): Promise<void> {
   const repair = await git(['worktree', 'repair', '--no-relative-paths'], repoPath)
   if (repair.code !== 0) {
     throw new Error(repair.stderr.trim() || 'git worktree repair --no-relative-paths failed')
   }
-  if (before.extension === null) {
-    await git(['config', '--local', '--unset', RELATIVE_EXTENSION], repoPath)
-  }
+  await restoreLocal(git, repoPath, RELATIVE_EXTENSION, before.extension)
   const extensions = await git(['config', '--local', '--get-regexp', '^extensions\\.'], repoPath)
-  // Format 1 is only for extensions; with none left, an older git may read the repo again.
-  if (before.formatVersion === '0' && extensions.code !== 0) {
-    await git(['config', '--local', FORMAT_VERSION, '0'], repoPath)
+  // Format 1 is only for extensions; with none left an older git reads the repo again. With some
+  // left (one the user turned on), version 1 must stay.
+  if (extensions.code !== 0) {
+    await restoreLocal(git, repoPath, FORMAT_VERSION, before.formatVersion)
   }
 }
 

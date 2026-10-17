@@ -85,4 +85,38 @@ describe('workspace git profile: verify and relative worktrees (real git)', () =
     expect(await local('core.repositoryformatversion')).toBe('0')
     expect(await fx.git(side, 'status', '--porcelain')).toBe('')
   })
+
+  it('undoes a relative-worktrees apply whose repair failed half way', async () => {
+    const side = join(fx.root, 'side')
+    await fx.git(repo, 'worktree', 'add', '-q', '-b', 'side', side)
+    const real = createWorkspaceGitExec()
+    let failRepair = true
+    // git turns the extension on, then the repair fails: what a crash part way would leave.
+    const git: typeof real = async (args, cwd, options) => {
+      if (failRepair && args[0] === 'worktree' && args[1] === 'repair') {
+        await real(args, cwd, options)
+        return { code: 1, stdout: '', stderr: 'repair failed' }
+      }
+      return real(args, cwd, options)
+    }
+    const service = createWorkspaceGitProfile({
+      git,
+      home: fx.home,
+      journal: createWorkspaceJournal(join(fx.root, 'journal.json')),
+      plans: createWorkspacePlanStore(),
+      getRepo: (id) => (id === 'repo-1' ? fx.repoRecord(repo) : undefined),
+      isLaunchdJobLoaded: async () => true
+    })
+    await expect(
+      service.apply((await service.plan('repo-1')).planId, ['relative-worktrees'])
+    ).rejects.toThrow(/repair failed/)
+    const [tune] = (await service.plan('repo-1')).tunes
+    expect(tune.relativeWorktreesBefore).toEqual({ extension: null, formatVersion: '0' })
+    failRepair = false
+    await service.undo((await service.plan('repo-1')).planId, tune.id)
+    await expect(local('worktree.useRelativePaths')).rejects.toThrow()
+    await expect(local('extensions.relativeWorktrees')).rejects.toThrow()
+    expect(await local('core.repositoryformatversion')).toBe('0')
+    expect(readFileSync(join(side, '.git'), 'utf8')).toMatch(/^gitdir: \//)
+  })
 })
