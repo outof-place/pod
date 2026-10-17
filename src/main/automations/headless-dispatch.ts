@@ -13,6 +13,8 @@ export type HeadlessAutomationDispatchLaunch = {
   terminalSessionId: string | null
   terminalPaneKey?: string | null
   terminalPtyId?: string | null
+  /** Pod: why the run's setup was skipped, kept on the run. */
+  setupNotice?: string
   completion?: Promise<{
     status: 'completed' | 'dispatch_failed'
     outputSnapshot?: AutomationRunOutputSnapshot | null

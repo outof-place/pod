@@ -179,8 +179,9 @@ export type CreateWorktreeResult = {
   workspaceLineage?: WorkspaceLineage | null
   warnings?: WorktreeLineageWarning[]
   setup?: WorktreeSetupLaunch
-  /** Pod: the new worktree's orca.yaml setup was skipped because no trust covers its content. */
-  setupTrust?: { status: 'needs-trust'; contentHash: string }
+  /** Pod: the new worktree's orca.yaml setup was skipped because no trust covers its content;
+   *  `automation-foreign-base`: an automation's base isn't the repo's own branch, so none can. */
+  setupTrust?: { status: 'needs-trust'; contentHash: string; reason?: 'automation-foreign-base' }
   setupReceipt?: {
     requested: 'run' | 'skip' | 'inherit'
     hookFound: boolean

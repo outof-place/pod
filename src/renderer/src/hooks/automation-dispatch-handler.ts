@@ -205,6 +205,7 @@ export async function handleAutomationDispatchRequest({
         terminalPaneKey: result.paneKey,
         terminalPtyId: result.ptyId,
         precheckResult: resolved.context.precheckResult,
+        ...(resolved.context.setupNotice ? { setupNotice: resolved.context.setupNotice } : {}),
         error: null
       })
       await completion.settlePendingAfterDispatch()

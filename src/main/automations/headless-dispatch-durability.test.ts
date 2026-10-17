@@ -38,6 +38,15 @@ const terminal = {
 }
 
 describe('headless automation observation during persistence', () => {
+  it('keeps the launch’s setup notice on the dispatched run (Pod)', async () => {
+    const setupNotice = 'setup skipped: base is outside your branches'
+    const context = fixture({ ...terminal, setupNotice })
+    await runHeadlessAutomationDispatch(context)
+    expect(context.runs.updateRun).toHaveBeenCalledWith(
+      expect.objectContaining({ ...terminal, status: 'dispatched', setupNotice })
+    )
+  })
+
   it('handles an early completion rejection while the dispatched write is stalled', async () => {
     const completion = Promise.withResolvers<never>()
     const acknowledgement = Promise.withResolvers<AutomationRun>()
