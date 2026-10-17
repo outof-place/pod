@@ -34,6 +34,8 @@ export type DaemonChildHandle = Pick<
   'pid' | 'exitCode' | 'signalCode' | 'connected' | 'disconnect' | 'unref'
 > & {
   kill(signal?: NodeJS.Signals): boolean
+  /** Pod: a launchd daemon's own termination, through launchd (no signal to a reusable pid). */
+  terminate?(): Promise<void>
   on(event: 'exit', listener: () => void): unknown
   once(event: 'exit', listener: () => void): unknown
   off(event: 'exit', listener: () => void): unknown
@@ -261,6 +263,9 @@ async function launchDaemonChildAttempt(
  * already the daemon itself. There is never an intermediate process left holding the daemon.
  */
 export async function terminateLaunchedDaemonChild(child: DaemonChildHandle): Promise<void> {
+  if (child.terminate) {
+    return child.terminate()
+  }
   try {
     if (daemonChildHasExited(child)) {
       return

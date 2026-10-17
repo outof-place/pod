@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '@orca/process-host/process-spec'
+import { LaunchdDaemonProcess } from './daemon-launchd-process'
 import {
-  LaunchdDaemonProcess,
   isGuiSessionDaemon,
   isLaunchdDaemonLaunchEnabled,
   launchDaemonViaLaunchd,
@@ -94,7 +94,8 @@ beforeEach(() => {
     },
     bootout: async (label) => {
       bootouts.push(label)
-    }
+    },
+    signal: async () => {}
   }
 })
 
@@ -245,19 +246,72 @@ describe('the launchd launch switch', () => {
 })
 
 describe('the handle of a launchd daemon', () => {
+  const control = () => ({ bootout: vi.fn(async () => {}), signal: vi.fn(async () => {}) })
+
   it('runs while its pid lives', () => {
-    const child = new LaunchdDaemonProcess(process.pid, 'label', async () => {})
+    const child = new LaunchdDaemonProcess(process.pid, 'label', control())
     expect(child.exitCode).toBeNull()
     expect(child.connected).toBe(false)
   })
 
   it('sees the exit, says so once, and boots the job out', async () => {
-    const bootout = vi.fn(async () => {})
-    const child = new LaunchdDaemonProcess(GONE_PID, 'label', bootout)
+    const jobs = control()
+    const child = new LaunchdDaemonProcess(GONE_PID, 'label', jobs)
     const exited = new Promise((resolve) => child.once('exit', resolve))
     await exited
     expect(child.exitCode).toBe(-1)
-    expect(bootout).toHaveBeenCalledTimes(1)
-    expect(bootout).toHaveBeenCalledWith('label')
+    expect(jobs.bootout).toHaveBeenCalledTimes(1)
+    expect(jobs.bootout).toHaveBeenCalledWith('label')
+  })
+
+  it("takes a live pid with another start for the daemon's pid reused, and signals nothing", () => {
+    const jobs = control()
+    const child = new LaunchdDaemonProcess(4242, 'label', jobs, {
+      startedAtMs: 1_000_000,
+      isAlive: () => true,
+      // Started an hour after the daemon: another process got its pid.
+      osStartedAtMs: () => 1_000_000 + 3_600_000
+    })
+    expect(child.exitCode).toBe(-1)
+    expect(child.kill('SIGTERM')).toBe(false)
+    expect(jobs.signal).not.toHaveBeenCalled()
+  })
+
+  it('signals through launchd by label, never the pid', async () => {
+    const kill = vi.spyOn(process, 'kill')
+    let alive = true
+    const jobs = control()
+    jobs.signal.mockImplementation(async () => {
+      alive = false
+    })
+    const child = new LaunchdDaemonProcess(4242, 'codes.pod.daemon.x.1', jobs, {
+      startedAtMs: 1_000_000,
+      isAlive: () => alive,
+      osStartedAtMs: () => 999_000
+    })
+    await child.terminate()
+    expect(jobs.signal).toHaveBeenCalledWith('codes.pod.daemon.x.1', 'SIGTERM')
+    expect(jobs.bootout).toHaveBeenCalledTimes(1) // once gone, its job is booted out
+    expect(kill.mock.calls.filter(([, signal]) => signal !== 0 && signal !== undefined)).toEqual([])
+    kill.mockRestore()
+  })
+
+  it('escalates to a bootout when SIGTERM is not enough', async () => {
+    let alive = true
+    const jobs = control()
+    jobs.bootout.mockImplementation(async () => {
+      alive = false
+    })
+    const child = new LaunchdDaemonProcess(4242, 'label', jobs, {
+      startedAtMs: 1_000_000,
+      isAlive: () => alive,
+      osStartedAtMs: () => 999_000,
+      graceMs: 300,
+      forceWaitMs: 1_000
+    })
+    await child.terminate()
+    expect(jobs.signal).toHaveBeenCalledWith('label', 'SIGTERM')
+    expect(jobs.bootout).toHaveBeenCalledWith('label')
+    expect(child.exitCode).toBe(-1)
   })
 })

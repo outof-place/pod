@@ -3,7 +3,6 @@
 // gives an app exec'd into a coalition with a live leader no coalition of its own. A forked daemon
 // sits in the runtime's coalition, which loses its leader when the runtime quits; an app started
 // from a terminal could then own it, and its quit or Force Quit ends every session (M10).
-import { EventEmitter } from 'node:events'
 import { readFileSync, unlinkSync } from 'node:fs'
 import { runProcess } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
@@ -16,14 +15,20 @@ import {
 import { DAEMON_LAUNCHD_REPORT_ARG, readDaemonLaunchdReport } from './daemon-launchd-report'
 import { parseDaemonReadyIdentity, type DaemonReadyIdentity } from './daemon-ready-identity'
 import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
+import {
+  LaunchdDaemonProcess,
+  processIsAlive,
+  warnLaunchdFailure,
+  type DaemonLaunchdJobControl
+} from './daemon-launchd-process'
 
 const LAUNCHCTL_PATH = '/bin/launchctl'
 const LAUNCHCTL_TIMEOUT_MS = 10_000
 const DEFAULT_STARTUP_TIMEOUT_MS = 10_000
 const REPORT_POLL_MS = 25
-const EXIT_POLL_MS = 250
 const PRINT_POLL_MS = 500
-const STDERR_TAIL_BYTES = 8192
+// Why short: it lands in an error message and runtime-stderr.log.
+const STDERR_TAIL_BYTES = 2048
 // The daemon's SIGTERM budget (daemon-entry SHUTDOWN_TIMEOUT_MS, 5 s) plus its reply flush (1 s)
 // and a second of slack, before launchd's SIGKILL.
 const DAEMON_EXIT_TIMEOUT_S = 7
@@ -69,10 +74,9 @@ export type DaemonLaunchdJob = {
 }
 
 /** The daemon-host side of a launchd launch: naming, the plist, and removing a job by label. */
-export type DaemonLaunchdJobs = {
+export type DaemonLaunchdJobs = DaemonLaunchdJobControl & {
   paths(options: { userDataPath: string; launchNonce: string }): DaemonLaunchdPaths
   writePlist(paths: DaemonLaunchdPaths, job: DaemonLaunchdJob): void
-  bootout(label: string): Promise<void>
 }
 
 export type RunLaunchctl = (args: string[]) => Promise<ProcessResult>
@@ -83,20 +87,6 @@ export type DaemonLaunchdOutcome =
 
 const runLaunchctl: RunLaunchctl = (args) =>
   runProcess({ program: LAUNCHCTL_PATH, args, timeoutMs: LAUNCHCTL_TIMEOUT_MS })
-
-function processIsAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return !(
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === 'ESRCH'
-    )
-  }
-}
 
 function removeQuietly(path: string): void {
   try {
@@ -175,7 +165,7 @@ export async function launchDaemonViaLaunchd(
   }
   const fail = async (message: string): Promise<never> => {
     // Why bootout and not a kill: it stops the job's process too, and unloads the job.
-    await jobs.bootout(paths.label).catch(() => {})
+    await jobs.bootout(paths.label).catch(warnLaunchdFailure('bootout'))
     removeQuietly(paths.reportPath)
     const tail = stderrTail(paths.stderrPath)
     throw new Error(tail ? `${message}\nDaemon stderr (tail):\n${tail}` : message)
@@ -191,7 +181,7 @@ export async function launchDaemonViaLaunchd(
     const { lastExitCode } = await printJob(launchctl, uid, paths.label)
     if (lastExitCode === DAEMON_EXIT_ENDPOINT_OCCUPIED) {
       // Lost the endpoint race before it could say so in its report.
-      await jobs.bootout(paths.label).catch(() => {})
+      await jobs.bootout(paths.label).catch(warnLaunchdFailure('bootout'))
       removeQuietly(paths.reportPath)
       return { kind: 'endpoint-unavailable', reason: 'occupied' }
     }
@@ -209,13 +199,15 @@ export async function launchDaemonViaLaunchd(
       removeQuietly(paths.reportPath)
       return {
         kind: 'ready',
-        child: new LaunchdDaemonProcess(identity.pid, paths.label, (label) => jobs.bootout(label)),
+        child: new LaunchdDaemonProcess(identity.pid, paths.label, jobs, {
+          startedAtMs: identity.startedAtMs
+        }),
         identity
       }
     }
     if (report?.type === 'endpoint-unavailable') {
       // The daemon exits on its own; its job stays loaded until booted out.
-      await jobs.bootout(paths.label).catch(() => {})
+      await jobs.bootout(paths.label).catch(warnLaunchdFailure('bootout'))
       removeQuietly(paths.reportPath)
       return {
         kind: 'endpoint-unavailable',
@@ -240,85 +232,5 @@ export async function launchDaemonViaLaunchd(
       return fail('Daemon startup timed out')
     }
     await new Promise((resolve) => setTimeout(resolve, REPORT_POLL_MS))
-  }
-}
-
-/**
- * What the launcher keeps of a daemon launchd started, in place of a ChildProcess: launchd is its
- * parent, so its exit is seen by polling the pid (only while someone listens for it), and its job
- * is booted out once it is gone.
- */
-export class LaunchdDaemonProcess extends EventEmitter {
-  readonly connected = false
-  readonly signalCode: NodeJS.Signals | null = null
-  private exited = false
-  private timer: ReturnType<typeof setInterval> | null = null
-
-  constructor(
-    readonly pid: number,
-    readonly label: string,
-    private readonly bootout: (label: string) => Promise<void>
-  ) {
-    super()
-    this.on('newListener', (event) => {
-      if (event === 'exit') {
-        this.watch()
-      }
-    })
-  }
-
-  /** null while it runs; -1 once it is gone (launchd reaped it, so its code isn't ours to see). */
-  get exitCode(): number | null {
-    if (!this.exited && !processIsAlive(this.pid)) {
-      this.markExited()
-    }
-    return this.exited ? -1 : null
-  }
-
-  kill(signal: NodeJS.Signals = 'SIGTERM'): boolean {
-    try {
-      process.kill(this.pid, signal)
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  disconnect(): void {}
-
-  unref(): void {
-    this.timer?.unref()
-  }
-
-  private watch(): void {
-    if (this.timer || this.exited) {
-      return
-    }
-    this.timer = setInterval(() => {
-      if (!processIsAlive(this.pid)) {
-        this.markExited()
-      } else if (this.listenerCount('exit') === 0) {
-        this.stopWatching()
-      }
-    }, EXIT_POLL_MS)
-    this.timer.unref()
-  }
-
-  private stopWatching(): void {
-    if (this.timer) {
-      clearInterval(this.timer)
-      this.timer = null
-    }
-  }
-
-  private markExited(): void {
-    if (this.exited) {
-      return
-    }
-    this.exited = true
-    this.stopWatching()
-    void this.bootout(this.label).catch(() => {})
-    // Why later: exitCode reads can mark it, and a ChildProcess sets its code before 'exit'.
-    queueMicrotask(() => this.emit('exit', -1, null))
   }
 }

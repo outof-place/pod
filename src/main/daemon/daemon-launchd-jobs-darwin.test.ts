@@ -116,6 +116,25 @@ describe('launchd jobs of a profile', () => {
   })
 })
 
+describe('launchd job control', () => {
+  it('signals a job by label through launchctl kill', async () => {
+    const launchctl = vi.fn(async () => result(0))
+    const jobs = createDarwinDaemonLaunchdJobs(jobsDir, launchctl, () => logs)
+    await jobs.signal('codes.pod.daemon.x.1', 'SIGTERM')
+    expect(launchctl.mock.calls[0]?.[0]).toEqual([
+      'kill',
+      '15',
+      `gui/${process.getuid?.() ?? -1}/codes.pod.daemon.x.1`
+    ])
+  })
+
+  it('gives a symlinked profile the prefix of its real path', () => {
+    const link = join(dir, 'link')
+    symlinkSync(userData, link)
+    expect(daemonLaunchdLabelPrefix(link)).toBe(daemonLaunchdLabelPrefix(userData))
+  })
+})
+
 describe('the sweep before a launch', () => {
   it('reads only this profile from launchctl list', () => {
     const prefix = daemonLaunchdLabelPrefix(userData)
@@ -135,6 +154,8 @@ describe('the sweep before a launch', () => {
       `${prefix}crashed.plist.77.tmp`
     ]) {
       writeFileSync(join(jobsDir, name), '')
+      // Older than a start in flight.
+      utimesSync(join(jobsDir, name), Date.now() / 1000 - 120, Date.now() / 1000 - 120)
     }
     const launchctl = vi.fn(async () =>
       result(
@@ -150,6 +171,22 @@ describe('the sweep before a launch', () => {
     expect(existsSync(join(jobsDir, `${prefix}dead.plist`))).toBe(false)
     expect(existsSync(join(jobsDir, `${prefix}crashed.plist.77.tmp`))).toBe(false)
     expect(existsSync(join(jobsDir, `${prefix}live.report.json`))).toBe(true)
+  })
+
+  it("leaves another launcher's start in flight alone", async () => {
+    const prefix = daemonLaunchdLabelPrefix(userData)
+    mkdirSync(jobsDir, { recursive: true })
+    writeFileSync(join(jobsDir, `${prefix}fresh.plist`), '')
+    writeFileSync(join(jobsDir, `${prefix}old.report.json`), '')
+    const old = Date.now() / 1000 - 120
+    utimesSync(join(jobsDir, `${prefix}old.report.json`), old, old)
+    const launchctl = vi.fn(async () =>
+      result(0, `PID\tStatus\tLabel\n-\t0\t${prefix}fresh\n-\t0\t${prefix}old\n`)
+    )
+    const bootout = vi.fn(async () => {})
+    expect(await sweepDeadDaemonLaunchdJobs(userData, jobsDir, { bootout }, launchctl)).toEqual([
+      `${prefix}old`
+    ])
   })
 
   it('does nothing when launchctl list fails', async () => {

@@ -7,11 +7,13 @@ import {
   chmodSync,
   mkdirSync,
   readdirSync,
+  realpathSync,
   renameSync,
   statSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
+import { constants } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { getLogsDirectory } from '../observability/logs-directory'
@@ -30,13 +32,22 @@ export const DAEMON_LAUNCHD_STDERR_LOG_NAME = 'daemon-launchd-stderr.log'
 const STDERR_LOG_MAX_BYTES = 2 * 1024 * 1024
 // launchctl's "no such service" exit codes: the job is already gone.
 const BOOTOUT_GONE_CODES = new Set([3, 113])
+/** A pid-less job whose plist or report is younger is another launcher's start in flight. */
+const SWEEP_MIN_AGE_MS = 60_000
 
 const runLaunchctl: RunLaunchctl = (args) =>
   runProcess({ program: LAUNCHCTL_PATH, args, timeoutMs: LAUNCHCTL_TIMEOUT_MS })
 
 /** Every job of this profile starts with it, so two profiles never sweep each other's. */
 export function daemonLaunchdLabelPrefix(userDataPath: string): string {
-  return `${DAEMON_LAUNCHD_LABEL_PREFIX}${createHash('sha256').update(userDataPath).digest('hex').slice(0, 12)}.`
+  // Why realpath: /tmp and /private/tmp, or a symlinked profile, must give one prefix.
+  let canonical = userDataPath
+  try {
+    canonical = realpathSync(userDataPath)
+  } catch {
+    // Not created yet: the path as given.
+  }
+  return `${DAEMON_LAUNCHD_LABEL_PREFIX}${createHash('sha256').update(canonical).digest('hex').slice(0, 12)}.`
 }
 
 /** Under userData/daemon, which an uninstall's zap already removes. */
@@ -145,6 +156,10 @@ export function createDarwinDaemonLaunchdJobs(
       if (result.code !== 0 && !BOOTOUT_GONE_CODES.has(result.code ?? -1)) {
         throw new Error(`launchctl bootout exited ${result.code}: ${result.stderr.trim()}`)
       }
+    },
+    // Why by label: launchd signals this job's process if it runs, never a pid reused since.
+    signal: async (label, signal) => {
+      await launchctl(['kill', String(constants.signals[signal]), `gui/${uid}/${label}`])
     }
   }
 }
@@ -181,7 +196,7 @@ export async function sweepDeadDaemonLaunchdJobs(
   const entries = parseDaemonLaunchdList(listed.stdout, prefix)
   const swept: string[] = []
   for (const { label, pid } of entries) {
-    if (pid === null) {
+    if (pid === null && !isStartInFlight(jobsDir, label)) {
       await jobs.bootout(label).then(
         () => swept.push(label),
         () => {}
@@ -202,4 +217,17 @@ export async function sweepDeadDaemonLaunchdJobs(
     }
   }
   return swept
+}
+
+function isStartInFlight(jobsDir: string, label: string): boolean {
+  for (const name of [`${label}.plist`, `${label}.report.json`]) {
+    try {
+      if (Date.now() - statSync(join(jobsDir, name)).mtimeMs < SWEEP_MIN_AGE_MS) {
+        return true
+      }
+    } catch {
+      // No such file.
+    }
+  }
+  return false
 }
