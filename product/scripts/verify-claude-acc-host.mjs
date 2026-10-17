@@ -54,14 +54,17 @@ export function verifyClaudeAccHost(app, { orcahost = findOrcahost(app), home = 
     return { problems, resolved: null }
   }
   // A clean env: inside a host terminal ORCA_USER_DATA_PATH would point the runtime file elsewhere.
+  // Why -B: orcahost.py runs inside the signed bundle, and a __pycache__ written there breaks the
+  // seal ("Pod.app is damaged"). -I ignores PYTHON* variables, so the env one only backs -B up.
   const resolved = JSON.parse(
-    execFileSync('python3', ['-I', orcahost], {
+    execFileSync('python3', ['-I', '-B', orcahost], {
       encoding: 'utf8',
       env: {
         PATH: process.env.PATH ?? '/usr/bin:/bin',
         HOME: home,
         CLAUDE_ACC_HOST: 'pod',
-        POD_APP_PATH: app
+        POD_APP_PATH: app,
+        PYTHONDONTWRITEBYTECODE: '1'
       }
     })
   )
