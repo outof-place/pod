@@ -16,6 +16,10 @@ const MACOS_PRINTF_PATH = '/usr/bin/printf'
 const LOGIN_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -l -- "$@"'
 const DIRECT_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -- "$@"'
 const LOGIN_PREFLIGHT_TIMEOUT_MS = 500
+// Pod: the daemon's startup warm-up runs off the spawn path, so a PAM stack slowed by load (a
+// launchd job's daemon starts with its runtime) gets the death-watch bound; a spawn still waits
+// on it no longer than LOGIN_PREFLIGHT_TIMEOUT_MS, and its verdict wraps every later spawn.
+const LOGIN_WARMUP_TIMEOUT_MS = 4_000
 // Why: the death-watch probe runs off the spawn path, so it can afford a bound
 // that outlasts a PAM stack answering slowly rather than misreading it as a hang.
 const LOGIN_SESSION_WATCH_PROBE_TIMEOUT_MS = 4_000
@@ -150,7 +154,8 @@ function cacheConclusiveLoginPreflightOutcome(outcome: LoginPreflightOutcome): v
 
 function loginPreflightSucceeds(
   username: string,
-  accountHome: string
+  accountHome: string,
+  timeoutMs: number
 ): Promise<LoginPreflightOutcome> {
   const cached = cachedOutcome()
   if (cached) {
@@ -160,7 +165,8 @@ function loginPreflightSucceeds(
     const cacheEpoch = loginPreflightCacheEpoch
     // Why: simultaneous pane restores share one PAM child instead of multiplying
     // subprocesses at exactly the point terminal startup is already busiest.
-    loginPreflightInFlight = runLoginPreflight(username, accountHome).then(async (pipeOutcome) => {
+    const pipeProbe = runLoginPreflight(username, accountHome, timeoutMs)
+    loginPreflightInFlight = pipeProbe.then(async (pipeOutcome) => {
       const outcome = await verifyRejectedLoginPreflightUnderPty(username, accountHome, pipeOutcome)
       // Why: cache only a conclusive PAM verdict; a killed/timed-out probe is
       // environmental and must be retried next spawn, not stuck forever (F1).
@@ -199,7 +205,9 @@ function loginPreflightSucceeds(
  * daemon uses the return to emit a structured degrade record, since detached
  * daemons destroy stderr and never surface the console.warn above (F2).
  */
-export async function prepareMacosTccLoginShell(): Promise<LoginPreflightOutcome | null> {
+export async function prepareMacosTccLoginShell(
+  options: { warmUp?: boolean } = {}
+): Promise<LoginPreflightOutcome | null> {
   if (process.platform !== 'darwin' || isDisabledByEnv()) {
     return null
   }
@@ -227,7 +235,23 @@ export async function prepareMacosTccLoginShell(): Promise<LoginPreflightOutcome
   if (!username || !accountHome) {
     return null
   }
-  return loginPreflightSucceeds(username, accountHome)
+  if (options.warmUp) {
+    return loginPreflightSucceeds(username, accountHome, LOGIN_WARMUP_TIMEOUT_MS)
+  }
+  return withinSpawnBudget(
+    loginPreflightSucceeds(username, accountHome, LOGIN_PREFLIGHT_TIMEOUT_MS)
+  )
+}
+
+/** Pod: a spawn's wait on a probe (a warm-up's may run longer), bounded by its own budget; the
+ *  probe runs on and caches its verdict. */
+function withinSpawnBudget(probe: Promise<LoginPreflightOutcome>): Promise<LoginPreflightOutcome> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const budget = new Promise<LoginPreflightOutcome>((resolve) => {
+    const timedOut: LoginPreflightOutcome = { ok: false, conclusive: false, reason: 'timeout' }
+    timer = setTimeout(() => resolve(timedOut), LOGIN_PREFLIGHT_TIMEOUT_MS)
+  })
+  return Promise.race([probe, budget]).finally(() => clearTimeout(timer))
 }
 
 export function resetMacosLoginShellPreflightForTests(): void {

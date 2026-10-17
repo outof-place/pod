@@ -148,15 +148,18 @@ async function main(): Promise<void> {
 
   // Why: detached daemons destroy stderr, so the preflight's console.warn is lost;
   // surface a degraded TCC attribution here where it's diagnosable (F2).
-  const runMacosLoginPreflight = async (): Promise<void> => {
-    const outcome = await prepareMacosTccLoginShell()
-    if (outcome && !outcome.ok) {
-      daemonLog.log('macos-login-preflight', { ok: outcome.ok, reason: outcome.reason })
+  // Pod: every probe that ran is logged with its duration, an accepted one too.
+  const runMacosLoginPreflight = async (warmUp = false): Promise<void> => {
+    const startedAtMs = Date.now()
+    const outcome = await prepareMacosTccLoginShell({ warmUp })
+    if (outcome) {
+      const durationMs = Date.now() - startedAtMs
+      daemonLog.log('macos-login-preflight', { ...outcome, durationMs, warmUp })
     }
   }
   // Why: warm the PAM probe at idle startup so the first terminal spawn doesn't
   // pay it under load — shrinking the window where a slow probe degrades (F1/F7).
-  void runMacosLoginPreflight()
+  void runMacosLoginPreflight(true)
 
   // Why: node-pty can throw a C++ Napi::Error that escapes all JS try/catch
   // blocks (e.g. writing to a PTY whose fd was closed between the native
@@ -300,7 +303,7 @@ async function main(): Promise<void> {
         }
       : {}),
     log: daemonLog,
-    preparePtySpawn: runMacosLoginPreflight,
+    preparePtySpawn: () => runMacosLoginPreflight(),
     ...(deathWatch
       ? {
           onPtySessionExit: () => deathWatch.notifyPtyExit(),
