@@ -31,6 +31,7 @@ export function registerPodPaneRestarter(tabId: string, restarter: PaneRestarter
 export function forgetPodPaneAgentResume(pane: PodUiHostPaneRestartRequest): void {
   const state = useAppStore.getState()
   const leaves = collectLayoutLeafIdsInOrder(state.terminalLayoutsByTabId[pane.tabId]?.root)
+  // Why no leaves counts: a tab with no stored layout is a single-pane tab.
   const onlyPane = leaves.length === 0 || (leaves.length === 1 && leaves[0] === pane.leafId)
   const paneKeys = Object.entries(state.sleepingAgentSessionsByPaneKey)
     .filter(
@@ -46,19 +47,23 @@ export function forgetPodPaneAgentResume(pane: PodUiHostPaneRestartRequest): voi
   }
 }
 
-// Why: the mount would reattach to the dead PTY and show the exit again instead of spawning.
+// Why: the mount would reattach to the dead PTY and show the exit again instead of spawning; a
+// one-pane tab can name it on the tab itself, not in its layout.
 function dropDeadPaneBinding(pane: PodUiHostPaneRestartRequest): void {
-  const { terminalLayoutsByTabId, setTabLayout } = useAppStore.getState()
+  const { terminalLayoutsByTabId, ptyIdsByTabId, setTabLayout, clearTabPtyId } =
+    useAppStore.getState()
   const layout = terminalLayoutsByTabId[pane.tabId]
-  if (!layout?.ptyIdsByLeafId?.[pane.leafId]) {
-    return
+  if (layout?.ptyIdsByLeafId?.[pane.leafId]) {
+    const { [pane.leafId]: _dead, ...bindings } = layout.ptyIdsByLeafId
+    const { ptyIdsByLeafId: _bindings, ...rest } = layout
+    setTabLayout(pane.tabId, {
+      ...rest,
+      ...(Object.keys(bindings).length > 0 ? { ptyIdsByLeafId: bindings } : {})
+    })
   }
-  const { [pane.leafId]: _dead, ...bindings } = layout.ptyIdsByLeafId
-  const { ptyIdsByLeafId: _bindings, ...rest } = layout
-  setTabLayout(pane.tabId, {
-    ...rest,
-    ...(Object.keys(bindings).length > 0 ? { ptyIdsByLeafId: bindings } : {})
-  })
+  if (pane.deadPtyId && ptyIdsByTabId[pane.tabId]?.includes(pane.deadPtyId)) {
+    clearTabPtyId(pane.tabId, pane.deadPtyId)
+  }
 }
 
 export function restartPodPane(request: PodUiHostPaneRestartRequest): boolean {
@@ -75,16 +80,27 @@ export function restartPodPane(request: PodUiHostPaneRestartRequest): boolean {
   return true
 }
 
+/** Subscribes this window to restarts and kept exits, and takes the exits kept before it did. */
+export function subscribePodUiHostPaneRestart(
+  podUiHost: Window['api']['podUiHost'] | undefined
+): () => void {
+  const stopRestarts = podUiHost?.onPaneRestart(restartPodPane)
+  const stopRetained = podUiHost?.onPaneExitRetained(forgetPodPaneAgentResume)
+  void podUiHost
+    ?.listRetainedPaneExits()
+    .then((panes) => panes.forEach(forgetPodPaneAgentResume))
+    .catch(() => {})
+  return () => {
+    stopRestarts?.()
+    stopRetained?.()
+  }
+}
+
 export function usePodUiHostPaneRestart(): void {
   useEffect(() => {
     // Undefined in the web client and in unit tests that stub only part of `window.api`.
     const api: Partial<Window['api']> | undefined =
       typeof window === 'undefined' ? undefined : window.api
-    const stopRestarts = api?.podUiHost?.onPaneRestart(restartPodPane)
-    const stopRetained = api?.podUiHost?.onPaneExitRetained(forgetPodPaneAgentResume)
-    return () => {
-      stopRestarts?.()
-      stopRetained?.()
-    }
+    return subscribePodUiHostPaneRestart(api?.podUiHost)
   }, [])
 }

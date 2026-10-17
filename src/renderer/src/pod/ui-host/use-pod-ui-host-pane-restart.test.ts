@@ -10,9 +10,14 @@ vi.mock('@/components/terminal/background-terminal-worktree-mount', () => ({
 const store = vi.hoisted(() => {
   const sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord> = {}
   const terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
+  const ptyIdsByTabId: Record<string, string[]> = {}
   return {
     sleepingAgentSessionsByPaneKey,
     terminalLayoutsByTabId,
+    ptyIdsByTabId,
+    clearTabPtyId: vi.fn((tabId: string, ptyId: string) => {
+      ptyIdsByTabId[tabId] = (ptyIdsByTabId[tabId] ?? []).filter((id) => id !== ptyId)
+    }),
     clearSleepingAgentSessionsByPaneKey: vi.fn((paneKeys: readonly string[]) => {
       for (const paneKey of paneKeys) {
         delete sleepingAgentSessionsByPaneKey[paneKey]
@@ -25,8 +30,12 @@ const store = vi.hoisted(() => {
 })
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 
-const { forgetPodPaneAgentResume, registerPodPaneRestarter, restartPodPane } =
-  await import('./use-pod-ui-host-pane-restart')
+const {
+  forgetPodPaneAgentResume,
+  registerPodPaneRestarter,
+  restartPodPane,
+  subscribePodUiHostPaneRestart
+} = await import('./use-pod-ui-host-pane-restart')
 
 const LEFT = '11111111-1111-4111-8111-111111111111'
 const RIGHT = '22222222-2222-4222-8222-222222222222'
@@ -54,6 +63,10 @@ beforeEach(() => {
   for (const key of Object.keys(store.terminalLayoutsByTabId)) {
     delete store.terminalLayoutsByTabId[key]
   }
+  for (const key of Object.keys(store.ptyIdsByTabId)) {
+    delete store.ptyIdsByTabId[key]
+  }
+  store.clearTabPtyId.mockClear()
 })
 
 describe('restartPodPane (Pod)', () => {
@@ -90,6 +103,18 @@ describe('restartPodPane (Pod)', () => {
     expect(Object.keys(store.sleepingAgentSessionsByPaneKey)).toEqual([`tab-b:${RIGHT}`])
   })
 
+  it("drops a one-pane tab's dead PTY on the tab itself, and only that one", () => {
+    store.ptyIdsByTabId['tab-f'] = ['pty-dead']
+    store.ptyIdsByTabId['tab-g'] = ['pty-live']
+
+    restartPodPane({ worktreeId: 'wt', tabId: 'tab-f', leafId: LEFT, deadPtyId: 'pty-dead' })
+    restartPodPane({ worktreeId: 'wt', tabId: 'tab-g', leafId: LEFT, deadPtyId: 'pty-dead' })
+
+    expect(store.clearTabPtyId).toHaveBeenCalledTimes(1)
+    expect(store.ptyIdsByTabId['tab-f']).toEqual([])
+    expect(store.ptyIdsByTabId['tab-g']).toEqual(['pty-live'])
+  })
+
   it("keeps a remount's restarter when the old mount unregisters", () => {
     const first = vi.fn(() => true)
     const second = vi.fn(() => false)
@@ -119,5 +144,22 @@ describe('forgetPodPaneAgentResume (Pod)', () => {
     forgetPodPaneAgentResume({ worktreeId: 'wt', tabId: 'tab-d', leafId: LEFT })
 
     expect(Object.keys(store.sleepingAgentSessionsByPaneKey).sort()).toEqual(['tab-d:2', 'tab-e:1'])
+  })
+})
+
+describe('subscribePodUiHostPaneRestart (Pod)', () => {
+  it('takes the panes main kept before this window subscribed', async () => {
+    store.sleepingAgentSessionsByPaneKey[`tab-h:${LEFT}`] = record(`tab-h:${LEFT}`, 'tab-h')
+    const stop = vi.fn()
+    const podUiHost = {
+      onPaneRestart: vi.fn(() => stop),
+      onPaneExitRetained: vi.fn(() => stop),
+      listRetainedPaneExits: vi.fn(async () => [{ worktreeId: 'wt', tabId: 'tab-h', leafId: LEFT }])
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the subscription calls only these three members.
+    const unsubscribe = subscribePodUiHostPaneRestart(podUiHost as never)
+    await vi.waitFor(() => expect(store.sleepingAgentSessionsByPaneKey).toEqual({}))
+    unsubscribe()
+    expect(stop).toHaveBeenCalledTimes(2)
   })
 })

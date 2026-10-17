@@ -63,6 +63,14 @@ export function withPodTerminalExits(
   return changed ? { ...result, tabs } : result
 }
 
+/** Every pane kept with an exit, for a window that missed their notices. */
+export function listPodTerminalExits(): { worktreeId: string; tabId: string; leafId: string }[] {
+  return Array.from(exits.keys(), (entry) => {
+    const [worktreeId = '', tabId = '', leafId = ''] = entry.split('\0')
+    return { worktreeId, tabId, leafId }
+  })
+}
+
 export function resetPodTerminalExitsForTests(): void {
   exits.clear()
 }

@@ -70,6 +70,11 @@ export const podUiHostApi = {
     ipcRenderer.on(POD_UI_HOST_PANE_RESTART_IPC.retained, listener)
     return () => ipcRenderer.removeListener(POD_UI_HOST_PANE_RESTART_IPC.retained, listener)
   },
+  listRetainedPaneExits: async () => {
+    const panes: unknown = await ipcRenderer.invoke(POD_UI_HOST_PANE_RESTART_IPC.listRetained)
+    const parsed = PodUiHostPaneRestartRequest.array().safeParse(panes)
+    return parsed.success ? parsed.data : []
+  },
   onPaneLayout: (apply) => {
     const listener = (_event: Electron.IpcRendererEvent, requestId: unknown, request: unknown) => {
       const parsed = PodUiHostPaneLayoutRequest.safeParse(request)
