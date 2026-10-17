@@ -315,9 +315,15 @@ export function killRoot(profile, pid) {
 function guard(pid, profile) {
   guardInstance(pid, () => {
     // The app's main process is this run's own child; its argv does not name the profile. Its
-    // pid is signalled only while it still has the start time recorded at the launch.
-    killRoot(profile, pid)
-    signalRunTreeSync(profile.ud, 'SIGKILL', profileTreeOptions(profile))
+    // pid is signalled only while it still has the start time recorded at the launch. The guard
+    // exits the run next (exit 70): a kill that could not go out is named on the way.
+    for (const stop of [() => killRoot(profile, pid), () => signalRunTreeSync(profile.ud, 'SIGKILL', profileTreeOptions(profile))]) {
+      try {
+        stop()
+      } catch (error) {
+        console.error(`claude-acc guard: ${error.message}`)
+      }
+    }
   })
 }
 
