@@ -15,7 +15,9 @@
 //   node bench/suites/latency.mjs [--confirm-visible] [--throughput] [--rounds 5] [--keys 40]
 //        [--subjects orca,pod-native,pod-xterm,ghostty] [--display ID]
 import { execFile, execFileSync } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { parseArgs, promisify } from 'node:util'
 import {
@@ -265,6 +267,27 @@ async function launchGhostty(profile, clone, command) {
   throw new Error('Ghostty did not start')
 }
 
+// The clone keeps Ghostty's bundle id, so macOS may write its preferences or saved state to the
+// account's own Ghostty domain: read before the first round and after the last, and shown in both
+// results (the lead's rule, 2026-10-17). Hashes and mtimes only, never the contents.
+const ACCOUNT_HOME = os.userInfo().homedir
+const GHOSTTY_ID = 'com.mitchellh.ghostty'
+function ghosttyAccountState() {
+  const sha = (data) => createHash('sha256').update(data).digest('hex')
+  const file = (target) =>
+    existsSync(target) ? { sha256: statSync(target).isFile() ? sha(readFileSync(target)) : null, mtimeMs: statSync(target).mtimeMs } : null
+  let defaults = null
+  try {
+    // Through cfprefsd: it also sees what isn't flushed to the plist yet.
+    defaults = sha(execFileSync('/usr/bin/defaults', ['export', GHOSTTY_ID, '-'], { stdio: ['ignore', 'pipe', 'ignore'] }))
+  } catch {}
+  return {
+    plist: file(path.join(ACCOUNT_HOME, 'Library/Preferences', `${GHOSTTY_ID}.plist`)),
+    defaultsExport: defaults,
+    savedState: file(path.join(ACCOUNT_HOME, 'Library/Saved Application State', `${GHOSTTY_ID}.savedState`))
+  }
+}
+
 // The clone's processes and their descendants (its shell), by executable (lib/run-tree.mjs).
 async function stopGhostty(clone) {
   const { left } = await stopRunTree(clone)
@@ -320,6 +343,7 @@ const measure = (name) => (name === 'ghostty' ? ghosttySubject() : orcaSubject(n
 const names = options.subjects.split(',')
 const rounds = Number(options.rounds)
 const samples = Object.fromEntries(names.map((name) => [name, []]))
+const ghosttyBefore = names.includes('ghostty') ? ghosttyAccountState() : null
 for (let round = 0; round < rounds; round += 1) {
   const order = names.map((_, i) => names[(i + round) % names.length])
   for (const name of order) {
@@ -332,6 +356,14 @@ for (let round = 0; round < rounds; round += 1) {
   }
 }
 
+const ghosttyAfter = ghosttyBefore ? ghosttyAccountState() : null
+// The account's own Ghostty domain before and after: `changed` names what differs.
+const ghosttyAccount = ghosttyBefore && {
+  before: ghosttyBefore,
+  after: ghosttyAfter,
+  changed: Object.keys(ghosttyBefore).filter((key) => JSON.stringify(ghosttyBefore[key]) !== JSON.stringify(ghosttyAfter[key]))
+}
+if (ghosttyAccount) log(`the account's Ghostty domain: ${ghosttyAccount.changed.length ? `CHANGED (${ghosttyAccount.changed.join(', ')})` : 'unchanged'}`)
 const versions = {
   ghostty: appVersion(GHOSTTY),
   ...Object.fromEntries(
@@ -363,6 +395,7 @@ writeSuiteResult('latency', {
   ],
   versions,
   config: { rounds, keys: Number(options.keys), frame, display, preflight },
+  ghosttyAccount,
   metrics: latencyMetrics,
   samples
 })
@@ -404,6 +437,7 @@ if (options.throughput) {
   writeSuiteResult('throughput-visible', {
     versions,
     config: { rounds, frame, display, logFile },
+    ghosttyAccount,
     metrics,
     samples: Object.fromEntries(
       names.map((name) => [name, samples[name].map((sample) => sample.throughput)])
