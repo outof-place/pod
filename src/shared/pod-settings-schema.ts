@@ -17,6 +17,7 @@ import {
 } from './terminal-minimum-contrast-settings'
 import { POD_SETTINGS_AGENT_FIELDS } from './pod-settings-agent-fields'
 import { row } from './pod-settings-row'
+import { normalizeExecutionHostId } from './execution-host'
 import { TuiAgentSchema } from './pod-settings-tui-agent-schema'
 
 const UiLanguageSchema = z.union([
@@ -37,6 +38,19 @@ const McpLazyStartSchema = z.object({
   enabled: row(z.boolean(), 'Lazy-start heavy MCP servers'),
   servers: row(z.array(z.string().min(1).max(256)).max(64), 'Servers')
 })
+
+// A notification source id as the store keeps it (normalizeVisibleExecutionHostIds).
+const MachineIdSchema = z
+  .string()
+  .max(1024)
+  .transform((value, ctx) => {
+    const id = normalizeExecutionHostId(value)
+    if (id !== value) {
+      ctx.addIssue({ code: 'custom', message: 'Unknown machine id' })
+      return z.NEVER
+    }
+    return id
+  })
 
 const NotificationsSchema = z
   .object({
@@ -61,7 +75,12 @@ const NotificationsSchema = z
       'Sound'
     ),
     customSoundPath: row(z.string().max(4096).nullable(), 'Custom sound file'),
-    customSoundVolume: row(z.number().min(0).max(100), 'Volume')
+    customSoundVolume: row(z.number().min(0).max(100), 'Volume'),
+    mutedNotificationSourceIds: row(
+      z.array(MachineIdSchema).max(256),
+      'Muted machines',
+      'Ids whose alerts this computer does not show. Mute a machine with every id notifications.sources lists for it.'
+    )
   })
   .partial()
   .strict()
