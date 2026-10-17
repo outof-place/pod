@@ -33,7 +33,6 @@ import { checkAcc, guardInstance, releaseInstance } from '../lib/acc-guard.mjs'
 import { assertRealHomeUntouched, realHomeState } from '../lib/real-home-guard.mjs'
 import {
   MAX_LOAD,
-  TOOLS_BIN,
   loadAverage,
   log,
   sleep,
@@ -42,6 +41,7 @@ import {
 } from '../lib/bench-session.mjs'
 import { POD_OUTER_APP, describeApp } from '../lib/orca-instance.mjs'
 import { rpcOk, runtimeMeta } from '../lib/runtime-rpc.mjs'
+import { runTree, stopRunTree } from '../lib/run-tree.mjs'
 import { summarize } from '../lib/sample-stats.mjs'
 
 const run = promisify(execFile)
@@ -96,7 +96,6 @@ function podNativeFile(rel) {
   })
 }
 
-const PROCSTAT = path.join(TOOLS_BIN, 'procstat')
 const PROTECTED = ['/Applications/', path.join(HOME, 'Library/Application Support/Pod/')]
 // An app LaunchServices starts gets the launchd session's environment beside what `open --env`
 // gives it: none of these may be set there.
@@ -216,16 +215,12 @@ function stubAccState(state) {
  * merely names the run's dir (via "argv"): those are reported, never counted or signalled, since
  * anyone's `tail` of a log there would match.
  */
-async function snapshot(launch, { scan = false } = {}) {
-  const args = ['--exe-prefix', `${launch.work}/`]
-  if (scan) args.push('--argv', `${launch.work}/`, '--argv', `${launch.work.replace(/^\/private/, '')}/`)
-  const { stdout } = await run(PROCSTAT, args, { maxBuffer: 16 << 20 })
-  const snap = JSON.parse(stdout)
-  // The harness's own processes that name the run's dir: procstat itself, `open -W`, the writer.
-  snap.procs = snap.procs.filter(
-    (proc) => proc.path !== PROCSTAT && proc.path !== '/usr/bin/open' && !proc.args.includes('live-writer.py')
-  )
-  return snap
+function snapshot(launch, { scan = false } = {}) {
+  return runTree(launch.work, { scan, exclude: harness })
+}
+// The harness's own processes that name the run's dir: `open -W` and the stub state's writer.
+function harness(proc) {
+  return proc.path === '/usr/bin/open' || proc.args.includes('live-writer.py')
 }
 
 // What each process is, by its executable: Pod's own (inside the clone) or the terminals' workload.
@@ -497,25 +492,7 @@ async function measureLaunch(variant, index) {
  * never a program under /Applications or Pod's data. Returns every signal sent, and what was left.
  */
 async function cleanup(launch) {
-  const signalled = []
-  let left = []
-  let argvOnly = []
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const snap = await snapshot(launch, { scan: true })
-    argvOnly = snap.procs.filter((proc) => proc.via === 'argv').map((proc) => `${proc.pid} ${proc.path}`)
-    left = snap.procs.filter(
-      (proc) => proc.via === 'exe' && proc.pid !== process.pid && !PROTECTED.some((prefix) => proc.path.startsWith(prefix))
-    )
-    if (left.length === 0) break
-    const signal = attempt < 25 ? 'SIGTERM' : 'SIGKILL'
-    for (const proc of left) {
-      try {
-        process.kill(proc.pid, signal)
-        signalled.push({ pid: proc.pid, path: proc.path, signal })
-      } catch {}
-    }
-    await sleep(200)
-  }
+  const { signalled, left, argvOnly } = await stopRunTree(launch.work, { protectedPrefixes: PROTECTED, exclude: harness })
   const nested = []
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -532,7 +509,7 @@ async function cleanup(launch) {
       execFileSync(LSREGISTER, ['-u', bundle], { stdio: 'ignore' })
     } catch {}
   }
-  return { signalled, left: left.map((proc) => `${proc.pid} ${proc.path}`), argvOnly }
+  return { signalled, left, argvOnly }
 }
 
 // The claude-acc baseline before the first launch (run-final.sh records one; a lone run takes it now).
