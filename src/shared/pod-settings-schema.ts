@@ -278,6 +278,12 @@ export const POD_SETTINGS_FIELDS = {
     'Third-party plugins',
     "Install plugins from marketplaces, Git and local folders. While this is off, only plugins bundled with Pod run. Remote revocation isn't available in Pod, so a plugin later found unsafe can't be blocked for you."
   ),
+  // PodNative highlights the pane itself; the desktop's switch is the same key.
+  experimentalTerminalAttention: row(
+    z.boolean(),
+    'Terminal attention',
+    'Keeps a pane highlighted after a terminal bell or a finished agent until you interact with it. Experimental while the signal is tuned.'
+  ),
   // network-proxy.ts's normalizer keeps 4096 characters.
   httpProxyBypassRules: row(
     z.string().max(4096),

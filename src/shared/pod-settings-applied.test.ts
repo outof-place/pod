@@ -93,7 +93,9 @@ const APPLIED_FOR_PODNATIVE = [
   'pluginSystemEnabled',
   'thirdPartyPluginsEnabled',
   // Advanced: the runtime's proxy applies it
-  'httpProxyBypassRules'
+  'httpProxyBypassRules',
+  // Experimental: PodNative's pane highlight (pn-acc's PN branch, landed in a pair)
+  'experimentalTerminalAttention'
 ]
 
 describe('podSettings pages', () => {
@@ -130,7 +132,6 @@ describe('podSettings pages', () => {
       'terminalShortcutPolicy',
       'primarySelectionMiddleClickPaste',
       'openInApplications',
-      'experimentalTerminalAttention',
       'experimentalAgentHibernation',
       'agentHibernationIdleMs',
       'experimentalActivity'
