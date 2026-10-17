@@ -199,3 +199,42 @@ describe("a user's comments around Pod's entries", () => {
     ).toBe('{\r\n  "model": "opus"\r\n}\r\n')
   })
 })
+
+describe('a cut that has to leave valid JSONC (r-orca on v4)', () => {
+  const POD = `{ "hooks": [{ "type": "command", "command": "${CLIENT}", "args": [] }] }`
+  const MINE = '{ "hooks": [{ "type": "command", "command": "my-guard" }] }'
+  const URL_MINE = '{ "hooks": [{ "type": "command", "command": "curl https://example.com//x" }] }'
+  const cut = (text: string): string | undefined => removePodClaudeEntries(text, names)?.text
+
+  it.each([
+    [
+      "a // line before Pod's last event, whose `}` shares its line",
+      `{\n  "hooks": {\n    "PreToolUse": [${MINE}],\n    // Pod's\n    "Stop": [${POD}]}\n}`,
+      `{\n  "hooks": {\n    "PreToolUse": [${MINE}]\n    // Pod's\n}\n}`
+    ],
+    [
+      'a // line before `hooks` as the last member, closed on the same line',
+      `{\n  "model": "opus",\n  // c\n  "hooks": {"Stop": [${POD}]}}`,
+      `{\n  "model": "opus"\n  // c\n}`
+    ],
+    ["a trailing comma after Pod's only event", `{"hooks": {"Stop": [${POD}],}}`, '{}'],
+    [
+      "a trailing comma after Pod's last group",
+      `{"hooks": {"Stop": [${MINE}, ${POD},]}}`,
+      `{"hooks": {"Stop": [${MINE},]}}`
+    ],
+    [
+      "a block comment before the comma ahead of Pod's group",
+      `{"hooks": {"Stop": [${MINE} /* c */ , ${POD}]}}`,
+      `{"hooks": {"Stop": [${MINE} /* c */ ]}}`
+    ],
+    [
+      'a // inside a string next to the cut',
+      `{"hooks": {"Stop": [${URL_MINE},\n ${POD}]}}`,
+      `{"hooks": {"Stop": [${URL_MINE}]}}`
+    ]
+  ])('cuts %s', (_label, before, after) => {
+    expect(cut(before)).toBe(after)
+    expect(removePodClaudeEntries(after, names)).toEqual({ text: after, removed: [] })
+  })
+})

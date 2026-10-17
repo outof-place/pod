@@ -128,6 +128,20 @@ describe('PodClaudeSettingsCut', () => {
     expect(scan).not.toHaveBeenCalled()
   })
 
+  it('says once that it refuses a file it cannot cut, apart from one with none of Pod', async () => {
+    writeFileSync(settingsPath, '{"hooks": ')
+    const scan = vi.fn(async () => [])
+    const { cut, log } = cutWith(scan)
+    await cut.arm()
+    await cut.arm()
+    expect(cut.pending).toBe(false)
+    expect(scan).not.toHaveBeenCalled()
+    expect(
+      log.mock.calls.filter(([event]) => event === 'pod-claude-settings-cut-refused')
+    ).toHaveLength(1)
+    expect(readFileSync(settingsPath, 'utf8')).toBe('{"hooks": ')
+  })
+
   it('waits while the table is unreadable, and watches the newest set of older claudes', async () => {
     writeFileSync(settingsPath, WITH_POD)
     let answer: number[] | null = null

@@ -4,6 +4,7 @@
 // first, and logs exactly what it removed. A file without Pod's entries is never written.
 import { chmodSync, copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import {
   findNodeAtLocation,
   getNodeValue,
@@ -98,9 +99,9 @@ function gapParts(text: string, from: number, to: number): Gap[] | null {
       at += 1
       parts.push({ kind: 'comma', start, end: at })
     } else if (text.startsWith('//', at)) {
-      // Why up to the line break: the break is a blank, so a cut can take it and keep the comment.
-      const line = text.indexOf('\n', at)
-      at = line === -1 || line > to ? to : text[line - 1] === '\r' ? line - 1 : line
+      // Why up to the line break: the break is a blank, which ends the comment (\r or \n alone too).
+      const line = text.slice(at, to).search(/[\r\n]/)
+      at = line === -1 ? to : at + line
       parts.push({ kind: 'comment', start, end: at })
     } else if (text.startsWith('/*', at)) {
       const close = text.indexOf('*/', at + 2)
@@ -129,8 +130,9 @@ function hasComment(text: string, node: Node): boolean {
 
 /** `text` without the member or element at `path`. Not jsonc-parser's modify: that rewrites the
  *  whitespace before a closing bracket. This cuts the node with one comma and the blanks beside
- *  it: the comma and blanks after it when it is not the last, else the blanks before it and the
- *  previous sibling's comma. Every other byte stays, a user's comment around it included. */
+ *  it: the comma and blanks after it when it is not the last, else the blanks before it (never a
+ *  `//` comment's line break) and the previous sibling's comma, or a trailing comma when it is the
+ *  only one. Every other byte stays, a user's comment around it included. */
 function cut(text: string, root: Node, path: JSONPath): string | null {
   const node = findNodeAtLocation(root, path)
   const target = node?.parent?.type === 'property' ? node.parent : node
@@ -163,9 +165,27 @@ function cut(text: string, root: Node, path: JSONPath): string | null {
     return null
   }
   const last = parts.at(-1)
-  const from = last?.kind === 'blank' ? last.start : target.offset
+  let from = last?.kind === 'blank' ? last.start : target.offset
+  const beforeLast = parts.at(-2)
+  // Why: a `//` comment ends at its line break. When the entry's own line goes on after it (`]}`),
+  // the blank's break has to stay, or what follows would be commented out.
+  const lineGoesOn = !/^[^\S\r\n]*[\r\n]/.test(text.slice(end))
+  if (
+    lineGoesOn &&
+    last?.kind === 'blank' &&
+    beforeLast?.kind === 'comment' &&
+    text.startsWith('//', beforeLast.start)
+  ) {
+    const lineBreak = /\r\n|\r|\n/.exec(text.slice(last.start, last.end))
+    from = lineBreak ? last.start + lineBreak.index + lineBreak[0].length : last.end
+  }
   if (!previous) {
-    return text.slice(0, from) + text.slice(end)
+    // The only member: a trailing comma after it goes too (`{"a": 1,}` would leave `{,}`).
+    const after = gapParts(text, end, container.offset + container.length - 1)
+    const trailing = after?.find((part) => part.kind === 'comma')
+    return trailing
+      ? text.slice(0, from) + text.slice(end, trailing.start) + text.slice(trailing.end)
+      : text.slice(0, from) + text.slice(end)
   }
   const comma = parts.find((part) => part.kind === 'comma')
   if (!comma) {
@@ -184,6 +204,7 @@ export function removePodClaudeEntries(
   if (!root) {
     return null
   }
+  const original: unknown = getNodeValue(root)
   const emptied = new Set<string>()
   const removed: PodClaudeSettingsRemoval[] = []
   for (let path = nextRemoval(root, isManaged, names.statusLineScript); path;) {
@@ -208,7 +229,11 @@ export function removePodClaudeEntries(
       !hasComment(text, groups)
     ) {
       text = cut(text, root, ['hooks', event]) ?? text
-      root = parseObject(text)!
+      const reparsed = parseObject(text)
+      if (!reparsed) {
+        return null
+      }
+      root = reparsed
     }
   }
   const hooks = findNodeAtLocation(root, ['hooks'])
@@ -220,7 +245,53 @@ export function removePodClaudeEntries(
   ) {
     text = cut(text, root, ['hooks']) ?? text
   }
+  // Why: the text is written to the user's own settings.json; one that doesn't parse, or means more
+  // than the original minus Pod's entries, is never written.
+  const final = parseObject(text)
+  if (!final || !sameSettings(getNodeValue(final), withoutRemovals(original, removed))) {
+    return null
+  }
   return { text, removed }
+}
+
+/** `value` with each removal's path taken out, in the order the cut took them. */
+function withoutRemovals(value: unknown, removals: PodClaudeSettingsRemoval[]): unknown {
+  const copy: unknown = structuredClone(value)
+  for (const { path } of removals) {
+    const parent = path
+      .slice(0, -1)
+      .reduce<unknown>(
+        (node, key) =>
+          node !== null && typeof node === 'object' ? Reflect.get(node, key) : undefined,
+        copy
+      )
+    const key = path.at(-1)
+    if (Array.isArray(parent) && typeof key === 'number') {
+      parent.splice(key, 1)
+    } else if (isPlainObject(parent) && typeof key === 'string') {
+      Reflect.deleteProperty(parent, key)
+    }
+  }
+  return copy
+}
+
+/** Equal settings once empty events and an empty `hooks` are left out (an emptied event that holds a
+ *  user's comment stays in the text as `[]`). */
+function sameSettings(left: unknown, right: unknown): boolean {
+  const trimmed = (value: unknown): unknown => {
+    if (!isPlainObject(value) || !isPlainObject(value.hooks)) {
+      return value
+    }
+    const hooks = Object.fromEntries(
+      Object.entries(value.hooks).filter(
+        ([, groups]) => !(Array.isArray(groups) && groups.length === 0)
+      )
+    )
+    const rest = Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'hooks'))
+    return Object.keys(hooks).length > 0 ? { ...rest, hooks } : rest
+  }
+  // Why structuredClone: getNodeValue builds null-prototype objects, which a strict compare tells apart.
+  return isDeepStrictEqual(trimmed(structuredClone(left)), trimmed(structuredClone(right)))
 }
 
 function readLog(path: string): MigrationLog {
