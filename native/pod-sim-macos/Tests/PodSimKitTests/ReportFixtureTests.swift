@@ -74,8 +74,15 @@ struct ReportFixtureTests {
         #expect(stop.nonce == start.nonce)
     }
 
+    @Test("ax params decode the runtime's request, the fresh flag included")
+    func axParams() throws {
+        let requests = try #require(fixtureRoot()["requests"] as? [String: Any])
+        let params = try JSONDecoder().decode(AXParams.self, from: JSONSerialization.data(withJSONObject: try #require(requests["ax"])))
+        #expect(params.fresh == true && params.hitTest == true && params.filter == "book" && params.maxNodes == 60)
+    }
+
     @Test("hid and ax results keep the fixture's shape and its optional keys",
-          arguments: ["hidTap", "hidText", "hidPasteAlert", "hidDegraded", "ax", "axDegraded"])
+          arguments: ["hidTap", "hidText", "hidPasteAlert", "hidDegraded", "ax", "axCached", "axTranslatorFallback", "axDegraded"])
     func inputResults(_ key: String) throws {
         if key.hasPrefix("ax") { try roundTrips(AXSnapshotResult.self, key) } else { try roundTrips(HIDResult.self, key) }
     }

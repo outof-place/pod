@@ -60,6 +60,8 @@ describe('pod-sim protocol v1 as the runtime reads it', () => {
     ['hidPasteAlert', SIM_HELPER_METHODS.hid.result],
     ['hidDegraded', SIM_HELPER_METHODS.hid.result],
     ['ax', SIM_HELPER_METHODS.ax.result],
+    ['axCached', SIM_HELPER_METHODS.ax.result],
+    ['axTranslatorFallback', SIM_HELPER_METHODS.ax.result],
     ['axDegraded', SIM_HELPER_METHODS.ax.result],
     ['displayStatsStreaming', SIM_HELPER_METHODS.displayStats.result],
     ['startStream', SIM_HELPER_METHODS.startStream.result],
@@ -88,6 +90,19 @@ describe('pod-sim protocol v1 as the runtime reads it', () => {
         params: { ...fixture.events.streamEnded, nonce: 1953 }
       })
     ).toEqual({ ok: false, reason: 'an event of an unknown shape' })
+  })
+
+  it('asks ax for a fresh read in a field the helper decodes, and reads how each tree was read', () => {
+    expect(SIM_HELPER_METHODS.ax.params.parse(fixture.requests.ax)).toEqual(fixture.requests.ax)
+    const bases = ['ax', 'axCached', 'axTranslatorFallback'].map(
+      (key) => SIM_HELPER_METHODS.ax.result.parse(fixture.results[key]).basis
+    )
+    expect(bases).toEqual(['parallel', 'cache', 'translator'])
+    expect(
+      SIM_HELPER_METHODS.ax.result.parse(fixture.results.axTranslatorFallback).fallbackReason
+    ).toMatch(/lookup answered 0/)
+    // A helper from before stage 3b sends neither field.
+    expect(SIM_HELPER_METHODS.ax.result.parse(fixture.results.axDegraded).basis).toBeUndefined()
   })
 
   it('sends a live view its nonce as 16 hex digits the helper decodes, never zero', () => {

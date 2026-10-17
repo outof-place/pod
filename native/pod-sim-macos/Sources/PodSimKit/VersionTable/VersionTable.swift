@@ -126,9 +126,14 @@ public struct VersionTable: Sendable {
         // Both halves must be known: the row's CoreSimulator side and this macOS's translator.
         if case .implementation(let name) = verdicts[.ax] {
             let translator = "AccessibilityPlatformTranslation \(translatorBuild ?? "(build unknown)")"
-            switch accessibility.first(where: { $0.translator == translatorBuild })?.ax {
+            let listed = accessibility.first(where: { $0.translator == translatorBuild })?.ax
+            switch listed {
             case nil: verdicts[.ax] = .unsupported("\(translator) is not in the version table for ax")
             case name?: break
+            // parallelWalk falls back to translatorWalk, so a table naming one of each (an override
+            // written before parallelWalk) still reads, one request at a time.
+            case let other? where Set([name, other]) == ["parallelWalk", "translatorWalk"] && (implemented[.ax] ?? []).contains("translatorWalk"):
+                verdicts[.ax] = .implementation("translatorWalk")
             case let other?: verdicts[.ax] = .unsupported("\(translator) is listed for ax \(other), not \(name)")
             }
         }

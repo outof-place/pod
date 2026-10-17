@@ -66,7 +66,7 @@ public struct HelperContext: Sendable {
 public enum SelftestRunner {
     /// What this binary implements.
     public static let implemented: [Capability: Set<String>] = [
-        .display: ["screenCallbacks"], .screenshot: ["surface"], .hid: ["dtuhid"], .ax: ["translatorWalk"],
+        .display: ["screenCallbacks"], .screenshot: ["surface"], .hid: ["dtuhid"], .ax: ["parallelWalk", "translatorWalk"],
     ]
 
     public static func run(_ options: SelftestOptions, context: HelperContext) -> SelftestReport {

@@ -44,8 +44,6 @@ enum AXTreeReader {
         let objectID: UInt64?
         let pid: Int32?
         var raw: AXRawElement
-        var subtree: Set<UInt64> = []
-        var ancestors: Set<UInt64> = []
         init(element: NSObject, objectID: UInt64?, pid: Int32?, raw: AXRawElement) {
             self.element = element
             self.objectID = objectID
@@ -100,29 +98,21 @@ enum AXTreeReader {
             }
             timings.attributeCalls = nodes.count
             timings.attributesMs = phaseMs()
-            // Each element's own id plus its descendants' and ancestors': a hit on any of them lands on
-            // it (a container answers for children that are not hit-testable themselves).
-            for index in nodes.indices.reversed() {
-                if let id = nodes[index].objectID { nodes[index].subtree.insert(id) }
-                if parents[index] >= 0 { nodes[parents[index]].subtree.formUnion(nodes[index].subtree) }
-            }
-            for index in nodes.indices where parents[index] >= 0 {
-                let parent = nodes[parents[index]]
-                nodes[index].ancestors = parent.ancestors.union(parent.objectID.map { [$0] } ?? [])
-            }
+            let families = AXCovering.families(objectIDs: nodes.map(\.objectID), parents: parents)
             let appPid = nodes.first?.pid
             // The application element spans the screen in the app's orientation, the frames' space.
             let rootSize = nodes.first.map { AXNormalizer.finite($0.raw.frame).size }.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
             let screen = CGRect(origin: .zero, size: rootSize ?? screenPoints)
             if limits.hitTest {
                 let points = hitPoints(nodes.map(\.raw), parents: parents, screen: screen, filter: limits.filter)
-                for (node, point) in zip(nodes, points) {
+                let pids = nodes.map(\.pid)
+                for (index, point) in points.enumerated() {
                     guard let point else { continue }
                     if DispatchTime.now() > limits.deadline { break }
                     let hit = hitTest(point, translator: translator, token: token)
                     requests += 1
                     timings.hitTests += 1
-                    if let hit { node.raw.hitsItself = lands(hit, on: node, root: nodes.first?.objectID) }
+                    if let hit { nodes[index].raw.hitsItself = AXCovering.lands(hit, element: index, families: families, pids: pids, root: nodes.first?.objectID) }
                 }
             }
             timings.hitTestsMs = phaseMs()
@@ -204,7 +194,7 @@ enum AXTreeReader {
         return values
     }
 
-    private static func raw(_ values: [String: Any], depth: Int) -> AXRawElement {
+    static func raw(_ values: [String: Any], depth: Int) -> AXRawElement {
         AXRawElement(
             role: values["AXRole"] as? String ?? "AXUnknown",
             label: text(values["AXDescription"]),
@@ -228,32 +218,50 @@ enum AXTreeReader {
         }
     }
 
-    private static func number(_ object: NSObject?, _ key: String) -> NSNumber? {
+    static func number(_ object: NSObject?, _ key: String) -> NSNumber? {
         guard let object, object.responds(to: NSSelectorFromString(key)) else { return nil }
         return object.value(forKey: key) as? NSNumber
     }
 
-    /// Whether a hit at a node's centre lands on it; nil when the walk cannot tell. Content another
-    /// process draws inside the app (a widget, web content) answers hit tests with ids this walk never
-    /// saw, so only the app's own elements count as covering it.
-    private static func lands(_ hit: Hit, on node: Node, root: UInt64?) -> Bool? {
-        // The application element answers where nothing accessible is: no evidence either way.
-        guard let id = hit.objectID, id != root else { return nil }
-        if node.subtree.contains(id) || node.ancestors.contains(id) { return true }
-        if let hitPid = hit.pid, let pid = node.pid, hitPid != pid { return nil }
-        return false
-    }
-
-    private struct Hit {
-        let objectID: UInt64?
-        let pid: Int32?
-    }
-
-    private static func hitTest(_ point: CGPoint, translator: NSObject, token: String) -> Hit? {
+    private static func hitTest(_ point: CGPoint, translator: NSObject, token: String) -> AXHit? {
         typealias At = @convention(c) (AnyObject, Selector, CGPoint, UInt32, NSString) -> AnyObject?
         let selector = NSSelectorFromString("objectAtPoint:displayId:bridgeDelegateToken:")
         guard let hit = unsafeBitCast(translator.method(for: selector), to: At.self)(translator, selector, point, 0, token as NSString) as? NSObject
         else { return nil }
-        return Hit(objectID: number(hit, "objectID")?.uint64Value, pid: number(hit, "pid")?.int32Value)
+        return AXHit(objectID: number(hit, "objectID")?.uint64Value, pid: number(hit, "pid")?.int32Value)
+    }
+}
+
+/// Whether a hit test at an element's tap point found that element. A hit on its own descendant
+/// counts (a container answers for children that are not hit-testable themselves), and on an ancestor
+/// too (an element that is not hit-testable itself answers with its container). Pure: both walks use it.
+enum AXCovering {
+    struct Families {
+        /// Each element's own id plus its descendants'.
+        let subtree: [Set<UInt64>]
+        let ancestors: [Set<UInt64>]
+    }
+
+    static func families(objectIDs: [UInt64?], parents: [Int]) -> Families {
+        var subtree = objectIDs.map { $0.map { Set([$0]) } ?? [] }
+        for index in objectIDs.indices.reversed() where parents[index] >= 0 {
+            subtree[parents[index]].formUnion(subtree[index])
+        }
+        var ancestors = [Set<UInt64>](repeating: [], count: objectIDs.count)
+        for index in objectIDs.indices where parents[index] >= 0 {
+            let parent = parents[index]
+            ancestors[index] = ancestors[parent].union(objectIDs[parent].map { [$0] } ?? [])
+        }
+        return Families(subtree: subtree, ancestors: ancestors)
+    }
+
+    /// Nil when the walk cannot tell: the application element answers where nothing accessible is,
+    /// and content another process draws inside the app (a widget, web content) answers with ids this
+    /// walk never saw, so only the app's own elements count as covering it.
+    static func lands(_ hit: AXHit, element index: Int, families: Families, pids: [Int32?], root: UInt64?) -> Bool? {
+        guard let id = hit.objectID, id != root else { return nil }
+        if families.subtree[index].contains(id) || families.ancestors[index].contains(id) { return true }
+        if let hitPid = hit.pid, let pid = pids[index], hitPid != pid { return nil }
+        return false
     }
 }

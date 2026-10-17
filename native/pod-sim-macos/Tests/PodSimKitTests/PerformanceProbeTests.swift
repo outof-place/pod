@@ -9,7 +9,8 @@ import Testing
 /// -enable-testing --filter PerformanceProbeTests`):
 /// - `POD_SIM_BENCH=1`: what the device lane adds to a `hid` call, against the concurrent queue it replaced.
 /// - `POD_SIM_PROBE_UDID=<udid>` with `POD_SIM_DEVICE_SET=<set>`: `ax` per phase on a booted device,
-///   whatever app is frontmost; `POD_SIM_PROBE_FILTER` adds a filtered run; `POD_SIM_PROBE_SHOTS=1`
+///   whatever app is frontmost, and the parallel read and the kept tree against the walk on that
+///   screen; `POD_SIM_PROBE_FILTER` adds a filtered run; `POD_SIM_PROBE_SHOTS=1`
 ///   times a screenshot's phases (the remote surface read, the copy, the PNG and JPEG encodes, the
 ///   write) and a settle hash on whatever the device shows.
 @Suite("Performance probes")
@@ -190,6 +191,44 @@ struct PerformanceProbeTests {
             print("  hit tests ms: \(Self.percentiles(hits))")
             print("  waiting on the device ms: \(Self.percentiles(transport))")
         }
+    }
+
+    /// The shipped `ax` against the translator walk on the same screen: a fresh parallel read, an
+    /// answer from the kept tree, and the walk; the nodes must match.
+    @Test("ax routes on a booted device", .enabled(if: environment["POD_SIM_PROBE_UDID"] != nil))
+    func axRoutes() throws {
+        let udid = try #require(Self.environment["POD_SIM_PROBE_UDID"]).uppercased()
+        let context = HelperContext.discover(environment: Self.environment)
+        let device = try context.simulatorService.flatMap { $0.device(udid: udid) }.get()
+        #expect(AccessibilitySnapshots.configure(implementation: "parallelWalk").route == .parallel)
+        defer { AccessibilitySnapshots.configure(implementation: nil) }
+        let port = try DisplayPort.main(of: device).get()
+        let surface: () -> (id: UInt32, seed: UInt32)? = { port.surface().map { (IOSurfaceGetID($0), IOSurfaceGetSeed($0)) } }
+        let options = AXSnapshotOptions(maxNodes: AXBudget.maxNodes, all: true)
+        func ms(_ since: UInt64) -> Double { Double(DispatchTime.now().uptimeNanoseconds - since) / 1_000_000 }
+        _ = AccessibilitySnapshots.snapshot(device, options: options, hitTest: true, fresh: true, surface: surface)
+        var fresh: [Double] = [], warm: [Double] = [], walk: [Double] = []
+        var cacheAnswers = 0
+        var last: (parallel: AXSnapshotResult, walk: AXSnapshotResult)?
+        for _ in 0..<30 {
+            var started = DispatchTime.now().uptimeNanoseconds
+            let parallel = try AccessibilitySnapshots.snapshot(device, options: options, hitTest: true, fresh: true, surface: surface).get()
+            fresh.append(ms(started))
+            started = DispatchTime.now().uptimeNanoseconds
+            if try AccessibilitySnapshots.snapshot(device, options: options, hitTest: true, fresh: false, surface: surface).get().basis == .cache {
+                cacheAnswers += 1
+            }
+            warm.append(ms(started))
+            started = DispatchTime.now().uptimeNanoseconds
+            let walked = try AccessibilitySnapshots.timed(device, options: options, hitTest: true).get().result
+            walk.append(ms(started))
+            last = (parallel, walked)
+        }
+        let nodes = last.map { "\($0.parallel.nodes.count) nodes, same as the walk: \($0.parallel.nodes == $0.walk.nodes)" } ?? ""
+        print("ax routes: \(nodes); \(cacheAnswers) of 30 warm calls answered from the kept tree")
+        print("  fresh parallel ms: \(Self.percentiles(fresh))")
+        print("  warm ms: \(Self.percentiles(warm))")
+        print("  translator walk ms: \(Self.percentiles(walk))")
     }
 }
 

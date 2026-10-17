@@ -39,6 +39,8 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
         self.accessibilityFallback = accessibilityFallback
         self.inputLanes = inputLanes
         context = HelperContext.discover(environment: environment)
+        // Before the self-test, whose device check reads the way `ax` will.
+        if case .implementation(let name) = context.lookup?.verdicts[.ax] { AccessibilitySnapshots.configure(implementation: name) }
         startup = SelftestRunner.run(SelftestOptions(environment: environment), context: context)
         startupJSON = (try? WireJSON.encoder.encode(startup)) ?? Data("{}".utf8)
         inputLanes.onWedge = { [weak self] wedge in self?.inputWedged(wedge) }
@@ -68,7 +70,13 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
         if request.method == "hid", case .success(let params) = WireJSON.decode(HIDParams.self, from: request.params),
            UUID(uuidString: params.udid) != nil {
             let call = dispatcher.start("hid", deadlineMs: deadlineMs, reply: reply)
-            inputLanes.submit(udid: params.udid.uppercased(), call: call) { self.hid(params) }
+            let udid = params.udid.uppercased()
+            // A kept accessibility tree is the screen's no longer, from the moment input is on its way until it landed.
+            AXDeviceSessions.shared.inputArrived(udid)
+            inputLanes.submit(udid: udid, call: call) {
+                defer { AXDeviceSessions.shared.inputArrived(udid) }
+                return self.hid(params)
+            }
             return true
         }
         let run: (@Sendable () -> Reply)?
@@ -145,7 +153,7 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
 
     // MARK: - plumbing
 
-    private func mainSurface(_ udid: String) -> Result<IOSurfaceRef, HelperError> {
+    func mainSurface(_ udid: String) -> Result<IOSurfaceRef, HelperError> {
         // An attachment that still shows this boot holds the surface already: no remote call at all.
         if case .success(let attachment) = currentAttachment(udid), let surface = attachment.currentSurface {
             return .success(surface)

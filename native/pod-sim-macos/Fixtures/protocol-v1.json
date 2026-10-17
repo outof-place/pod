@@ -512,7 +512,39 @@
       "alertSuspected": false,
       "fingerprint": "33ef18e57b51af54",
       "ms": 85,
-      "transport": "bridge"
+      "transport": "bridge",
+      "basis": "parallel"
+    },
+    "axCached": {
+      "udid": "01C2D240-07BE-4772-AB65-D00D78C451A0",
+      "screen": { "width": 402, "height": 874, "scale": 3, "orientation": "portrait" },
+      "app": { "pid": 559 },
+      "nodes": [],
+      "total": 22,
+      "shown": 0,
+      "omitted": 22,
+      "notVisible": 10,
+      "alertSuspected": false,
+      "fingerprint": "33ef18e57b51af54",
+      "ms": 1,
+      "transport": "bridge",
+      "basis": "cache"
+    },
+    "axTranslatorFallback": {
+      "udid": "01C2D240-07BE-4772-AB65-D00D78C451A0",
+      "screen": { "width": 402, "height": 874, "scale": 3, "orientation": "portrait" },
+      "app": { "pid": 559 },
+      "nodes": [],
+      "total": 22,
+      "shown": 0,
+      "omitted": 22,
+      "notVisible": 10,
+      "alertSuspected": false,
+      "fingerprint": "33ef18e57b51af54",
+      "ms": 96,
+      "transport": "bridge",
+      "basis": "translator",
+      "fallbackReason": "no com.apple.CoreSimulator.accessibility in Portivo-Pod-S3-Input: lookup answered 0"
     },
     "hidDegraded": {
       "udid": "01C2D240-07BE-4772-AB65-D00D78C451A0",
@@ -626,6 +658,14 @@
       "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
       "token": 1953,
       "nonce": "9e3779b97f4a7c15"
+    },
+    "ax": {
+      "udid": "01C2D240-07BE-4772-AB65-D00D78C451A0",
+      "maxNodes": 60,
+      "filter": "book",
+      "all": false,
+      "hitTest": true,
+      "fresh": true
     }
   },
   "streamEndReasons": ["viewerGone", "deviceShutDown", "deviceRebooted", "detached"],

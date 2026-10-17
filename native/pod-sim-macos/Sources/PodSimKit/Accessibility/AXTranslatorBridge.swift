@@ -134,9 +134,10 @@ final class AXTranslatorBridge: NSObject, @unchecked Sendable {
 
     // MARK: - AXPTranslationTokenDelegateHelper (called by the translator, on the translator queue)
 
+    // Tokens arrive optional: an element whose translation carries none must get no answer, not a trap.
     @objc(accessibilityTranslationDelegateBridgeCallbackWithToken:)
-    func bridgeCallback(token: String) -> AnyObject {
-        guard let route = route(token) else {
+    func bridgeCallback(token: String?) -> AnyObject {
+        guard let token, let route = route(token) else {
             let none: @convention(block) (AnyObject?) -> AnyObject? = { _ in AXTranslatorBridge.emptyResponse() }
             return none as AnyObject
         }
@@ -148,8 +149,8 @@ final class AXTranslatorBridge: NSObject, @unchecked Sendable {
     }
 
     @objc(accessibilityTranslationConvertPlatformFrameToSystem:withToken:)
-    func convertFrame(_ rect: NSRect, token: String) -> NSRect { rect }
+    func convertFrame(_ rect: NSRect, token: String?) -> NSRect { rect }
 
     @objc(accessibilityTranslationRootParentWithToken:)
-    func rootParent(token: String) -> AnyObject? { nil }
+    func rootParent(token: String?) -> AnyObject? { nil }
 }

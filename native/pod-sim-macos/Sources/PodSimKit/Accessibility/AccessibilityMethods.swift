@@ -1,4 +1,5 @@
 import Foundation
+import IOSurface
 
 /// A public driver's snapshot when the version table has no translator path for this build
 /// (pre-mortem triage 6). None ships yet; see `PublicInputFallback`. The seam marks what a fallback
@@ -21,6 +22,8 @@ struct AXParams: Decodable {
     let all: Bool?
     /// Hit-test each on-screen node so a covered one is not offered (default true).
     let hitTest: Bool?
+    /// Read the device now even when the kept tree still matches the screen (default false).
+    let fresh: Bool?
 }
 
 extension HelperMethods {
@@ -47,7 +50,12 @@ extension HelperMethods {
             } else {
                 switch booted(params.udid.uppercased()) {
                 case .failure(let error): return .error(error)
-                case .success(let device): taken = AccessibilitySnapshots.take(device, options: options, hitTest: params.hitTest ?? true)
+                case .success(let device):
+                    // Without a readable framebuffer nothing proves the screen held still, so nothing is kept.
+                    let screenshots = startupReport.capabilities.screenshot.status == .ok
+                    taken = AccessibilitySnapshots.snapshot(
+                        device, options: options, hitTest: params.hitTest ?? true, fresh: params.fresh ?? false,
+                        surface: { screenshots ? self.surfaceStamp(device.udid) : nil })
                 }
             }
             switch taken {
@@ -55,5 +63,11 @@ extension HelperMethods {
             case .success(let snapshot): return .encoding(snapshot)
             }
         }
+    }
+
+    /// The main display's framebuffer as an IOSurface id and seed: the seed moves whenever the device draws.
+    private func surfaceStamp(_ udid: String) -> (id: UInt32, seed: UInt32)? {
+        guard case .success(let surface) = mainSurface(udid) else { return nil }
+        return (IOSurfaceGetID(surface), IOSurfaceGetSeed(surface))
     }
 }

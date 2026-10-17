@@ -11,14 +11,30 @@ struct VersionTableTests {
     /// What this binary implements, stage 3 included.
     let implemented = SelftestRunner.implemented
 
-    @Test("the bundled table knows Xcode 27.0 with translator 587 and picks the stage 0 paths, hid and ax included")
+    @Test("the bundled table knows Xcode 27.0 with translator 587 and picks the stage 0 paths, hid and the parallel ax read included")
     func bundledKnowsXcode27() throws {
         let lookup = try VersionTable.bundled().lookup(xcode27, forcedUnknown: false, implemented: implemented, translatorBuild: translator587)
         #expect(lookup.entry?.name == "Xcode 27.0 (27A266a)")
         #expect(lookup.verdicts[.display] == .implementation("screenCallbacks"))
         #expect(lookup.verdicts[.screenshot] == .implementation("surface"))
         #expect(lookup.verdicts[.hid] == .implementation("dtuhid"))
-        #expect(lookup.verdicts[.ax] == .implementation("translatorWalk"))
+        #expect(lookup.verdicts[.ax] == .implementation("parallelWalk"))
+    }
+
+    @Test("a table naming parallelWalk on one side and translatorWalk on the other reads through the translator; another name still blocks")
+    func parallelWalkFallsBack() throws {
+        let override = try VersionTable.decode(Data("""
+        {"schema": 1, "builds": [], "accessibility": [
+          {"name": "587 kept on the walk", "translator": "587", "ax": "translatorWalk"}
+        ]}
+        """.utf8))
+        let table = try VersionTable.bundled().overlaid(by: override)
+        #expect(table.lookup(xcode27, forcedUnknown: false, implemented: implemented, translatorBuild: translator587).verdicts[.ax]
+            == .implementation("translatorWalk"))
+        // Without translatorWalk in this binary there is nothing to agree on.
+        let parallelOnly: [Capability: Set<String>] = [.ax: ["parallelWalk"]]
+        #expect(table.lookup(xcode27, forcedUnknown: false, implemented: parallelOnly, translatorBuild: translator587).verdicts[.ax]
+            == .unsupported("AccessibilityPlatformTranslation 587 is listed for ax translatorWalk, not parallelWalk"))
     }
 
     @Test("a capability this binary does not implement yet is unsupported whatever the row says")
@@ -52,7 +68,7 @@ struct VersionTableTests {
         let on = table.lookup(xcode27, forcedUnknown: false, implemented: implemented, translatorBuild: "601")
         #expect(on.verdicts[.ax] == .implementation("translatorWalk"))
         let blocked = table.lookup(xcode27, forcedUnknown: false, implemented: implemented, translatorBuild: translator587)
-        #expect(blocked.verdicts[.ax] == .unsupported("AccessibilityPlatformTranslation 587 is listed for ax batchedWalk, not translatorWalk"))
+        #expect(blocked.verdicts[.ax] == .unsupported("AccessibilityPlatformTranslation 587 is listed for ax batchedWalk, not parallelWalk"))
         #expect(blocked.verdicts[.hid] == .implementation("dtuhid"))
     }
 

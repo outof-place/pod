@@ -258,7 +258,13 @@ export const SimHelperAxResult = z.object({
   // `fallback`: a public driver read the tree (with `degraded`); none ships yet.
   transport: z.enum(['bridge', 'coreSimulator', 'fallback']),
   // A public fallback read the tree instead of the translator: the version table's reason.
-  degraded: z.string().optional()
+  degraded: z.string().optional(),
+  // How the tree was read: `cache` (the last read, nothing on screen changed since), `parallel`
+  // (read now, many requests at once) or `translator` (read now, one request at a time). Absent
+  // from a public fallback and from helpers before stage 3b.
+  basis: z.enum(['cache', 'parallel', 'translator']).optional(),
+  // Why a helper that reads in parallel read this one through the translator.
+  fallbackReason: z.string().optional()
 })
 export type SimHelperAxResult = z.infer<typeof SimHelperAxResult>
 
@@ -316,7 +322,9 @@ export const SIM_HELPER_METHODS = {
       // Off-screen, hidden and covered nodes too.
       all: z.boolean().optional(),
       // Hit-test each on-screen node so a covered one is not offered (default true).
-      hitTest: z.boolean().optional()
+      hitTest: z.boolean().optional(),
+      // Read the device now even when the last read still matches the screen (default false).
+      fresh: z.boolean().optional()
     }),
     result: SimHelperAxResult
   },
