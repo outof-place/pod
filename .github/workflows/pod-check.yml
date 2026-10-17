@@ -1,19 +1,26 @@
-# Runs Pod's checks on a branch or commit: typecheck, unit tests and the macOS build. Nothing
-# else: no rebase, no pull request, no issue, and nothing from Orca.
+# Runs Pod's checks on main or a candidate branch (stack/cand-*): typecheck and unit tests, and the
+# macOS build only when asked (macos: true; Filip's release check). Nothing else: no rebase, no pull
+# request, no issue, and nothing from Orca.
 #
-#   gh workflow run pod-check.yml -R outof-place/pod -f ref=<branch or commit>
+#   gh workflow run pod-check.yml -R outof-place/pod -f ref=stack/cand-<n>
 #
-# GITHUB_TOKEN reads the repository; no other secret is needed.
+# GITHUB_TOKEN reads the repository. POD_PAYLOAD_TOKEN (read access to claude-acc's contents)
+# fetches the claude-acc payload once that repository is private.
 name: Pod check
 
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: Branch or commit to check.
+        description: main or a candidate branch (stack/cand-*).
         required: false
         type: string
         default: main
+      macos:
+        description: Also run the macOS build (macOS minutes cost the most).
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -41,6 +48,14 @@ jobs:
           CHECK_REF: ${{ inputs.ref }}
         run: |
           set -euo pipefail
+          # Why only these: every run costs minutes, so a branch is checked once it is a candidate.
+          case "$CHECK_REF" in
+            main | stack/cand-*) ;;
+            *)
+              echo "::error::pod-check runs on main and stack/cand-* candidates, not $CHECK_REF"
+              exit 1
+              ;;
+          esac
           sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$CHECK_REF" --jq .sha)
           echo "Checking $CHECK_REF at $sha" >> "$GITHUB_STEP_SUMMARY"
           echo "head_sha=$sha" >> "$GITHUB_OUTPUT"
@@ -89,6 +104,8 @@ jobs:
           bun-version-file: config/.bun-version
       # The product packaging tests load the release config, which ships this pinned payload.
       - name: Fetch the claude-acc payload
+        env:
+          POD_PAYLOAD_TOKEN: ${{ secrets.POD_PAYLOAD_TOKEN }}
         run: |
           if [ -f config/scripts/fetch-claude-acc-payload.mjs ]; then
             node config/scripts/fetch-claude-acc-payload.mjs
@@ -109,6 +126,7 @@ jobs:
   build:
     name: macOS build
     needs: target
+    if: inputs.macos
     # The free 3-core macos-15 may run short of memory on `pnpm build`; POD_MAC_RUNNER switches it (CONTRIBUTING.md).
     runs-on: ${{ vars.POD_MAC_RUNNER || 'macos-15' }}
     timeout-minutes: 90
