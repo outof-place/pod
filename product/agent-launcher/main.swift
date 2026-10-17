@@ -10,6 +10,7 @@
 //   pod-agent-launcher -- <cmd> [args...]  explicit form
 //   pod-agent-launcher --print-policy      apply the policy and print what the kernel reports
 //   pod-agent-launcher --tree-watch <pid>  (internal) the watcher that gives <pid>'s tree the role
+//   pod-agent-launcher --search-detach <ogctl> <dir>  (internal) starts indexing (agent-search.swift)
 //
 // POD_AGENT_TURBO=0 skips the policy (the command still runs); POD_AGENT_TREE=0 keeps the role on
 // the agent's own process only.
@@ -408,6 +409,8 @@ if invokedAs == launcherName {
   case "--tree-watch" where arguments.count == 3:
     guard let root = pid_t(arguments[2]), root > 1 else { exit(64) }
     watchTree(root)
+  case "--search-detach" where arguments.count == 4:
+    searchDetach(ogctl: arguments[2], cwd: arguments[3])
   case "--" where arguments.count > 2:
     commandIndex = 2
   default:
@@ -438,6 +441,7 @@ if isScript(target) {
   unsetenv(depthEnv)
 }
 
+applyIndexedSearch(command: command)
 applyPolicy()
 startTreeWatcher()
 let argv = CommandLine.unsafeArgv + commandIndex
