@@ -155,7 +155,12 @@ export type PodTidyResult = {
 }
 
 /** An opt-in in the git profile: off by default because it measured no win, or costs a download. */
-export type PodProfileOptInId = 'reftable' | 'many-files' | 'bitmaps' | 'backfill'
+export type PodProfileOptInId =
+  | 'reftable'
+  | 'many-files'
+  | 'bitmaps'
+  | 'backfill'
+  | 'relative-worktrees'
 
 export type PodProfileOptIn = {
   id: PodProfileOptInId
@@ -180,6 +185,26 @@ export type PodTuneRecord = {
   podKeys: string[]
   registeredMaintenance: boolean
   optIns: PodProfileOptInId[]
+  /** What relative-worktrees found, so undo puts the repository format back as it was. */
+  relativeWorktreesBefore?: { extension: string | null; formatVersion: string | null }
+  /** Median `git status` before this apply, for verify's before/after; null when unmeasured. */
+  statusMsBefore?: number | null
+}
+
+/** One verify check: what Pod looked at, whether it holds, and what it saw. */
+export type PodGitProfileCheck = {
+  id: 'keys' | 'fsmonitor' | 'maintenance' | 'scheduler'
+  ok: boolean
+  detail: string
+}
+
+/** A read-only look at whether the applied profile is in effect, with `git status` timed now. */
+export type PodGitProfileVerify = {
+  repoPath: string
+  checks: PodGitProfileCheck[]
+  statusMs: number | null
+  /** The newest apply's measurement, so the UI can show before and after. */
+  statusMsBefore: number | null
 }
 
 export type PodWorkspaceGitProfile = PodWorkspacePlanRef & {

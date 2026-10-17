@@ -29,6 +29,7 @@ export type WorkspaceRpcServiceDeps = {
   /** The system's Trash, for a folder on another volume than the home folder. */
   osTrash: (path: string) => Promise<void>
   onBackgroundDone?: (repoId: string, message: string) => void
+  isLaunchdJobLoaded: (label: string) => Promise<boolean>
 }
 
 export type PodWorkspaceServices = PodWorkspaceRpcService & {
@@ -52,7 +53,8 @@ export function createPodWorkspaceRpcService(deps: WorkspaceRpcServiceDeps): Pod
     journal,
     plans,
     getRepo,
-    onBackgroundDone: deps.onBackgroundDone
+    onBackgroundDone: deps.onBackgroundDone,
+    isLaunchdJobLoaded: deps.isLaunchdJobLoaded
   })
   const adopt = createWorkspaceAdopt({
     git,
@@ -109,7 +111,9 @@ export function createPodWorkspaceRpcService(deps: WorkspaceRpcServiceDeps): Pod
         ? profile.plan(request.repoId)
         : request.action === 'apply'
           ? profile.apply(request.planId, request.optIns)
-          : profile.undo(request.planId, request.tuneId),
+          : request.action === 'verify'
+            ? profile.verify(request.repoId)
+            : profile.undo(request.planId, request.tuneId),
     adopt: (request, runtime) => {
       switch (request.action) {
         case 'plan':

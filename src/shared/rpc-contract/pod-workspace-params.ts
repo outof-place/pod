@@ -38,7 +38,7 @@ export const PodWorkspaceTidyApplyParams = z
   })
   .strict()
 
-const OptIn = z.enum(['reftable', 'many-files', 'bitmaps', 'backfill'])
+const OptIn = z.enum(['reftable', 'many-files', 'bitmaps', 'backfill', 'relative-worktrees'])
 
 export const PodWorkspaceGitProfileParams = z.discriminatedUnion('action', [
   z.object({ action: z.literal('plan'), repoId: Id }).strict(),
@@ -47,10 +47,12 @@ export const PodWorkspaceGitProfileParams = z.discriminatedUnion('action', [
       action: z.literal('apply'),
       planId: PlanId,
       reason: UserIntent,
-      optIns: z.array(OptIn).max(4).optional()
+      optIns: z.array(OptIn).max(5).optional()
     })
     .strict(),
-  z.object({ action: z.literal('undo'), planId: PlanId, reason: UserIntent, tuneId: Id }).strict()
+  z.object({ action: z.literal('undo'), planId: PlanId, reason: UserIntent, tuneId: Id }).strict(),
+  /** Read-only: is the applied profile in effect, and how fast is `git status` now. */
+  z.object({ action: z.literal('verify'), repoId: Id }).strict()
 ])
 
 export const PodWorkspaceCloneDestinationParams = z.object({ url: z.string().max(8_192) }).strict()

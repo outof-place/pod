@@ -14,8 +14,10 @@ export const PROFILE_KEYS: readonly PodGitProfileKey[] = [
   'maintenance.strategy',
   'maintenance.prefetch.enabled',
   'maintenance.geometric-repack.schedule',
+  'fetch.prune',
   'feature.manyFiles',
-  'repack.writeBitmaps'
+  'repack.writeBitmaps',
+  'worktree.useRelativePaths'
 ]
 
 const RECORD = POD_GIT_PROFILE_RECORD_KEY.toLowerCase()
@@ -131,6 +133,8 @@ export type GitHostFacts = {
   /** `git backfill` (2.49+) and `git refs migrate` (2.46+), by name, as this build lists them. */
   backfill: boolean
   refsMigrate: boolean
+  /** `worktree.useRelativePaths` (2.48+), as `git help --config` lists it. */
+  relativeWorktrees: boolean
 }
 
 function listsCommand(helpAll: string, name: string): boolean {
@@ -152,7 +156,8 @@ export function createGitHostFactsReader(git: WorkspaceGitExec, cwd: string) {
         version: parseGitVersion(version.stdout),
         geometric: help.stdout.includes('maintenance.geometric-repack.auto'),
         backfill: listsCommand(commands.stdout, 'backfill'),
-        refsMigrate: listsCommand(commands.stdout, 'refs')
+        refsMigrate: listsCommand(commands.stdout, 'refs'),
+        relativeWorktrees: /^worktree\.userelativepaths$/im.test(help.stdout)
       }
     })()
     return cached

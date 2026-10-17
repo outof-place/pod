@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/pod-workspace-types'
 import type {
   PodAdoptPlan,
+  PodGitProfileVerify,
   PodAdoptRecord,
   PodAdoptUndoPlan,
   PodTidyResult,
@@ -40,7 +41,7 @@ export type PodWorkspaceRpcService = {
   ): Promise<PodTidyResult>
   gitProfile(
     request: PodWorkspaceGitProfileRequest
-  ): Promise<PodWorkspaceGitProfile | PodTuneResult>
+  ): Promise<PodWorkspaceGitProfile | PodTuneResult | PodGitProfileVerify>
   /** `runtime` lists live terminals and tells clients about re-keyed worktrees and repos. */
   adopt(
     request: PodWorkspaceAdoptRequest,
