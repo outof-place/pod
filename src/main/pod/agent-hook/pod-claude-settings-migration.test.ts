@@ -229,6 +229,21 @@ describe('a cut that has to leave valid JSONC (r-orca on v4)', () => {
       `{"hooks": {"Stop": [${MINE} /* c */ ]}}`
     ],
     [
+      "a // line right before `]`, after Pod's last group",
+      `{"hooks": {"Stop": [\n  ${MINE},\n  ${POD} // c\n]}}`,
+      `{"hooks": {"Stop": [\n  ${MINE} // c\n]}}`
+    ],
+    [
+      "a // line right before the file's `}`, after `hooks`",
+      `{"hooks": {"Stop": [${POD}]} // c\n}`,
+      '{ // c\n}'
+    ],
+    [
+      'a trailing comma after `hooks` as the last member, with CRLF',
+      `{\r\n  "model": "opus",\r\n  "hooks": {"Stop": [${POD}]},\r\n}\r\n`,
+      '{\r\n  "model": "opus",\r\n}\r\n'
+    ],
+    [
       'a // inside a string next to the cut',
       `{"hooks": {"Stop": [${URL_MINE},\n ${POD}]}}`,
       `{"hooks": {"Stop": [${URL_MINE}]}}`
