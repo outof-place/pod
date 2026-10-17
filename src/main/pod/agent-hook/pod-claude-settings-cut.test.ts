@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -156,6 +156,20 @@ describe('PodClaudeSettingsCut', () => {
       reason: 'duplicate keys'
     })
     expect(readFileSync(settingsPath, 'utf8')).toBe(text)
+    expect(readdirSync(dir)).toEqual(['settings.json'])
+  })
+
+  it('refuses a file nested too deep to parse once, without throwing or writing', async () => {
+    const text = `{"hooks":${'['.repeat(20_000)}${']'.repeat(20_000)}}`
+    writeFileSync(settingsPath, text)
+    const { cut, log } = cutWith(vi.fn(async () => []))
+    await expect(cut.arm()).resolves.toBeUndefined()
+    await expect(cut.arm()).resolves.toBeUndefined()
+    expect(log.mock.calls.filter(([event]) => event === 'pod-claude-settings-cut-refused')).toEqual(
+      [['pod-claude-settings-cut-refused', { reason: 'unexpected error' }]]
+    )
+    expect(readFileSync(settingsPath, 'utf8')).toBe(text)
+    expect(readdirSync(dir)).toEqual(['settings.json'])
   })
 
   it('waits while the table is unreadable, and watches the newest set of older claudes', async () => {

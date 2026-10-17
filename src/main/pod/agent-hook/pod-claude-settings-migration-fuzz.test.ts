@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/orca-user-data' } }))
 
-import { removePodClaudeEntries } from './pod-claude-settings-migration'
+import { removePodClaudeEntries, type PodClaudeCutRefusal } from './pod-claude-settings-migration'
 
 const names = { hookScript: 'claude-hook.sh', statusLineScript: 'claude-statusline.sh' }
 const CLIENT = '/Users/e2e/.orca/agent-hooks/pod-agent-hook'
@@ -26,12 +26,12 @@ function random(seed: number): () => number {
 
 type Value = string | number | boolean | null | Value[] | { [key: string]: Value }
 /** A value to render; `pod` marks Pod's own subtrees, which never get a user comment inside. */
-type Shape = { value: Value; pod?: true; members?: [string, Shape][]; items?: Shape[] }
+type Draft = { value: Value; pod?: true; members?: [string, Draft][]; items?: Draft[] }
 
-const leaf = (value: Value, pod?: true): Shape => ({ value, pod })
-const object = (members: [string, Shape][], pod?: true): Shape => ({ value: null, members, pod })
-const array = (items: Shape[], pod?: true): Shape => ({ value: null, items, pod })
-const hook = (command: string, pod?: true): Shape =>
+const leaf = (value: Value, pod?: true): Draft => ({ value, pod })
+const object = (members: [string, Draft][], pod?: true): Draft => ({ value: null, members, pod })
+const array = (items: Draft[], pod?: true): Draft => ({ value: null, items, pod })
+const hook = (command: string, pod?: true): Draft =>
   object(
     [
       ['type', leaf('command', pod)],
@@ -44,23 +44,23 @@ const hook = (command: string, pod?: true): Shape =>
  *  events that held only Pod's groups may go or stay empty, every other one stays as it was (a user's
  *  own empty event too). */
 function settings(next: () => number): {
-  shape: Shape
+  draft: Draft
   userValue: unknown
   podOnlyEvents: Set<string>
   hooksPodOnly: boolean
 } {
   const pick = <T>(items: T[]): T => items[Math.floor(next() * items.length)]
   const user: [string, Value][] = []
-  const members: [string, Shape][] = []
+  const members: [string, Draft][] = []
   if (next() < 0.5) {
     members.push(['model', leaf('opus')])
     user.push(['model', 'opus'])
   }
-  const hooks: [string, Shape][] = []
+  const hooks: [string, Draft][] = []
   const userHooks: [string, Value][] = []
   const podOnlyEvents = new Set<string>()
   for (const event of EVENTS.filter(() => next() < 0.6)) {
-    const groups: Shape[] = []
+    const groups: Draft[] = []
     const userGroups: Value[] = []
     for (let count = 1 + Math.floor(next() * 3); count > 0; count -= 1) {
       const kind = pick(['pod', 'user', 'mixed'])
@@ -134,16 +134,16 @@ function settings(next: () => number): {
   const order = new Map(members.map(([key], index) => [key, index]))
   user.sort(([a], [b]) => order.get(a)! - order.get(b)!)
   return {
-    shape: object(members),
+    draft: object(members),
     userValue: Object.fromEntries(user),
     podOnlyEvents,
     hooksPodOnly: userHooks.every(([event]) => podOnlyEvents.has(event))
   }
 }
 
-/** The shape as JSONC text: random blanks, CRLF or LF, trailing commas, and numbered user comments in
+/** The draft as JSONC text: random blanks, CRLF or LF, trailing commas, and numbered user comments in
  *  every gap outside Pod's subtrees. */
-function render(shape: Shape, next: () => number, comments: string[]): string {
+function render(draft: Draft, next: () => number, comments: string[]): string {
   const newline = next() < 0.3 ? '\r\n' : '\n'
   const indentUnit = next() < 0.5 ? '\t' : '  '
   const gap = (depth: number, inPod: boolean): string => {
@@ -160,7 +160,7 @@ function render(shape: Shape, next: () => number, comments: string[]): string {
         ? ` /* ${id} */ `
         : `${indent}/* ${id} */${indent}`
   }
-  const write = (node: Shape, depth: number, inPod: boolean): string => {
+  const write = (node: Draft, depth: number, inPod: boolean): string => {
     const pod = inPod || node.pod === true
     if (node.members || node.items) {
       const [open, close] = node.members ? ['{', '}'] : ['[', ']']
@@ -181,7 +181,7 @@ function render(shape: Shape, next: () => number, comments: string[]): string {
     }
     return JSON.stringify(node.value)
   }
-  return write(shape, 0, false) + newline
+  return write(draft, 0, false) + newline
 }
 
 /** A settings value as plain objects, without the Pod-only events left empty and without `hooks` when
@@ -207,6 +207,47 @@ function trimmed(value: unknown, podOnlyEvents: Set<string>, hooksPodOnly: boole
   return record
 }
 
+type Place = 'root' | 'event' | 'group' | 'hook' | 'other'
+
+/** Names one member's key a second time, in an object picked by place first so each place gets its
+ *  share: the root, `hooks` (an event twice), a group, a hook, or statusLine/env. */
+function duplicateKey(draft: Draft, next: () => number): { place: Place; pod: boolean } {
+  const found: { node: Draft; place: Place; pod: boolean }[] = []
+  const walk = (node: Draft, path: (string | number)[], pod: boolean): void => {
+    const inPod = pod || node.pod === true
+    if (node.members && node.members.length > 0) {
+      const inHooks = path[0] === 'hooks'
+      const place: Place =
+        path.length === 0
+          ? 'root'
+          : inHooks && path.length === 1
+            ? 'event'
+            : inHooks && path.length === 3
+              ? 'group'
+              : inHooks && path.length === 5
+                ? 'hook'
+                : 'other'
+      found.push({ node, place, pod: inPod })
+    }
+    node.members?.forEach(([key, value]) => walk(value, [...path, key], inPod))
+    node.items?.forEach((item, index) => walk(item, [...path, index], inPod))
+  }
+  walk(draft, [], false)
+  const places = [...new Set(found.map(({ place }) => place))]
+  if (places.length === 0) {
+    draft.members!.push(['model', leaf('opus')], ['model', leaf('opus')])
+    return { place: 'root', pod: false }
+  }
+  const place = places[Math.floor(next() * places.length)]
+  const candidates = found.filter((entry) => entry.place === place)
+  const { node, pod } = candidates[Math.floor(next() * candidates.length)]
+  const members = node.members!
+  const [key, value] = members[Math.floor(next() * members.length)]
+  const copy: Draft = next() < 0.5 ? structuredClone(value) : leaf('dup', pod ? true : undefined)
+  members.splice(Math.floor(next() * (members.length + 1)), 0, [key, copy])
+  return { place, pod }
+}
+
 describe('the settings cut on generated files (fuzz)', () => {
   it('always leaves valid JSONC with every user entry and comment, and none of Pod', () => {
     const failures: string[] = []
@@ -221,10 +262,10 @@ describe('the settings cut on generated files (fuzz)', () => {
     }
     for (let seed = 1; seed <= 600; seed += 1) {
       const next = random(seed)
-      const { shape, userValue, podOnlyEvents, hooksPodOnly } = settings(next)
+      const { draft, userValue, podOnlyEvents, hooksPodOnly } = settings(next)
       seen.userEmptyEvent += JSON.stringify(userValue).includes('"UserEmpty":[]') ? 1 : 0
       const comments: string[] = []
-      const text = render(shape, next, comments)
+      const text = render(draft, next, comments)
       const errors: ParseError[] = []
       parseTree(text, errors, { allowTrailingComma: true })
       if (errors.length > 0) {
@@ -266,5 +307,37 @@ describe('the settings cut on generated files (fuzz)', () => {
     expect(seen.trailingComma).toBeGreaterThan(100)
     expect(seen.lineCommentBeforeClose).toBeGreaterThan(100)
     expect(seen.userEmptyEvent).toBeGreaterThan(150)
+  })
+
+  it('refuses every file that names a key twice, at any depth, and never throws', () => {
+    const failures: string[] = []
+    const seen = { root: 0, event: 0, group: 0, hook: 0, other: 0, pod: 0 }
+    for (let seed = 1; seed <= 400; seed += 1) {
+      const next = random(seed)
+      const { draft } = settings(next)
+      const { place, pod } = duplicateKey(draft, next)
+      seen[place] += 1
+      seen.pod += pod ? 1 : 0
+      const text = render(draft, next, [])
+      const errors: ParseError[] = []
+      parseTree(text, errors, { allowTrailingComma: true })
+      if (errors.length > 0) {
+        failures.push(`seed ${seed}: the generator wrote invalid JSONC`)
+        continue
+      }
+      const refusal: PodClaudeCutRefusal = {}
+      try {
+        const result = removePodClaudeEntries(text, names, refusal)
+        if (result !== null || refusal.reason !== 'duplicate keys') {
+          failures.push(`seed ${seed}: a ${place} key twice gave ${refusal.reason ?? 'a cut'}`)
+        }
+      } catch (error) {
+        failures.push(`seed ${seed}: threw ${String(error)}`)
+      }
+    }
+    expect(failures).toEqual([])
+    for (const place of ['root', 'event', 'group', 'hook', 'other', 'pod'] as const) {
+      expect(seen[place], place).toBeGreaterThan(50)
+    }
   })
 })
