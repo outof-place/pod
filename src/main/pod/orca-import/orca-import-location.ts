@@ -14,6 +14,8 @@ export type OrcaImportLocation = {
   legacyHome: string | null
   /** Before decouple Pod and Orca share one home folder, so there is nothing to copy from it. */
   sharesPodHome: boolean
+  /** The user's own Pod reading the account's Orca, where only Pod's window may apply. */
+  own: boolean
 }
 
 export type OrcaImportResolution =
@@ -30,6 +32,8 @@ export type OrcaImportLocationInput = {
   /** podHookWriteBlockNow(): null only for the user's own Pod. */
   instanceBlock: string | null
   env: NodeJS.ProcessEnv
+  /** This Pod's own userData, which is never a source. */
+  podUserData: string
 }
 
 /**
@@ -64,6 +68,17 @@ function nonEmpty(value: string | undefined): string | null {
 }
 
 export function resolveOrcaImportLocation(input: OrcaImportLocationInput): OrcaImportResolution {
+  const resolved = resolveSource(input)
+  if (
+    resolved.kind === 'source' &&
+    canonical(resolved.location.userData) === canonical(input.podUserData)
+  ) {
+    return { kind: 'refused', reason: 'source-is-this-pod' }
+  }
+  return resolved
+}
+
+function resolveSource(input: OrcaImportLocationInput): OrcaImportResolution {
   const { legacyUserDataName, legacyHomeDirName } = input
   if (!legacyUserDataName) {
     return { kind: 'refused', reason: 'no-legacy-identity' }
@@ -74,7 +89,8 @@ export function resolveOrcaImportLocation(input: OrcaImportLocationInput): OrcaI
       location: {
         userData: join(input.appDataPath, legacyUserDataName),
         legacyHome: legacyHomeDirName ? join(input.homePath, legacyHomeDirName) : null,
-        sharesPodHome: !legacyHomeDirName
+        sharesPodHome: !legacyHomeDirName,
+        own: true
       }
     }
   }
@@ -99,7 +115,8 @@ export function resolveOrcaImportLocation(input: OrcaImportLocationInput): OrcaI
     location: {
       userData: resolve(sourceDir),
       legacyHome: sourceHome ? resolve(sourceHome) : null,
-      sharesPodHome: false
+      sharesPodHome: false,
+      own: false
     }
   }
 }

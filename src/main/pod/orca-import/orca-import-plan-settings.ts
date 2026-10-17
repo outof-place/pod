@@ -192,7 +192,8 @@ export function planQuickCommands(
         kind: 'quickCommand',
         state,
         title: command.label,
-        ...(repoPath ? { detail: repoPath, parentId: repoItemId(repoPath) } : {}),
+        detail: displayValue('prompt' in command ? command.prompt : command.command),
+        ...(repoPath ? { parentId: repoItemId(repoPath) } : {}),
         selected: state === 'new'
       },
       action:

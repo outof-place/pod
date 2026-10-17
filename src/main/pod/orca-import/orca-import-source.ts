@@ -149,9 +149,15 @@ function readClone(
   }
 }
 
+// A legacy profile is read on the main thread; anything this big is not one.
+const MAX_JSON_BYTES = 128 * 1024 * 1024
+
 function readJson(path: string): OrcaProfileReadResult {
   let raw: string
   try {
+    if (statSync(path).size > MAX_JSON_BYTES) {
+      return { kind: 'unreadable', message: 'Orca’s profile file is too large to read.' }
+    }
     raw = readFileSync(path, 'utf8')
   } catch (error) {
     return { kind: 'unreadable', message: errorMessage(error) }
@@ -182,6 +188,8 @@ export function readOrcaProfile(
   profileId: string,
   snapshotRoot: string
 ): OrcaProfileReadResult {
+  // Why first: a crash mid-read leaves a full copy of Orca's profile; reads never overlap (sync).
+  rmSync(snapshotRoot, { recursive: true, force: true })
   if (list.rootJsonOnly) {
     return readJson(legacyDataFilePath(userData))
   }

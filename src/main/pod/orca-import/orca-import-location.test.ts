@@ -14,7 +14,8 @@ const base: OrcaImportLocationInput = {
   homePath: '/Users/someone',
   accountHome: '/Users/someone',
   instanceBlock: null,
-  env: {}
+  env: {},
+  podUserData: '/Users/someone/Library/Application Support/Pod'
 }
 
 describe('resolveOrcaImportLocation', () => {
@@ -24,7 +25,8 @@ describe('resolveOrcaImportLocation', () => {
       location: {
         userData: '/Users/someone/Library/Application Support/orca',
         legacyHome: null,
-        sharesPodHome: true
+        sharesPodHome: true,
+        own: true
       }
     })
   })
@@ -68,7 +70,8 @@ describe('resolveOrcaImportLocation', () => {
       location: {
         userData: '/private/tmp/run/orca',
         legacyHome: '/private/tmp/run/home/.orca',
-        sharesPodHome: false
+        sharesPodHome: false,
+        own: false
       }
     })
   })
@@ -98,6 +101,21 @@ describe('resolveOrcaImportLocation', () => {
         env: { [ORCA_IMPORT_SOURCE_DIR_ENV]: '/private/tmp/run/orca' }
       })
     ).toEqual({ kind: 'refused', reason: 'source-is-the-real-profile' })
+  })
+
+  it('never reads this Pod’s own profile as Orca’s', () => {
+    expect(resolveOrcaImportLocation({ ...base, legacyUserDataName: 'Pod' })).toEqual({
+      kind: 'refused',
+      reason: 'source-is-this-pod'
+    })
+    expect(
+      resolveOrcaImportLocation({
+        ...base,
+        instanceBlock: 'e2e',
+        podUserData: '/private/tmp/run/Pod',
+        env: { [ORCA_IMPORT_SOURCE_DIR_ENV]: '/private/tmp/run/Pod' }
+      })
+    ).toEqual({ kind: 'refused', reason: 'source-is-this-pod' })
   })
 
   it('refuses a build without Orca in its identity', () => {

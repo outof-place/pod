@@ -89,7 +89,8 @@ export function installOrcaImport(
           homePath: homedir(),
           accountHome: accountHome(),
           instanceBlock: orcaImportInstanceBlock(process.env, podHookWriteBlockNow),
-          env: process.env
+          env: process.env,
+          podUserData: app.getPath('userData')
         }),
       podUserData: app.getPath('userData'),
       getAllWorktreeMeta: () => store.getAllWorktreeMeta(),

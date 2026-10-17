@@ -99,7 +99,10 @@ function setup(options: { running?: boolean } = {}) {
   }
   let next = 0
   const resolution: { value: OrcaImportResolution } = {
-    value: { kind: 'source', location: { userData: orca, legacyHome: null, sharesPodHome: false } }
+    value: {
+      kind: 'source',
+      location: { userData: orca, legacyHome: null, sharesPodHome: false, own: false }
+    }
   }
   const service = new OrcaImportService({
     resolve: () => resolution.value,
@@ -176,7 +179,7 @@ describe('OrcaImportService', () => {
     const picked = selected.filter(
       (id) => id !== `repo:${join(work, 'lib')}` && id !== `worktree:${join(work, 'lib-fix')}`
     )
-    const applied = await service.apply(preview.previewId, picked)
+    const applied = await service.apply(preview.previewId, picked, true)
 
     expect(applied.status).toBe('applied')
     expect(
@@ -210,7 +213,11 @@ describe('OrcaImportService', () => {
   it('brings a picked worktree’s new project along', async () => {
     const { work, pod, service } = setup()
     const preview = ready(service.preview())
-    const result = await service.apply(preview.previewId, [`worktree:${join(work, 'lib-fix')}`])
+    const result = await service.apply(
+      preview.previewId,
+      [`worktree:${join(work, 'lib-fix')}`],
+      true
+    )
     expect(result.status).toBe('applied')
     expect(pod.repos.map((repo) => repo.path)).toEqual([join(work, 'lib')])
   })
@@ -223,7 +230,8 @@ describe('OrcaImportService', () => {
     await expect(
       service.apply(
         preview.previewId,
-        preview.items.map((item) => item.id)
+        preview.items.map((item) => item.id),
+        true
       )
     ).resolves.toEqual({
       status: 'orca-running',
@@ -241,10 +249,30 @@ describe('OrcaImportService', () => {
     )
     importProfileStateJson(opened.db, JSON.stringify({ settings: { terminalFontSize: 20 } }))
     opened.db.close()
-    await expect(service.apply(preview.previewId, ['setting:terminalFontSize'])).resolves.toEqual({
+    await expect(
+      service.apply(preview.previewId, ['setting:terminalFontSize'], true)
+    ).resolves.toEqual({
       status: 'stale-preview'
     })
-    await expect(service.apply('unknown', [])).resolves.toEqual({ status: 'stale-preview' })
+    await expect(service.apply('unknown', [], true)).resolves.toEqual({ status: 'stale-preview' })
+  })
+
+  it('applies in the user’s own Pod only from Pod’s window', async () => {
+    const { orca, pod, service, resolution } = setup()
+    resolution.value = {
+      kind: 'source',
+      location: { userData: orca, legacyHome: null, sharesPodHome: false, own: true }
+    }
+    const preview = ready(service.preview())
+    const ids = preview.items.filter((item) => item.selected).map((item) => item.id)
+    await expect(service.apply(preview.previewId, ids, false)).resolves.toEqual({
+      status: 'refused',
+      reason: 'apply-needs-pods-window'
+    })
+    expect(pod.repos).toEqual([])
+    await expect(service.apply(preview.previewId, ids, true)).resolves.toMatchObject({
+      status: 'applied'
+    })
   })
 
   it('reads nothing when the location is refused', async () => {
@@ -252,7 +280,7 @@ describe('OrcaImportService', () => {
     resolution.value = { kind: 'refused', reason: 'not-the-users-pod' }
     expect(service.detect()).toEqual({ found: false, refused: 'not-the-users-pod' })
     expect(service.preview()).toEqual({ status: 'refused', reason: 'not-the-users-pod' })
-    await expect(service.apply('x', [])).resolves.toEqual({
+    await expect(service.apply('x', [], true)).resolves.toEqual({
       status: 'refused',
       reason: 'not-the-users-pod'
     })
@@ -268,12 +296,12 @@ describe('OrcaImportService', () => {
     )
     resolution.value = {
       kind: 'source',
-      location: { userData: orca, legacyHome: orcaHome, sharesPodHome: false }
+      location: { userData: orca, legacyHome: orcaHome, sharesPodHome: false, own: false }
     }
     const before = censusOf(orcaHome)
 
     const preview = ready(service.preview())
-    const result = await service.apply(preview.previewId, ['keybinding:worktree.quickOpen'])
+    const result = await service.apply(preview.previewId, ['keybinding:worktree.quickOpen'], true)
 
     expect(result).toMatchObject({
       status: 'applied',

@@ -6,9 +6,10 @@ import { setOrcaImportService, type OrcaImportService } from './orca-import-serv
 
 const methods = eraseRpcMethods(POD_ORCA_IMPORT_METHODS)
 
-function from(kind: 'local-cli' | 'desktop' | 'paired-device'): RpcContext {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers read only the caller's kind.
-  return { caller: { kind } } as unknown as RpcContext
+function from(kind: 'local-cli' | 'desktop' | 'paired-device', podNative?: boolean): RpcContext {
+  const podNativePeer = podNative === undefined ? undefined : () => ({ ok: podNative, pid: 42 })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers read only the caller's kind and the PodNative peer check.
+  return { caller: { kind }, podNativePeer } as unknown as RpcContext
 }
 
 function call(name: string, params: unknown, context: RpcContext): unknown {
@@ -56,24 +57,46 @@ describe('podImport.* methods', () => {
       from('local-cli')
     )
     expect(service.preview).toHaveBeenCalledWith('p1')
-    expect(service.apply).toHaveBeenCalledWith('x', ['repo:/a'])
+    // The owner token alone (the CLI, any terminal) is not Pod's window.
+    expect(service.apply).toHaveBeenLastCalledWith('x', ['repo:/a'], false)
+    const apply = { previewId: 'x', itemIds: [], reason: 'user' }
+    await call('podImport.orcaApply', apply, from('local-cli', true))
+    expect(service.apply).toHaveBeenLastCalledWith('x', [], true)
+    await call('podImport.orcaApply', apply, from('local-cli', false))
+    expect(service.apply).toHaveBeenLastCalledWith('x', [], false)
+    await call('podImport.orcaApply', apply, from('desktop'))
+    expect(service.apply).toHaveBeenLastCalledWith('x', [], true)
   })
 
-  it('refuse a paired device before reading anything', () => {
+  it('refuse a paired device before reading anything', async () => {
     const service = install()
     for (const name of ['podImport.orcaDetect', 'podImport.orcaPreview']) {
       expect(() => call(name, {}, from('paired-device'))).toThrow(/only on this machine/)
     }
-    expect(() =>
+    await expect(
       call(
         'podImport.orcaApply',
         { previewId: 'x', itemIds: [], reason: 'user' },
         from('paired-device')
       )
-    ).toThrow(/only on this machine/)
+    ).rejects.toThrow(/only on this machine/)
     expect(service.detect).not.toHaveBeenCalled()
     expect(service.preview).not.toHaveBeenCalled()
     expect(service.apply).not.toHaveBeenCalled()
+  })
+
+  it('answer as a refusal in a build without the import', async () => {
+    expect(call('podImport.orcaDetect', undefined, from('local-cli'))).toEqual({
+      found: false,
+      refused: 'no-legacy-identity'
+    })
+    expect(call('podImport.orcaPreview', {}, from('local-cli'))).toEqual({
+      status: 'refused',
+      reason: 'no-legacy-identity'
+    })
+    await expect(
+      call('podImport.orcaApply', { previewId: 'x', itemIds: [], reason: 'user' }, from('desktop'))
+    ).resolves.toEqual({ status: 'refused', reason: 'no-legacy-identity' })
   })
 
   it('apply needs the user’s own intent', () => {
