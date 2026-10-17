@@ -131,6 +131,10 @@ export type Worktree = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  /** Pod: created from someone else's code (a pull or merge request's head, or a base that isn't the
+   *  repo's own branch). The root's archive script runs in this checkout, where a script it calls
+   *  can be that branch's, so clients ask before every removal that runs it. */
+  foreignOrigin?: boolean
   linkedWorkItem?: WorkspaceLinkedItem | null
   /** All attachments; singular fields select the active review/task for older readers. */
   linkedItems?: WorkspaceAttachment[]
