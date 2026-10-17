@@ -7,6 +7,8 @@ import type { PorcelainWorktree } from './workspace-tidy-git'
 
 const LOCAL_ROUTE: WorkspaceCleanupGitRoute = { kind: 'local', hostId: LOCAL_EXECUTION_HOST_ID }
 const UNSUPPORTED_MERGE_TREE = /unknown option|usage: git merge-tree/i
+/** git's well-known empty tree: no attributes, so no merge drivers. */
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 let mergeTreeUnsupported = false
 
 /**
@@ -44,11 +46,14 @@ export async function isMerged(
 }
 
 /**
- * A squash or rebase merge: the base has the branch's changes but not its commits. An in-memory
+ * A squash or rebase merge: the base has the branch's changes but not its commits. A
  * `merge-tree --write-tree` (Git 2.38+) that comes out clean and equal to the base's tree means
- * nothing of the branch is missing there. A branch with no commits of its own never counts (Orca's
- * single-reflog rule, for a worktree just created). Older git, a conflict, or a blob a blobless
- * clone lacks all answer false.
+ * nothing of the branch is missing there. It touches no worktree; its objects land unreachable in
+ * the repo, for gc. Attributes come from the empty tree (`--attr-source`, 2.40+), so no merge
+ * driver of the repo's or the user's runs in a background scan, and none can make a branch look
+ * merged. A branch with no commits of its own never counts (Orca's single-reflog rule, for a
+ * worktree just created); one whose commits net to nothing does, and its commits stay in the
+ * archive ref. Older git, a conflict, or a blob a blobless clone lacks all answer false.
  */
 export async function isMergedByContent(
   git: WorkspaceGitExec,
@@ -60,7 +65,8 @@ export async function isMergedByContent(
   if (!entry.branch || !base || isMain || base === short || base.endsWith(`/${short}`)) {
     return false
   }
-  const own = await git(['rev-list', '--count', `${base}..${entry.branch}`], entry.path)
+  const range = `${base}..${entry.branch}`
+  const own = await git(['rev-list', '--count', '--end-of-options', range], entry.path)
   if (own.code !== 0 || Number(own.stdout.trim()) === 0) {
     return false
   }
@@ -68,10 +74,21 @@ export async function isMergedByContent(
     return false
   }
   const [merged, baseTree] = await Promise.all([
-    git(['merge-tree', '--write-tree', '--no-messages', base, entry.branch], entry.path),
+    git(
+      [
+        `--attr-source=${EMPTY_TREE}`,
+        'merge-tree',
+        '--write-tree',
+        '--no-messages',
+        '--end-of-options',
+        base,
+        entry.branch
+      ],
+      entry.path
+    ),
     git(['rev-parse', '--verify', '--quiet', `${base}^{tree}`], entry.path)
   ])
-  // Git before 2.38 has no --write-tree; this Mac's git won't gain it while Pod runs.
+  // Git before 2.40 lacks --attr-source (before 2.38, --write-tree); it won't gain them while Pod runs.
   if (merged.code !== 0 && UNSUPPORTED_MERGE_TREE.test(merged.stderr)) {
     mergeTreeUnsupported = true
   }

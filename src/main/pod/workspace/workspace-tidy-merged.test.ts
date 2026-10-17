@@ -78,4 +78,21 @@ describe('workspace tidy: squash-merged branches (real git)', () => {
     expect(byName('partial')?.blockers).toContain('unpushed')
     expect(byName('fresh')?.reasons).not.toContain('squash-merged')
   })
+
+  it('never calls a conflicting branch merged, nor one only a merge driver would merge', async () => {
+    const conflicting = await addWorktree('conflicting')
+    writeFileSync(join(conflicting, 'README.md'), 'branch side\n')
+    await fx.git(conflicting, 'commit', '-q', '-am', 'branch edit')
+    // A driver that keeps the base's side would make any merge equal the base.
+    writeFileSync(join(repo, '.gitattributes'), 'README.md merge=keepbase\n')
+    await fx.git(repo, 'config', 'merge.keepbase.driver', 'true')
+    writeFileSync(join(repo, 'README.md'), 'main side\n')
+    await fx.git(repo, 'add', '.gitattributes', 'README.md')
+    await fx.git(repo, 'commit', '-q', '-m', 'main edit')
+    await fx.git(repo, 'push', '-q', 'origin', 'main')
+    await fx.git(repo, 'fetch', '-q', 'origin')
+    const byName = await scan()
+    expect(byName('conflicting')?.reasons).not.toContain('squash-merged')
+    expect(byName('conflicting')?.blockers).toContain('unpushed')
+  })
 })
