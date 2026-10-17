@@ -86,25 +86,92 @@ function nextRemoval(
   return null
 }
 
+type Gap = { kind: 'blank' | 'comment' | 'comma'; start: number; end: number }
+
+/** The text between two siblings, or a bracket and a member, as blanks, comments and commas; null
+ *  for anything else. */
+function gapParts(text: string, from: number, to: number): Gap[] | null {
+  const parts: Gap[] = []
+  for (let at = from; at < to;) {
+    const start = at
+    if (text[at] === ',') {
+      at += 1
+      parts.push({ kind: 'comma', start, end: at })
+    } else if (text.startsWith('//', at)) {
+      // Why up to the line break: the break is a blank, so a cut can take it and keep the comment.
+      const line = text.indexOf('\n', at)
+      at = line === -1 || line > to ? to : text[line - 1] === '\r' ? line - 1 : line
+      parts.push({ kind: 'comment', start, end: at })
+    } else if (text.startsWith('/*', at)) {
+      const close = text.indexOf('*/', at + 2)
+      if (close === -1 || close + 2 > to) {
+        return null
+      }
+      at = close + 2
+      parts.push({ kind: 'comment', start, end: at })
+    } else if (/\s/.test(text[at])) {
+      while (at < to && /\s/.test(text[at])) {
+        at += 1
+      }
+      parts.push({ kind: 'blank', start, end: at })
+    } else {
+      return null
+    }
+  }
+  return parts
+}
+
+function hasComment(text: string, node: Node): boolean {
+  // Why the inside only: an emptied container's brackets hold nothing but blanks and comments.
+  const parts = gapParts(text, node.offset + 1, node.offset + node.length - 1)
+  return parts === null || parts.some((part) => part.kind === 'comment')
+}
+
 /** `text` without the member or element at `path`. Not jsonc-parser's modify: that rewrites the
- *  whitespace before a closing bracket. This cuts from the node to its next sibling, or from the
- *  previous sibling's end when it is the last, so every byte around it stays. */
+ *  whitespace before a closing bracket. This cuts the node with one comma and the blanks beside
+ *  it: the comma and blanks after it when it is not the last, else the blanks before it and the
+ *  previous sibling's comma. Every other byte stays, a user's comment around it included. */
 function cut(text: string, root: Node, path: JSONPath): string | null {
   const node = findNodeAtLocation(root, path)
   const target = node?.parent?.type === 'property' ? node.parent : node
-  const siblings = target?.parent?.children ?? []
+  const container = target?.parent
+  const siblings = container?.children ?? []
   const index = target ? siblings.indexOf(target) : -1
-  if (!target || index === -1) {
+  if (!target || !container || index === -1) {
     return null
   }
   const end = target.offset + target.length
-  const [from, to] =
-    index < siblings.length - 1
-      ? [target.offset, siblings[index + 1].offset]
-      : index > 0
-        ? [siblings[index - 1].offset + siblings[index - 1].length, end]
-        : [target.offset, end]
-  return text.slice(0, from) + text.slice(to)
+  if (index < siblings.length - 1) {
+    const parts = gapParts(text, end, siblings[index + 1].offset)
+    const comma = parts?.findIndex((part) => part.kind === 'comma') ?? -1
+    if (!parts || comma === -1) {
+      return null
+    }
+    const before = parts.slice(0, comma).some((part) => part.kind === 'comment')
+      ? text.slice(end, parts[comma].start)
+      : ''
+    const stop = parts[comma + 1]?.kind === 'blank' ? parts[comma + 1].end : parts[comma].end
+    return text.slice(0, target.offset) + before + text.slice(stop)
+  }
+  const previous = index > 0 ? siblings[index - 1] : null
+  const parts = gapParts(
+    text,
+    previous ? previous.offset + previous.length : container.offset + 1,
+    target.offset
+  )
+  if (!parts) {
+    return null
+  }
+  const last = parts.at(-1)
+  const from = last?.kind === 'blank' ? last.start : target.offset
+  if (!previous) {
+    return text.slice(0, from) + text.slice(end)
+  }
+  const comma = parts.find((part) => part.kind === 'comma')
+  if (!comma) {
+    return null
+  }
+  return text.slice(0, comma.start) + text.slice(comma.end, from) + text.slice(end)
 }
 
 /** The text without Pod's entries, and what went; null when the text isn't a JSONC object. */
@@ -132,16 +199,25 @@ export function removePodClaudeEntries(
     text = next!
     path = nextRemoval(root, isManaged, names.statusLineScript)
   }
-  // Events, then `hooks` itself, that Pod's removals left empty.
+  // Events, then `hooks` itself, that Pod's removals left empty. One that holds a user's comment stays.
   for (const event of emptied) {
     const groups = findNodeAtLocation(root, ['hooks', event])
-    if (groups?.type === 'array' && (groups.children?.length ?? 0) === 0) {
+    if (
+      groups?.type === 'array' &&
+      (groups.children?.length ?? 0) === 0 &&
+      !hasComment(text, groups)
+    ) {
       text = cut(text, root, ['hooks', event]) ?? text
       root = parseObject(text)!
     }
   }
   const hooks = findNodeAtLocation(root, ['hooks'])
-  if (emptied.size > 0 && hooks?.type === 'object' && (hooks.children?.length ?? 0) === 0) {
+  if (
+    emptied.size > 0 &&
+    hooks?.type === 'object' &&
+    (hooks.children?.length ?? 0) === 0 &&
+    !hasComment(text, hooks)
+  ) {
     text = cut(text, root, ['hooks']) ?? text
   }
   return { text, removed }
