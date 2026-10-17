@@ -109,8 +109,9 @@ export async function saveOrcaAutomation(
         : null,
     draftSetupDecision: draft.setupDecision
   })
+  let setupTrustHash: string | undefined
   if (setupDecision === 'run') {
-    // Pod: asked on the base each run starts from; the host checks the content again per run.
+    // Pod: asked on the base each run starts from; its hash goes with each run, checked by the host.
     const trustDecision = await ensureHooksConfirmed(
       useAppStore.getState(),
       draft.projectId,
@@ -118,7 +119,10 @@ export async function saveOrcaAutomation(
       setupHostId,
       undefined,
       undefined,
-      { baseRef: draft.baseBranch.trim() || undefined, onTrusted: () => undefined }
+      {
+        baseRef: draft.baseBranch.trim() || undefined,
+        onTrusted: (hash) => (setupTrustHash = hash)
+      }
     )
     if (trustDecision === 'skip') {
       setupDecision = 'skip'
@@ -174,6 +178,7 @@ export async function saveOrcaAutomation(
     workspaceId: draft.workspaceId,
     baseBranch: draft.baseBranch.trim() || null,
     setupDecision,
+    ...(draft.workspaceMode === 'new_per_run' ? { setupTrustHash: setupTrustHash ?? null } : {}),
     reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
     timezone,
     missedRunGraceMinutes
@@ -194,6 +199,7 @@ export async function saveOrcaAutomation(
     workspaceId: draft.workspaceId,
     baseBranch: draft.baseBranch.trim() || null,
     setupDecision,
+    ...(draft.workspaceMode === 'new_per_run' ? { setupTrustHash: setupTrustHash ?? null } : {}),
     reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
     timezone,
     rrule,
