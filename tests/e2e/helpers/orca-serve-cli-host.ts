@@ -1,6 +1,6 @@
 /**
  * `orca serve` through the real CLI (`out/cli/index.js`), so the host it picks is the CLI's own
- * selection: orcad by default, Electron on `ORCA_SERVE_RUNTIME=electron` or a fallback.
+ * selection: orcad by default, Electron on `POD_SERVE_RUNTIME=electron` or a fallback.
  */
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -50,9 +50,9 @@ export function cliServeProfile(parent: string): { userDataDir: string; env: Nod
     env: {
       ...isolation.env,
       // How `orca serve` from a dev checkout finds its app (config/scripts/orca-dev.mjs).
-      ORCA_APP_EXECUTABLE: resolveElectronExecutable(process.cwd()),
-      ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT: '1',
-      ORCA_USER_DATA_PATH: userDataDir
+      POD_APP_EXECUTABLE: resolveElectronExecutable(process.cwd()),
+      POD_APP_EXECUTABLE_NEEDS_APP_ROOT: '1',
+      POD_USER_DATA_PATH: userDataDir
     }
   }
 }

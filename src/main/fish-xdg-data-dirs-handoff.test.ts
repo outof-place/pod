@@ -98,7 +98,7 @@ const STATE_PROBE = [
   'functions -q __orca_fish_xdg_handoff; and echo handoff-left'
 ].join('\n')
 
-// Why always run: the shell contracts job sets ORCA_REQUIRE_FISH so a missing fish fails, not skips.
+// Why always run: the shell contracts job sets POD_REQUIRE_FISH so a missing fish fails, not skips.
 it('finds fish when the environment requires it', () => {
   expect(fishRequirementViolation(fishLookup)).toBeNull()
 })
@@ -167,7 +167,7 @@ describe.skipIf(!fish.available)('fish vendor snippet in a real fish', () => {
   it('keeps the opt-out', () => {
     const output = runFish(['-i', '-c', 'emit fish_prompt; codex hi'], {
       ...getFishXdgDataDirsLaunchEnv(root, undefined),
-      ORCA_CODEX_ISOLATE: '0'
+      POD_CODEX_ISOLATE: '0'
     })
     expect(output).toContain('fake-codex hi')
   })

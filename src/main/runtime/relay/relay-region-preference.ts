@@ -256,7 +256,7 @@ export class RelayRegionPreferenceResolver {
 
   private overrideRegion(): RelayRegion | undefined {
     const override = RelayRegionSchema.safeParse(
-      this.options.diagnosticOverride ?? process.env.ORCA_RELAY_REGION_OVERRIDE
+      this.options.diagnosticOverride ?? process.env.POD_RELAY_REGION_OVERRIDE
     )
     return override.success ? override.data : undefined
   }

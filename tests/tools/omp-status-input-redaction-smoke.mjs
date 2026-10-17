@@ -22,8 +22,8 @@ for (const key of [
   'OMP_PROFILE',
   'PI_PROFILE',
   'PI_CONFIG_FILES',
-  'ORCA_AGENT_HOOK_ENDPOINT',
-  'ORCA_PI_STATUS_OWNED'
+  'POD_AGENT_HOOK_ENDPOINT',
+  'POD_PI_STATUS_OWNED'
 ]) {
   delete process.env[key]
 }
@@ -45,9 +45,9 @@ const server = createServer(async (request, response) => {
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
 const manager = SessionManager.inMemory(scratch)
 try {
-  process.env.ORCA_PANE_KEY = 'redaction-test-pane'
-  process.env.ORCA_AGENT_HOOK_PORT = String(server.address().port)
-  process.env.ORCA_AGENT_HOOK_TOKEN = 'synthetic-test-token'
+  process.env.POD_PANE_KEY = 'redaction-test-pane'
+  process.env.POD_AGENT_HOOK_PORT = String(server.address().port)
+  process.env.POD_AGENT_HOOK_TOKEN = 'synthetic-test-token'
   const extensionPath = join(scratch, 'orca-agent-status.ts')
   await writeFile(extensionPath, getPiAgentStatusExtensionSource('omp'))
   const loaded = await loadExtensions([extensionPath], scratch, new EventBus())

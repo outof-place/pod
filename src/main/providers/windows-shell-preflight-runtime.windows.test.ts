@@ -143,7 +143,7 @@ describeWindows('Windows Codex shell preflight runtime', () => {
       cwd: root,
       env: {
         ...process.env,
-        ORCA_CODEX_LAUNCH_PREFLIGHT: preflight,
+        POD_CODEX_LAUNCH_PREFLIGHT: preflight,
         [ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV]: '"',
         ORCA_PREFLIGHT_MARKER: preflightMarker
       }
@@ -170,8 +170,8 @@ describeWindows('Windows Codex shell preflight runtime', () => {
     const preflightMarker = join(root, 'git-bash-preflight-ran')
     const codexMarker = join(root, 'git-bash-codex-ran')
     const codexPathMarker = join(root, 'git-bash-codex-path')
-    const previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-    process.env.ORCA_USER_DATA_PATH = join(root, 'user data')
+    const previousUserDataPath = process.env.POD_USER_DATA_PATH
+    process.env.POD_USER_DATA_PATH = join(root, 'user data')
 
     try {
       const resolved = resolveWindowsShellLaunchArgs(
@@ -190,7 +190,7 @@ describeWindows('Windows Codex shell preflight runtime', () => {
           ...withPathEntry(process.env, join(root, 'bin')),
           CHERE_INVOKING: '1',
           HOME: root,
-          ORCA_CODEX_LAUNCH_PREFLIGHT: preflight,
+          POD_CODEX_LAUNCH_PREFLIGHT: preflight,
           ORCA_PREFLIGHT_MARKER: preflightMarker,
           ORCA_CODEX_MARKER: codexMarker,
           TERM: 'xterm-256color'
@@ -204,9 +204,9 @@ describeWindows('Windows Codex shell preflight runtime', () => {
       })
     } finally {
       if (previousUserDataPath === undefined) {
-        delete process.env.ORCA_USER_DATA_PATH
+        delete process.env.POD_USER_DATA_PATH
       } else {
-        process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+        process.env.POD_USER_DATA_PATH = previousUserDataPath
       }
     }
 

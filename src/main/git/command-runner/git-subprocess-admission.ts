@@ -9,7 +9,7 @@ export * from '../../../shared/git-admission-scheduler'
 let scheduler = new GitAdmissionScheduler()
 
 export function acquireGitAdmission(request: GitAdmissionRequest): Promise<GitAdmissionGrant> {
-  if (process.env.ORCA_GIT_ADMISSION_DISABLED === '1') {
+  if (process.env.POD_GIT_ADMISSION_DISABLED === '1') {
     return Promise.resolve({ queueWaitMs: 0, release: () => {} })
   }
   return scheduler.acquire({ ...request, tier: resolveGitAdmissionTier(request.tier) })

@@ -9,7 +9,7 @@ vi.mock('../../../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => fixture.userData, onWillQuit: vi.fn() })
 }))
 vi.mock('../../../agent-hooks/server', () => ({
-  agentHookServer: { buildPtyEnv: () => ({ ORCA_AGENT_HOOK_PORT: '12345' }) }
+  agentHookServer: { buildPtyEnv: () => ({ POD_AGENT_HOOK_PORT: '12345' }) }
 }))
 vi.mock('../../../agent-hooks/wsl-hook-relay-manager', () => ({
   wslHookRelayManager: {

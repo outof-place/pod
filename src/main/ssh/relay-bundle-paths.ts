@@ -18,7 +18,7 @@ export function relayBundleCandidates(
 ): string[] {
   return [
     ...new Set([
-      ...(process.env.ORCA_RELAY_PATH ? [join(process.env.ORCA_RELAY_PATH, platform)] : []),
+      ...(process.env.POD_RELAY_PATH ? [join(process.env.POD_RELAY_PATH, platform)] : []),
       ...(process.resourcesPath
         ? [
             join(process.resourcesPath, 'relay', platform),

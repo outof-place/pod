@@ -8,7 +8,7 @@ import { KiroHookService } from './hook-service'
 import { getKiroManagedCommandMatcher, KIRO_HOOK_EVENTS } from './hook-settings'
 
 // Why both names: os.homedir() reads $HOME on POSIX and %USERPROFILE% on Windows; setting
-// only one would let a run edit the developer's real ~/.kiro or ~/.orca.
+// only one would let a run edit the developer's real ~/.kiro or ~/.pod.
 let home: string
 let originalHome: string | undefined
 let originalUserProfile: string | undefined
@@ -48,7 +48,7 @@ const agentPath = (name: string): string => join(agentsDir(), `${name}.json`)
 const scriptPath = (): string =>
   join(
     home,
-    '.orca',
+    '.pod',
     'agent-hooks',
     process.platform === 'win32' ? 'kiro-hook.cmd' : 'kiro-hook.sh'
   )

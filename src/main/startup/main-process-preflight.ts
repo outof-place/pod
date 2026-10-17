@@ -179,7 +179,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Why (issue #9441): without this, one rejected background promise during startup restore kills main silently (exit 1, no crash report).
   installUnhandledRejectionLogging()
   // Why: expose the app version via process.env so main and the forked daemon can set TERM_PROGRAM_VERSION without importing electron.
-  process.env.ORCA_APP_VERSION = app.getVersion()
+  process.env.POD_APP_VERSION = app.getVersion()
   configureRemoteServerUpdater({
     getSnapshot: getRemoteServerUpdaterSnapshot,
     check: checkForRemoteServerUpdate,
@@ -242,7 +242,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
     })
     startEventLoopStallProbe()
   }
-  // Self-gated on ORCA_MAIN_THREAD_DIAGNOSTICS; runs the whole session to catch steady-state churn (issue #7576).
+  // Self-gated on POD_MAIN_THREAD_DIAGNOSTICS; runs the whole session to catch steady-state churn (issue #7576).
   // Why the diff-cache counters ride along: a stamp the filesystem reports unstably makes the cache
   // look exactly like a cold start, and only the hit/miss/unprovable split tells the two apart.
   if (isMainThreadDiagnosticsEnabled()) {

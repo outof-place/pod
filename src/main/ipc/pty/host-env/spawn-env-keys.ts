@@ -2,14 +2,14 @@ import { ORCA_AGENT_SESSION_ID_ENV } from '../../../../shared/agent-session-call
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/structured-session-marker'
 
 export const AGENT_HOOK_RUNTIME_ENV_KEYS = [
-  'ORCA_AGENT_HOOK_PORT',
-  'ORCA_AGENT_HOOK_TOKEN',
-  'ORCA_AGENT_HOOK_ENV',
-  'ORCA_AGENT_HOOK_VERSION',
-  'ORCA_AGENT_HOOK_TRANSPORT',
-  'ORCA_AGENT_HOOK_ENDPOINT',
+  'POD_AGENT_HOOK_PORT',
+  'POD_AGENT_HOOK_TOKEN',
+  'POD_AGENT_HOOK_ENV',
+  'POD_AGENT_HOOK_VERSION',
+  'POD_AGENT_HOOK_TRANSPORT',
+  'POD_AGENT_HOOK_ENDPOINT',
   // Why: PR 2778 briefly exported this path; keep deleting stale inherited values so older PTYs can't leak the reverted path.
-  'ORCA_CLAUDE_AGENT_STATUS_SETTINGS'
+  'POD_CLAUDE_AGENT_STATUS_SETTINGS'
 ] as const
 
 // Why: Orca never sets these, so an inherited value means a pty host launched from inside a Claude session — Claude reads it as a nested child and silently stops persisting the transcript.

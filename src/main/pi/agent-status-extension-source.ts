@@ -4,7 +4,7 @@ import { getPiAgentStatusPostQueueSourceLines } from './agent-status-post-queue-
 // etc.). To get pi panes into the unified agent-hooks pipeline alongside
 // Claude/Codex/Gemini/OpenCode/Cursor, we ship a bundled extension into
 // the selected Pi/OMP extension dir (PiTitlebarExtensionService) that POSTs to
-// /hook/<kind> using the same ORCA_AGENT_HOOK_* + ORCA_PANE_KEY env that every
+// /hook/<kind> using the same ORCA_AGENT_HOOK_* + POD_PANE_KEY env that every
 // PTY already receives from ipc/pty.ts.
 //
 // Each Pi process gets its own paneKey through env. Like the OpenCode plugin,
@@ -155,7 +155,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     'let cachedEndpointValues: Record<string, string> | null = null',
     '',
     'function readEndpointFile(): Record<string, string> | null {',
-    '  const path = process.env.ORCA_AGENT_HOOK_ENDPOINT',
+    '  const path = process.env.POD_AGENT_HOOK_ENDPOINT',
     '  if (!path) return null',
     '  try {',
     "    const fs = require('fs')",
@@ -195,10 +195,10 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     'function resolveHookCoords() {',
     '  const fileEnv = readEndpointFile() || {}',
     '  return {',
-    '    port: fileEnv.ORCA_AGENT_HOOK_PORT || process.env.ORCA_AGENT_HOOK_PORT,',
-    '    token: fileEnv.ORCA_AGENT_HOOK_TOKEN || process.env.ORCA_AGENT_HOOK_TOKEN,',
-    "    env: fileEnv.ORCA_AGENT_HOOK_ENV || process.env.ORCA_AGENT_HOOK_ENV || '',",
-    "    version: fileEnv.ORCA_AGENT_HOOK_VERSION || process.env.ORCA_AGENT_HOOK_VERSION || '',",
+    '    port: fileEnv.POD_AGENT_HOOK_PORT || process.env.POD_AGENT_HOOK_PORT,',
+    '    token: fileEnv.POD_AGENT_HOOK_TOKEN || process.env.POD_AGENT_HOOK_TOKEN,',
+    "    env: fileEnv.POD_AGENT_HOOK_ENV || process.env.POD_AGENT_HOOK_ENV || '',",
+    "    version: fileEnv.POD_AGENT_HOOK_VERSION || process.env.POD_AGENT_HOOK_VERSION || '',",
     '  }',
     '}',
     '',
@@ -243,14 +243,14 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '  final: boolean',
     '): Promise<void> {',
     '  const coords = resolveHookCoords()',
-    '  const paneKey = process.env.ORCA_PANE_KEY',
+    '  const paneKey = process.env.POD_PANE_KEY',
     '  if (!coords.port || !coords.token || !paneKey) return',
     '  const url = `http://127.0.0.1:${coords.port}${resolveHookPath(ompRuntime)}`',
     '  const body = JSON.stringify({',
     '    paneKey,',
-    "    launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || '',",
-    "    tabId: process.env.ORCA_TAB_ID || '',",
-    "    worktreeId: process.env.ORCA_WORKTREE_ID || '',",
+    "    launchToken: process.env.POD_AGENT_LAUNCH_TOKEN || '',",
+    "    tabId: process.env.POD_TAB_ID || '',",
+    "    worktreeId: process.env.POD_WORKTREE_ID || '',",
     '    env: coords.env,',
     '    version: coords.version,',
     payloadLine,

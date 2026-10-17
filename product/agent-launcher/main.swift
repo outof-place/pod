@@ -3,7 +3,7 @@
 //
 // Installed in Contents/Resources/bin next to Pod's CLI launchers, plus one symlink per agent
 // command (claude -> pod-agent-launcher). Pod's shell wrappers keep that directory first on PATH
-// in every terminal (ORCA_CLI_BIN_DIR), so a typed `claude` reaches this binary, which looks the
+// in every terminal (POD_CLI_BIN_DIR), so a typed `claude` reaches this binary, which looks the
 // real command up on the rest of PATH.
 //
 //   claude [args...]                       via the symlink: run the next `claude` on PATH

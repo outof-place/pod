@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { getProductIdentity } from '../product-identity/product-identity'
 
 // Why `orca-ide` on Linux: GNOME Orca ships /usr/bin/orca, so the CLI never claims that name.
 export const LINUX_CLI_COMMAND_NAME = 'orca-ide'
@@ -11,7 +12,7 @@ export function getBundledLauncherPath(
   resourcesPath: string
 ): string | null {
   if (platform === 'darwin') {
-    return join(resourcesPath, 'bin', 'orca')
+    return join(resourcesPath, 'bin', getProductIdentity()?.cliName ?? 'orca')
   }
   if (platform === 'linux') {
     return join(resourcesPath, 'bin', LINUX_CLI_COMMAND_NAME)

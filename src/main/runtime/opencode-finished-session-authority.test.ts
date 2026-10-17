@@ -77,8 +77,8 @@ async function launchOpenCodePane(options: {
     launchAgent: 'opencode'
   })
   const env = (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
-  const paneKey = env.ORCA_PANE_KEY as string
-  const launchToken = env.ORCA_AGENT_LAUNCH_TOKEN as string
+  const paneKey = env.POD_PANE_KEY as string
+  const launchToken = env.POD_AGENT_LAUNCH_TOKEN as string
   expect(paneKey).toBeTruthy()
   expect(launchToken).toBeTruthy()
   return {
@@ -180,11 +180,11 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     })
     const hookEnv = server.buildPtyEnv()
     const post = (payload: Record<string, unknown>): Promise<Response> =>
-      fetch(`http://127.0.0.1:${hookEnv.ORCA_AGENT_HOOK_PORT}/hook/opencode`, {
+      fetch(`http://127.0.0.1:${hookEnv.POD_AGENT_HOOK_PORT}/hook/opencode`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': hookEnv.ORCA_AGENT_HOOK_TOKEN
+          'X-Orca-Agent-Hook-Token': hookEnv.POD_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify({
           paneKey: pane.paneKey,
@@ -210,7 +210,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     pane.runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07', 100)
     await settle()
 
-    // Every later process in this shell inherits ORCA_AGENT_LAUNCH_TOKEN from the PTY env,
+    // Every later process in this shell inherits POD_AGENT_LAUNCH_TOKEN from the PTY env,
     // so the finished session's token must stop attesting once its command completed.
     expect(
       server.attestCompatibilityAuthority({
@@ -241,11 +241,11 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     // Both sessions post the same launchToken: it lives in the PTY env, so every
     // process started in this shell inherits it. Only sessionID separates them.
     const post = (sessionId: string): Promise<Response> =>
-      fetch(`http://127.0.0.1:${hookEnv.ORCA_AGENT_HOOK_PORT}/hook/opencode`, {
+      fetch(`http://127.0.0.1:${hookEnv.POD_AGENT_HOOK_PORT}/hook/opencode`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': hookEnv.ORCA_AGENT_HOOK_TOKEN
+          'X-Orca-Agent-Hook-Token': hookEnv.POD_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify({
           paneKey: pane.paneKey,
@@ -290,11 +290,11 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
       retireAgentHookCompatibilityAuthority: (paneKey) => first.retirePaneAuthority(paneKey)
     })
     const hookEnv = first.buildPtyEnv()
-    await fetch(`http://127.0.0.1:${hookEnv.ORCA_AGENT_HOOK_PORT}/hook/opencode`, {
+    await fetch(`http://127.0.0.1:${hookEnv.POD_AGENT_HOOK_PORT}/hook/opencode`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Orca-Agent-Hook-Token': hookEnv.ORCA_AGENT_HOOK_TOKEN
+        'X-Orca-Agent-Hook-Token': hookEnv.POD_AGENT_HOOK_TOKEN
       },
       body: JSON.stringify({
         paneKey: pane.paneKey,
@@ -315,7 +315,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     servers.push(restarted)
     await restarted.start({ env: 'production', userDataPath })
 
-    // After a restart the PTY survives with ORCA_AGENT_LAUNCH_TOKEN still in its env and
+    // After a restart the PTY survives with POD_AGENT_LAUNCH_TOKEN still in its env and
     // pty.launchToken gone, so a persisted commitment is the whole proof of authority.
     expect(
       restarted.attestCompatibilityAuthority({

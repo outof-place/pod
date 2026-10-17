@@ -69,7 +69,7 @@ describe.skipIf(process.platform === 'win32')('sequenced setup gate runs codex',
   it.each([
     ['an old binary', 'codex --yolo', '--no-alt-screen', {}],
     ['a subcommand that needs the shared server', 'codex agents', '--no-daemon', {}],
-    ['the opt-out', 'codex --yolo', '--no-daemon', { ORCA_CODEX_ISOLATE: '0' }]
+    ['the opt-out', 'codex --yolo', '--no-daemon', { POD_CODEX_ISOLATE: '0' }]
   ])('unchanged for %s', (_case, command, help, env) => {
     expect(runGate(command, help, env)).toBe(`ARGV:${command.slice('codex '.length)}\n`)
   })

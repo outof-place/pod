@@ -52,7 +52,7 @@ function waitForLiveChild(stateDir: string, id: string, signal: AbortSignal): Pr
 }
 
 async function verifySpawnContention(): Promise<void> {
-  delete process.env.ORCA_GIT_ADMISSION_DISABLED
+  delete process.env.POD_GIT_ADMISSION_DISABLED
   const admissionEvents: GitAdmissionEvent[] = []
   _resetGitAdmissionForTests(
     new GitAdmissionScheduler({

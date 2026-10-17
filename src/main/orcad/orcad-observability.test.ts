@@ -37,7 +37,7 @@ describe('orcad trace file', () => {
       getAppMetrics: () => []
     })
     // The lane is off in CI and when diagnostics are disabled; this asserts the default host.
-    for (const name of [...CI_ENV, 'ORCA_DIAGNOSTICS_DISABLED']) {
+    for (const name of [...CI_ENV, 'POD_DIAGNOSTICS_DISABLED']) {
       vi.stubEnv(name, '')
     }
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)

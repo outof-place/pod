@@ -1,6 +1,6 @@
 # Orca daemon bash shell-ready wrapper
-_orca_shell_features=",${ORCA_SHELL_FEATURES:-},"
-builtin unset ORCA_SHELL_FEATURES
+_orca_shell_features=",${POD_SHELL_FEATURES:-},"
+builtin unset POD_SHELL_FEATURES
 __orca_has_feature() { [[ "$_orca_shell_features" == *",$1,"* ]]; }
 __orca_has_feature identity && printf "\033]777;orca-shell-start:%s\007" "$$"
 # Why a plain variable: the channel is consumed and destroyed in these first
@@ -23,31 +23,31 @@ fi
 # continuation. Modern readline defaults this on; force it for the rest.
 [[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
 __orca_restore_agent_teams_path() {
-  [[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+  [[ -n "${POD_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
-    "${ORCA_AGENT_TEAMS_SHIM_DIR}"|"${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+    "${POD_AGENT_TEAMS_SHIM_DIR}"|"${POD_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
   esac
-  export PATH="${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+  export PATH="${POD_AGENT_TEAMS_SHIM_DIR}:$PATH"
 }
 __orca_restore_agent_teams_path
-if [ -n "${ORCA_CLI_BIN_DIR:-}" ]; then
+if [ -n "${POD_CLI_BIN_DIR:-}" ]; then
   case "${PATH:-}" in
-    "$ORCA_CLI_BIN_DIR"|"$ORCA_CLI_BIN_DIR":*) ;;
-    *) export PATH="$ORCA_CLI_BIN_DIR${PATH:+:$PATH}" ;;
+    "$POD_CLI_BIN_DIR"|"$POD_CLI_BIN_DIR":*) ;;
+    *) export PATH="$POD_CLI_BIN_DIR${PATH:+:$PATH}" ;;
   esac
 fi
 # Why: user startup files may set the default OpenCode config after Orca's
 # spawn env; restore the Orca-managed config dir before the first prompt.
-[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"
-if [[ -n "${ORCA_DATA_ACCOUNT_DATA_HOME:-}" ]]; then
-  export XDG_DATA_HOME="${ORCA_DATA_ACCOUNT_DATA_HOME}"
-  export XDG_STATE_HOME="${ORCA_DATA_ACCOUNT_STATE_HOME}"
-  if [[ "${ORCA_DATA_ACCOUNT_PROVIDER:-}" == opencode ]]; then
+[[ -n "${POD_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${POD_OPENCODE_CONFIG_DIR}"
+if [[ -n "${POD_DATA_ACCOUNT_DATA_HOME:-}" ]]; then
+  export XDG_DATA_HOME="${POD_DATA_ACCOUNT_DATA_HOME}"
+  export XDG_STATE_HOME="${POD_DATA_ACCOUNT_STATE_HOME}"
+  if [[ "${POD_DATA_ACCOUNT_PROVIDER:-}" == opencode ]]; then
     export OPENCODE_AUTH_CONTENT=""
     export OPENCODE_DB="opencode.db"
   fi
 fi
-[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"
+[[ -n "${POD_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${POD_MIMOCODE_HOME}"
 # Why: OMP does not auto-load Orca's managed status extension; wrap only
 # interactive launch invocations so subcommands such as `omp config` keep
 # their normal argv shape.
@@ -72,12 +72,12 @@ __orca_omp_cwd_is_usable() {
 __orca_omp_invoke() {
   local __orca_use_extension="$1"
   shift
-  if [[ $__orca_use_extension -eq 1 && -n "${ORCA_OMP_STATUS_EXTENSION:-}" && -f "${ORCA_OMP_STATUS_EXTENSION}" ]]; then
+  if [[ $__orca_use_extension -eq 1 && -n "${POD_OMP_STATUS_EXTENSION:-}" && -f "${POD_OMP_STATUS_EXTENSION}" ]]; then
     if [[ "${1:-}" == "launch" ]]; then
       shift
-      command omp launch --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"
+      command omp launch --extension "${POD_OMP_STATUS_EXTENSION}" "$@"
     else
-      command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"
+      command omp --extension "${POD_OMP_STATUS_EXTENSION}" "$@"
     fi
   else
     command omp "$@"
@@ -104,14 +104,14 @@ __orca_omp() {
     __orca_omp_invoke "$__orca_use_extension" "$@"
   fi
 }
-if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
+if [[ -n "${POD_OMP_STATUS_EXTENSION:-}" ]]; then
   # Why the function reserved word: it suppresses alias expansion of the name, which
   # an `alias omp` otherwise rewrites at parse time, aborting the rest of the file.
   function omp { __orca_omp "$@"; }
 fi
 
 # Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
-[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"
+[[ -n "${POD_CODEX_HOME:-}" ]] && export CODEX_HOME="${POD_CODEX_HOME}"
 # Why: a typed alias expands inside the shell, after pane launch prep.
 # Why unalias inside the substitution: an alias named codex makes command -v
 # report the alias text, and the subshell leaves the user's own alias intact.
@@ -123,9 +123,9 @@ if [[ -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
-    local __orca_codex_arg __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}"
-    if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
-      "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+    local __orca_codex_arg __orca_codex_isolate="${POD_CODEX_ISOLATE:-1}"
+    if [[ -n "${POD_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${POD_CODEX_LAUNCH_PREFLIGHT}" ]]; then
+      "${POD_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     fi
     for __orca_codex_arg in "$@"; do
       case "$__orca_codex_arg" in agents|queue|--no-daemon|--remote|--remote=*) __orca_codex_isolate=0 ;; esac
@@ -139,26 +139,26 @@ if [[ -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
 fi
 unset __orca_codex_binary
 __orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
-if [[ -n "${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "${__orca_claude_binary:-}" && -x "${__orca_claude_binary}" ]]; then
+if [[ -n "${POD_CLAUDE_PROFILE_POINTER:-}" && -n "${__orca_claude_binary:-}" && -x "${__orca_claude_binary}" ]]; then
   function claude {
-    local __orca_claude_home __orca_claude_pointer="${ORCA_CLAUDE_PROFILE_POINTER:-}"
+    local __orca_claude_home __orca_claude_pointer="${POD_CLAUDE_PROFILE_POINTER:-}"
     # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
     case "$__orca_claude_pointer" in '~/'*) __orca_claude_pointer="${HOME:-}/${__orca_claude_pointer#??}" ;; esac
     __orca_claude_home="$(cat "$__orca_claude_pointer" 2>/dev/null || :)"
-    if [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ]; then
+    if [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "${POD_CLAUDE_INJECTED_CONFIG_DIR:-}" ]; then
       command claude "$@"; return
     fi
     # Why: Orca's value replaced the user's own at spawn, so System default restores theirs.
-    if [ -z "$__orca_claude_home" ] && [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ -n "${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ]; then
-      ( unset ORCA_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"; command claude "$@" ); return
+    if [ -z "$__orca_claude_home" ] && [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ -n "${POD_CLAUDE_USER_CONFIG_DIR:-}" ]; then
+      ( unset POD_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$POD_CLAUDE_USER_CONFIG_DIR"; command claude "$@" ); return
     fi
     if [ -z "$__orca_claude_home" ]; then
-      ( unset CLAUDE_CONFIG_DIR ORCA_CLAUDE_INJECTED_CONFIG_DIR; command claude "$@" ); return
+      ( unset CLAUDE_CONFIG_DIR POD_CLAUDE_INJECTED_CONFIG_DIR; command claude "$@" ); return
     fi
     case "$__orca_claude_home" in /*|[A-Za-z]:*) ;; *) return 1 ;; esac
     # Why -m 700: matches the folder Orca's setup creates; a credentials folder stays private.
     [ -d "$__orca_claude_home" ] || mkdir -p -m 700 -- "$__orca_claude_home" 2>/dev/null
-    ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
+    ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" POD_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
   }
 fi
 unset __orca_claude_binary

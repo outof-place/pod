@@ -46,7 +46,7 @@ describe('the SSH bridge CLI child', () => {
       {
         argv: ['terminal', 'list', '--json'],
         cwd: '/home/alice/wt',
-        env: { ORCA_ENVIRONMENT: 'prod' },
+        env: { POD_ENVIRONMENT: 'prod' },
         runtimeAuthority: RUNTIME_AUTHORITY,
         callerScope: HOST_BOUND_SSH_BRIDGE_SCOPE
       },
@@ -57,8 +57,8 @@ describe('the SSH bridge CLI child', () => {
         entryExists: () => true,
         hostEnv: {
           PATH: '/usr/bin',
-          ORCA_ENVIRONMENT: 'owner-paired-server',
-          ORCA_PAIRING_CODE: 'owner-pairing-code',
+          POD_ENVIRONMENT: 'owner-paired-server',
+          POD_PAIRING_CODE: 'owner-pairing-code',
           [ORCA_SSH_BRIDGE_CREDENTIAL_ENV]: 'stale-or-forged'
         },
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every ChildProcess member the passthrough touches.
@@ -71,8 +71,8 @@ describe('the SSH bridge CLI child', () => {
     expect(token).toMatch(/^sshb_[0-9a-f]{48}$/)
     expect(credentials.resolve(token ?? '')).toEqual(HOST_BOUND_SSH_BRIDGE_SCOPE)
     // Why: this machine's paired-server selection would route the guest's command with owner credentials.
-    expect(spawnedEnv.ORCA_ENVIRONMENT).toBeUndefined()
-    expect(spawnedEnv.ORCA_PAIRING_CODE).toBeUndefined()
+    expect(spawnedEnv.POD_ENVIRONMENT).toBeUndefined()
+    expect(spawnedEnv.POD_PAIRING_CODE).toBeUndefined()
 
     child.emit('close', 0)
     await pending
@@ -121,7 +121,7 @@ describe('the in-process fallback bridge', () => {
       {
         argv: ['orchestration', 'send', '--to', 'term_local', '--subject', 'hi', '--json'],
         cwd: '/home/alice/repo',
-        env: { ORCA_TERMINAL_HANDLE: 'term_remote' },
+        env: { POD_TERMINAL_HANDLE: 'term_remote' },
         callerScope: HOST_BOUND_SSH_BRIDGE_SCOPE
       },
       LEGACY_FALLBACK_OPTIONS

@@ -71,8 +71,8 @@ const options = { executable: '/private/opencode', cwd: directory, env: {} }
 
 function decodedSupervisorSpec(env: unknown): unknown {
   const encoded =
-    typeof env === 'object' && env !== null && 'ORCA_PROVIDER_SUPERVISOR_SPEC' in env
-      ? String(env.ORCA_PROVIDER_SUPERVISOR_SPEC)
+    typeof env === 'object' && env !== null && 'POD_PROVIDER_SUPERVISOR_SPEC' in env
+      ? String(env.POD_PROVIDER_SUPERVISOR_SPEC)
       : ''
   return JSON.parse(Buffer.from(encoded, 'base64').toString() || 'null')
 }

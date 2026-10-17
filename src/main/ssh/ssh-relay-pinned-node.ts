@@ -53,7 +53,7 @@ export const RELAY_RUNTIME_REF_PREFIX = '.runtime-ref-node-'
 /** Official linux builds of the pinned Node need glibc 2.28; older hosts are rung B/C territory. */
 export const PINNED_NODE_GLIBC_FLOOR: GlibcVersion = { major: 2, minor: 28 }
 /** Developer override when no per-host setting is saved. */
-export const SSH_REMOTE_RUNTIME_ENV = 'ORCA_SSH_REMOTE_RUNTIME'
+export const SSH_REMOTE_RUNTIME_ENV = 'POD_SSH_REMOTE_RUNTIME'
 
 export function resolveSshRemoteRuntime(
   target: Pick<SshTarget, 'remoteRuntime'> | undefined,

@@ -25,8 +25,8 @@ ORCA artifacts delete <id> --json
 - If an upload exceeds the CLI transport limit, use the browser upload page as directed
   by the error.
 - For local or staging development, `--api-url <url>` overrides the artifact service;
-  `ORCA_ARTIFACTS_API_URL` provides the same override for the session.
-- `ORCA_CLOUD_AUTH_TOKEN` is a development-only authentication override. Prefer the active
+  `POD_ARTIFACTS_API_URL` provides the same override for the session.
+- `POD_CLOUD_AUTH_TOKEN` is a development-only authentication override. Prefer the active
   Orca profile's normal PropelAuth session and never expose the token in logs or agent output.
 
 ## Skill sharing

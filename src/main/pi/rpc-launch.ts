@@ -22,18 +22,18 @@ export type PiRpcLaunchOptions = {
 }
 
 const CHILD_ENV_TO_DELETE: readonly string[] = [
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN',
+  'POD_PANE_KEY',
+  'POD_TAB_ID',
+  'POD_WORKTREE_ID',
+  'POD_AGENT_LAUNCH_TOKEN',
   ORCA_SCRUB_SAFE_PANE_ENV,
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ...AGENT_HOOK_RUNTIME_ENV_KEYS
 ]
 const CALLER_ENV_TO_DELETE = [
   ...ORCA_AGENT_SESSION_CALLER_ENV_KEYS,
-  'ORCA_TERMINAL_HANDLE',
-  'ORCA_AGENT_SESSION_SPAWN_TOKEN'
+  'POD_TERMINAL_HANDLE',
+  'POD_AGENT_SESSION_SPAWN_TOKEN'
 ]
 
 /** Pi stores its own sessions; an explicit session file is shared with terminal resumes. */
@@ -57,7 +57,7 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
   const childEnv = options.structuredSession
     ? {
         ...structuredSessionChildIdentityEnv(options.structuredSession.id, env),
-        ORCA_AGENT_SESSION_SPAWN_TOKEN: options.structuredSession.spawnToken
+        POD_AGENT_SESSION_SPAWN_TOKEN: options.structuredSession.spawnToken
       }
     : env
   const args = [...(options.extraArgs ?? [])]
@@ -110,9 +110,9 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
     envToDelete: [
       ...CHILD_ENV_TO_DELETE,
       ...(options.structuredSession
-        ? Object.hasOwn(childEnv, 'ORCA_TERMINAL_HANDLE')
+        ? Object.hasOwn(childEnv, 'POD_TERMINAL_HANDLE')
           ? []
-          : ['ORCA_TERMINAL_HANDLE']
+          : ['POD_TERMINAL_HANDLE']
         : CALLER_ENV_TO_DELETE)
     ]
   }

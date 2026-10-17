@@ -63,9 +63,9 @@ describe('Orca cloud dev auth service', () => {
     safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
     vi.unstubAllEnvs()
     vi.stubEnv('NODE_ENV', 'development')
-    vi.stubEnv('ORCA_CLOUD_DEV_AUTH', '1')
-    vi.stubEnv('ORCA_CLOUD_API_URL', '')
-    vi.stubEnv('ORCA_CLOUD_CLIENT_ID', '')
+    vi.stubEnv('POD_CLOUD_DEV_AUTH', '1')
+    vi.stubEnv('POD_CLOUD_API_URL', '')
+    vi.stubEnv('POD_CLOUD_CLIENT_ID', '')
   })
 
   afterEach(() => {

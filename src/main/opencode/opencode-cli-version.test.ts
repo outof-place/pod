@@ -78,13 +78,13 @@ it('shares probes across pane identities while preserving launch-affecting envir
     env: {
       PATH: '/runtime',
       OPENCODE_CONFIG_DIR: '/config',
-      ORCA_PANE_KEY: 'pane-1',
-      ORCA_TAB_ID: 'tab-1',
-      ORCA_TERMINAL_HANDLE: 'term-1',
-      ORCA_WORKTREE_ID: 'workspace-1',
-      ORCA_AGENT_LAUNCH_TOKEN: 'launch-1',
-      ORCA_AGENT_PANE: 'pane-1',
-      ORCA_AGENT_LAUNCH: 'launch-1'
+      POD_PANE_KEY: 'pane-1',
+      POD_TAB_ID: 'tab-1',
+      POD_TERMINAL_HANDLE: 'term-1',
+      POD_WORKTREE_ID: 'workspace-1',
+      POD_AGENT_LAUNCH_TOKEN: 'launch-1',
+      POD_AGENT_PANE: 'pane-1',
+      POD_AGENT_LAUNCH: 'launch-1'
     },
     hostIdentity: 'pane-cache-host'
   }
@@ -94,13 +94,13 @@ it('shares probes across pane identities while preserving launch-affecting envir
       ...options,
       env: {
         ...options.env,
-        ORCA_PANE_KEY: 'pane-2',
-        ORCA_TAB_ID: 'tab-2',
-        ORCA_TERMINAL_HANDLE: 'term-2',
-        ORCA_WORKTREE_ID: 'workspace-2',
-        ORCA_AGENT_LAUNCH_TOKEN: 'launch-2',
-        ORCA_AGENT_PANE: 'pane-2',
-        ORCA_AGENT_LAUNCH: 'launch-2'
+        POD_PANE_KEY: 'pane-2',
+        POD_TAB_ID: 'tab-2',
+        POD_TERMINAL_HANDLE: 'term-2',
+        POD_WORKTREE_ID: 'workspace-2',
+        POD_AGENT_LAUNCH_TOKEN: 'launch-2',
+        POD_AGENT_PANE: 'pane-2',
+        POD_AGENT_LAUNCH: 'launch-2'
       }
     })
   ])

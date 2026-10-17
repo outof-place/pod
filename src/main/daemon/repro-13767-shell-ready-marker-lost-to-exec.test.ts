@@ -142,7 +142,7 @@ async function startFixture(
   const tempHome = mkdtempSync(join(tmpdir(), 'orca-shell-ready-exec-'))
   const previousHome = process.env.HOME
   const previousZdotdir = process.env.ZDOTDIR
-  const previousOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
+  const previousOrigZdotdir = process.env.POD_ORIG_ZDOTDIR
   let subprocess: Awaited<ReturnType<typeof createPtySubprocess>> | undefined
   let session: Session | undefined
   let consoleWarnSpy: { mockRestore: () => void } | undefined
@@ -153,7 +153,7 @@ async function startFixture(
     }
     process.env.HOME = tempHome
     delete process.env.ZDOTDIR
-    delete process.env.ORCA_ORIG_ZDOTDIR
+    delete process.env.POD_ORIG_ZDOTDIR
     consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     subprocess = await createPtySubprocess({
@@ -169,7 +169,7 @@ async function startFixture(
         SHELL: fixture.shellPath,
         TERM: 'xterm-256color'
       },
-      envToDelete: ['ORCA_EXEC_REPRO_DONE', 'ORCA_ORIG_ZDOTDIR', 'ZDOTDIR']
+      envToDelete: ['ORCA_EXEC_REPRO_DONE', 'POD_ORIG_ZDOTDIR', 'ZDOTDIR']
     })
     session = new Session({
       sessionId: `repro-13767-${fixture.startupFile}`,
@@ -236,7 +236,7 @@ function restoreEnvironment(
 ): void {
   setEnvironmentValue('HOME', home)
   setEnvironmentValue('ZDOTDIR', zdotdir)
-  setEnvironmentValue('ORCA_ORIG_ZDOTDIR', originalZdotdir)
+  setEnvironmentValue('POD_ORIG_ZDOTDIR', originalZdotdir)
 }
 
 function setEnvironmentValue(key: string, value: string | undefined): void {

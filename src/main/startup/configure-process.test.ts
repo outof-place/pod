@@ -372,22 +372,22 @@ function restoreEnv(key: string, value: string | undefined): void {
 }
 
 describe('configureOrcaUserDataPathEnv', () => {
-  it('overwrites stale inherited ORCA_USER_DATA_PATH with Electron userData', async () => {
+  it('overwrites stale inherited POD_USER_DATA_PATH with Electron userData', async () => {
     const { app } = await import('electron')
     const { configureOrcaUserDataPathEnv } = await import('./configure-process')
-    const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
-    process.env.ORCA_USER_DATA_PATH = '/tmp/stale-orca-user-data'
+    const originalUserDataPath = process.env.POD_USER_DATA_PATH
+    process.env.POD_USER_DATA_PATH = '/tmp/stale-orca-user-data'
     app.setPath('userData', '/tmp/current-orca-user-data')
     let configuredUserDataPath: string | undefined
 
     try {
       configureOrcaUserDataPathEnv()
-      configuredUserDataPath = process.env.ORCA_USER_DATA_PATH
+      configuredUserDataPath = process.env.POD_USER_DATA_PATH
     } finally {
       if (originalUserDataPath === undefined) {
-        delete process.env.ORCA_USER_DATA_PATH
+        delete process.env.POD_USER_DATA_PATH
       } else {
-        process.env.ORCA_USER_DATA_PATH = originalUserDataPath
+        process.env.POD_USER_DATA_PATH = originalUserDataPath
       }
     }
 
@@ -411,7 +411,7 @@ describe('shouldInstallManagedHooks', () => {
 
 describe('configureElectronNetworkCompatibility', () => {
   const tempDirs: string[] = []
-  const originalEnvValue = process.env.ORCA_DISABLE_HTTP2
+  const originalEnvValue = process.env.POD_DISABLE_HTTP2
 
   function createUserDataDir(settings: Record<string, unknown>): string {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-http1-compat-'))
@@ -441,9 +441,9 @@ describe('configureElectronNetworkCompatibility', () => {
       rmSync(dir, { recursive: true, force: true })
     }
     if (originalEnvValue === undefined) {
-      delete process.env.ORCA_DISABLE_HTTP2
+      delete process.env.POD_DISABLE_HTTP2
     } else {
-      process.env.ORCA_DISABLE_HTTP2 = originalEnvValue
+      process.env.POD_DISABLE_HTTP2 = originalEnvValue
     }
   })
 
@@ -466,7 +466,7 @@ describe('configureElectronNetworkCompatibility', () => {
 
     expect(
       shouldDisableHttp2ForElectronNetworking({
-        env: { ORCA_DISABLE_HTTP2: 'true' },
+        env: { POD_DISABLE_HTTP2: 'true' },
         userDataPath: createUserDataDir({ electronHttp1CompatibilityMode: false })
       })
     ).toBe(true)
@@ -477,7 +477,7 @@ describe('configureElectronNetworkCompatibility', () => {
 
     expect(
       shouldDisableHttp2ForElectronNetworking({
-        env: { ORCA_DISABLE_HTTP2: '0' },
+        env: { POD_DISABLE_HTTP2: '0' },
         userDataPath: createUserDataDir({ electronHttp1CompatibilityMode: true })
       })
     ).toBe(false)
@@ -516,7 +516,7 @@ describe('configureElectronNetworkCompatibility', () => {
     writeHttp1CompatibilityMarker(userDataPath, true)
 
     expect(
-      shouldDisableHttp2ForElectronNetworking({ env: { ORCA_DISABLE_HTTP2: '0' }, userDataPath })
+      shouldDisableHttp2ForElectronNetworking({ env: { POD_DISABLE_HTTP2: '0' }, userDataPath })
     ).toBe(false)
   })
 

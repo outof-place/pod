@@ -9,7 +9,7 @@ const correctedValues = {
   'auto.components.settings.source.control.action.recipe.options.commitMessage':
     '스테이징된 변경 사항에서 commit 메시지를 생성합니다.',
   'auto.components.settings.DevToolsPane.orcaCloudDescription':
-    '자사 클라우드 로그인의 개발자 전용 미리보기. 프로덕션에서는 숨겨집니다. 개발 환경에서는 ORCA_CLOUD_API_URL과 ORCA_CLOUD_CLIENT_ID가 설정되면 사이드바 계정 전환기에도 표시됩니다.',
+    '자사 클라우드 로그인의 개발자 전용 미리보기. 프로덕션에서는 숨겨집니다. 개발 환경에서는 POD_CLOUD_API_URL과 POD_CLOUD_CLIENT_ID가 설정되면 사이드바 계정 전환기에도 표시됩니다.',
   'auto.components.settings.EphemeralVmsPane.whatTitle': '이 스킬로 함께 하는 작업',
   'auto.components.settings.EphemeralVmsPane.recipes': '레시피',
   'auto.components.right.sidebar.SourceControl.a5e5a11090':

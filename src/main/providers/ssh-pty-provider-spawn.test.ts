@@ -449,7 +449,7 @@ describe('spawn', () => {
     await provider.spawn({
       cols: 120,
       rows: 40,
-      env: { PATH: '/usr/bin', ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { PATH: '/usr/bin', POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expectRequest(mux.request, 'pty.spawn', {
@@ -458,13 +458,13 @@ describe('spawn', () => {
       cwd: undefined,
       env: {
         PATH: '/home/user/.orca-relay/bin:/usr/bin',
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
+        POD_TERMINAL_HANDLE: 'term_ssh',
         [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
-        ORCA_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
-        ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
-        ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
-        ORCA_RELAY_NODE_PATH: '/usr/bin/node',
-        ORCA_RELAY_SOCKET_PATH: '/home/user/.orca-relay/relay.sock'
+        POD_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
+        POD_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
+        POD_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
+        POD_RELAY_NODE_PATH: '/usr/bin/node',
+        POD_RELAY_SOCKET_PATH: '/home/user/.orca-relay/relay.sock'
       }
     })
   })
@@ -481,7 +481,7 @@ describe('spawn', () => {
     await provider.spawn({
       cols: 120,
       rows: 40,
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expectRequest(mux.request, 'pty.spawn', {
@@ -489,13 +489,13 @@ describe('spawn', () => {
       rows: 40,
       cwd: undefined,
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
+        POD_TERMINAL_HANDLE: 'term_ssh',
         [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
-        ORCA_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
-        ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
-        ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
-        ORCA_RELAY_NODE_PATH: '/usr/bin/node',
-        ORCA_RELAY_SOCKET_PATH: '/home/user/.orca-relay/relay.sock'
+        POD_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
+        POD_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
+        POD_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
+        POD_RELAY_NODE_PATH: '/usr/bin/node',
+        POD_RELAY_SOCKET_PATH: '/home/user/.orca-relay/relay.sock'
       }
     })
   })
@@ -523,10 +523,10 @@ describe('spawn', () => {
       env: {
         Path: 'C:/Users/me/.orca-relay/bin;C:/Windows/System32;C:/Tools',
         [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
-        ORCA_REMOTE_CLI_BIN_DIR: 'C:/Users/me/.orca-relay/bin',
-        ORCA_RELAY_DIR: 'C:/Users/me/.orca-remote/relay-v1',
-        ORCA_RELAY_NODE_PATH: 'C:/Program Files/nodejs/node.exe',
-        ORCA_RELAY_SOCKET_PATH: '\\\\.\\pipe\\orca-relay-123'
+        POD_REMOTE_CLI_BIN_DIR: 'C:/Users/me/.orca-relay/bin',
+        POD_RELAY_DIR: 'C:/Users/me/.orca-remote/relay-v1',
+        POD_RELAY_NODE_PATH: 'C:/Program Files/nodejs/node.exe',
+        POD_RELAY_SOCKET_PATH: '\\\\.\\pipe\\orca-relay-123'
       }
     })
   })

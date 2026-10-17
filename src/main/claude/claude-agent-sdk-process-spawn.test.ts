@@ -82,7 +82,7 @@ describe('claude agent SDK process spawn', () => {
       expect(spec.detached).toBe(true)
       expect(spec.cwd).toBe('/work/repo')
       const supervisorSpec = JSON.parse(
-        Buffer.from(String(spec.env?.ORCA_PROVIDER_SUPERVISOR_SPEC), 'base64').toString()
+        Buffer.from(String(spec.env?.POD_PROVIDER_SUPERVISOR_SPEC), 'base64').toString()
       )
       // A gone Orca closes Claude as its own close does (stdin end and SIGTERM), not with the
       // root-only stdin-end drain a managed provider gets by default.

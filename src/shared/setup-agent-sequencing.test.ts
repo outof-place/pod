@@ -93,11 +93,11 @@ describe('createSequencedSetupAgentCommands', () => {
       platform: 'posix',
       nonce: 'nonce-1'
     })
-    const script = commands.startupEnv?.ORCA_SEQUENCED_STARTUP_SCRIPT ?? ''
+    const script = commands.startupEnv?.POD_SEQUENCED_STARTUP_SCRIPT ?? ''
     // Why ordering: `eval`/`exec` never returns, so a later message never renders.
     expect(script.indexOf(SETUP_COMPLETE_MESSAGE)).toBeGreaterThan(-1)
     expect(script.indexOf(SETUP_COMPLETE_MESSAGE)).toBeLessThan(
-      script.indexOf('eval "$ORCA_SEQUENCED_STARTUP_COMMAND"')
+      script.indexOf('eval "$POD_SEQUENCED_STARTUP_COMMAND"')
     )
   })
 
@@ -139,7 +139,7 @@ describe('createSequencedSetupAgentCommands', () => {
         startupCommand: 'codex',
         platform: 'posix',
         nonce: 'nonce-3'
-      }).startupEnv?.ORCA_SEQUENCED_STARTUP_SCRIPT ?? ''
+      }).startupEnv?.POD_SEQUENCED_STARTUP_SCRIPT ?? ''
     // Silence on success is what made a healthy worktree look stuck.
     expect(script).toContain(SETUP_COMPLETE_MESSAGE)
     expect(script).toContain('Setup failed; skipping agent startup.')
@@ -354,7 +354,7 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(result.startupCommand).toMatch(/^bash -lc /)
     expect(result.startupCommand).not.toContain('Invoke-Expression')
     expect(result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
-      'eval "$ORCA_SEQUENCED_STARTUP_COMMAND"'
+      'eval "$POD_SEQUENCED_STARTUP_COMMAND"'
     )
     // Why: bash writes and reads the marker here, so it needs the /c/... form of the path.
     expect(result.setupCommand).toContain(

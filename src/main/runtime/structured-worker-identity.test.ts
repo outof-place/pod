@@ -286,7 +286,7 @@ describe('structured worker identity registry', () => {
 describe('structured workers stay outside the PTY-only fail-closed paths', () => {
   it('keeps the selector shut by never letting a structured pane key reach a hook status', () => {
     // The selector matches on pane key, so it is fail-closed for a structured worker only while
-    // ORCA_PANE_KEY is absent from its child's environment. That absence IS the guard: put the key
+    // POD_PANE_KEY is absent from its child's environment. That absence IS the guard: put the key
     // back and the first assertion below is what an attacker gets.
     // The PROCESS registry, because that is the one the spawn path reads.
     const handle = mintStructuredWorkerHandle()
@@ -303,8 +303,8 @@ describe('structured workers stay outside the PTY-only fail-closed paths', () =>
       const env = structuredSessionChildIdentityEnv(SESSION_ID, {})
       // Registered, so the worker's handle is present; without it the pane-key assertion would pass
       // for the wrong reason.
-      expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
-      expect(Object.keys(env)).not.toContain('ORCA_PANE_KEY')
+      expect(env.POD_TERMINAL_HANDLE).toBe(handle)
+      expect(Object.keys(env)).not.toContain('POD_PANE_KEY')
     } finally {
       structuredWorkerIdentities.forget(handle)
     }

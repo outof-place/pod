@@ -21,7 +21,7 @@ function resolveFor(machine: string | null, dockerPinned = false): void {
 
 const plainRequest = { worktreeId: WORKTREE, connectionId: null }
 // Why built: Pod's decouple codemod renames a standalone ORCA_ name, never one inside the VM name.
-const VM_HOOK_TOKEN = `${POD_SANDBOX_VM_ENV_PREFIX}ORCA_AGENT_HOOK_TOKEN`
+const VM_HOOK_TOKEN = `${POD_SANDBOX_VM_ENV_PREFIX}POD_AGENT_HOOK_TOKEN`
 
 afterEach(() => setPodOrbstackTerminalResolver(null))
 
@@ -93,7 +93,7 @@ describe('sandboxed Claude launches', () => {
   }
 
   function claudeLaunch(extra: Record<string, string> = {}) {
-    const env: Record<string, string> = { ORCA_PANE_KEY: 'tab:leaf', ...extra }
+    const env: Record<string, string> = { POD_PANE_KEY: 'tab:leaf', ...extra }
     return {
       env,
       cwd: '/Users/me/pod/acme/web',
@@ -122,22 +122,22 @@ describe('sandboxed Claude launches', () => {
       return {
         nonce: 'n0nce',
         vmEnv: {
-          ORCA_AGENT_HOOK_TOKEN: 'sbx-token',
+          POD_AGENT_HOOK_TOKEN: 'sbx-token',
           NODE_EXTRA_CA_CERTS: '/etc/pod-sandbox/anthropic-ca.pem',
           ANTHROPIC_API_KEY: 'pod-sandbox-no-credential'
         }
       }
     })
     const options = claudeLaunch({
-      ORCA_AGENT_HOOK_PORT: '41234',
-      ORCA_AGENT_HOOK_TOKEN: 'server-token'
+      POD_AGENT_HOOK_PORT: '41234',
+      POD_AGENT_HOOK_TOKEN: 'server-token'
     })
     applyPodOrbstackTerminalOverride(options, plainRequest, options.command)
     expect(started).toEqual([
       { machine: SANDBOX, hookServer: { port: 41234, token: 'server-token' } }
     ])
     expect(options.env).toMatchObject({
-      ORCA_AGENT_HOOK_TOKEN: 'server-token',
+      POD_AGENT_HOOK_TOKEN: 'server-token',
       [VM_HOOK_TOKEN]: 'sbx-token',
       POD_SANDBOX_VM_ANTHROPIC_API_KEY: 'pod-sandbox-no-credential'
     })
@@ -146,13 +146,13 @@ describe('sandboxed Claude launches', () => {
     expect(orbenv).toContain(
       `:${VM_HOOK_TOKEN}:POD_SANDBOX_VM_NODE_EXTRA_CA_CERTS:POD_SANDBOX_VM_ANTHROPIC_API_KEY`
     )
-    expect(orbenv).not.toContain(':ORCA_AGENT_HOOK_TOKEN')
+    expect(orbenv).not.toContain(':POD_AGENT_HOOK_TOKEN')
     expect(options.command).not.toContain('server-token')
     expect(options.command).toContain(
       `'bash' '-lc' 'w=0; until [ "$(cat /run/pod-sandbox-relay/ready 2>/dev/null)" = n0nce ]`
     )
     expect(options.command).toContain(
-      `done; export ORCA_AGENT_HOOK_TOKEN="$${VM_HOOK_TOKEN}"; unset ${VM_HOOK_TOKEN}; export NODE_EXTRA_CA_CERTS=`
+      `done; export POD_AGENT_HOOK_TOKEN="$${VM_HOOK_TOKEN}"; unset ${VM_HOOK_TOKEN}; export NODE_EXTRA_CA_CERTS=`
     )
     expect(options.command).toContain(
       'unset POD_SANDBOX_VM_ANTHROPIC_API_KEY; export DISABLE_AUTOUPDATER=1; exec claude'

@@ -24,7 +24,7 @@ describe('Codex Windows hook command', () => {
     (profile) => {
       vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
       vi.stubEnv('SystemRoot', 'D:\\Windows')
-      const path = `C:\\Users\\${profile}\\.orca\\agent-hooks\\codex-hook.cmd`
+      const path = `C:\\Users\\${profile}\\.pod\\agent-hooks\\codex-hook.cmd`
       const command = getManagedCommand(path)
       expect(command).not.toMatch(/powershell\.exe|EncodedCommand|Set-ExecutionPolicy/)
       expect(command).toBe(
@@ -37,8 +37,8 @@ describe('Codex Windows hook command', () => {
 
   it('writes a bare forward-slash path when the profile is one token', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    expect(getManagedCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')).toBe(
-      'C:/Users/alice/.orca/agent-hooks/codex-hook.cmd'
+    expect(getManagedCommand('C:\\Users\\alice\\.pod\\agent-hooks\\codex-hook.cmd')).toBe(
+      'C:/Users/alice/.pod/agent-hooks/codex-hook.cmd'
     )
   })
 })
@@ -85,10 +85,10 @@ describe.skipIf(process.platform !== 'win32')('Codex hook delivery through Power
           Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))
         ),
         ORCA_BACKGROUND_LAUNCH: '1',
-        ORCA_AGENT_HOOK_PORT: String(address.port),
-        ORCA_AGENT_HOOK_TOKEN: 'unicode-test-token',
-        ORCA_PANE_KEY: 'unicode-tab:unicode-leaf',
-        ORCA_WORKTREE_ID: 'C:\\folder workspace\\测试 & repo'
+        POD_AGENT_HOOK_PORT: String(address.port),
+        POD_AGENT_HOOK_TOKEN: 'unicode-test-token',
+        POD_PANE_KEY: 'unicode-tab:unicode-leaf',
+        POD_WORKTREE_ID: 'C:\\folder workspace\\测试 & repo'
       }
       const payloads = CODEX_EVENTS.map((hook_event_name) =>
         JSON.stringify({
@@ -120,8 +120,8 @@ describe.skipIf(process.platform !== 'win32')('Codex hook delivery through Power
         expect(tokens).toEqual(CODEX_EVENTS.map(() => 'unicode-test-token'))
         expect(posts.map((post) => post.get('payload')).sort()).toEqual([...payloads].sort())
         for (const post of posts) {
-          expect(post.get('paneKey')).toBe(env.ORCA_PANE_KEY)
-          expect(post.get('worktreeId')).toBe(env.ORCA_WORKTREE_ID)
+          expect(post.get('paneKey')).toBe(env.POD_PANE_KEY)
+          expect(post.get('worktreeId')).toBe(env.POD_WORKTREE_ID)
         }
         await new Promise<void>((resolve) => server.close(() => resolve()))
         expect(await invoke(getManagedCommand(scriptPath), payloads[0])).toMatchObject({

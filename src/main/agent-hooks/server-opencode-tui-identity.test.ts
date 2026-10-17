@@ -46,11 +46,11 @@ describe('legacy TUI identity admitted by the canonical hook server', () => {
     extra: Record<string, unknown> = {}
   ) {
     const env = server.buildPtyEnv()
-    const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/opencode`, {
+    const response = await fetch(`http://127.0.0.1:${env.POD_AGENT_HOOK_PORT}/hook/opencode`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        'X-Orca-Agent-Hook-Token': env.POD_AGENT_HOOK_TOKEN
       },
       body: JSON.stringify({
         paneKey,
@@ -231,13 +231,13 @@ describe('legacy TUI identity admitted by the canonical hook server', () => {
     other.isolateBinder(join(dir, 'other-no-user-database'))
     await other.start({ env: 'other-host', userDataPath: join(dir, 'other-host') })
     try {
-      const { ORCA_AGENT_HOOK_PORT } = server.buildPtyEnv()
-      const { ORCA_AGENT_HOOK_TOKEN } = other.buildPtyEnv()
-      const response = await fetch(`http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/opencode`, {
+      const { POD_AGENT_HOOK_PORT } = server.buildPtyEnv()
+      const { POD_AGENT_HOOK_TOKEN } = other.buildPtyEnv()
+      const response = await fetch(`http://127.0.0.1:${POD_AGENT_HOOK_PORT}/hook/opencode`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': ORCA_AGENT_HOOK_TOKEN
+          'X-Orca-Agent-Hook-Token': POD_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify({
           paneKey: PANE_A,

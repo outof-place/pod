@@ -51,8 +51,8 @@ describe('SSH remote Linear save issue', () => {
       ],
       cwd: '/home/alice/remote-repo',
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote'
+        POD_TERMINAL_HANDLE: 'term_ssh',
+        POD_WORKTREE_ID: 'repo::remote'
       },
       stdin: 'Updated description'
     })
@@ -88,7 +88,7 @@ describe('SSH remote Linear save issue', () => {
       callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
       argv: ['linear', 'save-issue', '--team', 'ENG', '--title', 'New issue', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -103,7 +103,7 @@ describe('SSH remote Linear save issue', () => {
       callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
       argv: ['linear', 'save-issue', 'ENG-123', '--body-file', 'body.md', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)

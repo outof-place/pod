@@ -26,11 +26,11 @@ try {
       const env: NodeJS.ProcessEnv = {
         ...process.env,
         ORCA_BACKGROUND_LAUNCH: '1',
-        ORCA_OMP_FRESH_CONFIG: config,
+        POD_OMP_FRESH_CONFIG: config,
         CAPTURE: capture
       }
       if (state === 'unset') {
-        delete env.ORCA_OMP_FRESH_CONFIG
+        delete env.POD_OMP_FRESH_CONFIG
       }
       const command = withFreshOmpLaunch('omp', shell, ' "task with spaces"')
       const runner = join(root, 'run.cmd')

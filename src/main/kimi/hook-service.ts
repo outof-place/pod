@@ -77,10 +77,10 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     // Why: refresh PORT/TOKEN/ENV/VERSION from the current Orca install so a PTY
     // that survived an Orca restart still reaches the live listener. See
     // claude/hook-service.ts for the full rationale.
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    'if [ -n "$POD_AGENT_HOOK_ENDPOINT" ] && [ -r "$POD_AGENT_HOOK_ENDPOINT" ]; then',
+    '  . "$POD_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    'if [ -z "$POD_AGENT_HOOK_PORT" ] || [ -z "$POD_AGENT_HOOK_TOKEN" ] || [ -z "$POD_PANE_KEY" ]; then',
     // Why: the windows-local ordering runs this guard before stdin is read and before
     // spool_hook_event is defined, so only the payload-first ordering may spool here.
     ...(windowsLocal ? [] : ['  spool_hook_event']),
@@ -106,16 +106,16 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
     // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
     // command line (EDR command-line false positives). Wire body is identical.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/kimi" \\',
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${POD_AGENT_HOOK_PORT}/hook/kimi" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    '  -H "X-Orca-Agent-Hook-Token: ${POD_AGENT_HOOK_TOKEN}" \\',
+    '  --data-urlencode "paneKey=${POD_PANE_KEY}" \\',
+    '  --data-urlencode "tabId=${POD_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${POD_AGENT_LAUNCH_TOKEN}" \\',
+    '  --data-urlencode "worktreeId=${POD_WORKTREE_ID}" \\',
+    '  --data-urlencode "env=${POD_AGENT_HOOK_ENV}" \\',
+    '  --data-urlencode "version=${POD_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || spool_hook_event',
     'exit 0',
     ''
@@ -242,7 +242,7 @@ export class KimiHookService {
     const remoteConfigPath = pathPosix.join(remoteHome, '.kimi-code', 'config.toml')
     const remoteScriptPath = pathPosix.join(
       remoteHome,
-      '.orca',
+      '.pod',
       'agent-hooks',
       MANAGED_SCRIPT_FILE_NAME
     )

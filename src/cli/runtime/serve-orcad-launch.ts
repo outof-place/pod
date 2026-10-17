@@ -103,8 +103,8 @@ export function serveWithOrcad(
     env: {
       ...baseEnv,
       // The desktop's profile: its instance lock makes the two refuse each other.
-      ORCA_USER_DATA: userDataPath,
-      ORCA_VERSION: selection.version,
+      POD_USER_DATA: userDataPath,
+      POD_VERSION: selection.version,
       // Fork-only (Pod): orcad runs on bundled Node and cannot read the app's identity itself.
       ...Object.fromEntries(stablyServicesLaunchEnv(getProductIdentity()?.stablyServices !== false))
     }

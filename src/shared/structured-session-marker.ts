@@ -11,7 +11,7 @@
  * The reader answers only "does this process carry the marker": a current CLI reaches it after the
  * id check has already returned, which is what makes a marked child with an id act as its session.
  */
-export const ORCA_STRUCTURED_SESSION_ENV = 'ORCA_STRUCTURED_SESSION'
+export const ORCA_STRUCTURED_SESSION_ENV = 'POD_STRUCTURED_SESSION'
 
 export function hasStructuredSessionMarker(env: NodeJS.ProcessEnv = process.env): boolean {
   return (env[ORCA_STRUCTURED_SESSION_ENV] ?? '').length > 0

@@ -224,7 +224,7 @@ describe('createPtySubprocess', () => {
         cols: 80,
         rows: 24,
         cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
-        env: { CODEX_HOME: 'C:\\Users\\jin\\.codex', ORCA_CODEX_HOME: 'C:\\Users\\jin\\.codex' }
+        env: { CODEX_HOME: 'C:\\Users\\jin\\.codex', POD_CODEX_HOME: 'C:\\Users\\jin\\.codex' }
       })
     } finally {
       if (platform) {
@@ -238,7 +238,7 @@ describe('createPtySubprocess', () => {
       expect.objectContaining({
         env: expect.not.objectContaining({
           CODEX_HOME: expect.anything(),
-          ORCA_CODEX_HOME: expect.anything()
+          POD_CODEX_HOME: expect.anything()
         })
       })
     )
@@ -260,7 +260,7 @@ describe('createPtySubprocess', () => {
         env: {
           CODEX_HOME:
             '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home',
-          ORCA_CODEX_HOME:
+          POD_CODEX_HOME:
             '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
         }
       })
@@ -276,7 +276,7 @@ describe('createPtySubprocess', () => {
       expect.objectContaining({
         env: expect.not.objectContaining({
           CODEX_HOME: expect.anything(),
-          ORCA_CODEX_HOME: expect.anything()
+          POD_CODEX_HOME: expect.anything()
         })
       })
     )
@@ -300,7 +300,7 @@ describe('createPtySubprocess', () => {
         env: {
           CODEX_HOME:
             '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home',
-          ORCA_CODEX_HOME:
+          POD_CODEX_HOME:
             '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
         }
       })
@@ -323,7 +323,7 @@ describe('createPtySubprocess', () => {
       expect.objectContaining({
         env: expect.objectContaining({
           CODEX_HOME: '/home/jin/.local/share/orca/codex-accounts/a/home',
-          ORCA_CODEX_HOME: '/home/jin/.local/share/orca/codex-accounts/a/home',
+          POD_CODEX_HOME: '/home/jin/.local/share/orca/codex-accounts/a/home',
           WSLENV: expect.stringContaining('CODEX_HOME')
         })
       })
@@ -365,11 +365,11 @@ describe('createPtySubprocess', () => {
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     const savedCodexHome = process.env.CODEX_HOME
-    const savedOrcaCodexHome = process.env.ORCA_CODEX_HOME
+    const savedOrcaCodexHome = process.env.POD_CODEX_HOME
 
     Object.defineProperty(process, 'platform', { value: 'win32' })
     delete process.env.CODEX_HOME
-    delete process.env.ORCA_CODEX_HOME
+    delete process.env.POD_CODEX_HOME
 
     try {
       await createPtySubprocess({
@@ -378,8 +378,8 @@ describe('createPtySubprocess', () => {
         rows: 24,
         cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
         env: {
-          ORCA_TERMINAL_HANDLE: 'term_wsl',
-          ORCA_HERMES_STARTUP_QUERY: 'line one\nline two',
+          POD_TERMINAL_HANDLE: 'term_wsl',
+          POD_HERMES_STARTUP_QUERY: 'line one\nline two',
           WSLENV: 'FOO/u'
         }
       })
@@ -393,23 +393,23 @@ describe('createPtySubprocess', () => {
         process.env.CODEX_HOME = savedCodexHome
       }
       if (savedOrcaCodexHome === undefined) {
-        delete process.env.ORCA_CODEX_HOME
+        delete process.env.POD_CODEX_HOME
       } else {
-        process.env.ORCA_CODEX_HOME = savedOrcaCodexHome
+        process.env.POD_CODEX_HOME = savedOrcaCodexHome
       }
     }
 
     const spawnCall = spawnMock.mock.calls.at(-1)!
     expect(spawnCall[0]).toBe('wsl.exe')
     expect(spawnCall[1]).toEqual(expect.any(Array))
-    expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
+    expect(spawnCall[2].env.POD_TERMINAL_HANDLE).toBe('term_wsl')
     // Why: the daemon inherits optional agent-hook env in development. This
     // test owns only the terminal handle and Powerlevel10k WSLENV contract.
     expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
       expect.arrayContaining([
         'FOO/u',
-        'ORCA_TERMINAL_HANDLE/u',
-        'ORCA_HERMES_STARTUP_QUERY',
+        'POD_TERMINAL_HANDLE/u',
+        'POD_HERMES_STARTUP_QUERY',
         POWERLEVEL10K_WIZARD_DISABLE_ENV
       ])
     )
@@ -428,8 +428,8 @@ describe('createPtySubprocess', () => {
         cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
         env: {
           CLAUDE_CONFIG_DIR: home,
-          ORCA_CLAUDE_INJECTED_CONFIG_DIR: home,
-          ORCA_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca'
+          POD_CLAUDE_INJECTED_CONFIG_DIR: home,
+          POD_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca'
         }
       })
     } finally {
@@ -442,11 +442,11 @@ describe('createPtySubprocess', () => {
     expect(env.WSLENV.split(':')).toEqual(
       expect.arrayContaining([
         'CLAUDE_CONFIG_DIR',
-        'ORCA_CLAUDE_PROFILE_POINTER',
-        'ORCA_CLAUDE_INJECTED_CONFIG_DIR'
+        'POD_CLAUDE_PROFILE_POINTER',
+        'POD_CLAUDE_INJECTED_CONFIG_DIR'
       ])
     )
-    expect(env.ORCA_CLAUDE_PROFILE_POINTER).toBe(
+    expect(env.POD_CLAUDE_PROFILE_POINTER).toBe(
       '~/.local/share/orca/claude-profiles/selected-wsl-orca'
     )
   })

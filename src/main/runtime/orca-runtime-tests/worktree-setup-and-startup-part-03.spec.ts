@@ -91,7 +91,7 @@ describe('OrcaRuntimeService', () => {
         result.worktree.id,
         expect.objectContaining({
           ptyId: 'pty-bg-split-setup',
-          tabId: mainEnv.ORCA_TAB_ID,
+          tabId: mainEnv.POD_TAB_ID,
           activate: false,
           surfaceOwner: false,
           splitDirection: 'horizontal'

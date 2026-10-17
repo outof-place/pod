@@ -108,7 +108,7 @@ describe('native-deps repair probe verdicts', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // The host-npm path is opt-in; these cases cover it.
-    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
+    vi.stubEnv('POD_SSH_REMOTE_RUNTIME', 'legacy')
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockResolvedValue(undefined)
     sftpCapture.paths.length = 0

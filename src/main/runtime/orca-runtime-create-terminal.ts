@@ -75,7 +75,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           : undefined
         const baseEnv = {
           ...launchOpts.env,
-          ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
+          ...(launchToken ? { POD_AGENT_LAUNCH_TOKEN: launchToken } : {})
         }
         let agentTeamsPlan: Awaited<ReturnType<typeof dependencies.buildClaudeAgentTeamsLaunchPlan>>
         let sequencedStartupCommand: string | undefined

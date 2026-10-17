@@ -205,7 +205,7 @@ export XDG_CONFIG_HOME="$state_dir/config"
 export XDG_CACHE_HOME="$state_dir/cache"
 export XDG_RUNTIME_DIR="$state_dir/runtime"
 export LIBGL_ALWAYS_SOFTWARE=1
-export ORCA_STARTUP_DIAGNOSTICS=1
+export POD_STARTUP_DIAGNOSTICS=1
 ulimit -c 0
 
 [[ -r "$appimage" ]] || { echo "FAIL: AppImage is not readable: $appimage" >&2; exit 1; }

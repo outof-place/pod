@@ -10,13 +10,13 @@ import { _resetGitAdmissionForTests } from './git-subprocess-admission'
 import { configureRealGitTestRepo } from '../real-git-test-repo'
 
 const tempRoots: string[] = []
-const originalAdmissionDisabled = process.env.ORCA_GIT_ADMISSION_DISABLED
+const originalAdmissionDisabled = process.env.POD_GIT_ADMISSION_DISABLED
 
 afterEach(async () => {
   if (originalAdmissionDisabled === undefined) {
-    delete process.env.ORCA_GIT_ADMISSION_DISABLED
+    delete process.env.POD_GIT_ADMISSION_DISABLED
   } else {
-    process.env.ORCA_GIT_ADMISSION_DISABLED = originalAdmissionDisabled
+    process.env.POD_GIT_ADMISSION_DISABLED = originalAdmissionDisabled
   }
   _resetGitAdmissionForTests()
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
@@ -24,9 +24,9 @@ afterEach(async () => {
 
 function setAdmissionDisabled(disabled: boolean): void {
   if (disabled) {
-    process.env.ORCA_GIT_ADMISSION_DISABLED = '1'
+    process.env.POD_GIT_ADMISSION_DISABLED = '1'
   } else {
-    delete process.env.ORCA_GIT_ADMISSION_DISABLED
+    delete process.env.POD_GIT_ADMISSION_DISABLED
   }
 }
 

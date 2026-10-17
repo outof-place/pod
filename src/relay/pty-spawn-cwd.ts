@@ -28,7 +28,7 @@ function trimmedString(value: unknown): string | undefined {
  *
  * Why the workspace-root hop: a folder workspace's id is `folder:<uuid>` and carries no path, so
  * the worktree-id split yields nothing and the host default silently won (#15296). The client
- * already delivers the configured root as `ORCA_WORKSPACE_ROOT`; read it before falling back.
+ * already delivers the configured root as `POD_WORKSPACE_ROOT`; read it before falling back.
  *
  * Existence is checked on the relay host only when the relay is itself the execution host. A
  * worktree path absent here (a Windows relay launching into WSL) stays a miss, not a refusal — the
@@ -56,7 +56,7 @@ export function resolveRelaySpawnCwd(args: {
     return { kind: 'requested', cwd: requested }
   }
 
-  const workspaceId = trimmedString(args.worktreeId) ?? trimmedString(args.env?.ORCA_WORKSPACE_ID)
+  const workspaceId = trimmedString(args.worktreeId) ?? trimmedString(args.env?.POD_WORKSPACE_ID)
   const scope = workspaceId ? parseWorkspaceKey(workspaceId) : null
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
   const worktreePath =
@@ -67,7 +67,7 @@ export function resolveRelaySpawnCwd(args: {
     return { kind: 'worktree', cwd: worktreePath }
   }
 
-  const workspaceRoot = trimmedString(args.env?.ORCA_WORKSPACE_ROOT)
+  const workspaceRoot = trimmedString(args.env?.POD_WORKSPACE_ROOT)
   if (workspaceRoot && directoryExists(workspaceRoot)) {
     return { kind: 'workspace-root', cwd: workspaceRoot }
   }

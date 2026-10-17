@@ -23,7 +23,7 @@ async function launch(
   )
   vi.stubEnv('HOME', root)
   vi.stubEnv('ZDOTDIR', root)
-  vi.stubEnv('ORCA_ORIG_ZDOTDIR', root)
+  vi.stubEnv('POD_ORIG_ZDOTDIR', root)
   let session: Session | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
   let legacyTimer: ReturnType<typeof setTimeout> | undefined

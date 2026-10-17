@@ -21,8 +21,8 @@ describe('Orca cloud auth config', () => {
 
   it('builds default desktop auth endpoints from the API URL', () => {
     const state = getOrcaCloudAuthConfig({
-      ORCA_CLOUD_API_URL: 'https://orca-cloud.example/',
-      ORCA_CLOUD_CLIENT_ID: 'desktop-client'
+      POD_CLOUD_API_URL: 'https://orca-cloud.example/',
+      POD_CLOUD_CLIENT_ID: 'desktop-client'
     })
 
     expect(state).toEqual({
@@ -66,8 +66,8 @@ describe('Orca cloud auth config', () => {
 
   it('allows loopback HTTP endpoints for local desktop auth development', () => {
     const state = getOrcaCloudAuthConfig({
-      ORCA_CLOUD_API_URL: 'http://localhost:4100',
-      ORCA_CLOUD_CLIENT_ID: 'desktop-client'
+      POD_CLOUD_API_URL: 'http://localhost:4100',
+      POD_CLOUD_CLIENT_ID: 'desktop-client'
     })
 
     expect(state.configured).toBe(true)
@@ -77,8 +77,8 @@ describe('Orca cloud auth config', () => {
     expect(
       getOrcaCloudAuthConfig(
         {
-          ORCA_CLOUD_API_URL: 'http://localhost:4100',
-          ORCA_CLOUD_CLIENT_ID: 'desktop-client'
+          POD_CLOUD_API_URL: 'http://localhost:4100',
+          POD_CLOUD_CLIENT_ID: 'desktop-client'
         },
         true
       )
@@ -86,8 +86,8 @@ describe('Orca cloud auth config', () => {
 
     const httpsState = getOrcaCloudAuthConfig(
       {
-        ORCA_CLOUD_API_URL: 'https://orca-cloud.example',
-        ORCA_CLOUD_CLIENT_ID: 'desktop-client'
+        POD_CLOUD_API_URL: 'https://orca-cloud.example',
+        POD_CLOUD_CLIENT_ID: 'desktop-client'
       },
       true
     )
@@ -97,8 +97,8 @@ describe('Orca cloud auth config', () => {
   it('rejects non-HTTPS non-loopback API URLs', () => {
     expect(
       getOrcaCloudAuthConfig({
-        ORCA_CLOUD_API_URL: 'http://orca-cloud.example',
-        ORCA_CLOUD_CLIENT_ID: 'desktop-client'
+        POD_CLOUD_API_URL: 'http://orca-cloud.example',
+        POD_CLOUD_CLIENT_ID: 'desktop-client'
       })
     ).toMatchObject({ configured: false })
   })
@@ -106,13 +106,13 @@ describe('Orca cloud auth config', () => {
   it('allows dev plaintext sessions only outside production', () => {
     expect(
       allowsPlaintextOrcaCloudSession({
-        ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION: '1',
+        POD_CLOUD_ALLOW_PLAINTEXT_SESSION: '1',
         NODE_ENV: 'development'
       })
     ).toBe(true)
     expect(
       allowsPlaintextOrcaCloudSession({
-        ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION: '1',
+        POD_CLOUD_ALLOW_PLAINTEXT_SESSION: '1',
         NODE_ENV: 'production'
       })
     ).toBe(false)
@@ -121,22 +121,22 @@ describe('Orca cloud auth config', () => {
   it('ignores dev flags in packaged builds even without NODE_ENV', () => {
     // Why: packaged main bundles never define NODE_ENV, so packaged-ness must
     // gate the escape hatches on its own.
-    expect(allowsPlaintextOrcaCloudSession({ ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION: '1' }, true)).toBe(
+    expect(allowsPlaintextOrcaCloudSession({ POD_CLOUD_ALLOW_PLAINTEXT_SESSION: '1' }, true)).toBe(
       false
     )
-    expect(isOrcaCloudDevAuthEnabled({ ORCA_CLOUD_DEV_AUTH: '1' }, true)).toBe(false)
+    expect(isOrcaCloudDevAuthEnabled({ POD_CLOUD_DEV_AUTH: '1' }, true)).toBe(false)
   })
 
   it('allows local dev auth only outside production', () => {
     expect(
       isOrcaCloudDevAuthEnabled({
-        ORCA_CLOUD_DEV_AUTH: '1',
+        POD_CLOUD_DEV_AUTH: '1',
         NODE_ENV: 'development'
       })
     ).toBe(true)
     expect(
       isOrcaCloudDevAuthEnabled({
-        ORCA_CLOUD_DEV_AUTH: '1',
+        POD_CLOUD_DEV_AUTH: '1',
         NODE_ENV: 'production'
       })
     ).toBe(false)

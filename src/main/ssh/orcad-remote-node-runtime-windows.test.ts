@@ -275,7 +275,7 @@ describe('ensureRemoteOrcadNodeRuntime on Windows', () => {
 
   it('carries what node.exe said when it would not run', async () => {
     answer(
-      "ORCA_NODE_RUNTIME_SELFTEST_FAILED\r\nORCA_RUNTIME_EXIT=-1\r\nProgram 'node.exe' failed to run: This program is blocked by group policy.\r\n"
+      "ORCA_NODE_RUNTIME_SELFTEST_FAILED\r\nPOD_RUNTIME_EXIT=-1\r\nProgram 'node.exe' failed to run: This program is blocked by group policy.\r\n"
     )
     const failure = await ensureRemoteOrcadNodeRuntime({
       conn,

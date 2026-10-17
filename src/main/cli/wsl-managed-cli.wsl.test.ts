@@ -13,7 +13,7 @@ import { buildLocalShellReadyWrapperFiles } from '../providers/local-pty-shell-r
 // Explicit opt-in: never require a developer's WSL installation for unit tests.
 const enabled = process.platform === 'win32' && process.env.ORCA_TEST_MANAGED_WSL === '1'
 const FIXTURE_CLI =
-  'if(process.argv.includes("--exit"))process.exit(23); console.error("bridge stderr"); console.log(JSON.stringify({argv:process.argv.slice(2),owner:process.env.ORCA_USER_DATA_PATH,handle:process.env.ORCA_TERMINAL_HANDLE}))'
+  'if(process.argv.includes("--exit"))process.exit(23); console.error("bridge stderr"); console.log(JSON.stringify({argv:process.argv.slice(2),owner:process.env.POD_USER_DATA_PATH,handle:process.env.POD_TERMINAL_HANDLE}))'
 
 async function withManagedCli(
   run: (fixture: {
@@ -63,9 +63,9 @@ async function withManagedCli(
     const directory = getManagedWslCliDir({ isPackaged: false, userDataPath })
     expect(directory).not.toBeNull()
     Object.assign(env, {
-      ORCA_WSL_CLI_DIR: directory ?? '',
-      ORCA_CLI_COMMAND: 'orca-dev',
-      ORCA_TERMINAL_HANDLE: 'term_managed_fixture'
+      POD_WSL_CLI_DIR: directory ?? '',
+      POD_CLI_COMMAND: 'orca-dev',
+      POD_TERMINAL_HANDLE: 'term_managed_fixture'
     })
     addOrcaWslInteropEnv(env)
     await run({ env, guestRoot: translated.stdout.trim(), root, userDataPath, wsl })
@@ -100,7 +100,7 @@ it.skipIf(!enabled)(
       expect(result.stdout).toContain('"handle":"term_managed_fixture"')
       expect((await shell('orca-dev --exit')).code).toBe(23)
 
-      env.ORCA_WSL_CLI_DIR = join(root, 'missing-cli')
+      env.POD_WSL_CLI_DIR = join(root, 'missing-cli')
       // An unusable CLI warns but never blocks the shell.
       const missing = await shell('echo SHELL_CONTINUED')
       expect(missing.code).toBe(0)

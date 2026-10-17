@@ -39,8 +39,8 @@ describe('managed hook outside an Orca terminal', () => {
   it('endpoint points at a path that does not exist: silent, exit 0', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-outside-stale-'))
     const res = runHook(dir, {
-      ORCA_AGENT_HOOK_ENDPOINT: join(dir, 'gone', 'deeper', 'endpoint.env'),
-      ORCA_PANE_KEY: 'tab:0'
+      POD_AGENT_HOOK_ENDPOINT: join(dir, 'gone', 'deeper', 'endpoint.env'),
+      POD_PANE_KEY: 'tab:0'
     })
     expect(res.status).toBe(0)
     expect(res.stdout).toBe('')
@@ -52,8 +52,8 @@ describe('managed hook outside an Orca terminal', () => {
   it('readable endpoint without a pane key: silent, writes nothing', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-outside-readable-'))
     const endpoint = join(dir, 'endpoint.env')
-    writeFileSync(endpoint, 'ORCA_AGENT_HOOK_PORT=9\nORCA_AGENT_HOOK_TOKEN=stale\n')
-    const res = runHook(dir, { ORCA_AGENT_HOOK_ENDPOINT: endpoint })
+    writeFileSync(endpoint, 'POD_AGENT_HOOK_PORT=9\nPOD_AGENT_HOOK_TOKEN=stale\n')
+    const res = runHook(dir, { POD_AGENT_HOOK_ENDPOINT: endpoint })
     expect(res.status).toBe(0)
     expect(res.stdout).toBe('')
     expect(res.stderr).toBe('')
@@ -63,9 +63,9 @@ describe('managed hook outside an Orca terminal', () => {
 
 describe('antigravity out-of-band event name', () => {
   it('records hookEventName and filters tool progress on it', () => {
-    const lines = buildPosixHookSpoolLines('antigravity', 'ORCA_ANTIGRAVITY_EVENT').join('\n')
+    const lines = buildPosixHookSpoolLines('antigravity', 'POD_ANTIGRAVITY_EVENT').join('\n')
     expect(lines).toContain('"hookEventName":"%s"')
-    expect(lines).toContain('${ORCA_ANTIGRAVITY_EVENT:-}')
+    expect(lines).toContain('${POD_ANTIGRAVITY_EVENT:-}')
     expect(lines).toContain('in PreToolUse|PostToolUse|PostToolUseFailure) return 0')
     // payload-based filtering stays the default for every other provider
     expect(buildPosixHookSpoolLines('codex').join('\n')).toContain('case "$payload" in')

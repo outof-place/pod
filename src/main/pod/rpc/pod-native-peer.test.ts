@@ -25,7 +25,7 @@ vi.mock('../../product-identity/product-identity', async (importOriginal) => ({
 const servers: OrcaRuntimeRpcServer[] = []
 
 beforeEach(() => {
-  vi.stubEnv('ORCA_LOCAL_STREAM_TRANSPORT', '1')
+  vi.stubEnv('POD_LOCAL_STREAM_TRANSPORT', '1')
 })
 
 afterEach(async () => {

@@ -6,7 +6,7 @@ export const REMOTE_NODE_RUNTIME_MISSING = 'ORCA_NODE_RUNTIME_MISSING'
 export const REMOTE_NODE_RUNTIME_SELFTEST_FAILED = 'ORCA_NODE_RUNTIME_SELFTEST_FAILED'
 /** A file Orca wrote and verified changed or vanished afterwards; the rest of the line says which. */
 export const REMOTE_NODE_RUNTIME_SECURITY_MODIFIED = 'ORCA_NODE_RUNTIME_SECURITY_MODIFIED'
-export const REMOTE_NODE_RUNTIME_EXIT_PREFIX = 'ORCA_RUNTIME_EXIT='
+export const REMOTE_NODE_RUNTIME_EXIT_PREFIX = 'POD_RUNTIME_EXIT='
 export const REMOTE_NODE_RUNTIME_VERIFIED_MARKER = '.verified'
 
 /** The pinned runtime ran on the host and did not report its version: a host verdict, with evidence. */
@@ -30,7 +30,7 @@ export class RemoteNodeRuntimeSecurityModifiedError extends RelayHostAnsweredErr
   }
 }
 
-/** Splits `ORCA_RUNTIME_EXIT=<n>` from the output that follows it. */
+/** Splits `POD_RUNTIME_EXIT=<n>` from the output that follows it. */
 export function parseRemoteRuntimeExitReport(text: string): {
   exitStatus: number | null
   output: string

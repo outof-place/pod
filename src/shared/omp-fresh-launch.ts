@@ -1,7 +1,7 @@
 import { OMP_DRAFT_LAUNCH_PREFIX } from './omp-draft-launch'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
 
-export const ORCA_OMP_FRESH_CONFIG_ENV = 'ORCA_OMP_FRESH_CONFIG'
+export const ORCA_OMP_FRESH_CONFIG_ENV = 'POD_OMP_FRESH_CONFIG'
 export const OMP_FRESH_CONFIG_FILENAME = 'fresh-session.yml'
 export const OMP_FRESH_CONFIG_SOURCE = 'autoResume: false\n'
 

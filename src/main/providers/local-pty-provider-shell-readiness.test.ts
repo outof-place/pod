@@ -167,8 +167,8 @@ describe('LocalPtyProvider', () => {
 
       const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env
       expect(spawnEnv[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe(command)
-      expect(spawnEnv.ORCA_SHELL_FEATURES).toContain('startup')
-      expect(spawnEnv.ORCA_SHELL_FEATURES).not.toContain('ready')
+      expect(spawnEnv.POD_SHELL_FEATURES).toContain('startup')
+      expect(spawnEnv.POD_SHELL_FEATURES).not.toContain('ready')
       expect(mockProc.write).not.toHaveBeenCalled()
     })
 
@@ -185,8 +185,8 @@ describe('LocalPtyProvider', () => {
 
       const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env
       expect(spawnEnv[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe(command)
-      expect(spawnEnv.ORCA_SHELL_FEATURES).toContain('startup')
-      expect(spawnEnv.ORCA_SHELL_FEATURES).toContain('ready')
+      expect(spawnEnv.POD_SHELL_FEATURES).toContain('startup')
+      expect(spawnEnv.POD_SHELL_FEATURES).toContain('ready')
       expect(mockProc.write).not.toHaveBeenCalled()
     })
 

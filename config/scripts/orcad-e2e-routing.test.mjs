@@ -106,7 +106,7 @@ it('runs both Windows serve specs on one runner, each only when requested', () =
     expect(job.if, spec).toContain(`contains(inputs.test_files, '${spec}')`)
     const step = job.steps.find((candidate) => candidate.run?.includes(spec))
     expect(step.if, spec).toContain(`contains(inputs.test_files, '${spec}')`)
-    expect(step.env.ORCA_STARTUP_DIAGNOSTICS, spec).toBeUndefined()
+    expect(step.env.POD_STARTUP_DIAGNOSTICS, spec).toBeUndefined()
   }
 })
 

@@ -148,20 +148,20 @@ describe('agent-browser orphan sweep', () => {
 })
 
 describe('sweep kill switch', () => {
-  const previous = process.env.ORCA_DISABLE_AGENT_BROWSER_SWEEP
+  const previous = process.env.POD_DISABLE_AGENT_BROWSER_SWEEP
 
   afterEach(() => {
     if (previous === undefined) {
-      delete process.env.ORCA_DISABLE_AGENT_BROWSER_SWEEP
+      delete process.env.POD_DISABLE_AGENT_BROWSER_SWEEP
     } else {
-      process.env.ORCA_DISABLE_AGENT_BROWSER_SWEEP = previous
+      process.env.POD_DISABLE_AGENT_BROWSER_SWEEP = previous
     }
   })
 
   // Why: the idle bound is an env passthrough an operator can raise and the quit close is
   // self-bounded, so the sweep is the only new behaviour whose failure would need a revert.
   it('enumerates nothing when disabled, even when Orca owns the socket directory', async () => {
-    process.env.ORCA_DISABLE_AGENT_BROWSER_SWEEP = '1'
+    process.env.POD_DISABLE_AGENT_BROWSER_SWEEP = '1'
     runProcessMock.mockClear()
 
     const closed = await sweepOrphanedAgentBrowserSessions({
@@ -175,7 +175,7 @@ describe('sweep kill switch', () => {
   })
 
   it('still sweeps when the flag holds any other value', async () => {
-    process.env.ORCA_DISABLE_AGENT_BROWSER_SWEEP = '0'
+    process.env.POD_DISABLE_AGENT_BROWSER_SWEEP = '0'
     runProcessMock.mockClear()
     runProcessMock.mockResolvedValue({ code: 0, stdout: '{"data":{"sessions":[]}}', stderr: '' })
 

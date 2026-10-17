@@ -235,8 +235,8 @@ function getPathApi(platform: NodeJS.Platform): typeof win32 | typeof posix {
 function buildElectronRunAsNodeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const childEnv = { ...env }
   // Preserve user values without exposing them to Electron's bootstrap.
-  childEnv.ORCA_NODE_OPTIONS = env.NODE_OPTIONS ?? ''
-  childEnv.ORCA_NODE_REPL_EXTERNAL_MODULE = env.NODE_REPL_EXTERNAL_MODULE ?? ''
+  childEnv.POD_NODE_OPTIONS = env.NODE_OPTIONS ?? ''
+  childEnv.POD_NODE_REPL_EXTERNAL_MODULE = env.NODE_REPL_EXTERNAL_MODULE ?? ''
   childEnv.ELECTRON_RUN_AS_NODE = '1'
   childEnv[REDIRECT_ATTEMPT_ENV] = '1'
   delete childEnv.NODE_OPTIONS

@@ -32,7 +32,7 @@ const LOGIN_PREFLIGHT_REJECTED_REVALIDATE_MS = 30 * 60_000
  * user's environment misbehaves under login(1); terminals fall back to today's
  * direct-spawn behavior.
  */
-const DISABLE_ENV_VAR = 'ORCA_DISABLE_MACOS_LOGIN_SHELL'
+const DISABLE_ENV_VAR = 'POD_DISABLE_MACOS_LOGIN_SHELL'
 
 /**
  * Result of one PAM probe. `conclusive` marks a real PAM verdict (accept or

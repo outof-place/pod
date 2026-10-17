@@ -103,7 +103,7 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
       ...options.env,
       // Why the sentinel is env-borne: the prompt is overwritten from the PTY
       // below, and it has to survive whatever prompt the user's config installs.
-      ORCA_PTY_SENTINEL: sentinel
+      POD_PTY_SENTINEL: sentinel
     }
   })
 
@@ -181,7 +181,7 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
     // Why PS1 and not PROMPT: a config that leaves the shell in sh emulation
     // renders PS1, where PROMPT is just an ordinary variable. In zsh's own mode
     // the two name the same parameter, so PS1 covers both.
-    proc.write(`PS1="$ORCA_PTY_SENTINEL"\r`)
+    proc.write(`PS1="$POD_PTY_SENTINEL"\r`)
     // Why `exited` is raced here too: a user .zshenv that calls `exit` never
     // reaches a prompt, and that is an outcome worth comparing rather than a
     // twenty-second timeout.

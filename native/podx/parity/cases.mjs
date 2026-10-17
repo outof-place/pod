@@ -17,7 +17,7 @@ export function buildCases({ worktree }) {
   add('pre-command flag falls back', ['--json', 'tab', 'list'])
   add('kill switch', ['tab', 'list'], { env: { POD_NATIVE_CLI: '0' } })
   add('pairing env falls back', ['tab', 'list'], {
-    env: { ORCA_PAIRING_CODE: 'bogus' }
+    env: { POD_PAIRING_CODE: 'bogus' }
   })
 
   // Browser commands, text and JSON.
@@ -268,7 +268,7 @@ export function buildCases({ worktree }) {
     responses: { 'browser.click': [{ result: {}, metaRuntimeId: 'rt-other' }] }
   })
   add('no runtime metadata falls back', ['tab', 'list'], {
-    env: { ORCA_USER_DATA_PATH: '/nonexistent/podx-parity' }
+    env: { POD_USER_DATA_PATH: '/nonexistent/podx-parity' }
   })
 
   // Terminal and workspace reads.

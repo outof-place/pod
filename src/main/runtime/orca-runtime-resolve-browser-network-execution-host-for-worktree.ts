@@ -201,18 +201,18 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
       // Why: the runtime dir is a local unix-socket path; remote (SSH)
       // terminals must keep jcode on its own guest-side default daemon.
       ...jcodeRuntimeDirEnv,
-      ORCA_PANE_KEY: paneKey,
-      ORCA_TAB_ID: tabId,
-      ORCA_WORKTREE_ID: scope.id
+      POD_PANE_KEY: paneKey,
+      POD_TAB_ID: tabId,
+      POD_WORKTREE_ID: scope.id
     }
     if (!scope.folderWorkspace) {
       return env
     }
     return {
       ...env,
-      ORCA_WORKSPACE_ID: scope.id,
-      ORCA_PROJECT_GROUP_ID: scope.folderWorkspace.projectGroupId,
-      ORCA_WORKSPACE_ROOT: scope.folderWorkspace.folderPath
+      POD_WORKSPACE_ID: scope.id,
+      POD_PROJECT_GROUP_ID: scope.folderWorkspace.projectGroupId,
+      POD_WORKSPACE_ROOT: scope.folderWorkspace.folderPath
     }
   }
 

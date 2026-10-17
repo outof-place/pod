@@ -7,7 +7,7 @@ import { POD_ORBSTACK_MACHINE_PREFIX } from '../../../shared/pod-orbstack-types'
 
 const PRINT_CONNECTION = [
   "esc() { printf '%s' \"$1\" | sed 's/[\\\\\"]/\\\\&/g'; }",
-  'printf \'{"schemaVersion":1,"connection":{"type":"ssh","projectRoot":"%s","target":{"label":"OrbStack %s","host":"127.0.0.1","port":32222,"username":"%s@%s","identityFile":"%s","identitiesOnly":true}},"userData":{"provider":"orbstack","machine":"%s"}}\\n\' "$(esc "$ORCA_REPO_PATH")" "$(esc "${ORCA_WORKSPACE_NAME:-$name}")" "$(esc "$user")" "$name" "$(esc "$HOME/.orbstack/ssh/id_ed25519")" "$name"'
+  'printf \'{"schemaVersion":1,"connection":{"type":"ssh","projectRoot":"%s","target":{"label":"OrbStack %s","host":"127.0.0.1","port":32222,"username":"%s@%s","identityFile":"%s","identitiesOnly":true}},"userData":{"provider":"orbstack","machine":"%s"}}\\n\' "$(esc "$ORCA_REPO_PATH")" "$(esc "${POD_WORKSPACE_NAME:-$name}")" "$(esc "$user")" "$name" "$(esc "$HOME/.orbstack/ssh/id_ed25519")" "$name"'
 ]
 
 /** Same lifecycle as ~/.local/share/orca-native/recipes/orbstack-ubuntu.json, minus the git-only path check. */

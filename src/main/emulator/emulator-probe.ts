@@ -5,7 +5,7 @@ import { join } from 'node:path'
 // Diagnostic probes for emulator bring-up. They are opt-in because command
 // params can include typed text, package names, and local paths.
 export const EMULATOR_PROBE_LOG = join(tmpdir(), 'orca-android-emu-probe.log')
-const EMULATOR_PROBE_ENABLED = process.env.ORCA_EMULATOR_PROBE === '1'
+const EMULATOR_PROBE_ENABLED = process.env.POD_EMULATOR_PROBE === '1'
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error) {

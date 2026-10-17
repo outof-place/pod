@@ -105,7 +105,7 @@ export function registerTelemetryHandlers(store: Store): void {
     return setOptIn(via, optedIn)
   })
 
-  // Read-only getter: lets the Privacy pane see env-var blocks (DO_NOT_TRACK/ORCA_TELEMETRY_DISABLED/CI), which are main-side state the renderer can't read.
+  // Read-only getter: lets the Privacy pane see env-var blocks (DO_NOT_TRACK/POD_TELEMETRY_DISABLED/CI), which are main-side state the renderer can't read.
   ipcMain.handle('telemetry:getConsentState', (): ConsentState => {
     if (!storeRef) {
       // Fail closed: no store means we can't honor the stored preference, so surface pending_banner, not a misleading 'enabled'.

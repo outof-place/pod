@@ -59,7 +59,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       // Why: emit `{}` first so Gemini never stalls parsing stdout, even if the guards below exit early.
       'echo {}',
       // Why: source the endpoint file so a surviving PTY reaches the current server. See claude/hook-service.ts.
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      'if defined POD_AGENT_HOOK_ENDPOINT if exist "%POD_AGENT_HOOK_ENDPOINT%" call "%POD_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookPostCommand('gemini'),
       'exit /b 0',
@@ -75,25 +75,25 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('gemini'),
     // Why: source refreshes endpoint coords so a PTY surviving an Orca restart keeps reporting. See claude/hook-service.ts.
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    'if [ -n "$POD_AGENT_HOOK_ENDPOINT" ] && [ -r "$POD_AGENT_HOOK_ENDPOINT" ]; then',
+    '  . "$POD_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    'if [ -z "$POD_AGENT_HOOK_PORT" ] || [ -z "$POD_AGENT_HOOK_TOKEN" ] || [ -z "$POD_PANE_KEY" ]; then',
     '  spool_hook_event',
     '  exit 0',
     'fi',
     // Why: worktreeId embeds a path, so post form fields, not hand-built JSON that breaks on quotes/newlines.
     // Why: pipe payload via curl stdin (`payload@-`) so large tool output stays off the command line (EDR false positives).
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/gemini" \\',
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${POD_AGENT_HOOK_PORT}/hook/gemini" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    '  -H "X-Orca-Agent-Hook-Token: ${POD_AGENT_HOOK_TOKEN}" \\',
+    '  --data-urlencode "paneKey=${POD_PANE_KEY}" \\',
+    '  --data-urlencode "tabId=${POD_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${POD_AGENT_LAUNCH_TOKEN}" \\',
+    '  --data-urlencode "worktreeId=${POD_WORKTREE_ID}" \\',
+    '  --data-urlencode "env=${POD_AGENT_HOOK_ENV}" \\',
+    '  --data-urlencode "version=${POD_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || spool_hook_event',
     'exit 0',
     ''
@@ -206,7 +206,7 @@ export class GeminiHookService {
   // POSIX-only remote install mirroring ClaudeHookService.installRemote; the managed script/JSON shape must match local install() or remote panes report a different status.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.gemini/settings.json`
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/gemini-hook.sh`
+    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.pod/agent-hooks/gemini-hook.sh`
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
       if (!config) {

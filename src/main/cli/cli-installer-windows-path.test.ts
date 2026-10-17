@@ -61,11 +61,11 @@ describe('CliInstaller', () => {
     expect(userPath).toContain(join(fixture.root, 'Programs', 'Orca', 'bin'))
 
     const wrapperContent = await readFile(installPath, 'utf8')
-    expect(wrapperContent).toContain('ORCA_LAUNCHER=')
+    expect(wrapperContent).toContain('POD_LAUNCHER=')
     expect(wrapperContent).toContain('orca.cmd')
     const launcherContent = await readFile(installed.launcherPath as string, 'utf8')
-    expect(launcherContent).toContain(`set "ORCA_USER_DATA_PATH=${fixture.userDataPath}"`)
-    expect(launcherContent).toContain('set "ORCA_APP_EXECUTABLE=%ELECTRON%"')
+    expect(launcherContent).toContain(`set "POD_USER_DATA_PATH=${fixture.userDataPath}"`)
+    expect(launcherContent).toContain('set "POD_APP_EXECUTABLE=%ELECTRON%"')
 
     const removed = await installer.remove()
     expect(removed.state).toBe('not_installed')

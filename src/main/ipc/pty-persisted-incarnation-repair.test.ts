@@ -135,9 +135,9 @@ describe('registerPtyHandlers', () => {
       tabId,
       leafId,
       env: {
-        ORCA_PANE_KEY: paneKey,
-        ORCA_TAB_ID: tabId,
-        ORCA_WORKTREE_ID: worktreeId
+        POD_PANE_KEY: paneKey,
+        POD_TAB_ID: tabId,
+        POD_WORKTREE_ID: worktreeId
       }
     }
 
@@ -336,9 +336,9 @@ describe('registerPtyHandlers', () => {
         tabId,
         leafId,
         env: {
-          ORCA_PANE_KEY: paneKey,
-          ORCA_TAB_ID: tabId,
-          ORCA_WORKTREE_ID: worktreeId
+          POD_PANE_KEY: paneKey,
+          POD_TAB_ID: tabId,
+          POD_WORKTREE_ID: worktreeId
         }
       })
 
@@ -485,9 +485,9 @@ describe('registerPtyHandlers', () => {
         tabId,
         leafId,
         env: {
-          ORCA_PANE_KEY: paneKey,
-          ORCA_TAB_ID: tabId,
-          ORCA_WORKTREE_ID: worktreeId
+          POD_PANE_KEY: paneKey,
+          POD_TAB_ID: tabId,
+          POD_WORKTREE_ID: worktreeId
         }
       })
     ).rejects.toThrow('terminal_pane_owner_unverified')

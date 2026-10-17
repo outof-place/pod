@@ -19,10 +19,10 @@ async function rootWithActiveChild(): Promise<ReturnType<typeof createTestStore>
   const harness = createAgentStatusExtensionHarness({
     kind: 'omp',
     env: {
-      ORCA_PANE_KEY: PANE,
-      ORCA_WORKTREE_ID: 'wt-1',
-      ORCA_AGENT_HOOK_VERSION: '1',
-      ORCA_AGENT_HOOK_ENV: 'production'
+      POD_PANE_KEY: PANE,
+      POD_WORKTREE_ID: 'wt-1',
+      POD_AGENT_HOOK_VERSION: '1',
+      POD_AGENT_HOOK_ENV: 'production'
     },
     fetchImpl: async (_url, init) => {
       const event = normalizeHookPayload(

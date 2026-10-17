@@ -19,10 +19,10 @@ function restoredEnvironment(
 ): Record<string, string | undefined> {
   const copy = { ...environment }
   managedAccounts.restoreOriginalEnvironment(copy)
-  delete copy.ORCA_DATA_ACCOUNT_PROVIDER
-  delete copy.ORCA_DATA_ACCOUNT_DATA_HOME
-  delete copy.ORCA_DATA_ACCOUNT_STATE_HOME
-  delete copy.ORCA_DATA_ACCOUNT_ORIGINAL_ENV
+  delete copy.POD_DATA_ACCOUNT_PROVIDER
+  delete copy.POD_DATA_ACCOUNT_DATA_HOME
+  delete copy.POD_DATA_ACCOUNT_STATE_HOME
+  delete copy.POD_DATA_ACCOUNT_ORIGINAL_ENV
   return copy
 }
 

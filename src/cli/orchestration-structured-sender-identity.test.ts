@@ -2,7 +2,7 @@
  * The env-handle path, with NO `--from`.
  *
  * Every other orchestration CLI test passes `--from term_coord` explicitly, so the resolver a real
- * worker actually goes through — `ORCA_TERMINAL_HANDLE` plus `validateEnvHandle` — was never
+ * worker actually goes through — `POD_TERMINAL_HANDLE` plus `validateEnvHandle` — was never
  * exercised. That is why twelve coordinator verbs could fail for a structured worker while the
  * whole suite stayed green, and why the worker's own preamble (which tells it to run these with no
  * `--from`) failed on its first line.
@@ -99,9 +99,9 @@ describe('a structured worker running orchestration commands as itself', () => {
     async ({ argv, method }) => {
       // The defect this pins: the sender resolver validated the env handle with `terminal.show`, a
       // PTY verb that misses for a structured worker and answers `terminal_handle_stale`. The pane
-      // remint that would have recovered it needs `ORCA_PANE_KEY`, which a structured child
+      // remint that would have recovered it needs `POD_PANE_KEY`, which a structured child
       // deliberately does not carry, so the command died on `no_active_sender_terminal`.
-      process.env.ORCA_TERMINAL_HANDLE = STRUCTURED_HANDLE
+      process.env.POD_TERMINAL_HANDLE = STRUCTURED_HANDLE
       answerCalls()
       vi.spyOn(console, 'log').mockImplementation(() => {})
       await expect(main(argv)).resolves.not.toThrow()
@@ -114,7 +114,7 @@ describe('a structured worker running orchestration commands as itself', () => {
   )
 
   it('sends the structured handle as the sender, not a guessed sibling', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = STRUCTURED_HANDLE
+    process.env.POD_TERMINAL_HANDLE = STRUCTURED_HANDLE
     answerCalls()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     await main(['orchestration', 'run-create', '--objective', 'x'])
@@ -123,9 +123,9 @@ describe('a structured worker running orchestration commands as itself', () => {
   })
 
   it('still refuses a handle the runtime reports dead, with no pane key to remint from', async () => {
-    // The invariant the fix must not break: a stale `ORCA_TERMINAL_HANDLE` in a long-lived shell
+    // The invariant the fix must not break: a stale `POD_TERMINAL_HANDLE` in a long-lived shell
     // must keep failing rather than being baked into a coordinator preamble.
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale'
+    process.env.POD_TERMINAL_HANDLE = 'term_stale'
     callMock.mockImplementation(async (method: string) => {
       if (method === 'terminal.resolveIdentity') {
         return {

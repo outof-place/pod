@@ -9,7 +9,7 @@ import { MANAGED_DATA_ACCOUNT_FISH_RESTORE } from '../shared/managed-data-accoun
 import type { ShellWrapperFile } from './shell-wrapper-file-writer'
 
 /** Exactly what Orca prepended, so the snippet can remove that and nothing else. */
-export const FISH_XDG_DATA_DIRS_PREFIX_ENV = 'ORCA_FISH_XDG_DATA_DIRS_PREFIX'
+export const FISH_XDG_DATA_DIRS_PREFIX_ENV = 'POD_FISH_XDG_DATA_DIRS_PREFIX'
 
 // Why: the XDG spec default, which fish 4.7+ also scans when XDG_DATA_DIRS is unset or empty.
 const XDG_DATA_DIRS_DEFAULT = '/usr/local/share:/usr/share'

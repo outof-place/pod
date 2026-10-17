@@ -102,7 +102,7 @@ export function createPtyShellLaunchPlan(
     }
     if (
       pathWin32.basename(shellPath).toLowerCase() === 'cmd.exe' &&
-      env.ORCA_CODEX_LAUNCH_PREFLIGHT
+      env.POD_CODEX_LAUNCH_PREFLIGHT
     ) {
       env[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
     }
@@ -127,7 +127,7 @@ export function createPtyShellLaunchPlan(
         resolveSafePtyDefaultCwd(),
         resolvedWslContext,
         opts.command,
-        env.ORCA_CODEX_LAUNCH_PREFLIGHT
+        env.POD_CODEX_LAUNCH_PREFLIGHT
       )
       shellArgs = resolved.shellArgs
       spawnCwd = resolved.effectiveCwd
@@ -143,11 +143,11 @@ export function createPtyShellLaunchPlan(
         const launchWslDistro = resolvedWslContext?.distro
         if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {
           delete env.CODEX_HOME
-          delete env.ORCA_CODEX_HOME
+          delete env.POD_CODEX_HOME
         } else {
           env.CODEX_HOME = codexHomeWslInfo.linuxPath
-          env.ORCA_CODEX_HOME = codexHomeWslInfo.linuxPath
-          addWslEnvKeys(env, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
+          env.POD_CODEX_HOME = codexHomeWslInfo.linuxPath
+          addWslEnvKeys(env, ['CODEX_HOME', 'POD_CODEX_HOME'])
           if (!launchWslDistro) {
             const resolved = resolveWindowsShellLaunchArgs(
               shellPath,
@@ -155,7 +155,7 @@ export function createPtyShellLaunchPlan(
               resolveSafePtyDefaultCwd(),
               { distro: codexHomeWslInfo.distro },
               opts.command,
-              env.ORCA_CODEX_LAUNCH_PREFLIGHT
+              env.POD_CODEX_LAUNCH_PREFLIGHT
             )
             shellArgs = resolved.shellArgs
             spawnCwd = resolved.effectiveCwd
@@ -166,9 +166,9 @@ export function createPtyShellLaunchPlan(
         }
       } else if (isHostCodexHomeForWsl(env.CODEX_HOME)) {
         delete env.CODEX_HOME
-        delete env.ORCA_CODEX_HOME
+        delete env.POD_CODEX_HOME
       } else if (env.CODEX_HOME) {
-        addWslEnvKeys(env, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
+        addWslEnvKeys(env, ['CODEX_HOME', 'POD_CODEX_HOME'])
       }
       if (env.CLAUDE_CONFIG_DIR) {
         addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
@@ -181,7 +181,7 @@ export function createPtyShellLaunchPlan(
       }
     } else if (codexHomeWslInfo || isWslCodexHomeForHost(env.CODEX_HOME)) {
       delete env.CODEX_HOME
-      delete env.ORCA_CODEX_HOME
+      delete env.POD_CODEX_HOME
     }
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
       addOrcaWslInteropEnv(env)
@@ -204,7 +204,7 @@ export function createPtyShellLaunchPlan(
           startupCommandDelivery: opts.startupCommandDelivery,
           shellPath
         }))
-    delete env.ORCA_SHELL_FEATURES
+    delete env.POD_SHELL_FEATURES
     const userShellArgs = !opts.command && !opts.launchAgent ? opts.terminalShellArgs : undefined
     const shellLaunch = getShellLaunchConfig(
       shellPath,

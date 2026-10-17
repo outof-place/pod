@@ -2,7 +2,7 @@
  * The orchestration identity — and the CLI reachability — a structured session's own child needs to
  * speak for itself. Both providers' native launches (Claude, Codex) build their child env here.
  *
- * Every structured session carries `ORCA_AGENT_SESSION_ID`, the id Orca minted for it — never the
+ * Every structured session carries `POD_AGENT_SESSION_ID`, the id Orca minted for it — never the
  * provider's, which rotates on `/clear`. The CLI sends it as the caller, so a bare
  * `orca orchestration check` acts as this session instead of guessing a terminal: with no pane of
  * its own, every guess landed on a sibling, and a destructive `check` consumed that sibling's mail.
@@ -18,24 +18,24 @@
  * so it never claims GNOME Orca's /usr/bin/orca (stablyai/orca#7904), and on packaged macOS/Windows
  * the bundled launcher is reachable only from the app's own resources dir.
  *
- * `ORCA_CLI_COMMAND` names that same launcher by absolute path, because a provider can run each
+ * `POD_CLI_COMMAND` names that same launcher by absolute path, because a provider can run each
  * command in a login shell (Codex runs `zsh -lc`) whose profile rebuilds PATH and puts a global
  * install ahead of this app's. A bare `orca` that reaches another install still acts as this
- * session: any current CLI sends the injected id and dials the instance `ORCA_USER_DATA_PATH` pins
+ * session: any current CLI sends the injected id and dials the instance `POD_USER_DATA_PATH` pins
  * below, and a CLI that predates the id refuses on the marker. When no launcher resolves the key
  * is omitted rather than naming a bare `orca`: on Linux that is GNOME's screen reader, and an
  * inherited value names another app.
  *
- * `ORCA_USER_DATA_PATH` pins this instance beside the identity, so any current CLI — the session's
+ * `POD_USER_DATA_PATH` pins this instance beside the identity, so any current CLI — the session's
  * own or a global one — dials the Orca that minted the id instead of the production default.
  *
- * Deliberately NOT `ORCA_PANE_KEY`. Claude structured sessions run hooks, and a pane key in their
+ * Deliberately NOT `POD_PANE_KEY`. Claude structured sessions run hooks, and a pane key in their
  * environment starts flowing into hook-emitted agent-status payloads and the hook-attestation,
  * agent-row and mobile-projection pipelines, every one of which assumes a pane key names a live
  * PTY leaf. It would also open `selectExactWorkerProviderSession`, which is fail-closed today
  * precisely because a structured session emits no hook agent status.
  *
- * `ORCA_STRUCTURED_SESSION` stays beside the id for a CLI that predates it — one reached through a
+ * `POD_STRUCTURED_SESSION` stays beside the id for a CLI that predates it — one reached through a
  * global install when a shell rc resets PATH — which would otherwise guess a sibling's terminal;
  * such a CLI refuses on the marker. A current CLI checks the id first, so the marker never makes a
  * session with an id identity-less.
@@ -57,7 +57,7 @@ export function structuredSessionChildIdentityEnv(
   const identity = resolveStructuredWorkerIdentityForSession(sessionId, null)
   const env: Record<string, string> = {
     ...childEnv,
-    ...(identity ? { ORCA_TERMINAL_HANDLE: identity.handle } : {}),
+    ...(identity ? { POD_TERMINAL_HANDLE: identity.handle } : {}),
     [ORCA_AGENT_SESSION_ID_ENV]: sessionId,
     [ORCA_STRUCTURED_SESSION_ENV]: '1'
   }
@@ -70,24 +70,24 @@ export function structuredSessionChildIdentityEnv(
  * root to resolve, and inventing one would write a shim into the wrong directory.
  */
 function applyThisAppCli(env: Record<string, string>): void {
-  delete env.ORCA_CLI_COMMAND
+  delete env.POD_CLI_COMMAND
   if (!hasAppEnvironment()) {
     return
   }
   const app = getAppEnvironment()
   const userDataPath = app.getPath('userData')
   const isPackaged = app.isPackaged()
-  env.ORCA_USER_DATA_PATH = userDataPath
+  env.POD_USER_DATA_PATH = userDataPath
   const launcher = prependOrcaCliDirToChildPath(env, {
     isPackaged,
     userDataPath,
     resourcesPath: process.resourcesPath ?? null
   })
   if (launcher) {
-    env.ORCA_CLI_COMMAND = launcher
+    env.POD_CLI_COMMAND = launcher
   } else {
     console.warn(
-      "[structured-session] This app's CLI launcher did not resolve; the session's child has no ORCA_CLI_COMMAND."
+      "[structured-session] This app's CLI launcher did not resolve; the session's child has no POD_CLI_COMMAND."
     )
   }
 }

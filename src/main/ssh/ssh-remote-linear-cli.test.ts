@@ -200,8 +200,8 @@ describe('runRemoteOrcaCli Linear commands', () => {
       argv: ['linear', 'issue', '--current', '--full', '--json'],
       cwd: '/home/alice/remote-repo',
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote'
+        POD_TERMINAL_HANDLE: 'term_ssh',
+        POD_WORKTREE_ID: 'repo::remote'
       }
     })
 
@@ -229,7 +229,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['--json', 'linear', 'issue', 'ENG-123', '--full'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -250,7 +250,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'search', 'auth bug', '--limit', '5', '--workspace', 'all', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -272,12 +272,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const teamList = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'team', 'list', '--workspace', 'all', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
     const labels = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'team', 'labels', '--team', 'ENG', '--workspace', 'workspace-1', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
     const list = await runRemoteOrcaCli(runtime, {
       argv: [
@@ -294,7 +294,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
         '--json'
       ],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
     const projects = await runRemoteOrcaCli(runtime, {
       argv: [
@@ -310,7 +310,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
         '--json'
       ],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(teamList.exitCode).toBe(0)
@@ -350,7 +350,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'project', 'list', '--query', 'launch', '--workspace', 'workspace-1'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -395,8 +395,8 @@ describe('runRemoteOrcaCli Linear commands', () => {
       argv: ['linear', 'status', 'set', 'ENG-123', '--to', 'In Review', '--json'],
       cwd: '/home/alice/remote-repo',
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote'
+        POD_TERMINAL_HANDLE: 'term_ssh',
+        POD_WORKTREE_ID: 'repo::remote'
       }
     })
 
@@ -424,8 +424,8 @@ describe('runRemoteOrcaCli Linear commands', () => {
       argv: ['linear', 'priority', 'set', 'ENG-123', '--to', 'high', '--json'],
       cwd: '/home/alice/remote-repo',
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote'
+        POD_TERMINAL_HANDLE: 'term_ssh',
+        POD_WORKTREE_ID: 'repo::remote'
       }
     })
 
@@ -459,8 +459,8 @@ describe('runRemoteOrcaCli Linear commands', () => {
       ],
       cwd: '/home/alice/remote-repo',
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote'
+        POD_TERMINAL_HANDLE: 'term_ssh',
+        POD_WORKTREE_ID: 'repo::remote'
       }
     })
 
@@ -484,8 +484,8 @@ describe('runRemoteOrcaCli Linear commands', () => {
       argv: ['linear', 'create', '--title', 'Follow-up', '--team', 'ENG', '--project', 'project-1'],
       cwd: '/home/alice/remote-repo',
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote'
+        POD_TERMINAL_HANDLE: 'term_ssh',
+        POD_WORKTREE_ID: 'repo::remote'
       }
     })
 
@@ -501,8 +501,8 @@ describe('runRemoteOrcaCli Linear commands', () => {
       argv: ['linear', 'assignee', 'set', '--me', 'ENG-123', '--json'],
       cwd: '/home/alice/remote-repo',
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote'
+        POD_TERMINAL_HANDLE: 'term_ssh',
+        POD_WORKTREE_ID: 'repo::remote'
       }
     })
 
@@ -535,7 +535,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
         '--json'
       ],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -557,7 +557,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'comment', 'add', 'ENG-123', '--body', 'Done'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -571,7 +571,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'comment', 'add', '--current', '--body-file', '-', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' },
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' },
       stdin: 'line one\nline two\n'
     })
 
@@ -590,7 +590,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'comment', 'add', '--current', '--body-file', '-', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)
@@ -611,7 +611,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'comment', 'add', '--current', '--body-file', 'body.md', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)
@@ -632,7 +632,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'issue', '--current'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -671,7 +671,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'search', 'auth'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -698,7 +698,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'search', 'auth'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -716,7 +716,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'issue', '--current'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)
@@ -739,7 +739,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'comment', 'add', 'ENG-123', '--body', 'Done'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)
@@ -757,7 +757,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'issue', '--help'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -775,7 +775,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', '--help'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -797,12 +797,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const group = await runRemoteOrcaCli(runtime, {
       argv: ['help', 'linear'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
     const issue = await runRemoteOrcaCli(runtime, {
       argv: ['help', 'linear', 'issue'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(group.exitCode).toBe(0)
@@ -818,7 +818,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'issue', 'ENG-123', '--id', 'ENG-456', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)
@@ -839,7 +839,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'search', 'auth', '--limit', 'bad', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)
@@ -860,7 +860,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
     const result = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'issue', 'ENG-123', '--workspace', 'all', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)

@@ -215,7 +215,7 @@ describe('skill sharing CLI handlers', () => {
     ['a paired runtime', true, undefined]
   ])('rejects %s before any discovery or publish call', async (_label, isRemote, forwardedCwd) => {
     if (forwardedCwd) {
-      vi.stubEnv('ORCA_CLI_CWD', forwardedCwd)
+      vi.stubEnv('POD_CLI_CWD', forwardedCwd)
     }
     const call = vi.fn()
 

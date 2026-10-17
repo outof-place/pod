@@ -99,8 +99,8 @@ beforeEach(() => {
   // Why: worktree canonicalization realpaths, so /var vs /private/var would never match.
   fakeHomeDir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-codex-memo-home-')))
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-memo-user-data-'))
-  previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-  process.env.ORCA_USER_DATA_PATH = userDataDir
+  previousUserDataPath = process.env.POD_USER_DATA_PATH
+  process.env.POD_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(fakeHomeDir)
   getPathMock.mockImplementation((name: string) => {
     if (name === 'userData') {
@@ -119,9 +119,9 @@ afterEach(() => {
     process.env.CODEX_HOME = originalCodexHome
   }
   if (previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.POD_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    process.env.POD_USER_DATA_PATH = previousUserDataPath
   }
   vi.clearAllMocks()
 })

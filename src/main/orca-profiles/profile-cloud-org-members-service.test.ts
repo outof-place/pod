@@ -73,8 +73,8 @@ function runOperationDirectly(): void {
 }
 
 function configureCloudEnv(): void {
-  vi.stubEnv('ORCA_CLOUD_API_URL', 'https://orca-cloud.example')
-  vi.stubEnv('ORCA_CLOUD_CLIENT_ID', 'desktop-client')
+  vi.stubEnv('POD_CLOUD_API_URL', 'https://orca-cloud.example')
+  vi.stubEnv('POD_CLOUD_CLIENT_ID', 'desktop-client')
 }
 
 const roster: OrcaOrgMembersRoster = {
@@ -94,9 +94,9 @@ describe('Orca cloud org members service (configured)', () => {
     changeOrcaCloudOrgMemberRoleMock.mockReset()
     removeOrcaCloudOrgMemberMock.mockReset()
     vi.unstubAllEnvs()
-    vi.stubEnv('ORCA_CLOUD_DEV_AUTH', '')
-    vi.stubEnv('ORCA_CLOUD_API_URL', '')
-    vi.stubEnv('ORCA_CLOUD_CLIENT_ID', '')
+    vi.stubEnv('POD_CLOUD_DEV_AUTH', '')
+    vi.stubEnv('POD_CLOUD_API_URL', '')
+    vi.stubEnv('POD_CLOUD_CLIENT_ID', '')
   })
 
   afterEach(() => {
@@ -188,7 +188,7 @@ describe('Orca cloud org members service (dev auth)', () => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-org-members-dev-'))
     runWithFreshOrcaCloudSessionMock.mockReset()
     vi.unstubAllEnvs()
-    vi.stubEnv('ORCA_CLOUD_DEV_AUTH', '1')
+    vi.stubEnv('POD_CLOUD_DEV_AUTH', '1')
   })
 
   afterEach(() => {

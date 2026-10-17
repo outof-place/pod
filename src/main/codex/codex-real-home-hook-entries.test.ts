@@ -98,7 +98,7 @@ const orcaGroup = (command: string = frozen()): HookDefinition => ({
 })
 
 function olderBuildCommand(): string {
-  const script = join(home, '.orca', 'agent-hooks', 'codex-hook.sh')
+  const script = join(home, '.pod', 'agent-hooks', 'codex-hook.sh')
   return process.platform === 'win32' ? script : wrapPosixHookCommand(script)
 }
 
@@ -128,7 +128,7 @@ async function reconcile(
 ): Promise<'written' | 'unchanged'> {
   const hashes = options.hashes === undefined ? CODEX_HASHES : options.hashes
   if (options.userDataPath) {
-    vi.stubEnv('ORCA_USER_DATA_PATH', options.userDataPath)
+    vi.stubEnv('POD_USER_DATA_PATH', options.userDataPath)
   }
   // Why saved: the app's lookup holds the answer an earlier run wrote.
   memoizeCodexHookAnswer(
@@ -190,7 +190,7 @@ beforeEach(() => {
   mocks.beforeHooksJsonGuard = null
   mocks.hooksJsonWrites = 0
   vi.stubEnv('CODEX_HOME', '')
-  vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+  vi.stubEnv('POD_USER_DATA_PATH', userData)
 })
 
 afterEach(() => {
@@ -247,7 +247,7 @@ describe('reconcileRealHomeCodexHookEntries', () => {
   })
 
   it('never rewrites a newer build form or appends beside it', async () => {
-    const newer = `: orca-agent-hook-form=2; /bin/sh "\${HOME-}/.orca/agent-hooks/codex-hook.sh"`
+    const newer = `: orca-agent-hook-form=2; /bin/sh "\${HOME-}/.pod/agent-hooks/codex-hook.sh"`
     writeHooks({ hooks: { Stop: [orcaGroup(newer)] } })
 
     await reconcile()

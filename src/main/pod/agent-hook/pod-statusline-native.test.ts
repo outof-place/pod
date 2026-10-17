@@ -90,11 +90,11 @@ async function run(argv: string[], scenario: Case, tag: string): Promise<Run> {
   const tmp = mkdtempSync(join(dir, `${tag}-`))
   const env: Record<string, string> = { PATH: '/usr/bin:/bin', HOME: dir, TMPDIR: tmp }
   const vars = {
-    ORCA_AGENT_HOOK_PORT: String(port),
-    ORCA_AGENT_HOOK_TOKEN: 'tok-1',
-    ORCA_PANE_KEY: PANE,
-    ORCA_AGENT_HOOK_ENV: 'production',
-    ORCA_AGENT_HOOK_VERSION: '7',
+    POD_AGENT_HOOK_PORT: String(port),
+    POD_AGENT_HOOK_TOKEN: 'tok-1',
+    POD_PANE_KEY: PANE,
+    POD_AGENT_HOOK_ENV: 'production',
+    POD_AGENT_HOOK_VERSION: '7',
     CLAUDE_CONFIG_DIR: '/Users/e2e/.claude profiles/a',
     ...scenario.env
   }
@@ -104,13 +104,13 @@ async function run(argv: string[], scenario: Case, tag: string): Promise<Run> {
     }
   }
   if (scenario.endpoint !== undefined) {
-    env.ORCA_AGENT_HOOK_ENDPOINT = join(tmp, 'endpoint.env')
+    env.POD_AGENT_HOOK_ENDPOINT = join(tmp, 'endpoint.env')
     writeFileSync(
-      env.ORCA_AGENT_HOOK_ENDPOINT,
+      env.POD_AGENT_HOOK_ENDPOINT,
       scenario.endpoint.replaceAll('{port}', String(port))
     )
   }
-  const stamp = join(tmp, stampFileFor(env.ORCA_PANE_KEY ?? ''))
+  const stamp = join(tmp, stampFileFor(env.POD_PANE_KEY ?? ''))
   if (scenario.stamp !== undefined) {
     writeFileSync(stamp, scenario.stamp)
   }
@@ -142,9 +142,9 @@ const cases: Case[] = [
   { name: 'no rate_limits', payload: '{"cost":{"total_duration_ms":5000}}\n' },
   { name: 'rate_limits only inside a value', payload: '{"cwd":"/x/rate_limits"}\n' },
   { name: 'a background job', payload: timed('5000'), env: { CLAUDE_JOB_DIR: '/tmp/job' } },
-  { name: 'no port', payload: timed('5000'), env: { ORCA_AGENT_HOOK_PORT: undefined } },
-  { name: 'no token', payload: timed('5000'), env: { ORCA_AGENT_HOOK_TOKEN: undefined } },
-  { name: 'no pane', payload: timed('5000'), env: { ORCA_PANE_KEY: undefined } },
+  { name: 'no port', payload: timed('5000'), env: { POD_AGENT_HOOK_PORT: undefined } },
+  { name: 'no token', payload: timed('5000'), env: { POD_AGENT_HOOK_TOKEN: undefined } },
+  { name: 'no pane', payload: timed('5000'), env: { POD_PANE_KEY: undefined } },
   { name: 'a post', payload: `${timed('123456')}\n` },
   { name: 'trailing newlines', payload: `${timed('123456')}\n\n\n` },
   { name: 'no trailing newline', payload: timed('123456') },
@@ -155,14 +155,14 @@ const cases: Case[] = [
   {
     name: 'a numeric leaf with a safe tab',
     payload: timed('42000'),
-    env: { ORCA_PANE_KEY: 'tab.A_1:7' }
+    env: { POD_PANE_KEY: 'tab.A_1:7' }
   },
   {
     name: 'a numeric leaf with an unsafe tab',
     payload: timed('42000'),
-    env: { ORCA_PANE_KEY: 't/b:7' }
+    env: { POD_PANE_KEY: 't/b:7' }
   },
-  { name: 'a numeric key without a tab', payload: timed('42000'), env: { ORCA_PANE_KEY: '77' } },
+  { name: 'a numeric key without a tab', payload: timed('42000'), env: { POD_PANE_KEY: '77' } },
   { name: 'throttled', payload: timed('123456'), stamp: '120' },
   { name: 'past the interval', payload: timed('123456'), stamp: '100' },
   { name: 'exactly the interval', payload: timed('123456'), stamp: '108' },
@@ -183,12 +183,12 @@ const cases: Case[] = [
   {
     name: 'the endpoint file over a stale env',
     payload: timed('123456'),
-    env: { ORCA_AGENT_HOOK_PORT: '1', ORCA_AGENT_HOOK_TOKEN: 'stale' },
+    env: { POD_AGENT_HOOK_PORT: '1', POD_AGENT_HOOK_TOKEN: 'stale' },
     endpoint:
-      'ORCA_AGENT_HOOK_PORT={port}\nORCA_AGENT_HOOK_TOKEN=tok-2\nORCA_AGENT_HOOK_ENV=dev\nORCA_AGENT_HOOK_VERSION=8\n'
+      'POD_AGENT_HOOK_PORT={port}\nPOD_AGENT_HOOK_TOKEN=tok-2\nPOD_AGENT_HOOK_ENV=dev\nPOD_AGENT_HOOK_VERSION=8\n'
   },
   { name: 'no config dir', payload: timed('123456'), env: { CLAUDE_CONFIG_DIR: undefined } },
-  { name: 'a server that is down', payload: timed('123456'), env: { ORCA_AGENT_HOOK_PORT: '9' } }
+  { name: 'a server that is down', payload: timed('123456'), env: { POD_AGENT_HOOK_PORT: '9' } }
 ]
 
 describe.runIf(process.platform === 'darwin')('pod-agent-hook statusline', () => {
@@ -243,9 +243,9 @@ describe('the managed statusLine command', () => {
   it('execs the statusline copy, else the client, else the script, else drains stdin', () => {
     const command = podStatusLineCommand('claude-statusline.sh')
     expect(command).toBe(
-      'if [ -x "${HOME-}/.orca/agent-hooks/pod-agent-statusline" ]; then exec "${HOME-}/.orca/agent-hooks/pod-agent-statusline"; fi; ' +
-        'if [ -x "${HOME-}/.orca/agent-hooks/pod-agent-hook" ]; then exec "${HOME-}/.orca/agent-hooks/pod-agent-hook" statusline; fi; ' +
-        'if [ -f "${HOME-}/.orca/agent-hooks/claude-statusline.sh" ]; then exec /bin/sh "${HOME-}/.orca/agent-hooks/claude-statusline.sh"; fi; ' +
+      'if [ -x "${HOME-}/.pod/agent-hooks/pod-agent-statusline" ]; then exec "${HOME-}/.pod/agent-hooks/pod-agent-statusline"; fi; ' +
+        'if [ -x "${HOME-}/.pod/agent-hooks/pod-agent-hook" ]; then exec "${HOME-}/.pod/agent-hooks/pod-agent-hook" statusline; fi; ' +
+        'if [ -f "${HOME-}/.pod/agent-hooks/claude-statusline.sh" ]; then exec /bin/sh "${HOME-}/.pod/agent-hooks/claude-statusline.sh"; fi; ' +
         '{ command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :'
     )
   })
@@ -264,7 +264,7 @@ function setPlatform(platform: NodeJS.Platform): void {
 describe('installing the managed statusLine', () => {
   let home = ''
   let bundled = ''
-  const scriptPath = () => join(home, '.orca', 'agent-hooks', 'claude-statusline.sh')
+  const scriptPath = () => join(home, '.pod', 'agent-hooks', 'claude-statusline.sh')
   const native = podStatusLineCommand('claude-statusline.sh')
 
   function freshHome(): void {
@@ -284,13 +284,13 @@ describe('installing the managed statusLine', () => {
     freshHome()
     expect(podManagedStatusLineCommand({ agent: 'claude' }, scriptPath(), bundled)).toBe(native)
     for (const name of ['pod-agent-hook', 'pod-agent-statusline']) {
-      const installed = join(home, '.orca', 'agent-hooks', name)
+      const installed = join(home, '.pod', 'agent-hooks', name)
       expect(readFileSync(installed, 'utf8')).toBe(readFileSync(bundled, 'utf8'))
       expect(statSync(installed).mode & 0o777).toBe(0o755)
     }
     // Its own file, not a second name for the client's: the watcher reads one path per process.
-    expect(statSync(join(home, '.orca', 'agent-hooks', 'pod-agent-statusline')).ino).not.toBe(
-      statSync(join(home, '.orca', 'agent-hooks', 'pod-agent-hook')).ino
+    expect(statSync(join(home, '.pod', 'agent-hooks', 'pod-agent-statusline')).ino).not.toBe(
+      statSync(join(home, '.pod', 'agent-hooks', 'pod-agent-hook')).ino
     )
     const shell = getManagedCommand(scriptPath())
     expect(podManagedStatusLineCommand({ agent: 'openclaude' }, scriptPath(), bundled)).toBe(shell)

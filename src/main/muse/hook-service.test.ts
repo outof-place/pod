@@ -11,7 +11,7 @@ import { createAgentHookMemorySftp } from '../agent-hooks/agent-hook-memory-sftp
 // Why: getSharedManagedScriptPath() writes under homedir()/.orca and the
 // Muse config resolves via XDG_CONFIG_HOME ?? ~/.config/muse. Point HOME
 // at a temp dir and clear XDG_CONFIG_HOME so install/remove never touches the
-// real ~/.orca or ~/.config/muse. os.homedir() resolves $HOME on POSIX.
+// real ~/.pod or ~/.config/muse. os.homedir() resolves $HOME on POSIX.
 let home: string
 let originalHome: string | undefined
 let originalXdg: string | undefined
@@ -48,11 +48,11 @@ afterEach(() => {
 })
 
 const configPath = (): string => join(home, '.config', 'muse', 'settings.json')
-const managedHooksPath = (): string => join(home, '.orca', 'agent-hooks', 'muse-hooks.json')
+const managedHooksPath = (): string => join(home, '.pod', 'agent-hooks', 'muse-hooks.json')
 const scriptPath = (): string =>
   join(
     home,
-    '.orca',
+    '.pod',
     'agent-hooks',
     process.platform === 'win32' ? 'muse-hook.cmd' : 'muse-hook.sh'
   )
@@ -72,7 +72,7 @@ describe('MuseHookService', () => {
     const settings = parseMuseSettingsText(readFileSync(configPath(), 'utf-8'), 'test')
     expect(settings?.managed_hooks_path).toBe(managedHooksPath())
     expect(settings?.schema_version).toBe(1)
-    expect(settings?.managed_hooks_env_vars).toContain('ORCA_PANE_KEY')
+    expect(settings?.managed_hooks_env_vars).toContain('POD_PANE_KEY')
 
     const managedText = readFileSync(managedHooksPath(), 'utf-8')
     expect(managedText).toContain(process.platform === 'win32' ? 'muse-hook.cmd' : 'muse-hook.sh')
@@ -136,8 +136,8 @@ describe('MuseHookService', () => {
 
   it('treats malformed managed hook entries as absent instead of throwing', () => {
     mkdirSync(join(home, '.config', 'muse'), { recursive: true })
-    mkdirSync(join(home, '.orca', 'agent-hooks'), { recursive: true })
-    const managedPath = join(home, '.orca', 'agent-hooks', 'muse-hooks.json')
+    mkdirSync(join(home, '.pod', 'agent-hooks'), { recursive: true })
+    const managedPath = join(home, '.pod', 'agent-hooks', 'muse-hooks.json')
     writeFileSync(configPath(), JSON.stringify({ schema_version: 1 }))
     const service = new MuseHookService()
     expect(service.install().state).toBe('installed')
@@ -199,11 +199,11 @@ describe('MuseHookService', () => {
     const remote = createAgentHookMemorySftp()
     const service = new MuseHookService()
     expect((await service.installRemote(remote.sftp, '/home/alice smith')).state).toBe('installed')
-    const remoteHooksPath = '/home/alice smith/.orca/agent-hooks/muse-hooks.json'
+    const remoteHooksPath = '/home/alice smith/.pod/agent-hooks/muse-hooks.json'
     const installed = remote.fs.files.get(remoteHooksPath)
-    expect(installed).toContain('/home/alice smith/.orca/agent-hooks/muse-hook.sh')
+    expect(installed).toContain('/home/alice smith/.pod/agent-hooks/muse-hook.sh')
     expect(installed).not.toMatch(/powershell|EncodedCommand|muse-hook.cmd/)
-    expect(remote.fs.files.get('/home/alice smith/.orca/agent-hooks/muse-hook.sh')).toContain(
+    expect(remote.fs.files.get('/home/alice smith/.pod/agent-hooks/muse-hook.sh')).toContain(
       '#!/bin/sh'
     )
     await service.installRemote(remote.sftp, '/home/alice smith')

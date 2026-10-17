@@ -242,7 +242,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('passes caller terminal handle through worktree.create with cwd fallback', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_parent'
+    process.env.POD_TERMINAL_HANDLE = 'term_parent'
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
@@ -282,7 +282,7 @@ describe('orca cli worktree awareness', () => {
   it('marks every worktree.create as CLI-created even from an external shell', async () => {
     // Why: the sidebar badge/filter must catch hand-typed creates too, so the
     // provenance request is sent with no terminal handle rather than omitted.
-    delete process.env.ORCA_TERMINAL_HANDLE
+    delete process.env.POD_TERMINAL_HANDLE
     queueFixtures(
       callMock,
       okFixture('req_create_external', {

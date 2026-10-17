@@ -718,7 +718,7 @@ describe('worktree agent activation gate', () => {
   it.each([
     ['ssh:box@@pty-1', WORKTREE_ID],
     [`${WORKTREE_ID}@@legacy`, ''],
-    // A relay seeds worktreeId from the host's own ORCA_WORKTREE_ID, so a foreign value must not
+    // A relay seeds worktreeId from the host's own POD_WORKTREE_ID, so a foreign value must not
     // hide a session the minted id already claims for this workspace.
     [`${WORKTREE_ID}@@stale-env`, 'other-repo::/elsewhere']
   ])(

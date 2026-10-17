@@ -207,7 +207,7 @@ async function verifyNoOpWrites(scripts, home, payload) {
         withoutOrcaEnvironment({
           HOME: home,
           PATH: path,
-          ORCA_AGENT_HOOK_ENDPOINT: ''
+          POD_AGENT_HOOK_ENDPOINT: ''
         })
       )
       assertSuccessfulWrite(result, [script.fileName, ' no-op'].join(''))
@@ -241,10 +241,10 @@ async function verifyClaudeDevinSkip(scripts, home, payload) {
       withoutOrcaEnvironment({
         DEVIN_PROJECT_DIR: join(home, 'devin-project'),
         HOME: home,
-        ORCA_AGENT_HOOK_ENDPOINT: '',
-        ORCA_AGENT_HOOK_PORT: String(address.port),
-        ORCA_AGENT_HOOK_TOKEN: 'electron-verification-token',
-        ORCA_PANE_KEY: 'electron-verification-pane'
+        POD_AGENT_HOOK_ENDPOINT: '',
+        POD_AGENT_HOOK_PORT: String(address.port),
+        POD_AGENT_HOOK_TOKEN: 'electron-verification-token',
+        POD_PANE_KEY: 'electron-verification-pane'
       })
     )
     assertSuccessfulWrite(result, 'Claude Devin-import skip')
@@ -274,16 +274,16 @@ async function verifyForwarding(scripts, home, payload) {
         payload,
         withoutOrcaEnvironment({
           HOME: home,
-          ORCA_AGENT_HOOK_ENDPOINT: '',
-          ORCA_AGENT_HOOK_PORT: String(address.port),
-          ORCA_AGENT_HOOK_TOKEN: 'electron-verification-token',
-          ORCA_PANE_KEY: 'electron-verification-pane',
-          ORCA_TAB_ID: 'electron-verification-tab',
-          ORCA_WORKTREE_ID: 'electron-verification-worktree',
-          ORCA_AGENT_HOOK_ENV: 'test',
-          ORCA_AGENT_HOOK_VERSION: '1',
-          ORCA_ANTIGRAVITY_EVENT: 'PostInvocation',
-          ORCA_COPILOT_HOOK_EVENT: 'PostToolUse'
+          POD_AGENT_HOOK_ENDPOINT: '',
+          POD_AGENT_HOOK_PORT: String(address.port),
+          POD_AGENT_HOOK_TOKEN: 'electron-verification-token',
+          POD_PANE_KEY: 'electron-verification-pane',
+          POD_TAB_ID: 'electron-verification-tab',
+          POD_WORKTREE_ID: 'electron-verification-worktree',
+          POD_AGENT_HOOK_ENV: 'test',
+          POD_AGENT_HOOK_VERSION: '1',
+          POD_ANTIGRAVITY_EVENT: 'PostInvocation',
+          POD_COPILOT_HOOK_EVENT: 'PostToolUse'
         })
       )
       assertSuccessfulWrite(result, [script.fileName, ' forwarding'].join(''))

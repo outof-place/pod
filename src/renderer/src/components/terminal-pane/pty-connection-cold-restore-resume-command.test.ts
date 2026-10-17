@@ -222,11 +222,11 @@ describe('connectPanePty', () => {
           commandDelivery: 'provider',
           startupCommandDelivery: 'shell-ready',
           env: expect.objectContaining({
-            ORCA_PANE_KEY: paneKey,
-            ORCA_TAB_ID: 'tab-1',
-            ORCA_WORKTREE_ID: 'wt-1',
-            ORCA_WORKSPACE_ID: 'wt-1',
-            ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+            POD_PANE_KEY: paneKey,
+            POD_TAB_ID: 'tab-1',
+            POD_WORKTREE_ID: 'wt-1',
+            POD_WORKSPACE_ID: 'wt-1',
+            POD_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
           })
         })
       )
@@ -322,8 +322,8 @@ describe('connectPanePty', () => {
         expect.objectContaining({
           command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
           env: expect.objectContaining({
-            ORCA_PANE_KEY: paneKey,
-            ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+            POD_PANE_KEY: paneKey,
+            POD_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
           })
         })
       )

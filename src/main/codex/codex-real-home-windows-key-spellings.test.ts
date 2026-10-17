@@ -38,7 +38,7 @@ beforeEach(() => {
   root = realpathSync.native(mkdtempSync(join(tmpdir(), 'orca-real-home-windows-keys-')))
   mkdirSync(join(root, 'home', '.codex'), { recursive: true })
   mkdirSync(join(root, 'user-data'))
-  vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
+  vi.stubEnv('POD_USER_DATA_PATH', join(root, 'user-data'))
   homedirMock.mockReturnValue(join(root, 'home'))
 })
 

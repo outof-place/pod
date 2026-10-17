@@ -115,8 +115,8 @@ describe('RuntimeClient module-graph deferral', () => {
   it.each(SUPPRESSED_GROUPS)(
     'constructs exactly %s expected clients, with null remote selection',
     async (_name, argv, constructs) => {
-      vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
-      vi.stubEnv('ORCA_ENVIRONMENT', 'some-environment')
+      vi.stubEnv('POD_PAIRING_CODE', 'pairing-code')
+      vi.stubEnv('POD_ENVIRONMENT', 'some-environment')
       getCliStatusMock.mockResolvedValue({
         result: { runtime: { reachable: false }, app: { running: false } }
       })
@@ -153,8 +153,8 @@ describe('RuntimeClient module-graph deferral', () => {
   it.each(SUPPRESSED_GROUPS.map(([name, argv]) => [name, argv] as const))(
     'forwards null remote selection to the client %s would build',
     async (_name, argv) => {
-      vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
-      vi.stubEnv('ORCA_ENVIRONMENT', 'some-environment')
+      vi.stubEnv('POD_PAIRING_CODE', 'pairing-code')
+      vi.stubEnv('POD_ENVIRONMENT', 'some-environment')
       const dispatchSpy = vi.spyOn(dispatchModule, 'dispatch').mockResolvedValue(undefined)
       try {
         await main(argv, '/tmp/repo')
@@ -176,7 +176,7 @@ describe('RuntimeClient module-graph deferral', () => {
   // (not `null`) for a non-suppressed group, or the assertion above would pass
   // for a build that suppressed EVERY command's env fallback.
   it('forwards undefined remote selection for a non-suppressed group', async () => {
-    vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
+    vi.stubEnv('POD_PAIRING_CODE', 'pairing-code')
     const dispatchSpy = vi.spyOn(dispatchModule, 'dispatch').mockResolvedValue(undefined)
     try {
       await main(['worktree', 'list'], '/tmp/repo')

@@ -30,10 +30,10 @@ vi.mock('../../managed-data-accounts/service', async (importOriginal) => {
 beforeEach(() => {
   for (const key of [
     ...MANAGED_DATA_ACCOUNT_BASELINE_ENV_KEYS,
-    'ORCA_DATA_ACCOUNT_DATA_HOME',
-    'ORCA_DATA_ACCOUNT_STATE_HOME',
-    'ORCA_DATA_ACCOUNT_PROVIDER',
-    'ORCA_DATA_ACCOUNT_ORIGINAL_ENV'
+    'POD_DATA_ACCOUNT_DATA_HOME',
+    'POD_DATA_ACCOUNT_STATE_HOME',
+    'POD_DATA_ACCOUNT_PROVIDER',
+    'POD_DATA_ACCOUNT_ORIGINAL_ENV'
   ]) {
     vi.stubEnv(key, undefined)
   }
@@ -77,9 +77,9 @@ describe.each(['renderer', 'runtime'])('%s managed account daemon environment', 
       XDG_DATA_HOME: join(tmpdir(), 'daemon-data'),
       XDG_STATE_HOME: join(tmpdir(), 'daemon-state'),
       OPENCODE_DB: 'daemon.db',
-      ORCA_DATA_ACCOUNT_DATA_HOME: join(tmpdir(), 'future-profile'),
-      ORCA_DATA_ACCOUNT_PROVIDER: 'future-provider',
-      ORCA_DATA_ACCOUNT_ORIGINAL_ENV: '{"future":"opaque"}',
+      POD_DATA_ACCOUNT_DATA_HOME: join(tmpdir(), 'future-profile'),
+      POD_DATA_ACCOUNT_PROVIDER: 'future-provider',
+      POD_DATA_ACCOUNT_ORIGINAL_ENV: '{"future":"opaque"}',
       ORCA_DATA_ACCOUNT_FUTURE_METADATA: 'opaque-metadata'
     }
     for (const [key, value] of Object.entries(inherited)) {
@@ -156,10 +156,10 @@ describe.each(['renderer', 'runtime'])('%s managed account daemon environment', 
       vi.stubEnv(key, child[key])
     }
     for (const key of [
-      'ORCA_DATA_ACCOUNT_DATA_HOME',
-      'ORCA_DATA_ACCOUNT_STATE_HOME',
-      'ORCA_DATA_ACCOUNT_PROVIDER',
-      'ORCA_DATA_ACCOUNT_ORIGINAL_ENV'
+      'POD_DATA_ACCOUNT_DATA_HOME',
+      'POD_DATA_ACCOUNT_STATE_HOME',
+      'POD_DATA_ACCOUNT_PROVIDER',
+      'POD_DATA_ACCOUNT_ORIGINAL_ENV'
     ]) {
       vi.stubEnv(key, child[key])
     }
@@ -172,7 +172,7 @@ describe.each(['renderer', 'runtime'])('%s managed account daemon environment', 
       envToDelete: systemDeletions
     })
     expect(hash(systemChild.OPENCODE_AUTH_CONTENT) === hash(baseline)).toBe(true)
-    expect(systemChild.ORCA_DATA_ACCOUNT_DATA_HOME).toBeUndefined()
+    expect(systemChild.POD_DATA_ACCOUNT_DATA_HOME).toBeUndefined()
     restoreManagedDataAccountEnvironment(copied)
     expect(hash(copied.OPENCODE_AUTH_CONTENT) === hash(baseline)).toBe(true)
   })

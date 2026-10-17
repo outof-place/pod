@@ -30,16 +30,16 @@ export function installOpenCodeStartupPromptForLaunch(
   sourceEnvironment: NodeJS.ProcessEnv = { ...process.env, ...env }
 ): boolean {
   const nonce = env[OPENCODE_STARTUP_PROMPT_NONCE_ENV]
-  if (!nonce || env.ORCA_OPENCODE_PLUGIN_API !== 'v2') {
+  if (!nonce || env.POD_OPENCODE_PLUGIN_API !== 'v2') {
     return false
   }
   const source =
     resolveOpenCodeSourceConfigDir(env, sourceEnvironment) ||
     resolveOpenCodeConfigDirectory(sourceEnvironment)
   const statusOwner =
-    env.ORCA_OPENCODE_AGENT === 'opencode2' ? openCode2HookService : openCodeHookService
+    env.POD_OPENCODE_AGENT === 'opencode2' ? openCode2HookService : openCodeHookService
   const existing =
-    env.OPENCODE_CONFIG_DIR && env.OPENCODE_CONFIG_DIR === env.ORCA_OPENCODE_CONFIG_DIR
+    env.OPENCODE_CONFIG_DIR && env.OPENCODE_CONFIG_DIR === env.POD_OPENCODE_CONFIG_DIR
       ? installer.installIntoSourceOverlay(env.OPENCODE_CONFIG_DIR, source, statusOwner)
       : 'unmatched'
   const overlay =
@@ -66,11 +66,11 @@ export function installOpenCodeStartupPromptForLaunch(
     return false
   }
   env.OPENCODE_CONFIG_DIR = overlay
-  env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = source
+  env.POD_OPENCODE_SOURCE_CONFIG_DIR = source
   if (restoreAfterShellStartup || existing === 'installed') {
-    env.ORCA_OPENCODE_CONFIG_DIR = overlay
+    env.POD_OPENCODE_CONFIG_DIR = overlay
   } else {
-    delete env.ORCA_OPENCODE_CONFIG_DIR
+    delete env.POD_OPENCODE_CONFIG_DIR
   }
   return true
 }

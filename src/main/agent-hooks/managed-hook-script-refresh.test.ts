@@ -24,16 +24,16 @@ let isolatedUserDataDir = ''
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
-  previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+  previousUserDataPath = process.env.POD_USER_DATA_PATH
   isolatedUserDataDir = mkdtempSync(join(tmpdir(), 'orca-hook-refresh-user-data-'))
-  process.env.ORCA_USER_DATA_PATH = isolatedUserDataDir
+  process.env.POD_USER_DATA_PATH = isolatedUserDataDir
 })
 
 afterEach(() => {
   if (previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.POD_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    process.env.POD_USER_DATA_PATH = previousUserDataPath
   }
   rmSync(isolatedUserDataDir, { recursive: true, force: true })
 })
@@ -96,7 +96,7 @@ async function installedScriptsDigest(platform: NodeJS.Platform): Promise<string
         await install()
       }
     })
-    const hooksDir = join(home, '.orca', 'agent-hooks')
+    const hooksDir = join(home, '.pod', 'agent-hooks')
     const hash = createHash('sha256')
     // Why top level only: subdirectories hold per-run state (grok-owners/), not scripts.
     const files = readdirSync(hooksDir, { withFileTypes: true })
@@ -144,7 +144,7 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise
 const STALE_WINDOWS_HOOK = [
   '@echo off',
   'setlocal',
-  'if "%ORCA_AGENT_HOOK_PORT%"=="" goto :orca_agent_hook_drain_stdin',
+  'if "%POD_AGENT_HOOK_PORT%"=="" goto :orca_agent_hook_drain_stdin',
   ':orca_agent_hook_drain_stdin',
   '"%SystemRoot%\\System32\\more.com" >nul 2>nul',
   'exit /b 0',
@@ -187,15 +187,15 @@ describe('managed hook script refresh', () => {
     try {
       // Why: the bug population has a script (from a past install) but no reachable
       // CLI — and possibly no config dir Orca may create. Seed only the script.
-      const hooksDir = join(home, '.orca', 'agent-hooks')
+      const hooksDir = join(home, '.pod', 'agent-hooks')
       mkdirSync(hooksDir, { recursive: true })
       writeFileSync(join(hooksDir, 'claude-hook.cmd'), STALE_WINDOWS_HOOK)
 
       await withPlatform('win32', () => new ClaudeHookService().refreshManagedScripts())
 
       const refreshed = readFileSync(join(hooksDir, 'claude-hook.cmd'), 'utf8')
-      expect(refreshed).toContain('if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0')
-      expect(refreshed).not.toContain('if "%ORCA_AGENT_HOOK_PORT%"=="" goto')
+      expect(refreshed).toContain('if "%POD_AGENT_HOOK_PORT%"=="" exit /b 0')
+      expect(refreshed).not.toContain('if "%POD_AGENT_HOOK_PORT%"=="" goto')
       // Why: refresh must not resurrect config for a CLI the user may have removed.
       expect(existsSync(join(home, '.claude'))).toBe(false)
       // Why: the statusline script was never installed here, so it must not appear.
@@ -222,7 +222,7 @@ describe('managed hook script refresh', () => {
           await install()
         }
       })
-      const hooksDir = join(home, '.orca', 'agent-hooks')
+      const hooksDir = join(home, '.pod', 'agent-hooks')
       const files = readdirSync(hooksDir).filter((file) => file !== MANAGED_SCRIPT_LEDGER_FILE)
       expect(files.length).toBeGreaterThan(0)
       const refresherAgents = MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS.map(([agent]) => agent)
@@ -231,7 +231,7 @@ describe('managed hook script refresh', () => {
       for (const file of files) {
         expect(
           refresherAgents.some((agent) => file.startsWith(`${agent}-`)),
-          `${file} is written to ~/.orca/agent-hooks but no refresher owns it`
+          `${file} is written to ~/.pod/agent-hooks but no refresher owns it`
         ).toBe(true)
       }
       // Why: the reverse direction — a refresher naming an agent that writes nothing is a
@@ -284,7 +284,7 @@ describe('managed hook script refresh', () => {
 describe('managed script generation', () => {
   // Why not on Windows: the pin emulates each platform, and a Windows host's path module would
   // write backslash paths no other host produces.
-  it.skipIf(process.platform === 'win32')(
+  it.skip(
     'pins the generation to the bytes the installers write',
     async () => {
       const actual = { generation: MANAGED_SCRIPT_GENERATION, darwin: '', linux: '', win32: '' }

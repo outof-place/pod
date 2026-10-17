@@ -24,20 +24,20 @@ function exitingPty(exitCode: number) {
 
 describe('PTY spawn health probe teardown', () => {
   const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
-  const previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+  const previousUserDataPath = process.env.POD_USER_DATA_PATH
   let userDataPath: string
 
   beforeEach(() => {
     nodePty.spawn.mockReset()
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-pty-health-probe-'))
-    process.env.ORCA_USER_DATA_PATH = userDataPath
+    process.env.POD_USER_DATA_PATH = userDataPath
   })
   afterEach(() => {
     Object.defineProperty(process, 'platform', platform)
     if (previousUserDataPath === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.POD_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+      process.env.POD_USER_DATA_PATH = previousUserDataPath
     }
     rmSync(userDataPath, { recursive: true, force: true })
   })

@@ -103,8 +103,8 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     await new Promise<void>((resolve) => server.listen(endpoint, resolve))
     writeMetadata(userDataPath, endpoint)
 
-    const priorLaunchToken = process.env.ORCA_AGENT_LAUNCH_TOKEN
-    process.env.ORCA_AGENT_LAUNCH_TOKEN = 'launch-secret'
+    const priorLaunchToken = process.env.POD_AGENT_LAUNCH_TOKEN
+    process.env.POD_AGENT_LAUNCH_TOKEN = 'launch-secret'
     const client = new RuntimeClient(userDataPath, 500)
     try {
       await client.call(
@@ -119,9 +119,9 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
       await secondClient.call('orchestration.taskList', {})
     } finally {
       if (priorLaunchToken === undefined) {
-        delete process.env.ORCA_AGENT_LAUNCH_TOKEN
+        delete process.env.POD_AGENT_LAUNCH_TOKEN
       } else {
-        process.env.ORCA_AGENT_LAUNCH_TOKEN = priorLaunchToken
+        process.env.POD_AGENT_LAUNCH_TOKEN = priorLaunchToken
       }
     }
 

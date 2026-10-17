@@ -96,8 +96,8 @@ function startChild(markerPath, timeoutMs, checkIntervalMs) {
       ELECTRON_RUN_AS_NODE: '1',
       ORCA_HANG_WATCHDOG_PARENT_PID: String(process.pid),
       ORCA_HANG_WATCHDOG_MARKER_PATH: markerPath,
-      ORCA_HANG_WATCHDOG_TIMEOUT_MS: String(timeoutMs),
-      ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS: String(checkIntervalMs)
+      POD_HANG_WATCHDOG_TIMEOUT_MS: String(timeoutMs),
+      POD_HANG_WATCHDOG_CHECK_INTERVAL_MS: String(checkIntervalMs)
     }
   })
   const startupMs = Number(process.hrtime.bigint() - startedAt) / 1e6

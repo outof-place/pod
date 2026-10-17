@@ -8,8 +8,8 @@ export const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
 type PrefillAgentKind = Exclude<PiAgentKind, 'prime-agent'>
 
 const PREFILL_ENV_VAR_BY_KIND: Record<PrefillAgentKind, string> = {
-  pi: 'ORCA_PI_PREFILL',
-  omp: 'ORCA_OMP_PREFILL'
+  pi: 'POD_PI_PREFILL',
+  omp: 'POD_OMP_PREFILL'
 }
 
 export function getPiPrefillExtensionSource(kind: PrefillAgentKind): string {
@@ -26,7 +26,7 @@ export function getPiPrefillHandlerSourceLines(
   const register = wrapInStatusOwner && kind === 'omp' ? 'onStatus' : 'pi.on'
   return [
     `  ${register}('session_start', async (event, ctx) => {`,
-    '    if (!process.env.ORCA_PANE_KEY || ctx?.hasUI === false) return',
+    '    if (!process.env.POD_PANE_KEY || ctx?.hasUI === false) return',
     ...(kind === 'pi' ? ["    if (event.reason !== 'startup') return"] : []),
     `    const prefill = process.env.${envVar}`,
     "    if (!prefill || typeof ctx?.ui?.setEditorText !== 'function') return",

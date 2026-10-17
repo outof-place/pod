@@ -49,7 +49,7 @@ function worktreeSetupWslenvEntries(env: Record<string, string | undefined>): st
       (name) => `${name}/${env[name]?.startsWith('/') ? 'u' : 'p'}`
     ),
     // A display name, never a path.
-    'ORCA_WORKSPACE_NAME/u'
+    'POD_WORKSPACE_NAME/u'
   ]
 }
 
@@ -59,56 +59,56 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   // in-guest login script needs the resolved wrapper root. Windows/WSL wrappers
   // are always the local file set -- windows-shell-args.ts is shared by the
   // in-process provider and the daemon spawner, so both resolve the same tree.
-  env.ORCA_SHELL_READY_ROOT = getShellReadyWrapperRoot()
+  env.POD_SHELL_READY_ROOT = getShellReadyWrapperRoot()
   // Why: the endpoint is a Windows path (/p-translated so the guest reads it
   // via /mnt/c) until the WSL hook relay reports the guest home — then it is
   // already a guest-side POSIX path and must cross untranslated.
-  const endpointFlag = env.ORCA_AGENT_HOOK_ENDPOINT?.startsWith('/') ? 'u' : 'p'
+  const endpointFlag = env.POD_AGENT_HOOK_ENDPOINT?.startsWith('/') ? 'u' : 'p'
   // Why: ONLY a guest-side POSIX overlay may cross. /p would path-translate a
   // Windows value into /mnt/c and let in-guest OpenCode adopt it as its config
   // root — reachable via the relay spawn's process.env (wsl-hook-relay-launch)
   // and via daemon-inherited env, which buildPtyHostEnv's delete cannot reach.
-  const opencodeOverlayEntries = (['OPENCODE_CONFIG_DIR', 'ORCA_OPENCODE_CONFIG_DIR'] as const)
+  const opencodeOverlayEntries = (['OPENCODE_CONFIG_DIR', 'POD_OPENCODE_CONFIG_DIR'] as const)
     .filter((name) => env[name]?.startsWith('/'))
     .map((name) => `${name}/u`)
   // Why: wsl.exe only imports selected Windows env vars, so WSL needs the wrapper root, pane identity, and hook/OMP coordinates at start.
   const passthroughEntries = [
-    'ORCA_TERMINAL_HANDLE/u',
-    'ORCA_USER_DATA_PATH/p',
+    'POD_TERMINAL_HANDLE/u',
+    'POD_USER_DATA_PATH/p',
     // Why /p: the guest reads the content-addressed wrapper tree through /mnt/c,
-    // and it cannot derive the hash segment from ORCA_USER_DATA_PATH alone.
-    'ORCA_SHELL_READY_ROOT/p',
-    'ORCA_CLI_COMMAND/u',
+    // and it cannot derive the hash segment from POD_USER_DATA_PATH alone.
+    'POD_SHELL_READY_ROOT/p',
+    'POD_CLI_COMMAND/u',
     // Why /p: the managed CLI launcher lives in the host's userData tree.
-    'ORCA_WSL_CLI_DIR/p',
-    'ORCA_CODEX_LAUNCH_PREFLIGHT/p',
-    'ORCA_CODEX_ISOLATE/u',
-    'ORCA_PANE_KEY/u',
-    'ORCA_TAB_ID/u',
-    'ORCA_WORKTREE_ID/u',
-    'ORCA_AGENT_LAUNCH_TOKEN/u',
+    'POD_WSL_CLI_DIR/p',
+    'POD_CODEX_LAUNCH_PREFLIGHT/p',
+    'POD_CODEX_ISOLATE/u',
+    'POD_PANE_KEY/u',
+    'POD_TAB_ID/u',
+    'POD_WORKTREE_ID/u',
+    'POD_AGENT_LAUNCH_TOKEN/u',
     // The guest plugin uses this marker to select the OpenCode variant that
     // owns the pane when both native and WSL installations are present.
-    'ORCA_OPENCODE_AGENT/u',
+    'POD_OPENCODE_AGENT/u',
     `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u',
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID/u',
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION/u',
-    'ORCA_AGENT_HOOK_PORT/u',
-    'ORCA_AGENT_HOOK_TOKEN/u',
-    'ORCA_AGENT_HOOK_ENV/u',
-    'ORCA_AGENT_HOOK_VERSION/u',
-    'ORCA_AGENT_HOOK_TRANSPORT/u',
-    `ORCA_AGENT_HOOK_ENDPOINT/${endpointFlag}`,
+    'POD_AGENT_HOOK_PORT/u',
+    'POD_AGENT_HOOK_TOKEN/u',
+    'POD_AGENT_HOOK_ENV/u',
+    'POD_AGENT_HOOK_VERSION/u',
+    'POD_AGENT_HOOK_TRANSPORT/u',
+    `POD_AGENT_HOOK_ENDPOINT/${endpointFlag}`,
     ...opencodeOverlayEntries,
     'ORCA_WSL_HOOK_RELAY_VERSION/u',
-    'ORCA_WSL_HOOK_INSTANCE/u',
-    'ORCA_OMP_SOURCE_AGENT_DIR/p',
-    `ORCA_OMP_STATUS_EXTENSION/${env.ORCA_OMP_STATUS_EXTENSION?.startsWith('/') ? 'u' : 'p'}`,
-    ...(env.ORCA_PI_SOURCE_AGENT_DIR?.startsWith('/') ? ['ORCA_PI_SOURCE_AGENT_DIR/u'] : []),
+    'POD_WSL_HOOK_INSTANCE/u',
+    'POD_OMP_SOURCE_AGENT_DIR/p',
+    `POD_OMP_STATUS_EXTENSION/${env.POD_OMP_STATUS_EXTENSION?.startsWith('/') ? 'u' : 'p'}`,
+    ...(env.POD_PI_SOURCE_AGENT_DIR?.startsWith('/') ? ['POD_PI_SOURCE_AGENT_DIR/u'] : []),
     `${ORCA_IMAGE_PROTOCOL_ENV}/u`,
-    'ORCA_OMP_FRESH_CONFIG/p',
+    'POD_OMP_FRESH_CONFIG/p',
     ...worktreeSetupWslenvEntries(env)
   ]
   applyWslenvPassthrough(env, passthroughEntries)

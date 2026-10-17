@@ -49,7 +49,7 @@ it.skipIf(!binary || process.platform === 'win32')(
           HOME: home,
           USERPROFILE: home,
           ZDOTDIR: home,
-          ORCA_ORIG_ZDOTDIR: home,
+          POD_ORIG_ZDOTDIR: home,
           SHELL:
             process.env.ORCA_OMP_PROBE_SHELL ??
             (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'),
@@ -64,10 +64,10 @@ it.skipIf(!binary || process.platform === 'win32')(
           PI_CONFIG_DIR: '.omp',
           PI_CONFIG_FILES: '',
           ORCA_BACKGROUND_LAUNCH: '1',
-          ORCA_PANE_KEY: 'omp-relay-probe:owned-leaf',
-          ORCA_TAB_ID: 'omp-relay-probe'
+          POD_PANE_KEY: 'omp-relay-probe:owned-leaf',
+          POD_TAB_ID: 'omp-relay-probe'
         },
-        envToDelete: ['BASH_ENV', 'ENV', 'ORCA_OMP_STATUS_EXTENSION', 'ORCA_PI_STATUS_EXTENSION']
+        envToDelete: ['BASH_ENV', 'ENV', 'POD_OMP_STATUS_EXTENSION', 'ORCA_PI_STATUS_EXTENSION']
       })
       id = spawned.id
       const [entry] = JSON.parse(await dispatcher.callRequest('pty.serialize', { ids: [id] }))

@@ -131,7 +131,7 @@ test('keeps real Electron launch stable with 20 approved inert plugins', async (
   for (let sample = 0; sample < SAMPLE_COUNT; sample += 1) {
     for (const count of [0, PLUGIN_COUNT]) {
       // Seed each profile before its first migration into authoritative SQLite state.
-      const session = createRestartSession(testInfo, { ORCA_STARTUP_DIAGNOSTICS: '1' })
+      const session = createRestartSession(testInfo, { POD_STARTUP_DIAGNOSTICS: '1' })
       try {
         const markerPaths = seedPlugins(session.userDataDir, count)
         const samples = count === 0 ? baseline : populated

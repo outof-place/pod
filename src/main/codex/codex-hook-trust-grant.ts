@@ -42,7 +42,7 @@ import {
 } from './codex-trust-grant-cooldown'
 
 /** Ops escape hatch (not a setting): forces the fallback lane for every trust grant. */
-const DISABLE_ENV_FLAG = 'ORCA_DISABLE_CODEX_TRUST_RPC'
+const DISABLE_ENV_FLAG = 'POD_DISABLE_CODEX_TRUST_RPC'
 
 export type { CodexManagedTrustGrantPlan }
 export type { CodexTrustGrantFallbackReason }

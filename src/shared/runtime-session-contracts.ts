@@ -39,15 +39,15 @@ export const BROWSER_UNAVAILABLE_ERROR_CODE = 'browser_unavailable' as const
 // renders these so an older client still shows an accurate reason it cannot decode.
 const BROWSER_UNAVAILABLE_MESSAGES: Record<RuntimeBrowserUnavailableReason, string> = {
   unconfigured:
-    'Browser automation has no backend on this host. Install the Orca desktop app, or set ORCA_BROWSER_EXECUTABLE to a Chromium executable.',
+    'Browser automation has no backend on this host. Install the Orca desktop app, or set POD_BROWSER_EXECUTABLE to a Chromium executable.',
   driver_missing:
-    'ORCA_BROWSER_EXECUTABLE is set, but the bundled agent-browser driver is missing or not executable on this host, so Chromium cannot be driven.',
-  executable_not_found: 'ORCA_BROWSER_EXECUTABLE points at a path that does not exist.',
+    'POD_BROWSER_EXECUTABLE is set, but the bundled agent-browser driver is missing or not executable on this host, so Chromium cannot be driven.',
+  executable_not_found: 'POD_BROWSER_EXECUTABLE points at a path that does not exist.',
   executable_not_executable:
-    'ORCA_BROWSER_EXECUTABLE points at a file that is not executable by this host.',
+    'POD_BROWSER_EXECUTABLE points at a file that is not executable by this host.',
   electron_start_failed: 'The installed Electron browser provider failed to start.',
   chromium_start_failed:
-    'The Chromium browser provider named by ORCA_BROWSER_EXECUTABLE failed to start.',
+    'The Chromium browser provider named by POD_BROWSER_EXECUTABLE failed to start.',
   provider_unhealthy: 'The browser provider started but is no longer answering health checks.',
   desktop_window_unavailable:
     'Browser automation on this host needs a desktop window, and none is available.',

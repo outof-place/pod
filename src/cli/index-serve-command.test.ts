@@ -55,7 +55,7 @@ describe('orca cli worktree awareness', () => {
 
   it('starts a foreground headless server through `serve`', async () => {
     serveOrcaAppMock.mockResolvedValue(0)
-    process.env.ORCA_ENVIRONMENT = 'stale-env'
+    process.env.POD_ENVIRONMENT = 'stale-env'
 
     await main(
       ['serve', '--json', '--port', '6768', '--pairing-address', '100.64.1.20', '--no-pairing'],

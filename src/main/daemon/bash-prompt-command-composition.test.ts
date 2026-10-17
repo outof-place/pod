@@ -33,7 +33,7 @@ function runInteractiveBash(
       env: {
         ...withoutHostTerminalEnv(process.env),
         HOME: tempHome,
-        ORCA_SHELL_FEATURES: 'ready',
+        POD_SHELL_FEATURES: 'ready',
         TERM: 'xterm'
       },
       timeout: 5000

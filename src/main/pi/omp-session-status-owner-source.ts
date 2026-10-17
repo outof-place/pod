@@ -40,7 +40,7 @@ export function getOmpSessionOwnerHandlerSourceLines(): string[] {
     '      owners = new Map()',
     '      Reflect.set(globalThis, key, owners)',
     '    }',
-    '    const pane = JSON.stringify([process.env.ORCA_PANE_KEY, process.env.ORCA_AGENT_LAUNCH_TOKEN])',
+    '    const pane = JSON.stringify([process.env.POD_PANE_KEY, process.env.POD_AGENT_LAUNCH_TOKEN])',
     '    const owner = owners.get(pane)',
     '    if (owner) {',
     '      if (owner.manager === current.manager) return true',

@@ -299,7 +299,7 @@ describe('PtyHandler', () => {
     const exits: { id: string; paneKey?: string }[] = []
     handler.setExitListener((evt) => exits.push(evt))
 
-    const spawn = await spawnPty({ env: { ORCA_PANE_KEY: 'tab-fallback:0' } })
+    const spawn = await spawnPty({ env: { POD_PANE_KEY: 'tab-fallback:0' } })
     await dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: false })
     vi.advanceTimersByTime(5000)
 

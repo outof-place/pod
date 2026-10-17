@@ -22,7 +22,7 @@ import {
 import { isPodUiHostLaunch } from '../pod/ui-host/pod-ui-host-launch'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
-const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
+const HTTP1_COMPATIBILITY_ENV_VAR = 'POD_DISABLE_HTTP2'
 const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
 const FALSE_ENV_VALUES = new Set(['0', 'false', 'no', 'off'])
 let devParentShutdownRequested = false
@@ -263,8 +263,8 @@ export function configureOrcaUserDataPathEnv(): void {
   if (serveProfileRefusal) {
     throw new Error(serveProfileRefusal)
   }
-  // Why: relaunches can inherit a stale ORCA_USER_DATA_PATH; canonicalize before CLI-shared modules build runtime-home paths.
-  process.env.ORCA_USER_DATA_PATH = userDataPath
+  // Why: relaunches can inherit a stale POD_USER_DATA_PATH; canonicalize before CLI-shared modules build runtime-home paths.
+  process.env.POD_USER_DATA_PATH = userDataPath
 }
 
 export function shouldInstallManagedHooks(isDev: boolean): boolean {
@@ -345,10 +345,10 @@ export function enableMainProcessGpuFeatures(): void {
     return
   }
 
-  // Fork-only A/B: ORCA_SKIA_GRAPHITE=1 keeps Graphite to re-test the stale-tile bug it was disabled for.
+  // Fork-only A/B: POD_SKIA_GRAPHITE=1 keeps Graphite to re-test the stale-tile bug it was disabled for.
   if (
     process.platform === 'darwin' &&
-    process.env.ORCA_SKIA_GRAPHITE !== '1' &&
+    process.env.POD_SKIA_GRAPHITE !== '1' &&
     // Fork-only (Pod): one-app's browser panes need shared textures, which Ganesh turns off.
     !isPodUiHostLaunch()
   ) {
@@ -383,7 +383,7 @@ export function enableMainProcessGpuFeatures(): void {
     // Why: mirror VS Code's conservative GPU-channel flags instead of global Vulkan/SkiaGraphite/WebGPU; terminal accel is xterm WebGL.
     ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
     // Fork-only A/B: browser-side CADisplayLink paces BeginFrames to the display (ProMotion); p99 frame delta 9.3 -> 8.5 ms.
-    ...(process.platform === 'darwin' && process.env.ORCA_CADISPLAYLINK !== '0'
+    ...(process.platform === 'darwin' && process.env.POD_CADISPLAYLINK !== '0'
       ? ['CADisplayLinkInBrowser']
       : []),
     existingFeatures
