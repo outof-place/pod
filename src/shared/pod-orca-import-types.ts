@@ -12,8 +12,12 @@ export type PodOrcaImportRefusal =
   | 'not-the-users-pod'
   /** POD_ORCA_IMPORT_SOURCE_DIR names the account's real Orca profile from a non-default Pod. */
   | 'source-is-the-real-profile'
-  /** This build has no Orca lineage (identity without legacyProfile). */
+  /** This build has no Orca lineage (identity without legacyProfile), or no import at all. */
   | 'no-legacy-identity'
+  /** The source is this Pod's own profile. */
+  | 'source-is-this-pod'
+  /** In the user's own Pod only Pod's window (PodNative, by its audit token) applies an import. */
+  | 'apply-needs-pods-window'
 
 export type PodOrcaImportDetect =
   | {
@@ -64,6 +68,8 @@ export type PodOrcaImportItem = {
   selected: boolean
   /** A worktree's project item; applying the worktree also applies it when it is `new`. */
   parentId?: string
+  /** What applying a worktree row adds, in words ("shown in Pod", "comment", ...). */
+  changes?: string[]
 }
 
 /** What stays in Orca, by kind, so the client can say so without listing every row. */

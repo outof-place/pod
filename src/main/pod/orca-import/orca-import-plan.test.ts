@@ -146,6 +146,48 @@ describe('buildOrcaImportPlan: projects and worktrees', () => {
     })
   })
 
+  it('never archives or unpins a worktree Pod has its own notes on', () => {
+    const result = plan(
+      {
+        repos: [repo('o1', '/work/app')],
+        worktreeMeta: {
+          'o1::/work/app-feature': meta({ isArchived: true, isPinned: true, comment: 'old' }),
+          'o1::/work/app': meta({ isArchived: true })
+        }
+      },
+      {
+        repos: [repo('p1', '/work/app', { importedExternalWorktreePaths: ['/work/app-feature'] })],
+        worktreeMeta: { 'p1::/work/app-feature': meta({ displayName: 'In use' }) }
+      }
+    )
+    expect(result.actions.get('worktree:/work/app-feature')).toMatchObject({
+      fields: { comment: 'old' }
+    })
+    const feature = result.actions.get('worktree:/work/app-feature')
+    expect(feature?.kind === 'worktree' && 'isArchived' in feature.fields).toBe(false)
+    expect(result.items.find((item) => item.id === 'worktree:/work/app-feature')?.changes).toEqual([
+      'comment'
+    ])
+    expect(result.items.find((item) => item.id === 'worktree:/work/app')?.state).toBe('present')
+    // A project new to Pod keeps Orca's state, and the row says so.
+    const fresh = plan({
+      repos: [repo('o1', '/work/app')],
+      worktreeMeta: { 'o1::/work/app-feature': meta({ isArchived: true }) }
+    })
+    expect(fresh.items.find((item) => item.id === 'worktree:/work/app-feature')).toMatchObject({
+      state: 'new',
+      changes: ['shown in Pod', 'archived in Orca']
+    })
+  })
+
+  it('leaves Orca’s worktree folder out, so new worktrees go where Pod puts them', () => {
+    const result = plan({
+      repos: [repo('o1', '/work/app', { worktreeBasePath: '/Users/x/orca/workspaces' })]
+    })
+    const action = result.actions.get('repo:/work/app')
+    expect(action?.kind === 'repo' && 'worktreeBasePath' in action.fields).toBe(false)
+  })
+
   it('has nothing to do on a second run over what the first imported', () => {
     const result = plan(
       {
@@ -237,7 +279,8 @@ describe('buildOrcaImportPlan: settings, themes, quick commands', () => {
       'quickCommand:q3': 'unsupported'
     })
     expect(result.items.find((item) => item.id === 'quickCommand:q2')).toMatchObject({
-      parentId: 'repo:/work/app'
+      parentId: 'repo:/work/app',
+      detail: 'make'
     })
   })
 })
