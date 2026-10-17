@@ -293,10 +293,19 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
       return existsSync(ogctlLog()) ? readFileSync(ogctlLog(), 'utf8').trim().split('\n') : []
     }
 
+    /** The ogctl calls once a sentinel launch (in a folder of its own) has been logged: ogctl
+     *  runs detached, and anything an earlier launch started is in by then. */
     async function settled(): Promise<string[]> {
-      // ogctl runs detached; give it a moment to write.
-      await new Promise((resolve) => setTimeout(resolve, 400))
-      return ogctlCalls()
+      const sentinel = join(root, 'sentinel')
+      mkdirSync(sentinel, { recursive: true })
+      launch('claude', { POD_INDEXED_SEARCH: '1' }, sentinel)
+      const line = `ensure --register ${realpathSync(sentinel)}|`
+      for (let i = 0; i < 100 && !ogctlCalls().some((call) => call.startsWith(line)); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      const calls = ogctlCalls()
+      expect(calls.filter((call) => call.startsWith(line))).toHaveLength(1)
+      return calls.filter((call) => !call.startsWith(line))
     }
 
     it('leaves the environment alone while the setting is off', async () => {
