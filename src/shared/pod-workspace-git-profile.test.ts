@@ -25,6 +25,7 @@ describe('planPodGitProfile', () => {
       'maintenance.strategy': 'set:measured',
       'maintenance.prefetch.enabled': 'set:measured',
       'maintenance.geometric-repack.schedule': 'set:pack-churn',
+      'fetch.prune': 'set:tidy-signal',
       'feature.manyFiles': 'opt-in:many-files',
       'repack.writeBitmaps': 'opt-in:bitmaps'
     })

@@ -1,6 +1,7 @@
 import {
   POD_BACKFILL_BYTES_PER_BLOB,
   POD_OPT_IN_KEYS,
+  type PodGitProfileCurrent,
   type PodGitProfileRow
 } from '../../../shared/pod-workspace-git-profile'
 import type { PodProfileOptIn, PodProfileOptInId } from '../../../shared/pod-workspace-tidy-types'
@@ -101,12 +102,39 @@ function backfillOptIn(
   }
 }
 
+function relativeWorktreesOptIn(
+  host: GitHostFacts,
+  row: PodGitProfileCurrent[string] | undefined
+): PodProfileOptIn {
+  const base = { id: 'relative-worktrees' as const }
+  if (row?.local === 'true') {
+    return {
+      ...base,
+      available: false,
+      active: true,
+      note: 'Worktrees already link by relative path.'
+    }
+  }
+  if (row && (row.other || (row.local !== null && row.recorded !== row.local))) {
+    return { ...base, available: false, active: false, note: 'Set by you.' }
+  }
+  return host.relativeWorktrees
+    ? {
+        ...base,
+        available: true,
+        active: false,
+        note: 'The repo and its worktrees can move together with nothing to repair; git older than 2.48 and some tools stop reading its worktrees.'
+      }
+    : { ...base, available: false, active: false, note: 'Needs git 2.48 or newer.' }
+}
+
 /** Off by default: none measured a win worth a default, and each has a cost the user should see. */
 export function planOptIns(
   host: GitHostFacts,
   facts: RepoProfileFacts,
   rows: readonly PodGitProfileRow[],
-  count: Count | null
+  count: Count | null,
+  relative?: PodGitProfileCurrent[string]
 ): PodProfileOptIn[] {
   const keyRow = (id: 'many-files' | 'bitmaps') =>
     rows.find((row) => row.key === POD_OPT_IN_KEYS[id])
@@ -148,8 +176,59 @@ export function planOptIns(
         ? 'git cannot write bitmaps in a blobless clone.'
         : 'Helps serving clones from this repo; no local win measured.'
     },
-    backfillOptIn(host, facts, count)
+    backfillOptIn(host, facts, count),
+    relativeWorktreesOptIn(host, relative)
   ]
+}
+
+const RELATIVE_KEY = 'worktree.useRelativePaths'
+const RELATIVE_EXTENSION = 'extensions.relativeWorktrees'
+const FORMAT_VERSION = 'core.repositoryformatversion'
+
+async function localValue(git: WorkspaceGitExec, repoPath: string, key: string) {
+  const result = await git(['config', '--local', '--get', key], repoPath)
+  return result.code === 0 ? result.stdout.trim() : null
+}
+
+/**
+ * Sets the key through Pod's recorded writer, then has git rewrite every link; git turns on the
+ * repository extension (format version 1) itself. Returns what undo needs to put back.
+ */
+export async function enableRelativeWorktrees(
+  git: WorkspaceGitExec,
+  setKey: (repoPath: string, key: string, value: string) => Promise<void>,
+  repoPath: string
+): Promise<{ extension: string | null; formatVersion: string | null }> {
+  const before = {
+    extension: await localValue(git, repoPath, RELATIVE_EXTENSION),
+    formatVersion: await localValue(git, repoPath, FORMAT_VERSION)
+  }
+  await setKey(repoPath, RELATIVE_KEY, 'true')
+  const repair = await git(['worktree', 'repair', '--relative-paths'], repoPath)
+  if (repair.code !== 0) {
+    throw new Error(repair.stderr.trim() || 'git worktree repair --relative-paths failed')
+  }
+  return before
+}
+
+/** Absolute links again; the extension and format version go back only to what Pod found. */
+export async function disableRelativeWorktrees(
+  git: WorkspaceGitExec,
+  repoPath: string,
+  before: { extension: string | null; formatVersion: string | null }
+): Promise<void> {
+  const repair = await git(['worktree', 'repair', '--no-relative-paths'], repoPath)
+  if (repair.code !== 0) {
+    throw new Error(repair.stderr.trim() || 'git worktree repair --no-relative-paths failed')
+  }
+  if (before.extension === null) {
+    await git(['config', '--local', '--unset', RELATIVE_EXTENSION], repoPath)
+  }
+  const extensions = await git(['config', '--local', '--get-regexp', '^extensions\\.'], repoPath)
+  // Format 1 is only for extensions; with none left, an older git may read the repo again.
+  if (before.formatVersion === '0' && extensions.code !== 0) {
+    await git(['config', '--local', FORMAT_VERSION, '0'], repoPath)
+  }
 }
 
 /** Converts the ref store in place; git refuses while another process holds a ref lock. */
