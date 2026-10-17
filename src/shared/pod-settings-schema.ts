@@ -61,7 +61,13 @@ const NotificationsSchema = z
       'Sound'
     ),
     customSoundPath: row(z.string().max(4096).nullable(), 'Custom sound file'),
-    customSoundVolume: row(z.number().min(0).max(100), 'Volume')
+    customSoundVolume: row(z.number().min(0).max(100), 'Volume'),
+    // The store keeps only well-formed ids (normalizeVisibleExecutionHostIds).
+    mutedNotificationSourceIds: row(
+      z.array(z.string().max(1024)).max(256),
+      'Muted machines',
+      'Ids whose alerts this computer does not show. Mute a machine with every id notifications.sources lists for it.'
+    )
   })
   .partial()
   .strict()

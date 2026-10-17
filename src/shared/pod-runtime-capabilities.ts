@@ -65,6 +65,12 @@ export const POD_PLUGINS_MANAGE_RUNTIME_CAPABILITY = 'pod.plugins.manage.v1' as 
 export const POD_WORKSPACE_ROWS_RUNTIME_CAPABILITY = 'pod.workspace-rows.v1' as const
 
 /**
+ * notifications.sources, `notificationSourceId` on notifications.subscribe's alerts, and
+ * podSettings' notifications.mutedNotificationSourceIds: per-machine mutes without Pod's window.
+ */
+export const POD_NOTIFICATION_SOURCES_RUNTIME_CAPABILITY = 'pod.notifications.sources.v1' as const
+
+/**
  * sim.*: iOS simulators for agents (lease, drive, release; the pool snapshot and its stream). A
  * client shows simulator UI, and the CLI calls sim.*, only on a host that lists this. Not listed
  * below until the sim.* handlers land (stage 7): a runtime never advertises what it cannot serve.
@@ -81,5 +87,6 @@ export const POD_RUNTIME_CAPABILITIES = [
   POD_AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY,
   POD_SETTINGS_NETWORK_PROXY_RUNTIME_CAPABILITY,
   POD_PLUGINS_MANAGE_RUNTIME_CAPABILITY,
-  POD_WORKSPACE_ROWS_RUNTIME_CAPABILITY
+  POD_WORKSPACE_ROWS_RUNTIME_CAPABILITY,
+  POD_NOTIFICATION_SOURCES_RUNTIME_CAPABILITY
 ] as const
