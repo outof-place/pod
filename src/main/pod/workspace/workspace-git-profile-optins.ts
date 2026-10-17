@@ -186,16 +186,19 @@ const RELATIVE_KEY = 'worktree.useRelativePaths'
 
 /**
  * Each linked worktree's path, for `worktree repair`: without them git 2.54 rewrites no link on
- * `--no-relative-paths`, so undo would leave every worktree relative.
+ * `--no-relative-paths`, so undo would leave every worktree relative. A list git refuses throws:
+ * a repair without it would change nothing and still pass.
  */
 async function linkedWorktrees(git: WorkspaceGitExec, repoPath: string): Promise<string[]> {
   const list = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
-  return list.code === 0
-    ? parseWorktreePorcelainZ(list.stdout)
-        .slice(1)
-        .map((entry) => entry.path)
-    : []
+  if (list.code !== 0) {
+    throw new Error(list.stderr.trim() || 'git worktree list failed')
+  }
+  return parseWorktreePorcelainZ(list.stdout)
+    .slice(1)
+    .map((entry) => entry.path)
 }
+
 const RELATIVE_EXTENSION = 'extensions.relativeWorktrees'
 const FORMAT_VERSION = 'core.repositoryformatversion'
 

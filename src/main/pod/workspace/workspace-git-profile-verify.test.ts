@@ -119,4 +119,35 @@ describe('workspace git profile: verify and relative worktrees (real git)', () =
     expect(await local('core.repositoryformatversion')).toBe('0')
     expect(readFileSync(join(side, '.git'), 'utf8')).toMatch(/^gitdir: \//)
   })
+
+  it('keeps the tune when git refuses the worktree list on undo, and undoes it on retry', async () => {
+    const side = join(fx.root, 'side')
+    await fx.git(repo, 'worktree', 'add', '-q', '-b', 'side', side)
+    const real = createWorkspaceGitExec()
+    let failList = false
+    const git: typeof real = async (args, cwd, options) =>
+      failList && args[0] === 'worktree' && args[1] === 'list'
+        ? { code: 128, stdout: '', stderr: 'list failed' }
+        : real(args, cwd, options)
+    const service = createWorkspaceGitProfile({
+      git,
+      home: fx.home,
+      journal: createWorkspaceJournal(join(fx.root, 'journal.json')),
+      plans: createWorkspacePlanStore(),
+      getRepo: (id) => (id === 'repo-1' ? fx.repoRecord(repo) : undefined),
+      isLaunchdJobLoaded: async () => true
+    })
+    const applied = await service.apply((await service.plan('repo-1')).planId, [
+      'relative-worktrees'
+    ])
+    failList = true
+    const tuneId = applied.tune?.id ?? ''
+    await expect(service.undo((await service.plan('repo-1')).planId, tuneId)).rejects.toThrow(
+      /list failed/
+    )
+    expect((await service.plan('repo-1')).tunes.map((tune) => tune.id)).toEqual([tuneId])
+    failList = false
+    await service.undo((await service.plan('repo-1')).planId, tuneId)
+    expect(readFileSync(join(side, '.git'), 'utf8')).toMatch(/^gitdir: \//)
+  })
 })
