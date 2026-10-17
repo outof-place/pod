@@ -7,7 +7,7 @@ import {
   type IssueCommandReadResult
 } from '@/runtime/runtime-hooks-client'
 import { getRuntimeEnvironmentIdForRepo } from './repo-runtime-owner'
-import { readCreateSetupHooks, type CreateSetupTrust } from './create-setup-trust'
+import { hookTrustContent, readCreateSetupHooks, type CreateSetupTrust } from './create-setup-trust'
 import { MODAL_DISMISSED_KEY } from '@/store/slices/modal-slot-dismissal'
 import {
   getRepoExecutionHostId,
@@ -30,20 +30,6 @@ function enqueueTrustPrompt<T>(task: () => Promise<T>): Promise<T> {
 
 export function __resetTrustPromptChainForTests(): void {
   trustPromptChain = Promise.resolve()
-}
-
-function getSetupTrustContent(yamlHooks: OrcaHooks | null): string {
-  const defaultTabCommands = (yamlHooks?.defaultTabs ?? [])
-    .map((tab, index) => {
-      const command = tab.command?.trim()
-      if (!command) {
-        return null
-      }
-      const label = tab.title ? ` ${tab.title}` : ''
-      return `# defaultTabs[${index + 1}]${label}\n${command}`
-    })
-    .filter((entry): entry is string => entry !== null)
-  return [yamlHooks?.scripts?.setup?.trim(), ...defaultTabCommands].filter(Boolean).join('\n\n')
 }
 
 function getVmRecipeTrustContent(yamlHooks: OrcaHooks | null): string {
@@ -287,7 +273,8 @@ export async function ensureHooksConfirmed(
             hasLocalScript: Boolean(localScript)
           }
         )
-        if (sourcePolicy === 'local-only') {
+        // Pod: a create or removal may be someone else's code, where the repo's own script asks too.
+        if (sourcePolicy === 'local-only' && !createSetup) {
           return 'run'
         }
         const ownerSettings = settingsForHookRepoOwner(
@@ -303,12 +290,15 @@ export async function ensureHooksConfirmed(
           return 'skip'
         }
         const yamlHooks = (result.hooks as OrcaHooks | null) ?? null
-        scriptContent =
-          scriptKind === 'setup'
-            ? getSetupTrustContent(yamlHooks)
-            : scriptKind === 'vmRecipe'
-              ? getVmRecipeTrustContent(yamlHooks)
-              : (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
+        // Pod: orca.yaml's part (the clients' trust content), or for someone else's code all of it.
+        scriptContent = hookTrustContent(
+          scriptKind,
+          foreign,
+          sourcePolicy === 'local-only',
+          repo?.hookSettings,
+          yamlHooks,
+          () => getVmRecipeTrustContent(yamlHooks)
+        )
       }
     } catch {
       // Fail closed: if we cannot inspect the script, we cannot trust it.

@@ -28,6 +28,8 @@ export type RemoveWorktreeArgs = {
   /** Explicit waiver for a FAILED archive hook (#19334). Distinct from `skipArchive`, which
    *  never runs the hook at all, and never implied by `force`. */
   allowFailedArchiveHook?: boolean
+  /** Pod: the archive script's hash the user approved for this removal (someone else's code). */
+  archiveTrustHash?: string
   snapshotPruneBatchId?: string
 }
 
