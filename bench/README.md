@@ -416,12 +416,22 @@ POD_BENCH_POD_APP=<re-id'd copy of Pod.app> node bench/suites/native-idle.mjs [-
   - `acc-off` (`POD_NATIVE_NO_ACC=1`) is the breakdown without it.
 - **Isolation.** Each launch gets:
   - an APFS clone of the re-id'd bundle, with a fresh profile and `HOME`;
-  - `open -n -g` with its whole environment given (empty `USER`/`LOGNAME`);
+  - PodNative's `app_open` (`scripts/open-app.sh` at the guard's revision): `open -n -g -W` under
+    `env -i` with an allowlist (`HOME`, the guard `PATH`, a short `TMPDIR`, `SHELL`, `LANG`,
+    `GUARD_POSITIVE_MARK=1`), the launchd session's `SSH_AUTH_SOCK`, `USER`, `LOGNAME` and
+    `DISPLAY` empty, then the bench's `--env`. The runtime gets the same blanks, `SHELL`, `TMPDIR`
+    and `LANG` through `--runtime-env`, and the mark only through its environment;
   - the guard `PATH` (`lib/guard-path.mjs`, PodNative's `scripts/guard-path.sh` at a pinned
     revision): a stub for every agent and credential CLI the app's catalog probes, first in every
     shell of the profile's `HOME`, with the gate-2 `security` shim in front. After the launch,
     every PATH a stub logged must have had the stubs first, and no `claude` may have run past
-    `--version`, or the launch fails.
+    `--version`, or the launch fails;
+  - the canary: the shell that runs `app_open` has `GUARD_CANARY_TOKEN` set. Once the runtime is up
+    and again with 8 terminals, PodNative and its runtime must show `GUARD_POSITIVE_MARK` and no
+    canary (`guard_env_pid_check`, names only, never a value), and no other process of the launch
+    may show the canary; the stubs' log of their environment's names must show the mark and never
+    the canary. A process that shows neither (zsh and other platform binaries, whose environment
+    `ps -E` doesn't show) is listed as unproven in the result.
 
   A watchdog stops the launch on any real `claude` or `codex` in the run's tree, or on a new
   SecurityAgent. Before the first launch the suite refuses to start if the launchd session sets
@@ -512,12 +522,21 @@ foreground the runtime opens its outer PodNative through LaunchServices, outside
 
 Every run keeps its profiles under one `/private/tmp/pod-bench.XXXXXX` dir, printed at the start.
 Nothing is deleted while the run goes on (cold starts move the caches aside); remove the dir with
-`pod-tmp-rm` afterwards. Processes are stopped by pid: the app's own child, then every process whose
-argv names its profile, never a program under `/Applications` or Pod's data dir. Before the first
+`pod-tmp-rm` afterwards. Before the first
 CLI call, `status` must report the instance's own runtime id, or the run stops before any change.
-Every launch gets the guard `PATH` (`lib/guard-path.mjs`): a stub for every agent and credential
-CLI in the app's catalog, first in the profile's `HOME` and `ZDOTDIR` shells. Closing the instance
-fails the run when a stub was reached off that PATH, or `claude` ran past `--version`. Cleanup
+Every launch gets the guard `PATH` (`lib/guard-path.mjs`, PodNative's `scripts/guard-path.sh` at a
+pinned revision): a stub for every agent and credential CLI in the app's catalog (the dev
+checkout's source or the package), first in the profile's `HOME` and `ZDOTDIR` shells. The app
+starts only through the helper's `guard_exec`: `env -i` with an allowlist (the profile's `HOME`,
+the guard `PATH`, a `TMPDIR` of at most 48 bytes in the run dir, `SHELL=/bin/zsh`, `LANG`,
+`GUARD_POSITIVE_MARK=1`, then the bench's own variables), nothing of the caller's environment. The
+bench sets `GUARD_CANARY_TOKEN` in its own environment first. While the instance runs, its main
+process must show the mark and no canary (`guard_env_pid_check`, names only), and no other process
+of its tree may show the canary. A bench started from inside a Pod terminal refuses
+(`pod-terminal-guard.sh`). Closing the instance fails the run when a stub was reached off that
+PATH, `claude` ran past `--version`, or a stub call carried the canary or no stub call showed the
+mark. The `guard_exec` step (a bash and a Python check) runs between the spawn and the app's exec,
+so startup rows include it. Cleanup
 signals only the processes the run spawned (pinned by start time), those whose executable lies in
 the profile, and an app copy's own process that names the profile (crashpad); anything else that
 names the profile is reported and left alone.

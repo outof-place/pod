@@ -24,8 +24,16 @@ import {
   releaseInstance
 } from './acc-guard.mjs'
 import { BENCH_ROOT, TOOLS_BIN, log, sleep } from './bench-session.mjs'
-import { rootOfPid, signalIfSame, signalRunTreeSync, stopRunTree } from './run-tree.mjs'
-import { guardVerdict, installedClaudeVersion, prepareGuard } from './guard-path.mjs'
+import { rootOfPid, runTree, signalIfSame, signalRunTreeSync, stopRunTree } from './run-tree.mjs'
+import {
+  ENV_CANARY,
+  callerCanary,
+  envPidCheck,
+  guardExecScript,
+  guardVerdict,
+  installedClaudeVersion,
+  prepareGuard
+} from './guard-path.mjs'
 
 const HOME = os.homedir()
 export const ORCA_APP = process.env.POD_BENCH_ORCA_APP ?? '/Applications/Orca.app'
@@ -226,18 +234,16 @@ export function benchRepo() {
 
 /**
  * A throwaway profile: completed onboarding, telemetry off, the given settings, and a ZDOTDIR whose
- * .zshrc only logs each prompt's time. Orca's zsh wrapper restores ZDOTDIR, so panes never read the
- * user's own shell config.
+ * .zshrc only logs each prompt's time (written at the first launch, after the guard's rc files, or
+ * by writePromptHook for a shell outside an app). Orca's zsh wrapper restores ZDOTDIR, so panes
+ * never read the user's own shell config. Each profile also gets its own short TMPDIR inside the
+ * run dir.
  */
 const PROMPT_HOOK = 'zmodload zsh/datetime\nprecmd() { print -r -- $EPOCHREALTIME >> $POD_BENCH_PROMPT_LOG }\nPS1="%# "\n'
 
 export function createProfile(settings = {}) {
   mkdirSync(PROFILE_BASE, { recursive: true })
   const ud = mkdtempSync(path.join(PROFILE_BASE, 'p'))
-  const home = path.join(ud, 'home')
-  const zdot = path.join(ud, 'zdot')
-  mkdirSync(home, { recursive: true })
-  mkdirSync(zdot)
   const seed = completedOnboardingSeed()
   seed.settings = {
     ...seed.settings,
@@ -246,11 +252,38 @@ export function createProfile(settings = {}) {
   }
   seed.ui = { ...seed.ui, lastUpdateCheckAt: Date.now() }
   writeFileSync(path.join(ud, 'orca-data.json'), `${JSON.stringify(seed, null, 2)}\n`)
-  writeFileSync(path.join(zdot, '.zshrc'), PROMPT_HOOK)
+  return profileIn(ud)
+}
+
+/** The record of a fresh profile dir under PROFILE_BASE: its HOME and ZDOTDIR made, its TMPDIR chosen. */
+export function profileIn(ud) {
+  const home = path.join(ud, 'home')
+  const zdot = path.join(ud, 'zdot')
+  mkdirSync(home, { recursive: true })
+  mkdirSync(zdot)
   writeFileSync(path.join(home, '.hushlogin'), '')
   // roots: the pids this run spawned against the profile, with their start times; apps: the bundles
   // it ran them from.
-  return { ud, home, zdot, promptLog: path.join(ud, 'prompt.log'), repo: benchRepo(), roots: new Map(), apps: new Set(), signalled: [], argvOnly: [] }
+  return {
+    ud,
+    home,
+    zdot,
+    // The run dir's t/<profile>: at most 48 bytes, as guard_exec's TMPDIR (a socket path has 104).
+    tmp: path.join(path.dirname(PROFILE_BASE), 't', path.basename(ud)),
+    launches: 0,
+    promptLog: path.join(ud, 'prompt.log'),
+    repo: benchRepo(),
+    roots: new Map(),
+    apps: new Set(),
+    signalled: [],
+    argvOnly: []
+  }
+}
+
+/** The prompt-time hook as ZDOTDIR's whole .zshrc, for a zsh the bench starts outside an app (no guard). */
+export function writePromptHook(profile) {
+  if (profile.guard) throw new Error('writePromptHook: the guard owns this ZDOTDIR\'s .zshrc')
+  writeFileSync(path.join(profile.zdot, '.zshrc'), PROMPT_HOOK)
 }
 
 /** First-prompt times (epoch ms) the hermetic zsh logged, oldest first. */
@@ -265,17 +298,22 @@ export function promptTimes(profile) {
 }
 
 // The profile's guard PATH (lib/guard-path.mjs), made at its first launch from that app's agent
-// catalog: stubs first in HOME's shells and in the hermetic ZDOTDIR's, the bench tools in front.
-function ensureGuard(profile, info) {
+// catalog (a dev checkout's source tree, or the package): stubs first in HOME's shells and in the
+// hermetic ZDOTDIR's, the bench tools in front.
+export function ensureGuard(profile, info) {
   if (profile.guard) return profile.guard
+  if (existsSync(path.join(profile.zdot, '.zshrc'))) {
+    throw new Error(`${profile.zdot}/.zshrc exists: a profile's first launch needs a ZDOTDIR the guard can own`)
+  }
   profile.guard = prepareGuard(profile.ud, {
     ud: profile.ud,
     homes: [profile.home, profile.zdot],
     fronts: [TOOLS_BIN],
-    tree: info.dev ? undefined : info.realPath,
+    tree: info.realPath,
     claudeVersion: installedClaudeVersion()
   })
-  // build_guard_home rewrote ZDOTDIR's .zshrc: the prompt-time hook goes back after the guard.
+  // build_guard_home owns ZDOTDIR's rc files and refuses one it didn't write: the prompt-time hook
+  // goes in after it, at the end of its .zshrc.
   appendFileSync(path.join(profile.zdot, '.zshrc'), PROMPT_HOOK)
   return profile.guard
 }
@@ -289,18 +327,22 @@ function checkGuard(profile) {
   }
 }
 
+// The launch's whole environment, as NAME=VALUE words for guard_exec (lib/guard-path.mjs
+// guardExecScript): HOME, the profile's guard PATH and TMPDIR, the guard's variables and the
+// bench's own. guard_exec adds SHELL, LANG's default and GUARD_POSITIVE_MARK=1, and nothing of
+// this process's environment, which carries the caller's canary.
 export function launchEnv(profile, { visible = false } = {}) {
+  if (!profile.guard) throw new Error('launchEnv: the profile has no guard PATH yet (ensureGuard)')
   const presentation = visible
     ? // Only for the visible-window latency run, in a slot the user agreed to.
       { ORCA_E2E_HEADFUL: '1', ORCA_E2E_FOREGROUND: '1' }
     : // foreground-activation-policy.ts: no Dock tile, no menu bar, no window, no activation.
       { ORCA_E2E_HEADLESS: '1', ORCA_BACKGROUND_LAUNCH: '1' }
   return {
-    PATH: profile.guard?.path ?? `${TOOLS_BIN}:/usr/bin:/bin:/usr/sbin:/sbin`,
-    ...(profile.guard?.env ?? {}),
     HOME: profile.home,
-    SHELL: '/bin/zsh',
-    TMPDIR: process.env.TMPDIR ?? '/tmp',
+    PATH: profile.guard.path,
+    TMPDIR: profile.tmp,
+    ...profile.guard.env,
     LANG: 'en_US.UTF-8',
     // configure-process.ts: the userData override packaged builds honour; HOME must equal ORCA_E2E_HOME_DIR.
     ORCA_E2E_USER_DATA_DIR: profile.ud,
@@ -314,6 +356,26 @@ export function launchEnv(profile, { visible = false } = {}) {
     // Never let the packaged Pod run claude-acc's setup.sh (acc-guard.mjs).
     ...ACC_OFF_ENV
   }
+}
+
+// The script a launch runs: guard_exec of the app's executable with launchEnv's words (Playwright
+// adds its own arguments in front of the app's, and the script passes them on). It starts from
+// the caller's env with the canary in it; it never reaches the app.
+function launchScript(profile, info, env) {
+  profile.launches += 1
+  const script = path.join(profile.ud, `launch-${profile.launches}.sh`)
+  writeFileSync(script, guardExecScript(profile.ud, { words: env, fronts: profile.guard.fronts, exe: info.executable }), {
+    mode: 0o700,
+    flag: 'wx'
+  })
+  const encoding = process.env.__CF_USER_TEXT_ENCODING ?? ''
+  const callerEnv = {
+    PATH: '/usr/bin:/bin',
+    LANG: 'en_US.UTF-8',
+    ...(/^0x[0-9A-Fa-f]+:0x[0-9A-Fa-f]+:0x[0-9A-Fa-f]+$/.test(encoding) ? { __CF_USER_TEXT_ENCODING: encoding } : {}),
+    [ENV_CANARY]: callerCanary()
+  }
+  return { script, callerEnv }
 }
 
 /**
@@ -378,10 +440,12 @@ export function spawnInstance(appPath, profile) {
   ensureGuard(profile, info)
   const env = launchEnv(profile)
   assertAccOff(env)
+  const { script, callerEnv } = launchScript(profile, info, env)
   const spawnedAt = Date.now()
   const args = [...CHROMIUM_ARGS, ...(info.appArgs ?? []), '-ApplePersistenceIgnoreState', 'YES']
-  const child = spawn(info.executable, args, {
-    env,
+  // The script execs guard_exec, which execs the app: the child's pid is the app's.
+  const child = spawn(script, args, {
+    env: callerEnv,
     stdio: 'ignore',
     detached: false
   })
@@ -404,11 +468,14 @@ export async function launchInstance(appPath, profile, { visible = false } = {})
   ensureGuard(profile, info)
   const env = launchEnv(profile, { visible })
   assertAccOff(env)
+  const { script, callerEnv } = launchScript(profile, info, env)
   const spawnedAt = Date.now()
+  // Playwright spawns the script with exactly callerEnv (no merge) and its own arguments first;
+  // the script execs guard_exec, which execs the app, so app.process() is the app.
   const app = await playwright._electron.launch({
-    executablePath: info.executable,
+    executablePath: script,
     args: [...CHROMIUM_ARGS, ...(info.appArgs ?? []), '-ApplePersistenceIgnoreState', 'YES'],
-    env,
+    env: callerEnv,
     timeout: 180_000
   })
   profile.roots?.set(app.process().pid, rootOfPid(app.process().pid))
@@ -620,11 +687,41 @@ function lsUnregister(appPath) {
 }
 
 /**
+ * The canary check while the instance runs (guard-path.sh guard_env_pid_check, names only): the
+ * app's main process, which guard_exec started, must show GUARD_POSITIVE_MARK and no canary. The
+ * rest of its tree (as a cleanup would take it) must show no canary; one that shows no mark either
+ * (a platform binary such as zsh, or a process Pod started with an env of its own) proves nothing
+ * and is listed as such. The stubs' own log is guardVerdict's.
+ */
+async function checkEnv(instance) {
+  const options = profileTreeOptions(instance.profile)
+  const { procs } = await runTree(instance.profile.ud, { scan: true, roots: options.roots })
+  const ours = procs.filter((proc) => proc.via === 'exe' || proc.via === 'root' || (proc.via === 'argv' && options.argvOwned(proc)))
+  const problems = []
+  const unproven = []
+  const main = envPidCheck(instance.profile.ud, instance.pid, 'app')
+  if (main.status !== 0) problems.push(main.said)
+  for (const proc of ours) {
+    if (proc.pid === instance.pid) continue
+    const check = envPidCheck(instance.profile.ud, proc.pid, path.basename(proc.path))
+    if (check.status === 1) problems.push(check.said)
+    else if (check.status !== 0) unproven.push(`${proc.pid} ${path.basename(proc.path)}`)
+  }
+  return { ok: problems.length === 0, problems, main: main.said, checked: ours.length, unproven }
+}
+
+/**
  * Quits the instance, kills its terminal daemon and shells, and (for non-/Applications builds)
- * unregisters it from LaunchServices. The profile stays on disk (nothing is deleted during a run);
- * the run's /private/tmp dir is removed as a whole afterwards.
+ * unregisters it from LaunchServices, also when a check fails. The profile stays on disk (nothing
+ * is deleted during a run); the run's /private/tmp dir is removed as a whole afterwards.
  */
 export async function closeInstance(instance) {
+  let env
+  try {
+    env = await checkEnv(instance)
+  } catch (error) {
+    env = { ok: false, problems: [`no env check: ${error.message}`] }
+  }
   if (instance.app) {
     const proc = instance.app.process()
     await Promise.race([instance.app.close().catch(() => {}), sleep(30_000)])
@@ -637,14 +734,19 @@ export async function closeInstance(instance) {
       sleep(30_000)
     ])
   }
-  await killProfileProcesses(instance.profile)
-  releaseInstance(instance.pid)
-  checkGuard(instance.profile)
-  checkAcc(`after closing ${instance.info.realPath}`)
-  if (!instance.info.dev && !instance.info.realPath.startsWith('/Applications/')) {
-    lsUnregister(instance.info.realPath)
-    if (instance.info.oneApp) {
-      lsUnregister(instance.info.realPath.slice(0, -(ONE_APP_RUNTIME.length + 1)))
+  try {
+    await killProfileProcesses(instance.profile)
+    releaseInstance(instance.pid)
+    if (!env.ok) throw new Error(`env allowlist of ${instance.profile.ud}: ${env.problems.join('; ')}`)
+    log(`${env.main}; ${env.checked} processes of the tree, no canary; no mark (no proof) on ${env.unproven.length}: ${env.unproven.join(', ')}`)
+    checkGuard(instance.profile)
+    checkAcc(`after closing ${instance.info.realPath}`)
+  } finally {
+    if (!instance.info.dev && !instance.info.realPath.startsWith('/Applications/')) {
+      lsUnregister(instance.info.realPath)
+      if (instance.info.oneApp) {
+        lsUnregister(instance.info.realPath.slice(0, -(ONE_APP_RUNTIME.length + 1)))
+      }
     }
   }
 }
