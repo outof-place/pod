@@ -65,6 +65,7 @@ import { POD_WORKSPACE_METHODS } from '../../../pod/workspace/pod-workspace-rpc-
 import { WORKSPACE_LAYOUT_METHODS } from './workspace-layout'
 import { POD_ORBSTACK_METHODS } from '../../../pod/orbstack/pod-orbstack-rpc-methods'
 import { POD_TERMINAL_LANE_METHODS } from './pod-terminal-lane'
+import { POD_WORKSPACE_ROW_METHODS } from './pod-workspace-rows'
 import { POD_SETTINGS_METHODS } from '../../../pod/settings/pod-settings-rpc-methods'
 import { POD_MCP_LAZY_METHODS } from '../../../pod/mcp-lazy/mcp-lazy-rpc-methods'
 import { POD_KEYBINDINGS_METHODS } from '../../../pod/keybindings/pod-keybindings-rpc-methods'
@@ -152,6 +153,8 @@ export const ALL_RPC_METHODS = [
   ...RUNTIME_CLIENT_CAPABILITY_METHODS,
   ...CLIENT_EVENT_METHODS,
   ...CLIENT_UI_METHODS,
+  // Fork-only (Pod): host rename and sparse-preset Delete for native sidebar rows.
+  ...POD_WORKSPACE_ROW_METHODS,
   // Fork-only (Pod): settings for native clients, rendered from one schema.
   ...POD_SETTINGS_METHODS,
   ...POD_MCP_LAZY_METHODS,
