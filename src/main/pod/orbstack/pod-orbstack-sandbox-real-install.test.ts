@@ -204,7 +204,9 @@ describe.skipIf(!enabled)('real OrbStack sandbox', () => {
           ca: createSandboxCa(name),
           credentials: () => credentials,
           upstream: { host: '127.0.0.1', port: api.port, ca: api.ca.caCertPem },
-          log: (line) => refused.push(line)
+          log: (line) => refused.push(line),
+          // The VM's Claude Code gets this as its key or OAuth token below.
+          placeholder: () => SANDBOX_CREDENTIAL_PLACEHOLDER
         })
         try {
           expect(

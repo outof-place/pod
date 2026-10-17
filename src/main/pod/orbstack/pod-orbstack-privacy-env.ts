@@ -1,8 +1,8 @@
 // Fork-only (Pod): the Mac's Claude Code privacy and traffic switches, mirrored into a sandbox so a
 // sandboxed agent sends nothing the Mac agent would not.
-import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { readCappedConfig } from './pod-orbstack-mac-claude-choices'
 
 /** From code.claude.com/docs/en/env-vars and data-usage. */
 export const MIRRORED_PRIVACY_ENV = [
@@ -30,7 +30,7 @@ export type SandboxPrivacy = {
 
 function settingsEnv(file: string): Record<string, unknown> {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'))
+    const parsed: unknown = JSON.parse(readCappedConfig(file))
     const env = typeof parsed === 'object' && parsed !== null && 'env' in parsed ? parsed.env : null
     return typeof env === 'object' && env !== null ? { ...env } : {}
   } catch {

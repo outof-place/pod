@@ -268,7 +268,8 @@ describe.skipIf(process.platform === 'win32' || !hasPython())('relay agent over 
         mode: () => 'api-key',
         authHeaders: async () => ({ 'x-api-key': 'stub-key-not-a-secret' })
       }),
-      upstream: { host: '127.0.0.1', port: upstreamPort, ca: upstreamCa.caCertPem }
+      upstream: { host: '127.0.0.1', port: upstreamPort, ca: upstreamCa.caCertPem },
+      placeholder: () => 'pod-sandbox-no-credential'
     })
     cleanups.push(() => {
       anthropic.close()

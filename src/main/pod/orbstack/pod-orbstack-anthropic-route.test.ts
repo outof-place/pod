@@ -15,6 +15,8 @@ import { createSandboxCa } from './pod-orbstack-sandbox-ca'
 
 type Seen = { method?: string; url?: string; headers: IncomingHttpHeaders; body: Buffer }
 
+const DEFAULT_PLACEHOLDER = 'pod-sandbox-placeholder'
+
 const apiKey: SandboxAnthropicCredentials = {
   mode: () => 'api-key',
   authHeaders: async () => ({ 'x-api-key': 'stub-key-not-a-secret' })
@@ -38,7 +40,7 @@ describe('anthropic-api route', () => {
     credentials: SandboxAnthropicCredentials = apiKey,
     privacy: SandboxPrivacy = { env: {}, telemetryOff: false, featureFlagsOff: false },
     respond?: (res: Http2ServerResponse) => void,
-    placeholder?: string
+    placeholder = DEFAULT_PLACEHOLDER
   ) {
     // The stub API has its own CA, so the route verifies upstream as it would the real one.
     const upstreamCa = createSandboxCa('stub-upstream')
@@ -77,7 +79,7 @@ describe('anthropic-api route', () => {
       privacy: () => privacy,
       log: (message) => refused.push(message),
       onRow: (row) => rows.push(row),
-      ...(placeholder ? { placeholder: () => placeholder } : {})
+      placeholder: () => placeholder
     })
     // Stands in for the relay: each TCP connection is one VM connection to 127.0.0.1:443.
     const front = createServer((socket) => route.attach(socket))
@@ -109,7 +111,8 @@ describe('anthropic-api route', () => {
             ca: ca.caCertPem,
             method: options.method ?? 'POST',
             path: options.path ?? '/v1/messages?beta=true',
-            headers: options.headers ?? {}
+            // As the sandbox's Claude Code: its placeholder as the key, unless the test says otherwise.
+            headers: { 'x-api-key': DEFAULT_PLACEHOLDER, ...options.headers }
           },
           (res) => {
             const chunks: Buffer[] = []
