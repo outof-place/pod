@@ -3,7 +3,13 @@ import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { isOrcaYamlRef, readOrcaYamlAtRef, type GitShowExec } from './orca-yaml-at-ref'
+import {
+  isForeignCreate,
+  isOrcaYamlRef,
+  isOwnBranch,
+  readOrcaYamlAtRef,
+  type GitShowExec
+} from './orca-yaml-at-ref'
 
 function fixture() {
   const repo = realpathSync(mkdtempSync(join(tmpdir(), 'pod-orca-yaml-ref-')))
@@ -31,7 +37,7 @@ function fixture() {
   git('-c', 'user.name=t', '-c', 'user.email=t@e.invalid', 'commit', '-q', '-m', 'setup')
   git('checkout', '-q', 'main')
   const exec: GitShowExec = async (args) => ({ stdout: git(...args) })
-  return { exec }
+  return { exec, git }
 }
 
 describe('a ref’s orca.yaml (Pod)', () => {
@@ -54,5 +60,26 @@ describe('a ref’s orca.yaml (Pod)', () => {
     for (const ref of ['-p', 'main:orca.yaml', 'a b', '']) {
       expect(isOrcaYamlRef(ref)).toBe(false)
     }
+  })
+
+  it('tells the repo’s own branches from someone else’s code', async () => {
+    const { exec, git } = fixture()
+    const head = git('rev-parse', 'adds-setup').trim()
+    git('update-ref', 'refs/remotes/origin/main', head)
+    git('update-ref', 'refs/remotes/fork/evil', head)
+    git('update-ref', 'refs/orca/pull/fork/7', head)
+    for (const ref of ['main', 'adds-setup', 'origin/main']) {
+      expect(await isOwnBranch(exec, ref)).toBe(true)
+    }
+    for (const ref of ['fork/evil', 'refs/orca/pull/fork/7', head, 'no-such-branch', '-q']) {
+      expect(await isOwnBranch(exec, ref)).toBe(false)
+    }
+    expect(await isOwnBranch(null, 'main')).toBe(false)
+    expect(await isForeignCreate(exec, {})).toBe(false)
+    expect(await isForeignCreate(exec, { baseBranch: 'origin/main' })).toBe(false)
+    expect(await isForeignCreate(exec, { baseBranch: head })).toBe(true)
+    expect(await isForeignCreate(exec, { baseBranch: 'origin/main', linkedPR: 7 })).toBe(true)
+    expect(await isForeignCreate(exec, { linkedGitLabMR: 3 })).toBe(true)
+    expect(await isForeignCreate(exec, { linkedPR: null, baseBranch: 'main' })).toBe(false)
   })
 })

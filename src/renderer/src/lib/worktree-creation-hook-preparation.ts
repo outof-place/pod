@@ -3,6 +3,7 @@ import type { WorktreeCreationRequest } from './pending-worktree-creation'
 import { ensureHooksConfirmed, readAndConfirmRuntimeIssueCommand } from './ensure-hooks-confirmed'
 import { buildTrustedComposerIssueCommand } from './composer-issue-command'
 import { getInitialWorktreeCreationPhase } from './worktree-creation-flow-startup'
+import { hasLinkedCodeReview } from '../../../shared/worktree/linked-code-review'
 
 export async function prepareWorktreeCreationHooks(
   creationId: string,
@@ -25,7 +26,11 @@ export async function prepareWorktreeCreationHooks(
       isCancelled,
       // Pod: asked on the base's orca.yaml, which is what the create runs.
       kind === 'setup'
-        ? { baseRef: request.baseBranch, onTrusted: (hash) => (setupTrustHash = hash) }
+        ? {
+            baseRef: request.baseBranch,
+            foreign: hasLinkedCodeReview(request),
+            onTrusted: (hash) => (setupTrustHash = hash)
+          }
         : undefined
     )
   const trustDecision = await confirmHook('setup')
