@@ -7,7 +7,7 @@ import {
   isAgentSessionRefusalError,
   type AgentSessionRefusalError
 } from '../../../shared/agent-session-wire-refusals'
-import { brandProductCopy } from '../../product-identity/product-overlay'
+import { brandRpcErrorCopy } from '../../product-identity/product-rpc-error-copy'
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
@@ -59,7 +59,7 @@ export function errorResponse(
     id,
     ok: false,
     // Fork-only (Pod): every RPC error message a client prints names the product.
-    error: brandRpcError(data === undefined ? { code, message } : { code, message, data }),
+    error: brandRpcErrorCopy(data === undefined ? { code, message } : { code, message, data }),
     _meta: meta
   }
 }
@@ -299,8 +299,4 @@ export function mapEmulatorError(id: string, meta: RpcEnvelopeMeta, error: unkno
     return errorResponse(id, meta, (error as { code: string }).code, error.message)
   }
   return mapRuntimeError(id, meta, error)
-}
-
-function brandRpcError<T extends { message: string }>(error: T): T {
-  return { ...error, message: brandProductCopy(error.message) }
 }
