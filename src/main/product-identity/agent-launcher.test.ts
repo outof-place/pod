@@ -68,7 +68,9 @@ function run(
 
 describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
   beforeAll(() => {
-    root = mkdtempSync(join(tmpdir(), 'pod-agent-launcher-'))
+    // Why realpath: the launcher finds Resources from its own resolved path, and tmpdir() is
+    // under /var, a link to /private/var.
+    root = realpathSync(mkdtempSync(join(tmpdir(), 'pod-agent-launcher-')))
     binDir = join(root, 'Resources', 'bin')
     mkdirSync(binDir, { recursive: true })
     if (typeof installAgentLauncher !== 'function') {
