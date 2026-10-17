@@ -219,6 +219,11 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
     return this.clientSettings.updatePRBotAuthorOverride(args)
   }
 
+  // Fork-only (Pod): host.setDisplayLabel.
+  setClientHostDisplayLabel(hostId: ExecutionHostId, displayLabel: string | null) {
+    return this.clientSettings.setHostDisplayLabel(hostId, displayLabel)
+  }
+
   updateClientNativeChatSessionOptions(mutation: NativeChatSessionOptionSettingsMutation): void {
     this.clientSettings.updateNativeChatSessionOptions(mutation)
   }

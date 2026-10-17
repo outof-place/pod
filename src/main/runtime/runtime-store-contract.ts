@@ -74,6 +74,8 @@ export type RuntimeStore = {
   deleteAutomation?: Store['deleteAutomation']
   getSparsePresets?: Store['getSparsePresets']
   saveSparsePreset?: Store['saveSparsePreset']
+  // Fork-only (Pod): repo.removeSparsePreset.
+  removeSparsePreset?: Store['removeSparsePreset']
   getMobileClientTabSelections?: Store['getMobileClientTabSelections']
   setMobileClientTabSelections?: Store['setMobileClientTabSelections']
   // Why the theme keys: a headless host resolves the terminal theme its renderer would publish.
