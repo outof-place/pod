@@ -228,7 +228,9 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
    * Pod's records and Claude's folders to the new path. The record is written before the first
    * rename and after every step, so Move Back works from wherever a failure or a crash stopped it.
    * Processes inside keep running (their cwd moves with the folder) only when the user ticked
-   * them; a live Pod terminal always refuses.
+   * them; a live Pod terminal always refuses. Not locked: a pane that starts after the check (agent
+   * resume, a click) and before the ids move gets its PTY under the old id, during the renames and
+   * git's repair.
    */
   const apply = async (
     planId: string,
