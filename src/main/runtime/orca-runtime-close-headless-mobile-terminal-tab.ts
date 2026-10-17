@@ -12,6 +12,11 @@ import { appendRetiredTerminalSurfaceProofs } from './mobile-session-terminal-re
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
 import type { RuntimeSessionTabCloseReason } from '../../shared/runtime-session-contracts'
+import {
+  applyPodHeadlessActiveLeaf,
+  applyPodPaneLayoutInWindow,
+  type PodPaneLayoutUpdateResult
+} from '../pod/pane-layout/pod-pane-layout-sync'
 
 export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWithCloseStructuredAgentSessionTab {
   protected async closeHeadlessMobileTerminalTab(
@@ -187,8 +192,10 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       expandedLeafId: string | null
       chatLeafId?: string | null
       titlesByLeafId?: Record<string, string>
+      activeLeafId?: string
+      podLocalCaller?: boolean
     }
-  ): Promise<{ updated: true }> {
+  ): Promise<{ updated: true } | PodPaneLayoutUpdateResult> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
@@ -196,7 +203,10 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     // control), it owns pane geometry and republishes it — a headless write here
     // would be overwritten and could fight the renderer. Persist only headlessly.
     if (this.getAvailableAuthoritativeWindow()) {
-      return { updated: true }
+      // Fork-only (Pod): this machine's PodNative hands its layout to the renderer that owns it.
+      return args.podLocalCaller
+        ? applyPodPaneLayoutInWindow(this, worktreeId, args)
+        : { updated: true }
     }
     // Why: resolve to the host tab id (older/raw-id clients) so the persisted
     // layout entry matches, matching setMobileSessionTabProps.
@@ -215,7 +225,14 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
         ...(acceptedLayout.titlesByLeafId ? { titlesByLeafId: acceptedLayout.titlesByLeafId } : {})
       })
     }
-    return { updated: true }
+    // Fork-only (Pod): the active pane too, on the tab's layout and snapshot.
+    return applyPodHeadlessActiveLeaf(
+      this,
+      worktreeId,
+      hostTabId,
+      acceptedLayout,
+      args.activeLeafId
+    )
   }
 
   // Why: tab color/pin are host-authoritative for remote-server tabs but had no

@@ -125,7 +125,9 @@ export const UpdatePaneLayout = WorktreeTabSelector.extend({
   chatLeafId: z.string().max(128).nullable().optional(),
   titlesByLeafId: z.record(z.string(), z.string()).optional(),
   // Why: marks a user's layout gesture; .catch keeps a newer client's unknown intent from failing the edit.
-  intent: PaneLayoutEditIntentSchema.optional().catch(undefined)
+  intent: PaneLayoutEditIntentSchema.optional().catch(undefined),
+  // Fork-only (Pod): the tab's active pane; never focuses it (pod-pane-layout-sync.ts).
+  activeLeafId: z.string().min(1).max(128).optional()
 })
 
 export const SetTabProps = WorktreeTabSelector.extend({

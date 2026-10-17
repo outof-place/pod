@@ -82,7 +82,10 @@ export const SESSION_TAB_MUTATION_METHODS = [
     name: 'session.tabs.updatePaneLayout',
     permission: 'workspace',
     params: UpdatePaneLayout,
-    handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
+    handler: async (
+      params,
+      { runtime, pairedDeviceId, clientCapabilities, clientKind, caller }
+    ) => {
       await assertVisibleMutationTab(
         runtime,
         params.worktree,
@@ -96,7 +99,10 @@ export const SESSION_TAB_MUTATION_METHODS = [
         root: params.root,
         expandedLeafId: params.expandedLeafId ?? null,
         chatLeafId: params.chatLeafId,
-        titlesByLeafId: params.titlesByLeafId
+        titlesByLeafId: params.titlesByLeafId,
+        // Fork-only (Pod): only this machine's PodNative or CLI reaches the window's layout.
+        activeLeafId: params.activeLeafId,
+        podLocalCaller: caller?.kind === 'local-cli'
       })
     }
   }),

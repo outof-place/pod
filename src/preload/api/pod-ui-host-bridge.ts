@@ -6,6 +6,10 @@ import {
   PodUiHostPaneRestartRequest
 } from '../../shared/pod-ui-host-pane-restart'
 import {
+  POD_UI_HOST_PANE_LAYOUT_IPC,
+  PodUiHostPaneLayoutRequest
+} from '../../shared/pod-ui-host-pane-layout'
+import {
   isPodUiHostSurfaceNavigation,
   POD_UI_HOST_SURFACE_IPC
 } from '../../shared/pod-ui-host-surface'
@@ -55,5 +59,17 @@ export const podUiHostApi = {
     }
     ipcRenderer.on(POD_UI_HOST_PANE_RESTART_IPC.restart, listener)
     return () => ipcRenderer.removeListener(POD_UI_HOST_PANE_RESTART_IPC.restart, listener)
+  },
+  onPaneLayout: (apply) => {
+    const listener = (_event: Electron.IpcRendererEvent, requestId: unknown, request: unknown) => {
+      const parsed = PodUiHostPaneLayoutRequest.safeParse(request)
+      ipcRenderer.send(
+        POD_UI_HOST_PANE_LAYOUT_IPC.applied,
+        requestId,
+        parsed.success ? apply(parsed.data) : { applied: false, reason: 'layout_mismatch' }
+      )
+    }
+    ipcRenderer.on(POD_UI_HOST_PANE_LAYOUT_IPC.apply, listener)
+    return () => ipcRenderer.removeListener(POD_UI_HOST_PANE_LAYOUT_IPC.apply, listener)
   }
 } satisfies PreloadApi['podUiHost']

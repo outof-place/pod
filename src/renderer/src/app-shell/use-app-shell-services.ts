@@ -30,6 +30,7 @@ import { usePodUiHostQuitAssess } from '../pod/ui-host/use-pod-ui-host-quit-asse
 import { usePodUiHostSurfaceReady } from '../pod/ui-host/use-pod-ui-host-surface-ready'
 import { usePodUiHostSurfaceNavigation } from '../pod/ui-host/use-pod-ui-host-surface-navigation'
 import { usePodUiHostPaneRestart } from '../pod/ui-host/use-pod-ui-host-pane-restart'
+import { usePodUiHostPaneLayout } from '../pod/ui-host/use-pod-ui-host-pane-layout'
 
 /**
  * App-level subscriptions that must outlive any individual surface. Each one is here because
@@ -57,6 +58,7 @@ export function useAppShellServices(): void {
   usePodUiHostSurfaceReady(workspaceSessionReady)
   usePodUiHostSurfaceNavigation()
   usePodUiHostPaneRestart()
+  usePodUiHostPaneLayout()
   useRemoteRuntimeRecoveryTriggers()
   useVisibleReviewRefreshReporting()
   useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })
