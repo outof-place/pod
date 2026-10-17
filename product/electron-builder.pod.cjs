@@ -186,6 +186,11 @@ module.exports = {
     )
     helperNames.assertNoUpstreamNames(join(resourcesDir, '..', '..'))
   },
+  // pod-sim in the signed app, valid, hardened and named codes.pod.sim (skipped when nothing is signed).
+  afterSign: (context) =>
+    helperNames.assertPodSimSigned(
+      join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
+    ),
   mac: {
     ...base.mac,
     signIgnore: [...(base.mac.signIgnore ?? []), ...PRODUCT_SIGN_IGNORE],
@@ -200,19 +205,8 @@ module.exports = {
       PodUIHostFeatures: ['headless']
     },
     hardenedRuntime: true,
-    // Least-privilege entitlements per nested executable instead of Electron's set for all of them,
-    // and pod-sim signed under the identifier its viewers admit.
-    sign: async (options, packager) => {
-      const withPodSim =
-        typeof options.optionsForFile === 'function'
-          ? {
-              ...options,
-              optionsForFile: helperNames.podSimSignOptions(options.app, options.optionsForFile)
-            }
-          : options
-      await signWithProductEntitlements(withPodSim, packager)
-      helperNames.assertPodSimSigned(options.app)
-    },
+    // Least-privilege entitlements per nested executable instead of Electron's set for all of them.
+    sign: signWithProductEntitlements,
     ...(productElectronEntitlements()
       ? {
           entitlements: productElectronEntitlements(),

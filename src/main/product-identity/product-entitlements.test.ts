@@ -94,6 +94,39 @@ describe('product entitlements', () => {
     expect(basename(rg.entitlements ?? '')).toBe('none.plist')
     expect(productConfig.mac.sign).toBe(policy.signWithProductEntitlements)
   })
+
+  it('signs pod-sim under the identifier its viewers admit, and nothing else under it', async () => {
+    const macCodeSign: { sign: unknown } = createRequire(
+      join(import.meta.dirname, '../../../product/entitlements-policy.cjs')
+    )('app-builder-lib/out/codeSign/macCodeSign')
+    const realSign = macCodeSign.sign
+    let handed: ((filePath: string) => SignOptions & { additionalArguments?: string[] }) | null =
+      null
+    macCodeSign.sign = async (options: { optionsForFile: typeof handed }) => {
+      handed = options.optionsForFile
+    }
+    try {
+      const app = '/out/mac-arm64/Pod.app'
+      const sign = policy.signWithProductEntitlements as (
+        options: unknown,
+        packager: unknown
+      ) => Promise<void>
+      await sign(
+        { app, optionsForFile: () => ({ entitlements: '/e.plist', hardenedRuntime: true }) },
+        { appInfo: { productFilename: 'Pod' } }
+      )
+    } finally {
+      macCodeSign.sign = realSign
+    }
+    const forFile = handed as unknown as (
+      filePath: string
+    ) => SignOptions & { additionalArguments?: string[] }
+    const podSim = forFile('/out/mac-arm64/Pod.app/Contents/Resources/bin/pod-sim')
+    expect(podSim.additionalArguments).toEqual(['--identifier', 'codes.pod.sim'])
+    expect(basename(podSim.entitlements ?? '')).toBe('none.plist')
+    const rg = forFile('/out/mac-arm64/Pod.app/Contents/Resources/ripgrep/darwin-arm64/rg')
+    expect(rg.additionalArguments).toBeUndefined()
+  })
   it('trims the app and Electron helpers in the Pod profile and keeps upstream in the orca one', () => {
     const pod = policy.productElectronEntitlements({})
     expect(basename(pod ?? '')).toBe('electron-pod.plist')

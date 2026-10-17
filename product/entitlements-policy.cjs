@@ -6,6 +6,7 @@
 // belong to executables only; libraries and frameworks inherit their host's. Accessibility,
 // Screen Recording and Input Monitoring are privacy (TCC) grants, not entitlements.
 const { join } = require('node:path')
+const { podSimSignOptions } = require('./helper-names.cjs')
 
 const ENTITLEMENTS_DIR = join(__dirname, 'entitlements')
 // Keep electron-builder's own choice: the app and Electron's helper apps run V8 and Chromium.
@@ -97,7 +98,11 @@ async function signWithProductEntitlements(options, packager) {
   const mainExecutable = packager.appInfo.productFilename
   return sign({
     ...options,
-    optionsForFile: productOptionsForFile(options.app, options.optionsForFile, mainExecutable)
+    // pod-sim also gets the signing identifier its viewers admit.
+    optionsForFile: podSimSignOptions(
+      options.app,
+      productOptionsForFile(options.app, options.optionsForFile, mainExecutable)
+    )
   })
 }
 
