@@ -13,7 +13,7 @@
 </picture>
 
 <p align="center">
-  <a href="https://github.com/outof-place/pod/releases/download/v1.0.0-rc3/Pod-1.0.0-rc3.dmg"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-download-dark.svg"><img alt="Download Pod 1.0.0-rc3 for macOS" src="assets/button-download-light.svg" height="44"></picture></a>
+  <a href="https://github.com/outof-place/pod/releases/download/v1.0.0-rc4/Pod-1.0.0-rc4.dmg"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-download-dark.svg"><img alt="Download Pod 1.0.0-rc4 for macOS" src="assets/button-download-light.svg" height="44"></picture></a>
   <a href="https://github.com/outof-place/homebrew-tap"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-brew-dark.svg"><img alt="Install with Homebrew" src="assets/button-brew-light.svg" height="44"></picture></a>
   <a href="https://pod.codes"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-site-dark.svg"><img alt="pod.codes" src="assets/button-site-light.svg" height="44"></picture></a>
 </p>
@@ -24,9 +24,9 @@
 </p>
 
 > [!NOTE]
-> Pod 1.0.0-rc3, the third release candidate of Pod 1.0, is out: [download the DMG](https://github.com/outof-place/pod/releases/download/v1.0.0-rc3/Pod-1.0.0-rc3.dmg), signed with
+> Pod 1.0.0-rc4, the fourth release candidate of Pod 1.0, is out: [download the DMG](https://github.com/outof-place/pod/releases/download/v1.0.0-rc4/Pod-1.0.0-rc4.dmg), signed with
 > the studio's Developer ID and notarized by Apple. It needs a Mac with Apple silicon and macOS 27 or later.
-> The [release notes](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc3) list the known issues. It also installs with Homebrew; see [Install](#install).
+> The [release notes](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc4) list the known issues. It also installs with Homebrew; see [Install](#install).
 > On 1.0.0-rc1, install it once by hand: rc1 can't update itself to a later release (see [Install](#install)).
 
 <picture>
@@ -66,7 +66,7 @@
   checks that no request reaches a Stably host. Marketplace installs are off by default in Pod (no
   remote plugin revocation).
 
-1.0 marks what Pod 1.0 brings, out now as release candidate 1.0.0-rc3; coming, what follows it.
+1.0 marks what Pod 1.0 brings, out now as release candidate 1.0.0-rc4; coming, what follows it.
 Per-worktree setup through `orca.yaml` is inherited from Orca.
 
 </details>
@@ -241,7 +241,7 @@ Pod is not affiliated with or endorsed by Stably AI or Lovecast Inc. Orca is the
 
 ## Install
 
-- **DMG.** Download [Pod-1.0.0-rc3.dmg](https://github.com/outof-place/pod/releases/download/v1.0.0-rc3/Pod-1.0.0-rc3.dmg) from the [1.0.0-rc3 release](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc3),
+- **DMG.** Download [Pod-1.0.0-rc4.dmg](https://github.com/outof-place/pod/releases/download/v1.0.0-rc4/Pod-1.0.0-rc4.dmg) from the [1.0.0-rc4 release](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc4),
   open it and drag Pod to Applications. Its SHA-256 is in `SHA256SUMS` on the release page. Later
   versions arrive through Pod's "Check for Updates…".
 - **Homebrew**, from the studio's tap:
