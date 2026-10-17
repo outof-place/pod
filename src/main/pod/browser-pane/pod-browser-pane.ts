@@ -10,16 +10,12 @@ import type {
 } from './pod-browser-pane-protocol'
 import { PaneDownloads } from './pod-browser-pane-downloads'
 import type { PodBrowserDownloadEvent } from './pod-browser-pane-hooks'
-import { PaneInputState } from './pod-browser-pane-input'
+import { applyPaneInput, PaneInputState } from './pod-browser-pane-input'
 import { navigatePanePage } from './pod-browser-pane-navigation'
 import { PaneSelectMenus } from './pod-browser-pane-select'
-import { describePaneContextMenu } from './pod-browser-pane-context-menu'
 import { PaneLinks } from './pod-browser-pane-links'
 import { PaneFramePump, type PodBrowserFrames } from './pod-browser-pane-frames'
-import {
-  encodePodUiHostServerMessage,
-  POD_UI_HOST_MAX_LINE_BYTES
-} from '../ui-host/pod-ui-host-protocol'
+import { followPanePage, panePageState } from './pod-browser-pane-page-events'
 const PANE_FRAME_RATE = 60
 // A page nobody sees and no agent drives. Why 10: a rate change waits for the next tick, so a
 // pane coming back (or an agent's screenshot) waits ≤100 ms; an animated page costs 13 ms/s here
@@ -27,11 +23,6 @@ const PANE_FRAME_RATE = 60
 const UNSEEN_FRAME_RATE = 10
 // How long after an agent's last command its page still reads as driven.
 const AGENT_DRIVING_MS = 3_000
-// Why capped: past POD_UI_HOST_MAX_LINE_BYTES PodNative drops the whole channel, and every state of
-// the page would cut it again. Chromium's URLs are ASCII, so their length is their size.
-const MAX_FAVICON_URL_LENGTH = 8192
-// A longer page URL (a data: page) gets the whole state line measured; one that won't fit goes as ''.
-const LONG_PAGE_URL_LENGTH = 16_384
 
 type Page = {
   win: BrowserWindow
@@ -94,45 +85,11 @@ export class PodBrowserPaneController {
     wc.stopPainting()
     wc.setFrameRate(UNSEEN_FRAME_RATE)
     wc.on('paint', (event) => this.frames.paint(page, event.texture))
-    // Why not while an agent drives: its right-clicks must not open a menu on the screen.
-    wc.on('context-menu', (_event, params) => {
-      if (this.userDriven(page)) {
-        this.deps.send(describePaneContextMenu(pageId, wc, params))
-      }
+    followPanePage(pageId, page, {
+      send: this.deps.send,
+      userDriven: () => this.userDriven(page),
+      state: () => this.sendState(pageId)
     })
-    // Why not while an agent drives: its pointer must not show links on the screen.
-    wc.on('update-target-url', (_event, url) => page.links.hover(url, this.userDriven(page)))
-    // Why: the link under the pointer was the old page's; the next page's hover starts afresh.
-    wc.on('did-navigate', () => page.links.hover('', false))
-    wc.on('did-navigate', () => {
-      page.favicon = undefined
-    })
-    wc.on('page-favicon-updated', (_event, favicons) => {
-      page.favicon = favicons.find((icon) => icon.length <= MAX_FAVICON_URL_LENGTH)
-      this.sendState(pageId)
-    })
-    wc.on('cursor-changed', (_event, cursor) => {
-      if (page.token !== null) {
-        this.deps.send({ type: 'browserCursor', pageId, cursor })
-      }
-    })
-    wc.on('found-in-page', (_event, result) => {
-      if (page.token !== null) {
-        this.deps.send({
-          type: 'browserFound',
-          pageId,
-          matches: result.matches,
-          active: result.activeMatchOrdinal,
-          final: result.finalUpdate
-        })
-      }
-    })
-    const state = (): void => this.sendState(pageId)
-    wc.on('did-start-loading', state)
-    wc.on('did-stop-loading', state)
-    wc.on('did-navigate', state)
-    wc.on('did-navigate-in-page', state)
-    wc.on('page-title-updated', state)
     wc.once('destroyed', () => {
       if (page.agentTimer) {
         clearTimeout(page.agentTimer)
@@ -233,14 +190,7 @@ export class PodBrowserPaneController {
         return
       case 'browserInput': {
         page.links.noteInput(message.event)
-        const action = page.input.map(message.event)
-        if (action.kind === 'send') {
-          wc.sendInputEvent(action.input)
-        } else if (action.kind === 'insertText') {
-          void wc.insertText(action.text)
-        } else if (action.kind === 'edit') {
-          wc[action.command]()
-        }
+        applyPaneInput(wc, page.input.map(message.event))
         return
       }
       case 'browserNavigate':
@@ -321,25 +271,8 @@ export class PodBrowserPaneController {
 
   private sendState(pageId: string): void {
     const page = this.pages.get(pageId)
-    if (!page || page.token === null || page.wc.isDestroyed()) {
-      return
+    if (page && page.token !== null && !page.wc.isDestroyed()) {
+      this.deps.send(panePageState(pageId, page))
     }
-    const { wc } = page
-    const url = wc.getURL()
-    const state = {
-      type: 'browserState' as const,
-      pageId,
-      url,
-      title: wc.getTitle(),
-      loading: wc.isLoading(),
-      canGoBack: wc.navigationHistory.canGoBack(),
-      canGoForward: wc.navigationHistory.canGoForward(),
-      agentDriving: Date.now() < page.agentDrivingUntil,
-      ...(page.favicon ? { faviconUrl: page.favicon } : {})
-    }
-    const fits =
-      url.length <= LONG_PAGE_URL_LENGTH ||
-      Buffer.byteLength(encodePodUiHostServerMessage(state)) <= POD_UI_HOST_MAX_LINE_BYTES
-    this.deps.send(fits ? state : { ...state, url: '' })
   }
 }
