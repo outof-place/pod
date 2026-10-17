@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <a href="../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-004046?style=flat&labelColor=0d1016"></a>
+  <a href="../LICENSE"><img alt="License: proprietary" src="https://img.shields.io/badge/license-proprietary-004046?style=flat&labelColor=0d1016"></a>
   <img alt="Platform: macOS" src="https://img.shields.io/badge/platform-macOS-004046?style=flat&labelColor=0d1016">
 </p>
 
@@ -202,7 +202,7 @@ Pod differs. Every cell links to its source. As of 2026-10-09.
 
 | | License | Platforms | Price |
 | --- | --- | --- | --- |
-| **Pod** | [MIT](../LICENSE) | [macOS on Apple silicon, 27 or later](#install) | [Free](../LICENSE) |
+| **Pod** | [Proprietary; Orca's parts MIT](../LICENSE) | [macOS on Apple silicon, 27 or later](#install) | [Free](../LICENSE) |
 | **Orca** | [MIT](https://github.com/stablyai/orca/blob/main/LICENSE) | [macOS, Windows, Linux](https://github.com/stablyai/orca/blob/b8a055435744c3391107f058a03536678c34ecdf/README.md) | [Free](https://www.onorca.dev/) |
 | **Conductor** | [Proprietary](https://www.conductor.build/terms) | [macOS](https://www.conductor.build/docs/installation) | [Free tier; Pro $50/mo](https://www.conductor.build/pricing) |
 | **Claude Squad** | [AGPL-3.0](https://github.com/smtg-ai/claude-squad/blob/main/LICENSE.md) | [macOS, Linux and Windows builds; needs tmux](https://github.com/smtg-ai/claude-squad/blob/main/.goreleaser.yaml) | [Free](https://github.com/smtg-ai/claude-squad) |

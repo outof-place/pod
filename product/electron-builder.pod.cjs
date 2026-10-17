@@ -217,7 +217,8 @@ module.exports = {
     extraResources: [
       ...base.mac.extraResources,
       { from: 'product/identity.json', to: 'product-identity.json' },
-      { from: 'LICENSE', to: 'ORCA-LICENSE.txt' },
+      // Why: Orca's MIT notice must ship with every copy; Pod's own LICENSE is proprietary.
+      { from: 'resources/licenses/orca/LICENSE', to: 'ORCA-LICENSE.txt' },
       // Rollback of the opt-in terminal handover, runnable with the app's own Node.
       { from: 'product/scripts/restore-orca-terminals.mjs', to: 'restore-orca-terminals.mjs' },
       // The one-app control socket admits only PodNative signed by Pod (pod/one-app).
