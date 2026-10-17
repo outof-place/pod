@@ -141,7 +141,8 @@ describe('Claude managed hook events by resolved version', () => {
 
     expect(managedEvents(upgraded)).toContain('StopFailure')
     expect(managedEvents(upgraded)).toContain('PostCompact')
-    expect(upgraded.hooks?.StopFailure).toEqual([{ hooks: [managedHook] }])
+    // Status-only, so in the background from Claude 2.1.19 on.
+    expect(upgraded.hooks?.StopFailure).toEqual([{ hooks: [{ ...managedHook, async: true }] }])
   })
 
   it('removes only Orca entries for events a downgraded Claude does not know', () => {

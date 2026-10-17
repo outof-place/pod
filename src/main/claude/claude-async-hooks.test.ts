@@ -13,7 +13,10 @@ const STATUS_ONLY = [
   'UserPromptSubmit',
   'Stop',
   'SubagentStart',
-  'SubagentStop'
+  'SubagentStop',
+  'StopFailure',
+  'TeammateIdle',
+  'PostCompact'
 ]
 
 function install(config: HooksConfig, claudeVersion: string | undefined): HooksConfig {
