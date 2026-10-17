@@ -95,4 +95,13 @@ describe('OrcaYamlTrustDialog', () => {
     expect(text).not.toContain('Always trustorca.yaml')
     expect(text).not.toContain('inorca')
   })
+
+  it('says why someone else’s code has no Always trust (Pod)', async () => {
+    mocks.state.modalData = { ...mocks.state.modalData, foreign: true }
+    const { default: OrcaYamlTrustDialog } = await import('./OrcaYamlTrustDialog')
+    const text = decodeHtml(renderToStaticMarkup(<OrcaYamlTrustDialog />)).replace(/<[^>]+>/g, '')
+
+    expect(text).toContain('No Always trust here: this code comes from a pull request')
+    expect(text).not.toContain('Always trust orca.yaml in orca')
+  })
 })
