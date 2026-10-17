@@ -28,11 +28,18 @@ describe('resolveOrbstackE2eAnthropic', () => {
     })
   })
 
-  it('sends a fake bearer in OAuth mode, as the Mac login does', async () => {
-    const seam = resolveOrbstackE2eAnthropic({ ...e2e, POD_E2E_ANTHROPIC_MODE: 'oauth' })
+  it('sends a fake bearer in OAuth mode, only while the login switch is on', async () => {
+    let allowed = true
+    const seam = resolveOrbstackE2eAnthropic(
+      { ...e2e, POD_E2E_ANTHROPIC_MODE: 'oauth' },
+      () => allowed
+    )
     expect(seam?.credentials.mode()).toBe('oauth')
     expect(await seam?.credentials.authHeaders({ machine: 'pod-x-sbx' })).toEqual({
       authorization: 'Bearer pod-e2e-stub-token'
     })
+    allowed = false
+    expect(seam?.credentials.mode()).toBe('off')
+    expect(await seam?.credentials.authHeaders({ machine: 'pod-x-sbx' })).toBeNull()
   })
 })
