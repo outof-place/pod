@@ -55,6 +55,7 @@ import { getUserKeybindingsPath } from '../keybindings/keybinding-file'
 import { installPodHookWriteGate } from '../pod/instance/pod-instance'
 import { installPodNativePeerCheck } from '../pod/rpc/install-pod-native-peer'
 import { installPodAiVaultSessionDelete } from '../pod/ai-vault/install-pod-ai-vault-session-delete'
+import { installPodUiHostPaneRestart } from '../pod/ui-host/pod-ui-host-pane-restart'
 
 // Headless serve never opens a window, so the sweep still has to run off a timer there.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -93,6 +94,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   installPodNativePeerCheck()
   // Fork-only (Pod): aiVault.deleteSession, which needs Electron's Trash; no window needed.
   installPodAiVaultSessionDelete()
+  // Fork-only (Pod): session.tabs.restartTerminal reaches a one-app window's pane.
+  installPodUiHostPaneRestart()
   await initializeMainProcessPlugins(runtime)
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()

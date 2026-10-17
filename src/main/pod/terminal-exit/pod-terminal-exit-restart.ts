@@ -2,13 +2,30 @@
 // the desktop's Restart starts a 'process-failed' pane (terminal-process-exit-restart.ts).
 import type {
   RuntimeMobileSessionCreateTerminalResult,
+  RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../shared/runtime-types'
+import type { PodUiHostPaneRestartRequest } from '../../../shared/pod-ui-host-pane-restart'
 import {
   clearPodTerminalExit,
   getPodTerminalExit,
   recordPodTerminalExit
 } from './pod-terminal-exits'
+
+const RENDERER_RESTART_TIMEOUT_MS = 10_000
+const READY_POLL_MS = 100
+
+type RendererPaneRestart = (
+  window: unknown,
+  request: PodUiHostPaneRestartRequest
+) => Promise<boolean>
+
+// Why a registry: the runtime stays Electron-free; main installs the IPC (pod-ui-host-pane-restart.ts).
+let rendererPaneRestart: RendererPaneRestart | null = null
+
+export function setPodRendererPaneRestart(restart: RendererPaneRestart | null): void {
+  rendererPaneRestart = restart
+}
 
 /** The runtime members a restart uses; OrcaRuntimeService passes itself. */
 export type PodTerminalRestartHost = {
@@ -19,6 +36,8 @@ export type PodTerminalRestartHost = {
   mobileSessionTabsByWorktree: ReadonlyMap<string, RuntimeMobileSessionTabsSnapshot>
   joinPaneMaterialization(worktreeId: string, paneKey: string): Promise<void> | null
   beginPaneMaterialization(worktreeId: string, paneKey: string): () => void
+  getAvailableAuthoritativeWindow(): unknown
+  getMobileSessionTabsForWorktree(worktreeId: string): RuntimeMobileSessionTabsResult
   createRuntimeOwnedMobileSessionTerminal(
     worktreeId: string,
     activate: boolean,
@@ -63,6 +82,15 @@ export async function restartPodExitedTerminal(
   const finishMaterialization = host.beginPaneMaterialization(worktreeId, paneKey)
   clearPodTerminalExit(worktreeId, tab.parentTabId, tab.leafId)
   try {
+    const window = host.getAvailableAuthoritativeWindow()
+    if (window && rendererPaneRestart) {
+      // Why the renderer: with a window it owns the pane, and only its own spawn drops the overlay.
+      const pane = { worktreeId, tabId: tab.parentTabId, leafId: tab.leafId }
+      if (!(await rendererPaneRestart(window, pane))) {
+        throw new Error('terminal_restart_failed')
+      }
+      return { terminal: await waitForReadyLeaf(host, pane) }
+    }
     const created = await host.createRuntimeOwnedMobileSessionTerminal(
       worktreeId,
       false,
@@ -85,5 +113,31 @@ export async function restartPodExitedTerminal(
     throw error
   } finally {
     finishMaterialization()
+  }
+}
+
+/** The leaf's handle once the renderer's new shell is live in it. */
+async function waitForReadyLeaf(
+  host: PodTerminalRestartHost,
+  pane: PodUiHostPaneRestartRequest,
+  timeoutMs = RENDERER_RESTART_TIMEOUT_MS
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const leaf = host
+      .getMobileSessionTabsForWorktree(pane.worktreeId)
+      .tabs.find(
+        (candidate) =>
+          candidate.type === 'terminal' &&
+          candidate.parentTabId === pane.tabId &&
+          candidate.leafId === pane.leafId
+      )
+    if (leaf?.type === 'terminal' && leaf.status === 'ready') {
+      return leaf.terminal
+    }
+    if (Date.now() >= deadline) {
+      throw new Error('terminal_restart_timed_out')
+    }
+    await new Promise((resolve) => setTimeout(resolve, READY_POLL_MS))
   }
 }
