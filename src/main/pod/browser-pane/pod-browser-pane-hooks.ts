@@ -32,20 +32,30 @@ export type PodBrowserDownloadEvent =
 /** A new-tab open of an offscreen page; true once PodNative has it. */
 type LinkOpenSink = (browserPageId: string, url: string, activate: boolean) => boolean
 
+/** A security key's accounts for a page: PodNative's pick, or null when no pane shows the page. */
+type PasskeySink = (
+  webContentsId: number,
+  relyingPartyId: string,
+  accounts: readonly { credentialId: string; displayName?: string; name?: string }[]
+) => Promise<string | null> | null
+
 let agentCommandSink: AgentCommandSink | null = null
 let downloadSink: ((event: PodBrowserDownloadEvent) => void) | null = null
 let linkOpenSink: LinkOpenSink | null = null
+let passkeySink: PasskeySink | null = null
 
 export function setPodBrowserPaneHooks(
   hooks: {
     agentCommand: AgentCommandSink
     download: (event: PodBrowserDownloadEvent) => void
     openLink: LinkOpenSink
+    passkey: PasskeySink
   } | null
 ): void {
   agentCommandSink = hooks?.agentCommand ?? null
   downloadSink = hooks?.download ?? null
   linkOpenSink = hooks?.openLink ?? null
+  passkeySink = hooks?.passkey ?? null
 }
 
 /** True once one-app's panes own browser pages: browser commands then take the offscreen path. */
@@ -66,4 +76,11 @@ export function notePodAgentBrowserCommand(webContentsId: number): void {
 /** A link a page opens in a new tab while no renderer hosts it; false outside one-app. */
 export function openPodPaneLink(browserPageId: string, url: string, activate: boolean): boolean {
   return linkOpenSink?.(browserPageId, url, activate) ?? false
+}
+
+/** A security key's account pick for a page no renderer hosts; null outside one-app or with no pane. */
+export function pickPodPanePasskey(
+  ...args: Parameters<PasskeySink>
+): Promise<string | null> | null {
+  return passkeySink?.(...args) ?? null
 }

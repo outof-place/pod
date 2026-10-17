@@ -89,7 +89,8 @@ describe("an offscreen page's new-tab links", () => {
     setPodBrowserPaneHooks({
       agentCommand: vi.fn(),
       download: vi.fn(),
-      openLink
+      openLink,
+      passkey: vi.fn(() => null)
     })
     const handler = offscreenPage()
     expect(handler({ ...link, disposition: 'background-tab' })).toEqual({
