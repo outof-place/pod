@@ -67,7 +67,10 @@ const clone = {
   execPath: '/data/daemon-host.noindex/1.0/Pod Runtime/Contents/MacOS/Pod'
 }
 
-async function launch(policy: { macosLaunchdJob?: boolean }): Promise<unknown> {
+async function launch(policy: {
+  macosLaunchdJob?: boolean
+  macosDisclaimResponsibility?: boolean
+}): Promise<unknown> {
   return createOutOfProcessLauncher(runtimeDir, policy)(
     join(tempDir, 'daemon.sock'),
     join(tempDir, 'daemon.token')
@@ -141,5 +144,13 @@ describe('the launcher of a GUI daemon on macOS', () => {
   it('forks a plain serve', async () => {
     await launch({ macosLaunchdJob: false })
     expect(harness.launchDaemonChild.mock.calls[0]?.[1]).toBeUndefined()
+  })
+
+  it('hands the disclaim policy on to the daemon launch, and is off by default', async () => {
+    await launch({ macosLaunchdJob: true, macosDisclaimResponsibility: true })
+    await launch({ macosLaunchdJob: true })
+    const [disclaimed, plain] = harness.launchDaemonChild.mock.calls.map(([options]) => options)
+    expect(disclaimed).toMatchObject({ macosDisclaimResponsibility: true })
+    expect(plain).toMatchObject({ macosDisclaimResponsibility: false })
   })
 })

@@ -13,6 +13,7 @@ import {
   type DaemonLaunchdJobs
 } from './daemon-launchd-launch'
 import { unlinkOwnedDaemonPidFile } from './daemon-spawner'
+import { reportDaemonDisclaimFallback } from './daemon-responsibility-darwin'
 
 const DAEMON_CHILD_TERMINATION_GRACE_MS = 5_000
 const DAEMON_CHILD_FORCE_EXIT_WAIT_MS = 1_000
@@ -85,7 +86,7 @@ export async function launchDaemonChild(
     }
   }
   if (!isDurableDaemonScopeSupported()) {
-    return launchDaemonChildAttempt(options, false)
+    return launchForkedDaemon(options)
   }
   try {
     return await launchDaemonChildAttempt(options, true)
@@ -100,6 +101,27 @@ export async function launchDaemonChild(
       error instanceof Error ? error.message : String(error)
     )
     return launchDaemonChildAttempt(options, false)
+  }
+}
+
+/** Pod: a launcher failure (a stale POD_AGENT_LAUNCHER_BINARY, a killed or non-executable launcher)
+ *  must not cost the terminals: retry once with today's launch. */
+async function launchForkedDaemon(options: DaemonChildSpawnOptions): Promise<LaunchedDaemonChild> {
+  try {
+    return await launchDaemonChildAttempt(options, false)
+  } catch (error) {
+    if (
+      process.platform !== 'darwin' ||
+      !options.macosDisclaimResponsibility ||
+      error instanceof DaemonEndpointUnavailableError
+    ) {
+      throw error
+    }
+    console.warn(
+      '[daemon] launch through the disclaiming launcher failed, retrying without it:',
+      error instanceof Error ? error.message : String(error)
+    )
+    return launchDaemonChildAttempt({ ...options, macosDisclaimResponsibility: false }, false)
   }
 }
 
@@ -210,6 +232,7 @@ async function launchDaemonChildAttempt(
         settled = true
         // Why: daemon is detached after readiness; detach startup listeners so the launch promise closure isn't retained.
         cleanupStartupListeners()
+        reportDaemonDisclaimFallback(startupStderr)
         // Why: release IPC/stderr and unref so Electron can exit without waiting; the daemon keeps running detached.
         releaseStderr()
         child.disconnect()

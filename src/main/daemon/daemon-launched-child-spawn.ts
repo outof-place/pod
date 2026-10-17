@@ -3,9 +3,10 @@ import { spawnProcess } from '@orca/process-host'
 import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { removeChromiumDisabledSessionBus } from '../pty/chromium-session-bus-env'
-import { daemonAppPolicyLaunch } from './daemon-app-scheduling-policy'
+import { daemonAppPolicyLaunch, type DaemonProgramLaunch } from './daemon-app-scheduling-policy'
 import { buildDurableDaemonScopeCommand } from './daemon-cgroup-scope'
 import { daemonLogArgs } from './daemon-launch-paths'
+import { disclaimedDaemonLaunch } from './daemon-responsibility-darwin'
 import { podLaneDaemonEnv } from './pod-lane/pod-lane-daemon-env'
 
 export type DaemonChildSpawnOptions = {
@@ -18,6 +19,8 @@ export type DaemonChildSpawnOptions = {
   pidPath: string
   launchNonce: string
   macosLoginSessionWatch: boolean
+  /** Pod: a GUI session's daemon on macOS, responsible for itself (daemon-responsibility-darwin.ts). */
+  macosDisclaimResponsibility: boolean
   /** Defaults to 10 s; a cold first exec on Windows can need longer. */
   startupTimeoutMs?: number
 }
@@ -47,19 +50,6 @@ export function buildDaemonScriptArgs(
   ]
 }
 
-/**
- * The two ways the daemon's OS process comes into being: the long-standing direct `fork()`, and
- * (`useDurableScope`) the identical command line wrapped in `systemd-run --user --scope` so the
- * daemon lands in a sibling cgroup instead of the caller's — see daemon-cgroup-scope.ts. The
- * wrapper needs `spawn()` because it is not a Node script, but it takes the same `'ipc'` stdio
- * contract and the process it execs into inherits the channel, so the readiness handshake is
- * unchanged. Do not read the daemon's PID off the returned child; the daemon reports its own
- * (see daemon-ready-identity.ts).
- *
- * Both arms go through the process-host chokepoint (`@orca/process-host`), which
- * is what every caller outside that directory must use — `forkProcess` for the Node-module arm,
- * `spawnProcess` for the program arm.
- */
 /** The daemon's environment, and so every PTY's. */
 export function buildDaemonChildEnv(
   options: Pick<DaemonChildSpawnOptions, 'userDataPath' | 'relocatedExecPath'>
@@ -78,6 +68,29 @@ export function buildDaemonChildEnv(
   return daemonEnv
 }
 
+/**
+ * Pod: on macOS the same command line under the app scheduling policy and, for a GUI session's
+ * daemon, responsible for itself. Both exec in place, so the pid and the IPC channel stay its own.
+ */
+function darwinDaemonLaunch(
+  options: DaemonChildSpawnOptions,
+  scriptArgs: string[]
+): DaemonProgramLaunch | null {
+  const { forkEntryPath, relocatedExecPath } = options
+  const disclaimed = options.macosDisclaimResponsibility
+    ? disclaimedDaemonLaunch(forkEntryPath, scriptArgs, relocatedExecPath)
+    : null
+  return disclaimed ?? daemonAppPolicyLaunch(forkEntryPath, scriptArgs, relocatedExecPath)
+}
+
+/**
+ * Starts the daemon's OS process: `fork()`; on macOS the same command line behind `taskpolicy` and,
+ * for a GUI session's daemon, `pod-agent-launcher --disclaim-exec`; or (`useDurableScope`) wrapped
+ * in `systemd-run --user --scope` so it lands in a sibling cgroup (daemon-cgroup-scope.ts). All go
+ * through `@orca/process-host`, take the same `'ipc'` stdio contract and exec in place, so the
+ * readiness handshake is unchanged. Do not read the daemon's PID off the returned child; the daemon
+ * reports its own (see daemon-ready-identity.ts).
+ */
 export function spawnDaemonChildProcess(
   options: DaemonChildSpawnOptions,
   useDurableScope: boolean
@@ -92,12 +105,9 @@ export function spawnDaemonChildProcess(
     detached: true,
     stdio: ['ignore', 'ignore', 'pipe', 'ipc']
   }
-  // Pod: the same command line under the app scheduling policy on macOS.
-  const appPolicy = useDurableScope
-    ? null
-    : daemonAppPolicyLaunch(forkEntryPath, scriptArgs, relocatedExecPath)
-  if (appPolicy) {
-    return spawnProcess({ ...childOptions, ...appPolicy, env: daemonEnv })
+  const darwinLaunch = useDurableScope ? null : darwinDaemonLaunch(options, scriptArgs)
+  if (darwinLaunch) {
+    return spawnProcess({ ...childOptions, ...darwinLaunch, env: daemonEnv })
   }
   if (!useDurableScope) {
     return forkProcess({

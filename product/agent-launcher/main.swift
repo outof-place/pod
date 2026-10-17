@@ -12,6 +12,8 @@
 //   pod-agent-launcher --tree-watch <pid>  (internal) the watcher that gives <pid>'s tree the role
 //   pod-agent-launcher --search-detach <ogctl> <dir>  (internal) starts indexing (agent-search.swift)
 //   pod-agent-launcher --await-exit <pid>…  return once one of them, or the caller, exits
+//   pod-agent-launcher --disclaim-exec <program> [args...]  (internal) become <program>, responsible
+//                                          for itself (disclaim-exec.swift)
 //
 // POD_AGENT_TURBO=0 skips the policy (the command still runs); POD_AGENT_TREE=0 keeps the role on
 // the agent's own process only.
@@ -418,6 +420,8 @@ if invokedAs == launcherName {
     searchDetach(ogctl: arguments[2], cwd: arguments[3])
   case "--await-exit":
     awaitExit(arguments.dropFirst(2).compactMap { pid_t($0) })
+  case "--disclaim-exec" where arguments.count > 2:
+    disclaimExec(CommandLine.unsafeArgv + 2)
   case "--" where arguments.count > 2:
     commandIndex = 2
   default:

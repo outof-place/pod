@@ -7,7 +7,7 @@
 // pod-claude-hook-service.ts, which takes Pod's entries out of settings.json once.
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import {
   getSharedManagedScriptPath,
   MANAGED_HOOK_TIMEOUT_SECONDS,
@@ -15,6 +15,7 @@ import {
   type HooksConfig
 } from '../../agent-hooks/installer-utils'
 import { claudeVersionReaches } from '../../claude/claude-hook-event-versions'
+import { findPodAgentLauncher } from './pod-agent-launcher-path'
 
 /** PTY env: the templates' prefix (`<prefix>.http.json`, `<prefix>.command.json`). */
 export const POD_CLAUDE_LAUNCH_SETTINGS_ENV = 'POD_CLAUDE_LAUNCH_SETTINGS'
@@ -28,7 +29,6 @@ export const POD_CLAUDE_HTTP_HOOKS_ENV = 'POD_CLAUDE_HTTP_HOOKS'
 /** Events that stay on the command hook: SessionStart fires no http hook, TeammateIdle was never
  *  reached in that E2E. */
 const COMMAND_ONLY_EVENTS = new Set(['SessionStart', 'TeammateIdle'])
-const LAUNCHER_FILE_NAME = 'pod-agent-launcher'
 const PREFIX_NAME = 'pod-claude-settings'
 
 type LaunchOptions = {
@@ -54,13 +54,7 @@ export function resolvePodAgentLauncher(options: LaunchOptions = {}): string | n
       : typeof appResources === 'string'
         ? appResources
         : undefined
-  return (
-    [
-      env.POD_AGENT_LAUNCHER_BINARY,
-      resourcesPath ? join(resourcesPath, 'bin', LAUNCHER_FILE_NAME) : undefined
-    ].find((path): path is string => typeof path === 'string' && path !== '' && existsSync(path)) ??
-    null
-  )
+  return findPodAgentLauncher(resourcesPath, env.POD_AGENT_LAUNCHER_BINARY)
 }
 
 /** On where Pod's launcher is (resolvePodAgentLauncher). */

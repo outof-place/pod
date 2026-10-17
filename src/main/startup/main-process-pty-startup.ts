@@ -146,10 +146,14 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
       logStartupMilestone('startup-service-start', { service: 'daemon-pty-provider' })
       // Why: only GUI-spawned macOS daemons watch for login-session death; a headless
       // serve daemon must survive its spawning session ending (SSH disconnect).
+      const guiSessionDaemon = isGuiSessionDaemon(state.isServeMode, isPodHeadlessUiHost())
       const daemonOptions = {
         macosLoginSessionWatch: process.platform === 'darwin' && !state.isServeMode,
         // Pod: a launchd job leads the daemon's coalition (daemon-launchd-launch.ts).
-        macosLaunchdJob: isGuiSessionDaemon(state.isServeMode, isPodHeadlessUiHost()),
+        macosLaunchdJob: guiSessionDaemon,
+        // Pod: its terminals attributed to Pod for its whole life; a plain serve keeps its
+        // session's attribution (an SSH login's grants), as before (daemon-responsibility-darwin.ts).
+        macosDisclaimResponsibility: guiSessionDaemon,
         isQuitting: isProcessQuitRequested
       }
       // Fork-only (Pod): a daemon that missed the gate still takes fresh terminals once it starts.
