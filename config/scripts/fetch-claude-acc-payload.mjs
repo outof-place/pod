@@ -23,6 +23,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
+import { downloadReleaseAsset } from './github-release-asset.mjs'
 
 const ROOT = join(import.meta.dirname, '..', '..')
 export const PAYLOAD_DIR = join(ROOT, 'resources', 'claude-acc')
@@ -135,15 +136,13 @@ export async function fetchPayload({
     dropBytecode(into)
     return { version: assertPayload(into), source: 'cached' }
   }
-  const url = `https://github.com/${pin.repository}/releases/download/${pin.tag}/${pin.asset}`
-  const response = await download(url)
-  if (!response.ok) {
-    throw new Error(`GET ${url}: ${response.status}`)
-  }
+  const url = `${pin.repository} ${pin.tag}/${pin.asset}`
+  // Why the helper: a private claude-acc answers only to POD_PAYLOAD_TOKEN (github-release-asset.mjs).
+  const bytes = await downloadReleaseAsset({ ...pin, download })
   const work = mkdtempSync(join(tmpdir(), 'claude-acc-download-'))
   try {
     const tarball = join(work, pin.asset)
-    writeFileSync(tarball, Buffer.from(await response.arrayBuffer()))
+    writeFileSync(tarball, bytes)
     const actual = sha256File(tarball)
     if (actual !== pin.sha256) {
       throw new Error(`${url}: sha256 ${actual}, pinned ${pin.sha256}`)
