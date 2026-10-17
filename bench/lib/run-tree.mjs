@@ -81,8 +81,20 @@ export function signalTargets(
   )
 }
 
+/** The start time each of these pids has right now (absent: not running). */
+export function startTimes(pids) {
+  if (pids.length === 0) return new Map()
+  const args = pids.flatMap((pid) => ['--root', String(pid)])
+  const snap = JSON.parse(execFileSync(PROCSTAT, args, { encoding: 'utf8', maxBuffer: 16 << 20 }))
+  return new Map(snap.procs.map((proc) => [proc.pid, proc.startUs]))
+}
+
 function signalAll(targets, signal, signalled) {
+  // Read again right before the signal: a target that exited and whose pid went to a new process
+  // in between keeps its pid but not its start time.
+  const now = startTimes(targets.map((proc) => proc.pid))
   for (const proc of targets) {
+    if (now.get(proc.pid) !== proc.startUs) continue
     try {
       process.kill(proc.pid, signal)
       signalled.push({ pid: proc.pid, path: proc.path, signal })
