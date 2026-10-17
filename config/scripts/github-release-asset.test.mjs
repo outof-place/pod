@@ -72,7 +72,14 @@ describe('downloadReleaseAsset (Pod)', () => {
   it("never sends the token to an asset URL outside the repository's asset API", async () => {
     const { download, calls } = answering({
       'https://api.github.com/repos/outof-place/claude-acc/releases/tags/v1.34.2': () =>
-        Response.json({ assets: [{ name: 'payload.tar.gz', url: 'https://elsewhere.example/a' }] })
+        Response.json({
+          assets: [
+            {
+              name: 'payload.tar.gz',
+              url: 'https://api.github.com/repos/outof-place/claude-acc/releases/assets/../../../x'
+            }
+          ]
+        })
     })
     await expect(downloadReleaseAsset({ ...target, token: 'tok', download })).rejects.toThrow(
       'outside its asset API'

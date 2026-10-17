@@ -59,12 +59,17 @@ export async function downloadReleaseAsset({
   if (typeof found?.url !== 'string') {
     throw new Error(`${repository} release ${tag} has no asset ${asset}`)
   }
-  // Why: the token goes only to this repository's asset endpoint, whatever the release lists.
-  if (!found.url.startsWith(`${API}/repos/${repository}/releases/assets/`)) {
+  // Why: the token goes only to this repository's asset endpoint, whatever the release lists; URL
+  // resolves `..` before the check.
+  const assetUrl = new URL(found.url)
+  if (
+    assetUrl.origin !== API ||
+    !assetUrl.pathname.startsWith(`/repos/${repository}/releases/assets/`)
+  ) {
     throw new Error(`${repository} release ${tag} lists ${asset} outside its asset API`)
   }
   // Why manual: the API answers 200 with the bytes or 302 to signed storage, which takes no token.
-  const response = await download(found.url, {
+  const response = await download(assetUrl.href, {
     headers: { ...headers, Accept: 'application/octet-stream' },
     redirect: 'manual'
   })

@@ -61,6 +61,7 @@ function dropDeadPaneBinding(pane: PodUiHostPaneRestartRequest): void {
       ...(Object.keys(bindings).length > 0 ? { ptyIdsByLeafId: bindings } : {})
     })
   }
+  // Why no liveness check: a PTY id names one spawn, and main certified this one's exit.
   if (pane.deadPtyId && ptyIdsByTabId[pane.tabId]?.includes(pane.deadPtyId)) {
     clearTabPtyId(pane.tabId, pane.deadPtyId)
   }

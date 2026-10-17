@@ -1,6 +1,6 @@
 // Fork-only (Pod): asks the one-app window's renderer to restart a failed shell's pane
 // (src/shared/pod-ui-host-pane-restart.ts; the renderer answers in src/renderer/src/pod/ui-host).
-import { ipcMain, type BrowserWindow, type IpcMainEvent } from 'electron'
+import { BrowserWindow, ipcMain, type IpcMainEvent } from 'electron'
 import {
   POD_UI_HOST_PANE_RESTART_IPC,
   type PodUiHostPaneRestartRequest
@@ -58,7 +58,9 @@ export function installPodUiHostPaneRestart(): void {
     noteRetainedExit(window as BrowserWindow, pane)
   )
   // Why: a notice sent before the renderer subscribed is lost; it asks for the kept panes once.
-  ipcMain.handle(POD_UI_HOST_PANE_RESTART_IPC.listRetained, () => listPodTerminalExits())
+  ipcMain.handle(POD_UI_HOST_PANE_RESTART_IPC.listRetained, (event) =>
+    BrowserWindow.fromWebContents(event.sender) ? listPodTerminalExits() : []
+  )
 }
 
 /** Tells the renderer a failed shell's pane was kept, so it drops the pane's agent resume. */
