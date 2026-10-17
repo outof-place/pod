@@ -85,6 +85,23 @@ describe('podImport.* methods', () => {
     expect(service.apply).not.toHaveBeenCalled()
   })
 
+  it('log only where an apply came from: never a token or a path', async () => {
+    install()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const apply = { previewId: 'x', itemIds: [], reason: 'user' }
+    await call('podImport.orcaApply', apply, from('local-cli', true))
+    await call('podImport.orcaApply', apply, from('local-cli'))
+    await call('podImport.orcaApply', apply, from('desktop'))
+    const lines = warn.mock.calls.map((args) => String(args[0]))
+    expect(lines.map((line) => line.replace(/runtime .*\)$/, 'runtime <id>)'))).toEqual([
+      "[orca-import] apply from Pod's window: yes (podnative, runtime <id>)",
+      "[orca-import] apply from Pod's window: no (owner-token, runtime <id>)",
+      "[orca-import] apply from Pod's window: yes (desktop, runtime <id>)"
+    ])
+    expect(lines.some((line) => line.includes('/'))).toBe(false)
+    warn.mockRestore()
+  })
+
   it('answer as a refusal in a build without the import', async () => {
     expect(call('podImport.orcaDetect', undefined, from('local-cli'))).toEqual({
       found: false,
