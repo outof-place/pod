@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { glabExecFileAsyncMock } = vi.hoisted(() => ({ glabExecFileAsyncMock: vi.fn() }))
 
@@ -13,6 +13,7 @@ import {
   rememberGlabKnownHosts
 } from './gitlab-known-host-probe'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 
 describe('getGlabKnownHosts', () => {
   // A locally-keyed probe must never answer from the default WSL distro.
@@ -21,6 +22,10 @@ describe('getGlabKnownHosts', () => {
   beforeEach(() => {
     glabExecFileAsyncMock.mockReset()
     _resetKnownHostsCache()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('returns gitlab.com plus auth-status hosts, deduped', async () => {
@@ -237,6 +242,7 @@ describe('getGlabKnownHosts', () => {
   })
 
   it('does not permanently cache the failure fallback — a later probe can re-discover hosts', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
     glabExecFileAsyncMock
       .mockRejectedValueOnce(new Error('ssh tunnel not ready'))
       .mockResolvedValueOnce({
@@ -247,10 +253,85 @@ describe('getGlabKnownHosts', () => {
     // First probe fails → canonical default, NOT cached.
     await expect(getGlabKnownHosts('conn-1')).resolves.toEqual(['gitlab.com'])
     // Re-probe (e.g. after tunnel comes up) discovers the real host.
+    clock.mockReturnValue(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
     await expect(getGlabKnownHosts('conn-1')).resolves.toEqual([
       'gitlab.com',
       'gitlab.example.com:8080'
     ])
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('spawns glab once for two failed lookups inside the negative interval', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    glabExecFileAsyncMock.mockRejectedValue(new Error('glab not authenticated'))
+
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com'])
+    clock.mockReturnValue(1_000_000 + NEGATIVE_ENTRY_TTL_MS - 1)
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com'])
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+
+    clock.mockReturnValue(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com'])
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-probes after an auth refresh even when it adds no host', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    glabExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('glab not authenticated'))
+      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.example.com as user\n', stderr: '' })
+
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com'])
+    rememberGlabKnownHosts(['gitlab.com'])
+
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.example.com'])
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a failed probe from holding back other execution contexts', async () => {
+    const connectionId = 'conn-negative-reconnect'
+    vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    registerSshGitProvider(connectionId, {} as never)
+    glabExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('glab not authenticated'))
+      .mockRejectedValueOnce(new Error('ssh tunnel not ready'))
+      .mockResolvedValueOnce({ stdout: 'Logged in to wsl.test as user\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to new-tunnel.test as user\n', stderr: '' })
+
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com'])
+    await expect(getGlabKnownHosts(connectionId)).resolves.toEqual(['gitlab.com'])
+    await expect(getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })).resolves.toEqual([
+      'gitlab.com',
+      'wsl.test'
+    ])
+    registerSshGitProvider(connectionId, {} as never)
+    await expect(getGlabKnownHosts(connectionId)).resolves.toEqual([
+      'gitlab.com',
+      'new-tunnel.test'
+    ])
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com'])
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(4)
+    unregisterSshGitProvider(connectionId)
+  })
+
+  it('does not record a failure from a probe that a reset superseded', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    let rejectProbe!: (error: Error) => void
+    glabExecFileAsyncMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectProbe = reject
+          })
+      )
+      .mockResolvedValueOnce({ stdout: 'Logged in to after-reset.test as user\n', stderr: '' })
+
+    const stale = getGlabKnownHosts()
+    _resetKnownHostsCache()
+    rejectProbe(new Error('glab not authenticated'))
+    await expect(stale).resolves.toEqual(['gitlab.com'])
+
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'after-reset.test'])
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
@@ -274,6 +355,8 @@ describe('getGlabKnownHosts', () => {
       ['gitlab.com'],
       ['gitlab.com']
     ])
+    // An auth refresh clears the failure memo, so only a leaked in-flight probe could answer.
+    rememberGlabKnownHosts([], undefined, { wslDistro: 'Ubuntu' })
     await expect(getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })).resolves.toEqual([
       'gitlab.com',
       'recovered.test'

@@ -15,6 +15,7 @@ import {
   rememberGlabKnownHost
 } from './gitlab-known-host-probe'
 import { PROBE_COALESCE_STALE_MS } from '../git/coalesced-probe'
+import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 
 const response = (host: string) => ({ stdout: `Logged in to ${host} as user`, stderr: '' })
 const deferred = () => Promise.withResolvers<ReturnType<typeof response>>()
@@ -160,11 +161,13 @@ it('keeps native, WSL and other connection caches when one generation changes', 
 })
 
 it('does not serve a retired generation after the current probe fails', async () => {
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
   execute.mockResolvedValueOnce(response('retired.test'))
   await getGlabKnownHosts('connection')
   generations.set('connection', 1)
   execute.mockRejectedValueOnce(new Error('current host unavailable'))
   await expect(getGlabKnownHosts('connection')).resolves.toEqual(['gitlab.com'])
+  clock.mockReturnValue(1000 + NEGATIVE_ENTRY_TTL_MS + 1)
   execute.mockResolvedValueOnce(response('current.test'))
   await expect(getGlabKnownHosts('connection')).resolves.toEqual(['gitlab.com', 'current.test'])
   expect(execute).toHaveBeenCalledTimes(3)
