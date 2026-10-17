@@ -68,16 +68,24 @@ export const SimRefusalInput = z.discriminatedUnion('code', [
     state: z.enum(['failed', 'lost']),
     problem: Text.optional()
   }),
-  // The dev-client build the lease waited for failed, which ended the lease.
+  // The dev-client build the lease waited for failed, which ended the lease. `logTail`: the log's
+  // last lines on one line; `retryInMinutes`: Pod builds that fingerprint again only after this.
   input('build_failed', {
     buildId: SimBuildId,
     logPath: Root,
-    app: z.string().min(1).max(64).optional()
+    app: z.string().min(1).max(64).optional(),
+    logTail: z.string().min(1).max(600).optional(),
+    retryInMinutes: z.number().int().positive().optional()
   }),
   input('no_worktree', {}),
   input('no_holder', {}),
-  input('no_recipe', { worktreeRoot: Root }),
-  input('bad_recipe', { path: Text, problem: Text }),
+  // `files`: the recipe files looked in, relative to the root (orca.yaml when absent).
+  input('no_recipe', {
+    worktreeRoot: Root,
+    files: z.array(z.string().min(1).max(64)).min(1).max(3).optional()
+  }),
+  // `file`: where the recipe came from (orca.yaml when absent).
+  input('bad_recipe', { path: Text, problem: Text, file: Root.optional() }),
   input('unknown_app', { app: Text, apps: AppIds }),
   input('ambiguous_app', { apps: AppIds }),
   input('unavailable', { problem: Text }),
@@ -184,11 +192,18 @@ function words(refusal: SimRefusalInput): { text: string; next: string } {
             : `${refusal.device} failed${refusal.problem ? ` (${refusal.problem})` : ''}; Pod restarts it for your lease.`,
         next: WAIT_MINE
       }
-    case 'build_failed':
+    case 'build_failed': {
+      const tail = refusal.logTail
+        ? ` It ended with: ${refusal.logTail.replace(/[.\s]+$/, '')}.`
+        : ''
+      const retry = refusal.retryInMinutes
+        ? ` Pod builds this fingerprint again in ${refusal.retryInMinutes} min, or at once when the app's native code changes.`
+        : ''
       return {
-        text: `The dev-client build ${refusal.buildId} failed and ended your lease; its log is ${refusal.logPath}. Fix the build, then`,
+        text: `The dev-client build ${refusal.buildId} failed and ended your lease; its log is ${refusal.logPath}.${tail}${retry} Fix the build, then`,
         next: refusal.app ? `${LEASE} --app ${refusal.app}` : LEASE
       }
+    }
     case 'no_worktree':
       return {
         text: 'This directory is in no worktree or Pod workspace.',
@@ -199,13 +214,20 @@ function words(refusal: SimRefusalInput): { text: string; next: string } {
         text: 'No agent, Pod terminal or shell above this call can hold a lease; name a holder for it.',
         next: `${LEASE} --holder <name>`
       }
-    case 'no_recipe':
+    case 'no_recipe': {
+      const files = (refusal.files ?? ['orca.yaml']).map(
+        (file) => `${refusal.worktreeRoot}/${file}`
+      )
       return {
-        text: `No simulators recipe in ${refusal.worktreeRoot}/orca.yaml; add a simulators: section first.`,
+        text: `No simulators recipe in ${files.join(' or ')}; add a simulators: section first.`,
         next: LEASE
       }
+    }
     case 'bad_recipe':
-      return { text: `orca.yaml ${refusal.path}: ${refusal.problem}. Fix it, then`, next: LEASE }
+      return {
+        text: `${refusal.file ?? 'orca.yaml'} ${refusal.path}: ${refusal.problem}. Fix it, then`,
+        next: LEASE
+      }
     case 'unknown_app':
       return {
         text: `No app named ${refusal.app} in the simulators recipe (apps: ${refusal.apps.join(', ')}).`,

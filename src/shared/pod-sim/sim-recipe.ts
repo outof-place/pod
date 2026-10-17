@@ -1,8 +1,9 @@
-// Fork-only (Pod): the `simulators:` section of a repo's orca.yaml, read-only. It says which apps
-// the repo's simulators run and how Pod makes each ready: bundle id, the app's folder, Metro, the
-// native fingerprint and build commands, an external dev-client cache to adopt, and the defaults
-// written into the app before launch. Runtimes that predate it ignore the key (parseOrcaYaml reads
-// only what it knows). A key this Pod does not know is a warning, so newer recipes still run here.
+// Fork-only (Pod): the `simulators:` section of a repo's pod.yaml (else its orca.yaml), read-only.
+// It says which apps the repo's simulators run and how Pod makes each ready: bundle id, the app's
+// folder, Metro, the native fingerprint and build commands, an external dev-client cache to adopt,
+// and the defaults the app is launched with. Runtimes that predate it ignore the key
+// (parseOrcaYaml reads only what it knows). A key this Pod does not know is a warning, so newer
+// recipes still run here.
 import { z } from 'zod'
 import { ORCA_VM_RECIPE_ID_PATTERN, ORCA_VM_RECIPE_ID_RULE } from '../orca-yaml'
 
@@ -45,11 +46,14 @@ const App = z.object({
   build: Build.optional(),
   // A dev-client cache another tool fills (`<dir>/<fingerprint>.app`); `~` is the home folder.
   clientCache: z.string().trim().min(1).max(1024).optional(),
-  // Written into the app's UserDefaults before launch (expo-dev-menu's onboarding keys).
+  // Passed at each launch as `-Key value` arguments, which the app's UserDefaults reads over its
+  // own values (expo-dev-menu's onboarding keys).
   appDefaults: z
     .record(z.string().min(1).max(256), z.union([z.boolean(), z.number(), z.string()]))
     .optional(),
-  env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(4096)).optional()
+  env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(4096)).optional(),
+  // This app's simslim profile, over the recipe's (stage 5b derives and applies it).
+  slimProfile: RepoPath.optional()
 })
 
 const Recipe = z.object({
@@ -68,7 +72,7 @@ export type SimRecipe = z.infer<typeof Recipe>
 export type SimRecipeApp = z.infer<typeof App>
 
 export type SimRecipeDiagnostic = {
-  /** The orca.yaml key, from `simulators`: `simulators.apps.mobile.bundleId`. */
+  /** The recipe key, from `simulators`: `simulators.apps.mobile.bundleId`. */
   path: string
   severity: 'error' | 'warning'
   message: string
@@ -136,7 +140,7 @@ function errors(recipe: SimRecipe): SimRecipeDiagnostic[] {
   return out
 }
 
-/** The `simulators` value of a parsed orca.yaml: the recipe, or null with what is wrong. */
+/** The `simulators` value of a parsed pod.yaml or orca.yaml: the recipe, or null with what is wrong. */
 export function parseSimRecipe(value: unknown): {
   recipe: SimRecipe | null
   diagnostics: SimRecipeDiagnostic[]

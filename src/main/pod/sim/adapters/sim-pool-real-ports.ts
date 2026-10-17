@@ -1,16 +1,19 @@
 // Fork-only (Pod): the pool's ports built from the real adapters, for one runtime. Stage 7 starts
-// it with the RPC; until then the real-simctl test is its only user. Nothing here starts a timer
+// it with the RPC; until then the real-simctl tests are its only users. Nothing here starts a timer
 // or a process: ports act only when the coordinator calls them. Off macOS none are made, and the
-// store, the driver and the lease files each refuse on their own as well.
+// store, the driver and the lease files each refuse on their own as well. The app module (stage 5)
+// is made here too, over the same driver, store and home claim: its port fills the pool's `apps`,
+// and stage 7 reaches the rest of it (prepare, open, reconcile, builds) as `appReadiness`.
 import { createHash } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { createSimApps, type SimApps } from '../apps/sim-app-readiness'
 import { SIM_POOL_DEFAULTS } from '../pool/sim-pool-config'
 import type { SimPoolPorts } from '../pool/sim-pool-coordinator'
 import type { SimAppPort, SimRuntime, SimSlimProfile, SimWaiterPort } from '../pool/sim-pool-ports'
 import { createClaudeAccCapacity } from '../claude-acc/sim-claude-acc-capacity'
 import { createClaudeAccLeaseFiles } from '../claude-acc/sim-claude-acc-lease-files'
 import { readTextOrNull, type ClaudeAccPaths } from '../claude-acc/sim-claude-acc-paths'
-import { simAppPortStub } from './sim-app-port-stub'
 import { createSimClock, simIds, type SimPowerEvents } from './sim-clock'
 import { simRunProcess, type SimRun } from './sim-command-run'
 import { createSimDeviceDriver } from './sim-device-driver'
@@ -36,7 +39,10 @@ export type SimRealPortsOptions = Readonly<{
   // This runtime's panes and agent sessions; null until stage 7 wires them (holders keep leases).
   panes: SimPodPanes | null
   podCap?: number
+  // Stands in for the app module's port (tests); the real one is made otherwise.
   apps?: SimAppPort
+  // A dev-client build this runtime started ended: run `buildFinished` on the pool at once.
+  onBuildFinished?: (buildId: string, ok: boolean) => void
   native?: SimNativeProcesses | null
   run?: SimRun
   slimProfileFile?: (profile: SimSlimProfile) => string | null
@@ -44,7 +50,7 @@ export type SimRealPortsOptions = Readonly<{
   platform?: NodeJS.Platform
 }>
 
-export type SimRealPorts = SimPoolPorts & { dispose(): void }
+export type SimRealPorts = SimPoolPorts & { appReadiness: SimApps; dispose(): void }
 
 export type SimRealPortsMade =
   | Readonly<{ ok: true; ports: SimRealPorts }>
@@ -61,26 +67,48 @@ export function createSimRealPorts(options: SimRealPortsOptions): SimRealPortsMa
   const podDevices = () => simDevicesOnDisk(home.deviceSet)
   const processes = createSimProcessFacts({ run, native: options.native ?? null })
   const clock = createSimClock(options.power)
+  const store = createSimRegistryFileStore({
+    home,
+    claim,
+    ...(options.onRegistryTiming ? { onTiming: options.onRegistryTiming } : {})
+  })
+  const devices = createSimDeviceDriver({
+    deviceSet: home.deviceSet,
+    run,
+    ensureSet: async (deviceSet) => {
+      const claimed = await claim()
+      if (!claimed.ok) {
+        throw new Error(claimed.message)
+      }
+      await mkdir(deviceSet, { recursive: true, mode: 0o700 })
+    },
+    ...(options.slimProfileFile ? { slimProfileFile: options.slimProfileFile } : {}),
+    processes
+  })
+  const liveness = createSimLiveness({
+    deviceSet: home.deviceSet,
+    processes,
+    panes: options.panes,
+    podDevices
+  })
+  const appReadiness = createSimApps({
+    home,
+    claim,
+    store,
+    device: devices,
+    self: options.self,
+    processes,
+    runtimeState: (ref) => liveness.runtime(ref),
+    claudeAcc: options.claudeAcc.binary,
+    run,
+    userHome: homedir(),
+    ...(options.onBuildFinished ? { onBuildFinished: options.onBuildFinished } : {})
+  })
   const ports: SimRealPorts = {
-    store: createSimRegistryFileStore({
-      home,
-      claim,
-      ...(options.onRegistryTiming ? { onTiming: options.onRegistryTiming } : {})
-    }),
+    store,
     clock,
     ids: simIds,
-    devices: createSimDeviceDriver({
-      deviceSet: home.deviceSet,
-      run,
-      ensureSet: async (deviceSet) => {
-        const claimed = await claim()
-        if (!claimed.ok) {
-          throw new Error(claimed.message)
-        }
-        await mkdir(deviceSet, { recursive: true, mode: 0o700 })
-      },
-      ...(options.slimProfileFile ? { slimProfileFile: options.slimProfileFile } : {})
-    }),
+    devices,
     capacity: createClaudeAccCapacity({
       podCap: options.podCap ?? SIM_POOL_DEFAULTS.podCap,
       podDevices,
@@ -93,15 +121,11 @@ export function createSimRealPorts(options: SimRealPortsOptions): SimRealPortsMa
         return pod ? simBootedOutsidePod(processes, pod) : 'unknown'
       }
     }),
-    liveness: createSimLiveness({
-      deviceSet: home.deviceSet,
-      processes,
-      panes: options.panes,
-      podDevices
-    }),
+    liveness,
     leaseFiles: createClaudeAccLeaseFiles({ directory: options.leaseDirectory, platform }),
     waiters: options.waiters,
-    apps: options.apps ?? simAppPortStub,
+    apps: options.apps ?? appReadiness.port,
+    appReadiness,
     dispose: () => clock.dispose()
   }
   return { ok: true, ports }

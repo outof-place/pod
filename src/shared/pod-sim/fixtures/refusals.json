@@ -200,6 +200,22 @@
   },
   {
     "input": {
+      "code": "build_failed",
+      "buildId": "sb_mobile_9a8b7c",
+      "logPath": "/Users/dev/.pod/sim/clients/logs/sb_mobile_9a8b7c.log",
+      "app": "mobile",
+      "logTail": "› 2 error(s), and 1 warning(s) | error: no such module 'ExpoModulesCore'",
+      "retryInMinutes": 10
+    },
+    "refusal": {
+      "code": "build_failed",
+      "message": "The dev-client build sb_mobile_9a8b7c failed and ended your lease; its log is /Users/dev/.pod/sim/clients/logs/sb_mobile_9a8b7c.log. It ended with: › 2 error(s), and 1 warning(s) | error: no such module 'ExpoModulesCore'. Pod builds this fingerprint again in 10 min, or at once when the app's native code changes. Fix the build, then run: podx sim lease --app mobile",
+      "next": "podx sim lease --app mobile",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
       "code": "no_worktree"
     },
     "refusal": {
@@ -234,6 +250,19 @@
   },
   {
     "input": {
+      "code": "no_recipe",
+      "worktreeRoot": "/Users/dev/portivo",
+      "files": ["pod.yaml", "orca.yaml"]
+    },
+    "refusal": {
+      "code": "no_recipe",
+      "message": "No simulators recipe in /Users/dev/portivo/pod.yaml or /Users/dev/portivo/orca.yaml; add a simulators: section first. Run: podx sim lease",
+      "next": "podx sim lease",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
       "code": "bad_recipe",
       "path": "simulators.apps.mobile.bundleId",
       "problem": "a bundle id is required"
@@ -241,6 +270,20 @@
     "refusal": {
       "code": "bad_recipe",
       "message": "orca.yaml simulators.apps.mobile.bundleId: a bundle id is required. Fix it, then run: podx sim lease",
+      "next": "podx sim lease",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "bad_recipe",
+      "path": "simulators.apps.mobile.metro.port",
+      "problem": "Too small: expected number to be >=1024",
+      "file": "/Users/dev/portivo/pod.yaml"
+    },
+    "refusal": {
+      "code": "bad_recipe",
+      "message": "/Users/dev/portivo/pod.yaml simulators.apps.mobile.metro.port: Too small: expected number to be >=1024. Fix it, then run: podx sim lease",
       "next": "podx sim lease",
       "waitable": false
     }

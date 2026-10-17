@@ -1,6 +1,10 @@
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { SimRun, SimRunResult } from './sim-command-run'
+import { simRunProcess, type SimRun, type SimRunResult } from './sim-command-run'
 import { createSimDeviceDriver } from './sim-device-driver'
+import type { SimProcessRow } from './sim-process-facts'
 
 const SET = '/private/tmp/pod-sim-test/CoreSimulator/Devices'
 const A = '0A0A0A0A-0000-4000-8000-00000000000A'
@@ -381,3 +385,156 @@ describe('the device driver over simctl in Pod’s own set', () => {
     expect(await late.driver.release(A)).toMatchObject({ ok: false })
   })
 })
+
+describe('the app module’s calls on a device (stage 5), through the same simctl', () => {
+  const APP = '/Users/dev/.pod/sim/clients/eu.portivo.app/c118632b.app'
+
+  it('installs, launches on Metro with its arguments and reads the app’s state in Pod’s set only', async () => {
+    const { driver, calls } = driverWith([
+      ['get_app_container', ok('/x/data/Containers/Bundle/Application/1/Portivo.app\n')],
+      ['launchctl list', ok('123\t0\tUIKitApplication:eu.portivo.app[1a2b][rb-legacy]\n')]
+    ])
+    expect(await driver.appInstalled(A, 'eu.portivo.app')).toBe(true)
+    expect(await driver.install(A, APP)).toEqual({ ok: true })
+    expect(
+      await driver.launch(A, 'eu.portivo.app', [
+        '--initialUrl',
+        'http://127.0.0.1:8183',
+        '-EXDevMenuShowsAtLaunch',
+        'NO'
+      ])
+    ).toEqual({ ok: true })
+    expect(await driver.appRunning(A, 'eu.portivo.app')).toBe(true)
+    expect(await driver.appRunning(A, 'eu.portivo.operator')).toBe(false)
+    expect(await driver.uninstall(A, 'eu.portivo.app')).toEqual({ ok: true })
+    for (const call of calls) {
+      expect(call.slice(1, 3), call.join(' ')).toEqual(['--set', SET])
+    }
+    const words = calls.map((call) => call.slice(3).join(' '))
+    expect(words).toEqual(
+      expect.arrayContaining([
+        `get_app_container ${A} eu.portivo.app app`,
+        `install ${A} ${APP}`,
+        // A running copy is ended first; the arguments reach the app as its process arguments.
+        `launch --terminate-running-process ${A} eu.portivo.app --initialUrl http://127.0.0.1:8183 -EXDevMenuShowsAtLaunch NO`,
+        `uninstall ${A} eu.portivo.app`
+      ])
+    )
+  })
+
+  it('reads a missing app as not installed, a silent simctl as unknown, and an absent uninstall as done', async () => {
+    const missing = driverWith([
+      ['get_app_container', ok('', 'No such file or directory', 2)],
+      ['uninstall', ok('', 'The application is not installed', 1)]
+    ])
+    expect(await missing.driver.appInstalled(A, 'eu.portivo.app')).toBe(false)
+    expect(await missing.driver.uninstall(A, 'eu.portivo.app')).toEqual({ ok: true })
+    const silent = driverWith([
+      ['get_app_container', { ok: false, reason: 'timeout', message: 'ran past 15000 ms' }],
+      ['launchctl list', { ok: false, reason: 'timeout', message: 'ran past 15000 ms' }]
+    ])
+    expect(await silent.driver.appInstalled(A, 'eu.portivo.app')).toBe('unknown')
+    expect(await silent.driver.appRunning(A, 'eu.portivo.app')).toBe('unknown')
+    const failing = driverWith([
+      ['install', ok('', 'Failed to install the app: not a simulator build', 1)]
+    ])
+    const installed = await failing.driver.install(A, APP)
+    expect(!installed.ok && installed.message).toContain('not a simulator build')
+  })
+})
+
+describe.skipIf(process.platform !== 'darwin')(
+  'which apps a device has and runs, read on this Mac (stage 5)',
+  () => {
+    const C = '0C0C0C0C-0000-4000-8000-00000000000C'
+    const plist = (bundleId: string) =>
+      `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${bundleId}</string></dict></plist>`
+
+    /** A set on disk: device A has the Portivo client and another app, device C the client. */
+    async function setOnDisk() {
+      const set = await realpath(await mkdtemp(join(tmpdir(), 'pod-sim-set-')))
+      const apps: Record<string, string> = {}
+      const install = async (udid: string, container: string, name: string, bundleId: string) => {
+        const app = join(set, udid, 'data', 'Containers', 'Bundle', 'Application', container, name)
+        await mkdir(app, { recursive: true })
+        await writeFile(join(app, 'Info.plist'), plist(bundleId))
+        apps[`${udid} ${bundleId}`] = app
+      }
+      await install(A, '11111111-1111-4111-8111-111111111111', 'c118632b.app', 'eu.portivo.app')
+      await install(A, '22222222-2222-4222-8222-222222222222', 'Other.app', 'com.example.other')
+      await install(C, '33333333-3333-4333-8333-333333333333', 'c118632b.app', 'eu.portivo.app')
+      await writeFile(
+        join(set, A, 'device.plist'),
+        `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>name</key><string>Portivo-Pod-1</string><key>UDID</key><string>${A}</string></dict></plist>`
+      )
+      return { set, apps }
+    }
+
+    function driverOver(set: string, rows: SimProcessRow[]) {
+      const simctl: string[][] = []
+      // plutil runs for real; simctl only answers that it was asked.
+      const run: SimRun = async (program, args, options) => {
+        if (program === '/usr/bin/plutil') {
+          return simRunProcess(program, args, options)
+        }
+        simctl.push([program, ...args])
+        return ok('', 'No such file or directory', 2)
+      }
+      const driver = createSimDeviceDriver({
+        deviceSet: set,
+        run,
+        tools: async () => TOOLS,
+        ensureSet: async () => undefined,
+        processes: { startOf: async () => 'unknown', table: async () => rows }
+      })
+      return { driver, simctl }
+    }
+
+    it('answers installed and running from the set’s folders and the process table, without simctl', async () => {
+      const { set, apps } = await setOnDisk()
+      try {
+        const portivoOnA = `${apps[`${A} eu.portivo.app`]}/Portivo --initialUrl http://127.0.0.1:8183`
+        const { driver, simctl } = driverOver(set, [
+          { pid: 10, ppid: 1, command: '/sbin/launchd' },
+          { pid: 11, ppid: 9, command: portivoOnA }
+        ])
+        expect(await driver.appInstalled(A, 'eu.portivo.app')).toBe(true)
+        expect(await driver.appInstalled(A, 'com.example.missing')).toBe(false)
+        expect(await driver.appRunning(A, 'eu.portivo.app')).toBe(true)
+        // Installed is not running.
+        expect(await driver.appRunning(A, 'com.example.other')).toBe(false)
+        // The name the app reports to Metro's inspector, from CoreSimulator's record of the device.
+        expect(await driver.deviceName(A)).toBe('Portivo-Pod-1')
+        expect(await driver.deviceName(C)).toBeNull()
+        expect(simctl).toEqual([])
+      } finally {
+        await rm(set, { recursive: true, force: true })
+      }
+    })
+
+    it('does not take the same app running on another device for this one', async () => {
+      const { set, apps } = await setOnDisk()
+      try {
+        const portivoOnC = `${apps[`${C} eu.portivo.app`]}/Portivo --initialUrl http://127.0.0.1:8184`
+        const { driver } = driverOver(set, [{ pid: 12, ppid: 9, command: portivoOnC }])
+        expect(await driver.appRunning(A, 'eu.portivo.app')).toBe(false)
+        expect(await driver.appRunning(C, 'eu.portivo.app')).toBe(true)
+      } finally {
+        await rm(set, { recursive: true, force: true })
+      }
+    })
+
+    it('asks simctl when the device has no data folder on this Mac', async () => {
+      const { set } = await setOnDisk()
+      try {
+        const { driver, simctl } = driverOver(set, [])
+        expect(await driver.appInstalled(B, 'eu.portivo.app')).toBe(false)
+        expect(simctl.map((call) => call.slice(3).join(' '))).toEqual([
+          `get_app_container ${B} eu.portivo.app app`
+        ])
+      } finally {
+        await rm(set, { recursive: true, force: true })
+      }
+    })
+  }
+)

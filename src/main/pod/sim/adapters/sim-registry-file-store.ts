@@ -63,7 +63,8 @@ function isBusy(error: unknown): boolean {
   return code === 'EAGAIN' || code === 'EWOULDBLOCK'
 }
 
-async function lockWithin(path: string, waitMs: number) {
+/** The flock on `path` within `waitMs` (also the app module's Mac-wide files); EAGAIN past it. */
+export async function lockWithin(path: string, waitMs: number) {
   const deadline = performance.now() + waitMs
   let pause = 1
   for (;;) {

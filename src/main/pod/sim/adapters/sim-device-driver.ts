@@ -4,7 +4,9 @@
 // sets as well, so every simslim call first checks its UDID is a directory in Pod's set, and a
 // clone's new UDID is read from its JSON and checked the same way. Each op answers within its own
 // timeout, set under the core's op deadline (SIM_OP_DEADLINE_MS), so the outcome lands before the
-// core gives up on it; nothing throws.
+// core gives up on it; nothing throws. The app module (stage 5) installs and launches the lease's
+// dev client through the same simctl, in the same set (SimAppDevice).
+import type { SimAppDevice } from '../apps/sim-app-device'
 import type {
   SimDeviceDriver,
   SimDeviceObservation,
@@ -12,7 +14,9 @@ import type {
   SimSlimProfile
 } from '../pool/sim-pool-ports'
 import { simRunFailure, simRunProcess, type SimRun, type SimRunResult } from './sim-command-run'
+import { simDeviceAppOps } from './sim-device-app-ops'
 import { simDevicesOnDisk } from './sim-pod-home'
+import type { SimProcessFacts } from './sim-process-facts'
 import { parseSimctlList, SIM_UDID_IN_TEXT, userAppsRunning } from './sim-simctl-output'
 import { resolveSimTools, type SimTools } from './sim-tools'
 
@@ -28,6 +32,8 @@ export type SimDeviceDriverOptions = Readonly<{
   // The simslim profile file for a lease's app (stage 5b derives them); null: simslim's default,
   // every slimmable category off.
   slimProfileFile?: (profile: SimSlimProfile) => string | null
+  // Tells which apps run without `simctl spawn` (sim-device-app-ops.ts).
+  processes?: SimProcessFacts | null
 }>
 
 // Under SIM_OP_DEADLINE_MS, each with room for the outcome's own step. Measured on Xcode 27 with
@@ -76,7 +82,9 @@ function clonedUdid(stdout: string): string | null {
   }
 }
 
-export function createSimDeviceDriver(options: SimDeviceDriverOptions): SimDeviceDriver {
+export function createSimDeviceDriver(
+  options: SimDeviceDriverOptions
+): SimDeviceDriver & SimAppDevice {
   const run = options.run ?? simRunProcess
   const onDisk = options.devicesOnDisk ?? simDevicesOnDisk
   const profileFile = options.slimProfileFile ?? (() => null)
@@ -278,6 +286,12 @@ export function createSimDeviceDriver(options: SimDeviceDriverOptions): SimDevic
       return outcome(
         await step('simctl delete', simctl(['delete', udid], TIMEOUT_MS.delete), NO_SUCH_DEVICE)
       )
-    }
+    },
+
+    ...simDeviceAppOps(simctl, step, {
+      deviceSet: options.deviceSet,
+      run,
+      processes: options.processes ?? null
+    })
   }
 }
