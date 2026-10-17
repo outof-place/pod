@@ -300,6 +300,8 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         }
       } else if (
         targetsHost &&
+        // Pod: a window remounting a failed shell's pane spawns a new one behind its overlay.
+        !(automatic && publicTab?.type === 'terminal' && publicTab.terminalExit) &&
         // Pod: focusing a sleeping worktree's tab spawns its PTY, waking what Close Terminals slept.
         !podUiHostRefusesAutomaticFocus(
           automatic,
