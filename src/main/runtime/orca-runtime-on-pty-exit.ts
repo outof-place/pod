@@ -10,6 +10,11 @@ import { SSH_EXIT_UNCONFIRMED_REASON } from '../../shared/pty-liveness-verdict'
 import type { RetiredTerminalSurface } from './mobile-session-terminal-retirement'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
+import {
+  clearPodTerminalExit,
+  podRetainsFailedLocalExit,
+  recordPodTerminalExit
+} from '../pod/terminal-exit/pod-terminal-exits'
 
 export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnected {
   onPtyExit(
@@ -122,6 +127,25 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       const preservesIntentionallyStoppedSurface =
         this.intentionalPtyStops.claimExit(ptyId, exitIncarnationId ?? pty?.incarnationId).length >
         0
+      // Pod: a local shell that failed keeps its pane, for the native "Terminal exited" overlay.
+      const retainsFailedLocalSurface =
+        !preservesIntentionallyStoppedSurface &&
+        !preservesAbnormalSshSurface &&
+        pty !== undefined &&
+        podRetainsFailedLocalExit({
+          exitCode,
+          local: pty.connectionId == null && !this.isSshOwnedPtyId(ptyId),
+          operatorClose: exitCause.kind === 'operator_close',
+          processDeathCertified
+        })
+      const exitedAt = Date.now()
+      for (const surface of exactSurfaces) {
+        if (retainsFailedLocalSurface) {
+          recordPodTerminalExit(surface, { exitCode, exitedAt })
+        } else {
+          clearPodTerminalExit(surface.worktreeId, surface.parentTabId, surface.leafId)
+        }
+      }
       advertisedUrlWatcher.unbindPty(ptyId)
       // Clean up new mobile state for this PTY
       this.mobileSubscribers.delete(ptyId)
@@ -220,8 +244,12 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
         this.resolvePtyExitWaiters(pty, ptyId)
         this.pruneDisconnectedPtyTranscript(pty)
       }
-      if (preservesIntentionallyStoppedSurface || preservesAbnormalSshSurface) {
-        if (preservesIntentionallyStoppedSurface) {
+      if (
+        preservesIntentionallyStoppedSurface ||
+        preservesAbnormalSshSurface ||
+        retainsFailedLocalSurface
+      ) {
+        if (preservesIntentionallyStoppedSurface || retainsFailedLocalSurface) {
           // Pod: the frame below shows a slept pane pending, not its dead terminal ready.
           for (const leaf of this.getLeavesForPty(ptyId)) {
             leaf.connected = false

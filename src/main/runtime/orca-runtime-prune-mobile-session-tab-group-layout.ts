@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { withPodTerminalExits } from '../pod/terminal-exit/pod-terminal-exits'
 import { selectFreshAgentRowForMobileTab } from './runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithHostTerminalTheme } from './orca-runtime-host-terminal-theme'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
@@ -86,7 +87,8 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       return record?.location.workspaceId === snapshot.worktree ? record.conversationName : null
     })
     const result = projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
-    return this.withHostTerminalTheme(result)
+    // Pod: a failed local shell's kept pane shows its exit (pod-terminal-exits.ts).
+    return this.withHostTerminalTheme(withPodTerminalExits(result))
   }
 
   refreshStructuredConversationTabTitle(workspaceId: string, sessionId: string): void {
