@@ -10,6 +10,7 @@ import { agentHookServer } from '../../../agent-hooks/server'
 import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
 import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
+import { applyPodIndexedSearchPtyEnv } from '../../../pod/search/pod-indexed-search-pty-env'
 import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl-managed-cli'
 import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
 import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
@@ -283,6 +284,8 @@ export function buildPtyHostEnv(
     userDataPath: opts.userDataPath,
     resourcesPath: opts.resourcesPath
   })
+  // Pod: indexed search for agents in this terminal (Settings: Indexed search).
+  applyPodIndexedSearchPtyEnv(baseEnv)
 
   if (
     opts.routeBrowserOpensToClient === true &&
