@@ -125,7 +125,11 @@ export function createNotificationDeliveryService(
             // vs "finished" — and to stay silent while the agent is still working.
             ...(request.agentState ? { agentState: request.agentState } : {}),
             ...(request.attentionKey ? { attentionKey: request.attentionKey } : {}),
-            ...(request.structuredOrigin ? { structuredOrigin: request.structuredOrigin } : {})
+            ...(request.structuredOrigin ? { structuredOrigin: request.structuredOrigin } : {}),
+            // Fork-only (Pod): PodNative mutes machines itself (notifications.sources).
+            ...(request.notificationSourceId
+              ? { notificationSourceId: request.notificationSourceId }
+              : {})
           })
           deps.recordAnnounced?.(request)
         }
