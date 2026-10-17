@@ -1,10 +1,13 @@
-// Fork-only (Pod): is the git profile Pod applied in effect? A read-only look, with `git status`
-// timed now so the UI can show it against the time the apply measured.
+// Fork-only (Pod): is the git profile Pod applied in effect? It changes no setting; timing
+// `git status` may start the file watcher a repo asks for, as any status would. Timed now so the
+// UI can show it against the time the apply measured.
 import type { PodGitProfileRow } from '../../../shared/pod-workspace-git-profile'
 import type { PodGitProfileCheck } from '../../../shared/pod-workspace-tidy-types'
 import type { WorkspaceGitExec } from './workspace-git-exec'
 
 const STATUS_RUNS = 3
+/** Per run: a repo slower than this tells the user enough, and the RPC never waits a minute. */
+const STATUS_TIMEOUT_MS = 5_000
 const STATUS_ARGS = [
   '--no-optional-locks',
   'status',
@@ -25,7 +28,7 @@ export async function timeGitStatus(
   const times: number[] = []
   for (let run = 0; run < STATUS_RUNS; run++) {
     const started = performance.now()
-    const result = await git(STATUS_ARGS, repoPath)
+    const result = await git(STATUS_ARGS, repoPath, { timeoutMs: STATUS_TIMEOUT_MS })
     if (result.code !== 0) {
       return null
     }

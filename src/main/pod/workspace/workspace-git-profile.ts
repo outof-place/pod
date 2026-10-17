@@ -24,6 +24,7 @@ import {
   disableRelativeWorktrees,
   enableRelativeWorktrees,
   isKeyOptIn,
+  readRelativeWorktreesBefore,
   migrateRefFormat,
   planOptIns,
   startBackfill
@@ -184,13 +185,19 @@ export function createWorkspaceGitProfile(deps: WorkspaceGitProfileDeps) {
         await migrateRefFormat(git, repo.path, 'reftable')
       }
       if (optIns.includes('relative-worktrees')) {
-        tune.relativeWorktreesBefore = await enableRelativeWorktrees(git, keys.set, repo.path)
+        // Recorded before anything changes: a repair that fails part way is still undone.
+        tune.relativeWorktreesBefore = await readRelativeWorktreesBefore(git, repo.path)
         tune.podKeys.push('worktree.useRelativePaths')
+        await enableRelativeWorktrees(git, keys.set, repo.path)
       }
       tune.optIns = [...optIns]
     } finally {
       // Whatever got written is recorded, so even a failed apply can be undone.
-      if (tune.orcaKeys.length + tune.podKeys.length > 0 || tune.registeredMaintenance) {
+      if (
+        tune.orcaKeys.length + tune.podKeys.length > 0 ||
+        tune.registeredMaintenance ||
+        tune.relativeWorktreesBefore
+      ) {
         await journal.update((data) => void data.tunes.push(tune))
       }
     }
