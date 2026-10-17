@@ -22,11 +22,9 @@
 // checks the run's processes: a real claude or codex, or a new SecurityAgent, stops the launch.
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import {
-  closeSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -39,12 +37,11 @@ import { checkAcc, guardInstance, releaseInstance } from '../lib/acc-guard.mjs'
 import { assertHeavyGate } from '../lib/heavy-gate.mjs'
 import {
   APP_ENV_BLANK,
-  ENV_CANARY,
-  callerCanary,
-  envPidCheck,
+  envTreeCheck,
   guardVerdict,
   installedClaudeVersion,
-  prepareGuard
+  prepareGuard,
+  spawnAppOpen
 } from '../lib/guard-path.mjs'
 import { assertRealHomeUntouched, realHomeState } from '../lib/real-home-guard.mjs'
 import {
@@ -237,16 +234,32 @@ function harness(proc) {
 // What each process is, by its executable: Pod's own (inside the clone) or the terminals' workload.
 function classify(launch, proc) {
   const exe = proc.path
-  if (exe === launch.exe) return 'podnative'
+  if (exe === launch.exe) {
+    return 'podnative'
+  }
   // The runtime starts the terminal daemon from a copy of itself in the profile.
-  if (exe.startsWith(`${launch.profile}/daemon-host.noindex/`)) return 'daemon'
-  if (!exe.startsWith(`${launch.app}/`)) return 'workload'
+  if (exe.startsWith(`${launch.profile}/daemon-host.noindex/`)) {
+    return 'daemon'
+  }
+  if (!exe.startsWith(`${launch.app}/`)) {
+    return 'workload'
+  }
   const name = path.basename(exe)
-  if (/Helper \(GPU\)/.test(name)) return 'runtime-gpu'
-  if (/Helper \(Renderer\)/.test(name)) return 'runtime-renderer'
-  if (/Helper/.test(name)) return 'runtime-helper'
-  if (/crashpad/.test(name)) return 'crashpad'
-  if (exe.includes('/Pod Runtime.app/Contents/MacOS/')) return /daemon/.test(proc.args) ? 'daemon' : 'runtime-main'
+  if (/Helper \(GPU\)/.test(name)) {
+    return 'runtime-gpu'
+  }
+  if (/Helper \(Renderer\)/.test(name)) {
+    return 'runtime-renderer'
+  }
+  if (/Helper/.test(name)) {
+    return 'runtime-helper'
+  }
+  if (/crashpad/.test(name)) {
+    return 'crashpad'
+  }
+  if (exe.includes('/Pod Runtime.app/Contents/MacOS/')) {
+    return /daemon/.test(proc.args) ? 'daemon' : 'runtime-main'
+  }
   return 'bundle-other'
 }
 
@@ -254,7 +267,9 @@ function classify(launch, proc) {
 // that is not one of the guard's stubs.
 function realAgent(launch, proc) {
   const base = path.basename(proc.path)
-  if (proc.path.startsWith(path.join(HOME, '.local/share/claude/'))) return true
+  if (proc.path.startsWith(path.join(HOME, '.local/share/claude/'))) {
+    return true
+  }
   return (base === 'claude' || base === 'codex') && !proc.path.startsWith(`${launch.guard}/`)
 }
 
@@ -282,7 +297,9 @@ async function rpcWithRetry(launch, method, params, attempts = 20) {
     try {
       return await rpcOk(runtimeMeta({ ud: launch.profile }), method, params, 60_000)
     } catch (error) {
-      if (attempt >= attempts) throw error
+      if (attempt >= attempts) {
+        throw error
+      }
       await sleep(1_000)
     }
   }
@@ -299,8 +316,6 @@ async function measureLaunch(variant, index) {
   const guardPath = launch.guardSetup.path
   const guardEnv = Object.entries(launch.guardSetup.env)
   const nosearch = path.join(launch.profile, 'tmp/no-ogd.sock')
-  // The caller's canary, in the env app_open's shell starts with.
-  const canary = callerCanary()
   const env = (flag, pairs) => pairs.flatMap(([key, value]) => [flag, `${key}=${value}`])
   // PodNative opens its runtime with `open --env` and its own environment, and LaunchServices adds
   // the session's variables again: the runtime gets app_open's allowlist and blanks explicitly.
@@ -374,29 +389,10 @@ async function measureLaunch(variant, index) {
     })
   }
   const launchedAt = Date.now()
-  // The shell that sources open-app.sh starts from a near-empty env with the canary in it; app_open
-  // runs open under its own `env -i`, and the shell waits for open (alive while PodNative is).
-  const encoding = process.env.__CF_USER_TEXT_ENCODING ?? ''
-  // app_open's own refusals land in out/opener.log.
-  const openerLog = openSync(path.join(launch.work, 'out/opener.log'), 'w', 0o600)
-  const opener = spawn(
-    '/usr/bin/env',
-    [
-      '-i',
-      'PATH=/usr/bin:/bin',
-      'LANG=en_US.UTF-8',
-      ...(/^0x[0-9A-Fa-f]+:0x[0-9A-Fa-f]+:0x[0-9A-Fa-f]+$/.test(encoding) ? [`__CF_USER_TEXT_ENCODING=${encoding}`] : []),
-      `${ENV_CANARY}=${canary}`,
-      '/bin/bash',
-      '-c',
-      '. "$1/open-app.sh" || exit 3; shift; app_open "$@" || exit $?; wait "$APP_OPEN_PID"',
-      'open-app',
-      path.join(launch.work, 'guard-lib'),
-      ...args
-    ],
-    { stdio: ['ignore', 'ignore', openerLog] }
-  )
-  closeSync(openerLog)
+  // app_open (lib/guard-path.mjs spawnAppOpen) in a shell that starts from callerEnv(), the canary
+  // in it; app_open runs open under its own `env -i`, and the shell waits for open (alive while
+  // PodNative is). app_open's own refusals land in out/opener.log.
+  const opener = spawnAppOpen(launch.work, args, { stderrFile: path.join(launch.work, 'out/opener.log') })
   openers.add(opener.pid)
   let openerStatus = null
   const openerExit = new Promise((resolve) => opener.on('exit', (code) => resolve((openerStatus = code))))
@@ -404,44 +400,47 @@ async function measureLaunch(variant, index) {
   // PodNative and its runtime must show the mark and no canary; no other process of the launch may
   // show the canary, and one that shows no mark either (zsh, a platform binary) is listed unproven.
   const checkEnv = async (when, launched) => {
-    const tree = await snapshot(launch)
-    const problems = []
-    const unproven = []
-    const proven = []
-    for (const proc of tree.procs) {
-      const label = launched[proc.pid] ?? classify(launch, proc)
-      const check = envPidCheck(launch.work, proc.pid, label)
-      if (check.status === 0) proven.push(`${proc.pid} ${label}`)
-      else if (check.status === 1 || launched[proc.pid]) problems.push(check.said)
-      else unproven.push(`${proc.pid} ${label}`)
+    const verdict = envTreeCheck(launch.work, (await snapshot(launch)).procs, {
+      launched,
+      labelOf: (proc) => classify(launch, proc)
+    })
+    envChecks.push({ when, ...verdict })
+    if (!verdict.ok) {
+      throw new Error(`env allowlist (${when}): ${verdict.problems.join('; ')}`)
     }
-    for (const [pid, label] of Object.entries(launched)) {
-      if (!tree.procs.some((proc) => proc.pid === Number(pid))) problems.push(`${label} ${pid} is not among the launch's processes`)
-    }
-    envChecks.push({ when, ok: problems.length === 0, problems, proven, unproven })
-    if (problems.length > 0) throw new Error(`env allowlist (${when}): ${problems.join('; ')}`)
   }
   let failure = null
   const stop = async (reason) => {
     failure ??= reason
     log(`${SUITE}: STOP ${reason}`)
     for (const proc of (await snapshot(launch)).procs) {
-      if (proc.path === launch.exe) process.kill(proc.pid, 'SIGTERM')
+      if (proc.path === launch.exe) {
+        process.kill(proc.pid, 'SIGTERM')
+      }
     }
   }
   // The watchdog, every second until PodNative is gone.
   let watching = false
   const watchdog = setInterval(async () => {
-    if (watching) return
+    if (watching) {
+      return
+    }
     watching = true
     try {
       const now = await snapshot(launch)
       const offenders = now.procs.filter((proc) => realAgent(launch, proc))
-      for (const proc of offenders) process.kill(proc.pid, 'SIGKILL')
-      if (offenders.length > 0) await stop(`a real agent in the run: ${offenders.map((proc) => `${proc.pid} ${proc.path}`).join(', ')}`)
+      for (const proc of offenders) {
+        process.kill(proc.pid, 'SIGKILL')
+      }
+      if (offenders.length > 0) {
+        await stop(`a real agent in the run: ${offenders.map((proc) => `${proc.pid} ${proc.path}`).join(', ')}`)
+      }
       const fresh = securityAgents().filter((pid) => !agentsBefore.includes(pid))
-      if (fresh.length > 0) await stop(`SecurityAgent ${fresh.join(' ')} appeared`)
+      if (fresh.length > 0) {
+        await stop(`SecurityAgent ${fresh.join(' ')} appeared`)
+      }
     } catch {
+      // A snapshot that failed mid-run: the next tick reads again.
     } finally {
       watching = false
     }
@@ -452,9 +451,13 @@ async function measureLaunch(variant, index) {
     let pn = null
     for (let i = 0; i < 80 && !pn; i += 1) {
       pn = (await snapshot(launch)).procs.find((proc) => proc.path === launch.exe)?.pid ?? null
-      if (!pn) await sleep(250)
+      if (!pn) {
+        await sleep(250)
+      }
     }
-    if (!pn) throw new Error(`no PodNative of this launch came up${openerStatus === null ? '' : ` (app_open's shell exited ${openerStatus}, out/opener.log)`}`)
+    if (!pn) {
+      throw new Error(`no PodNative of this launch came up${openerStatus === null ? '' : ` (app_open's shell exited ${openerStatus}, out/opener.log)`}`)
+    }
     // A claude-acc setup.sh anywhere stops the launch (lib/acc-guard.mjs).
     guardInstance(pn, () => process.kill(pn, 'SIGTERM'))
     guarded = pn
@@ -468,9 +471,13 @@ async function measureLaunch(variant, index) {
     try {
       const { stdout } = await run('/usr/sbin/lsof', ['-nP', '-a', '-p', tree.procs.map((proc) => proc.pid).join(','), '-iTCP', '-sTCP:LISTEN'])
       const wide = stdout.split('\n').slice(1).filter(Boolean).map((line) => line.trim().split(/\s+/)[8]).filter((addr) => addr && !/^(127\.0\.0\.1|\[::1\]):/.test(addr))
-      if (wide.length > 0) throw new Error(`listens beyond loopback: ${wide.join(' ')}`)
+      if (wide.length > 0) {
+        throw new Error(`listens beyond loopback: ${wide.join(' ')}`)
+      }
     } catch (error) {
-      if (/beyond loopback/.test(error.message)) throw error
+      if (/beyond loopback/.test(error.message)) {
+        throw error
+      }
     }
     await checkEnv('runtime up', { [pn]: 'podnative', [runtimePid]: 'runtime' })
     await rpcWithRetry(launch, 'repo.add', { path: launch.repo })
@@ -486,10 +493,18 @@ async function measureLaunch(variant, index) {
         terminals += 1
       }
       // With the most processes: the 8 terminals' shells too, read before the settle.
-      if (state.id === 'idle8') await checkEnv('8 terminals', { [pn]: 'podnative', [runtimePid]: 'runtime' })
-      if (state.sleep) terminals = 0
-      if (state.id !== 'idle0') await sleep(settleS * 1000)
-      if (failure) break
+      if (state.id === 'idle8') {
+        await checkEnv('8 terminals', { [pn]: 'podnative', [runtimePid]: 'runtime' })
+      }
+      if (state.sleep) {
+        terminals = 0
+      }
+      if (state.id !== 'idle0') {
+        await sleep(settleS * 1000)
+      }
+      if (failure) {
+        break
+      }
       const loadBefore = loadAverage()
       const before = await snapshot(launch, { scan: true })
       const t0 = Date.now()
@@ -524,7 +539,9 @@ async function measureLaunch(variant, index) {
   clearTimeout(deadline)
   clearInterval(watchdog)
   openers.delete(opener.pid)
-  if (guarded) releaseInstance(guarded)
+  if (guarded) {
+    releaseInstance(guarded)
+  }
   writer?.kill('SIGTERM')
   const cleaned = await cleanup(launch)
   const measure = existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : null
@@ -552,9 +569,15 @@ async function measureLaunch(variant, index) {
     measureIdle: measure?.idle ?? null
   }
   checkAcc(`after native-idle launch ${index + 1}`)
-  if (checks.securityNonFind > 0) failure ??= `security shim saw ${checks.securityNonFind} non-find calls`
-  if (!checks.guard.ok) failure ??= `guard PATH: ${checks.guard.problems.join('; ')}`
-  if (envChecks.length < 2 && !failure) failure = `env allowlist checked ${envChecks.length} times, not 2`
+  if (checks.securityNonFind > 0) {
+    failure ??= `security shim saw ${checks.securityNonFind} non-find calls`
+  }
+  if (!checks.guard.ok) {
+    failure ??= `guard PATH: ${checks.guard.problems.join('; ')}`
+  }
+  if (envChecks.length < 2 && !failure) {
+    failure = `env allowlist checked ${envChecks.length} times, not 2`
+  }
   log(`${SUITE}: launch ${index + 1} done${failure ? `, FAILED: ${failure}` : ''}; checks ${JSON.stringify({ ...checks, measureIdle: undefined }).slice(0, 300)}`)
   return { variant, launch: index, work: launch.work, failure, windows, checks }
 }
@@ -571,8 +594,12 @@ async function cleanup(launch) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name)
       if (entry.isDirectory()) {
-        if (entry.name.endsWith('.app')) nested.push(full)
-        if (!entry.isSymbolicLink()) walk(full)
+        if (entry.name.endsWith('.app')) {
+          nested.push(full)
+        }
+        if (!entry.isSymbolicLink()) {
+          walk(full)
+        }
       }
     }
   }

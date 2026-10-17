@@ -18,14 +18,20 @@
 //     the bash that guard_exec's a command with these NAME=VALUE words (the runtime's exec)
 //   envPidCheck(run, pid, label)
 //     guard_env_pid_check on one of the run's own pids: the mark and no canary (status 0)
+//   envTreeCheck(run, procs, { launched, labelOf })
+//     envPidCheck on each of a run's processes: the launched ones proven, no canary anywhere
+//   callerEnv()
+//     the env a launcher shell starts from: a system PATH, LANG, the text encoding, the canary
+//   spawnAppOpen(run, args, { stderrFile })
+//     open-app.sh's app_open from the run's guard-lib, in such a shell
 //
 // The app's environment is an allowlist, never the caller's (the lead's MUST, 2026-10-17: `open`
 // hands an app its caller's whole environment). guard_exec and app_open start from `env -i` and add
 // GUARD_POSITIVE_MARK=1; the caller sets GUARD_CANARY_TOKEN in its own environment (callerCanary)
 // before it starts anything. A check that can't see the mark proves nothing and fails the run.
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdirSync, readlinkSync, writeFileSync } from 'node:fs'
+import { closeSync, mkdirSync, openSync, readlinkSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -47,6 +53,21 @@ export function callerCanary() {
   canary ??= randomBytes(16).toString('hex')
   process.env[ENV_CANARY] = canary
   return canary
+}
+
+/**
+ * The env a launcher shell (guard_exec's script, app_open's bash) starts from: a system PATH,
+ * LANG, CoreFoundation's text encoding when it has the 0x..:0x..:0x.. form, and the caller's
+ * canary, which guard_exec and app_open must keep from the app. Nothing else of this process's.
+ */
+export function callerEnv() {
+  const encoding = process.env.__CF_USER_TEXT_ENCODING ?? ''
+  return {
+    PATH: '/usr/bin:/bin',
+    LANG: 'en_US.UTF-8',
+    ...(/^0x[0-9A-Fa-f]+:0x[0-9A-Fa-f]+:0x[0-9A-Fa-f]+$/.test(encoding) ? { __CF_USER_TEXT_ENCODING: encoding } : {}),
+    [ENV_CANARY]: callerCanary()
+  }
 }
 
 function helper(run, script, args, env = {}) {
@@ -79,7 +100,9 @@ const said = (error) =>
 export function installedClaudeVersion() {
   const target = readlinkSync(path.join(os.homedir(), '.local/bin/claude'))
   const version = path.basename(target)
-  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`cannot read the claude version from ${target}`)
+  if (!/^\d+\.\d+\.\d+$/.test(version)) {
+    throw new Error(`cannot read the claude version from ${target}`)
+  }
   return version
 }
 
@@ -137,8 +160,11 @@ export function guardVerdict(run, fronts = []) {
   } catch (error) {
     abort = `failed (status ${error.status}): ${said(error)}`
   }
-  if (abort === 'abort') problems.push('a stub saw claude run past --version')
-  else if (abort !== 'clean') problems.push(`guard_path_abort ${abort}`)
+  if (abort === 'abort') {
+    problems.push('a stub saw claude run past --version')
+  } else if (abort !== 'clean') {
+    problems.push(`guard_path_abort ${abort}`)
+  }
   // guard_env_names_check: 1 when a stub call had the canary, 2 when none had the mark (no proof).
   let envNames = null
   try {
@@ -166,7 +192,9 @@ const quoted = (word) => `'${String(word).replaceAll("'", "'\\''")}'`
  */
 export function guardExecScript(run, { words, fronts = [], exe }) {
   for (const [name] of Object.entries(words)) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`guardExecScript: a bad name ('${name}')`)
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      throw new Error(`guardExecScript: a bad name ('${name}')`)
+    }
   }
   return [
     '#!/bin/bash',
@@ -189,5 +217,60 @@ export function envPidCheck(run, pid, label) {
     return { pid, label, status: 0, said: helper(run, 'guard_env_pid_check "$@"', [String(pid), label]).trim() }
   } catch (error) {
     return { pid, label, status: error.status ?? -1, said: said(error) }
+  }
+}
+
+/**
+ * envPidCheck on each of a run's processes ({ pid, path }). Every launched pid ({ pid: label })
+ * must show the mark and no canary, and be among them; no other may show the canary, and one
+ * without the mark either (zsh and other platform binaries) is listed unproven.
+ */
+export function envTreeCheck(run, procs, { launched, labelOf }) {
+  const problems = []
+  const proven = []
+  const unproven = []
+  for (const proc of procs) {
+    const label = launched[proc.pid] ?? labelOf(proc)
+    const check = envPidCheck(run, proc.pid, label)
+    if (check.status === 0) {
+      proven.push(`${proc.pid} ${label}`)
+    } else if (check.status === 1 || launched[proc.pid]) {
+      problems.push(check.said)
+    } else {
+      unproven.push(`${proc.pid} ${label}`)
+    }
+  }
+  for (const [pid, label] of Object.entries(launched)) {
+    if (!procs.some((proc) => proc.pid === Number(pid))) {
+      problems.push(`${label} ${pid} is not among the run's processes`)
+    }
+  }
+  return { ok: problems.length === 0, problems, proven, unproven }
+}
+
+/**
+ * `app_open <args…>` (open-app.sh from <run>/guard-lib) in a bash that starts from callerEnv() and
+ * waits for open, which runs while the app does. app_open's own refusals go to stderrFile. The
+ * child is that bash, never the app.
+ */
+export function spawnAppOpen(run, args, { stderrFile }) {
+  const err = openSync(stderrFile, 'w', 0o600)
+  try {
+    return spawn(
+      '/usr/bin/env',
+      [
+        '-i',
+        ...Object.entries(callerEnv()).map(([name, value]) => `${name}=${value}`),
+        '/bin/bash',
+        '-c',
+        '. "$1/open-app.sh" || exit 3; shift; app_open "$@" || exit $?; wait "$APP_OPEN_PID"',
+        'open-app',
+        path.join(run, 'guard-lib'),
+        ...args
+      ],
+      { stdio: ['ignore', 'ignore', err] }
+    )
+  } finally {
+    closeSync(err)
   }
 }

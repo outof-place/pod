@@ -28,7 +28,9 @@ const needsHelper = { skip: !haveHelper && `PodNative ${GUARD_PATH_REVISION} not
 
 function removeRun(run) {
   const remover = path.join(os.homedir(), '.local/bin/pod-tmp-rm')
-  if (existsSync(remover)) execFileSync(remover, [run], { stdio: 'ignore' })
+  if (existsSync(remover)) {
+    execFileSync(remover, [run], { stdio: 'ignore' })
+  }
 }
 
 // A fresh run dir with a guard (no catalog: these tests read no app).
@@ -36,7 +38,9 @@ function guardedRun(homes = []) {
   const run = realpathSync(mkdtempSync('/private/tmp/guard-path-test.'))
   const ud = path.join(run, 'ud')
   mkdirSync(ud)
-  for (const home of homes) mkdirSync(path.join(run, home))
+  for (const home of homes) {
+    mkdirSync(path.join(run, home))
+  }
   return { run, ud, guard: prepareGuard(run, { ud, homes: homes.map((home) => path.join(run, home)), claudeVersion: '2.1.302' }) }
 }
 
@@ -174,7 +178,9 @@ test(
       assert.ok(!caught.said.includes(canary), 'never a value')
       assert.equal(envPidCheck(run, unmarked.pid, 'unmarked').status, 2)
     } finally {
-      for (const child of children) child.kill('SIGKILL')
+      for (const child of children) {
+        child.kill('SIGKILL')
+      }
       removeRun(run)
     }
   }

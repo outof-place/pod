@@ -69,7 +69,9 @@ test(
       assert.equal(alive(stranger.pid), true, 'the stranger survived')
     } finally {
       for (const child of [own, stranger]) {
-        if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+        if (child.exitCode === null && child.signalCode === null) {
+          child.kill('SIGKILL')
+        }
       }
       // The test's own /private/tmp dir, through the guarded remover where it is installed.
       const remover = path.join(os.homedir(), '.local/bin/pod-tmp-rm')
@@ -88,7 +90,9 @@ test('startTimes takes more pids than procstat takes roots in one call', { skip:
     const times = startTimes(children.map((child) => child.pid))
     assert.equal(children.filter((child) => times.get(child.pid) > 0).length, 70)
   } finally {
-    for (const child of children) child.kill('SIGKILL')
+    for (const child of children) {
+      child.kill('SIGKILL')
+    }
   }
 })
 
@@ -102,7 +106,9 @@ test('a signal goes only to a target that still has its start time', { skip: !ex
     assert.equal(alive(child.pid) && child.exitCode === null && child.signalCode === null, true, 'a changed start time: no signal')
     assert.equal(signalIfSame([{ pid: child.pid, path: '/bin/sleep', startUs: root.startUs }], 'SIGTERM').length, 1)
   } finally {
-    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL')
+    }
   }
 })
 
@@ -118,8 +124,12 @@ test('when procstat fails, nothing is signalled and the error names every target
       (error) => error instanceof UnsignalledError && /left running: .*\/the\/run\/app0.*\/the\/run\/app1/.test(error.message)
     )
     await sleep(100)
-    for (const child of children) assert.ok(alive(child.pid), `${child.pid} got no signal`)
+    for (const child of children) {
+      assert.ok(alive(child.pid), `${child.pid} got no signal`)
+    }
   } finally {
-    for (const child of children) child.kill('SIGKILL')
+    for (const child of children) {
+      child.kill('SIGKILL')
+    }
   }
 })
