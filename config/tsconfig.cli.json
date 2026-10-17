@@ -35,6 +35,7 @@
     "../src/main/pod/agent-hook/pod-claude-hook-service.ts",
     "../src/main/pod/agent-hook/pod-claude-profile-hook-service.ts",
     "../src/main/pod/agent-hook/pod-claude-settings-migration.ts",
+    "../src/main/pod/agent-hook/pod-claude-settings-jsonc-cut.ts",
     "../src/main/pod/agent-hook/pod-claude-settings-cut.ts",
     "../src/main/pod/agent-hook/pod-claude-agent-change.ts",
     "../src/main/pod/ui-host/pod-ui-host-launch.ts",

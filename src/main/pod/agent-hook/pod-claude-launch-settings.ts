@@ -47,7 +47,7 @@ export function resolvePodAgentLauncher(options: LaunchOptions = {}): string | n
   ) {
     return null
   }
-  const appResources: unknown = Reflect.get(process, 'resourcesPath')
+  const appResources = 'resourcesPath' in process ? process.resourcesPath : undefined
   const resourcesPath =
     'resourcesPath' in options
       ? options.resourcesPath
@@ -120,6 +120,8 @@ function writeIfChanged(path: string, text: string): void {
 }
 
 export type PodClaudeStatusLine = { type: 'command'; command: string }
+/** One launch template's JSON: the hooks, and Pod's statusLine in a `-statusline` one. */
+type PodClaudeLaunchFile = { hooks?: Record<string, unknown[]>; statusLine?: PodClaudeStatusLine }
 
 /** Template file names: `<prefix>.<kind>.json`, and `<kind>-statusline` with Pod's statusLine. */
 const TEMPLATE_SUFFIXES = [
@@ -153,7 +155,7 @@ export function writePodClaudeLaunchTemplates(
     claudeVersionReaches(claudeVersion, CLAUDE_LAUNCH_SETTINGS_FIRST_VERSION)
       ? httpVariant(command)
       : null
-  const text = (value: object): string => `${JSON.stringify(value, null, 2)}\n`
+  const text = (value: PodClaudeLaunchFile): string => `${JSON.stringify(value, null, 2)}\n`
   const kinds = [
     ['command', { hooks: command.hooks }],
     ['http', http]

@@ -97,7 +97,7 @@ export function podClaudeSettingsCut(): PodClaudeSettingsCut {
       scan: () => scanLegacyClaudes(homedir()),
       // Why only in Electron's main process: the CLI exits right after its install.
       awaitExit:
-        launcher && Reflect.get(process, 'type') === 'browser'
+        launcher && 'type' in process && process.type === 'browser'
           ? (pids) => launcherAwaitExit(launcher, pids)
           : null,
       log: (event, details) => console.log(`[pod] ${event}`, JSON.stringify(details ?? {}))
