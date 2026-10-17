@@ -16,6 +16,10 @@ import { PaneSelectMenus } from './pod-browser-pane-select'
 import { describePaneContextMenu } from './pod-browser-pane-context-menu'
 import { PaneLinks } from './pod-browser-pane-links'
 import { PaneFramePump, type PodBrowserFrames } from './pod-browser-pane-frames'
+import {
+  encodePodUiHostServerMessage,
+  POD_UI_HOST_MAX_LINE_BYTES
+} from '../ui-host/pod-ui-host-protocol'
 const PANE_FRAME_RATE = 60
 // A page nobody sees and no agent drives. Why 10: a rate change waits for the next tick, so a
 // pane coming back (or an agent's screenshot) waits ≤100 ms; an animated page costs 13 ms/s here
@@ -23,6 +27,11 @@ const PANE_FRAME_RATE = 60
 const UNSEEN_FRAME_RATE = 10
 // How long after an agent's last command its page still reads as driven.
 const AGENT_DRIVING_MS = 3_000
+// Why capped: past POD_UI_HOST_MAX_LINE_BYTES PodNative drops the whole channel, and every state of
+// the page would cut it again. Chromium's URLs are ASCII, so their length is their size.
+const MAX_FAVICON_URL_LENGTH = 8192
+// A longer page URL (a data: page) gets the whole state line measured; one that won't fit goes as ''.
+const LONG_PAGE_URL_LENGTH = 16_384
 
 type Page = {
   win: BrowserWindow
@@ -99,7 +108,7 @@ export class PodBrowserPaneController {
       page.favicon = undefined
     })
     wc.on('page-favicon-updated', (_event, favicons) => {
-      page.favicon = favicons[0]
+      page.favicon = favicons.find((icon) => icon.length <= MAX_FAVICON_URL_LENGTH)
       this.sendState(pageId)
     })
     wc.on('cursor-changed', (_event, cursor) => {
@@ -316,16 +325,21 @@ export class PodBrowserPaneController {
       return
     }
     const { wc } = page
-    this.deps.send({
-      type: 'browserState',
+    const url = wc.getURL()
+    const state = {
+      type: 'browserState' as const,
       pageId,
-      url: wc.getURL(),
+      url,
       title: wc.getTitle(),
       loading: wc.isLoading(),
       canGoBack: wc.navigationHistory.canGoBack(),
       canGoForward: wc.navigationHistory.canGoForward(),
       agentDriving: Date.now() < page.agentDrivingUntil,
       ...(page.favicon ? { faviconUrl: page.favicon } : {})
-    })
+    }
+    const fits =
+      url.length <= LONG_PAGE_URL_LENGTH ||
+      Buffer.byteLength(encodePodUiHostServerMessage(state)) <= POD_UI_HOST_MAX_LINE_BYTES
+    this.deps.send(fits ? state : { ...state, url: '' })
   }
 }

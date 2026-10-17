@@ -321,6 +321,29 @@ describe('PodBrowserPaneController', () => {
     expect(sent.at(-1)).not.toHaveProperty('faviconUrl')
   })
 
+  it('never sends an icon URL that would cut the channel: a 70 KB data: icon falls to the next one', () => {
+    const { panes, wc, sent } = setup()
+    panes.handle(attach)
+    const huge = `data:image/png;base64,${'A'.repeat(70 * 1024)}`
+    wc.emit('page-favicon-updated', {}, [huge])
+    expect(sent.at(-1)).toMatchObject({ type: 'browserState' })
+    expect(sent.at(-1)).not.toHaveProperty('faviconUrl')
+    wc.emit('page-favicon-updated', {}, [huge, 'https://example.com/icon-16.png'])
+    expect(sent.at(-1)).toMatchObject({ faviconUrl: 'https://example.com/icon-16.png' })
+  })
+
+  it("keeps a state line within the channel's limit on a 100 KB data: page", () => {
+    const { panes, wc, sent } = setup()
+    panes.handle(attach)
+    wc.url = `data:text/html;base64,${'P'.repeat(100 * 1024)}`
+    wc.emit('did-navigate')
+    const state = sent.at(-1)
+    expect(state).toMatchObject({ type: 'browserState', url: '' })
+    expect(Buffer.byteLength(`${JSON.stringify(state)}\n`)).toBeLessThanOrEqual(
+      POD_UI_HOST_MAX_LINE_BYTES
+    )
+  })
+
   it('forwards cursor and find results of an attached page only', () => {
     const { panes, wc, sent } = setup()
     wc.emit('cursor-changed', {}, 'pointer')
