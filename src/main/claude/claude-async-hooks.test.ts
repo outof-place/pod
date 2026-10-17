@@ -89,6 +89,62 @@ describe("Orca's Claude status hooks in the background", () => {
   })
 })
 
+// Fork-only (Pod): the three events this Pod runs async and RC3 (795854fc00) ran in line.
+const ADDED_ASYNC = ['StopFailure', 'TeammateIdle', 'PostCompact']
+
+/** RC3's plan for the same Claude: the three without async, as its STATUS_ONLY_EVENTS lacked them. */
+function rc3Plan(claudeVersion: string): ReturnType<typeof getClaudeManagedHookPlan> {
+  const plan = getClaudeManagedHookPlan(claudeVersion)
+  return {
+    ...plan,
+    install: plan.install.map((event) => {
+      if (!ADDED_ASYNC.includes(event.eventName)) {
+        return event
+      }
+      const { async: _rc3HadNone, ...inLine } = event
+      return inLine
+    })
+  }
+}
+
+describe('the three status-only events Pod added to the async set', () => {
+  const userTool: HookDefinition = {
+    matcher: 'Bash',
+    hooks: [{ type: 'command', command: 'rtk hook claude' }]
+  }
+  const userCompact: HookDefinition = { hooks: [{ type: 'command', command: 'my-compact-note' }] }
+
+  it('changes only those three Pod entries in a file RC3 wrote, user entries and order kept', () => {
+    const rc3 = applyManagedHooks(
+      { hooks: { PreToolUse: [userTool], PostCompact: [userCompact] } },
+      managedHook,
+      SCRIPT_FILE_NAME,
+      rc3Plan('2.1.302')
+    )
+    const upgraded = install(rc3, '2.1.302')
+    for (const event of Object.keys(upgraded.hooks ?? {})) {
+      if (!ADDED_ASYNC.includes(event)) {
+        expect(upgraded.hooks?.[event], event).toEqual(rc3.hooks?.[event])
+      }
+    }
+    for (const event of ADDED_ASYNC) {
+      const [definition, ...rest] = (upgraded.hooks?.[event] ?? []).filter((d) =>
+        (d.hooks ?? []).some((hook) => hook.command === MANAGED_COMMAND)
+      )
+      expect(rest, event).toEqual([])
+      expect(definition?.hooks, event).toEqual([{ ...managedHook, async: true }])
+    }
+    expect(upgraded.hooks?.PostCompact?.[0]).toEqual(userCompact)
+  })
+
+  it("is left as it is by RC3's install, so an older Pod never takes the async back", () => {
+    const written = install({ hooks: { PreToolUse: [userTool] } }, '2.1.302')
+    const again = applyManagedHooks(written, managedHook, SCRIPT_FILE_NAME, rc3Plan('2.1.302'))
+    expect(JSON.stringify(again)).toBe(JSON.stringify(written))
+    expect(ADDED_ASYNC.every((event) => managedAsync(again)[event] === true)).toBe(true)
+  })
+})
+
 function withAsyncEverywhere(config: HooksConfig): HooksConfig {
   return {
     ...config,
