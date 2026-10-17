@@ -177,21 +177,31 @@ export class OrcaImportService {
     }
   }
 
-  apply(previewId: string, itemIds: readonly string[]): Promise<PodOrcaImportApplyResult> {
+  /** `fromPodWindow`: Pod's classic window, or PodNative by its audit token. */
+  apply(
+    previewId: string,
+    itemIds: readonly string[],
+    fromPodWindow: boolean
+  ): Promise<PodOrcaImportApplyResult> {
     // Why one at a time: two applies would both add the same projects from one stale plan.
-    const run = this.applying.then(() => this.applyNow(previewId, itemIds))
+    const run = this.applying.then(() => this.applyNow(previewId, itemIds, fromPodWindow))
     this.applying = run.catch(() => undefined)
     return run
   }
 
   private async applyNow(
     previewId: string,
-    itemIds: readonly string[]
+    itemIds: readonly string[],
+    fromPodWindow: boolean
   ): Promise<PodOrcaImportApplyResult> {
     const cached = this.previews.get(previewId)
     const resolution = this.deps.resolve()
     if (resolution.kind === 'refused') {
       return { status: 'refused', reason: resolution.reason }
+    }
+    // Why: the owner token is the CLI's and any terminal's too, so an agent could apply for the user.
+    if (resolution.location.own && !fromPodWindow) {
+      return { status: 'refused', reason: 'apply-needs-pods-window' }
     }
     if (!cached || cached.userData !== resolution.location.userData) {
       return { status: 'stale-preview' }
