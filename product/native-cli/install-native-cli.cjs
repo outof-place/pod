@@ -13,6 +13,7 @@ const {
   symlinkSync
 } = require('node:fs')
 const { join } = require('node:path')
+const { LEGACY_CLI_SHIM_MARKER } = require('../cli-launchers/install-cli-launchers.cjs')
 
 const PACKAGE_DIR = join(__dirname, '..', '..', 'native', 'podx')
 const NODE_LAUNCHER = 'podx-node'
@@ -68,9 +69,14 @@ function installNativeCli(resourcesDir, arch, identity) {
   renameSync(nativePath, join(binDir, NODE_LAUNCHER))
   copyFileSync(join(builtDir, 'podx'), nativePath)
   chmodSync(nativePath, 0o755)
-  // Why: a decoupled tree ships <cliName> alone; only a tree that still has `orca` keeps it.
+  // Why: a decoupled tree ships <cliName> and the one-release `orca` shim, which stays; only a tree
+  // that still has Orca's `orca` launcher links it to the native front.
   const orcaPath = join(binDir, 'orca')
-  if (identity.cliName !== 'orca' && existsSync(orcaPath)) {
+  if (
+    identity.cliName !== 'orca' &&
+    existsSync(orcaPath) &&
+    !readFileSync(orcaPath, 'utf8').includes(LEGACY_CLI_SHIM_MARKER)
+  ) {
     rmSync(orcaPath, { force: true })
     symlinkSync(identity.cliName, orcaPath)
   }
