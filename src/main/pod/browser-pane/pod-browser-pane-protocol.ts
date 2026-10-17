@@ -110,7 +110,8 @@ const Navigate = z.discriminatedUnion('action', [
     .object({
       type: z.literal('browserNavigate'),
       pageId: PageId,
-      action: z.enum(['back', 'forward', 'reload', 'stop'])
+      // reloadHard (feature browserHardReload): a reload past the cache, Pod's ⇧⌘R.
+      action: z.enum(['back', 'forward', 'reload', 'reloadHard', 'stop'])
     })
     .strict(),
   z
@@ -170,6 +171,15 @@ const DownloadCancel = z
   })
   .strict()
 
+// Feature browserPageZoom: the page's zoom one step in or out, or back to 100% (Pod's ⌘+ ⌘- ⌘0).
+const Zoom = z
+  .object({
+    type: z.literal('browserZoom'),
+    pageId: PageId,
+    direction: z.enum(['in', 'out', 'reset'])
+  })
+  .strict()
+
 /** Every browser verb, for the socket's discriminated union of client messages. */
 export const POD_BROWSER_PANE_CLIENT_MESSAGES = [
   Rendezvous,
@@ -185,7 +195,8 @@ export const POD_BROWSER_PANE_CLIENT_MESSAGES = [
   DevTools,
   PopupChoose,
   PasskeyChoose,
-  DownloadCancel
+  DownloadCancel,
+  Zoom
 ] as const
 
 export type PodBrowserPaneClientMessage =
@@ -203,6 +214,7 @@ export type PodBrowserPaneClientMessage =
   | z.infer<typeof PopupChoose>
   | z.infer<typeof PasskeyChoose>
   | z.infer<typeof DownloadCancel>
+  | z.infer<typeof Zoom>
 
 export type PodBrowserPaneServerMessage =
   | {
@@ -216,6 +228,8 @@ export type PodBrowserPaneServerMessage =
       agentDriving: boolean
       // Optional so older native clients ignore it; absent until the page declares an icon.
       faviconUrl?: string
+      // Feature browserPageZoom: the page's zoom as Chromium's controls show it (100 unzoomed).
+      zoomPercent?: number
     }
   | { type: 'browserCursor'; pageId: string; cursor: string }
   | { type: 'browserFound'; pageId: string; matches: number; active: number; final: boolean }

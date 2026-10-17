@@ -199,7 +199,9 @@ describe('PodUiHostServer', () => {
         'browserContextMenu',
         'browserDownloadCancel',
         'browserFrameSelect',
+        'browserHardReload',
         'browserOpenLink',
+        'browserPageZoom',
         'browserPasskey',
         'browserTargetUrl',
         'headless',
@@ -220,7 +222,9 @@ describe('PodUiHostServer', () => {
         'browserContextMenu',
         'browserDownloadCancel',
         'browserFrameSelect',
+        'browserHardReload',
         'browserOpenLink',
+        'browserPageZoom',
         'browserPasskey',
         'browserTargetUrl',
         'surfaceSection'
@@ -277,6 +281,10 @@ describe('PodUiHostServer', () => {
         }
       ],
       ['a size over the limit', { ...attach, width: 9000 }],
+      [
+        'a zoom in an unknown direction',
+        { type: 'browserZoom', pageId: 'page-1', direction: 'sideways' }
+      ],
       [
         'a download cancel without an id',
         { type: 'browserDownloadCancel', pageId: 'page-1', downloadId: '' }

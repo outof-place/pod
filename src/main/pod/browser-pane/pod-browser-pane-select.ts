@@ -191,31 +191,42 @@ export class PaneSelectMenus {
     this.click = null
     const clientX = 'clientX' in value ? coordinate(value.clientX) : 0
     const clientY = 'clientY' in value ? coordinate(value.clientY) : 0
+    // The click and the page view in the page's CSS px, which the frame's numbers are in.
+    const zoom = this.wc.getZoomFactor()
+    const x = click.x / zoom
+    const y = click.y / zoom
+    const [viewWidth = 0, viewHeight = 0] = this.hooks.viewSize()
     // The frame's box on the page, from where the same click landed in each. Only its part in the
     // page view: the page writes this box, at any size.
     const rect = inView(
-      {
-        x: menu.x + click.x - clientX,
-        y: menu.y + click.y - clientY,
-        width: menu.width,
-        height: menu.height
-      },
-      this.hooks.viewSize()
+      { x: menu.x + x - clientX, y: menu.y + y - clientY, width: menu.width, height: menu.height },
+      [viewWidth / zoom, viewHeight / zoom]
     )
     const holdsClick =
       rect !== null &&
-      click.x >= rect.x - 1 &&
-      click.x <= rect.x + rect.width + 1 &&
-      click.y >= rect.y - 1 &&
-      click.y <= rect.y + rect.height + 1
-    // A transformed or zoomed frame moves its box: the menu then opens at the click.
-    const box = holdsClick ? rect : { x: click.x, y: click.y, width: 0, height: 0 }
+      x >= rect.x - 1 &&
+      x <= rect.x + rect.width + 1 &&
+      y >= rect.y - 1 &&
+      y <= rect.y + rect.height + 1
+    // A transformed frame moves its box: the menu then opens at the click.
+    const box = holdsClick ? rect : { x, y, width: 0, height: 0 }
     this.open({ frame, doc, menuId: menu.menuId }, { ...menu, ...box })
   }
 
   private open(route: MenuRoute, menu: PaneSelectMenu): void {
     const menuId = ++this.seq
-    const line = fitLine({ type: 'browserPopupMenu', pageId: this.hooks.pageId, ...menu, menuId })
+    // CSS px to the page view's, the space PodNative places the menu in.
+    const zoom = this.wc.getZoomFactor()
+    const line = fitLine({
+      type: 'browserPopupMenu',
+      pageId: this.hooks.pageId,
+      ...menu,
+      menuId,
+      x: menu.x * zoom,
+      y: menu.y * zoom,
+      width: menu.width * zoom,
+      height: menu.height * zoom
+    })
     if (!line) {
       return
     }

@@ -10,7 +10,7 @@ import type {
 } from './pod-browser-pane-protocol'
 import { PaneDownloads } from './pod-browser-pane-downloads'
 import type { PodBrowserDownloadEvent } from './pod-browser-pane-hooks'
-import { applyPaneInput, PaneInputState } from './pod-browser-pane-input'
+import { PaneInputState } from './pod-browser-pane-input'
 import { navigatePanePage } from './pod-browser-pane-navigation'
 import { PaneSelectMenus } from './pod-browser-pane-select'
 import { PaneLinks } from './pod-browser-pane-links'
@@ -21,6 +21,8 @@ import {
   type PodBrowserFrames
 } from './pod-browser-pane-frames'
 import { followPanePage, panePageState } from './pod-browser-pane-page-events'
+import { applyPanePageInput } from './pod-browser-pane-page-input'
+import { PaneZoom } from './pod-browser-pane-zoom'
 const PANE_FRAME_RATE = 60
 // A page nobody sees and no agent drives. Why 10: a rate change waits for the next tick, so a
 // pane coming back (or an agent's screenshot) waits ≤100 ms; an animated page costs 13 ms/s here
@@ -45,6 +47,7 @@ type Page = {
   agentTimer: ReturnType<typeof setTimeout> | null
   // The icon the current document declares; a new document starts without one.
   favicon: string | undefined
+  zoom: PaneZoom
 }
 
 export class PodBrowserPaneController {
@@ -67,6 +70,8 @@ export class PodBrowserPaneController {
       mainDisplayScale?: () => number
       // The browser manager's cancel for a download of a page no renderer hosts.
       cancelDownload?: (pageId: string, downloadId: string) => boolean
+      // Pod's browserDefaultZoomLevel setting.
+      defaultZoomLevel?: () => number | undefined
     }
   ) {
     this.frames = new PaneFramePump(deps.frames, deps.log)
@@ -117,7 +122,8 @@ export class PodBrowserPaneController {
       links: new PaneLinks(pageId, (message) => this.deps.send(message)),
       agentDrivingUntil: 0,
       agentTimer: null,
-      favicon: undefined
+      favicon: undefined,
+      zoom: new PaneZoom(wc, this.deps.defaultZoomLevel?.(), () => this.sendState(pageId))
     }
     this.openingScale = null
     this.pages.set(pageId, page)
@@ -251,15 +257,9 @@ export class PodBrowserPaneController {
         this.reportedScale = message.scale
         this.resize(page, message.width, message.height)
         return
-      case 'browserInput': {
-        page.links.noteInput(message.event)
-        const { event } = message
-        if (event.kind === 'mouse' && event.action === 'down' && event.button === 'left') {
-          page.select.noteClick(event.x, event.y)
-        }
-        applyPaneInput(wc, page.input.map(event))
+      case 'browserInput':
+        applyPanePageInput(page, message.event)
         return
-      }
       case 'browserNavigate':
         navigatePanePage(wc, message, this.deps.log)
         return
@@ -268,6 +268,9 @@ export class PodBrowserPaneController {
         return
       case 'browserPasskeyChoose':
         this.passkeys.choose(message.pageId, message.requestId, message.credentialId)
+        return
+      case 'browserZoom':
+        page.zoom.step(message.direction)
         return
       case 'browserDownloadCancel':
         if (!this.deps.cancelDownload?.(message.pageId, message.downloadId)) {
