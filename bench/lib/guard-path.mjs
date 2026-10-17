@@ -11,14 +11,15 @@
 //     the app's catalog names an agent without a stub), build_guard_home on each HOME (or ZDOTDIR),
 //     guard_path_env; returns { path, env, fronts, lib }
 //   guardVerdict(run, fronts)
-//     after the run: guard_bin_first (every logged PATH had guard-bin first), guard_path_abort (no
-//     claude ran past --version) and guard_env_names_check (no stub call had the caller's canary,
-//     and some had the positive mark); returns { ok, problems, envNames }
+//     after the run: guard_bin_first (it gathers the stubs' record files into guard-*.log first;
+//     every logged PATH had guard-bin first), guard_path_abort (no claude ran past --version) and
+//     guard_env_names_check (some stub ran, and every stub call had the positive mark and none the
+//     caller's canary); returns { ok, problems, envNames }
 //   guardExecScript(run, words, fronts)
 //     the bash that guard_exec's a command with these NAME=VALUE words (the runtime's exec)
-//   envPidCheck(run, pid, label)
+//   envPidCheck(run, pid, { exeDir, label, runRoot })
 //     guard_env_pid_check on one of the run's own pids: the mark and no canary (status 0)
-//   envTreeCheck(run, procs, { launched, labelOf })
+//   envTreeCheck(run, procs, { launched, labelOf, dirs })
 //     envPidCheck on each of a run's processes: the launched ones proven, no canary anywhere
 //   callerEnv()
 //     the env a launcher shell starts from: a system PATH, LANG, the text encoding, the canary
@@ -35,7 +36,7 @@ import { closeSync, mkdirSync, openSync, readlinkSync, writeFileSync } from 'nod
 import os from 'node:os'
 import path from 'node:path'
 
-export const GUARD_PATH_REVISION = '18b5702935a388d7b3f9fff3adccb1e87e859862'
+export const GUARD_PATH_REVISION = 'c1273b98e6201792ab9f819f6f617c262a5052bc'
 const PODNATIVE_REPO = path.join(os.homedir(), 'Documents/orca-native-wt/native-ui/PodNative')
 // open-app.sh (app_open) and the run-procs.sh it sources: native-idle opens PodNative through them.
 // pod-terminal-guard.sh: the waiver's ancestry check before a runtime is exec'd from a shell.
@@ -82,8 +83,8 @@ function helper(run, script, args, env = {}) {
       ...Object.entries(env).map(([key, value]) => `${key}=${value}`),
       '/bin/bash',
       '-c',
-      // Status 3 when the helper can't be read: never mistaken for one of its own verdicts.
-      `. "$1/guard-path.sh" || exit 3; shift; ${script}`,
+      // Status 9 when the helper can't be read: never mistaken for one of its own verdicts (0-3).
+      `. "$1/guard-path.sh" || exit 9; shift; ${script}`,
       'guard',
       path.join(run, 'guard-lib'),
       ...args
@@ -118,7 +119,7 @@ export function prepareGuard(run, { ud, homes, fronts = [], tree, claudeVersion 
   }
   // The headless-exec waiver's condition: this process's parents (by executable) include no Pod
   // terminal daemon or runtime. It exits 2 with the ancestor named.
-  helper(run, '. "$GUARD_PATH_HERE/pod-terminal-guard.sh" || exit 3; refuse_in_pod_terminal', [])
+  helper(run, '. "$GUARD_PATH_HERE/pod-terminal-guard.sh" || exit 9; refuse_in_pod_terminal', [])
   const built = helper(run, 'build_guard_path "$@"', [run, ...(tree ? [tree] : [])], {
     GUARD_CLAUDE_VERSION: claudeVersion
   })
@@ -143,7 +144,8 @@ export function guardVerdict(run, fronts = []) {
   try {
     helper(run, 'guard_bin_first "$@"', [run, ...fronts])
   } catch (error) {
-    // guard_bin_first: 1 lists the entries before guard-bin, 2 is no PATH logged (or no run dir).
+    // guard_bin_first: 1 lists the entries before guard-bin, 2 is no PATH logged (or no run dir),
+    // 3 a stub record that isn't whole or was lost (a harness failure).
     problems.push(
       error.status === 1
         ? `PATH entries before guard-bin: ${said(error)}`
@@ -165,16 +167,17 @@ export function guardVerdict(run, fronts = []) {
   } else if (abort !== 'clean') {
     problems.push(`guard_path_abort ${abort}`)
   }
-  // guard_env_names_check: 1 when a stub call had the canary, 2 when none had the mark (no proof).
+  // guard_env_names_check: 1 when a stub call had the canary or lacked the mark (it ran from outside
+  // the guarded environment), 2 when no stub ran at all (no proof), 3 a record that isn't whole.
   let envNames = null
   try {
     envNames = helper(run, 'guard_env_names_check "$@"', [run]).trim()
   } catch (error) {
     problems.push(
       error.status === 1
-        ? `the caller's canary reached a stub: ${said(error)}`
+        ? `a stub call had the caller's canary or no ${POSITIVE_MARK}: ${said(error)}`
         : error.status === 2
-          ? `no stub call shows ${POSITIVE_MARK}, so no proof the canary stayed out: ${said(error)}`
+          ? `no stub ran, so no proof the canary stayed out: ${said(error)}`
           : `guard_env_names_check failed (status ${error.status}): ${said(error)}`
     )
   }
@@ -199,7 +202,7 @@ export function guardExecScript(run, { words, fronts = [], exe }) {
   return [
     '#!/bin/bash',
     '# lib/orca-instance.mjs: this launch through guard-path.sh guard_exec, its arguments as given.',
-    `. ${quoted(path.join(run, 'guard-lib/guard-path.sh'))} || exit 3`,
+    `. ${quoted(path.join(run, 'guard-lib/guard-path.sh'))} || exit 9`,
     `guard_exec ${quoted(run)} ${fronts.map((dir) => `--front ${quoted(dir)} `).join('')}\\`,
     ...Object.entries(words).map(([name, value]) => `  ${quoted(`${name}=${value}`)} \\`),
     `  -- ${quoted(exe)} "$@"`,
@@ -208,30 +211,42 @@ export function guardExecScript(run, { words, fronts = [], exe }) {
 }
 
 /**
- * guard_env_pid_check on one of the run's own pids (never another's): status 0 when it has the
- * mark and no canary, 1 with the canary, 2 without the mark (not started by guard_exec or
- * app_open, gone, or a platform binary, whose environment `ps -E` doesn't show). Never a value.
+ * guard_env_pid_check on one of the run's own pids (never another's), names only. `exeDir` holds
+ * its executable. `runRoot` is this run's own dir, or its app clone's, under /private/tmp with
+ * exeDir inside it: the helper needs it for a process that isn't its shell's descendant, which is
+ * every process here (the helper's bash is the bench's child, never the app's ancestor). Status 0
+ * when it has the mark and no canary, 1 with the canary, 2 without proof (another executable, no
+ * mark, gone, or a platform binary, whose environment `ps -E` doesn't show). Never a value.
  */
-export function envPidCheck(run, pid, label) {
+export function envPidCheck(run, pid, { exeDir, label, runRoot }) {
   try {
-    return { pid, label, status: 0, said: helper(run, 'guard_env_pid_check "$@"', [String(pid), label]).trim() }
+    return {
+      pid,
+      label,
+      status: 0,
+      said: helper(run, 'guard_env_pid_check "$@"', [String(pid), exeDir, label, runRoot ?? '']).trim()
+    }
   } catch (error) {
     return { pid, label, status: error.status ?? -1, said: said(error) }
   }
 }
 
 /**
- * envPidCheck on each of a run's processes ({ pid, path }). Every launched pid ({ pid: label })
+ * envPidCheck on each of a run's processes ({ pid, path }), each against the first of `dirs`
+ * ({ exeDir, runRoot }, resolved) that holds its executable. Every launched pid ({ pid: label })
  * must show the mark and no canary, and be among them; no other may show the canary, and one
- * without the mark either (zsh and other platform binaries) is listed unproven.
+ * without the mark, or outside every dir (zsh and other platform binaries), is listed unproven.
  */
-export function envTreeCheck(run, procs, { launched, labelOf }) {
+export function envTreeCheck(run, procs, { launched, labelOf, dirs }) {
   const problems = []
   const proven = []
   const unproven = []
   for (const proc of procs) {
     const label = launched[proc.pid] ?? labelOf(proc)
-    const check = envPidCheck(run, proc.pid, label)
+    const dir = dirs.find(({ exeDir }) => proc.path.startsWith(`${exeDir}/`))
+    const check = dir
+      ? envPidCheck(run, proc.pid, { exeDir: dir.exeDir, label, runRoot: dir.runRoot })
+      : { status: 2, said: `guard env: ${label} (pid ${proc.pid}) runs ${proc.path}, outside the run's dirs: not read, no proof` }
     if (check.status === 0) {
       proven.push(`${proc.pid} ${label}`)
     } else if (check.status === 1 || launched[proc.pid]) {
@@ -249,6 +264,15 @@ export function envTreeCheck(run, procs, { launched, labelOf }) {
 }
 
 /**
+ * The run root guard_env_pid_check takes for a path under /private/tmp: its first dir there (a
+ * run's dir, or the dir of the run's own app clone); null for any other path, which it can't prove.
+ */
+export function runRootOf(target) {
+  const parts = target.split('/')
+  return parts[1] === 'private' && parts[2] === 'tmp' && parts[3] ? `/private/tmp/${parts[3]}` : null
+}
+
+/**
  * `app_open <args…>` (open-app.sh from <run>/guard-lib) in a bash that starts from callerEnv() and
  * waits for open, which runs while the app does. app_open's own refusals go to stderrFile. The
  * child is that bash, never the app.
@@ -263,7 +287,7 @@ export function spawnAppOpen(run, args, { stderrFile }) {
         ...Object.entries(callerEnv()).map(([name, value]) => `${name}=${value}`),
         '/bin/bash',
         '-c',
-        '. "$1/open-app.sh" || exit 3; shift; app_open "$@" || exit $?; wait "$APP_OPEN_PID"',
+        '. "$1/open-app.sh" || exit 9; shift; app_open "$@" || exit $?; wait "$APP_OPEN_PID"',
         'open-app',
         path.join(run, 'guard-lib'),
         ...args

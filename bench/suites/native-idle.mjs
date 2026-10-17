@@ -18,7 +18,7 @@
 // allowlist for the runtime through --runtime-env, a guard PATH whose agents are stubs and whose
 // security is the gate-2 shim. The caller's canary (GUARD_CANARY_TOKEN) must reach no process of
 // the launch, and PodNative and its runtime must show GUARD_POSITIVE_MARK, which app_open adds
-// (guard-path.sh guard_env_pid_check, names only; the stubs' log too). Every second a watchdog
+// (guard-path.sh guard_env_pid_check, names only; every stub call too). Every second a watchdog
 // checks the run's processes: a real claude or codex, or a new SecurityAgent, stops the launch.
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import {
@@ -400,9 +400,12 @@ async function measureLaunch(variant, index) {
   // PodNative and its runtime must show the mark and no canary; no other process of the launch may
   // show the canary, and one that shows no mark either (zsh, a platform binary) is listed unproven.
   const checkEnv = async (when, launched) => {
+    // The launch's dir holds the clone and the profile's daemon copy: it is the run root too, which
+    // guard_env_pid_check needs for an app LaunchServices started.
     const verdict = envTreeCheck(launch.work, (await snapshot(launch)).procs, {
       launched,
-      labelOf: (proc) => classify(launch, proc)
+      labelOf: (proc) => classify(launch, proc),
+      dirs: [{ exeDir: launch.work, runRoot: launch.work }]
     })
     envChecks.push({ when, ...verdict })
     if (!verdict.ok) {
@@ -555,13 +558,16 @@ async function measureLaunch(variant, index) {
     realHome = { error: error.message }
     failure ??= error.message
   }
+  // The verdict first: it gathers the stubs' record files into guard-agents.log, which the
+  // result lists.
+  const guard = guardVerdict(launch.work, launch.guardSetup.fronts)
   const checks = {
     realHome,
     domainsChanged: DOMAINS.filter((domain) => domainKeys(domain) !== domainsBefore[domain]),
     securityCalls: security.length,
     securityNonFind: security.filter((line) => !/"subcommand": "find-/.test(line)).length,
     stubCalls: readFileSync(path.join(launch.work, 'guard-agents.log'), 'utf8').split('\n').filter(Boolean),
-    guard: guardVerdict(launch.work, launch.guardSetup.fronts),
+    guard,
     env: envChecks,
     signalled: cleaned.signalled,
     leftovers: cleaned.left,
