@@ -180,7 +180,13 @@ export const WorktreeRemove = WorktreeSelector.extend({
   runHooks: OptionalBoolean,
   // Why (#19334): a failed archive hook blocks removal. This waives that refusal and is recorded
   // in the result; it is NOT `force`, and it does not decide whether the hook runs.
-  allowFailedArchiveHook: OptionalBoolean
+  allowFailedArchiveHook: OptionalBoolean,
+  // Pod: the archive script's hash approved for this removal, which a worktree of someone else's
+  // code needs before `runHooks` runs it.
+  archiveTrustHash: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/)
+    .optional()
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({

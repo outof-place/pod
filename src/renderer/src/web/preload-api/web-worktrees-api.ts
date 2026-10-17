@@ -144,7 +144,14 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         targetBranch,
         isCrossRepository
       }),
-    remove: async ({ worktreeId, hostId, force, allowUnverifiedPtyStop, skipArchive }) => {
+    remove: async ({
+      worktreeId,
+      hostId,
+      force,
+      allowUnverifiedPtyStop,
+      skipArchive,
+      archiveTrustHash
+    }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult<RemoveWorktreeResult>(
         'worktree.rm',
@@ -155,7 +162,8 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
           // Why (#11960): the web client renders the same Force Delete affordances, so
           // dropping this field here would leave paired clients permanently wedged.
           allowUnverifiedPtyStop,
-          runHooks: skipArchive !== true
+          runHooks: skipArchive !== true,
+          ...(skipArchive !== true && archiveTrustHash ? { archiveTrustHash } : {})
         },
         // Why: the host replies once Git has deleted the checkout, past the default 30 s budget.
         worktreeRemovalReplyTimeoutMs(skipArchive !== true)

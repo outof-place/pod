@@ -27,6 +27,8 @@ import { formatWorktreeRemovalError } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { getArchiveHooksForRemoval, runRemoteArchiveHook } from './worktree-archive-hook'
+import { untrustedRemovalArchive } from '../../../orca-yaml-setup-trust'
+import { isForeignWorktree } from '../../../../shared/worktree/linked-code-review'
 import { isAlreadyRemovedWorktreePath } from './worktree-removal-filesystem'
 import { rememberPreservedBranchCleanupTarget } from './preserved-branch-cleanup'
 import { removeWorktreeMetadataAndTransientState } from './worktree-removal-ownership'
@@ -165,6 +167,16 @@ export async function executeWorktreeRemoval(
   // checkout, so a hook failure has to throw here — before either is reached.
   let archiveHookOverride: ArchiveHookOverride | undefined
   if (archiveScript && !args.skipArchive) {
+    // Pod: in a checkout of someone else's code only this removal's approval runs it.
+    const refused = untrustedRemovalArchive(
+      isForeignWorktree(store.getWorktreeMeta(args.worktreeId)),
+      archiveScript,
+      args.archiveTrustHash,
+      canonicalWorktreePath
+    )
+    if (refused) {
+      throw refused
+    }
     // Why the branch on connectionId: this block is shared by both flows, so a hardcoded
     // 'remote' would file every local archive hook under the SSH breakdown.
     await withWorktreeRemoveStageSpan(

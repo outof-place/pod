@@ -2,7 +2,7 @@ import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import { skipRemovalArchive } from './removal-archive-trust'
+import { confirmRemovalArchive } from './removal-archive-trust'
 import { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
@@ -93,9 +93,9 @@ export function createRemoveWorktree(
 
     try {
       // Why: forget-local touches no remote, so there's no archive hook to run or trust prompt needed.
-      const skipArchive =
-        policy.forgetLocalOnly ||
-        (await skipRemovalArchive(get, worktreeId, hostId, removalRoute?.runtimeEnvironmentId))
+      const archive = policy.forgetLocalOnly
+        ? { skip: true }
+        : await confirmRemovalArchive(get, worktreeId, hostId, removalRoute?.runtimeEnvironmentId)
 
       const worktreeBeforeRemoval = findWorktreeOnConfirmedHost(
         get,
@@ -127,7 +127,8 @@ export function createRemoveWorktree(
           worktreeId,
           hostId,
           force: policy.force,
-          skipArchive,
+          skipArchive: archive.skip,
+          archiveTrustHash: archive.archiveTrustHash,
           get,
           target,
           options: policy.options,
