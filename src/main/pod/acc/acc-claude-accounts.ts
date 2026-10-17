@@ -1,11 +1,11 @@
 // Fork-only (Pod): Settings' Claude accounts are claude-acc's own. Listing reads the account
 // tick's status.json; add, sign in again and switch run `claude-acc` (accswitch) itself.
-import type { ChildProcess } from 'node:child_process'
 import { constants } from 'node:fs'
 import { access, readFile } from 'node:fs/promises'
 import { homedir, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { runProcess, spawnProcess } from '@orca/process-host'
+import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import type {
   PodClaudeAccAccount,
   PodClaudeAccResult,
@@ -91,7 +91,7 @@ type Spawn = typeof spawnProcess
 type Run = typeof runProcess
 
 export class PodClaudeAccAccounts {
-  private signIn: ChildProcess | null = null
+  private signIn: SpawnedProcess | null = null
   private cancelled = false
 
   constructor(
