@@ -174,7 +174,26 @@ describe('PodSettingsService.set', () => {
       notifications: { ...getDefaultSettings('/Users/e2e').notifications, terminalBell: false }
     })
     expect(store.getSettings().notifications.mutedNotificationSourceIds).toEqual([])
-    expect(service.get().values.notifications).not.toHaveProperty('mutedNotificationSourceIds')
+  })
+
+  it('reads and writes per-machine mutes, keeping the other notification fields', async () => {
+    const { service, store, write } = setup()
+    expect(service.get().values.notifications).toHaveProperty('mutedNotificationSourceIds', [])
+    await service.set(
+      { notifications: { mutedNotificationSourceIds: ['ssh:box', 'runtime:srv'] } },
+      service.get().revision
+    )
+    expect(write).toHaveBeenCalledWith({
+      notifications: {
+        ...getDefaultSettings('/Users/e2e').notifications,
+        mutedNotificationSourceIds: ['ssh:box', 'runtime:srv']
+      }
+    })
+    expect(store.getSettings().notifications.terminalBell).toBe(true)
+    expect(service.get().values.notifications).toHaveProperty('mutedNotificationSourceIds', [
+      'ssh:box',
+      'runtime:srv'
+    ])
   })
 
   it('reads the legacy awake boolean as a mode', () => {

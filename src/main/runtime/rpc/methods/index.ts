@@ -65,6 +65,7 @@ import { POD_WORKSPACE_METHODS } from '../../../pod/workspace/pod-workspace-rpc-
 import { WORKSPACE_LAYOUT_METHODS } from './workspace-layout'
 import { POD_ORBSTACK_METHODS } from '../../../pod/orbstack/pod-orbstack-rpc-methods'
 import { POD_TERMINAL_LANE_METHODS } from './pod-terminal-lane'
+import { POD_NOTIFICATION_SOURCE_METHODS } from './pod-notification-sources'
 import { POD_SETTINGS_METHODS } from '../../../pod/settings/pod-settings-rpc-methods'
 import { POD_MCP_LAZY_METHODS } from '../../../pod/mcp-lazy/mcp-lazy-rpc-methods'
 import { POD_KEYBINDINGS_METHODS } from '../../../pod/keybindings/pod-keybindings-rpc-methods'
@@ -111,6 +112,8 @@ export const ALL_RPC_METHODS = [
   ...BROWSER_NETWORK_TUNNEL_METHODS,
   ...ORCHESTRATION_METHODS,
   ...NOTIFICATION_METHODS,
+  // Fork-only (Pod): the machines PodNative's per-machine notification mutes list.
+  ...POD_NOTIFICATION_SOURCE_METHODS,
   ...STATS_METHODS,
   ...DIAGNOSTICS_METHODS,
   ...ACCOUNT_METHODS,
