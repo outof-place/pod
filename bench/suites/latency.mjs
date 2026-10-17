@@ -27,6 +27,7 @@ import {
   summarizeFields,
   writeSuiteResult
 } from '../lib/bench-session.mjs'
+import { APP_ENV_BLANK } from '../lib/guard-path.mjs'
 import {
   SUBJECTS,
   cli,
@@ -235,7 +236,25 @@ async function launchGhostty(profile, clone, command) {
     ].join('\n')
   )
   const exe = path.join(clone, 'Contents/MacOS/ghostty')
-  await run('/usr/bin/open', ['-n', clone, '--args', '--config-default-files=false', `--config-file=${config}`])
+  // open hands the app its caller's environment: open-app.sh's allowlist instead (the profile's
+  // HOME and TMPDIR, a system PATH), with the launchd session's SSH_AUTH_SOCK, USER, LOGNAME and
+  // DISPLAY empty, and in the background (-g): only keylat --activate brings it forward.
+  await run('/usr/bin/env', [
+    '-i',
+    `HOME=${profile.home}`,
+    'PATH=/usr/bin:/bin:/usr/sbin:/sbin',
+    `TMPDIR=${profile.tmp}`,
+    'SHELL=/bin/zsh',
+    'LANG=en_US.UTF-8',
+    '/usr/bin/open',
+    '-n',
+    '-g',
+    ...APP_ENV_BLANK.flatMap((name) => ['--env', `${name}=`]),
+    clone,
+    '--args',
+    '--config-default-files=false',
+    `--config-file=${config}`
+  ])
   for (let i = 0; i < 100; i += 1) {
     const main = (await runTree(clone)).procs.find((proc) => proc.path === exe)
     if (main) {
