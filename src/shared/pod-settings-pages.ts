@@ -150,7 +150,13 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
   {
     id: 'browser',
     title: 'Browser',
-    sections: [{ title: 'Links', keys: ['openLinksInApp', 'openLinksInAppModifierInverts'] }]
+    sections: [
+      { title: 'Links', keys: ['openLinksInApp', 'openLinksInAppModifierInverts'] },
+      {
+        title: 'Terminal URL clicks',
+        keys: ['terminalLinkClickBehavior', 'terminalUrlMiddleClickBehavior']
+      }
+    ]
   },
   {
     id: 'notifications',

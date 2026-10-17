@@ -285,6 +285,27 @@ describe('PodSettingsService fields that were Electron-only', () => {
     expect(service.get().values.sourceControlAi).toMatchObject({ enabled: true })
   })
 
+  it("reads a terminal link click as Pod's terminal does, from the old popover switch too", () => {
+    const { service, store } = setup()
+    store.update({ terminalLinkClickBehavior: undefined, terminalLinkActionPopoverEnabled: false })
+    expect(service.get().values.terminalLinkClickBehavior).toBe('none')
+    store.update({ terminalLinkActionPopoverEnabled: true })
+    expect(service.get().values.terminalLinkClickBehavior).toBe('actions')
+    store.update({ terminalLinkClickBehavior: 'open', terminalLinkActionPopoverEnabled: false })
+    expect(service.get().values.terminalLinkClickBehavior).toBe('open')
+  })
+
+  it('turns the old popover switch on with the actions it would hide', async () => {
+    const { service, store, write } = setup()
+    store.update({ terminalLinkClickBehavior: 'none', terminalLinkActionPopoverEnabled: false })
+    await service.set({ terminalLinkClickBehavior: 'actions' }, service.get().revision)
+    expect(write).toHaveBeenLastCalledWith({
+      terminalLinkClickBehavior: 'actions',
+      terminalLinkActionPopoverEnabled: true
+    })
+    expect(service.get().values.terminalLinkClickBehavior).toBe('actions')
+  })
+
   it("refuses values the desktop's own controls can't produce", async () => {
     const { service, write } = setup()
     const { revision } = service.get()

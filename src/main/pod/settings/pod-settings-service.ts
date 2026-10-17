@@ -148,6 +148,10 @@ export class PodSettingsService {
         Object.assign(update, { [key]: merged })
       }
     }
+    if (update.terminalLinkClickBehavior !== undefined) {
+      // The renderer reads 'actions' as 'none' while the old popover switch is off.
+      update.terminalLinkActionPopoverEnabled = update.terminalLinkClickBehavior !== 'none'
+    }
     await this.write(update)
     return { ok: true, ...this.get() }
   }
@@ -278,6 +282,15 @@ function stored(settings: GlobalSettings, key: PodSettingsKey): unknown {
   }
   if (key === 'sourceControlAi') {
     return normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi)
+  }
+  if (key === 'terminalLinkClickBehavior') {
+    // The renderer's terminalLinkClickBehaviorFor: a profile from before this setting kept only
+    // the popover switch.
+    const behavior = settings.terminalLinkClickBehavior
+    if (behavior === 'open' || behavior === 'none') {
+      return behavior
+    }
+    return settings.terminalLinkActionPopoverEnabled === false ? 'none' : 'actions'
   }
   return settings[key]
 }
