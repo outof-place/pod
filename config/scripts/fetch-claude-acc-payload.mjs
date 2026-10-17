@@ -136,7 +136,7 @@ export async function fetchPayload({
     dropBytecode(into)
     return { version: assertPayload(into), source: 'cached' }
   }
-  const url = `${pin.repository} ${pin.tag}/${pin.asset}`
+  const asset = `${pin.repository} ${pin.tag}/${pin.asset}`
   // Why the helper: a private claude-acc answers only to POD_PAYLOAD_TOKEN (github-release-asset.mjs).
   const bytes = await downloadReleaseAsset({ ...pin, download })
   const work = mkdtempSync(join(tmpdir(), 'claude-acc-download-'))
@@ -145,14 +145,14 @@ export async function fetchPayload({
     writeFileSync(tarball, bytes)
     const actual = sha256File(tarball)
     if (actual !== pin.sha256) {
-      throw new Error(`${url}: sha256 ${actual}, pinned ${pin.sha256}`)
+      throw new Error(`${asset}: sha256 ${actual}, pinned ${pin.sha256}`)
     }
     unpack(tarball, into)
   } finally {
     rmSync(work, { recursive: true, force: true })
   }
   writeFileSync(stamp, `${JSON.stringify({ tag: pin.tag, sha256: pin.sha256 })}\n`)
-  return { version: assertPayload(into), source: url }
+  return { version: assertPayload(into), source: asset }
 }
 
 if (process.argv[1] && import.meta.filename === process.argv[1]) {

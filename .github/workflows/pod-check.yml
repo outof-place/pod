@@ -1,6 +1,6 @@
-# Runs Pod's checks on main or a candidate branch (stack/cand-*): typecheck and unit tests, and the
-# macOS build only when asked (macos: true; Filip's release check). Nothing else: no rebase, no pull
-# request, no issue, and nothing from Orca.
+# Runs Pod's checks on main or a candidate branch (stack/cand-*): typecheck and unit tests. The macOS
+# build runs only when dispatched by hand with `-f macos=true` before a release; a default run ends
+# green with it skipped. Nothing else: no rebase, no pull request, no issue, and nothing from Orca.
 #
 #   gh workflow run pod-check.yml -R outof-place/pod -f ref=stack/cand-<n>
 #
