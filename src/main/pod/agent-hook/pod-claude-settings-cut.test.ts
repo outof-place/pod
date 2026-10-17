@@ -139,6 +139,9 @@ describe('PodClaudeSettingsCut', () => {
     expect(
       log.mock.calls.filter(([event]) => event === 'pod-claude-settings-cut-refused')
     ).toHaveLength(1)
+    expect(log).toHaveBeenCalledWith('pod-claude-settings-cut-refused', {
+      reason: 'not a JSONC object'
+    })
     expect(readFileSync(settingsPath, 'utf8')).toBe('{"hooks": ')
   })
 

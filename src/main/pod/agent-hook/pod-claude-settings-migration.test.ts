@@ -17,7 +17,8 @@ vi.mock('electron', () => ({ app: { getPath: () => '/tmp/orca-user-data' } }))
 import {
   migratePodClaudeSettings,
   readPodClaudeMigrations,
-  removePodClaudeEntries
+  removePodClaudeEntries,
+  type PodClaudeCutRefusal
 } from './pod-claude-settings-migration'
 
 const names = { hookScript: 'claude-hook.sh', statusLineScript: 'claude-statusline.sh' }
@@ -251,5 +252,40 @@ describe('a cut that has to leave valid JSONC (r-orca on v4)', () => {
   ])('cuts %s', (_label, before, after) => {
     expect(cut(before)).toBe(after)
     expect(removePodClaudeEntries(after, names)).toEqual({ text: after, removed: [] })
+  })
+})
+
+describe("a user's own empty entries and Pod's direct command (r-orca on v5)", () => {
+  const POD = `{ "hooks": [{ "type": "command", "command": "${CLIENT}", "args": [] }] }`
+  const cut = (text: string): string | undefined => removePodClaudeEntries(text, names)?.text
+
+  it("keeps a user's empty event next to the one Pod's removals emptied", () => {
+    expect(cut(`{"hooks": {"Notification": [], "Stop": [${POD}]}}`)).toBe(
+      '{"hooks": {"Notification": []}}'
+    )
+    expect(cut(`{"hooks": {"Stop": [${POD}], "X": []}}`)).toBe('{"hooks": {"X": []}}')
+  })
+
+  it('keeps `hooks` with only a user empty event when Pod also had its statusLine', () => {
+    expect(
+      cut(`{"hooks": {"X": []}, "statusLine": { "type": "command", "command": "${STATUS}" }}`)
+    ).toBe('{"hooks": {"X": []}}')
+  })
+
+  it("takes Pod's command from a group that also holds the user's hooks", () => {
+    const before = `{"hooks": {"Stop": [{ "command": "${CLIENT}", "hooks": [{ "type": "command", "command": "say done" }] }]}}`
+    const result = removePodClaudeEntries(before, names)
+    expect(result?.removed.map((removal) => removal.path)).toEqual([
+      ['hooks', 'Stop', 0, 'command']
+    ])
+    expect(result?.text).toBe(
+      '{"hooks": {"Stop": [{ "hooks": [{ "type": "command", "command": "say done" }] }]}}'
+    )
+  })
+
+  it('names why it refused', () => {
+    const refusal: PodClaudeCutRefusal = {}
+    expect(removePodClaudeEntries('{"hooks": ', names, refusal)).toBe(null)
+    expect(refusal.reason).toBe('not a JSONC object')
   })
 })
