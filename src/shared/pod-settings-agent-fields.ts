@@ -63,6 +63,12 @@ export const POD_SETTINGS_AGENT_FIELDS = {
     'Nested worker depth',
     'How many generations of dispatched workers may spawn their own workers. 1 keeps the agent tree flat: a coordinator dispatches workers, and those workers do not dispatch.'
   ),
+  // Session tab snapshots carry the generated title only while this is on.
+  tabAutoGenerateTitle: row(
+    z.boolean(),
+    'Auto-generate tab titles',
+    'Derive short stable tab names from the first known agent prompt. Manual renames always win.'
+  ),
   codexSessionSourceHome: CodexSessionSourceHomeSchema.meta({
     title: 'Codex history folder',
     propertyOrder: Object.keys(CodexSessionSourceHomeSchema.shape)

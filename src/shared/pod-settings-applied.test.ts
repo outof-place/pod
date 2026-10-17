@@ -71,6 +71,7 @@ const APPLIED_FOR_PODNATIVE = [
   'promptCacheTimerEnabled',
   'promptCacheTtlMs',
   'nestedWorkerMaxDepth',
+  'tabAutoGenerateTitle',
   // Browser: PodNative's link handling reads them
   'openLinksInApp',
   'openLinksInAppModifierInverts',
@@ -123,7 +124,6 @@ describe('podSettings pages', () => {
     for (const key of [
       'ctrlTabOrderMode',
       'confirmClosePinnedTab',
-      'tabAutoGenerateTitle',
       'skipDeleteAutomationConfirm',
       'skipDeleteArtifactConfirm',
       'skipCodexRateLimitResetConfirm',
