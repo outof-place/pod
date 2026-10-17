@@ -1,5 +1,6 @@
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 import type { AgentStatusState } from '../../shared/agent-status-types'
+import type { NotificationSourceId } from '../../shared/notification-source'
 import {
   agentSessionAttentionSubjectPrefix,
   attentionOriginWasRead,
@@ -39,6 +40,8 @@ export type MobileNotificationDispatchEvent = {
   /** See `NotificationDispatchRequest.attentionKey`: cooldowns key on it instead of the workspace. */
   attentionKey?: string
   structuredOrigin?: StructuredAttentionOrigin
+  /** Fork-only (Pod): the machine the alert came through, so a desktop client applies its mutes. */
+  notificationSourceId?: NotificationSourceId
 }
 
 export type MobileNotificationDismissEvent = {
