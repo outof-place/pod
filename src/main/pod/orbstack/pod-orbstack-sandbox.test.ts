@@ -27,10 +27,32 @@ describe('sandbox hook files', () => {
 })
 
 describe('sandbox Claude config', () => {
-  it('trusts only the mounted worktree', () => {
+  it('trusts only the mounted worktree and opens on the prompt', () => {
     expect(JSON.parse(buildSandboxClaudeConfig('/Users/me/web.worktrees/a'))).toEqual({
+      hasCompletedOnboarding: true,
+      theme: 'dark',
       projects: { '/Users/me/web.worktrees/a': { hasTrustDialogAccepted: true } }
     })
+  })
+
+  it('marks the installed version seen and keeps the Mac theme', () => {
+    const config = JSON.parse(
+      buildSandboxClaudeConfig('/Users/me/web', { agentVersion: '2.1.302', theme: 'light-ansi' })
+    )
+    expect(config).toMatchObject({
+      hasCompletedOnboarding: true,
+      lastOnboardingVersion: '2.1.302',
+      lastReleaseNotesSeen: '2.1.302',
+      theme: 'light-ansi'
+    })
+    // Nothing that authenticates or points elsewhere comes in.
+    expect(Object.keys(config).sort()).toEqual([
+      'hasCompletedOnboarding',
+      'lastOnboardingVersion',
+      'lastReleaseNotesSeen',
+      'projects',
+      'theme'
+    ])
   })
 })
 
@@ -74,7 +96,8 @@ describe('provisionSandbox', () => {
       run,
       name: 'pod-web-1a2b3c4d-sbx',
       mounts: ['/Users/me/web.worktrees/a', '/Users/me/web/.git'],
-      release
+      release,
+      theme: 'light'
     })
 
     expect(result).toEqual({ agentVersion: '2.1.295' })
@@ -116,6 +139,11 @@ describe('provisionSandbox', () => {
     expect(decode(script)).toContain('127.0.0.1')
     expect(decode(trust)).toContain('"/Users/me/web.worktrees/a"')
     expect(decode(trust)).not.toContain('.git"')
+    expect(JSON.parse(decode(trust))).toMatchObject({
+      hasCompletedOnboarding: true,
+      lastOnboardingVersion: '2.1.295',
+      theme: 'light'
+    })
     expect(decode(managed)).toContain('"DISABLE_AUTOUPDATER": "1"')
     expect(mounts).toEqual(['/Users/me/web.worktrees/a', '/Users/me/web/.git'])
     expect(SETUP_WORKTREE).toContain('/etc/claude-code/managed-settings.json')

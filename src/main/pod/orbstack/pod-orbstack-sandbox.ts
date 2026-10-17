@@ -63,10 +63,25 @@ export function buildSandboxManagedSettings(claudeVersion: string | null): strin
   return `${JSON.stringify({ ...config, env: { DISABLE_AUTOUPDATER: '1' } }, null, 2)}\n`
 }
 
-/** A VM-local ~/.claude.json that trusts only the mounted worktree; the Mac's file never enters. */
-export function buildSandboxClaudeConfig(worktreePath: string): string {
-  const change = applyClaudeFolderTrust({}, [toClaudeTrustKey(worktreePath, 'posix')])
-  return `${JSON.stringify(change.kind === 'changed' ? change.config : {}, null, 2)}\n`
+/**
+ * A VM-local ~/.claude.json that trusts only the mounted worktree; the Mac's file never enters.
+ * Why onboarded: the Mac's user already went through Claude Code's first run, so the sandbox opens
+ * on its prompt, in the Mac's theme, instead of the theme picker and the release notes.
+ */
+export function buildSandboxClaudeConfig(
+  worktreePath: string,
+  options: { agentVersion?: string | null; theme?: string | null } = {}
+): string {
+  const { agentVersion, theme } = options
+  const base = {
+    hasCompletedOnboarding: true,
+    ...(agentVersion
+      ? { lastOnboardingVersion: agentVersion, lastReleaseNotesSeen: agentVersion }
+      : {}),
+    theme: theme ?? 'dark'
+  }
+  const change = applyClaudeFolderTrust(base, [toClaudeTrustKey(worktreePath, 'posix')])
+  return `${JSON.stringify(change.kind === 'changed' ? change.config : base, null, 2)}\n`
 }
 
 /** The worktree, plus its git dir when that lives elsewhere (linked worktrees). */
@@ -135,6 +150,8 @@ export async function provisionSandbox(args: {
   release: SandboxClaudeRelease | null
   /** Progress, in words a user reads. */
   onStep?: (step: string) => void
+  /** The Mac's Claude Code theme; null writes Claude's dark one. */
+  theme?: string | null
 }): Promise<{ agentVersion: string | null }> {
   const { agentVersion } = await provisionSandboxBase(args)
   args.onStep?.('Setting up the worktree')
@@ -263,6 +280,7 @@ export async function provisionSandboxWorktree(args: {
   name: string
   mounts: readonly string[]
   agentVersion: string | null
+  theme?: string | null
 }): Promise<void> {
   const base64 = (text: string): string => Buffer.from(text).toString('base64')
   const [worktreePath] = args.mounts
@@ -276,7 +294,14 @@ export async function provisionSandboxWorktree(args: {
     'pod-setup',
     getPosixManagedScriptFileName(),
     base64(buildSandboxHookScript()),
-    worktreePath ? base64(buildSandboxClaudeConfig(worktreePath)) : '',
+    worktreePath
+      ? base64(
+          buildSandboxClaudeConfig(worktreePath, {
+            agentVersion: args.agentVersion,
+            theme: args.theme ?? null
+          })
+        )
+      : '',
     base64(buildSandboxManagedSettings(args.agentVersion)),
     ...args.mounts
   ])

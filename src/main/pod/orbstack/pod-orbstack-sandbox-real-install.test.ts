@@ -132,6 +132,10 @@ describe.skipIf(!enabled)('real OrbStack sandbox', () => {
       expect(agentVersion).toBe(release.version)
       const config = await run('orb', ['run', '-m', name, 'sh', '-c', 'cat "$HOME/.claude.json"'])
       expect(JSON.parse(config.stdout)).toEqual({
+        hasCompletedOnboarding: true,
+        lastOnboardingVersion: release.version,
+        lastReleaseNotesSeen: release.version,
+        theme: 'dark',
         projects: { [worktree]: { hasTrustDialogAccepted: true } }
       })
       const leftovers = await run('orb', ['run', '-m', name, 'ls', '/var/tmp'])
