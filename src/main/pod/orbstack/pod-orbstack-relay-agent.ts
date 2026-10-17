@@ -10,9 +10,9 @@ export const RELAY_STATE_DIR = '/run/pod-sandbox-relay'
 export const SANDBOX_CA_PATH = '/etc/pod-sandbox/anthropic-ca.pem'
 
 /**
- * argv[1] is JSON: { nonce, stateDir, routes: [port, …], ipv6Routes: [index, …], hosts: { file,
- * names }, files: { path: content | null } }. OPEN carries the route's index; ipv6Routes also
- * listen on ::1. The hosts block and files exist only while this relay runs.
+ * argv[1] is JSON: { nonce, stateDir, listen: [[host, port], …], hosts: { file, names, addresses },
+ * files: { path: content | null } }. OPEN carries the route's index in `listen`. The hosts block
+ * pins each name to each address; it and the files exist only while this relay runs.
  */
 export const SANDBOX_RELAY_AGENT_PY = String.raw`
 import json, os, signal, socket, struct, sys, threading, time
@@ -90,13 +90,13 @@ def stop_previous():
     except OSError:
         pass
 
-def bind(port, family=socket.AF_INET):
+def bind(host, port):
     deadline = time.monotonic() + 5
     while True:
-        listener = socket.socket(family, socket.SOCK_STREAM)
+        listener = socket.socket(socket.AF_INET6 if ':' in host else socket.AF_INET, socket.SOCK_STREAM)
         listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            listener.bind(('::1' if family == socket.AF_INET6 else '127.0.0.1', port))
+            listener.bind((host, port))
             listener.listen(64)
             return listener
         except OSError:
@@ -127,8 +127,7 @@ def pin_hosts(names):
     if names:
         if text and not text.endswith('\n'):
             text += '\n'
-        # Both families: a resolver asking for IPv6 alone would otherwise go to DNS.
-        pins = ''.join('127.0.0.1 %s\n::1 %s\n' % (n, n) for n in names)
+        pins = ''.join('%s %s\n' % (a, n) for n in names for a in spec['hosts']['addresses'])
         text += BEGIN + '\n' + pins + FINISH + '\n'
     # In place: /etc/hosts may be a bind mount that a rename cannot replace.
     with open(path, 'w') as f:
@@ -153,8 +152,7 @@ def read_exact(size):
 
 os.makedirs(state, exist_ok=True)
 stop_previous()
-listeners = [(index, bind(port)) for index, port in enumerate(spec['routes'])]
-listeners += [(index, bind(spec['routes'][index], socket.AF_INET6)) for index in spec.get('ipv6Routes', [])]
+listeners = [(index, bind(host, port)) for index, (host, port) in enumerate(spec['listen'])]
 with open(os.path.join(state, 'pid'), 'w') as f:
     f.write(str(os.getpid()))
 for index, listener in listeners:

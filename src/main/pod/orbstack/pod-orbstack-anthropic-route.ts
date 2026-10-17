@@ -1,5 +1,5 @@
 // Fork-only (Pod): the sandbox relay's `anthropic-api` route. The VM pins api.anthropic.com to its
-// own 127.0.0.1:443; the relay hands those bytes here, where TLS ends under the sandbox's CA and
+// own 127.0.0.2:443; the relay hands those bytes here, where TLS ends under the sandbox's CA and
 // each allowed request goes on to the real api.anthropic.com with Pod's credential in place of the VM's.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { pipeline, Transform, type Duplex } from 'node:stream'
@@ -309,7 +309,7 @@ export function createAnthropicRoute(args: {
 
   return {
     caCertPem: args.ca.caCertPem,
-    /** Takes one VM connection to 127.0.0.1:443 and serves it as api.anthropic.com. */
+    /** Takes one VM connection to 127.0.0.2:443 and serves it as api.anthropic.com. */
     attach(stream: Duplex): void {
       const tls = new TLSSocket(stream, {
         isServer: true,
