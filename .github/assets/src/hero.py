@@ -27,7 +27,7 @@ from house import (
 CLAIM = ("The agent-fleet IDE", "for macOS.")
 LEAD = (
     "Run a fleet of coding agents side by side in a native terminal, with your "
-    "subscriptions, memory and builds looked after. Built on Orca, by the outofplace studio."
+    "subscriptions, memory and builds looked after. Free and open source (MIT), by the outofplace studio."
 )
 
 HERO_CSS = f"""

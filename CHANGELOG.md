@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- claude-acc 1.34.2 is built in (from `release/1.34.2`): when Homebrew stops a `brew upgrade` on one formula it can't
+  build, the formulae still outdated update one by one, so only the one that failed is reported.
+
 ## [1.0.0-rc3] - 2026-10-16
 
 A fix for 1.0.0-rc2: [Pod-1.0.0-rc3.dmg](https://github.com/outof-place/pod/releases/download/v1.0.0-rc3/Pod-1.0.0-rc3.dmg).
