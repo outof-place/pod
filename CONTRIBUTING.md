@@ -7,12 +7,12 @@ pull request process does not. This file adds what is specific to Pod.
 
 ## Branch model
 
-| Branch | What it is | Who writes it |
-| --- | --- | --- |
-| `main` (default) | The product. The pinned Orca commit, the stack as last assembled, its generated layers, then every commit landed since, each with a trailer. | Fast-forward pushes only, after a green Pod check on the pushed commit. Never force, never rebuild it. |
-| Orca-style topic branches: `feat/*`, `fix/*`, `perf/*`, `plugins/*`, `native-terminal/*` | Older changes once sent to Orca, assembled into `main` under their names. No new ones: Pod sends no changes to Orca. | Nobody. |
-| `pod/*` | Pod-only work, one branch per change, landed on `main` by fast-forward. A branch you pushed is not rewritten: push a rebase under a new name. | You. |
-| `stack/<topic>` | A copy of a topic branch replayed onto the Pod stack while `main` was assembled, when two topic branches conflicted. Its `pod-stack.json` entry says what it was replayed onto. | Nobody now. |
+| Branch                                                                                   | What it is                                                                                                                                                                      | Who writes it                                                                                          |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `main` (default)                                                                         | The product. The pinned Orca commit, the stack as last assembled, its generated layers, then every commit landed since, each with a trailer.                                    | Fast-forward pushes only, after a green Pod check on the pushed commit. Never force, never rebuild it. |
+| Orca-style topic branches: `feat/*`, `fix/*`, `perf/*`, `plugins/*`, `native-terminal/*` | Older changes once sent to Orca, assembled into `main` under their names. No new ones: Pod sends no changes to Orca.                                                            | Nobody.                                                                                                |
+| `pod/*`                                                                                  | Pod-only work, one branch per change, landed on `main` by fast-forward. A branch you pushed is not rewritten: push a rebase under a new name.                                   | You.                                                                                                   |
+| `stack/<topic>`                                                                          | A copy of a topic branch replayed onto the Pod stack while `main` was assembled, when two topic branches conflicted. Its `pod-stack.json` entry says what it was replayed onto. | Nobody now.                                                                                            |
 
 - `fork/no-official-updater` predates the `pod/*` convention and keeps its name.
 
@@ -26,8 +26,8 @@ pull request process does not. This file adds what is specific to Pod.
   helpers from `@orca/process-host`, and never bring back a file `pod-prune` removed.
 - Land it:
   1. Rebase onto the latest `origin/main`.
-  2. Run the [Pod check](.github/workflows/pod-check.yml) on the branch's last commit and get it
-     green.
+  2. Push it as a candidate branch `stack/cand-<n>`, run the [Pod check](.github/workflows/pod-check.yml)
+     on it and get it green.
   3. `git push origin <sha>:refs/heads/main`, with no force. If it is refused as not a fast-forward,
      someone landed first: rebase, check again, push again.
 - Never force-push `main`, and never rebuild it with `scripts/pod-stack.sh`: commits that landed
@@ -84,9 +84,12 @@ else builds `main` now.
 ## Checks
 
 The [Pod check](.github/workflows/pod-check.yml) workflow runs the generated-layer check, the
-typecheck, the unit tests and the macOS build on a branch or commit, on demand only:
-`gh workflow run pod-check.yml -R outof-place/pod -f ref=<branch or commit>`. Add `--ref <branch>`
-to run the workflow file of that branch instead of `main`'s.
+typecheck and the unit tests on `main` or a candidate branch (`stack/cand-*`), on demand only:
+`gh workflow run pod-check.yml -R outof-place/pod -f ref=stack/cand-<n>`. Add `--ref <branch>` to
+run the workflow file of that branch instead of `main`'s. Every run costs Actions minutes, so other
+branches are refused. The macOS build runs only with `-f macos=true` (before a release); a
+checklist's "macOS build" is a local build, never this check. The claude-acc payload comes through
+the `POD_PAYLOAD_TOKEN` secret once claude-acc is private (`config/scripts/github-release-asset.mjs`).
 
 ## Generated layers
 
