@@ -3,8 +3,10 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  lstatSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -13,7 +15,14 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { copyLegacyHome, PRODUCT_HOME_COPY_RECORD } from './legacy-home-copy'
+import {
+  copyLegacyHome,
+  PRODUCT_HOME_COPY_RECORD,
+  PRODUCT_ONLY_HOOK_ENTRIES
+} from './legacy-home-copy'
+import { POD_AGENT_HOOK_FILE_NAME } from '../pod/agent-hook/pod-agent-hook-native'
+import { POD_AGENT_STATUSLINE_FILE_NAME } from '../pod/agent-hook/pod-statusline-native'
+import { MCP_LAZY_FILE_NAME } from '../pod/mcp-lazy/mcp-lazy-binary'
 
 // Why a placeholder name: the decouple codemod rewrites the legacy home's literal in code.
 const LEGACY = '.legacy-home'
@@ -56,7 +65,8 @@ describe('copyLegacyHome', () => {
     const copied = {
       status: 'copied',
       copied: ['jira-tokens', 'keybindings.json'],
-      skipped: ['agent-hooks']
+      skipped: ['agent-hooks'],
+      moved: []
     }
     expect(copy()).toEqual(copied)
     expect(readFileSync(join(home, PRODUCT, 'keybindings.json'), 'utf8')).toBe('[]')
@@ -109,7 +119,8 @@ describe('copyLegacyHome', () => {
     expect(copy()).toEqual({
       status: 'copied',
       copied: ['linear-credentials.json'],
-      skipped: ['agent-hooks', 'keybindings.json']
+      skipped: ['agent-hooks', 'keybindings.json'],
+      moved: []
     })
     expect(readFileSync(join(home, PRODUCT, 'keybindings.json'), 'utf8')).toBe('product')
     expect(readFileSync(join(home, PRODUCT, 'linear-credentials.json'), 'utf8')).toBe('secret')
@@ -129,7 +140,12 @@ describe('copyLegacyHome', () => {
   it('waits while the legacy app runs, without recording', () => {
     const { home, userData, copy } = scratch()
     mkdirSync(join(home, LEGACY))
-    expect(copy(4242)).toEqual({ status: 'deferred', reason: 'legacy-app-running', pid: 4242 })
+    expect(copy(4242)).toEqual({
+      status: 'deferred',
+      reason: 'legacy-app-running',
+      pid: 4242,
+      moved: []
+    })
     expect(existsSync(join(home, PRODUCT))).toBe(false)
     expect(existsSync(join(userData, PRODUCT_HOME_COPY_RECORD))).toBe(false)
   })
@@ -144,5 +160,128 @@ describe('copyLegacyHome', () => {
     symlinkSync(join(linked.home, 'shared'), join(linked.home, LEGACY))
     expect(linked.copy()).toEqual({ status: 'not-needed', reason: 'legacy-home-is-a-link' })
     expect(existsSync(join(linked.home, PRODUCT))).toBe(false)
+  })
+})
+
+/** Every file under `dir` with its bytes, mode and mtime, so a test can prove nothing moved. */
+function snapshot(dir: string): Record<string, string> {
+  const files: Record<string, string> = {}
+  const walk = (folder: string, prefix: string): void => {
+    for (const name of readdirSync(folder).sort()) {
+      const path = join(folder, name)
+      const stat = lstatSync(path)
+      if (stat.isDirectory()) {
+        walk(path, `${prefix}${name}/`)
+      } else {
+        const body = stat.isSymbolicLink() ? `-> ${readlinkSync(path)}` : readFileSync(path, 'hex')
+        files[`${prefix}${name}`] = `${stat.mode.toString(8)} ${stat.mtimeMs} ${body}`
+      }
+    }
+  }
+  walk(dir, '')
+  return files
+}
+
+describe('copyLegacyHome: the product-only hook files', () => {
+  /** A legacy hook folder both apps wrote into, as on a Mac with Orca.app and Pod. */
+  function sharedHookFolder(home: string) {
+    const hooks = join(home, LEGACY, 'agent-hooks')
+    mkdirSync(hooks, { recursive: true })
+    // The legacy app's files, under names both apps write.
+    writeFileSync(join(hooks, 'claude-hook.sh'), '#!/bin/sh\necho legacy app\n')
+    chmodSync(join(hooks, 'claude-hook.sh'), 0o755)
+    writeFileSync(join(hooks, '.orca-managed-scripts.json'), '{"scripts":[]}\n')
+    writeFileSync(join(home, LEGACY, 'keybindings.json'), '[]')
+    // The product's own.
+    writeFileSync(join(hooks, 'pod-agent-hook'), 'native client v1')
+    chmodSync(join(hooks, 'pod-agent-hook'), 0o755)
+    writeFileSync(join(hooks, 'mcp-lazy'), 'shim v1')
+    chmodSync(join(hooks, 'mcp-lazy'), 0o755)
+    return hooks
+  }
+
+  const legacyAppFiles = (home: string) => {
+    const all = snapshot(join(home, LEGACY))
+    for (const name of PRODUCT_ONLY_HOOK_ENTRIES) {
+      delete all[`agent-hooks/${name}`]
+    }
+    return all
+  }
+
+  it('names exactly the files the product writes there, never a pattern', () => {
+    expect(PRODUCT_ONLY_HOOK_ENTRIES).toEqual([
+      POD_AGENT_HOOK_FILE_NAME,
+      POD_AGENT_STATUSLINE_FILE_NAME,
+      MCP_LAZY_FILE_NAME,
+      'claude-settings-migration.json'
+    ])
+  })
+
+  it("moves them and leaves a link behind; the legacy app's files stay byte for byte", () => {
+    const { home, copy } = scratch()
+    const hooks = sharedHookFolder(home)
+    const before = legacyAppFiles(home)
+
+    expect(copy()).toMatchObject({ status: 'copied', moved: ['pod-agent-hook', 'mcp-lazy'] })
+
+    const productHooks = join(home, PRODUCT, 'agent-hooks')
+    expect(readdirSync(productHooks).sort()).toEqual(['mcp-lazy', 'pod-agent-hook'])
+    for (const name of ['pod-agent-hook', 'mcp-lazy']) {
+      expect(lstatSync(join(hooks, name)).isSymbolicLink()).toBe(true)
+      expect(readlinkSync(join(hooks, name))).toBe(join(productHooks, name))
+      expect(statSync(join(productHooks, name)).mode & 0o777).toBe(0o755)
+    }
+    // The old path reaches the product's file, which the product updates from now on.
+    expect(readFileSync(join(hooks, 'pod-agent-hook'), 'utf8')).toBe('native client v1')
+    writeFileSync(join(productHooks, 'pod-agent-hook'), 'native client v2')
+    expect(readFileSync(join(hooks, 'pod-agent-hook'), 'utf8')).toBe('native client v2')
+    expect(legacyAppFiles(home)).toEqual(before)
+    expect(existsSync(join(productHooks, 'claude-hook.sh'))).toBe(false)
+  })
+
+  it('changes nothing on a second start, recorded or not', () => {
+    const { home, userData, copy } = scratch()
+    sharedHookFolder(home)
+    copy()
+    const legacy = snapshot(join(home, LEGACY))
+    const product = snapshot(join(home, PRODUCT))
+
+    expect(copy()).toEqual({ status: 'not-needed', reason: 'already-recorded' })
+    rmSync(join(userData, PRODUCT_HOME_COPY_RECORD))
+    expect(copy()).toMatchObject({ status: 'copied', moved: [] })
+
+    expect(snapshot(join(home, LEGACY))).toEqual(legacy)
+    expect(snapshot(join(home, PRODUCT))).toEqual(product)
+  })
+
+  it('moves them while the legacy app runs, since it never writes these names', () => {
+    const { home, userData, copy } = scratch()
+    const hooks = sharedHookFolder(home)
+    const before = legacyAppFiles(home)
+
+    expect(copy(4242)).toEqual({
+      status: 'deferred',
+      reason: 'legacy-app-running',
+      pid: 4242,
+      moved: ['pod-agent-hook', 'mcp-lazy']
+    })
+
+    expect(lstatSync(join(hooks, 'pod-agent-hook')).isSymbolicLink()).toBe(true)
+    expect(legacyAppFiles(home)).toEqual(before)
+    expect(existsSync(join(home, PRODUCT, 'keybindings.json'))).toBe(false)
+    expect(existsSync(join(userData, PRODUCT_HOME_COPY_RECORD))).toBe(false)
+  })
+
+  it('leaves one the product folder already has where it is', () => {
+    const { home, copy } = scratch()
+    const hooks = sharedHookFolder(home)
+    mkdirSync(join(home, PRODUCT, 'agent-hooks'), { recursive: true })
+    writeFileSync(join(home, PRODUCT, 'agent-hooks', 'mcp-lazy'), 'shim v2')
+
+    expect(copy()).toMatchObject({ moved: ['pod-agent-hook'] })
+
+    expect(lstatSync(join(hooks, 'mcp-lazy')).isFile()).toBe(true)
+    expect(readFileSync(join(hooks, 'mcp-lazy'), 'utf8')).toBe('shim v1')
+    expect(readFileSync(join(home, PRODUCT, 'agent-hooks', 'mcp-lazy'), 'utf8')).toBe('shim v2')
   })
 })
