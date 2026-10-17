@@ -71,7 +71,8 @@ export function createSandboxAccess(deps: {
       client,
       privacy: () => privacy.get(machine) ?? readPrivacy(),
       log: (message) => deps.log?.(`${machine}: ${message}`),
-      onRow: (row) => deps.onRow?.({ machine, route: 'anthropic-api', ...row })
+      onRow: (row) => deps.onRow?.({ machine, route: 'anthropic-api', ...row }),
+      placeholder: () => placeholders.get(machine) ?? null
     })
     routes.set(machine, route)
     return route

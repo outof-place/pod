@@ -10,6 +10,7 @@ import {
   type SandboxAnthropicCredentials
 } from './pod-orbstack-anthropic-route'
 import type { SandboxPrivacy } from './pod-orbstack-privacy-env'
+import type { RelayConnectionRecord } from './pod-orbstack-relay-connections'
 import { createSandboxCa } from './pod-orbstack-sandbox-ca'
 
 type Seen = { method?: string; url?: string; headers: IncomingHttpHeaders; body: Buffer }
@@ -36,7 +37,8 @@ describe('anthropic-api route', () => {
   async function setup(
     credentials: SandboxAnthropicCredentials = apiKey,
     privacy: SandboxPrivacy = { env: {}, telemetryOff: false, featureFlagsOff: false },
-    respond?: (res: Http2ServerResponse) => void
+    respond?: (res: Http2ServerResponse) => void,
+    placeholder?: string
   ) {
     // The stub API has its own CA, so the route verifies upstream as it would the real one.
     const upstreamCa = createSandboxCa('stub-upstream')
@@ -66,13 +68,16 @@ describe('anthropic-api route', () => {
     const upstreamPort = await listen(upstream)
     const ca = createSandboxCa('pod-x-sbx')
     const refused: string[] = []
+    const rows: RelayConnectionRecord[] = []
     const route = createAnthropicRoute({
       machine: 'pod-x-sbx',
       ca,
       credentials: () => credentials,
       upstream: { host: '127.0.0.1', port: upstreamPort, ca: upstreamCa.caCertPem },
       privacy: () => privacy,
-      log: (message) => refused.push(message)
+      log: (message) => refused.push(message),
+      onRow: (row) => rows.push(row),
+      ...(placeholder ? { placeholder: () => placeholder } : {})
     })
     // Stands in for the relay: each TCP connection is one VM connection to 127.0.0.1:443.
     const front = createServer((socket) => route.attach(socket))
@@ -132,7 +137,7 @@ describe('anthropic-api route', () => {
         req.on('error', reject)
         req.end(options.body)
       })
-    return { call, seen, refused }
+    return { call, seen, refused, rows }
   }
 
   it('swaps the VM auth for the credential and streams the answer back', async () => {
@@ -170,6 +175,33 @@ describe('anthropic-api route', () => {
     expect(upstream?.headers.cookie).toBeUndefined()
     expect(upstream?.headers['proxy-authorization']).toBeUndefined()
     expect(upstream?.body.equals(body)).toBe(true)
+  })
+
+  it("refuses a credentialed call without the sandbox's placeholder, as from the Mac's localhost", async () => {
+    const placeholder = 'pod-sandbox-no-credential-0123456789abcdef0123456789abcdef'
+    const { call, seen, rows } = await setup(apiKey, undefined, undefined, placeholder)
+    const json = { 'content-type': 'application/json' }
+    const guesses: Record<string, string>[] = [
+      {},
+      { 'x-api-key': 'guess' },
+      { authorization: 'Bearer guess' }
+    ]
+    for (const headers of guesses) {
+      const reply = await call({ headers: { ...json, ...headers }, body: Buffer.from('{}') })
+      expect(reply.status).toBe(401)
+    }
+    expect(seen).toHaveLength(0)
+    await vi.waitFor(() =>
+      expect(rows.map((row) => row.refused)).toEqual(['token', 'token', 'token'])
+    )
+    // Claude Code sends it as its API key or, for an OAuth source, as its bearer.
+    expect(
+      (await call({ headers: { ...json, 'x-api-key': placeholder }, body: Buffer.from('{}') }))
+        .status
+    ).toBe(200)
+    const bearer = { ...json, authorization: `Bearer ${placeholder}` }
+    expect((await call({ headers: bearer, body: Buffer.from('{}') })).status).toBe(200)
+    expect(seen).toHaveLength(2)
   })
 
   it('refuses anything Claude Code does not need, without reaching the API', async () => {
