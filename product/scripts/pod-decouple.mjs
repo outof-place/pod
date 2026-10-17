@@ -32,6 +32,7 @@ const KEEP_MARKER = 'pod-decouple:keep'
 // mobile/ and cloud/ are other products; docs/ and .github/ do not ship. product/agent-launcher
 // is the `claude` launcher Pod ships, which reads the pane's env names; e2e.yml sets the app's
 // names for the E2E jobs, and a unit test reads them back.
+// bench/ stays out: it launches Orca next to Pod and must keep Orca's ORCA_ names.
 const SCOPES = [
   'src/',
   'tests/',

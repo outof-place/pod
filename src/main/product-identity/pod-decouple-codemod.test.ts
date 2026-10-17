@@ -66,6 +66,19 @@ describe('pod-decouple', () => {
     expect(run('--check').status).toBe(0)
   })
 
+  // The Pod vs Orca bench launches Orca itself, so its legacy names are Orca's and must stay.
+  it('leaves bench/ alone', () => {
+    const benchFile = 'bench/lib/launch.mjs'
+    const text = 'env.{O}PANE_KEY = key\nenv.{O}NEW_THING = 1\n'
+    const { run, read } = fixture(
+      { 'src/main/spawn.ts': 'env.{O}PANE_KEY = key\n', [benchFile]: text },
+      { env: env(['{O}PANE_KEY']) }
+    )
+    expect(run('--apply').status).toBe(0)
+    expect(read(benchFile)).toBe(legacy(text))
+    expect(run('--check').status).toBe(0)
+  })
+
   it('fails closed on an env name production code adds', () => {
     const { run, read } = fixture(
       { 'src/main/spawn.ts': 'env.{O}PANE_KEY = key\nenv.{O}NEW_THING = 1\n' },
