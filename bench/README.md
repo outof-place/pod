@@ -431,7 +431,7 @@ POD_BENCH_POD_APP=<re-id'd copy of Pod.app> node bench/suites/native-idle.mjs [-
   click Pod links during a run.
 - **Cleanup.** Only processes whose executable lies inside the run's dir get a signal, and so do
   their descendants. A process that merely names the dir in its argv (anyone's `tail` of a log
-  there) is reported, never signalled. Each launch's result lists every signal sent.
+  there) is reported, never signalled (`lib/run-tree.mjs`, tested in `lib/run-tree.test.mjs`). Each launch's result lists every signal sent.
 - **Sampling.** `tools/procstat.c` reads every process of the launch at each window's edges.
   That means every process whose executable lies inside the run's dir (the clone's PodNative and
   runtime helpers, plus the daemon the runtime copies into the profile) and their descendants. `extra.breakdown` splits the numbers by process class. A window counts only when
