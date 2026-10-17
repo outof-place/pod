@@ -47,12 +47,13 @@ export function finishRuntimeRemoteWorktreeCreate(args: {
   const requested = args.request.runHooks ? 'run' : (args.request.setupDecision ?? 'inherit')
   const setupReceipt = {
     requested,
-    hookFound: Boolean(args.result.setup),
+    // Pod: a setup skipped for trust was found, not missing.
+    hookFound: Boolean(args.result.setup ?? args.result.setupTrust),
     startupPolicy: args.result.setup?.waitForAgentStartup
       ? ('wait-for-setup' as const)
       : ('start-immediately' as const),
     state:
-      requested === 'skip'
+      requested === 'skip' || args.result.setupTrust
         ? ('skipped' as const)
         : !args.result.setup
           ? ('not_configured' as const)

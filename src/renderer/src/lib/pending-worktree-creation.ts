@@ -70,6 +70,8 @@ export type WorktreeCreationRequest = {
   baseBranch?: string
   compareBaseRef?: string
   setupDecision: SetupDecision
+  /** Pod: the base's orca.yaml setup hash the user approved during preparation. */
+  setupTrustHash?: string
   /** Inspect and confirm scripts on the captured host after the composer closes. */
   hookPreparation?: {
     executionHostId?: ExecutionHostId

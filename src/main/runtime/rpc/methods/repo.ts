@@ -5,7 +5,10 @@ import {
   includesQualifiedSearchRefs,
   projectRepoSearchRefsForClient
 } from './repo-search-ref-projection'
-import { RepoSelector } from '../../../../shared/rpc-contract/github-repo-target-params'
+import {
+  RepoHooksSelector,
+  RepoSelector
+} from '../../../../shared/rpc-contract/github-repo-target-params'
 import {
   projectRepoResultVisibilityForClient,
   projectRepoVisibilityForClient
@@ -222,14 +225,14 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'repo.hooks',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.getRepoHooks(params.repo)
+    params: RepoHooksSelector,
+    handler: async (params, { runtime }) => runtime.getRepoHooks(params.repo, params.ref)
   }),
   defineMethod({
     name: 'repo.hooksCheck',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.checkRepoHooks(params.repo)
+    params: RepoHooksSelector,
+    handler: async (params, { runtime }) => runtime.checkRepoHooks(params.repo, params.ref)
   }),
   defineMethod({
     name: 'repo.setupScriptImports',

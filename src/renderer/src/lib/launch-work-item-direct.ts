@@ -120,10 +120,6 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return false
   }
 
-  const trustDecision = await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
-  const finalSetupDecision: SetupDecision =
-    trustDecision === 'skip' ? 'skip' : setupResolution.decision
-
   const workspaceIntentName =
     itemNumber !== null
       ? getWorkspaceIntentName({
@@ -158,6 +154,20 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       return false
     }
   }
+
+  // Pod: after the PR head resolves, so the user is asked about the orca.yaml the create runs.
+  let setupTrustHash: string | undefined
+  const trustDecision = await ensureHooksConfirmed(
+    useAppStore.getState(),
+    repoId,
+    'setup',
+    undefined,
+    undefined,
+    undefined,
+    { baseRef: resolvedBaseBranch, onTrusted: (hash) => (setupTrustHash = hash) }
+  )
+  const finalSetupDecision: SetupDecision =
+    trustDecision === 'skip' ? 'skip' : setupResolution.decision
 
   let worktreeId: string,
     worktreePath = ''
@@ -195,7 +205,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       undefined,
       undefined,
       undefined,
-      resolvedCompareBaseRef
+      resolvedCompareBaseRef,
+      setupTrustHash ? { setupTrustHash } : undefined
     )
     worktreeId = result.worktree.id
     worktreePath = result.worktree.path

@@ -111,6 +111,9 @@ export type CreateWorktreeArgs = {
    *  legitimately contains `/` while the worktree directory must not. */
   branchNameOverride?: string
   setupDecision?: SetupDecision
+  /** Pod: sha256 of the base's orca.yaml setup content the user approved for this create; the host
+   *  runs the new worktree's setup only when its content has this hash or a recorded trust. */
+  setupTrustHash?: string
   sparseCheckout?: CreateSparseCheckoutRequest
   linkedIssue?: number
   linkedPR?: number
@@ -176,6 +179,8 @@ export type CreateWorktreeResult = {
   workspaceLineage?: WorkspaceLineage | null
   warnings?: WorktreeLineageWarning[]
   setup?: WorktreeSetupLaunch
+  /** Pod: the new worktree's orca.yaml setup was skipped because no trust covers its content. */
+  setupTrust?: { status: 'needs-trust'; contentHash: string }
   setupReceipt?: {
     requested: 'run' | 'skip' | 'inherit'
     hookFound: boolean

@@ -23,6 +23,11 @@ import {
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 
+vi.mock('../orca-yaml-setup-trust', async (importOriginal) =>
+  (await import('./worktrees-test-module-mocks')).orcaYamlSetupTrustModuleMock(
+    (await importOriginal()) as Record<string, unknown>
+  )
+)
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )

@@ -16,6 +16,8 @@ export type CreateWorktreeCallOptions = {
   /** True only when `name` came from the creature-name generator; gates host-side retirement. */
   nameWasGenerated?: boolean
   displayNameKind?: CreateWorktreeArgs['displayNameKind']
+  /** Pod: the base's orca.yaml setup hash the user approved; the host checks what it runs. */
+  setupTrustHash?: string
   /** Parent picked in the composer. Sets sidebar nesting only; ignored if it no longer exists. */
   parentWorktreeId?: string
   provisionedRoot?: {
@@ -52,6 +54,7 @@ function sharedCreateFields(
     ...(request.compareBaseRef ? { compareBaseRef: request.compareBaseRef } : {}),
     ...(attempt.branchNameOverride ? { branchNameOverride: attempt.branchNameOverride } : {}),
     setupDecision: request.setupDecision,
+    ...(options?.setupTrustHash ? { setupTrustHash: options.setupTrustHash } : {}),
     sparseCheckout: request.sparseCheckout,
     ...(request.displayName ? { displayName: request.displayName } : {}),
     ...((request.displayNameKind ?? options?.displayNameKind)
