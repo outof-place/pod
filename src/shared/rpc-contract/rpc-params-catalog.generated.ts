@@ -449,6 +449,7 @@ import {
   PodOrbstackUnsubscribeParams,
   PodOrbstackWorktreeParams
 } from './pod-orbstack-params'
+import { PodOrcaImportApplyParams, PodOrcaImportPreviewParams } from './pod-orca-import-params'
 import {
   PodSettingsSetNetworkProxyParams,
   PodSettingsSetParams,
@@ -1171,6 +1172,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.setEnabled': PluginSetEnabledParams,
   'pod.terminal.directLane': PodTerminalDirectLaneParams,
   'pod.terminal.openedBeforeClaudeAccounts': PodTerminalOpenedBeforeClaudeAccountsParams,
+  'podImport.orcaApply': PodOrcaImportApplyParams,
+  'podImport.orcaDetect': null,
+  'podImport.orcaPreview': PodOrcaImportPreviewParams,
   'podMcpLazy.restoreBackup': null,
   'podMcpLazy.status': null,
   'podSettings.get': null,
