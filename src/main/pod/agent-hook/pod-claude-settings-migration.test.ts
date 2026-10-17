@@ -304,4 +304,11 @@ describe('a settings file that names a key twice (r-orca on cfc502ee)', () => {
       expect(refusal.reason).toBe('duplicate keys')
     }
   })
+
+  it('refuses a file nested too deep to parse instead of throwing', () => {
+    const refusal: PodClaudeCutRefusal = {}
+    const text = `{"hooks":${'['.repeat(20_000)}${']'.repeat(20_000)}}`
+    expect(removePodClaudeEntries(text, names, refusal)).toBe(null)
+    expect(refusal.reason).toBe('unexpected error')
+  })
 })
