@@ -8,6 +8,7 @@ import type { PodProfileOptIn, PodProfileOptInId } from '../../../shared/pod-wor
 import { gitStreamStdout } from '../../git/runner'
 import type { GitHostFacts, RepoProfileFacts } from './workspace-git-profile-facts'
 import type { WorkspaceGitExec } from './workspace-git-exec'
+import { parseWorktreePorcelainZ } from './workspace-tidy-git'
 
 // Why: counting walks every object in HEAD's history; never on a path the UI waits on.
 const COUNT_TIMEOUT_MS = 180_000
@@ -182,6 +183,19 @@ export function planOptIns(
 }
 
 const RELATIVE_KEY = 'worktree.useRelativePaths'
+
+/**
+ * Each linked worktree's path, for `worktree repair`: without them git 2.54 rewrites no link on
+ * `--no-relative-paths`, so undo would leave every worktree relative.
+ */
+async function linkedWorktrees(git: WorkspaceGitExec, repoPath: string): Promise<string[]> {
+  const list = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
+  return list.code === 0
+    ? parseWorktreePorcelainZ(list.stdout)
+        .slice(1)
+        .map((entry) => entry.path)
+    : []
+}
 const RELATIVE_EXTENSION = 'extensions.relativeWorktrees'
 const FORMAT_VERSION = 'core.repositoryformatversion'
 
@@ -214,7 +228,8 @@ export async function enableRelativeWorktrees(
   repoPath: string
 ): Promise<void> {
   await setKey(repoPath, RELATIVE_KEY, 'true')
-  const repair = await git(['worktree', 'repair', '--relative-paths'], repoPath)
+  const linked = await linkedWorktrees(git, repoPath)
+  const repair = await git(['worktree', 'repair', '--relative-paths', ...linked], repoPath)
   if (repair.code !== 0) {
     throw new Error(repair.stderr.trim() || 'git worktree repair --relative-paths failed')
   }
@@ -235,7 +250,8 @@ export async function disableRelativeWorktrees(
   repoPath: string,
   before: RelativeWorktreesBefore
 ): Promise<void> {
-  const repair = await git(['worktree', 'repair', '--no-relative-paths'], repoPath)
+  const linked = await linkedWorktrees(git, repoPath)
+  const repair = await git(['worktree', 'repair', '--no-relative-paths', ...linked], repoPath)
   if (repair.code !== 0) {
     throw new Error(repair.stderr.trim() || 'git worktree repair --no-relative-paths failed')
   }
