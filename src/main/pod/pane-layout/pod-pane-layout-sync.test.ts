@@ -8,6 +8,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import {
   applyPodHeadlessActiveLeaf,
   applyPodPaneLayoutInWindow,
+  refusePodHeadlessActiveLeaf,
   setPodRendererPaneLayoutApply,
   type PodPaneLayoutHost
 } from './pod-pane-layout-sync'
@@ -155,5 +156,32 @@ describe('applyPodHeadlessActiveLeaf (Pod)', () => {
     })
     expect(session().terminalLayoutsByTabId.tab?.activeLeafId).toBe('left')
     expect(emitted).toHaveLength(0)
+  })
+})
+
+describe('refusePodHeadlessActiveLeaf (Pod)', () => {
+  it("checks the active pane against the client's splits, else the stored ones", () => {
+    const { fake } = host()
+    expect(
+      refusePodHeadlessActiveLeaf(fake, 'wt', 'tab', { root: null, activeLeafId: 'right' })
+    ).toBeNull()
+    expect(
+      refusePodHeadlessActiveLeaf(fake, 'wt', 'tab', {
+        root: { type: 'leaf', leafId: 'left' },
+        activeLeafId: 'right'
+      })
+    ).toEqual({ updated: false, reason: 'leaf_not_found' })
+    expect(refusePodHeadlessActiveLeaf(fake, 'wt', 'tab', { root: null })).toBeNull()
+  })
+
+  it('refuses an active pane for a tab without a stored layout', () => {
+    const { fake } = host()
+    expect(
+      refusePodHeadlessActiveLeaf(fake, 'wt', 'other', { root: null, activeLeafId: 'left' })
+    ).toEqual({ updated: false, reason: 'tab_not_found' })
+    expect(applyPodHeadlessActiveLeaf(fake, 'wt', 'other', undefined, 'left')).toEqual({
+      updated: false,
+      reason: 'tab_not_found'
+    })
   })
 })

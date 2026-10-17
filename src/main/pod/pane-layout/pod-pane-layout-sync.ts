@@ -80,6 +80,28 @@ export async function applyPodPaneLayoutInWindow(
 }
 
 /**
+ * Before the headless write: an active pane the tab's layout (the client's splits, else the stored
+ * ones) lacks refuses the whole update, so a refusal never leaves the splits written.
+ */
+export function refusePodHeadlessActiveLeaf(
+  host: PodPaneLayoutHost,
+  worktreeId: string,
+  tabId: string,
+  args: Pick<PodPaneLayoutArgs, 'root' | 'activeLeafId'>
+): PodPaneLayoutUpdateResult | null {
+  if (args.activeLeafId === undefined) {
+    return null
+  }
+  const stored = host.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[tabId]
+  if (!stored) {
+    return { updated: false, reason: 'tab_not_found' }
+  }
+  return collectLayoutLeafIdsInOrder(args.root ?? stored.root).includes(args.activeLeafId)
+    ? null
+    : { updated: false, reason: 'leaf_not_found' }
+}
+
+/**
  * After the headless write of `accepted` (the tab's stored layout): the client's active pane goes
  * on that layout and its snapshot. A leaf the layout lacks is refused; splits stay as written.
  */
@@ -90,8 +112,11 @@ export function applyPodHeadlessActiveLeaf(
   accepted: TerminalLayoutSnapshot | undefined,
   activeLeafId: string | undefined
 ): PodPaneLayoutUpdateResult {
-  if (activeLeafId === undefined || !accepted) {
+  if (activeLeafId === undefined) {
     return { updated: true, appliedBy: 'headless' }
+  }
+  if (!accepted) {
+    return { updated: false, reason: 'tab_not_found' }
   }
   if (!collectLayoutLeafIdsInOrder(accepted.root).includes(activeLeafId)) {
     return { updated: false, reason: 'leaf_not_found' }

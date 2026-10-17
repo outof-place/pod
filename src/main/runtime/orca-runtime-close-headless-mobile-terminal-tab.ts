@@ -15,6 +15,7 @@ import type { RuntimeSessionTabCloseReason } from '../../shared/runtime-session-
 import {
   applyPodHeadlessActiveLeaf,
   applyPodPaneLayoutInWindow,
+  refusePodHeadlessActiveLeaf,
   type PodPaneLayoutUpdateResult
 } from '../pod/pane-layout/pod-pane-layout-sync'
 
@@ -215,6 +216,11 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
     const resolvedArgs = { ...args, tabId: hostTabId }
+    // Fork-only (Pod): an active pane the layout lacks refuses the update before anything is written.
+    const podRefusal = refusePodHeadlessActiveLeaf(this, worktreeId, hostTabId, args)
+    if (podRefusal) {
+      return podRefusal
+    }
     const acceptedLayout = this.persistHeadlessTerminalPaneLayout(worktreeId, resolvedArgs)
     if (acceptedLayout) {
       this.applyHeadlessTerminalPaneLayoutToSnapshot(worktreeId, {
