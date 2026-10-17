@@ -131,7 +131,9 @@ test("a profile's cleanup stops its own processes and leaves a stranger that nam
     assert.ok(!signalled.has(process.pid), 'never this process')
   } finally {
     for (const child of [own, crashpad, reused, ...strangers]) {
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill('SIGTERM')
+      }
     }
   }
 })
@@ -146,7 +148,9 @@ test("the claude-acc guard's kill of the app's own pid needs the start time reco
     process.kill(child.pid, 0)
     assert.equal(killRoot({ roots: new Map([[child.pid, root]]) }, child.pid).length, 1)
   } finally {
-    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL')
+    }
   }
 })
 

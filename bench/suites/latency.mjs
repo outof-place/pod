@@ -291,7 +291,9 @@ function ghosttyAccountState() {
 // The clone's processes and their descendants (its shell), by executable (lib/run-tree.mjs).
 async function stopGhostty(clone) {
   const { left } = await stopRunTree(clone)
-  if (left.length > 0) throw new Error(`Ghostty processes left: ${left.map((proc) => proc.pid).join(' ')}`)
+  if (left.length > 0) {
+    throw new Error(`Ghostty processes left: ${left.map((proc) => proc.pid).join(' ')}`)
+  }
 }
 
 async function ghosttySubject() {
@@ -363,7 +365,9 @@ const ghosttyAccount = ghosttyBefore && {
   after: ghosttyAfter,
   changed: Object.keys(ghosttyBefore).filter((key) => JSON.stringify(ghosttyBefore[key]) !== JSON.stringify(ghosttyAfter[key]))
 }
-if (ghosttyAccount) log(`the account's Ghostty domain: ${ghosttyAccount.changed.length ? `CHANGED (${ghosttyAccount.changed.join(', ')})` : 'unchanged'}`)
+if (ghosttyAccount) {
+  log(`the account's Ghostty domain: ${ghosttyAccount.changed.length ? `CHANGED (${ghosttyAccount.changed.join(', ')})` : 'unchanged'}`)
+}
 const versions = {
   ghostty: appVersion(GHOSTTY),
   ...Object.fromEntries(
