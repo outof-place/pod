@@ -62,7 +62,11 @@ export const PodWorkspaceAdoptParams = z.discriminatedUnion('action', [
       action: z.literal('apply'),
       planId: PlanId,
       reason: UserIntent,
-      acknowledged: z.array(z.literal('process-inside')).max(1).optional()
+      /** Soft blockers the plan listed and the user ticked. */
+      acknowledged: z
+        .array(z.enum(['process-inside', 'files-open']))
+        .max(2)
+        .optional()
     })
     .strict(),
   z.object({ action: z.literal('plan-undo'), recordId: Id }).strict(),

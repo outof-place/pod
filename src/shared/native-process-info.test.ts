@@ -1,6 +1,14 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { Worker } from 'node:worker_threads'
@@ -289,6 +297,25 @@ describeDarwin('native/proc-info-darwin against ps', () => {
       'expected a terminal name'
     )
   )
+
+  it('finds files held open below a folder in one pass, and only below it', () => {
+    const folder = join(scratch, 'held')
+    mkdirSync(folder)
+    writeFileSync(join(folder, 'open.txt'), 'x')
+    writeFileSync(`${folder}-sibling.txt`, 'x')
+    const fds = [openSync(join(folder, 'open.txt'), 'r'), openSync(`${folder}-sibling.txt`, 'r')]
+    try {
+      const real = realpathSync(folder)
+      const mine = addon.findOpenPathsUnder!([`${real}/`]).filter((hit) => hit.pid === process.pid)
+      expect(mine.map((hit) => hit.path)).toEqual([join(real, 'open.txt')])
+      expect(addon.findOpenPathsUnder!([join(real, 'none-such')])).toEqual([])
+      expect(() => addon.findOpenPathsUnder!(Array.from({ length: 65 }, () => real))).toThrow(
+        /up to 64/
+      )
+    } finally {
+      fds.forEach((fd) => closeSync(fd))
+    }
+  })
 
   it('answers single-pid and cwd lookups without a table scan', () => {
     const row = addon.readProcess(process.pid)

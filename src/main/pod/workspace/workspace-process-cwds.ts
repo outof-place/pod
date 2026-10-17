@@ -1,4 +1,4 @@
-import { getNativeProcessInfo } from '../../../shared/native-process-info'
+import { getNativeProcessInfo, type NativeOpenPath } from '../../../shared/native-process-info'
 import type { PodTidyProcess } from '../../../shared/pod-workspace-tidy-types'
 import { isPathInsideRoot } from './workspace-root-path'
 
@@ -7,6 +7,8 @@ export type ProcessCwdReader = {
   readCwd(pid: number): string | null
   /** Names for the few pids that matched; empty when the kernel withholds them. */
   readNames(pids: readonly number[]): Promise<Map<number, string>>
+  /** Files held open below these folders; absent where the addon predates it. Plan reads only. */
+  openPathsUnder?(folders: readonly string[]): NativeOpenPath[]
 }
 
 export function createNativeProcessCwdReader(): ProcessCwdReader | null {
@@ -14,7 +16,9 @@ export function createNativeProcessCwdReader(): ProcessCwdReader | null {
   if (!native) {
     return null
   }
+  const findOpenPathsUnder = native.findOpenPathsUnder
   return {
+    ...(findOpenPathsUnder ? { openPathsUnder: (folders) => findOpenPathsUnder(folders) } : {}),
     listPids: async () => (await native.listProcesses()).map((row) => row.pid),
     readCwd: (pid) => native.readProcessCwd(pid),
     readNames: async (pids) => {
