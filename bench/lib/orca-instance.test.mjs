@@ -1,12 +1,21 @@
 // node --test bench/lib/orca-instance.test.mjs
-// Test dirs stay under PROFILE_BASE (/private/tmp by default); nothing is deleted here. Remove the
-// run dir with pod-tmp-rm afterwards.
+// Test dirs stay under PROFILE_BASE. Without POD_BENCH_PROFILE_BASE that is this process's own
+// /private/tmp/pod-bench.<pid>.* dir, which goes through pod-tmp-rm (where installed) at the end.
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
-import { test } from 'node:test'
-import { PROFILE_BASE, cli, describeApp, launchInstance, profilePids } from './orca-instance.mjs'
+import { after, test } from 'node:test'
+import { PROFILE_BASE, cli, describeApp, launchInstance, removeProfile } from './orca-instance.mjs'
+
+after(() => {
+  const remover = path.join(os.homedir(), '.local/bin/pod-tmp-rm')
+  const own = path.dirname(PROFILE_BASE)
+  if (!process.env.POD_BENCH_PROFILE_BASE && own.startsWith(`/private/tmp/pod-bench.${process.pid}.`) && existsSync(own) && existsSync(remover)) {
+    execFileSync(remover, [own], { stdio: 'ignore' })
+  }
+})
 
 function testDir(prefix) {
   mkdirSync(PROFILE_BASE, { recursive: true })
@@ -64,26 +73,37 @@ test('a CLI that reaches another runtime is stopped before any change', async ()
   ])
 })
 
-test("profilePids finds a profile's processes in either /tmp spelling, and nothing else", async () => {
+test("a profile's cleanup stops its own processes and leaves a stranger that names it alone", async () => {
   const ud = testDir('pids-')
   assert.ok(ud.startsWith('/private/tmp/'), ud)
   const short = ud.replace(/^\/private\/tmp\//, '/tmp/')
-  const children = [
+  // An app copy the run launched from: a process of it naming the profile is the run's (crashpad).
+  const app = path.join(testDir('app-'), 'App.app')
+  mkdirSync(path.join(app, 'Contents/MacOS'), { recursive: true })
+  writeFileSync(path.join(ud, 'tool.c'), '#include <unistd.h>\nint main(void) { sleep(30); return 0; }\n')
+  execFileSync('xcrun', ['clang', '-O2', '-o', path.join(app, 'Contents/MacOS/crashpad'), path.join(ud, 'tool.c')])
+  const own = spawn('/bin/sh', ['-c', 'sleep 30; true'], { stdio: 'ignore' })
+  const crashpad = spawn(path.join(app, 'Contents/MacOS/crashpad'), [`--database=${ud}/Crashpad`], { stdio: 'ignore' })
+  const strangers = [
     spawn('/bin/sh', ['-c', 'sleep 30; true', `${ud}/marker`], { stdio: 'ignore' }),
-    spawn('/bin/sh', ['-c', 'sleep 30; true', `${short}/marker`], { stdio: 'ignore' }),
-    // A sibling dir that only shares the prefix is not the profile.
-    spawn('/bin/sh', ['-c', 'sleep 30; true', `${ud}-other/marker`], { stdio: 'ignore' })
+    spawn('/bin/sh', ['-c', 'sleep 30; true', `${short}/marker`], { stdio: 'ignore' })
   ]
+  const profile = { ud, roots: new Set([own.pid]), apps: new Set([app]), signalled: [], argvOnly: [] }
   try {
     await new Promise((resolve) => setTimeout(resolve, 300))
-    const found = profilePids(ud)
-    assert.ok(found.includes(children[0].pid), 'the /private/tmp spelling')
-    assert.ok(found.includes(children[1].pid), 'the /tmp spelling')
-    assert.ok(!found.includes(children[2].pid), 'a sibling dir')
-    assert.ok(!found.includes(process.pid), 'never this process')
+    await removeProfile(profile)
+    const signalled = new Set(profile.signalled.map((entry) => entry.pid))
+    assert.ok(signalled.has(own.pid), 'the run spawned it')
+    assert.ok(signalled.has(crashpad.pid), 'its executable is the run app, and it names the profile')
+    for (const stranger of strangers) {
+      assert.ok(!signalled.has(stranger.pid), 'a stranger is never signalled')
+      assert.ok(profile.argvOnly.some((entry) => entry.pid === stranger.pid), 'but it is reported')
+      process.kill(stranger.pid, 0)
+    }
+    assert.ok(!signalled.has(process.pid), 'never this process')
   } finally {
-    for (const child of children) {
-      child.kill('SIGTERM')
+    for (const child of [own, crashpad, ...strangers]) {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
     }
   }
 })
