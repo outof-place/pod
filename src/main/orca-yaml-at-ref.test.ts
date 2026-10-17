@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  foreignOriginMeta,
   isForeignCreate,
   isOrcaYamlRef,
   isOwnBranch,
@@ -81,5 +82,7 @@ describe('a ref’s orca.yaml (Pod)', () => {
     expect(await isForeignCreate(exec, { baseBranch: 'origin/main', linkedPR: 7 })).toBe(true)
     expect(await isForeignCreate(exec, { linkedGitLabMR: 3 })).toBe(true)
     expect(await isForeignCreate(exec, { linkedPR: null, baseBranch: 'main' })).toBe(false)
+    expect(await foreignOriginMeta(exec, { baseBranch: head })).toEqual({ foreignOrigin: true })
+    expect(await foreignOriginMeta(exec, { baseBranch: 'main' })).toEqual({})
   })
 })

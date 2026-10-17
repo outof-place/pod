@@ -103,4 +103,21 @@ describe('mergeWorktree identity projection', () => {
 
     expect(worktree.suppressedGitHubPR).toBe(42)
   })
+
+  it('carries a checkout of someone else’s code (Pod), and nothing for any other', () => {
+    const meta = {
+      displayName: 'feature',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: 7,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0
+    }
+    expect(mergeWorktree('repo-1', git, { ...meta, foreignOrigin: true }).foreignOrigin).toBe(true)
+    expect(mergeWorktree('repo-1', git, meta)).not.toHaveProperty('foreignOrigin')
+  })
 })
