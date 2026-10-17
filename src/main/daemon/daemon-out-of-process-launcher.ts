@@ -18,6 +18,7 @@ import { materializeRelocatedDaemonHost, pruneDaemonHostStaging } from './daemon
 import { darwinDaemonHostForSpawn } from './daemon-host-darwin-spawn'
 import {
   createDarwinDaemonLaunchdJobs,
+  daemonLaunchdJobsDir,
   sweepDeadDaemonLaunchdJobs
 } from './daemon-launchd-jobs-darwin'
 import { isLaunchdDaemonLaunchEnabled } from './daemon-launchd-launch'
@@ -146,13 +147,15 @@ export function createOutOfProcessLauncher(
       pruneDaemonHostStaging()
       // Fork the relocated entry when available; otherwise the install-dir entry.
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
-      // Pod: a GUI daemon on macOS starts as a launchd job (daemon-launchd-launch.ts).
+      // Pod: a GUI daemon on macOS starts as a launchd job (daemon-launchd-launch.ts), only from
+      // its daemon-host clone: an update deletes the bundle. Without a clone it forks, as before.
+      const jobsDir = daemonLaunchdJobsDir(runtimeDir)
       const launchdJobs =
-        macosLaunchdJob && isLaunchdDaemonLaunchEnabled()
-          ? createDarwinDaemonLaunchdJobs()
+        macosLaunchdJob && relocatedHost && isLaunchdDaemonLaunchEnabled()
+          ? createDarwinDaemonLaunchdJobs(jobsDir)
           : undefined
       if (launchdJobs) {
-        await sweepDeadDaemonLaunchdJobs(userDataPath, launchdJobs).catch(() => [])
+        await sweepDeadDaemonLaunchdJobs(userDataPath, jobsDir, launchdJobs).catch(() => [])
       }
       let launched
       try {

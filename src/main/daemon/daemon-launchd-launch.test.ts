@@ -150,6 +150,15 @@ describe('a daemon launchd starts', () => {
     expect(written[0]?.args[0]).toBe('/clone/daemon-entry.js')
   })
 
+  it('refuses to run from the app bundle, so the caller forks', async () => {
+    const launchctl = launchctlReporting([])
+    await expect(
+      launchDaemonViaLaunchd({ ...options, relocatedExecPath: undefined }, jobs, launchctl)
+    ).rejects.toThrow('a launchd daemon needs its daemon-host clone')
+    expect(launchctl).not.toHaveBeenCalled()
+    expect(written).toEqual([])
+  })
+
   it('reports a lost endpoint race, with the job booted out', async () => {
     const launchctl = launchctlReporting([
       { type: 'started', pid: process.pid },

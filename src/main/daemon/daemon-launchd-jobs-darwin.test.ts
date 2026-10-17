@@ -14,6 +14,7 @@ import type { ProcessResult } from '@orca/process-host/process-spec'
 import {
   DAEMON_LAUNCHD_STDERR_LOG_NAME,
   createDarwinDaemonLaunchdJobs,
+  daemonLaunchdJobsDir,
   daemonLaunchdLabelPrefix,
   parseDaemonLaunchdList,
   sweepDeadDaemonLaunchdJobs
@@ -23,6 +24,7 @@ import type { DaemonLaunchdJob } from './daemon-launchd-launch'
 let dir: string
 let userData: string
 let logs: string
+let jobsDir: string
 
 function result(code: number, stdout = '', stderr = ''): ProcessResult {
   return { code, signal: null, stdout, stderr, timedOut: false }
@@ -41,6 +43,7 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'pod-launchd-jobs-'))
   userData = join(dir, 'userData')
   logs = join(userData, 'logs')
+  jobsDir = daemonLaunchdJobsDir(join(userData, 'daemon'))
   mkdirSync(userData)
 })
 
@@ -51,22 +54,25 @@ describe('launchd jobs of a profile', () => {
     const prefix = daemonLaunchdLabelPrefix(userData)
     expect(prefix).toMatch(/^codes\.pod\.daemon\.[0-9a-f]{12}\.$/)
     expect(daemonLaunchdLabelPrefix(join(dir, 'other'))).not.toBe(prefix)
-    const paths = createDarwinDaemonLaunchdJobs(vi.fn(), () => logs).paths({
+    const paths = createDarwinDaemonLaunchdJobs(jobsDir, vi.fn(), () => logs).paths({
       userDataPath: userData,
       launchNonce: 'nonce-1'
     })
     expect(paths.label).toBe(`${prefix}nonce-1`)
-    expect(paths.plistPath).toBe(join(userData, 'daemon-launchd', `${prefix}nonce-1.plist`))
-    expect(paths.reportPath).toBe(join(userData, 'daemon-launchd', `${prefix}nonce-1.report.json`))
+    // Under userData/daemon, which the cask's zap removes; nothing goes to ~/Library/LaunchAgents.
+    expect(paths.plistPath).toBe(join(userData, 'daemon', 'launchd', `${prefix}nonce-1.plist`))
+    expect(paths.reportPath).toBe(
+      join(userData, 'daemon', 'launchd', `${prefix}nonce-1.report.json`)
+    )
     expect(paths.stderrPath).toBe(join(logs, DAEMON_LAUNCHD_STDERR_LOG_NAME))
   })
 
   it('write a private plist with the job keys and an escaped environment', () => {
-    const jobs = createDarwinDaemonLaunchdJobs(vi.fn(), () => logs)
+    const jobs = createDarwinDaemonLaunchdJobs(jobsDir, vi.fn(), () => logs)
     const paths = jobs.paths({ userDataPath: userData, launchNonce: 'nonce-1' })
     jobs.writePlist(paths, job)
     expect(statSync(paths.plistPath).mode & 0o777).toBe(0o600)
-    expect(statSync(join(userData, 'daemon-launchd')).mode & 0o777).toBe(0o700)
+    expect(statSync(jobsDir).mode & 0o777).toBe(0o700)
     const plist = readFileSync(paths.plistPath, 'utf8')
     expect(plist).toContain(`<key>Label</key><string>${paths.label}</string>`)
     expect(plist).toContain('<string>/usr/sbin/taskpolicy</string>\n    <string>-a</string>')
@@ -82,7 +88,7 @@ describe('launchd jobs of a profile', () => {
   })
 
   it('rotate a stderr log past 2 MB before a launch', () => {
-    const jobs = createDarwinDaemonLaunchdJobs(vi.fn(), () => logs)
+    const jobs = createDarwinDaemonLaunchdJobs(jobsDir, vi.fn(), () => logs)
     const paths = jobs.paths({ userDataPath: userData, launchNonce: 'nonce-2' })
     mkdirSync(logs, { recursive: true })
     writeFileSync(paths.stderrPath, 'x'.repeat(2 * 1024 * 1024 + 1))
@@ -97,7 +103,7 @@ describe('launchd jobs of a profile', () => {
       .mockResolvedValueOnce(result(0))
       .mockResolvedValueOnce(result(113, '', 'Could not find service'))
       .mockResolvedValueOnce(result(5, '', 'Input/output error'))
-    const jobs = createDarwinDaemonLaunchdJobs(launchctl, () => logs)
+    const jobs = createDarwinDaemonLaunchdJobs(jobsDir, launchctl, () => logs)
     await jobs.bootout('codes.pod.daemon.x.1')
     await jobs.bootout('codes.pod.daemon.x.2')
     await expect(jobs.bootout('codes.pod.daemon.x.3')).rejects.toThrow(
@@ -122,8 +128,7 @@ describe('the sweep before a launch', () => {
 
   it('boots out dead jobs and their files, never a live one or another profile', async () => {
     const prefix = daemonLaunchdLabelPrefix(userData)
-    const jobsDir = join(userData, 'daemon-launchd')
-    mkdirSync(jobsDir)
+    mkdirSync(jobsDir, { recursive: true })
     for (const name of [
       `${prefix}dead.plist`,
       `${prefix}live.report.json`,
@@ -138,7 +143,7 @@ describe('the sweep before a launch', () => {
       )
     )
     const bootout = vi.fn(async () => {})
-    expect(await sweepDeadDaemonLaunchdJobs(userData, { bootout }, launchctl)).toEqual([
+    expect(await sweepDeadDaemonLaunchdJobs(userData, jobsDir, { bootout }, launchctl)).toEqual([
       `${prefix}dead`
     ])
     expect(bootout.mock.calls).toEqual([[`${prefix}dead`]])
@@ -150,7 +155,7 @@ describe('the sweep before a launch', () => {
   it('does nothing when launchctl list fails', async () => {
     const bootout = vi.fn(async () => {})
     const launchctl = vi.fn(async () => result(1))
-    expect(await sweepDeadDaemonLaunchdJobs(userData, { bootout }, launchctl)).toEqual([])
+    expect(await sweepDeadDaemonLaunchdJobs(userData, jobsDir, { bootout }, launchctl)).toEqual([])
     expect(bootout).not.toHaveBeenCalled()
   })
 })

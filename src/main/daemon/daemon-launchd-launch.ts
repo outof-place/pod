@@ -137,10 +137,13 @@ export async function launchDaemonViaLaunchd(
   jobs: DaemonLaunchdJobs,
   launchctl: RunLaunchctl = runLaunchctl
 ): Promise<DaemonLaunchdOutcome> {
-  const executable = daemonNodeExecutable(options.relocatedExecPath)
+  // Why the clone only: an update deletes the bundle, and a job outlives the runtime that made it.
+  const executable = options.relocatedExecPath
+    ? daemonNodeExecutable(options.relocatedExecPath)
+    : null
   const uid = process.getuid?.()
   if (!executable || uid === undefined) {
-    throw new Error('no executable or user for a launchd daemon')
+    throw new Error('a launchd daemon needs its daemon-host clone and a user')
   }
   const paths = jobs.paths({ userDataPath: options.userDataPath, launchNonce: options.launchNonce })
   removeQuietly(paths.reportPath)
