@@ -54,7 +54,7 @@ class FakeWindow {
   }
 }
 
-function setup(frames: PodBrowserFrames | null = fakeFrames()) {
+function setup(frames: PodBrowserFrames | null = fakeFrames(), mainDisplayScale?: () => number) {
   const sent: PodBrowserPaneServerMessage[] = []
   const devTools = vi.fn()
   const panes = new PodBrowserPaneController({
@@ -64,7 +64,8 @@ function setup(frames: PodBrowserFrames | null = fakeFrames()) {
       return true
     },
     openDevTools: devTools,
-    log: vi.fn()
+    log: vi.fn(),
+    mainDisplayScale
   })
   const wc = new FakeWebContents()
   const win = new FakeWindow(wc)
@@ -164,6 +165,71 @@ describe('PodBrowserPaneController', () => {
     )
     expect(page.release).toHaveBeenCalled()
     expect(panes.stats).toEqual({ framesSent: 2, sendFailures: 0, sendNs: 18000 })
+  })
+
+  it("opens a page at the main display's scale until a pane reports one", () => {
+    const frames = fakeFrames()
+    const { panes, wc } = setup(frames, () => 1)
+    panes.handle(rendezvous)
+    panes.handle({ ...attach, scale: 1 })
+    wc.emit('paint', { texture: texture() })
+    expect(frames.browserSend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ scaleX100: 100 })
+    )
+  })
+
+  it('opens the next page at the scale a pane last reported; an open page keeps its own', () => {
+    const frames = fakeFrames()
+    const { panes, wc } = setup(frames, () => 2)
+    panes.handle(rendezvous)
+    panes.handle({ ...attach, scale: 1 })
+    wc.emit('paint', { texture: texture() })
+    expect(frames.browserSend).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ scaleX100: 200 })
+    )
+    expect(panes.newPageScale()).toBe(1)
+
+    const second = new FakeWebContents()
+    second.id = 42
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fakes implement every member the controller calls.
+    panes.trackPage('page-2', new FakeWindow(second) as unknown as Electron.BrowserWindow)
+    panes.handle({ ...attach, pageId: 'page-2', token: 8, scale: 1 })
+    second.emit('paint', { texture: texture() })
+    expect(frames.browserSend).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ token: 8, scaleX100: 100 })
+    )
+
+    panes.handle({ type: 'browserResize', pageId: 'page-2', width: 900, height: 700, scale: 2 })
+    expect(panes.newPageScale()).toBe(2)
+  })
+
+  it('gives a page the scale its window opened at, though a pane reports another before it is tracked', () => {
+    const frames = fakeFrames()
+    const { panes } = setup(frames, () => 1)
+    // The backend's webPreferences for page-2's window.
+    expect(panes.newPageScale()).toBe(1)
+    panes.handle(rendezvous)
+    panes.handle({ ...attach, scale: 2 })
+    const second = new FakeWebContents()
+    second.id = 42
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fakes implement every member the controller calls.
+    panes.trackPage('page-2', new FakeWindow(second) as unknown as Electron.BrowserWindow)
+    panes.handle({ ...attach, pageId: 'page-2', token: 8, scale: 2 })
+    second.emit('paint', { texture: texture() })
+    expect(frames.browserSend).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ token: 8, scaleX100: 100 })
+    )
+  })
+
+  it("keeps a new page's scale between 1 and 4, and Retina when the display says nothing usable", () => {
+    expect(setup(fakeFrames(), () => Number.NaN).panes.newPageScale()).toBe(2)
+    expect(setup(fakeFrames(), () => 0.5).panes.newPageScale()).toBe(1)
+    expect(setup(fakeFrames(), () => 8).panes.newPageScale()).toBe(4)
+    expect(setup(fakeFrames()).panes.newPageScale()).toBe(2)
   })
 
   it('sends nothing before PodNative named a receiver', () => {
