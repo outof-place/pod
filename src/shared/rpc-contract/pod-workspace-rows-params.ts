@@ -5,6 +5,7 @@ import { RepoSelector } from './github-repo-target-params'
 import { ExecutionHostId } from './automation-params'
 
 export const HOST_DISPLAY_LABEL_MAX_LENGTH = 256
+export const SPARSE_PRESET_ID_MAX_LENGTH = 256
 
 export const HostSetDisplayLabelParams = z
   .object({
@@ -15,5 +16,7 @@ export const HostSetDisplayLabelParams = z
   .strict()
 
 export const RepoSparsePresetRemove = RepoSelector.extend({
-  presetId: requiredString('Missing preset id')
+  presetId: requiredString('Missing preset id').pipe(
+    z.string().max(SPARSE_PRESET_ID_MAX_LENGTH, 'Preset id too long')
+  )
 })

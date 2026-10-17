@@ -59,8 +59,9 @@ export const POD_SETTINGS_NETWORK_PROXY_RUNTIME_CAPABILITY =
 export const POD_PLUGINS_MANAGE_RUNTIME_CAPABILITY = 'pod.plugins.manage.v1' as const
 
 /**
- * host.setDisplayLabel, repo.removeSparsePreset, and repo.update taking `worktreeBaseRef: null` as a
- * clear. An older host drops that null and keeps the base ref, so a client offers Reset only here.
+ * host.setDisplayLabel, repo.removeSparsePreset, and repo.update taking `worktreeBaseRef: null` or ""
+ * as a clear, for every RPC client (mobile's repo.update included, where both did nothing before).
+ * An older host drops that null and keeps the base ref, so a client offers Reset only here.
  */
 export const POD_WORKSPACE_ROWS_RUNTIME_CAPABILITY = 'pod.workspace-rows.v1' as const
 
