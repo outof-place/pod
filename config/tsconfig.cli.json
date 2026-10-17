@@ -32,6 +32,7 @@
     "../src/main/pod/agent-hook/pod-agent-hook-native.ts",
     "../src/main/pod/agent-hook/pod-statusline-native.ts",
     "../src/main/pod/agent-hook/pod-claude-launch-settings.ts",
+    "../src/main/pod/agent-hook/pod-agent-launcher-path.ts",
     "../src/main/pod/agent-hook/pod-claude-hook-service.ts",
     "../src/main/pod/agent-hook/pod-claude-profile-hook-service.ts",
     "../src/main/pod/agent-hook/pod-claude-settings-migration.ts",
