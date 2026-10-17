@@ -3,7 +3,8 @@ import type {
   PodOrbstackMachine,
   PodOrbstackStatus,
   PodOrbstackWorktreeLink,
-  PodOrbstackChurn
+  PodOrbstackChurn,
+  PodOrbstackSandboxCredentialSource
 } from '../../../shared/pod-orbstack-types'
 import { orbstackKeepsDeletedAddresses } from './pod-orbstack-churn'
 import {
@@ -104,6 +105,7 @@ export async function readPodOrbstackStatus(deps: {
   containers?: boolean
   busyWorktreeIds: readonly string[]
   churn?: PodOrbstackChurn
+  sandboxCredentialSource?: PodOrbstackSandboxCredentialSource
   now?: () => number
 }): Promise<PodOrbstackStatus> {
   const { paths, run, registry } = deps
@@ -183,6 +185,9 @@ export async function readPodOrbstackStatus(deps: {
     containers,
     links: buildLinks(registry),
     sandboxClaudeLogin: registry.sandboxClaudeLogin(),
+    ...(deps.sandboxCredentialSource
+      ? { sandboxCredentialSource: deps.sandboxCredentialSource }
+      : {}),
     busyWorktreeIds: [...deps.busyWorktreeIds],
     errors,
     checkedAt: (deps.now ?? Date.now)(),

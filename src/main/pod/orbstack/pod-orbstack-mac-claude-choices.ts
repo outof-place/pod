@@ -1,6 +1,6 @@
 // Fork-only (Pod): what the Mac's user already chose in Claude Code, so a sandboxed Claude opens on
 // its prompt as on the Mac: the theme, and the accepted bypass-permissions warning.
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveClaudeGlobalConfigFile } from '../../claude/claude-folder-trust-file'
@@ -16,6 +16,17 @@ export type SandboxClaudeChoices = {
 export const NO_SANDBOX_CLAUDE_CHOICES: SandboxClaudeChoices = {
   theme: null,
   skipDangerousModePermissionPrompt: false
+}
+
+// Why a cap: ~/.claude.json grows to tens of MB for heavy users, and this runs on each create.
+const MAX_CONFIG_BYTES = 8 * 1024 * 1024
+
+/** Reads a Mac config file whole, or throws when it is past the cap. */
+export function readCappedConfig(path: string, maxBytes = MAX_CONFIG_BYTES): string {
+  if (statSync(path).size > maxBytes) {
+    throw new Error(`${path} is past ${maxBytes} bytes`)
+  }
+  return readFileSync(path, 'utf8')
 }
 
 // Why a shape, not a list: Claude Code names its own themes; only a plain word is copied.
@@ -54,7 +65,7 @@ function builtInTheme(value: unknown, configDir: string, read: Read): string | n
 export function readMacClaudeChoices(
   env: NodeJS.ProcessEnv = process.env,
   homeDir: string = homedir(),
-  read: Read = (path) => readFileSync(path, 'utf8')
+  read: Read = (path) => readCappedConfig(path)
 ): SandboxClaudeChoices {
   const configDir = env.CLAUDE_CONFIG_DIR || join(homeDir, '.claude')
   const settings = readJsonObject(read, join(configDir, 'settings.json'))
