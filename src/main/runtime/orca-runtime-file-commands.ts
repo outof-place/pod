@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithPreservedBranchCleanup } from './orca-runtime-preserved-branch-cleanup'
+import { repoGitShowExec } from '../orca-yaml-at-ref'
 import { RuntimeFileCommands } from './orca-runtime-files'
 import { nativeChatTranscriptIncludesPath } from '../native-chat/native-chat-file-provenance'
 import { createRuntimeFileWatcherRemoval } from './runtime-file-watcher-removal'
@@ -212,7 +213,8 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
   protected readonly gitHubProjectCommands = new RuntimeGitHubProjectCommands()
 
   protected readonly repositoryHooks = new RuntimeRepositoryHooksCommands({
-    resolveRepo: (selector) => this.resolveRepoSelector(selector)
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    gitShowExec: (repo) => (this.store ? repoGitShowExec(this.store, repo) : null)
   })
 
   protected readonly repositoryIssueCommand = new RuntimeRepositoryIssueCommand({

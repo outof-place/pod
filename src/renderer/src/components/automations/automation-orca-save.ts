@@ -110,11 +110,15 @@ export async function saveOrcaAutomation(
     draftSetupDecision: draft.setupDecision
   })
   if (setupDecision === 'run') {
+    // Pod: asked on the base each run starts from; the host checks the content again per run.
     const trustDecision = await ensureHooksConfirmed(
       useAppStore.getState(),
       draft.projectId,
       'setup',
-      setupHostId
+      setupHostId,
+      undefined,
+      undefined,
+      { baseRef: draft.baseBranch.trim() || undefined, onTrusted: () => undefined }
     )
     if (trustDecision === 'skip') {
       setupDecision = 'skip'

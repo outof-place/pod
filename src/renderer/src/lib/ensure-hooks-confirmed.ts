@@ -233,6 +233,10 @@ export async function readAndConfirmRuntimeIssueCommand(
   return confirmRuntimeIssueCommandRead(state, repoId, hostId, result, isCancelled)
 }
 
+/** Pod: a create's setup is asked about on its base's orca.yaml, and the approved hash goes with
+ *  the create so the host can check the content it actually runs. */
+export type CreateSetupTrust = { baseRef?: string; onTrusted: (contentHash: string) => void }
+
 export async function ensureHooksConfirmed(
   // Why a getter: a caller that queues behind an earlier prompt must see the trust it recorded.
   stateOrGetter: AppState | (() => AppState),
@@ -240,14 +244,16 @@ export async function ensureHooksConfirmed(
   scriptKind: HookScriptKind,
   hostId?: ExecutionHostId,
   runtimeOwnerEnvironmentId?: string | null,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  createSetup?: CreateSetupTrust
 ): Promise<'run' | 'skip'> {
   return enqueueTrustPrompt(async () => {
     if (isCancelled()) {
       return 'skip'
     }
     const state = typeof stateOrGetter === 'function' ? stateOrGetter() : stateOrGetter
-    if (canUseRepoWideTrust(state, repoId)) {
+    // A create still reads the content: its hash goes with the request.
+    if (canUseRepoWideTrust(state, repoId) && !createSetup) {
       return 'run'
     }
 
@@ -284,11 +290,21 @@ export async function ensureHooksConfirmed(
         if (sourcePolicy === 'local-only') {
           return 'run'
         }
-        const result = await checkRuntimeHooks(
-          settingsForHookRepoOwner(state, repoId, hostId, runtimeOwnerEnvironmentId),
+        const ownerSettings = settingsForHookRepoOwner(
+          state,
           repoId,
-          hostId
+          hostId,
+          runtimeOwnerEnvironmentId
         )
+        const atBase = createSetup?.baseRef
+          ? await checkRuntimeHooks(ownerSettings, repoId, hostId, createSetup.baseRef)
+          : null
+        // A base this host can't read (an older host, a ref only the create resolves) falls back
+        // to the root's content; the host still checks what it runs.
+        const result =
+          atBase && atBase.status !== 'error'
+            ? atBase
+            : await checkRuntimeHooks(ownerSettings, repoId, hostId)
         if (result.status === 'error') {
           return 'skip'
         }
@@ -305,6 +321,17 @@ export async function ensureHooksConfirmed(
       return 'skip'
     }
 
-    return confirmScriptContent(state, repoId, scriptKind, scriptContent, hostId, isCancelled)
+    const decision = await confirmScriptContent(
+      state,
+      repoId,
+      scriptKind,
+      scriptContent,
+      hostId,
+      isCancelled
+    )
+    if (decision === 'run' && createSetup && scriptContent) {
+      createSetup.onTrusted(await hashOrcaHookScript(scriptContent))
+    }
+    return decision
   })
 }

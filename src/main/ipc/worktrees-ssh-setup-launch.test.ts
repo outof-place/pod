@@ -6,10 +6,16 @@ import {
   resolveSetupRunnerShellMock,
   getSshGitProviderMock,
   getSshFilesystemProviderMock,
-  getActiveMultiplexerMock
+  getActiveMultiplexerMock,
+  untrustedCreateSetupMock
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 
+vi.mock('../orca-yaml-setup-trust', async (importOriginal) =>
+  (await import('./worktrees-test-module-mocks')).orcaYamlSetupTrustModuleMock(
+    (await importOriginal()) as Record<string, unknown>
+  )
+)
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
@@ -202,6 +208,99 @@ describe('registerWorktreeHandlers', () => {
         }
       })
     )
+  })
+
+  it('skips an SSH setup nobody trusted, even with setup run (Pod)', async () => {
+    untrustedCreateSetupMock.mockReturnValueOnce({
+      status: 'needs-trust',
+      contentHash: 'c'.repeat(64)
+    })
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args[1] === '--git-path') {
+          return {
+            stdout: '/remote/repo/.git/worktrees/repo-improve-dashboard/orca/setup-runner.sh\n',
+            stderr: ''
+          }
+        }
+        if (args[0] === 'rev-parse') {
+          throw new Error('missing local branch')
+        }
+        if (args[0] === 'show-ref') {
+          throw Object.assign(new Error('missing exact ref'), { code: 1 })
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/old-improve-dashboard',
+          head: 'old123',
+          branch: 'refs/heads/archive/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        },
+        {
+          path: '/remote/repo-improve-dashboard',
+          head: 'abc123',
+          branch: 'refs/heads/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const fsProvider = {
+      readFile: vi.fn().mockResolvedValue({
+        content: 'setupAgentStartupPolicy: wait-for-setup\nscripts:\n  setup: pnpm install\n',
+        isBinary: false
+      }),
+      createDir: vi.fn().mockResolvedValue(undefined),
+      writeFile: vi.fn().mockResolvedValue(undefined)
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    parseOrcaYamlMock.mockReturnValue({
+      scripts: { setup: 'pnpm install' },
+      setupAgentStartupPolicy: 'wait-for-setup'
+    })
+    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    shouldRunSetupForCreateMock.mockReturnValue(true)
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard',
+      setupDecision: 'run'
+    })
+
+    expect(fsProvider.writeFile).not.toHaveBeenCalled()
+    expect(result).toEqual(
+      expect.objectContaining({
+        setupTrust: { status: 'needs-trust', contentHash: 'c'.repeat(64) },
+        warning: expect.stringContaining("isn't trusted yet")
+      })
+    )
+    expect(result).not.toHaveProperty('setup')
   })
 
   it('keeps Windows SSH setup runners independent from the local Git Bash setting', async () => {
