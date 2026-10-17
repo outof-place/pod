@@ -40,13 +40,14 @@ test(
     mkdirSync(path.join(work, 'bin'))
     mkdirSync(path.join(work, 'out'))
     writeFileSync(path.join(work, 'out/app.log'), '')
-    // The run's own program: an executable inside the run dir that starts a child outside it.
+    // The run's own program: an executable inside the run dir whose child runs outside it, with
+    // the run dir in its argv (as a command in one of the run's terminals would have).
     writeFileSync(
       path.join(work, 'bin/app.c'),
-      '#include <unistd.h>\nint main(void) { if (fork() == 0) { execl("/bin/sleep", "sleep", "30", (char *)0); _exit(1); } sleep(30); return 0; }\n'
+      '#include <unistd.h>\nint main(int argc, char **argv) { if (argc > 1 && fork() == 0) { execl("/bin/sh", "sh", "-c", argv[1], (char *)0); _exit(1); } sleep(30); return 0; }\n'
     )
     execFileSync('xcrun', ['clang', '-O2', '-o', path.join(work, 'bin/app'), path.join(work, 'bin/app.c')])
-    const own = spawn(path.join(work, 'bin/app'), [], { stdio: 'ignore' })
+    const own = spawn(path.join(work, 'bin/app'), [`sleep 30; : ${work}/out/app.log`], { stdio: 'ignore' })
     // A stranger: a shell whose command line names a log in the run dir, as `tail -f` would.
     const stranger = spawn('/bin/sh', ['-c', `sleep 30; : ${work}/out/app.log`], { stdio: 'ignore' })
     try {
@@ -54,7 +55,7 @@ test(
       const before = await runTree(work, { scan: true })
       const ownTree = before.procs.filter((proc) => proc.via === 'exe').map((proc) => proc.pid)
       assert.ok(ownTree.includes(own.pid), 'the run dir program is in the tree')
-      assert.equal(ownTree.length, 2, 'with its child')
+      assert.ok(ownTree.length >= 2, 'with its child, whose argv names the run dir too')
       assert.ok(
         before.procs.some((proc) => proc.pid === stranger.pid && proc.via === 'argv'),
         'the stranger shows up through its argv'
