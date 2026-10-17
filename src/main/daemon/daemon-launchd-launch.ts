@@ -1,5 +1,5 @@
-// Fork-only (Pod): the macOS daemon as a launchd job in the user's GUI domain (kill switch
-// POD_DAEMON_LAUNCHD=0). A job leads its own coalition for its whole life, and launchservicesd
+// Fork-only (Pod): the macOS daemon as a launchd job in the user's GUI domain
+// (POD_DAEMON_LAUNCHD=1). A job leads its own coalition for its whole life, and launchservicesd
 // gives an app exec'd into a coalition with a live leader no coalition of its own. A forked daemon
 // sits in the runtime's coalition, which loses its leader when the runtime quits; an app started
 // from a terminal could then own it, and its quit or Force Quit ends every session (M10).
@@ -36,11 +36,9 @@ const DAEMON_EXIT_TIMEOUT_S = 7
 const DAEMON_NUMBER_OF_FILES = 10_240
 
 export function isLaunchdDaemonLaunchEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (process.platform !== 'darwin') {
-    return false
-  }
-  // Why opt-in under vitest: a unit test on a Mac would bootstrap real jobs in the user's GUI domain.
-  return env.VITEST ? env.POD_DAEMON_LAUNCHD === '1' : env.POD_DAEMON_LAUNCHD !== '0'
+  // Why opt-in (POD_DAEMON_LAUNCHD=1) for now: on by default only once a package's TCC check shows
+  // the job's shells keep Pod's grants (r-orca). Off under vitest too: no real jobs from unit tests.
+  return process.platform === 'darwin' && env.POD_DAEMON_LAUNCHD === '1'
 }
 
 /** A GUI session's daemon wants a job: a plain serve forks (SSH must outlive the session), but
