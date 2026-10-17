@@ -230,10 +230,11 @@ export function createAdoptRelink(deps: AdoptRelinkDeps) {
     if (!deps.store.updateRepo(repo.id, repoFields(repo, moves, inputs.repoPathAfter))) {
       throw new Error('the project is no longer in Pod')
     }
+    // Saved before each move: undo of an id that never moved is a no-op in the store.
     for (const [from, to] of pairs) {
-      deps.store.migrateWorktreeIdentity(from, to)
       record.worktreeIds.push([from, to])
       await save()
+      deps.store.migrateWorktreeIdentity(from, to)
       runtime?.notifyWorktreeRenamed(repo.id, from, to)
     }
     record.orbstackKeys = deps.orbstack()?.rekey(pairs) ?? []
