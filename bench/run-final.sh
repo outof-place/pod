@@ -212,10 +212,19 @@ if [ "$visible" = 1 ]; then
   fi
   echo "==> visible windows: latency and throughput (takes the desktop)"
   node "$here/lib/heavy-gate.mjs" || exit $?
-  node "$here/suites/latency.mjs" --confirm-visible --throughput
+  # Exit 3: the run is measured and written, but the Ghostty clone's own preferences domain
+  # (codes.pod.bench.ghostty) is left in the account's ~/Library. Any other failure stops here.
+  node "$here/suites/latency.mjs" --confirm-visible --throughput || {
+    latency_status=$?
+    [ "$latency_status" = 3 ] || exit "$latency_status"
+  }
   acc_check
   node "$here/summarize.mjs" "$POD_BENCH_OUT"
 fi
 
 node "$here/report.mjs" "$POD_BENCH_OUT/summary.json"
 echo "==> done: $POD_BENCH_OUT/summary.json"
+if [ "${latency_status:-0}" = 3 ]; then
+  echo "WARNING: codes.pod.bench.ghostty is left in ~/Library (latency.json ghosttyAccount.bench says what the cleanup did)" >&2
+  exit 3
+fi

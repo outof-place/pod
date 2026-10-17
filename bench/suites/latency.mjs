@@ -474,7 +474,10 @@ try {
       // windows' shells among them, at the first round and the last: with any, a change may be
       // theirs, not the bench's.
       userGhosttyProcesses: { before: userGhosttyBefore, after: userGhosttyAfter },
-      bench
+      bench,
+      // The clone's own domain left in the account's ~/Library: its cleanup threw, or the domain
+      // this run created is still there. The suite then exits 3 (run-final.sh says so at its end).
+      cleanupFailed: typeof bench.deleted === 'string' || (!bench.existedBefore && bench.existsAfterCleanup === true)
     }
   }
 }
@@ -569,4 +572,8 @@ if (options.throughput) {
       names.map((name) => [name, samples[name].map((sample) => sample.throughput)])
     )
   })
+}
+if (ghosttyAccount?.cleanupFailed) {
+  log(`WARNING: ${BENCH_GHOSTTY_ID} is left in the account's ~/Library: the results say what the cleanup did`)
+  process.exitCode = 3
 }

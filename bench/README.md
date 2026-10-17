@@ -166,7 +166,9 @@ change its domain without the bench. The clone's own domain is a known trace: wh
 (it didn't exist before the first round), the suite runs `defaults delete codes.pod.bench.ghostty`
 after the last round, then moves the plist and saved state left on disk to the Trash, and the
 results show the domain before and after. A domain that existed before the run is left alone and
-reported. Orca and Pod run
+reported. When the cleanup throws, or the domain the run created is still there afterwards, the
+results say `cleanupFailed: true` and latency.mjs exits 3; `run-final.sh` still writes the
+summary, then warns and exits 3. Orca and Pod run
 there too, so the visible numbers compare all four with painting included. Those results go to
 `throughput-visible.json`.
 
