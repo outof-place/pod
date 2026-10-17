@@ -150,6 +150,8 @@ else
 fi
 acc_check
 run_suite() {
+  # The shared Mac's gate right before each suite: bench hold + GO, /tmp/pod-heavy-state, load, disk.
+  node "$here/lib/heavy-gate.mjs" || exit $?
   echo "==> $*"
   node "$here/suites/$1.mjs" "${@:2}"
   acc_check
