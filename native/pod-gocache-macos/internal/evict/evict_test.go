@@ -11,8 +11,16 @@ const mb = 1_000_000
 
 // The tier table (amendment 1) with hysteresis (D3): a tier is entered below
 // its threshold and left only at threshold + 1 GB.
-func TestNextTier(t *testing.T) {
+// floors8and6 is Defaults with the hard and emergency floors the worked
+// examples below were computed for.
+func floors8and6() Limits {
 	l := Defaults()
+	l.HardFloor, l.EmergencyFloor = 8*GB, 6*GB
+	return l
+}
+
+func TestNextTier(t *testing.T) {
+	l := floors8and6()
 	cases := []struct {
 		prev Tier
 		free int64
@@ -45,7 +53,7 @@ func TestNextTier(t *testing.T) {
 // Targets from the brief's formula: min(30, max(15, size - deficit)), with
 // the relaxed stages only up to their threshold + 1 GB (D3).
 func TestNeeds(t *testing.T) {
-	l := Defaults()
+	l := floors8and6()
 	cases := []struct {
 		name        string
 		size, free  int64

@@ -352,7 +352,7 @@ func TestD2StartGrace(t *testing.T) {
 // the 1.5 GB entry idle 6.5 h (inside W) stays, though the relaxed 30 minute
 // window would allow it.
 func TestWindowOverSixHoursIsABucketBound(t *testing.T) {
-	r := newRig(t, 75, nil)
+	r := newRig(t, 75, floors8and6)
 	r.w.SetMode("owner", true)
 	p := r.w.Spawn(cachesim.ProcSpec{Comm: "go", Kind: "build", Child: "compile", Life: 100 * time.Hour})
 	p.Start -= int64(6 * time.Hour)

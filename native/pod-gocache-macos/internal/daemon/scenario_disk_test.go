@@ -106,7 +106,7 @@ func TestS6HardFloorOrder(t *testing.T) {
 		old  int // 100 MB entries idle > 2 h
 	}{{"enough-old", 30}, {"little-old", 5}} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := newRig(t, 60, nil)
+			r := newRig(t, 60, floors8and6)
 			r.w.SetMode("owner", true)
 			r.run(time.Minute)
 			rng := r.w.Rand()

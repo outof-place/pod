@@ -61,6 +61,10 @@ func simLimits(l evict.Limits) cachesim.Limits {
 	}
 }
 
+// floors8and6 pins the hard and emergency floors a scenario's numbers were
+// worked out for.
+func floors8and6(c *Config) { c.Limits.HardFloor, c.Limits.EmergencyFloor = 8*GB, 6*GB }
+
 func newRig(t testing.TB, seed int64, tweak func(*Config)) *rig {
 	r := buildRig(t, seed, simStart, tweak)
 	r.start()
