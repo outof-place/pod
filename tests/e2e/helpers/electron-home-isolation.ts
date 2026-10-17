@@ -93,6 +93,8 @@ export function createElectronHomeIsolation({
     realHome,
     env: {
       ...stripAmbientHomeAndCodexEnv(inheritedEnv),
+      // Pod: no launchd daemon job from a developer's env; a spec opts in through its overlay.
+      POD_DAEMON_LAUNCHD: '0',
       ...launchEnv,
       ...extraEnv,
       HOME: isolatedHome,
