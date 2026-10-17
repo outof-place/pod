@@ -1,0 +1,24 @@
+{
+  "redirects": [
+    {
+      "source": "/:archive(Pod-[^/]+\\.dmg)",
+      "destination": "https://6oaqiaz38g6zr40k.public.blob.vercel-storage.com/:archive",
+      "permanent": false
+    },
+    {
+      "source": "/rehearsal/:path*",
+      "destination": "https://6oaqiaz38g6zr40k.public.blob.vercel-storage.com/rehearsal/:path*",
+      "permanent": false
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+    },
+    {
+      "source": "/appcast.xml",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
+    }
+  ]
+}

@@ -4,8 +4,9 @@
 #   2. the PodNative outer (PodNative's scripts/release-app.sh: Developer ID, notarized);
 #   3. the assembly (product/assemble-one-app.sh: the app, DMG and zip, notarized and stapled);
 #   4. the Sparkle appcast for the DMG (product/scripts/sparkle-appcast.sh);
-#   5. a release directory a GitHub release takes as it is, with SHA256SUMS and artifacts.txt.
-# It publishes nothing: it ends with the command that does (see RELEASE-RUNBOOK.md).
+#   5. a release directory with SHA256SUMS and artifacts.txt, which the GitHub release and Pod's
+#      update host take as it is.
+# It publishes nothing: it ends with the commands that do (see RELEASE-RUNBOOK.md).
 #
 #   product/release-one-app.sh <X.Y.Z | X.Y.Z-rcN> --native-checkout <dir> [options]
 #
@@ -14,7 +15,7 @@
 #   --dry-run                 sign with a throwaway EdDSA key made here and kept in this shell's
 #                             memory (Sparkle's tools read it on stdin): never the keychain, never
 #                             generate_keys. The outer carries its public half.
-#   --feed-url <url>          dry-run only: the outer's SUFeedURL (an update rehearsal on 127.0.0.1)
+#   --feed-url <url>          dry-run only: the outer's SUFeedURL (an update rehearsal's own feed)
 #   --download-url-prefix <url>  dry-run only: the appcast's download URL prefix
 #   --out <dir>               outside this checkout, must not exist: <dir>/one-app (the assembly) and
 #                             <dir>/release (what the GitHub release takes)
@@ -26,13 +27,16 @@
 # Versions: CFBundleShortVersionString is <version> in both apps, and so is one numeric CFBundleVersion
 # from product/scripts/pod-build-number.sh (the number Sparkle compares in the outer).
 # Assets: Pod-<version>.dmg (the download and the Sparkle update), Pod-<version>.zip, appcast.xml,
-# SHA256SUMS. The feed is the `appcast` prerelease's asset, not releases/latest: GitHub's latest
-# skips prereleases, and RCs are prereleases. A real release signs with the key in this Mac's login
-# keychain (sparkle-appcast.sh); the outer's public key is PodNative's scripts/sparkle-ed-public-key.txt.
+# SHA256SUMS. The feed and the DMG live on Pod's update host (product/update-host/update-host.sh):
+# https://updates.pod.codes/appcast.xml names https://updates.pod.codes/Pod-<version>.dmg. Pods up to
+# rc4 read GitHub's `appcast` release instead, written one last time for the bridge release. A real
+# release signs with the key in this Mac's login keychain (sparkle-appcast.sh); the outer's public key
+# is PodNative's scripts/sparkle-ed-public-key.txt.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
+. product/update-host/update-host.sh
 log() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die() {
   printf '\033[31merror\033[0m %s\n' "$*" >&2
@@ -48,7 +52,7 @@ while [ $# -gt 0 ]; do
     --feed-url) feed_url=${2:?--feed-url needs a URL}; shift 2 ;;
     --download-url-prefix) url_prefix=${2:?--download-url-prefix needs a URL}; shift 2 ;;
     --out) out=${2:?--out needs a directory}; shift 2 ;;
-    -h | --help) sed -n '2,31p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,34p' "$0"; exit 0 ;;
     -*) die "unknown option $1" ;;
     *) [ -z "$version" ] || die "one version only"; version="${1#v}"; shift ;;
   esac
@@ -99,13 +103,16 @@ SWIFT
   seed=$(sed -n 1p <<<"$keys")
   public_key=$(sed -n 2p <<<"$keys")
   unset keys
-  expected_feed=${feed_url:-https://github.com/$release_repo/releases/download/appcast/appcast.xml}
+  expected_feed=${feed_url:-$POD_UPDATE_FEED}
 else
   key_file="$native_checkout/scripts/sparkle-ed-public-key.txt"
   [ -s "$key_file" ] || die "no Sparkle public key in $key_file: this release could never update (RELEASE-RUNBOOK.md)"
   public_key=$(tr -d '[:space:]' <"$key_file")
-  expected_feed=https://github.com/$release_repo/releases/download/appcast/appcast.xml
+  expected_feed=$POD_UPDATE_FEED
 fi
+# The bridge release is also written to GitHub's feed, the one Pods up to rc4 read.
+bridge=0
+[ "$version" = "$POD_BRIDGE_VERSION" ] && bridge=1
 log "Pod $version (CFBundleVersion $build)$([ "$dry_run" = 1 ] && echo ', dry run with a throwaway key')"
 
 # 1. The runtime.
@@ -193,6 +200,7 @@ node product/release-feed-gate.cjs "$app_id" "$assembled/$display_name.app" "$re
   echo "runtime  $(plist "$runtime" CFBundleShortVersionString) ($(plist "$runtime" CFBundleVersion)) from $runtime"
   echo "outer    PodNative $(plist "$assembled/$display_name.app" PodNativeRevision)"
   echo "feed     $expected_feed"
+  [ "$bridge" = 0 ] || echo "bridge   $POD_GITHUB_FEED (Pods up to rc4)"
   echo "key      $public_key"
   (cd "$release_dir" && for f in "$display_name-$version.dmg" "$display_name-$version.zip" appcast.xml SHA256SUMS; do
     printf '%-28s %12s  %s\n' "$f" "$(stat -f %z "$f")" "$(shasum -a 256 "$f" | cut -d' ' -f1)"
@@ -204,8 +212,10 @@ remove=$(command -v pod-tmp-rm || echo "$HOME/.local/bin/pod-tmp-rm")
 log "done: $release_dir"
 if [ "$dry_run" = 1 ]; then
   echo "dry run: these assets carry a throwaway key; never publish them"
+  echo "a release of $version publishes its feed on: $POD_UPDATE_FEED$([ "$bridge" = 0 ] || echo " and $POD_GITHUB_FEED")"
 else
-  # The release first, then the feed that points at it (RELEASE-RUNBOOK.md); an RC is a prerelease.
+  # The tag and notes first, then the update host, then (the bridge only) GitHub's feed, which
+  # checks that the host already serves the same appcast (RELEASE-RUNBOOK.md). An RC is a prerelease.
   prerelease=""
   [[ "$version" == *-rc* ]] && prerelease=" --prerelease"
   # The notes carry the release's known issues (product/release-notes/<version>.md).
@@ -213,5 +223,6 @@ else
   [ -f "$notes" ] || { echo "no release notes at $notes: write them before publishing"; notes="<notes.md>"; }
   echo "publish (RELEASE-RUNBOOK.md), in this order:"
   echo "  gh release create $tag \"$release_dir/$display_name-$version.dmg\" \"$release_dir/$display_name-$version.zip\" \"$release_dir/SHA256SUMS\" --repo $release_repo --target $pod_commit --title \"$display_name $version\" --notes-file \"$notes\"$prerelease"
-  echo "  product/scripts/publish-appcast.sh \"$release_dir/appcast.xml\""
+  echo "  product/scripts/publish-update.sh \"$release_dir\""
+  [ "$bridge" = 0 ] || echo "  product/scripts/publish-github-appcast.sh \"$release_dir/appcast.xml\""
 fi

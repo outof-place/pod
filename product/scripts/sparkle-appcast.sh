@@ -1,14 +1,14 @@
 #!/bin/bash
 # Writes the Sparkle appcast for one release of the one-app Pod.app: a single item for <archive>,
-# its EdDSA signature and the feed's own (PodNative sets SURequireSignedFeed), with download URLs
-# under the release's tag. PodNative reads it from the asset of the `appcast` prerelease
-# (releases/download/appcast/appcast.xml), which each release replaces (RELEASE-RUNBOOK.md).
+# its EdDSA signature and the feed's own (PodNative sets SURequireSignedFeed), with the download URL
+# on Pod's update host (product/update-host: https://updates.pod.codes/<archive name>), where
+# publish-update.sh puts both (RELEASE-RUNBOOK.md).
 #
 #   product/scripts/sparkle-appcast.sh <archive> <tag> <out dir>
 #
 #   <archive>  the notarized DMG (Developer ID signed: Sparkle's way back if the EdDSA key is ever
 #              lost) or a zip of the stapled Pod.app (`ditto -c -k --keepParent`)
-#   <tag>      the release tag, e.g. v0.1.0
+#   <tag>      the release tag, e.g. v0.1.0 (checked; the download URL no longer carries it)
 #
 # The private key is read from this Mac's login keychain (`generate_keys --account $SPARKLE_ACCOUNT`,
 # default codes.pod), by generate_appcast and again by sign_update: macOS asks twice. Never from a file.
@@ -18,12 +18,12 @@
 # Sparkle's tools come from the release whose framework PodNative pins, checked against its digest.
 set -euo pipefail
 
+. "$(dirname "${BASH_SOURCE[0]}")/../update-host/update-host.sh"
 SPARKLE_VERSION=2.10.0
 SPARKLE_SHA256=c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c
 ACCOUNT=${SPARKLE_ACCOUNT:-codes.pod}
 KEY=(--account "$ACCOUNT")
 [ "${SPARKLE_KEY_ON_STDIN:-0}" = 1 ] && KEY=(--ed-key-file -)
-FEED_REPO=outof-place/pod
 
 archive=${1:?usage: sparkle-appcast.sh <archive> <tag> <out dir>}
 tag=${2:?usage: sparkle-appcast.sh <archive> <tag> <out dir>}
@@ -65,7 +65,7 @@ cp -c "$archive" "$work/feed/"
 # A stdin key is read once, into memory, and handed to both tools.
 [ "${SPARKLE_KEY_ON_STDIN:-0}" = 1 ] && key=$(cat)
 run_with_key() { if [ -n "${key:-}" ]; then printf '%s' "$key" | "$@"; else "$@"; fi; }
-prefix=${SPARKLE_DOWNLOAD_URL_PREFIX:-https://github.com/$FEED_REPO/releases/download/$tag/}
+prefix=${SPARKLE_DOWNLOAD_URL_PREFIX:-$POD_UPDATE_HOST/}
 run_with_key "$work/tools/bin/generate_appcast" "${KEY[@]}" \
   --download-url-prefix "$prefix" \
   --link https://pod.codes "$work/feed" 2>&1 | tee "$work/generate_appcast.log"

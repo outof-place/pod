@@ -1,8 +1,10 @@
 #!/bin/bash
-# Publishes Pod's update feed: makes <appcast.xml> the `appcast` release's appcast.xml asset, which
-# every installed Pod reads (RELEASE-RUNBOOK.md). GitHub refuses a second asset of one name, and
-# `gh release upload --clobber` deletes before it uploads, so a failed upload would leave the feed
-# at 404 until someone noticed. Here:
+# Publishes the bridge release on GitHub's feed, the `appcast` release's appcast.xml asset that Pods up
+# to rc4 read (RELEASE-RUNBOOK.md). Every later Pod reads Pod's own host (publish-update.sh), so this
+# runs once, for POD_BRIDGE_VERSION (product/update-host/update-host.sh): its appcast must be the one
+# the host already serves, with the archive on the host, and nothing after it is written here.
+# GitHub refuses a second asset of one name, and `gh release upload --clobber` deletes before it
+# uploads, so a failed upload would leave the feed at 404 until someone noticed. Here:
 #   1. upload it as appcast.xml.new and download it back: it must be byte for byte this file;
 #   2. rename the live asset to appcast.xml.old, then the new one to appcast.xml. The feed is
 #      missing only between those two calls, and a failed second rename puts the old one back;
@@ -10,39 +12,53 @@
 #      Nothing proves the download URL follows a renamed asset, so a feed that never shows up
 #      rolls the swap back: the new asset to appcast.xml.new, the old one to appcast.xml.
 #
-#   product/scripts/publish-appcast.sh <appcast.xml>
+#   product/scripts/publish-github-appcast.sh <appcast.xml>
 #
-# The release owner runs it from Terminal, after `gh release create` of the release it points at.
-# Tests only: POD_FEED_URL replaces the feed URL it reads back, POD_PUBLISH_RETRY_SECONDS the 5 s
-# between attempts (3 for an API call, 10 for the feed).
+# The release owner runs it from Terminal, after publish-update.sh of the same release.
+# Tests only: POD_FEED_URL replaces the feed URL it reads back, POD_UPDATE_READ_HOST the update host,
+# POD_PUBLISH_RETRY_SECONDS the 5 s between attempts (3 for an API call, 10 for the feed).
 set -euo pipefail
 
+scripts=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+. "$scripts/../update-host/update-host.sh"
 REPO=outof-place/pod
 TAG=appcast
-FEED_URL=${POD_FEED_URL:-https://github.com/$REPO/releases/download/$TAG/appcast.xml}
+FEED_URL=${POD_FEED_URL:-$POD_GITHUB_FEED}
 
 die() {
-  printf '\033[31merror\033[0m publish-appcast: %s\n' "$*" >&2
+  printf '\033[31merror\033[0m publish-github-appcast: %s\n' "$*" >&2
   exit 1
 }
-feed=${1:?usage: product/scripts/publish-appcast.sh <appcast.xml>}
+feed=${1:?usage: product/scripts/publish-github-appcast.sh <appcast.xml>}
 [ -f "$feed" ] || die "no appcast at $feed"
 [ -z "${CLAUDECODE:-}" ] || die "run this in your own Terminal: it publishes the feed every installed Pod reads"
 
-version_of() {
+# "<sparkle:version> <enclosure URL>" of a one-item appcast, else nothing.
+item_of() {
   python3 -I -c '
 import sys
 import xml.etree.ElementTree as ET
 ns = {"sparkle": "http://www.andymatuschak.org/xml-namespaces/sparkle"}
 items = ET.parse(sys.argv[1]).getroot().findall("./channel/item")
-print(items[0].findtext("sparkle:version", namespaces=ns) if len(items) == 1 else "")
+if len(items) == 1:
+    enclosure = items[0].find("enclosure")
+    print(items[0].findtext("sparkle:version", namespaces=ns), "" if enclosure is None else enclosure.get("url", ""))
 ' "$1" 2>/dev/null || true
 }
-build=$(version_of "$feed")
-[ -n "$build" ] || die "$feed is not a one-item appcast"
+read -r build enclosure <<<"$(item_of "$feed")" || true
+[ -n "${build:-}" ] || die "$feed is not a one-item appcast"
+bridge=$("$scripts/pod-build-number.sh" "$POD_BRIDGE_VERSION")
+[ "$build" = "$bridge" ] ||
+  die "GitHub's feed was last written for $POD_BRIDGE_VERSION ($bridge), not $build: Pods since then read $POD_UPDATE_FEED"
+[[ "${enclosure:-}" == "$POD_UPDATE_HOST/"* ]] ||
+  die "the archive is ${enclosure:-missing}, not on $POD_UPDATE_HOST: nothing an installed Pod fetches may live on GitHub"
 sha() { shasum -a 256 "$1" | cut -d' ' -f1; }
+# The host first: Pods that move over through this feed find the same release there.
+host_feed=$(curl -fsSL --connect-timeout 20 --max-time 60 "${POD_UPDATE_READ_HOST:-$POD_UPDATE_HOST}/appcast.xml" | shasum -a 256 | cut -d' ' -f1) ||
+  host_feed=""
+[ "$host_feed" = "$(sha "$feed")" ] || die "$POD_UPDATE_FEED does not serve $feed yet: run publish-update.sh first"
 
-work=$(mktemp -d /tmp/pod-publish-appcast.XXXXXX)
+work=$(mktemp -d /tmp/pod-publish-github-appcast.XXXXXX)
 remove=$(command -v pod-tmp-rm || echo "$HOME/.local/bin/pod-tmp-rm")
 trap 'if [ -x "$remove" ]; then "$remove" "$work" > /dev/null || true; fi' EXIT
 mkdir "$work/up" "$work/back" "$work/live"
@@ -101,5 +117,5 @@ if ! serves_feed; then
   die "$FEED_URL did not serve $feed and the rollback failed: fix the assets by hand (gh api repos/$REPO/releases/tags/$TAG)"
 fi
 [ -z "$old" ] || retry gh api -X DELETE "repos/$REPO/releases/assets/$old" ||
-  echo "publish-appcast: asset $old appcast.xml.old is still there; delete it before the next release" >&2
-echo "publish-appcast: $FEED_URL serves $feed (sparkle:version $build)"
+  echo "publish-github-appcast: asset $old appcast.xml.old is still there; delete it by hand" >&2
+echo "publish-github-appcast: $FEED_URL serves $feed (sparkle:version $build)"

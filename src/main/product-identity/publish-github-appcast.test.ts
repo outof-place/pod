@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -12,7 +13,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
-const script = join(__dirname, '..', '..', '..', 'product', 'scripts', 'publish-appcast.sh')
+const script = join(__dirname, '..', '..', '..', 'product', 'scripts', 'publish-github-appcast.sh')
+// 1.0.0-rc5, product/update-host/update-host.sh's POD_BRIDGE_VERSION.
+const BRIDGE = '1000005'
+const HOST_DMG = 'https://updates.pod.codes/Pod-1.0.0-rc5.dmg'
 
 // A GitHub release in a directory: assets/<id>/{name,data}, download/<name> as the download URLs
 // serve them. Like GitHub, it refuses a second asset or a rename onto a name that is taken.
@@ -58,17 +62,23 @@ afterEach(() => {
   }
 })
 
-function appcast(build: string): string {
+function appcast(build: string, archive = HOST_DMG): string {
   return (
     `<?xml version="1.0" encoding="utf-8"?>\n` +
     `<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0"><channel>\n` +
-    `<item><sparkle:version>${build}</sparkle:version></item>\n</channel></rss>\n`
+    `<item><sparkle:version>${build}</sparkle:version><enclosure url="${archive}" length="1"/></item>\n` +
+    `</channel></rss>\n`
   )
 }
 
-/** A release whose assets are `existing` (name -> content); returns the paths the run needs. */
-function release(existing: Record<string, string>): { state: string; shims: string; feed: string } {
-  root = mkdtempSync(join(tmpdir(), 'pod-publish-appcast-'))
+type Run = { state: string; shims: string; feed: string; host: string }
+
+/**
+ * A release whose assets are `existing` (name -> content), and an update host that already serves
+ * `feed`; returns the paths the run needs.
+ */
+function release(existing: Record<string, string>, feed = appcast(BRIDGE)): Run {
+  root = mkdtempSync(join(tmpdir(), 'pod-publish-github-appcast-'))
   const state = join(root, 'release')
   const shims = join(root, 'bin')
   mkdirSync(join(state, 'assets'), { recursive: true })
@@ -88,13 +98,15 @@ function release(existing: Record<string, string>): { state: string; shims: stri
     id += 1
   }
   writeFileSync(join(state, 'next'), '100\n')
-  const feed = join(root, 'appcast.xml')
-  writeFileSync(feed, appcast('1000002'))
-  return { state, shims, feed }
+  const host = join(root, 'host')
+  mkdirSync(host)
+  writeFileSync(join(host, 'appcast.xml'), feed)
+  writeFileSync(join(root, 'appcast.xml'), feed)
+  return { state, shims, feed: join(root, 'appcast.xml'), host }
 }
 
 function publish(
-  run: { state: string; shims: string; feed: string },
+  run: Run,
   env: Record<string, string> = {}
 ): { status: number | null; out: string } {
   const result = spawnSync('/bin/bash', [script, run.feed], {
@@ -104,6 +116,7 @@ function publish(
       HOME: run.state,
       FAKE_GH: run.state,
       POD_FEED_URL: `file://${run.state}/download/appcast.xml`,
+      POD_UPDATE_READ_HOST: `file://${run.host}`,
       POD_PUBLISH_RETRY_SECONDS: '0',
       ...env
     }
@@ -120,14 +133,14 @@ function assets(state: string): Record<string, string> {
   )
 }
 
-describe('publish-appcast.sh', () => {
+describe('publish-github-appcast.sh', () => {
   it('replaces the live feed through a renamed upload, never by deleting it first', () => {
-    const run = release({ 'appcast.xml': appcast('1000001') })
+    const run = release({ 'appcast.xml': appcast('1000004') })
     const result = publish(run)
     expect(result.status, result.out).toBe(0)
     expect(result.out).toContain('serves')
-    expect(result.out).toContain('(sparkle:version 1000002)')
-    expect(assets(run.state)).toEqual({ 'appcast.xml': appcast('1000002') })
+    expect(result.out).toContain('(sparkle:version 1000005)')
+    expect(assets(run.state)).toEqual({ 'appcast.xml': appcast(BRIDGE) })
     const calls = readFileSync(join(run.state, 'calls.log'), 'utf8')
       .split('\n')
       .filter((call) => !call.startsWith('api repos/'))
@@ -145,43 +158,43 @@ describe('publish-appcast.sh', () => {
   it('publishes the first feed into an empty release', () => {
     const run = release({})
     expect(publish(run).status).toBe(0)
-    expect(assets(run.state)).toEqual({ 'appcast.xml': appcast('1000002') })
+    expect(assets(run.state)).toEqual({ 'appcast.xml': appcast(BRIDGE) })
   })
 
   it('leaves the live feed alone when the upload fails', () => {
-    const run = release({ 'appcast.xml': appcast('1000001') })
+    const run = release({ 'appcast.xml': appcast('1000004') })
     expect(publish(run, { FAKE_GH_FAIL_UPLOAD: '1' }).out).toContain(
       'the upload failed; the feed is unchanged'
     )
-    expect(assets(run.state)).toEqual({ 'appcast.xml': appcast('1000001') })
+    expect(assets(run.state)).toEqual({ 'appcast.xml': appcast('1000004') })
   })
 
   it('leaves the live feed alone when the upload comes back different', () => {
-    const run = release({ 'appcast.xml': appcast('1000001') })
+    const run = release({ 'appcast.xml': appcast('1000004') })
     expect(publish(run, { FAKE_GH_CORRUPT_UPLOAD: '1' }).out).toContain('the feed is unchanged')
-    expect(assets(run.state)['appcast.xml']).toBe(appcast('1000001'))
+    expect(assets(run.state)['appcast.xml']).toBe(appcast('1000004'))
   })
 
   it('puts the old feed back when the new one cannot take its name', () => {
-    const run = release({ 'appcast.xml': appcast('1000001') })
+    const run = release({ 'appcast.xml': appcast('1000004') })
     const result = publish(run, { FAKE_GH_FAIL_RENAME_ID: '100' })
     expect(result.status).toBe(1)
     expect(result.out).toContain('the old feed is back')
-    expect(assets(run.state)['appcast.xml']).toBe(appcast('1000001'))
+    expect(assets(run.state)['appcast.xml']).toBe(appcast('1000004'))
   })
 
   it('rolls the swap back while the feed URL still serves the old file, and only then keeps the old asset', () => {
-    const run = release({ 'appcast.xml': appcast('1000001') })
+    const run = release({ 'appcast.xml': appcast('1000004') })
     // A download URL that never follows the rename keeps answering with the old feed.
     const stale = join(run.state, '..', 'stale')
     mkdirSync(stale)
-    writeFileSync(join(stale, 'appcast.xml'), appcast('1000001'))
+    writeFileSync(join(stale, 'appcast.xml'), appcast('1000004'))
     const result = publish(run, { POD_FEED_URL: `file://${stale}/appcast.xml` })
     expect(result.status).toBe(1)
     expect(result.out).toContain('the swap is rolled back')
     expect(assets(run.state)).toEqual({
-      'appcast.xml': appcast('1000001'),
-      'appcast.xml.new': appcast('1000002')
+      'appcast.xml': appcast('1000004'),
+      'appcast.xml.new': appcast(BRIDGE)
     })
   })
 
@@ -193,13 +206,43 @@ describe('publish-appcast.sh', () => {
   })
 
   it('stops on a half-done earlier run', () => {
-    const run = release({ 'appcast.xml.old': appcast('1000001') })
+    const run = release({ 'appcast.xml.old': appcast('1000004') })
     expect(publish(run).out).toContain('appcast.xml.old is left from an earlier run')
   })
 
   it('refuses to run inside an agent', () => {
-    const run = release({ 'appcast.xml': appcast('1000001') })
+    const run = release({ 'appcast.xml': appcast('1000004') })
     expect(publish(run, { CLAUDECODE: '1' }).out).toContain('run this in your own Terminal')
-    expect(assets(run.state)).toEqual({ 'appcast.xml': appcast('1000001') })
+    expect(assets(run.state)).toEqual({ 'appcast.xml': appcast('1000004') })
+  })
+
+  it('writes nothing after the bridge release: a later one stays on the update host', () => {
+    const rc6 = appcast('1000006', 'https://updates.pod.codes/Pod-1.0.0-rc6.dmg')
+    const run = release({ 'appcast.xml': appcast(BRIDGE) }, rc6)
+    const result = publish(run)
+    expect(result.status).toBe(1)
+    expect(result.out).toContain('last written for 1.0.0-rc5 (1000005), not 1000006')
+    expect(existsSync(join(run.state, 'calls.log'))).toBe(false)
+    expect(assets(run.state)).toEqual({ 'appcast.xml': appcast(BRIDGE) })
+  })
+
+  it('refuses a bridge whose archive is on GitHub, which goes private', () => {
+    const github =
+      'https://github.com/outof-place/pod/releases/download/v1.0.0-rc5/Pod-1.0.0-rc5.dmg'
+    const run = release({ 'appcast.xml': appcast('1000004') }, appcast(BRIDGE, github))
+    const result = publish(run)
+    expect(result.status).toBe(1)
+    expect(result.out).toContain('not on https://updates.pod.codes')
+    expect(existsSync(join(run.state, 'calls.log'))).toBe(false)
+  })
+
+  it('waits for the update host: GitHub gets the bridge only once the host serves the same appcast', () => {
+    const run = release({ 'appcast.xml': appcast('1000004') })
+    writeFileSync(join(run.host, 'appcast.xml'), appcast('1000004'))
+    const result = publish(run)
+    expect(result.status).toBe(1)
+    expect(result.out).toContain('run publish-update.sh first')
+    expect(existsSync(join(run.state, 'calls.log'))).toBe(false)
+    expect(assets(run.state)).toEqual({ 'appcast.xml': appcast('1000004') })
   })
 })
