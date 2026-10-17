@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { sleep } from './bench-session.mjs'
-import { PROCSTAT, runTree, signalTargets, stopRunTree } from './run-tree.mjs'
+import { PROCSTAT, rootOfPid, runTree, signalIfSame, signalTargets, startTimes, stopRunTree } from './run-tree.mjs'
 
 const alive = (pid) => {
   try {
@@ -80,3 +80,28 @@ test(
     }
   }
 )
+
+test('startTimes takes more pids than procstat takes roots in one call', { skip: !existsSync(PROCSTAT) && 'build the tools first' }, async () => {
+  const children = Array.from({ length: 70 }, () => spawn('/bin/sleep', ['30'], { stdio: 'ignore' }))
+  try {
+    await sleep(300)
+    const times = startTimes(children.map((child) => child.pid))
+    assert.equal(children.filter((child) => times.get(child.pid) > 0).length, 70)
+  } finally {
+    for (const child of children) child.kill('SIGKILL')
+  }
+})
+
+test('a signal goes only to a target that still has its start time', { skip: !existsSync(PROCSTAT) && 'build the tools first' }, async () => {
+  const child = spawn('/bin/sleep', ['30'], { stdio: 'ignore' })
+  try {
+    await sleep(100)
+    const root = rootOfPid(child.pid)
+    assert.deepEqual(signalIfSame([{ pid: child.pid, path: '/bin/sleep', startUs: root.startUs - 1 }], 'SIGTERM'), [])
+    await sleep(100)
+    assert.equal(alive(child.pid) && child.exitCode === null && child.signalCode === null, true, 'a changed start time: no signal')
+    assert.equal(signalIfSame([{ pid: child.pid, path: '/bin/sleep', startUs: root.startUs }], 'SIGTERM').length, 1)
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+  }
+})

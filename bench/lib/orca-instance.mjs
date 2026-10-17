@@ -23,7 +23,7 @@ import {
   releaseInstance
 } from './acc-guard.mjs'
 import { BENCH_ROOT, TOOLS_BIN, log, sleep } from './bench-session.mjs'
-import { rootOfPid, signalRunTreeSync, startTimes, stopRunTree } from './run-tree.mjs'
+import { rootOfPid, signalIfSame, signalRunTreeSync, stopRunTree } from './run-tree.mjs'
 
 const HOME = os.homedir()
 export const ORCA_APP = process.env.POD_BENCH_ORCA_APP ?? '/Applications/Orca.app'
@@ -305,17 +305,18 @@ function profileTreeOptions(profile) {
   }
 }
 
+/** SIGKILL to a pid the run spawned, only while it is still that process (its recorded start time). */
+export function killRoot(profile, pid) {
+  const root = profile.roots?.get(pid)
+  return root ? signalIfSame([{ pid, path: '(root)', startUs: root.startUs }], 'SIGKILL') : []
+}
+
 // If the guard trips, it must stop the instance synchronously before exiting.
 function guard(pid, profile) {
   guardInstance(pid, () => {
     // The app's main process is this run's own child; its argv does not name the profile. Its
     // pid is signalled only while it still has the start time recorded at the launch.
-    const recorded = profile.roots?.get(pid)?.startUs
-    if (recorded !== undefined && startTimes([pid]).get(pid) === recorded) {
-      try {
-        process.kill(pid, 'SIGKILL')
-      } catch {}
-    }
+    killRoot(profile, pid)
     signalRunTreeSync(profile.ud, 'SIGKILL', profileTreeOptions(profile))
   })
 }
