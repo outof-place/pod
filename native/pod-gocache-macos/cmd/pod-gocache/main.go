@@ -1,21 +1,20 @@
 // Command pod-gocache is Pod's Go build cache: a GOCACHEPROG client over Go's
-// native GOCACHE layout, and later a daemon that owns eviction.
+// native GOCACHE layout, and the daemon that owns its eviction.
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/daemon"
 )
 
 // version is set at link time: -ldflags "-X main.version=<v>".
 var version = "0.0.0-dev"
 
-const (
-	exitUsage       = 64 // EX_USAGE
-	exitUnavailable = 69 // EX_UNAVAILABLE
-)
+const exitUsage = 64 // EX_USAGE
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -30,10 +29,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "prog":
 		return runProg()
 	case "daemon":
-		fmt.Fprintln(stderr, "pod-gocache daemon: not implemented")
-		return exitUnavailable
+		return daemon.DaemonMain(context.Background(), args[1:], stderr, version)
 	case "status":
-		return runStatus(args[1:], stdout, stderr)
+		return daemon.StatusMain(args[1:], stdout, stderr, version)
 	case "version":
 		fmt.Fprintln(stdout, version)
 		return 0
@@ -46,31 +44,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 func usage(w io.Writer) {
 	fmt.Fprint(w, `usage:
   pod-gocache prog            GOCACHEPROG client (GOCACHEPROG="<path> prog")
-  pod-gocache daemon          cache daemon (not implemented yet)
-  pod-gocache status [--json] cache status
+  pod-gocache daemon [--cache-dir <abs>] [--state-dir <abs>] [--mode observe]
+                              the cache owner (observe until ~/.pod/gocache/mode says owner)
+  pod-gocache status [--json] [--state-dir <abs>]
+                              the daemon's last status; works with the daemon down
   pod-gocache version         print the version
 `)
-}
-
-func runStatus(args []string, stdout, stderr io.Writer) int {
-	asJSON := false
-	for _, a := range args {
-		switch a {
-		case "--json", "-json":
-			asJSON = true
-		default:
-			usage(stderr)
-			return exitUsage
-		}
-	}
-	if asJSON {
-		data, _ := json.Marshal(struct {
-			Version string `json:"version"`
-			Mode    string `json:"mode"`
-		}{version, "standalone"})
-		fmt.Fprintf(stdout, "%s\n", data)
-		return 0
-	}
-	fmt.Fprintf(stdout, "pod-gocache %s: standalone (no daemon)\n", version)
-	return 0
 }

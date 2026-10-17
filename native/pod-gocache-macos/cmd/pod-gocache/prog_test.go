@@ -405,13 +405,16 @@ func TestCLI(t *testing.T) {
 	if out, _, code := run("version"); code != 0 || strings.TrimSpace(out) != version {
 		t.Errorf("version: %q %d", out, code)
 	}
-	out, _, code := run("status", "--json")
+	out, _, code := run("status", "--json", "--state-dir", t.TempDir())
 	var st map[string]any
-	if err := json.Unmarshal([]byte(out), &st); err != nil || code != 0 || st["version"] != version || st["mode"] != "standalone" || len(st) != 2 {
-		t.Errorf("status --json: %q %d %v", out, code, err)
+	if err := json.Unmarshal([]byte(out), &st); err != nil || code != 0 || st["neverRan"] != true || st["version"] != version || st["mode"] != "standalone" {
+		t.Errorf("status --json with no daemon ever run: %q %d %v", out, code, err)
 	}
-	if _, errOut, code := run("daemon"); code != exitUnavailable || !strings.Contains(errOut, "not implemented") {
-		t.Errorf("daemon: %q %d", errOut, code)
+	if _, errOut, code := run("daemon", "--cache-dir", "relative/go-build", "--state-dir", t.TempDir()); code != exitUsage || !strings.Contains(errOut, "absolute") {
+		t.Errorf("daemon with a relative --cache-dir: %q %d", errOut, code)
+	}
+	if _, _, code := run("daemon", "--mode", "owner"); code != exitUsage {
+		t.Errorf("daemon --mode owner: %d", code)
 	}
 	if _, _, code := run(); code != exitUsage {
 		t.Errorf("no args: %d", code)
