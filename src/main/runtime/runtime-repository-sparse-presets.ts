@@ -71,4 +71,18 @@ export class RuntimeRepositorySparsePresets {
       updatedAt: now
     })
   }
+
+  // Fork-only (Pod): repo.removeSparsePreset, the composer's Delete (IPC sparsePresets:remove).
+  async remove(repoSelector: string, presetId: string): Promise<{ removed: boolean }> {
+    const store = this.deps.getStore()
+    if (!store?.getSparsePresets || !store.removeSparsePreset) {
+      throw new Error('runtime_unavailable')
+    }
+    const repo = await this.deps.resolveRepo(repoSelector)
+    if (!store.getSparsePresets(repo.id).some((preset) => preset.id === presetId)) {
+      return { removed: false }
+    }
+    store.removeSparsePreset(repo.id, presetId)
+    return { removed: true }
+  }
 }
