@@ -276,6 +276,10 @@ export async function installSandboxClaude(args: {
  * The per-worktree part in one exec (each `orb run` costs 20-140 ms): mounts checked, Pod's hook
  * script, the trusted worktree, managed settings, the user's choices, and fresh host keys if the
  * image has sshd. Arguments: hook file name, then the four files base64-encoded, then the mounts.
+ * Last, the first launch's path once: a login shell in the worktree runs `claude --version`, which
+ * writes nothing (a template ran it and holds no ~/.claude*). Why: a fresh sandbox's first Claude
+ * prompt came 925 ms after the click, 613 ms when a shell and `claude --version` had run in it
+ * first (round 3, OrbStack 2.2.4). A failure there fails nothing.
  */
 export const SETUP_WORKTREE = `set -eu
 hook="$1" script="$2" trust="$3" managed="$4" settings="$5"; shift 5
@@ -287,6 +291,7 @@ chmod 755 "$HOME/.orca/agent-hooks/$hook"
 [ -n "$settings" ] && { mkdir -p "$HOME/.claude"; [ -e "$HOME/.claude/settings.json" ] || printf '%s' "$settings" | base64 -d > "$HOME/.claude/settings.json"; }
 printf '%s' "$managed" | base64 -d | sudo -n sh -c 'mkdir -p /etc/claude-code && cat > ${MANAGED_SETTINGS_PATH}'
 if [ -e /etc/ssh/sshd_config ] && ! ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1; then sudo -n ssh-keygen -A >/dev/null; fi
+(cd "\${1:-$HOME}" && bash -lc '"$HOME/.local/bin/claude" --version') </dev/null >/dev/null 2>&1 || true
 `
 
 export async function provisionSandboxWorktree(args: {
