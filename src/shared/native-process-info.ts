@@ -45,7 +45,14 @@ export type NativeProcessInfoAddon = {
   /** Every process on one terminal, or null when the terminal does not exist. */
   listTerminalProcesses(tty: string): NativeTerminalProcessRow[] | null
   readProcessCwd(pid: number): string | null
+  /**
+   * Files any process holds open below these folders (at most 64), one pass in C. Absent from an
+   * addon built before it; another user's processes are skipped, so the list is a lower bound.
+   */
+  findOpenPathsUnder?(folders: readonly string[]): NativeOpenPath[]
 }
+
+export type NativeOpenPath = { pid: number; path: string }
 
 export type NativeProcessInfo = Omit<
   NativeProcessInfoAddon,

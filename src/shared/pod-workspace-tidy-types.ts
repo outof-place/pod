@@ -195,7 +195,21 @@ export type PodAdoptBlocker =
   | 'target-exists'
   | 'other-volume'
   | 'process-inside'
+  | 'files-open'
   | 'terminals-open'
+
+/** Soft: the user may tick these; every other adopt blocker refuses. */
+export type PodAdoptSoftBlocker = 'process-inside' | 'files-open'
+
+/** A file a process holds open inside a folder Move In would rename. */
+export type PodAdoptOpenFile = { pid: number; name: string; path: string }
+
+/** What applying would change beyond Pod's own records, shown before the user applies. */
+export type PodAdoptWarning =
+  /** The Compose project is named after the folder, so it gets a new name and empty volumes. */
+  | { kind: 'compose-project'; file: string; from: string; to: string }
+  /** Claude Code asks to trust each moved checkout again: its trust list is keyed by path. */
+  | { kind: 'claude-trust'; count: number }
 
 export type PodAdoptPlan = PodWorkspacePlanRef & {
   repoId: string
@@ -209,6 +223,9 @@ export type PodAdoptPlan = PodWorkspacePlanRef & {
   worktreesDir: string | null
   claudeProjectDir: string | null
   relink: PodAdoptRelinkPlan
+  /** Up to 20 of the open files behind `files-open`. */
+  openFiles: PodAdoptOpenFile[]
+  warnings: PodAdoptWarning[]
 }
 
 export type PodAdoptUndoPlan = PodWorkspacePlanRef & {
