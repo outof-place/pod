@@ -8,9 +8,16 @@ import {
   resetPodTerminalExitsForTests,
   withPodTerminalExits
 } from './pod-terminal-exits'
-import { restartPodExitedTerminal, type PodTerminalRestartHost } from './pod-terminal-exit-restart'
+import {
+  restartPodExitedTerminal,
+  setPodRendererPaneRestart,
+  type PodTerminalRestartHost
+} from './pod-terminal-exit-restart'
 
-afterEach(() => resetPodTerminalExitsForTests())
+afterEach(() => {
+  resetPodTerminalExitsForTests()
+  setPodRendererPaneRestart(null)
+})
 
 const surface = { worktreeId: 'wt', parentTabId: 'tab', leafId: 'left' }
 const exit = { exitCode: 2, exitedAt: 1_000 }
@@ -116,6 +123,10 @@ describe('restartPodExitedTerminal (Pod)', () => {
       mobileSessionTabsByWorktree: new Map([['wt', snapshot]]),
       joinPaneMaterialization: () => null,
       beginPaneMaterialization: () => finish,
+      getAvailableAuthoritativeWindow: () => null,
+      getMobileSessionTabsForWorktree: () => {
+        throw new Error('headless restarts never wait on the window')
+      },
       createRuntimeOwnedMobileSessionTerminal: create,
       ...overrides
     }
@@ -166,5 +177,62 @@ describe('restartPodExitedTerminal (Pod)', () => {
     )
     expect(getPodTerminalExit('wt', 'tab', 'left')).toEqual(exit)
     expect(finish).toHaveBeenCalledTimes(1)
+  })
+
+  describe('with a window', () => {
+    function leafTab(ready: boolean): RuntimeMobileSessionTabsResult {
+      const base = {
+        type: 'terminal' as const,
+        id: 'tab::left',
+        parentTabId: 'tab',
+        leafId: 'left',
+        title: 'Left',
+        isActive: true
+      }
+      return {
+        worktree: 'wt',
+        publicationEpoch: 'renderer',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: [
+          ready
+            ? { ...base, status: 'ready', terminal: 'term_window' }
+            : { ...base, status: 'pending-handle', terminal: null }
+        ]
+      }
+    }
+
+    it("has the window's renderer start the shell, then answers the leaf's new handle", async () => {
+      recordPodTerminalExit(surface, exit)
+      const restart = vi.fn(async () => true)
+      setPodRendererPaneRestart(restart)
+      let polls = 0
+      const { value, create } = host({
+        getAvailableAuthoritativeWindow: () => ({ window: 1 }),
+        getMobileSessionTabsForWorktree: () => leafTab(++polls > 2)
+      })
+
+      await expect(restartPodExitedTerminal(value, 'id:wt', 'tab', 'left')).resolves.toEqual({
+        terminal: 'term_window'
+      })
+      expect(restart).toHaveBeenCalledWith(
+        { window: 1 },
+        { worktreeId: 'wt', tabId: 'tab', leafId: 'left' }
+      )
+      expect(create).not.toHaveBeenCalled()
+    })
+
+    it('keeps the exit when the renderer refuses the restart', async () => {
+      recordPodTerminalExit(surface, exit)
+      setPodRendererPaneRestart(async () => false)
+      const { value } = host({ getAvailableAuthoritativeWindow: () => ({ window: 1 }) })
+
+      await expect(restartPodExitedTerminal(value, 'id:wt', 'tab::left')).rejects.toThrow(
+        'terminal_restart_failed'
+      )
+      expect(getPodTerminalExit('wt', 'tab', 'left')).toEqual(exit)
+    })
   })
 })
