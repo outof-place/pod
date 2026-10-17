@@ -13,8 +13,7 @@
 </picture>
 
 <p align="center">
-  <a href="https://github.com/outof-place/pod/releases/download/v1.0.0-rc4/Pod-1.0.0-rc4.dmg"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-download-dark.svg"><img alt="Download Pod 1.0.0-rc4 for macOS" src="assets/button-download-light.svg" height="44"></picture></a>
-  <a href="https://github.com/outof-place/homebrew-tap"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-brew-dark.svg"><img alt="Install with Homebrew" src="assets/button-brew-light.svg" height="44"></picture></a>
+  <a href="https://updates.pod.codes/download/v1.0.0-rc5/Pod-1.0.0-rc5.dmg"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-download-dark.svg"><img alt="Download Pod 1.0.0-rc5 for macOS" src="assets/button-download-light.svg" height="44"></picture></a>
   <a href="https://pod.codes"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/button-site-dark.svg"><img alt="pod.codes" src="assets/button-site-light.svg" height="44"></picture></a>
 </p>
 
@@ -24,9 +23,9 @@
 </p>
 
 > [!NOTE]
-> Pod 1.0.0-rc4, the fourth release candidate of Pod 1.0, is out: [download the DMG](https://github.com/outof-place/pod/releases/download/v1.0.0-rc4/Pod-1.0.0-rc4.dmg), signed with
+> Pod 1.0.0-rc5, the fifth release candidate of Pod 1.0, is out: [download the DMG](https://updates.pod.codes/download/v1.0.0-rc5/Pod-1.0.0-rc5.dmg), signed with
 > the studio's Developer ID and notarized by Apple. It needs a Mac with Apple silicon and macOS 27 or later.
-> The [release notes](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc4) list the known issues. It also installs with Homebrew; see [Install](#install).
+> The [release notes](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc5) list the known issues.
 > On 1.0.0-rc1, install it once by hand: rc1 can't update itself to a later release (see [Install](#install)).
 
 <picture>
@@ -66,7 +65,7 @@
   checks that no request reaches a Stably host. Marketplace installs are off by default in Pod (no
   remote plugin revocation).
 
-1.0 marks what Pod 1.0 brings, out now as release candidate 1.0.0-rc4; coming, what follows it.
+1.0 marks what Pod 1.0 brings, out now as release candidate 1.0.0-rc5; coming, what follows it.
 Per-worktree setup through `orca.yaml` is inherited from Orca.
 
 </details>
@@ -241,22 +240,13 @@ Pod is not affiliated with or endorsed by Stably AI or Lovecast Inc. Orca is the
 
 ## Install
 
-- **DMG.** Download [Pod-1.0.0-rc4.dmg](https://github.com/outof-place/pod/releases/download/v1.0.0-rc4/Pod-1.0.0-rc4.dmg) from the [1.0.0-rc4 release](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc4),
+- **DMG.** Download [Pod-1.0.0-rc5.dmg](https://updates.pod.codes/download/v1.0.0-rc5/Pod-1.0.0-rc5.dmg) from the [1.0.0-rc5 release](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc5),
   open it and drag Pod to Applications. Its SHA-256 is in `SHA256SUMS` on the release page. Later
   versions arrive through Pod's "Check for Updates…".
-- **Homebrew**, from the studio's tap:
-
-  ```sh
-  brew install --cask outof-place/tap/pod
-  ```
-
-  Pod updates itself after that, as it does from the DMG, so a plain `brew upgrade` leaves it alone.
-
 - **From 1.0.0-rc1**, install once by hand: 1.0.0-rc2 changed the update key, so rc1's "Check for
   Updates…" can't install a later release. Drag Pod from the DMG into Applications and replace the old
   one while Pod is still open; the old Pod quits as for an update and leaves the terminal sessions
-  running. Open the new one and they are there. Installed from Homebrew, run
-  `brew update && brew upgrade --cask --greedy pod` once instead. After that, "Check for Updates…"
+  running. Open the new one and they are there. After that, "Check for Updates…"
   brings later releases.
 
 - Pod needs a Mac with Apple silicon and macOS 27 or later.

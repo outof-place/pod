@@ -8,10 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Changed
+## [1.0.0-rc5] - 2026-10-17
 
-- claude-acc 1.34.2 is built in (from `release/1.34.2`): when Homebrew stops a `brew upgrade` on one formula it can't
-  build, the formulae still outdated update one by one, so only the one that failed is reported.
+[Pod-1.0.0-rc5.dmg](https://updates.pod.codes/download/v1.0.0-rc5/Pod-1.0.0-rc5.dmg); the
+[release notes](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc5) list every change. A name given to a tab
+stays, the + starts Claude Code, updates come from updates.pod.codes, claude-acc 1.36.2 is built in, and Developer
+Tools reach the programs started in Pod's terminals. From rc2 to rc4, "Check for Updates…" installs it.
+
+## [1.0.0-rc4] - 2026-10-17
+
+[Pod-1.0.0-rc4.dmg](https://github.com/outof-place/pod/releases/download/v1.0.0-rc4/Pod-1.0.0-rc4.dmg); the
+[release notes](https://github.com/outof-place/pod/releases/tag/v1.0.0-rc4) list every change.
 
 ## [1.0.0-rc3] - 2026-10-16
 
