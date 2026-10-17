@@ -11,3 +11,22 @@ export function setProductSettingDefaults(defaults: Partial<GlobalSettings>): vo
 export function getProductSettingDefaults(): Partial<GlobalSettings> {
   return productDefaults
 }
+
+/**
+ * One-shot flips a product build makes to a loaded profile. Orca stored `tabAutoGenerateTitle:
+ * false` in every profile, so that false is no opt-out until the product has turned it on once.
+ */
+export function migrateLoadedProductSettings<T extends Partial<GlobalSettings>>(
+  settings: T,
+  stored: Partial<GlobalSettings> | undefined,
+  markNeedsSave: () => void
+): T {
+  if (
+    productDefaults.tabAutoGenerateTitleDefaultedOnForPod !== true ||
+    stored?.tabAutoGenerateTitleDefaultedOnForPod === true
+  ) {
+    return settings
+  }
+  markNeedsSave()
+  return { ...settings, tabAutoGenerateTitle: true, tabAutoGenerateTitleDefaultedOnForPod: true }
+}

@@ -19,6 +19,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import { normalizeLoadedGlobalSettings } from './normalize-loaded-global-settings'
+import { migrateLoadedProductSettings } from '../../../shared/product-setting-defaults'
 import { normalizeLoadedUiState } from './normalize-loaded-ui-state'
 import {
   normalizeLoadedAutomationRuns,
@@ -70,7 +71,12 @@ export function normalizeLoadedProfileState(
     workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
       parsed.workspaceLineageByChildKey
     ),
-    settings: normalizeLoadedGlobalSettings(parsed, terminal, profile),
+    // Fork-only (Pod): a product build's one-shot default flips.
+    settings: migrateLoadedProductSettings(
+      normalizeLoadedGlobalSettings(parsed, terminal, profile),
+      parsed.settings,
+      markNeedsSave
+    ),
     // Why: legacy 'recent' meant the smart sort; migrate once on the raw value so a fresh 'recent' default isn't remigrated.
     ui: normalizeLoadedUiState(
       parsed,
