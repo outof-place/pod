@@ -32,7 +32,8 @@ describe('process facts from ps', () => {
       'stat=,lstart=',
       '-p',
       '22623',
-      'LC_ALL=en_US.UTF-8',
+      // Why per platform: psLocaleEnvironment pins LC_ALL on macOS only, where simulators run.
+      `LC_ALL=${process.platform === 'darwin' ? 'en_US.UTF-8' : undefined}`,
       'TZ=UTC0'
     ])
   })
