@@ -49,7 +49,8 @@ describe.runIf(ENV_DECOUPLED)('an SSH terminal under an inherited ORCA_ env', ()
     vi.unstubAllEnvs()
   })
 
-  it('gets none of its renamed names, except one the request sets', async () => {
+  // The twin of a name the request sets is the request's value, never the inherited one.
+  it('gets none of its renamed names, except twins of the ones the request sets', async () => {
     vi.stubEnv(legacy('AGENT_HOOK_ENDPOINT'), '/live-pod/agent-hooks/endpoint.env')
     vi.stubEnv(legacy('PANE_KEY'), 'tab-9:live-pane')
     vi.stubEnv(legacy('AGENT_LAUNCH_TOKEN'), 'live-launch')
@@ -60,10 +61,10 @@ describe.runIf(ENV_DECOUPLED)('an SSH terminal under an inherited ORCA_ env', ()
     })
     const env = mocks.mockPtySpawn.mock.calls.at(-1)?.[2].env
     expect(env).not.toHaveProperty(legacy('AGENT_HOOK_ENDPOINT'))
-    expect(env).not.toHaveProperty(legacy('PANE_KEY'))
     expect(env).not.toHaveProperty(legacy('AGENT_LAUNCH_TOKEN'))
     expect(env).toMatchObject({
       [current('PANE_KEY')]: 'tab-1:own',
+      [legacy('PANE_KEY')]: 'tab-1:own',
       [legacy('TAB_ID')]: 'explicit-legacy'
     })
   })
