@@ -34,7 +34,7 @@ import { inspectPtyChildProcesses, processHasChildren } from './pty-child-proces
 import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
 import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
 import { applyScrubSafeAgentEnvAliases } from '../shared/agent-hook-scrub-safe-env'
-import { stripInheritedLegacyEnv } from '../shared/pod-legacy-env-names'
+import { addLegacyEnvTwins, stripInheritedLegacyEnv } from '../shared/pod-legacy-env-names'
 import { addWslEnvKeys } from '../shared/wsl-env'
 import {
   OPENCODE_STARTUP_PROMPT_SHA256_ENV,
@@ -987,6 +987,8 @@ export class PtyHandler {
     // so an envToDelete of CONDA_PREFIX would otherwise re-create the broken pair.
     dropIncoherentCondaActivationEnv(result, process.platform)
     expandWindowsPathEnvironmentVariables(result)
+    // Fork-only (Pod): both spellings for one release (pod-decouple), after every delete above.
+    addLegacyEnvTwins(result)
     return result
   }
 
