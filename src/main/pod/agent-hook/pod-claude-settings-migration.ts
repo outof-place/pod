@@ -121,21 +121,22 @@ export function removePodClaudeEntries(
   names: { hookScript: string; statusLineScript: string },
   refusal: PodClaudeCutRefusal = {}
 ): { text: string; removed: PodClaudeSettingsRemoval[] } | null {
-  const root = parseObject(text)
-  if (!root) {
-    refusal.reason = 'not a JSONC object'
-    return null
-  }
-  // Why: with a key twice (`"Stop": [], "Stop": [...]`) a removal's path names another node than the
-  // one it came from.
-  if (hasDuplicateKeys(root)) {
-    refusal.reason = 'duplicate keys'
-    return null
-  }
   try {
+    const root = parseObject(text)
+    if (!root) {
+      refusal.reason = 'not a JSONC object'
+      return null
+    }
+    // Why: with a key twice (`"Stop": [], "Stop": [...]`) a removal's path names another node than the
+    // one it came from.
+    if (hasDuplicateKeys(root)) {
+      refusal.reason = 'duplicate keys'
+      return null
+    }
     return cutPodEntries(text, root, names, refusal)
   } catch {
-    // Why: the main process reads the user's own file here; a pathological one must never throw.
+    // Why: the main process reads the user's own file here; a pathological one (parseTree recurses, so
+    // a few thousand nested brackets overflow the stack) must never throw.
     refusal.reason = 'unexpected error'
     return null
   }
@@ -225,7 +226,11 @@ function withoutRemovals(value: unknown, removals: PodClaudeSettingsRemoval[]): 
       .slice(0, -1)
       .reduce<unknown>(
         (node, key) =>
-          node !== null && typeof node === 'object' ? Reflect.get(node, key) : undefined,
+          Array.isArray(node) && typeof key === 'number'
+            ? node[key]
+            : isPlainObject(node) && typeof key === 'string'
+              ? node[key]
+              : undefined,
         copy
       )
     const key = path.at(-1)
