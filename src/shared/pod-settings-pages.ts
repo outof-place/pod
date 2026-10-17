@@ -88,13 +88,27 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
         ]
       },
       {
+        title: 'Panes',
+        keys: [
+          'terminalInactivePaneOpacity',
+          'terminalActivePaneOpacity',
+          'terminalDividerThicknessPx',
+          'terminalDividerColorDark',
+          'terminalDividerColorLight'
+        ]
+      },
+      {
         title: 'Keyboard and mouse',
         keys: [
           'terminalMacOptionAsAlt',
           'terminalJISYenToBackslash',
           'terminalMouseHideWhileTyping',
           'terminalFocusFollowsMouse',
-          'terminalWordSeparator'
+          'terminalWordSeparator',
+          'terminalScrollSensitivity',
+          'terminalFastScrollSensitivity',
+          'terminalTuiScrollSensitivity',
+          'terminalRightClickToPaste'
         ]
       },
       {

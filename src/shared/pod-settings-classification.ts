@@ -51,7 +51,6 @@ export const POD_SETTINGS_HIDDEN = {
   agentsSidebarMigratedFromExperimental: 'migration',
   experimentalActivityDefaultedOffForAllUsers: 'migration',
   minimizeToTrayOnClose: 'platform',
-  terminalRightClickToPaste: 'platform',
   terminalWindowsShell: 'platform',
   terminalWindowsWslDistro: 'platform',
   localAccountRuntime: 'platform',
@@ -170,14 +169,6 @@ export const POD_SETTINGS_HIDDEN = {
   editorPreviewTabsEnabled: 'later',
   // Row bounds lived in pod-settings-schema.ts at commit ed129568dd; restore them with the control.
   // N1 (native settings): PodNative reads none of these yet, so a row would change nothing.
-  terminalScrollSensitivity: 'later',
-  terminalFastScrollSensitivity: 'later',
-  terminalTuiScrollSensitivity: 'later',
-  terminalInactivePaneOpacity: 'later',
-  terminalActivePaneOpacity: 'later',
-  terminalDividerThicknessPx: 'later',
-  terminalDividerColorDark: 'later',
-  terminalDividerColorLight: 'later',
   terminalShortcutPolicy: 'later',
   // N1: the middle-click paste is fixed behavior in PodNative's terminal, not driven by this key.
   primarySelectionMiddleClickPaste: 'later',
