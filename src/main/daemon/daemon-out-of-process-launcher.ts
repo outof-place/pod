@@ -16,6 +16,11 @@ import {
 import { getDaemonEntryPath, probeDaemonSocket as probeSocket } from './daemon-launch-paths'
 import { materializeRelocatedDaemonHost, pruneDaemonHostStaging } from './daemon-host-relocation'
 import { darwinDaemonHostForSpawn } from './daemon-host-darwin-spawn'
+import {
+  createDarwinDaemonLaunchdJobs,
+  sweepDeadDaemonLaunchdJobs
+} from './daemon-launchd-jobs-darwin'
+import { isLaunchdDaemonLaunchEnabled } from './daemon-launchd-launch'
 import { DAEMON_RECOVERY_BUDGET_MS, daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
 import {
@@ -132,20 +137,31 @@ export function createOutOfProcessLauncher(
       pruneDaemonHostStaging()
       // Fork the relocated entry when available; otherwise the install-dir entry.
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
+      // Pod: a GUI daemon on macOS starts as a launchd job (daemon-launchd-launch.ts).
+      const launchdJobs =
+        macosLoginSessionWatch && isLaunchdDaemonLaunchEnabled()
+          ? createDarwinDaemonLaunchdJobs()
+          : undefined
+      if (launchdJobs) {
+        await sweepDeadDaemonLaunchdJobs(userDataPath, launchdJobs).catch(() => [])
+      }
       let launched
       try {
-        launched = await launchDaemonChild({
-          entryPath,
-          forkEntryPath,
-          relocatedExecPath: relocatedHost?.execPath,
-          userDataPath,
-          socketPath,
-          tokenPath,
-          pidPath,
-          launchNonce,
-          macosLoginSessionWatch,
-          startupTimeoutMs: startupTimeoutMs ?? darwinDaemonStartupTimeoutMs(recoveryDeadlineMs)
-        })
+        launched = await launchDaemonChild(
+          {
+            entryPath,
+            forkEntryPath,
+            relocatedExecPath: relocatedHost?.execPath,
+            userDataPath,
+            socketPath,
+            tokenPath,
+            pidPath,
+            launchNonce,
+            macosLoginSessionWatch,
+            startupTimeoutMs: startupTimeoutMs ?? darwinDaemonStartupTimeoutMs(recoveryDeadlineMs)
+          },
+          launchdJobs
+        )
       } catch (error) {
         if (!(error instanceof DaemonEndpointUnavailableError) || error.reason !== 'occupied') {
           throw error
