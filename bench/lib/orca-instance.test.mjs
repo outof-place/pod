@@ -240,8 +240,9 @@ test(
     assert.ok(!Object.values(env).some((value) => value.includes(canary)), `no ${ENV_CANARY}`)
     assert.equal(env.HOME, profile.home)
     assert.ok(env.PATH.split(':').includes(`${profile.ud}/guard-bin`), env.PATH)
-    assert.equal(env.TMPDIR, path.join(path.dirname(PROFILE_BASE), 't', path.basename(profile.ud)))
+    assert.ok(env.TMPDIR.startsWith(`${path.dirname(PROFILE_BASE)}/t/`), env.TMPDIR)
     assert.ok(Buffer.byteLength(env.TMPDIR) <= 48, env.TMPDIR)
+    assert.deepEqual(profile.guard.fronts, [], 'no front dir outside the run dir')
     for (const name of ['USER', 'LOGNAME', 'SSH_AUTH_SOCK', 'DISPLAY', 'TERM', 'NODE_OPTIONS', 'TMUX']) {
       assert.equal(env[name], undefined, name)
     }

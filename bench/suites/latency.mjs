@@ -56,6 +56,16 @@ const { values: options } = parseArgs({
     display: { type: 'string' }
   }
 })
+// Before anything starts: only these subjects. Terminal.app is refused by name, as every unknown one.
+for (const name of options.subjects.split(',')) {
+  if (name !== 'ghostty' && !SUBJECTS[name]) {
+    throw new Error(
+      name === 'terminal-app'
+        ? 'refusing terminal-app: driving Terminal.app takes AppleScript against the user\'s own Terminal by name'
+        : `unknown subject ${name}`
+    )
+  }
+}
 const keylat = path.join(TOOLS_BIN, 'keylat')
 const keylatJSON = async (args) =>
   JSON.parse((await run(keylat, args, { maxBuffer: 16 * 1024 * 1024, timeout: 600_000 })).stdout)

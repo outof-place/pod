@@ -52,10 +52,11 @@ const REAL_PROFILE = path.join(HOME, 'Library/Application Support/orca')
 // at the end (pod-tmp-rm), so nothing is deleted while the run goes on.
 // Without run-final.sh's base, each process gets its own run dir: a shared base would let one run's
 // argv sweep reach another's processes.
-// The dir is created on first use (createProfile), not at import.
+// The dir is created on first use (createProfile), not at import. Kept short: each profile's
+// TMPDIR, <run dir>/t/XXXXXX, must fit guard_exec's 48 bytes.
 export const PROFILE_BASE =
   process.env.POD_BENCH_PROFILE_BASE ??
-  `/private/tmp/pod-bench.${process.pid}.${Date.now().toString(36)}/p`
+  `/private/tmp/pod-bench.${process.pid}.${(Date.now() % 36 ** 4).toString(36)}/p`
 // Never signal a program under these, whatever its argv says.
 const PROTECTED_PROGRAMS = ['/Applications/', path.join(HOME, 'Library/Application Support/Pod/')]
 const REPO_ROOT = path.dirname(BENCH_ROOT)
@@ -262,14 +263,19 @@ export function profileIn(ud) {
   mkdirSync(home, { recursive: true })
   mkdirSync(zdot)
   writeFileSync(path.join(home, '.hushlogin'), '')
+  // The run dir's t/XXXXXX: at most 48 bytes, as guard_exec's TMPDIR (a socket path has 104).
+  mkdirSync(path.join(path.dirname(PROFILE_BASE), 't'), { recursive: true, mode: 0o700 })
+  const tmp = mkdtempSync(path.join(path.dirname(PROFILE_BASE), 't', '/'))
+  if (Buffer.byteLength(tmp) > 48) {
+    throw new Error(`the profile's TMPDIR ${tmp} is over 48 bytes: use a shorter POD_BENCH_PROFILE_BASE`)
+  }
   // roots: the pids this run spawned against the profile, with their start times; apps: the bundles
   // it ran them from.
   return {
     ud,
     home,
     zdot,
-    // The run dir's t/<profile>: at most 48 bytes, as guard_exec's TMPDIR (a socket path has 104).
-    tmp: path.join(path.dirname(PROFILE_BASE), 't', path.basename(ud)),
+    tmp,
     launches: 0,
     promptLog: path.join(ud, 'prompt.log'),
     repo: benchRepo(),
@@ -299,7 +305,8 @@ export function promptTimes(profile) {
 
 // The profile's guard PATH (lib/guard-path.mjs), made at its first launch from that app's agent
 // catalog (a dev checkout's source tree, or the package): stubs first in HOME's shells and in the
-// hermetic ZDOTDIR's, the bench tools in front.
+// hermetic ZDOTDIR's. No front dir: the panes run the bench's tools by absolute path
+// (terminal-workloads.mjs), and a front dir has to lie inside the run dir (the lead's MUST).
 export function ensureGuard(profile, info) {
   if (profile.guard) return profile.guard
   if (existsSync(path.join(profile.zdot, '.zshrc'))) {
@@ -308,7 +315,7 @@ export function ensureGuard(profile, info) {
   profile.guard = prepareGuard(profile.ud, {
     ud: profile.ud,
     homes: [profile.home, profile.zdot],
-    fronts: [TOOLS_BIN],
+    fronts: [],
     tree: info.realPath,
     claudeVersion: installedClaudeVersion()
   })
