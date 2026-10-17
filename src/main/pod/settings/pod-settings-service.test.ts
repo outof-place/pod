@@ -269,8 +269,9 @@ describe('PodSettingsService fields that were Electron-only', () => {
       { promptCacheTtlMs: 60_000 },
       { httpProxyBypassRules: 'x'.repeat(4097) },
       { agentCmdOverrides: { 'not-an-agent': 'x' } },
+      { terminalScrollSensitivity: 11 },
       // Hidden as `later` until PodNative applies them: not writable meanwhile.
-      { terminalScrollSensitivity: 2 },
+      { terminalShortcutPolicy: 'terminal-first' },
       { openInApplications: [] }
     ]) {
       await expect(service.set(values, revision), JSON.stringify(values)).rejects.toThrow(
