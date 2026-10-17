@@ -130,6 +130,8 @@ export const POD_SETTINGS_HIDDEN = {
   agentsSidebarIntroShown: 'internal',
   tabSwitchKeybindingSeed: 'internal',
   rightSidebarOpenByDefault: 'legacy',
+  // Read into terminalLinkClickBehavior, which a native client sees and writes.
+  terminalLinkActionPopoverEnabled: 'legacy',
   artifactsEnabled: 'legacy',
   keepComputerAwakeWhileAgentsRun: 'legacy',
   experimentalSidekick: 'legacy',
@@ -159,10 +161,6 @@ export const POD_SETTINGS_HIDDEN = {
   nativeChatInlineVisuals: 'later',
   nativeChatInheritShellEnvironment: 'later',
   nativeChatShellEnvironmentVariables: 'later',
-  // How a terminal link click and middle click act: settled with PodNative's link handling.
-  terminalLinkActionPopoverEnabled: 'later',
-  terminalLinkClickBehavior: 'later',
-  terminalUrlMiddleClickBehavior: 'later',
   // Routes Orca's browser tabs through SSH; PodNative's browser doesn't yet.
   browserSshWorkspaceRoutingEnabled: 'later',
   // PodNative's editor has no preview tabs.
