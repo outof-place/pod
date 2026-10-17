@@ -17,7 +17,11 @@ import {
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-options'
-import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
+import {
+  clearHostSettingOverride,
+  getHostDisplayLabelOverrides,
+  setHostSettingOverride
+} from '../../shared/host-setting-overrides'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
@@ -212,6 +216,23 @@ export class RuntimeClientSettingsController {
       { notifyListeners: true }
     )
     return this.get()
+  }
+
+  // Fork-only (Pod): host.setDisplayLabel. Blank or null clears, as the sidebar's Rename does.
+  setHostDisplayLabel(
+    hostId: ExecutionHostId,
+    displayLabel: string | null
+  ): RuntimeHostDisplayLabelOverrides {
+    if (!this.store?.getSettings || !this.store.updateSettings) {
+      throw new Error('runtime_unavailable')
+    }
+    const settings = this.store.getSettings()
+    const hostSettingOverrides =
+      displayLabel === null
+        ? clearHostSettingOverride(settings, hostId, 'displayLabel')
+        : setHostSettingOverride(settings, hostId, 'displayLabel', displayLabel)
+    this.store.updateSettings({ hostSettingOverrides }, { notifyListeners: true })
+    return this.get().hostSettingOverrides
   }
 
   updateNativeChatSessionOptions(mutation: NativeChatSessionOptionSettingsMutation): void {
