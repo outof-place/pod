@@ -227,6 +227,18 @@ export class OrcaRuntimeWithHeadlessAgentResume extends OrcaRuntimeWithResolveWa
     }
   }
 
+  /** Fork-only (Pod): a failed shell's kept pane never resumes its agent (pod-terminal-exit-resume.ts). */
+  protected forgetAgentResumeForPane(worktreeId: string, paneKey: string): void {
+    this.agentResumeByPaneKey.delete(paneKey)
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    if (
+      session?.sleepingAgentSessionsByPaneKey?.[paneKey] &&
+      !this.getAvailableAuthoritativeWindow()
+    ) {
+      this.writeAgentResumeRecords(worktreeId, session, { [paneKey]: null })
+    }
+  }
+
   /** `worktree.sleep` with no renderer: keep each agent's resume handle, then stop the PTYs. */
   protected async sleepWorktreeTerminalsWithoutRenderer(worktreeId: string): Promise<void> {
     if (!isHeadlessAgentResumeEnabled()) {

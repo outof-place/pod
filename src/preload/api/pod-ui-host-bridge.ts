@@ -55,5 +55,15 @@ export const podUiHostApi = {
     }
     ipcRenderer.on(POD_UI_HOST_PANE_RESTART_IPC.restart, listener)
     return () => ipcRenderer.removeListener(POD_UI_HOST_PANE_RESTART_IPC.restart, listener)
+  },
+  onPaneExitRetained: (retained) => {
+    const listener = (_event: Electron.IpcRendererEvent, pane: unknown) => {
+      const parsed = PodUiHostPaneRestartRequest.safeParse(pane)
+      if (parsed.success) {
+        retained(parsed.data)
+      }
+    }
+    ipcRenderer.on(POD_UI_HOST_PANE_RESTART_IPC.retained, listener)
+    return () => ipcRenderer.removeListener(POD_UI_HOST_PANE_RESTART_IPC.retained, listener)
   }
 } satisfies PreloadApi['podUiHost']

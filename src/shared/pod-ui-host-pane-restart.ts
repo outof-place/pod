@@ -7,7 +7,9 @@ export const POD_UI_HOST_PANE_RESTART_IPC = {
   /** main → renderer, (requestId, PodUiHostPaneRestartRequest) */
   restart: 'pod:uiHostPaneRestart:restart',
   /** renderer → main, (requestId, accepted: boolean) */
-  restarted: 'pod:uiHostPaneRestart:restarted'
+  restarted: 'pod:uiHostPaneRestart:restarted',
+  /** main → renderer, (PodUiHostPaneRestartRequest): a failed shell's pane was kept */
+  retained: 'pod:uiHostPaneRestart:retained'
 } as const
 
 export const PodUiHostPaneRestartRequest = z

@@ -161,3 +161,89 @@ describe('a failed local shell keeps its pane (Pod)', () => {
     expect(tabs.map((tab) => tab.id)).toEqual(['tab::right'])
   })
 })
+
+describe('a kept failed pane starts no agent after Pod restarts (Pod, no window)', () => {
+  // Why UUIDs: a headless host rebuilds its tabs from the session, which keeps only stable leaf ids.
+  const AGENT = '11111111-1111-4111-8111-111111111111'
+  const PANE_KEY = `tab:${AGENT}`
+
+  function agentSession(): WorkspaceSessionState {
+    const base = session()
+    return {
+      ...base,
+      tabsByWorktree: {
+        [WORKTREE_ID]: base.tabsByWorktree[WORKTREE_ID]!.map((tab) => ({
+          ...tab,
+          launchAgent: 'claude' as const
+        }))
+      },
+      terminalLayoutsByTabId: {
+        tab: {
+          root: { type: 'leaf', leafId: AGENT },
+          activeLeafId: AGENT,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [AGENT]: LEFT }
+        }
+      },
+      sleepingAgentSessionsByPaneKey: {
+        [PANE_KEY]: {
+          paneKey: PANE_KEY,
+          tabId: 'tab',
+          worktreeId: WORKTREE_ID,
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'claude-session' },
+          prompt: 'fix it',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1,
+          origin: 'live'
+        }
+      }
+    }
+  }
+
+  function headlessRuntime(initial: WorkspaceSessionState) {
+    let stored = initial
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This runtime fixture supplies the persistence methods exercised by the test.
+    const store = withDurableRuntimeStore({
+      getRepos: () => [REPO],
+      getRepo: (id: string) => (id === REPO_ID ? REPO : undefined),
+      getWorkspaceSession: () => stored,
+      setWorkspaceSession: (next: WorkspaceSessionState) => {
+        stored = next
+      },
+      flushOrThrow: vi.fn()
+    }) as never
+    return { runtime: new OrcaRuntimeService(store), stored: () => stored }
+  }
+
+  it("drops the pane's resume record and the tab's launch agent when it keeps the exit", async () => {
+    const { runtime, stored } = headlessRuntime(agentSession())
+    await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    runtime.registerPty(LEFT, WORKTREE_ID, null, {
+      tabId: 'tab',
+      leafId: AGENT,
+      incarnationId: 'incarnation-a'
+    })
+    await runtime.onPtyExit(LEFT, 1, 'incarnation-a')
+
+    const left = (await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs.find(
+      (tab) => tab.id === `tab::${AGENT}`
+    )
+    expect(left?.type === 'terminal' ? left.terminalExit?.exitCode : null).toBe(1)
+    // Why these two: after a restart the exit is gone, and activation would resume or launch from them.
+    expect(stored().sleepingAgentSessionsByPaneKey).not.toHaveProperty(PANE_KEY)
+    expect(stored().tabsByWorktree[WORKTREE_ID]?.[0]).not.toHaveProperty('launchAgent')
+
+    // A restart: a new runtime over the stored session, and the in-memory exits gone with the old one.
+    resetPodTerminalExitsForTests()
+    const restarted = headlessRuntime(stored()).runtime
+    const leaf = (await restarted.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs.find(
+      (tab) => tab.id === `tab::${AGENT}`
+    )
+    expect(leaf).toBeDefined()
+    expect(leaf).not.toHaveProperty('terminalExit')
+    expect(leaf).not.toHaveProperty('launchAgent')
+    expect(restarted.getPaneAgentResume(PANE_KEY)).toBeUndefined()
+  })
+})
