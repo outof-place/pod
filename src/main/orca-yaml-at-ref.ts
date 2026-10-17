@@ -64,9 +64,10 @@ export async function readOrcaYamlAtRef(exec: GitShowExec, ref: string): Promise
 }
 
 /**
- * The repo's own branch: a local branch or one of origin's remote-tracking branches. Anything else
- * (a fork's head fetched for a pull request, another remote, a tag, a bare commit) and anything git
- * can't name is not, so a caller that asks the user fails closed.
+ * The repo's own branch: one of origin's remote-tracking branches, or a local branch that tracks
+ * nothing or one of origin's. Anything else (a fork's head fetched for a pull request, another
+ * remote, a local branch tracking a fork's, as Pod's fork-PR worktrees and `gh pr checkout` make,
+ * a tag, a bare commit) and anything git can't name is not, so a caller that asks fails closed.
  */
 export async function isOwnBranch(exec: GitShowExec | null, ref: string): Promise<boolean> {
   if (!exec || !isOrcaYamlRef(ref)) {
@@ -74,11 +75,24 @@ export async function isOwnBranch(exec: GitShowExec | null, ref: string): Promis
   }
   try {
     const named = await exec(['rev-parse', '--verify', '--quiet', '--symbolic-full-name', ref])
-    return /^refs\/(heads|remotes\/origin)\/\S/.test(named.stdout.trim())
+    const full = named.stdout.trim()
+    if (ORIGIN_BRANCH.test(full)) {
+      return true
+    }
+    if (!/^refs\/heads\/\S/.test(full)) {
+      return false
+    }
+    // for-each-ref, not `<b>@{upstream}`: no upstream is an empty field, not an error.
+    const listed = await exec(['for-each-ref', '--format=%(refname) %(upstream)', full])
+    const line = listed.stdout.split('\n').find((entry) => entry.split(' ')[0] === full)
+    const upstream = line?.slice(full.length + 1).trim()
+    return upstream !== undefined && (upstream === '' || ORIGIN_BRANCH.test(upstream))
   } catch {
     return false
   }
 }
+
+const ORIGIN_BRANCH = /^refs\/remotes\/origin\/\S/
 
 /**
  * A create from someone else's code: linked to a pull or merge request, or based on a ref that

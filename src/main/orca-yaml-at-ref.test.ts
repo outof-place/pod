@@ -72,6 +72,23 @@ describe('a ref’s orca.yaml (Pod)', () => {
     for (const ref of ['main', 'adds-setup', 'origin/main']) {
       expect(await isOwnBranch(exec, ref)).toBe(true)
     }
+    // A local branch is the repo's own while it tracks nothing or origin, not when it tracks a fork.
+    for (const remote of ['origin', 'fork']) {
+      git('config', `remote.${remote}.fetch`, `+refs/heads/*:refs/remotes/${remote}/*`)
+    }
+    git('branch', 'tracks-origin', 'adds-setup')
+    git('config', 'branch.tracks-origin.remote', 'origin')
+    git('config', 'branch.tracks-origin.merge', 'refs/heads/main')
+    git('branch', 'pr-fork-repo/evil', 'adds-setup')
+    git('config', 'branch.pr-fork-repo/evil.remote', 'fork')
+    git('config', 'branch.pr-fork-repo/evil.merge', 'refs/heads/evil')
+    git('tag', 'v1')
+    git('tag', 'main')
+    expect(await isOwnBranch(exec, 'tracks-origin')).toBe(true)
+    for (const ref of ['pr-fork-repo/evil', 'v1', 'main']) {
+      expect(await isOwnBranch(exec, ref)).toBe(false)
+    }
+    git('tag', '-d', 'main')
     for (const ref of ['fork/evil', 'refs/orca/pull/fork/7', head, 'no-such-branch', '-q']) {
       expect(await isOwnBranch(exec, ref)).toBe(false)
     }
