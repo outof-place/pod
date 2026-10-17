@@ -36,11 +36,17 @@ export function realHomeState() {
   )
 }
 
-/** Throws when a file changed or came or went; returns the files rewritten with the same bytes. */
-export function assertRealHomeUntouched(before, where, runDir) {
+/**
+ * Throws when a file changed or came or went; returns the files rewritten with the same bytes.
+ * `strictMtime` trips on those too: for the few seconds an app's own installer code runs, where a
+ * leak through the account's home could write the very bytes the live Pod writes.
+ */
+export function assertRealHomeUntouched(before, where, runDir, { strictMtime = false } = {}) {
   const after = realHomeState()
   const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(
-    (file) => before[file]?.sha256 !== after[file]?.sha256
+    (file) =>
+      before[file]?.sha256 !== after[file]?.sha256 ||
+      (strictMtime && before[file]?.mtimeMs !== after[file]?.mtimeMs)
   )
   const claudeJson = path.join(REAL_HOME, '.claude.json')
   if (existsSync(claudeJson) && readFileSync(claudeJson, 'utf8').includes(runDir)) {

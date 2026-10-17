@@ -429,9 +429,12 @@ POD_BENCH_POD_APP=<re-id'd copy of Pod.app> node bench/suites/native-idle.mjs [-
 - **Deep links.** While a launch runs, its clone is registered with LaunchServices (until
   `lsregister -u` at its cleanup), so a `pod://` link clicked meanwhile could open in it. Don't
   click Pod links during a run.
-- **Sampling.** `tools/procstat.c` reads every process of the launch at each window's edges:
-  PodNative by its executable, the runtime and daemons the profile records, and their
-  descendants. `extra.breakdown` splits the numbers by process class. A window counts only when
+- **Cleanup.** Only processes whose executable lies inside the run's dir get a signal, and so do
+  their descendants. A process that merely names the dir in its argv (anyone's `tail` of a log
+  there) is reported, never signalled. Each launch's result lists every signal sent.
+- **Sampling.** `tools/procstat.c` reads every process of the launch at each window's edges.
+  That means every process whose executable lies inside the run's dir (the clone's PodNative and
+  runtime helpers, plus the daemon the runtime copies into the profile) and their descendants. `extra.breakdown` splits the numbers by process class. A window counts only when
   the load gate held at its start. PodNative's own `--measure` report is kept next to them as a
   cross-check.
 

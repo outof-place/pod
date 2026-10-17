@@ -180,7 +180,7 @@ function prepare(variant) {
     }
     stubAccState(state)
   }
-  return { work, app, exe: path.join(app, 'Contents/MacOS/PodNative'), profile, home, guard, repo, accHome, owned: new Set() }
+  return { work, app, exe: path.join(app, 'Contents/MacOS/PodNative'), profile, home, guard, repo, accHome }
 }
 
 // PodNative's mac-e2e claude-acc fixtures (scripts/mac-e2e/state), moved to this run's clock, with
@@ -210,14 +210,14 @@ function stubAccState(state) {
 }
 
 /**
- * The launch's processes with their rusage: PodNative by its executable, the runtime and the
- * daemons its profile records (once their environment names the run's dir), and all their
- * descendants. `scan` also takes every process whose argv names the run's dir (a full argv read of
- * the machine, so only at window edges and cleanup, not in the watchdog).
+ * The launch's processes with their rusage: every process whose executable lies inside the run's
+ * dir (the clone's PodNative and runtime helpers, the daemon the runtime copies into the profile)
+ * and their descendants, the terminals' shells among them. `scan` also lists processes whose argv
+ * merely names the run's dir (via "argv"): those are reported, never counted or signalled, since
+ * anyone's `tail` of a log there would match.
  */
 async function snapshot(launch, { scan = false } = {}) {
-  const args = ['--exe', launch.exe]
-  for (const pid of profileRoots(launch)) args.push('--root', String(pid))
+  const args = ['--exe-prefix', `${launch.work}/`]
   if (scan) args.push('--argv', `${launch.work}/`, '--argv', `${launch.work.replace(/^\/private/, '')}/`)
   const { stdout } = await run(PROCSTAT, args, { maxBuffer: 16 << 20 })
   const snap = JSON.parse(stdout)
@@ -226,33 +226,6 @@ async function snapshot(launch, { scan = false } = {}) {
     (proc) => proc.path !== PROCSTAT && proc.path !== '/usr/bin/open' && !proc.args.includes('live-writer.py')
   )
   return snap
-}
-
-// orca-runtime.json and the daemons' pid files in the profile; a pid counts once ps -E shows it
-// carries the run's dir (a detached daemon is no descendant of PodNative).
-function profileRoots(launch) {
-  const files = []
-  const walk = (dir, depth) => {
-    if (depth > 3 || !existsSync(dir)) return
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name)
-      if (entry.isDirectory() && !entry.isSymbolicLink() && entry.name !== 'home') walk(full, depth + 1)
-      else if (entry.name.endsWith('.pid') || entry.name === 'orca-runtime.json') files.push(full)
-    }
-  }
-  walk(launch.profile, 0)
-  const pids = []
-  for (const file of files) {
-    let pid = null
-    try {
-      const text = readFileSync(file, 'utf8')
-      pid = file.endsWith('.json') ? JSON.parse(text).pid : Number(text.trim().split(/\s+/)[0])
-    } catch {}
-    if (!Number.isInteger(pid) || pid <= 1) continue
-    if (!launch.owned.has(pid) && ownedBy(launch, pid)) launch.owned.add(pid)
-    if (launch.owned.has(pid)) pids.push(pid)
-  }
-  return pids
 }
 
 // What each process is, by its executable: Pod's own (inside the clone) or the terminals' workload.
@@ -489,7 +462,7 @@ async function measureLaunch(variant, index) {
   clearInterval(watchdog)
   if (guarded) releaseInstance(guarded)
   writer?.kill('SIGTERM')
-  const leftovers = await cleanup(launch)
+  const cleaned = await cleanup(launch)
   const measure = existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : null
   const security = existsSync(path.join(launch.work, 'security.jsonl'))
     ? readFileSync(path.join(launch.work, 'security.jsonl'), 'utf8').split('\n').filter(Boolean)
@@ -507,7 +480,9 @@ async function measureLaunch(variant, index) {
     securityCalls: security.length,
     securityNonFind: security.filter((line) => !/"subcommand": "find-/.test(line)).length,
     stubCalls: readFileSync(path.join(launch.work, 'guard.log'), 'utf8').split('\n').filter(Boolean),
-    leftovers,
+    signalled: cleaned.signalled,
+    leftovers: cleaned.left,
+    argvOnly: cleaned.argvOnly,
     measureIdle: measure?.idle ?? null
   }
   checkAcc(`after native-idle launch ${index + 1}`)
@@ -516,19 +491,27 @@ async function measureLaunch(variant, index) {
   return { variant, launch: index, work: launch.work, failure, windows, checks }
 }
 
-/** Stops whatever of the launch still runs (its own processes, by the run's dir), and its LaunchServices records. */
+/**
+ * Stops whatever of the launch still runs: only processes whose executable lies inside the run's
+ * dir and their descendants, never one that merely names the dir in its argv (reported instead),
+ * never a program under /Applications or Pod's data. Returns every signal sent, and what was left.
+ */
 async function cleanup(launch) {
+  const signalled = []
   let left = []
+  let argvOnly = []
   for (let attempt = 0; attempt < 50; attempt += 1) {
-    // The tree is the launch's by construction (its clone's PodNative, owned roots, argv naming
-    // the run's dir, and their descendants); never a program under /Applications or Pod's data.
-    left = (await snapshot(launch, { scan: true })).procs.filter(
-      (proc) => proc.pid !== process.pid && !PROTECTED.some((prefix) => proc.path.startsWith(prefix))
+    const snap = await snapshot(launch, { scan: true })
+    argvOnly = snap.procs.filter((proc) => proc.via === 'argv').map((proc) => `${proc.pid} ${proc.path}`)
+    left = snap.procs.filter(
+      (proc) => proc.via === 'exe' && proc.pid !== process.pid && !PROTECTED.some((prefix) => proc.path.startsWith(prefix))
     )
     if (left.length === 0) break
+    const signal = attempt < 25 ? 'SIGTERM' : 'SIGKILL'
     for (const proc of left) {
       try {
-        process.kill(proc.pid, attempt < 25 ? 'SIGTERM' : 'SIGKILL')
+        process.kill(proc.pid, signal)
+        signalled.push({ pid: proc.pid, path: proc.path, signal })
       } catch {}
     }
     await sleep(200)
@@ -549,19 +532,7 @@ async function cleanup(launch) {
       execFileSync(LSREGISTER, ['-u', bundle], { stdio: 'ignore' })
     } catch {}
   }
-  return left.map((proc) => `${proc.pid} ${proc.path}`)
-}
-
-// A recorded pid counts as the launch's when its command line names the run's dir (the runtime
-// runs from the clone, the daemon from the profile's daemon-host dir); never its environment,
-// since a stale pid file can name someone else's process.
-function ownedBy(launch, pid) {
-  try {
-    const line = execFileSync('/bin/ps', ['-ww', '-o', 'command=', '-p', String(pid)], { encoding: 'utf8' })
-    return line.includes(`${launch.work.replace(/^\/private/, '')}/`)
-  } catch {
-    return false
-  }
+  return { signalled, left: left.map((proc) => `${proc.pid} ${proc.path}`), argvOnly }
 }
 
 // The claude-acc baseline before the first launch (run-final.sh records one; a lone run takes it now).
