@@ -145,3 +145,57 @@ describe("taking Pod's entries out of a Claude settings file", () => {
     expect(existsSync(`${settingsPath}.bak`)).toBe(false)
   })
 })
+
+describe("a user's comments around Pod's entries", () => {
+  const POD = `{ "hooks": [{ "type": "command", "command": "${CLIENT}", "args": [] }] }`
+  const MINE = '{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "my-guard" }] }'
+  const cut = (text: string): string | undefined => removePodClaudeEntries(text, names)?.text
+
+  it.each([
+    [
+      "a // line between Pod's event and the next one",
+      `{\n\t"hooks": {\n\t\t"SessionStart": [${POD}],\n\t\t// mine: the guard below\n\t\t"PreCompact": [${MINE}]\n\t}\n}\n`,
+      `{\n\t"hooks": {\n\t\t// mine: the guard below\n\t\t"PreCompact": [${MINE}]\n\t}\n}\n`
+    ],
+    [
+      "a /* block */ before Pod's last group",
+      `{"hooks": {"Stop": [\n\t\t\t${MINE},\n\t\t\t/* Pod's below */\n\t\t\t${POD}\n\t\t]}}`,
+      `{"hooks": {"Stop": [\n\t\t\t${MINE}\n\t\t\t/* Pod's below */\n\t\t]}}`
+    ],
+    [
+      "a comment after Pod's last group, on its line",
+      `{"hooks": {"Stop": [\n\t\t\t${MINE},\n\t\t\t${POD} // Pod's\n\t\t]}}`,
+      `{"hooks": {"Stop": [\n\t\t\t${MINE} // Pod's\n\t\t]}}`
+    ],
+    [
+      "a comment after the comma that follows Pod's group",
+      `{"hooks": {"Stop": [\n\t\t\t${POD}, // about mine\n\t\t\t${MINE}\n\t\t]}}`,
+      `{"hooks": {"Stop": [\n\t\t\t// about mine\n\t\t\t${MINE}\n\t\t]}}`
+    ],
+    [
+      "a comment in an event that held only Pod's group, which then stays empty",
+      `{"hooks": {"Stop": [\n\t\t\t// mine\n\t\t\t${POD}\n\t\t]}}`,
+      '{"hooks": {"Stop": [\n\t\t\t// mine\n\t\t]}}'
+    ],
+    [
+      'a /* block */ between events, with CRLF',
+      `{\r\n  "hooks": {\r\n    "SessionStart": [${POD}],\r\n    /* mine */\r\n    "PreCompact": [${MINE}]\r\n  }\r\n}\r\n`,
+      `{\r\n  "hooks": {\r\n    /* mine */\r\n    "PreCompact": [${MINE}]\r\n  }\r\n}\r\n`
+    ],
+    [
+      "a comment before Pod's statusLine as the file's last member",
+      `{\n\t"model": "opus",\n\t// my status line is Pod's\n\t"statusLine": { "type": "command", "command": "${STATUS}" }\n}\n`,
+      `{\n\t"model": "opus"\n\t// my status line is Pod's\n}\n`
+    ]
+  ])('keeps %s', (_label, before, after) => {
+    expect(cut(before)).toBe(after)
+  })
+
+  it("drops an event and `hooks` that held only Pod's group and no comment, with CRLF", () => {
+    expect(
+      cut(
+        `{\r\n  "hooks": {\r\n    "Stop": [\r\n      ${POD}\r\n    ]\r\n  },\r\n  "model": "opus"\r\n}\r\n`
+      )
+    ).toBe('{\r\n  "model": "opus"\r\n}\r\n')
+  })
+})
