@@ -98,7 +98,11 @@ const STATUS_ONLY_EVENTS: ReadonlySet<string> = new Set([
   'UserPromptSubmit',
   'Stop',
   'SubagentStart',
-  'SubagentStop'
+  'SubagentStop',
+  // Fork-only (Pod): status-only too; Claude waited for a hook process on each.
+  'StopFailure',
+  'TeammateIdle',
+  'PostCompact'
 ])
 
 export type ClaudeManagedHookPlan = {
