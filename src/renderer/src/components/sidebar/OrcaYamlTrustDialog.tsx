@@ -64,6 +64,8 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
   const scriptContent = typeof modalData.scriptContent === 'string' ? modalData.scriptContent : ''
   const contentHash = typeof modalData.contentHash === 'string' ? modalData.contentHash : ''
   const previouslyApproved = modalData.previouslyApproved === true
+  // Pod: a create from someone else's code: this answer is for this create only.
+  const foreign = modalData.foreign === true
   const onResolve =
     typeof modalData.onResolve === 'function'
       ? (modalData.onResolve as (decision: 'run' | 'skip') => void)
@@ -71,7 +73,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
 
   const resolveAndClose = useCallback(
     (decision: 'run' | 'skip') => {
-      if (decision === 'run' && repoId) {
+      if (decision === 'run' && repoId && !foreign) {
         if (alwaysTrust) {
           markOrcaHookRepoAlwaysTrusted(repoId)
         } else if (contentHash) {
@@ -85,6 +87,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
       alwaysTrust,
       closeModal,
       contentHash,
+      foreign,
       markOrcaHookRepoAlwaysTrusted,
       markOrcaHookScriptConfirmed,
       onResolve,
@@ -176,27 +179,29 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
           </div>
         )}
 
-        <label
-          className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 transition-colors ${
-            alwaysTrust
-              ? 'border-primary/60 bg-primary/5'
-              : 'border-border/70 bg-muted/25 hover:border-border hover:bg-muted/40'
-          }`}
-        >
-          <input
-            type="checkbox"
-            className="h-4 w-4 accent-primary"
-            checked={alwaysTrust}
-            onChange={(event) => setAlwaysTrust(event.target.checked)}
-          />
-          <span className="text-xs font-medium text-foreground">
-            {translate('auto.components.sidebar.OrcaYamlTrustDialog.531689199b', 'Always trust')}{' '}
-            <code>
-              {translate('auto.components.sidebar.OrcaYamlTrustDialog.79afc6772b', 'orca.yaml')}
-            </code>{' '}
-            {translate('auto.components.sidebar.OrcaYamlTrustDialog.c494b3ccb1', 'in')} {repoName}
-          </span>
-        </label>
+        {!foreign && (
+          <label
+            className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 transition-colors ${
+              alwaysTrust
+                ? 'border-primary/60 bg-primary/5'
+                : 'border-border/70 bg-muted/25 hover:border-border hover:bg-muted/40'
+            }`}
+          >
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary"
+              checked={alwaysTrust}
+              onChange={(event) => setAlwaysTrust(event.target.checked)}
+            />
+            <span className="text-xs font-medium text-foreground">
+              {translate('auto.components.sidebar.OrcaYamlTrustDialog.531689199b', 'Always trust')}{' '}
+              <code>
+                {translate('auto.components.sidebar.OrcaYamlTrustDialog.79afc6772b', 'orca.yaml')}
+              </code>{' '}
+              {translate('auto.components.sidebar.OrcaYamlTrustDialog.c494b3ccb1', 'in')} {repoName}
+            </span>
+          </label>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => resolveAndClose('skip')}>

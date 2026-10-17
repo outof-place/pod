@@ -3,11 +3,11 @@ import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { hashOrcaHookScript, type OrcaHookScriptKind } from './orca-hook-trust'
 import {
-  checkRuntimeHooks,
   readRuntimeIssueCommand,
   type IssueCommandReadResult
 } from '@/runtime/runtime-hooks-client'
 import { getRuntimeEnvironmentIdForRepo } from './repo-runtime-owner'
+import { readCreateSetupHooks, type CreateSetupTrust } from './create-setup-trust'
 import { MODAL_DISMISSED_KEY } from '@/store/slices/modal-slot-dismissal'
 import {
   getRepoExecutionHostId,
@@ -106,12 +106,14 @@ async function confirmScriptContent(
   scriptKind: HookScriptKind,
   scriptContent: string,
   hostId?: ExecutionHostId,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  // Pod: a create from someone else's code asks every time, and its answer isn't kept.
+  foreign = false
 ): Promise<'run' | 'skip'> {
   if (isCancelled()) {
     return 'skip'
   }
-  if (canUseRepoWideTrust(state, repoId) || !scriptContent) {
+  if (!scriptContent || (!foreign && canUseRepoWideTrust(state, repoId))) {
     return 'run'
   }
 
@@ -120,13 +122,13 @@ async function confirmScriptContent(
     return 'skip'
   }
   const existingHash = state.trustedOrcaHooks[repoId]?.[scriptKind]?.contentHash
-  if (existingHash === contentHash) {
+  if (!foreign && existingHash === contentHash) {
     return 'run'
   }
 
   const repo = findHookRepo(state, repoId, hostId)
   const repoName = repo?.displayName ?? 'this repository'
-  const previouslyApproved = Boolean(existingHash)
+  const previouslyApproved = !foreign && Boolean(existingHash)
 
   return new Promise<'run' | 'skip'>((resolve) => {
     let settled = false
@@ -144,6 +146,7 @@ async function confirmScriptContent(
       scriptContent,
       contentHash,
       previouslyApproved,
+      ...(foreign ? { foreign: true } : {}),
       onResolve: settle,
       // Why: eviction must fail closed without stranding the singleton trust queue.
       [MODAL_DISMISSED_KEY]: () => settle('skip')
@@ -233,10 +236,6 @@ export async function readAndConfirmRuntimeIssueCommand(
   return confirmRuntimeIssueCommandRead(state, repoId, hostId, result, isCancelled)
 }
 
-/** Pod: a create's setup is asked about on its base's orca.yaml, and the approved hash goes with
- *  the create so the host can check the content it actually runs. */
-export type CreateSetupTrust = { baseRef?: string; onTrusted: (contentHash: string) => void }
-
 export async function ensureHooksConfirmed(
   // Why a getter: a caller that queues behind an earlier prompt must see the trust it recorded.
   stateOrGetter: AppState | (() => AppState),
@@ -258,6 +257,7 @@ export async function ensureHooksConfirmed(
     }
 
     let scriptContent = ''
+    let foreign = false
     try {
       if (scriptKind === 'issueCommand') {
         // Local overrides are user-owned; only shared orca.yaml commands need repo trust.
@@ -296,15 +296,9 @@ export async function ensureHooksConfirmed(
           hostId,
           runtimeOwnerEnvironmentId
         )
-        const atBase = createSetup?.baseRef
-          ? await checkRuntimeHooks(ownerSettings, repoId, hostId, createSetup.baseRef)
-          : null
-        // A base this host can't read (an older host, a ref only the create resolves) falls back
-        // to the root's content; the host still checks what it runs.
-        const result =
-          atBase && atBase.status !== 'error'
-            ? atBase
-            : await checkRuntimeHooks(ownerSettings, repoId, hostId)
+        const read = await readCreateSetupHooks(ownerSettings, repoId, hostId, createSetup)
+        const result = read.result
+        foreign = read.foreign
         if (result.status === 'error') {
           return 'skip'
         }
@@ -327,7 +321,8 @@ export async function ensureHooksConfirmed(
       scriptKind,
       scriptContent,
       hostId,
-      isCancelled
+      isCancelled,
+      foreign
     )
     if (decision === 'run' && createSetup && scriptContent) {
       createSetup.onTrusted(await hashOrcaHookScript(scriptContent))

@@ -9,6 +9,8 @@ import {
   withoutTabCommands,
   type SetupTrustStore
 } from '../orca-yaml-setup-trust'
+import { gitExecFileAsync } from '../git/runner'
+import { isForeignCreate } from '../orca-yaml-at-ref'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from './runtime-store-contract'
 
@@ -68,7 +70,12 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   const setupTrust =
     effectiveDecision === 'skip'
       ? null
-      : untrustedCreateSetup(args.store, repo, yamlHooks, request.setupTrustHash)
+      : await untrustedCreateSetup(args.store, repo, yamlHooks, request.setupTrustHash, () =>
+          isForeignCreate(
+            (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repo.path, ...args.runtimeTarget }),
+            request
+          )
+        )
   if (setupTrust) {
     shouldRunSetup = false
     defaultTabs = withoutTabCommands(defaultTabs)

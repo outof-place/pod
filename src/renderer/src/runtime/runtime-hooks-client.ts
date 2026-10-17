@@ -20,6 +20,8 @@ export type HookCheckResult = {
   hasHooks: boolean
   hooks: OrcaHooks | null
   mayNeedUpdate: boolean
+  /** Pod, on a `ref` read: whether that ref is the repo's own branch. */
+  baseOwned?: boolean
 }
 
 export type IssueCommandReadResult = {

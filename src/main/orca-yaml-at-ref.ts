@@ -2,6 +2,10 @@
 // create from that ref will run (its base), not the root checkout's.
 import type { OrcaHooks } from '../shared/orca-yaml-hook-types'
 import type { Repo } from '../shared/repo-types'
+import {
+  hasLinkedCodeReview,
+  type LinkedCodeReviewFields
+} from '../shared/worktree/linked-code-review'
 import { gitExecFileAsync } from './git/runner'
 import { parseOrcaYaml } from './hooks'
 import type { Store } from './persistence'
@@ -30,7 +34,7 @@ export function isOrcaYamlRef(ref: string): boolean {
 }
 
 /**
- * `ls-tree` first: it answers for a missing file with an empty list on every host, where `show`'s
+ * `ls-tree` first: it answers for a missing file with an empty list on every host, where `cat-file`'s
  * error text differs between local git and the SSH relay. Any failure is `error`, so a caller
  * that asks the user fails closed.
  */
@@ -50,12 +54,46 @@ export async function readOrcaYamlAtRef(exec: GitShowExec, ref: string): Promise
     if (!listed.stdout.trim()) {
       return { status: 'ok', hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
-    const shown = await exec(['show', '--end-of-options', `${ref}:orca.yaml`])
+    // cat-file, not show: the committed bytes, never through a textconv or filter.
+    const shown = await exec(['cat-file', 'blob', '--end-of-options', `${ref}:orca.yaml`])
     const hooks = parseOrcaYaml(shown.stdout)
     return { status: 'ok', hasHooks: true, hooks, mayNeedUpdate: !hooks }
   } catch {
     return UNREADABLE
   }
+}
+
+/**
+ * The repo's own branch: a local branch or one of origin's remote-tracking branches. Anything else
+ * (a fork's head fetched for a pull request, another remote, a tag, a bare commit) and anything git
+ * can't name is not, so a caller that asks the user fails closed.
+ */
+export async function isOwnBranch(exec: GitShowExec | null, ref: string): Promise<boolean> {
+  if (!exec || !isOrcaYamlRef(ref)) {
+    return false
+  }
+  try {
+    const named = await exec(['rev-parse', '--verify', '--quiet', '--symbolic-full-name', ref])
+    return /^refs\/(heads|remotes\/origin)\/\S/.test(named.stdout.trim())
+  } catch {
+    return false
+  }
+}
+
+/**
+ * A create from someone else's code: linked to a pull or merge request, or based on a ref that
+ * isn't the repo's own branch. Its setup runs only on the hash approved for that create: "Always
+ * trust" and a recorded hash were given for the repo's own content, and the same orca.yaml can
+ * call a script the other branch changed. No base is the repo's default, its own.
+ */
+export async function isForeignCreate(
+  exec: GitShowExec | null,
+  create: LinkedCodeReviewFields & { baseBranch?: string }
+): Promise<boolean> {
+  if (hasLinkedCodeReview(create)) {
+    return true
+  }
+  return create.baseBranch ? !(await isOwnBranch(exec, create.baseBranch)) : false
 }
 
 /** Runs git where the repo lives: this Mac's project runtime, or the SSH host's relay. */
