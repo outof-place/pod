@@ -63,6 +63,10 @@ test('a fresh product profile keeps per-user state in its own home; legacy env n
     const twin = `POD_${name.slice(LEGACY_ENV_PREFIX.length)}`
     expect(terminalEnv.get(name), name).toBe(terminalEnv.get(twin))
   }
+  // The shell wrapper unsets these before the user's shell runs, so no twin may outlive them.
+  for (const name of ['HISTFILE', 'ORIG_ZDOTDIR', 'SHELL_FEATURES']) {
+    expect(terminalEnv.has(`${LEGACY_ENV_PREFIX}${name}`), name).toBe(false)
+  }
   expect([...terminalEnv.keys()]).toEqual(
     expect.arrayContaining(['POD_PANE_KEY', 'POD_TAB_ID', `${LEGACY_ENV_PREFIX}PANE_KEY`])
   )

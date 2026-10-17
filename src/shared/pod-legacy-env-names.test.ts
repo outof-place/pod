@@ -117,13 +117,21 @@ describe.runIf(ENV_DECOUPLED)('the overlap after the codemod', () => {
       [current('TAB_ID')]: 'tab-1',
       [legacy('TAB_ID')]: 'explicit',
       [current('HISTFILE')]: '/history/zsh_history',
-      [current('ORIG_ZDOTDIR')]: '/Users/me'
+      [current('ORIG_ZDOTDIR')]: '/Users/me',
+      [current('SHELL_FEATURES')]: 'ready',
+      [current('CLAUDE_INJECTED_CONFIG_DIR')]: '/profiles/work'
     }
     addLegacyEnvTwins(env)
     expect(env[legacy('PANE_KEY')]).toBe('tab-1:pane')
     expect(env[legacy('TAB_ID')]).toBe('explicit')
-    expect(env).not.toHaveProperty(legacy('HISTFILE'))
-    expect(env).not.toHaveProperty(legacy('ORIG_ZDOTDIR'))
+    for (const name of [
+      'HISTFILE',
+      'ORIG_ZDOTDIR',
+      'SHELL_FEATURES',
+      'CLAUDE_INJECTED_CONFIG_DIR'
+    ]) {
+      expect(env).not.toHaveProperty(legacy(name))
+    }
   })
 
   it('drops the inherited ORCA_ spelling of each renamed name, and only that', () => {

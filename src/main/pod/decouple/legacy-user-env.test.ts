@@ -27,6 +27,11 @@ describe('the app process takes a user ORCA_ setting for one release', () => {
     }
   })
 
+  it("never takes the CLI install path, which names the legacy app's CLI", () => {
+    expect(LEGACY_USER_ENV_NAMES as readonly string[]).not.toContain(current('CLI_INSTALL_PATH'))
+    expect(LEGACY_USER_ENV_NAMES as readonly string[]).not.toContain(legacy('CLI_INSTALL_PATH'))
+  })
+
   it.runIf(ENV_DECOUPLED)('takes the ORCA_ value only where the POD_ spelling is unset', () => {
     const env: NodeJS.ProcessEnv = {
       [legacy('GITEA_TOKEN')]: 'old-token',

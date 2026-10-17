@@ -95,10 +95,12 @@ export function stripInheritedLegacyEnv(env: Record<string, string | undefined>)
   }
 }
 
-// The shell wrapper reads these and unsets them before the user's shell runs (shell-templates.ts),
-// so a twin would outlive the name it mirrors.
+// The shell wrapper unsets these (shell-templates.ts): before the user's shell runs, or for the
+// claude its function starts. A twin would outlive the name it mirrors.
 const WRAPPER_CONSUMED = new Set(
-  ['HISTFILE', 'ORIG_ZDOTDIR'].map((name) => `${ENV_SPELLINGS.current}${name}`)
+  ['HISTFILE', 'ORIG_ZDOTDIR', 'SHELL_FEATURES', 'CLAUDE_INJECTED_CONFIG_DIR'].map(
+    (name) => `${ENV_SPELLINGS.current}${name}`
+  )
 )
 
 /** In place, on a new terminal's final env: the ORCA_ spelling of each renamed name it carries, with

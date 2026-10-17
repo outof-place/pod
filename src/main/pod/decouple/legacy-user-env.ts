@@ -1,7 +1,8 @@
 // Fork-only (Pod): for one release the app process takes a user's ORCA_ settings (tokens, switches,
 // tool paths) when the POD_ spelling is unset: POD_ first, then ORCA_, as the simulators read them.
 // Only names a user or a script sets for the app. Terminal-scoped names (pane identity, the hook
-// endpoint, launch tokens) are Pod's own, and a parent terminal's must never pass for them.
+// endpoint, launch tokens) are Pod's own, and a parent terminal's must never pass for them. The CLI
+// install path stays out too: set for the legacy app, it names where that app's CLI lives.
 // TODO(pod): drop after 2026-12-31, and no earlier than the release after the decouple.
 import { renamedLegacyEnvName } from '../../../shared/pod-legacy-env-names'
 
@@ -16,7 +17,6 @@ export const LEGACY_USER_ENV_NAMES = [
   'ORCA_BITBUCKET_API_TOKEN',
   'ORCA_BITBUCKET_EMAIL',
   'ORCA_BROWSER_EXECUTABLE',
-  'ORCA_CLI_INSTALL_PATH',
   'ORCA_DIAGNOSTICS_DISABLED',
   'ORCA_DISABLE_AGENT_BROWSER_SWEEP',
   'ORCA_DISABLE_CODEX_TRUST_RPC',
