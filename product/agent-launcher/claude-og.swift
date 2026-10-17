@@ -24,16 +24,15 @@ let claudeOgEnv = "POD_CLAUDE_OG"
 let claudeOgUgrepVersions = ["7.8.4"]
 
 /// Whether `path` (Claude's real binary) embeds a checked ugrep. The answer is cached per path,
-/// size, mtime and inode in pod-search's state dir: a scan reads the whole binary once per build.
+/// size, mtime and inode in Pod's launcher cache: a scan reads the whole binary once per build.
 func embedsCheckedUgrep(_ path: String) -> Bool {
   var info = stat()
   guard stat(path, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, info.st_size > 0 else {
     return false
   }
   let key = "\(path)\t\(info.st_size)\t\(info.st_mtimespec.tv_sec)\t\(info.st_ino)"
-  let cacheDir =
-    env("POD_SEARCH_STATE_DIR").flatMap { $0.isEmpty ? nil : $0 }
-    ?? (env("HOME") ?? "") + "/Library/Caches/pod-search"
+  // Pod's own cache folder (agent-search.swift), never pod-search's or a developer install's.
+  let cacheDir = (env("HOME") ?? "") + "/Library/Caches/" + launcherCacheName
   let cache = cacheDir + "/claude-ugrep"
   if let cached = readSmallFile(cache) {
     let lines = cached.split(separator: "\n", omittingEmptySubsequences: false)

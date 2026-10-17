@@ -31,18 +31,10 @@ static int has_ugrep_defaults(int argc, char **argv) {
 }
 
 // Pod's launcher sets POD_SEARCH_UGREP to the bundled entry (<Resources>/pod-search/ugrep-shim/ugrep;
-// empty: none). Without it, the link a developer's own pod-search install makes, once og has its
-// ugrep mode.
+// empty or unset: none, and Claude's own ugrep answers).
 static char *ugrep_entry(void) {
-  const char *override = getenv("POD_SEARCH_UGREP");
-  if (override != NULL) return *override != '\0' ? strdup(override) : NULL;
-  const char *home = getenv("HOME");
-  if (home == NULL || *home != '/') return NULL;
-  const char *suffix = "/.local/share/pod-search/ugrep-shim/ugrep";
-  size_t size = strlen(home) + strlen(suffix) + 1;
-  char *path = malloc(size);
-  if (path != NULL) snprintf(path, size, "%s%s", home, suffix);
-  return path;
+  const char *entry = getenv("POD_SEARCH_UGREP");
+  return entry != NULL && *entry == '/' ? strdup(entry) : NULL;
 }
 
 int main(int argc, char **argv) {
