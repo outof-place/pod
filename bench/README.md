@@ -159,8 +159,10 @@ profile (its processes are found and stopped by that executable, never by argv),
 preferences domain by bundle id and account, never by `HOME`, so the clone writes to its own
 domain, never the account's Ghostty one. Its config sets `auto-update = off`, so Sparkle neither
 checks nor prompts. Both results record the account's Ghostty domain (the plist's sha256 and
-mtime, `defaults export`'s sha256, the saved state's mtime) before the first round and after the
-last, and name what changed. The clone's own domain is a known trace: when the run created it
+mtime, `defaults export`'s sha256, a hash of the saved state's listing of names, sizes and mtimes)
+before the first round and after the last, also when a round fails, and name what changed. They
+also count the processes of the account's own Ghostty at both ends: one running meanwhile can
+change its domain without the bench. The clone's own domain is a known trace: when the run created it
 (it didn't exist before the first round), the suite runs `defaults delete codes.pod.bench.ghostty`
 after the last round, then moves the plist and saved state left on disk to the Trash, and the
 results show the domain before and after. A domain that existed before the run is left alone and
