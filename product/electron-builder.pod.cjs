@@ -64,6 +64,25 @@ function podAccMacExtraResources() {
     return []
   }
 }
+// pod-search payload (indexed search: og, ogd, ogctl, a plain rg 15.2.0); same rule as claude-acc:
+// a release throws without it, a local `dir` build or a config read by tests goes on without it.
+const podSearchConfig = join(repoRoot, 'config', 'pod-search-extra-resources.cjs')
+const podSearch = existsSync(podSearchConfig) ? require(podSearchConfig) : null
+
+function podSearchMacExtraResources() {
+  if (!podSearch) {
+    return []
+  }
+  try {
+    return podSearch.podSearchMacExtraResources()
+  } catch (error) {
+    if (isRelease) {
+      throw error
+    }
+    console.warn(`[product] ${error.message}; this non-release build ships without indexed search`)
+    return []
+  }
+}
 const identity = JSON.parse(readFileSync(join(__dirname, 'identity.json'), 'utf8'))
 const arch = process.env.POD_ARCH || 'arm64'
 const isRelease = process.env.POD_RELEASE === '1'
@@ -135,7 +154,8 @@ module.exports = {
   files: [
     ...base.files,
     ...PRODUCT_FILE_EXCLUSIONS,
-    ...(podAcc ? podAcc.podAccFileExclusions : [])
+    ...(podAcc ? podAcc.podAccFileExclusions : []),
+    ...(podSearch ? podSearch.podSearchFileExclusions : [])
   ],
   protocols: [{ name: identity.displayName, schemes: identity.protocols }],
   extraMetadata: {
@@ -215,7 +235,8 @@ module.exports = {
       { from: 'product/scripts/restore-orca-terminals.mjs', to: 'restore-orca-terminals.mjs' },
       // The one-app control socket admits only PodNative signed by Pod (pod/one-app).
       { from: POD_PEER_IDENTITY_BUILD, to: 'native/pod-peer-identity.node' },
-      ...podAccMacExtraResources()
+      ...podAccMacExtraResources(),
+      ...podSearchMacExtraResources()
     ],
     artifactName: `${identity.displayName}-\${version}-\${arch}-mac.\${ext}`,
     target: isRelease

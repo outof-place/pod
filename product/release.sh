@@ -158,6 +158,13 @@ if [ -f config/scripts/fetch-claude-acc-payload.mjs ]; then
   node config/scripts/fetch-claude-acc-payload.mjs
 fi
 
+# pod-search payload (indexed search), pinned in config/pod-search-payload.json; a no-op when
+# already fetched.
+if [ -f config/scripts/fetch-pod-search-payload.mjs ]; then
+  log "fetch the pod-search payload pinned in config/pod-search-payload.json"
+  node config/scripts/fetch-pod-search-payload.mjs
+fi
+
 log "package, sign and notarize the app (electron-builder staples it)"
 rm -rf dist
 # A release version (X.Y.Z or X.Y.Z-rcN) gets the integer CFBundleVersion its outer carries too;
