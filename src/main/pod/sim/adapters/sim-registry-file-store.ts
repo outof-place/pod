@@ -39,19 +39,21 @@ export type SimRegistryFileStoreOptions = Readonly<{
   onTiming?: (phase: SimRegistryTimingPhase, ms: number) => void
 }>
 
-function tokenOf(bytes: Buffer | null): string {
+/** A file's identity for a compare-and-swap: a hash of its bytes, or `absent`. */
+export function simFileToken(bytes: Buffer | null): string {
   return bytes ? createHash('sha256').update(bytes).digest('base64url') : ABSENT
 }
 
-function errnoOf(error: unknown): unknown {
+export function simErrno(error: unknown): unknown {
   return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
 }
 
-async function bytesAt(path: string): Promise<Buffer | null> {
+/** The file's bytes, or null when it is not there. */
+export async function simBytesAt(path: string): Promise<Buffer | null> {
   try {
     return await readFile(path)
   } catch (error) {
-    if (errnoOf(error) === 'ENOENT') {
+    if (simErrno(error) === 'ENOENT') {
       return null
     }
     throw error
@@ -59,7 +61,7 @@ async function bytesAt(path: string): Promise<Buffer | null> {
 }
 
 function isBusy(error: unknown): boolean {
-  const code = errnoOf(error)
+  const code = simErrno(error)
   return code === 'EAGAIN' || code === 'EWOULDBLOCK'
 }
 
@@ -77,6 +79,59 @@ export async function lockWithin(path: string, waitMs: number) {
     }
     await new Promise((resolve) => setTimeout(resolve, pause))
     pause = Math.min(pause * 2, 16)
+  }
+}
+
+export type SimFileSwap =
+  | 'swapped'
+  | 'conflict'
+  | Readonly<{ failed: 'lock' | 'write'; error: string }>
+
+/**
+ * Writes `bytes` to `path` if the file is still the one `token` named: under the flock on `lock`, a
+ * temp file beside it renamed over it. A lock held past `waitMs` is a conflict (slow, not broken).
+ * `locked` runs first under the lock; `phase` is told as each step ends.
+ */
+export async function simSwapFile(
+  options: Readonly<{
+    path: string
+    lock: string
+    waitMs: number
+    token: string
+    bytes: Buffer
+    locked?: () => Promise<void>
+    phase?: (phase: Exclude<SimRegistryTimingPhase, 'read'>) => void
+  }>
+): Promise<SimFileSwap> {
+  let lock: Awaited<ReturnType<typeof open>>
+  try {
+    lock = await lockWithin(options.lock, options.waitMs)
+  } catch (error) {
+    return isBusy(error) ? 'conflict' : { failed: 'lock', error: String(error) }
+  }
+  const temp = `${options.path}.${process.pid}.tmp`
+  try {
+    options.phase?.('lock')
+    await options.locked?.()
+    if (simFileToken(await simBytesAt(options.path)) !== options.token) {
+      return 'conflict'
+    }
+    options.phase?.('check')
+    const file = await open(temp, 'w', 0o600)
+    try {
+      await file.writeFile(options.bytes)
+      await file.sync()
+    } finally {
+      await file.close()
+    }
+    await rename(temp, options.path)
+    options.phase?.('write')
+    return 'swapped'
+  } catch (error) {
+    await rm(temp, { force: true })
+    return { failed: 'write', error: String(error) }
+  } finally {
+    await lock.close()
   }
 }
 
@@ -117,13 +172,13 @@ export function createSimRegistryFileStore(options: SimRegistryFileStoreOptions)
       }
       let bytes: Buffer | null
       try {
-        bytes = await bytesAt(home.registry)
+        bytes = await simBytesAt(home.registry)
       } catch (error) {
         return unreadable(`${home.registry} cannot be read: ${String(error)}`)
       }
       const read = readSimRegistry(bytes ? bytes.toString('utf8') : null, home.registry)
       timed('read', start)
-      return read.ok ? { ok: true, registry: read.registry, token: tokenOf(bytes) } : read
+      return read.ok ? { ok: true, registry: read.registry, token: simFileToken(bytes) } : read
     },
 
     async swap(token: string, next: SimRegistryFile): Promise<SimRegistrySwap> {
@@ -132,44 +187,35 @@ export function createSimRegistryFileStore(options: SimRegistryFileStoreOptions)
       if (!claimed.ok) {
         return claimed
       }
-      let lock: Awaited<ReturnType<typeof open>>
-      try {
-        lock = await lockWithin(home.lock, waitMs)
-      } catch (error) {
-        if (isBusy(error)) {
-          // Slow, not broken: the caller re-reads and tries again, and gives up as contention.
-          return { ok: false, reason: 'conflict' }
+      const bytes = Buffer.from(JSON.stringify(next))
+      const swapped = await simSwapFile({
+        path: home.registry,
+        lock: home.lock,
+        waitMs,
+        token,
+        bytes,
+        locked: async () => {
+          if (!pruned) {
+            pruned = true
+            await pruneTemps(home)
+          }
+        },
+        phase: (phase) => {
+          at = timed(phase, at)
         }
-        return unreadable(`the simulator registry lock ${home.lock}: ${String(error)}`)
+      })
+      if (swapped === 'swapped') {
+        return { ok: true, token: simFileToken(bytes) }
       }
-      const temp = `${home.registry}.${process.pid}.tmp`
-      try {
-        at = timed('lock', at)
-        if (!pruned) {
-          pruned = true
-          await pruneTemps(home)
-        }
-        if (tokenOf(await bytesAt(home.registry)) !== token) {
-          return { ok: false, reason: 'conflict' }
-        }
-        at = timed('check', at)
-        const bytes = Buffer.from(JSON.stringify(next))
-        const file = await open(temp, 'w', 0o600)
-        try {
-          await file.writeFile(bytes)
-          await file.sync()
-        } finally {
-          await file.close()
-        }
-        await rename(temp, home.registry)
-        timed('write', at)
-        return { ok: true, token: tokenOf(bytes) }
-      } catch (error) {
-        await rm(temp, { force: true })
-        return unreadable(`${home.registry} cannot be written: ${String(error)}`)
-      } finally {
-        await lock.close()
+      if (swapped === 'conflict') {
+        // Slow, not broken: the caller re-reads and tries again, and gives up as contention.
+        return { ok: false, reason: 'conflict' }
       }
+      return unreadable(
+        swapped.failed === 'lock'
+          ? `the simulator registry lock ${home.lock}: ${swapped.error}`
+          : `${home.registry} cannot be written: ${swapped.error}`
+      )
     }
   }
 }

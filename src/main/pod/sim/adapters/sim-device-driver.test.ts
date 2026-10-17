@@ -524,6 +524,29 @@ describe.skipIf(process.platform !== 'darwin')(
       }
     })
 
+    it('asks simctl when the device’s app folders are there but none of them reads', async () => {
+      const { set } = await setOnDisk()
+      try {
+        // CoreSimulator moved its layout, or the plists are mid-write: the folder proves nothing.
+        const app = join(set, C, 'data', 'Containers', 'Bundle', 'Application')
+        await writeFile(
+          join(app, '33333333-3333-4333-8333-333333333333', 'c118632b.app', 'Info.plist'),
+          'not a plist'
+        )
+        const { driver, simctl } = driverOver(set, [])
+        expect(await driver.appInstalled(C, 'eu.portivo.app')).toBe(false)
+        expect(simctl.map((call) => call.slice(3).join(' '))).toEqual([
+          `get_app_container ${C} eu.portivo.app app`
+        ])
+        // One that reads is enough to answer from disk.
+        const { driver: onDisk, simctl: asked } = driverOver(set, [])
+        expect(await onDisk.appInstalled(A, 'eu.portivo.app')).toBe(true)
+        expect(asked).toEqual([])
+      } finally {
+        await rm(set, { recursive: true, force: true })
+      }
+    })
+
     it('asks simctl when the device has no data folder on this Mac', async () => {
       const { set } = await setOnDisk()
       try {

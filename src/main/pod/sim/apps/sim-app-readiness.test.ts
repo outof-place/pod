@@ -1,5 +1,7 @@
 // The app module end to end on this Mac: real files in a throwaway simulator home, real detached
 // builds and Metro processes (tiny shell and node stand-ins), a device kept in memory.
+import { spawnProcess } from '@orca/process-host'
+import type { ChildProcess } from 'node:child_process'
 import { createServer, type Server } from 'node:net'
 import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
@@ -7,14 +9,19 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { simRefusal } from '../../../../shared/pod-sim/sim-refusals'
 import { probeSimMetro } from './sim-app-metro-http'
-import type { SimApps } from './sim-app-readiness'
+import type { SimApps, SimAppsOptions } from './sim-app-readiness'
 import {
   appsFor,
   BUNDLE,
+  cacheClient,
   DEVICE,
   eventually,
   fakeBuildCommand,
   fakeDevice,
+  FAKE_METRO,
+  freeBase,
+  metroRecipe,
+  NODE,
   sandbox,
   scriptedFingerprints,
   thisRuntime,
@@ -25,9 +32,6 @@ import {
 } from './sim-app.test-support'
 import type { SimRuntime } from '../pool/sim-pool-ports'
 
-const NODE = process.env.ORCA_TEST_NODE_EXECUTABLE || 'node'
-const FAKE_METRO = join(__dirname, '__fixtures__', 'fake-metro.cjs')
-
 let box: Sandbox
 let self: SimRuntime
 let device: FakeDevice
@@ -35,23 +39,20 @@ let counter: string
 const finished: { buildId: string; ok: boolean }[] = []
 const started: SimApps[] = []
 
-/** A free TCP port with 1100 free-looking ports above it (the worktree range). */
-async function freeBase(): Promise<number> {
-  for (;;) {
-    const base = 20_000 + Math.floor(Math.random() * 20_000)
-    const answers = await Promise.all(
-      [base, base + 100, base + 101, base + 102].map((port) => probeSimMetro(port, '/nowhere', 300))
-    )
-    if (answers.every((answer) => answer === 'none')) {
-      return base
-    }
-  }
-}
-
 function listen(port: number): Promise<Server> {
   return new Promise((resolve) => {
     const server = createServer((socket) => socket.end('HTTP/1.1 200 OK\r\n\r\nnot metro'))
     server.listen(port, () => resolve(server))
+  })
+}
+
+/** A stand-in Metro Pod did not start, claiming `root`, run from `cwd`. */
+function fakeMetro(port: number, root: string, cwd: string): ChildProcess {
+  return spawnProcess({
+    program: NODE,
+    args: [FAKE_METRO, String(port), root],
+    cwd,
+    stdio: 'ignore'
   })
 }
 
@@ -73,13 +74,19 @@ afterEach(async () => {
   await box.cleanup()
 })
 
-function make(fingerprints = scriptedFingerprints(), graceMs = 0): SimApps {
+function make(
+  fingerprints = scriptedFingerprints(),
+  graceMs: number | null = 0,
+  extra: Partial<SimAppsOptions> = {}
+): SimApps {
   const apps = appsFor(box, self, {
     device,
     shell: fingerprints.shell,
-    metroGraceMs: graceMs,
+    // null: the module's own grace.
+    ...(graceMs === null ? {} : { metroGraceMs: graceMs }),
     connectMs: 400,
-    onBuildFinished: (buildId, ok) => finished.push({ buildId, ok })
+    onBuildFinished: (buildId, ok) => finished.push({ buildId, ok }),
+    ...extra
   })
   started.push(apps)
   return apps
@@ -304,6 +311,42 @@ describe.skipIf(process.platform !== 'darwin')('the right dev client for a workt
     expect(!missing.ok && missing.refusal.code).toBe('unavailable')
   })
 
+  it('refuses an app whose .env is missing, naming the file and the command that makes it', async () => {
+    const root = await worktree(box, 'wt-a', { app: 'fingerprint: fp' })
+    const appDir = join(root, 'apps', 'app')
+    await writeFile(join(appDir, '.env.example'), 'EXPO_PUBLIC_API_BASE_URL=\n')
+    await writeFile(
+      join(root, 'package.json'),
+      JSON.stringify({ scripts: { 'env:pull': 'bash scripts/env-sync.sh pull' } })
+    )
+    await writeFile(join(root, 'pnpm-lock.yaml'), '')
+    const apps = make()
+    const answers = [
+      await apps.prepare({ worktreeRoot: root }),
+      await apps.open({ worktreeRoot: root, udid: DEVICE })
+    ]
+    for (const answer of answers) {
+      expect(answer).toMatchObject({
+        ok: false,
+        refusal: {
+          code: 'unavailable',
+          missing: { file: join(appDir, '.env'), command: `pnpm -C ${root} env:pull` }
+        }
+      })
+      const message = answer.ok ? '' : simRefusal(answer.refusal).message
+      expect(message).toContain(`${join(appDir, '.env')} is missing`)
+      expect(message.endsWith(`Run: pnpm -C ${root} env:pull`)).toBe(true)
+    }
+    // Without a script that makes it, the example is where it starts.
+    await writeFile(join(root, 'package.json'), '{}')
+    const plain = await apps.prepare({ worktreeRoot: root })
+    expect(!plain.ok && plain.refusal).toMatchObject({
+      missing: { command: `cp ${join(appDir, '.env.example')} ${join(appDir, '.env')}` }
+    })
+    await writeFile(join(appDir, '.env'), 'EXPO_PUBLIC_API_BASE_URL=http://localhost:8003\n')
+    expect((await apps.prepare({ worktreeRoot: root })).ok).toBe(true)
+  })
+
   it('refuses a bad recipe with its file and key, and a worktree without one', async () => {
     const bad = await worktree(box, 'wt-bad', { file: 'pod.yaml', app: 'metro:\n  port: 80' })
     const none = await worktree(box, 'wt-none', null)
@@ -324,14 +367,6 @@ describe.skipIf(process.platform !== 'darwin')('the right dev client for a workt
 })
 
 describe.skipIf(process.platform !== 'darwin')('a worktree’s own Metro', () => {
-  const metroRecipe = (base: number) =>
-    [
-      'fingerprint: fp',
-      'metro:',
-      `  port: ${base}`,
-      `  command: ${JSON.stringify(`'${NODE}' '${FAKE_METRO}' {port}`)}`
-    ].join('\n')
-
   it('gets a port per worktree that differs between worktrees and holds across calls and restarts', async () => {
     const base = await freeBase()
     const recipe = { app: metroRecipe(base) }
@@ -348,7 +383,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree’s own Metro', () =>
       return answers
     }
     const first = await ports(apps)
-    expect(first).toEqual([base, base + 100, base + 101])
+    expect(first).toEqual([base, base + 300, base + 301])
     expect(await ports(apps)).toEqual(first)
     // Another runtime (a restart, or a probe's) reads the same plan.
     expect(await ports(make())).toEqual(first)
@@ -356,12 +391,12 @@ describe.skipIf(process.platform !== 'darwin')('a worktree’s own Metro', () =>
 
   it('skips a port another program holds, and moves off one taken since', async () => {
     const base = await freeBase()
-    const blocker = await listen(base + 100)
+    const blocker = await listen(base + 300)
     try {
       const a = await worktree(box, 'wt-a', { app: metroRecipe(base) })
       const apps = make()
       const answer = await apps.prepare({ worktreeRoot: a })
-      expect(answer.ok && answer.metro?.port).toBe(base + 101)
+      expect(answer.ok && answer.metro?.port).toBe(base + 301)
     } finally {
       blocker.close()
     }
@@ -377,23 +412,19 @@ describe.skipIf(process.platform !== 'darwin')('a worktree’s own Metro', () =>
         '  EXDevMenuShowsAtLaunch: false'
       ].join('\n')
     })
-    // Its client is in the cache already.
-    const client = join(box.home.root, 'clients', BUNDLE, 'f00d.app')
-    await mkdir(client, { recursive: true })
-    await writeFile(
-      join(client, 'Info.plist'),
-      `<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${BUNDLE}</string></dict></plist>`
-    )
+    // Its client is in the cache already, and its lease holds a device.
+    const client = await cacheClient(box)
+    await writeLeases(box.home, self, [{ worktreeRoot: a, appId: 'app', holds: DEVICE }])
     const apps = make(scriptedFingerprints(), 0)
     const prepared = await apps.prepare({ worktreeRoot: a })
     expect(prepared.ok && prepared.metro).toMatchObject({
-      port: base + 100,
+      port: base + 300,
       running: false,
       startedByPod: true
     })
     // A second lease call while it starts does not start another.
     const again = await apps.prepare({ worktreeRoot: a })
-    expect(again.ok && again.metro?.port).toBe(base + 100)
+    expect(again.ok && again.metro?.port).toBe(base + 300)
 
     const appDir = join(a, 'apps', 'app')
     // Once ready, Metro is asked for the bundle the manifest names, once for both lease calls.
@@ -408,7 +439,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree’s own Metro', () =>
     // Done once the app's JS is on the worktree's Metro, which lists it for this device.
     expect(opened).toMatchObject({
       ok: true,
-      metroPort: base + 100,
+      metroPort: base + 300,
       installed: true,
       launched: true,
       connected: true
@@ -418,19 +449,19 @@ describe.skipIf(process.platform !== 'darwin')('a worktree’s own Metro', () =>
     expect(device.launches).toEqual([
       [
         '--initialUrl',
-        `http://127.0.0.1:${base + 100}`,
+        `http://127.0.0.1:${base + 300}`,
         '-EXDevMenuIsOnboardingFinished',
         'YES',
         '-EXDevMenuShowsAtLaunch',
         'NO'
       ]
     ])
-    expect(await probeSimMetro(base + 100, appDir)).toBe('ready')
+    expect(await probeSimMetro(base + 300, appDir)).toBe('ready')
     // Same Metro process: open does not warm it again.
     expect(await readFile(bundles, 'utf8')).toBe('?platform=ios&dev=true\n')
     const [logName] = await readdir(join(box.home.root, 'metro'))
     expect(await readFile(join(box.home.root, 'metro', logName), 'utf8')).toContain(
-      `on port ${base + 100}`
+      `on port ${base + 300}`
     )
 
     // The app already runs on this worktree's Metro: a second open neither installs nor relaunches.
@@ -442,16 +473,16 @@ describe.skipIf(process.platform !== 'darwin')('a worktree’s own Metro', () =>
     expect(device.installs).toHaveLength(1)
     expect(device.launches).toHaveLength(2)
 
-    // A live lease keeps it; with none left, the grace (0 here) passes and it stops.
-    await writeLeases(box.home, self, [[a, 'app']])
+    // A lease that holds a device keeps it; with none left, the grace (0 here) passes and it stops.
+    await writeLeases(box.home, self, [{ worktreeRoot: a, appId: 'app', holds: DEVICE }])
     await apps.reconcile()
     await apps.reconcile()
-    expect(await probeSimMetro(base + 100, appDir)).toBe('ready')
+    expect(await probeSimMetro(base + 300, appDir)).toBe('ready')
     await writeLeases(box.home, self, [])
     await apps.reconcile()
     await apps.reconcile()
     await eventually(
-      () => probeSimMetro(base + 100, appDir, 300),
+      () => probeSimMetro(base + 300, appDir, 300),
       (answer) => answer === 'none'
     )
   }, 30_000)
@@ -459,9 +490,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree’s own Metro', () =>
   it('launches again when a launch stops at the dev launcher, and says so when it never reaches Metro', async () => {
     const base = await freeBase()
     const a = await worktree(box, 'wt-a', { app: metroRecipe(base) })
-    const client = join(box.home.root, 'clients', BUNDLE, 'f00d.app')
-    await mkdir(client, { recursive: true })
-    await writeFile(join(client, 'Info.plist'), '<plist/>')
+    await cacheClient(box)
     const apps = make(scriptedFingerprints(), 0)
     // Its manifest request timed out once: the dev launcher's home, no JS on Metro.
     device.launcherOnly = 1
@@ -471,7 +500,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree’s own Metro', () =>
 
     // Running, launched on this Metro, but no longer on it (back at the launcher): launch again.
     await fetch(
-      `http://127.0.0.1:${base + 100}/fake/disconnect?appId=${BUNDLE}&deviceName=${device.name}`
+      `http://127.0.0.1:${base + 300}/fake/disconnect?appId=${BUNDLE}&deviceName=${device.name}`
     )
     const again = await apps.open({ worktreeRoot: a, udid: DEVICE })
     expect(again).toMatchObject({ ok: true, launched: true, connected: true })
@@ -485,22 +514,147 @@ describe.skipIf(process.platform !== 'darwin')('a worktree’s own Metro', () =>
     expect(device.launches).toHaveLength(5)
   }, 30_000)
 
-  it('keeps Metro through the grace after the last lease, for the next lease of the worktree', async () => {
+  it('starts no Metro for a queued lease, and starts it once the pool readies a device for it', async () => {
     const base = await freeBase()
     const a = await worktree(box, 'wt-a', { app: metroRecipe(base) })
-    const apps = make(scriptedFingerprints(), 60_000)
-    await apps.prepare({ worktreeRoot: a })
+    const b = await worktree(box, 'wt-b', { app: metroRecipe(base) })
     const appDir = join(a, 'apps', 'app')
+    // Both wait for a slot (the Mac is full): each gets its port, neither a Metro.
+    await writeLeases(box.home, self, [
+      [a, 'app'],
+      [b, 'app']
+    ])
+    const apps = make()
+    const prepared = await apps.prepare({ worktreeRoot: a })
+    expect(prepared.ok && prepared.metro).toMatchObject({
+      port: base + 300,
+      running: false,
+      startedByPod: false
+    })
+    expect((await apps.prepare({ worktreeRoot: b })).ok).toBe(true)
+    await apps.reconcile()
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+    expect(await probeSimMetro(base + 300, appDir, 500)).toBe('none')
+    expect(await probeSimMetro(base + 301, join(b, 'apps', 'app'), 500)).toBe('none')
+
+    // The pool readies a device for a: its Metro starts and builds its bundle while that boots.
+    await writeLeases(box.home, self, [
+      { worktreeRoot: a, appId: 'app', waitingFor: 'device' },
+      [b, 'app']
+    ])
+    await apps.reconcile()
     await eventually(
-      () => probeSimMetro(base + 100, appDir),
+      () => probeSimMetro(base + 300, appDir),
       (answer) => answer === 'ready'
     )
+    await eventually(
+      () => readFile(join(appDir, 'bundle-requests.log'), 'utf8').catch(() => ''),
+      (text) => text !== ''
+    )
+    expect(await probeSimMetro(base + 301, join(b, 'apps', 'app'), 500)).toBe('none')
+  }, 30_000)
+
+  it('keeps an idle Metro for the pool’s warm window (10 minutes), then stops it', async () => {
+    const base = await freeBase()
+    const a = await worktree(box, 'wt-a', { app: metroRecipe(base) })
+    const appDir = join(a, 'apps', 'app')
+    const clock = { skew: 0 }
+    const apps = make(scriptedFingerprints(), null, { now: () => Date.now() + clock.skew })
+    await writeLeases(box.home, self, [{ worktreeRoot: a, appId: 'app', holds: DEVICE }])
+    await apps.prepare({ worktreeRoot: a })
+    await eventually(
+      () => probeSimMetro(base + 300, appDir),
+      (answer) => answer === 'ready'
+    )
+    // Its last lease ends: idle from here.
     await writeLeases(box.home, self, [])
     await apps.reconcile()
+    clock.skew = 9 * 60_000
     await apps.reconcile()
-    expect(await probeSimMetro(base + 100, appDir)).toBe('ready')
-    // afterEach stops it: a fresh module with no grace.
-    started.push(make(scriptedFingerprints(), 0))
+    expect(await probeSimMetro(base + 300, appDir)).toBe('ready')
+    clock.skew = 10 * 60_000
+    await apps.reconcile()
+    await eventually(
+      () => probeSimMetro(base + 300, appDir, 300),
+      (answer) => answer === 'none'
+    )
+  }, 30_000)
+
+  it('uses a Metro Pod did not start that serves this worktree’s app, and never stops it', async () => {
+    const base = await freeBase()
+    const a = await worktree(box, 'wt-a', { app: metroRecipe(base) })
+    const appDir = join(a, 'apps', 'app')
+    // Someone's own `pnpm dev` for this worktree, on the port Pod plans for it.
+    const theirs = fakeMetro(base + 300, appDir, appDir)
+    try {
+      await eventually(
+        () => probeSimMetro(base + 300, appDir),
+        (answer) => answer === 'ready'
+      )
+      await cacheClient(box)
+      await writeLeases(box.home, self, [{ worktreeRoot: a, appId: 'app', holds: DEVICE }])
+      const apps = make()
+      const prepared = await apps.prepare({ worktreeRoot: a })
+      expect(prepared.ok && prepared.metro).toMatchObject({
+        port: base + 300,
+        running: true,
+        startedByPod: false
+      })
+      const opened = await apps.open({ worktreeRoot: a, udid: DEVICE })
+      expect(opened).toMatchObject({ ok: true, metroPort: base + 300, connected: true })
+      // No lease left and no grace: Pod still leaves it alone.
+      await writeLeases(box.home, self, [])
+      await apps.reconcile()
+      await apps.reconcile()
+      expect(await probeSimMetro(base + 300, appDir)).toBe('ready')
+      expect(theirs.exitCode).toBeNull()
+    } finally {
+      theirs.kill()
+    }
+  }, 30_000)
+
+  it('skips another folder’s Metro on the worktree’s planned port and moves to the next', async () => {
+    const base = await freeBase()
+    const elsewhere = join(box.dir, 'other-checkout', 'apps', 'app')
+    await mkdir(elsewhere, { recursive: true })
+    const other = fakeMetro(base + 300, elsewhere, elsewhere)
+    try {
+      await eventually(
+        () => probeSimMetro(base + 300, elsewhere),
+        (answer) => answer === 'ready'
+      )
+      const a = await worktree(box, 'wt-a', { app: metroRecipe(base) })
+      await writeLeases(box.home, self, [{ worktreeRoot: a, appId: 'app', holds: DEVICE }])
+      const prepared = await make().prepare({ worktreeRoot: a })
+      expect(prepared.ok && prepared.metro?.port).toBe(base + 301)
+      await eventually(
+        () => probeSimMetro(base + 301, join(a, 'apps', 'app')),
+        (answer) => answer === 'ready'
+      )
+      expect(await probeSimMetro(base + 300, elsewhere)).toBe('ready')
+    } finally {
+      other.kill()
+    }
+  }, 30_000)
+
+  it('sees the app on Metro after one launch while Metro is too busy to list it for seconds', async () => {
+    const base = await freeBase()
+    const a = await worktree(box, 'wt-a', {
+      app: metroRecipe(base, 'FAKE_METRO_LIST_STALL_MS=2500 ')
+    })
+    await cacheClient(box)
+    const opened = await make().open({ worktreeRoot: a, udid: DEVICE })
+    expect(opened).toMatchObject({ ok: true, launched: true, connected: true })
+    expect(device.launches).toHaveLength(1)
+  }, 30_000)
+
+  it('does not end the wait on one failed or unparsable app list', async () => {
+    const base = await freeBase()
+    const a = await worktree(box, 'wt-a', { app: metroRecipe(base, 'FAKE_METRO_LIST_FLAKY=2 ') })
+    await cacheClient(box)
+    const opened = await make().open({ worktreeRoot: a, udid: DEVICE })
+    expect(opened).toMatchObject({ ok: true, launched: true, connected: true })
+    expect(device.launches).toHaveLength(1)
   }, 30_000)
 })
 

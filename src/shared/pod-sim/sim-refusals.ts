@@ -69,13 +69,15 @@ export const SimRefusalInput = z.discriminatedUnion('code', [
     problem: Text.optional()
   }),
   // The dev-client build the lease waited for failed, which ended the lease. `logTail`: the log's
-  // last lines on one line; `retryInMinutes`: Pod builds that fingerprint again only after this.
+  // last lines on one line; `retryInMinutes`: Pod builds that fingerprint again only after this;
+  // `stopped`: why something stopped it (claude-acc's cancel or memory brake), not a failure.
   input('build_failed', {
     buildId: SimBuildId,
     logPath: Root,
     app: z.string().min(1).max(64).optional(),
     logTail: z.string().min(1).max(600).optional(),
-    retryInMinutes: z.number().int().positive().optional()
+    retryInMinutes: z.number().int().positive().optional(),
+    stopped: z.string().min(1).max(512).optional()
   }),
   input('no_worktree', {}),
   input('no_holder', {}),
@@ -88,7 +90,12 @@ export const SimRefusalInput = z.discriminatedUnion('code', [
   input('bad_recipe', { path: Text, problem: Text, file: Root.optional() }),
   input('unknown_app', { app: Text, apps: AppIds }),
   input('ambiguous_app', { apps: AppIds }),
-  input('unavailable', { problem: Text }),
+  // `missing`: a file the worktree's app needs and lacks (its .env), and the command that makes it;
+  // `problem` is then the whole sentence.
+  input('unavailable', {
+    problem: Text,
+    missing: z.object({ file: Root, command: Text }).strict().optional()
+  }),
   input('capability_unavailable', { verb: Text, capability: Text, fallback: Text.optional() }),
   input('element_not_found', { query: Query }),
   input('element_ambiguous', {
@@ -196,6 +203,12 @@ function words(refusal: SimRefusalInput): { text: string; next: string } {
       const tail = refusal.logTail
         ? ` It ended with: ${refusal.logTail.replace(/[.\s]+$/, '')}.`
         : ''
+      if (refusal.stopped) {
+        return {
+          text: `The dev-client build ${refusal.buildId} was stopped before it finished (${refusal.stopped}), which ended your lease; nothing in the build is broken, and its log is ${refusal.logPath}.${tail} A new lease builds it again.`,
+          next: refusal.app ? `${LEASE} --app ${refusal.app}` : LEASE
+        }
+      }
       const retry = refusal.retryInMinutes
         ? ` Pod builds this fingerprint again in ${refusal.retryInMinutes} min, or at once when the app's native code changes.`
         : ''
@@ -239,7 +252,9 @@ function words(refusal: SimRefusalInput): { text: string; next: string } {
         next: `${LEASE} --app ${refusal.apps[0]}`
       }
     case 'unavailable':
-      return { text: `Simulators are off: ${refusal.problem}`, next: 'podx sim status' }
+      return refusal.missing
+        ? { text: refusal.problem, next: refusal.missing.command }
+        : { text: `Simulators are off: ${refusal.problem}`, next: 'podx sim status' }
     case 'capability_unavailable':
       return {
         text: `podx sim ${refusal.verb} is unavailable here: ${refusal.capability} failed the helper's self-test on this Xcode build.`,

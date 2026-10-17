@@ -3,14 +3,16 @@
 // own, adopted from the recipe's external cache, or built once for the whole Mac), its Metro runs on
 // the worktree's own port, and the client is installed and launched on that Metro.
 //
-//   prepare   at `lease`: recipe, app, fingerprint, client (or the build to wait for), and Metro
-//             started and its bundle warmed in the background. A lease waits on `buildId`
-//             (`waitingFor: build`).
+//   prepare   at `lease`: recipe, app, fingerprint, client (or the build to wait for), and the
+//             worktree's Metro port; Metro started (and its bundle warmed in the background) only
+//             when the registry already has a lease of it that uses Metro soon. A lease waits on
+//             `buildId` (`waitingFor: build`).
 //   open      once the lease has a device (sim-app-open.ts).
 //   port      the pool's SimAppPort: `reset app` and the reinstall after `reset device`.
-//   reconcile after each pool poll and release (stage 7 wires it): ends builds whose process ended
-//             and answers a `buildFinished` command per build a lease waits on, and stops Metros
-//             whose worktree's last lease is gone.
+//   reconcile after each pool step, poll and release (stage 7 wires it): ends builds whose process
+//             ended (or stops one past its time) and answers a `buildFinished` command per build a
+//             lease waits on; starts Metro for each lease that holds a device or is readied one
+//             (sim-app-metro-idle.ts), and stops each Metro past the grace without one.
 //
 // Everything here runs on this Mac (sim-app-resolve.ts).
 import type { SimRecipeDiagnostic } from '../../../../shared/pod-sim/sim-recipe'
@@ -28,7 +30,9 @@ import { createSimInstalledRecords, type SimAppDevice } from './sim-app-device'
 import { createSimFingerprints, type SimFingerprints } from './sim-app-fingerprint'
 import { simHopTimer, type SimAppHops } from './sim-app-hops'
 import { SIM_APP_CONNECT_MS } from './sim-app-launch'
-import { createSimMetros } from './sim-app-metro'
+import { createSimMetros, type SimMetroEnsure, type SimMetroInput } from './sim-app-metro'
+import { simMetroLeases, type SimMetroLease } from './sim-app-metro-idle'
+import { simMetroKey } from './sim-app-metro-ports'
 import {
   createSimAppOpen,
   type SimAppOpened,
@@ -187,6 +191,34 @@ export function createSimApps(options: SimAppsOptions): SimApps {
     return builds.snapshot(read.ok ? read.registry : null)
   }
 
+  /** Metro for a lease, started or only planned; a failure to start is an answer, never a throw. */
+  const ensureMetro = (input: SimMetroInput, start: boolean): Promise<SimMetroEnsure> =>
+    metros.ensure(input, { start }).then(
+      (started) => {
+        if (started.ok && start) {
+          void metros.warm(input).catch(() => undefined)
+        }
+        return started
+      },
+      (error: unknown) => ({ ok: false, message: String(error) })
+    )
+
+  /** Starts Metro for each lease that uses it soon and has none of Pod's yet. */
+  const startWanted = async (wanted: ReadonlyMap<string, SimMetroLease>) => {
+    for (const key of await metros.unstarted(wanted.keys())) {
+      const lease = wanted.get(key)
+      const resolved = lease
+        ? await resolve({ worktreeRoot: lease.worktreeRoot, app: lease.appId })
+        : null
+      if (lease && resolved?.ok && resolved.app.metro) {
+        await ensureMetro(
+          { worktreeRoot: lease.worktreeRoot, appId: resolved.id, app: resolved.app },
+          true
+        )
+      }
+    }
+  }
+
   return {
     async prepare(input) {
       const time = simHopTimer()
@@ -197,15 +229,11 @@ export function createSimApps(options: SimAppsOptions): SimApps {
       const { id, app, warnings } = resolved
       time.hop('recipe')
       const metroInput = { worktreeRoot: input.worktreeRoot, appId: id, app }
-      // Metro starts, then builds the client's bundle, while the device is found and booted.
-      const metro = app.metro
-        ? metros.ensure(metroInput).then((started) => {
-            if (started.ok) {
-              void metros.warm(metroInput).catch(() => undefined)
-            }
-            return started
-          })
-        : null
+      // Only a lease that holds a device or is readied one starts Metro now (it then builds the
+      // client's bundle while the device boots); a queued one gets its port, and Metro with its device.
+      const read = app.metro ? await options.store.read() : null
+      const soon = read?.ok === true && simMetroLeases(read.registry).has(simMetroKey(metroInput))
+      const metro = app.metro ? ensureMetro(metroInput, soon) : null
       const found = await lookup.find(
         { worktreeRoot: input.worktreeRoot, id, app, startBuild: true },
         time
@@ -226,8 +254,8 @@ export function createSimApps(options: SimAppsOptions): SimApps {
               port: started.port,
               running: started.running,
               logPath: started.logPath,
-              // False: Pod has no command for it (no metro.command, not an Expo app).
-              startedByPod: started.running || started.command !== undefined
+              // Pod's own Metro (its record's process), which it stops once idle.
+              startedByPod: started.ours
             }
           : null,
         ...(started && !started.ok ? { metroProblem: started.message } : {}),
@@ -263,7 +291,9 @@ export function createSimApps(options: SimAppsOptions): SimApps {
         }
       }
       if (registry) {
-        await metros.reconcile(registry)
+        const wanted = simMetroLeases(registry)
+        await metros.reconcile(new Set(wanted.keys()))
+        await startWanted(wanted)
       }
       return commands
     },

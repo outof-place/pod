@@ -1,6 +1,7 @@
 // Fork-only (Pod): the dev client for a worktree's app, by its native fingerprint. In order: Pod's
 // Mac-wide cache, the recipe's external cache (adopted into Pod's, never rebuilt), or the one build
-// of that fingerprint for the whole Mac (joined when one runs). A failed build answers its refusal.
+// of that fingerprint for the whole Mac (joined when one runs). A new build starts only when the
+// fingerprint, run again, comes out the same. A failed build answers its refusal.
 import type { SimRecipeApp } from '../../../../shared/pod-sim/sim-recipe'
 import type { SimRefusalInput } from '../../../../shared/pod-sim/sim-refusals'
 import type { SimBuilds } from './sim-app-builds'
@@ -42,13 +43,15 @@ export function createSimClientLookup(
     const tail = await builds.tail(build)
     const retry = builds.retryInMinutes(build)
     const appId = app ?? build.appId
+    const stopped = build.failure?.stopped
     return {
       code: 'build_failed',
       buildId: build.buildId,
       logPath: build.logPath,
       ...(appId ? { app: appId.slice(0, 64) } : {}),
       ...(tail ? { logTail: tail } : {}),
-      ...(retry ? { retryInMinutes: retry } : {})
+      ...(retry ? { retryInMinutes: retry } : {}),
+      ...(stopped ? { stopped } : {})
     }
   }
 
@@ -88,7 +91,21 @@ export function createSimClientLookup(
           client: { state: 'missing', why: `no dev client for fingerprint ${hash} yet` }
         }
       }
-      const build = await builds.ensure({ appId: id, app, fingerprint: hash, worktreeRoot })
+      const build = await builds.ensure({
+        appId: id,
+        app,
+        fingerprint: hash,
+        worktreeRoot,
+        confirm: async () => {
+          const again = await fingerprints.of({ worktreeRoot, appId: id, app }, { fresh: true })
+          if (!again.ok) {
+            return again.message
+          }
+          return again.hash === hash
+            ? null
+            : `the fingerprint command printed ${hash}, then ${again.hash}; Pod builds only a fingerprint that holds (does the app's config load?)`
+        }
+      })
       time?.hop('build')
       switch (build.state) {
         case 'building':

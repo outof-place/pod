@@ -9,10 +9,11 @@
 // after. Metro runs for the worktree on its own port and is stopped through reconcile. Hops go to
 // POD_SIM_EVIDENCE (written after every case).
 //
-// "On screen" is the app's own UI: the first settle whose accessibility tree is neither the splash
-// nor React Native's loading banner (a static splash settles long before the app draws).
+// "On screen" is the app's own UI: the first settle whose accessibility tree is neither the splash,
+// React Native's loading banner, nor its error screens (LogBox's "Log 1 of 73 / Uncaught Error /
+// Call Stack", the native red box), which run 1 took for the app.
 import { runProcess } from '@orca/process-host'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { request } from 'node:http'
 import { homedir } from 'node:os'
@@ -39,28 +40,9 @@ const DEVICE_TYPE = 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro'
 const RUNTIME = 'com.apple.CoreSimulator.SimRuntime.iOS-26-5'
 const BUNDLE = 'eu.portivo.app'
 // The dev launcher's own screen, the dev menu or its onboarding, React Native's loading banner or
-// an error screen: not the app (yet).
+// an error screen (LogBox, the native red box): not the app (yet).
 const NOT_THE_APP =
-  /Development Build|DEVELOPMENT SERVERS|Enter URL manually|developer menu|Open JS debugger|Toggle performance monitor|^Uncaught Error$|^(Loading|Bundling|Downloading)\b/i
-
-/**
- * The app's `.env` values when its folder has none (a backup worktree), from the repo's own example:
- * the app's dev config throws without EXPO_PUBLIC_API_BASE_URL. They prefix Metro's command only, as
- * portivo-mobile's `dev` script prefix would: in the recipe's `env` they reach the fingerprint
- * command too, and app.config.ts carries them into the native fingerprint (c118632b becomes
- * 6403326f, a client nobody built).
- */
-function exampleEnvPrefix(): string {
-  const app = join(WORKTREE, 'apps', 'mobile')
-  if (existsSync(join(app, '.env')) || !existsSync(join(app, '.env.example'))) {
-    return ''
-  }
-  return readFileSync(join(app, '.env.example'), 'utf8')
-    .split('\n')
-    .map((line) => /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line.trim()))
-    .flatMap((match) => (match ? [`${match[1]}='${match[2].replaceAll("'", "'\\''")}' `] : []))
-    .join('')
-}
+  /Development Build|DEVELOPMENT SERVERS|Enter URL manually|developer menu|Open JS debugger|Toggle performance monitor|^(Uncaught|Render|Syntax|Console) Error$|^Log \d+ of \d+$|^Call Stack$|^Reload JS$|^(Loading|Bundling|Downloading)\b/i
 
 // Portivo's mobile app as its recipe will say it (stage 11 writes the real one into the repo).
 const recipe = (repo: string) =>
@@ -75,8 +57,10 @@ const recipe = (repo: string) =>
     '      metro:',
     // Not 8083: other sessions run this worktree's Metro from 8183 up, and Pod would use theirs.
     '        port: 8483',
-    `        command: ${JSON.stringify(`${exampleEnvPrefix()}./node_modules/.bin/expo start --port {port}`)}`,
-    "      fingerprint: './node_modules/.bin/fingerprint fingerprint:generate --platform ios'",
+    '        command: ./node_modules/.bin/expo start --port {port}',
+    // The fingerprint without the worktree's .env (Metro loads it): its EXPO_PUBLIC values reach
+    // app.config.ts and would make every .env its own native build (c118632b becomes 6403326f).
+    "      fingerprint: 'EXPO_NO_DOTENV=1 ./node_modules/.bin/fingerprint fingerprint:generate --platform ios'",
     `      clientCache: ${JSON.stringify(CLIENTS)}`,
     '      appDefaults:',
     '        EXDevMenuIsOnboardingFinished: true',
@@ -271,8 +255,8 @@ describe.skipIf(!REAL || !WORKTREE)('a Portivo worktree’s app on a real booted
     at = performance.now()
     const idle = await helper.call('settle', { udid, windowMs: 1000, timeoutMs: 20_000 })
     report['home screen settled, ms'] = idle.ok ? Math.round(performance.now() - at) : idle
-    // A lease of this worktree's app keeps its Metro while the test runs.
-    await writeLeases(home, self, [[WORKTREE, 'mobile']])
+    // A lease of this worktree's app holds the device: its Metro runs while the test does.
+    await writeLeases(home, self, [{ worktreeRoot: WORKTREE, appId: 'mobile', holds: udid }])
   }, 10 * 60_000)
 
   // Written after every case: a run cut short still leaves what it measured.
@@ -370,7 +354,7 @@ describe.skipIf(!REAL || !WORKTREE)('a Portivo worktree’s app on a real booted
     if (!installed) {
       await driver().uninstall(udid, BUNDLE)
     }
-    await writeLeases(home, self, [[WORKTREE, 'mobile']])
+    await writeLeases(home, self, [{ worktreeRoot: WORKTREE, appId: 'mobile', holds: udid }])
     const start = performance.now()
     const prepared = await apps.prepare({ worktreeRoot: WORKTREE })
     report[`${name} prepare, hops ms`] = prepared.ok ? prepared.ms : prepared

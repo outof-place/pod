@@ -134,7 +134,7 @@ function errors(recipe: SimRecipe): SimRecipeDiagnostic[] {
       })
     }
   }
-  if (recipe.default !== undefined && !(recipe.default in recipe.apps)) {
+  if (recipe.default !== undefined && !Object.hasOwn(recipe.apps, recipe.default)) {
     out.push({ path: `${ROOT}.default`, severity: 'error', message: 'names no app in apps' })
   }
   return out

@@ -5,7 +5,6 @@ import { createServer, type Server, type ServerResponse } from 'node:http'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SimRecipeApp } from '../../../../shared/pod-sim/sim-recipe'
-import { SimRegistryFile } from '../../../../shared/pod-sim/sim-registry'
 import { createSimProcessFacts } from '../adapters/sim-process-facts'
 import type { SimRuntime } from '../pool/sim-pool-ports'
 import { createSimMetros, type SimMetros } from './sim-app-metro'
@@ -20,9 +19,8 @@ const FAKE_METRO = join(__dirname, '__fixtures__', 'fake-metro.cjs')
 let box: Sandbox
 let self: SimRuntime
 let metros: SimMetros
-// No lease anywhere: with no grace, one pass marks a Metro idle and the next stops it.
-const noLeases = () =>
-  SimRegistryFile.parse({ version: 1, updatedAt: Date.now(), devices: [], leases: [] })
+// No worktree uses its Metro: with no grace, one pass marks a Metro idle and the next stops it.
+const noLeases = () => new Set<string>()
 
 beforeEach(async () => {
   box = await sandbox()
@@ -56,7 +54,7 @@ describe.skipIf(process.platform !== 'darwin')('warming a worktree’s Metro', (
     const requests = async () =>
       (await readFile(bundles, 'utf8').catch(() => '')).split('\n').filter(Boolean)
 
-    const started = await metros.ensure(input)
+    const started = await metros.ensure(input, { start: true })
     expect(started).toMatchObject({ ok: true, started: true })
     const [first, joined] = await Promise.all([metros.warm(input), metros.warm(input)])
     expect(first).toMatchObject({ ok: true })
@@ -71,7 +69,7 @@ describe.skipIf(process.platform !== 'darwin')('warming a worktree’s Metro', (
     await metros.reconcile(noLeases())
     const port = started.ok ? started.port : 0
     expect(await probeSimMetro(port, join(root, 'apps', 'app'), 500)).toBe('none')
-    expect(await metros.ensure(input)).toMatchObject({ ok: true, started: true })
+    expect(await metros.ensure(input, { start: true })).toMatchObject({ ok: true, started: true })
     expect(await metros.warm(input)).toMatchObject({ ok: true })
     expect(await requests()).toHaveLength(2)
   }, 30_000)

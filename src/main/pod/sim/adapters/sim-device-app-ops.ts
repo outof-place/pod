@@ -6,7 +6,9 @@
 // device's apps at `<set>/<udid>/data/Containers/Bundle/Application/<UUID>/<name>.app`, and a
 // running app is a process of this Mac whose executable lies there. Under load each `simctl spawn`
 // or `get_app_container` took 1 to 27 s (stage 5's real test), a folder read and the process table
-// take milliseconds. When the folder is not there, simctl answers as before.
+// take milliseconds. When the folder is not there, or it holds apps none of which reads (a layout
+// CoreSimulator moved, a plist mid-write), simctl answers as before. The layout is CoreSimulator's
+// own, not an API: native/pod-sim-macos/README.md lists it with the private symbols Pod relies on.
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SimAppDevice } from '../apps/sim-app-device'
@@ -90,17 +92,20 @@ export function simDeviceAppOps(
     }
     const root = join(containers, 'Bundle', 'Application')
     // A booted device with no app installed yet has no Bundle folder.
-    const entries = await readdir(root).catch(() => [])
-    const ids = await Promise.all(
-      entries
-        .filter((entry) => CONTAINER_UUID.test(entry))
-        .map(async (entry) => {
+    const entries = (await readdir(root).catch(() => [])).filter((entry) =>
+      CONTAINER_UUID.test(entry)
+    )
+    const ids = (
+      await Promise.all(
+        entries.map(async (entry) => {
           const apps = await readdir(join(root, entry)).catch(() => [])
           const app = apps.find((name) => name.endsWith('.app'))
           return app ? bundleIdOf(join(root, entry, app)) : null
         })
-    )
-    return new Set(ids.filter((id): id is string => id !== null))
+      )
+    ).filter((id): id is string => id !== null)
+    // Apps there but none read: the folder proves nothing either way.
+    return entries.length > 0 && ids.length === 0 ? null : new Set(ids)
   }
 
   /** Whether a process of this Mac runs the app from this device; null when it cannot tell. */

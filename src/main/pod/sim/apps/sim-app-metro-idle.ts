@@ -1,12 +1,39 @@
-// Fork-only (Pod): a worktree's Metro stopped once it idles. The registry's leases say which
-// worktree and app still need theirs; a Metro Pod started with none for the grace is stopped (it
-// holds a GB or more, pre-mortem item 10), one that exited is forgotten, and the record of a
-// worktree that is gone is dropped. A Metro Pod did not start is never touched.
+// Fork-only (Pod): which worktrees need their Metro, and stopping the ones that idle. A Metro holds
+// 1 to 3 GB (pre-mortem item 10), so only a lease that will use it soon keeps one: a lease that holds
+// a device, or a waiter the pool is readying a device for (`waitingFor: device`, which it sets only
+// within free capacity). A waiter for a slot, the brake or its build keeps none: ten queued
+// worktrees are not ten Metros. A Metro Pod started with no such lease for the grace is stopped, one
+// that exited is forgotten, and the record of a worktree that is gone is dropped. While `ps` cannot
+// say (a busy Mac), nothing is stopped or forgotten. A Metro Pod did not start is never touched.
 import { stat } from 'node:fs/promises'
 import type { SimRegistryFile } from '../../../../shared/pod-sim/sim-registry'
 import type { SimJsonFile } from './sim-app-json-file'
-import { simMetroKey, type SimMetroFile, type SimMetroRecord } from './sim-app-metro-ports'
+import {
+  simMetroKey,
+  simMetroProcess,
+  type SimMetroFile,
+  type SimMetroRecord
+} from './sim-app-metro-ports'
 import type { SimProcessControl } from './sim-app-spawn'
+
+export type SimMetroLease = Readonly<{ worktreeRoot: string; appId: string }>
+
+/** The worktree and app of each lease that uses its Metro now or next, by Metro key. */
+export function simMetroLeases(registry: SimRegistryFile): Map<string, SimMetroLease> {
+  const wanted = new Map<string, SimMetroLease>()
+  for (const lease of registry.leases) {
+    const soon =
+      lease.state === 'reserved' ||
+      lease.state === 'active' ||
+      lease.state === 'takeover' ||
+      (lease.state === 'waiting' && lease.queue?.waitingFor === 'device')
+    if (soon && lease.app) {
+      const entry = { worktreeRoot: lease.worktreeRoot, appId: lease.app.id }
+      wanted.set(simMetroKey(entry), entry)
+    }
+  }
+  return wanted
+}
 
 /** Stops each idle Metro past the grace; answers the worktree and app keys it stopped. */
 export async function stopIdleSimMetros(
@@ -16,28 +43,25 @@ export async function stopIdleSimMetros(
     now: () => number
     graceMs: number
   }>,
-  registry: SimRegistryFile
+  inUse: ReadonlySet<string>
 ): Promise<string[]> {
   const read = await options.file.read()
   if (!read.ok) {
     return []
   }
   const at = options.now()
-  const inUse = new Set(
-    registry.leases.flatMap((lease) =>
-      lease.app ? [simMetroKey({ worktreeRoot: lease.worktreeRoot, appId: lease.app.id })] : []
-    )
-  )
   const stop: SimMetroRecord[] = []
-  const exited = new Set<string>()
+  // Key to the pid seen exited or stopped: a Metro started since under the key is not this one.
+  const ended = new Map<string, number>()
   const gone = new Set<string>()
   for (const record of read.value.servers) {
-    if (!record.process) {
+    const server = simMetroProcess(record)
+    if (!server) {
       if (!(await stat(record.worktreeRoot).catch(() => null))) {
         gone.add(simMetroKey(record))
       }
-    } else if ((await options.control.state(record.process)) === 'exited') {
-      exited.add(simMetroKey(record))
+    } else if ((await options.control.state(server)) === 'exited') {
+      ended.set(simMetroKey(record), server.pid)
     } else if (
       !inUse.has(simMetroKey(record)) &&
       record.idleSince !== undefined &&
@@ -46,12 +70,15 @@ export async function stopIdleSimMetros(
       stop.push(record)
     }
   }
+  const stopped = new Set<string>()
   for (const record of stop) {
-    if (record.process) {
-      await options.control.stop(record.process)
+    const server = simMetroProcess(record)
+    // Unknown: `ps` did not answer; it stays recorded for the next pass.
+    if (server && (await options.control.stop(server)) !== 'unknown') {
+      stopped.add(simMetroKey(record))
+      ended.set(simMetroKey(record), server.pid)
     }
   }
-  const stopped = new Set(stop.map(simMetroKey))
   await options.file.update((value) => {
     let changed = false
     const servers = value.servers.filter((record) => {
@@ -61,7 +88,7 @@ export async function stopIdleSimMetros(
     })
     for (const record of servers) {
       const key = simMetroKey(record)
-      if (record.process && (stopped.has(key) || exited.has(key))) {
+      if (record.process && ended.get(key) === record.process.pid) {
         delete record.process
         delete record.idleSince
         changed = true

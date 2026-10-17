@@ -15,6 +15,7 @@ import { createSimProcessFacts } from '../adapters/sim-process-facts'
 import { createSimRegistryFileStore } from '../adapters/sim-registry-file-store'
 import type { SimOpOutcome, SimRuntime } from '../pool/sim-pool-ports'
 import type { SimAppDevice } from './sim-app-device'
+import { probeSimMetro } from './sim-app-metro-http'
 import { createSimApps, type SimApps, type SimAppsOptions } from './sim-app-readiness'
 import type { SimShell } from './sim-app-shell'
 
@@ -193,33 +194,59 @@ const holder = (n: number): SimHolder => ({
   startedAt: 1_760_600_000
 })
 
-/** Writes the registry with one live lease per [worktree, app] pair. */
+/**
+ * A lease in the registry: `[worktree, app, buildId?]` waits in the queue (for a slot, or for that
+ * build); `holds` names the device an active lease holds; `waitingFor: 'device'` is a waiter the
+ * pool is readying a device for.
+ */
+export type TestLease =
+  | readonly [worktreeRoot: string, appId: string, buildId?: string]
+  | Readonly<{
+      worktreeRoot: string
+      appId: string
+      holds?: string
+      waitingFor?: 'slot' | 'device' | 'brake'
+    }>
+
+/** Writes the registry with one live lease per entry. */
 export async function writeLeases(
   home: SimPodHome,
   self: SimRuntime,
-  leases: readonly (readonly [worktreeRoot: string, appId: string, buildId?: string])[]
+  leases: readonly TestLease[]
 ): Promise<void> {
   const registry: Registry = SimRegistryFile.parse({
     version: 1,
     updatedAt: Date.now(),
     devices: [],
-    leases: leases.map(([worktreeRoot, appId, buildId], n) => ({
-      leaseId: `sl_test${n}`,
-      key: simLeaseKey(holder(n).id, worktreeRoot),
-      state: 'waiting',
-      holder: holder(n),
-      worktreeRoot,
-      app: { id: appId, bundleId: BUNDLE },
-      since: Date.now(),
-      lastActivity: Date.now(),
-      queue: {
-        position: n + 1,
+    leases: leases.map((entry, n) => {
+      const lease = Array.isArray(entry)
+        ? { worktreeRoot: entry[0], appId: entry[1], buildId: entry[2] }
+        : { buildId: undefined, ...entry }
+      const { worktreeRoot, appId, buildId } = lease
+      const holds = 'holds' in lease ? lease.holds : undefined
+      const waitingFor = 'waitingFor' in lease ? lease.waitingFor : undefined
+      return {
+        leaseId: `sl_test${n}`,
+        key: simLeaseKey(holder(n).id, worktreeRoot),
+        state: holds ? 'active' : 'waiting',
+        holder: holder(n),
+        worktreeRoot,
+        app: { id: appId, bundleId: BUNDLE },
         since: Date.now(),
-        waitingFor: buildId ? 'build' : 'slot',
-        ...(buildId ? { buildId } : {})
-      },
-      servedBy: { pid: self.pid, startedAt: self.startedAt }
-    }))
+        lastActivity: Date.now(),
+        ...(holds
+          ? { udid: holds }
+          : {
+              queue: {
+                position: n + 1,
+                since: Date.now(),
+                waitingFor: buildId ? 'build' : (waitingFor ?? 'slot'),
+                ...(buildId ? { buildId } : {})
+              }
+            }),
+        servedBy: { pid: self.pid, startedAt: self.startedAt }
+      }
+    })
   })
   await writeFile(home.registry, JSON.stringify(registry))
 }
@@ -237,6 +264,43 @@ export function fakeBuildCommand(out: string, counter: string, extra = ''): stri
   ]
     .filter((part) => part !== '')
     .join(' && ')
+}
+
+export const NODE = process.env.ORCA_TEST_NODE_EXECUTABLE || 'node'
+export const FAKE_METRO = join(__dirname, '__fixtures__', 'fake-metro.cjs')
+
+/** A free TCP port whose first worktree ports look free too. */
+export async function freeBase(): Promise<number> {
+  for (;;) {
+    const base = 20_000 + Math.floor(Math.random() * 20_000)
+    const answers = await Promise.all(
+      [base, base + 300, base + 301, base + 302].map((port) => probeSimMetro(port, '/nowhere', 300))
+    )
+    if (answers.every((answer) => answer === 'none')) {
+      return base
+    }
+  }
+}
+
+/** Recipe lines for a Metro the stand-in plays; `env` prefixes its command (`FAKE_METRO_*=`). */
+export function metroRecipe(base: number, env = ''): string {
+  return [
+    'fingerprint: fp',
+    'metro:',
+    `  port: ${base}`,
+    `  command: ${JSON.stringify(`${env}'${NODE}' '${FAKE_METRO}' {port}`)}`
+  ].join('\n')
+}
+
+/** BUNDLE's dev client of fingerprint f00d, in Pod's cache already. */
+export async function cacheClient(box: Sandbox): Promise<string> {
+  const client = join(box.home.root, 'clients', BUNDLE, 'f00d.app')
+  await mkdir(client, { recursive: true })
+  await writeFile(
+    join(client, 'Info.plist'),
+    `<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${BUNDLE}</string></dict></plist>`
+  )
+  return client
 }
 
 /** Resolves once `predicate` holds, polling every 25 ms, or rejects after `ms`. */

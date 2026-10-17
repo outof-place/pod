@@ -10,7 +10,9 @@
 // source directory with a hash is walked; a bare hash has no sources, so only the config files and
 // install markers guard it. Anything changed, or changed while the command ran, runs it again. A
 // local module that app.config.ts imports is not watched. Calls for one app in one worktree share
-// one run.
+// one run; a `fresh` call runs it again whatever is kept (before a build: @expo/fingerprint 0.21.3
+// leaves a config that failed to load out of the hash with only a warning, ExpoConfig.js
+// getExpoConfigAsync, so one run's hash may not hold).
 import { readdir, stat } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import type { SimRecipeApp } from '../../../../shared/pod-sim/sim-recipe'
@@ -44,7 +46,7 @@ export type SimFingerprintAnswer =
   | Readonly<{ ok: false; message: string }>
 
 export type SimFingerprints = {
-  of(input: SimFingerprintInput): Promise<SimFingerprintAnswer>
+  of(input: SimFingerprintInput, how?: Readonly<{ fresh?: boolean }>): Promise<SimFingerprintAnswer>
 }
 
 type Source = { type: string; filePath?: string; hash?: string | null }
@@ -219,7 +221,8 @@ export function createSimFingerprints(options: SimFingerprintOptions = {}): SimF
 
   const compute = async (
     input: SimFingerprintInput,
-    key: string
+    key: string,
+    fresh: boolean
   ): Promise<SimFingerprintAnswer> => {
     const started = performance.now()
     const command = input.app.fingerprint
@@ -228,7 +231,7 @@ export function createSimFingerprints(options: SimFingerprintOptions = {}): SimF
     }
     const appDir = join(input.worktreeRoot, input.app.path)
     const before = kept.get(key)
-    if (before && (await unchanged(before.guard))) {
+    if (!fresh && before && (await unchanged(before.guard))) {
       return { ok: true, hash: before.hash, cached: true, ms: performance.now() - started }
     }
     kept.delete(key)
@@ -256,7 +259,7 @@ export function createSimFingerprints(options: SimFingerprintOptions = {}): SimF
   }
 
   return {
-    of(input) {
+    of(input, how = {}) {
       const key = JSON.stringify([
         input.worktreeRoot,
         input.appId,
@@ -264,11 +267,14 @@ export function createSimFingerprints(options: SimFingerprintOptions = {}): SimF
         input.app.fingerprint,
         input.app.env ?? {}
       ])
+      if (how.fresh) {
+        return compute(input, key, true)
+      }
       const inFlight = running.get(key)
       if (inFlight) {
         return inFlight
       }
-      const run = compute(input, key).finally(() => running.delete(key))
+      const run = compute(input, key, false).finally(() => running.delete(key))
       running.set(key, run)
       return run
     }

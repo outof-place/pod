@@ -216,6 +216,22 @@
   },
   {
     "input": {
+      "code": "build_failed",
+      "buildId": "sb_mobile_9a8b7c",
+      "logPath": "/Users/dev/.pod/sim/clients/logs/sb_mobile_9a8b7c.log",
+      "app": "mobile",
+      "logTail": "› Compiling react-native-screens",
+      "stopped": "it was terminated (exit 143, SIGTERM), as claude-acc's memory brake and sched cancel do"
+    },
+    "refusal": {
+      "code": "build_failed",
+      "message": "The dev-client build sb_mobile_9a8b7c was stopped before it finished (it was terminated (exit 143, SIGTERM), as claude-acc's memory brake and sched cancel do), which ended your lease; nothing in the build is broken, and its log is /Users/dev/.pod/sim/clients/logs/sb_mobile_9a8b7c.log. It ended with: › Compiling react-native-screens. A new lease builds it again. Run: podx sim lease --app mobile",
+      "next": "podx sim lease --app mobile",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
       "code": "no_worktree"
     },
     "refusal": {
@@ -322,6 +338,22 @@
       "code": "unavailable",
       "message": "Simulators are off: Pod's simulator helper does not support Xcode 28.0 (28A100) yet. Run: podx sim status",
       "next": "podx sim status",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
+      "code": "unavailable",
+      "problem": "/Users/dev/portivo-wt/apps/mobile/.env is missing: the mobile app reads its settings from it (/Users/dev/portivo-wt/apps/mobile/.env.example lists them) and stops at an error screen without it. Make it before you lease again.",
+      "missing": {
+        "file": "/Users/dev/portivo-wt/apps/mobile/.env",
+        "command": "pnpm -C /Users/dev/portivo-wt env:pull"
+      }
+    },
+    "refusal": {
+      "code": "unavailable",
+      "message": "/Users/dev/portivo-wt/apps/mobile/.env is missing: the mobile app reads its settings from it (/Users/dev/portivo-wt/apps/mobile/.env.example lists them) and stops at an error screen without it. Make it before you lease again. Run: pnpm -C /Users/dev/portivo-wt env:pull",
+      "next": "pnpm -C /Users/dev/portivo-wt env:pull",
       "waitable": false
     }
   },

@@ -3,12 +3,18 @@
 // failures (sim-pool-make-failures.ts): past SIM_BUILD_FAILURE_LIMIT failures in a row of one
 // bundle id and fingerprint, it is not built again until a backoff passes, doubling up to a cap. A
 // build costs minutes of a 10 GB process, so the first failure allows one retry (a flake, a fix
-// outside the native code), the second stops it.
+// outside the native code), the second stops it. A build something stopped (claude-acc's cancel or
+// memory brake) ends `failed` with `failure.stopped`, and counts toward nothing.
+//
+// Mixed versions share the file (a dev runtime beside the installed Pod): `version` changes only
+// with its layout, and a build record this runtime cannot read (a newer Pod's state) is skipped and
+// written back as it was.
 import { z } from 'zod'
 import type { SimBuild as SimBuildSchema } from '../../../../shared/pod-sim/sim-pool-snapshot'
 import { SimRuntimeRef } from '../../../../shared/pod-sim/sim-registry'
-import { createSimJsonFile, type SimJsonFile } from './sim-app-json-file'
+import { createSimJsonFile, simReadRecords, type SimJsonFile } from './sim-app-json-file'
 import type { SimAppHome } from './sim-app-paths'
+import type { SimSpawnedRef } from './sim-app-spawn'
 
 export const SIM_BUILD_FAILURE_LIMIT = 2
 export const SIM_BUILD_BACKOFF_MS = 10 * 60_000
@@ -16,9 +22,11 @@ export const SIM_BUILD_BACKOFF_MAX_MS = 2 * 60 * 60_000
 const DONE_KEPT_MS = 60 * 60_000
 const FAILED_KEPT_MS = 24 * 60 * 60_000
 
+// `startedAt` is the kernel's, once `ps` read it; `spawnedAt` the wall time it was spawned at.
 const ProcessRef = z.looseObject({
   pid: z.number().int().positive(),
-  startedAt: z.number().int().nonnegative()
+  startedAt: z.number().int().nonnegative().optional(),
+  spawnedAt: z.number().int().nonnegative().optional()
 })
 
 const SimBuildRecord = z.looseObject({
@@ -39,23 +47,39 @@ const SimBuildRecord = z.looseObject({
   process: ProcessRef.optional(),
   logPath: z.string().min(1),
   statusPath: z.string().min(1),
-  // Why it failed: its log's last lines.
-  failure: z.looseObject({ message: z.string().max(1024) }).optional(),
+  // Pod is stopping it (it ran past its time): it ends failed, with this.
+  stopping: z.looseObject({ at: z.number().int().nonnegative(), message: z.string() }).optional(),
+  // Why it failed: its log's last lines; `stopped`, why something stopped it (not a failure).
+  failure: z
+    .looseObject({ message: z.string().max(1024), stopped: z.string().max(512).optional() })
+    .optional(),
   // Failures in a row of this bundle id and fingerprint, this one included when it failed.
   failures: z.number().int().nonnegative(),
   retryAt: z.number().int().nonnegative().optional()
 })
 export type SimBuildRecord = z.infer<typeof SimBuildRecord>
 
-const SimBuildsFile = z.looseObject({
+// The last good build's step count and length per bundle id: the next one's progress and its
+// time limit.
+const SimBuildsHistory = z.record(
+  z.string(),
+  z.looseObject({ steps: z.number().int().nonnegative(), ms: z.number() })
+)
+
+const SimBuildsFileLayout = z.looseObject({
   version: z.literal(1),
-  builds: z.array(SimBuildRecord),
-  // The last good build's step count and length per bundle id: the next one's progress.
-  history: z
-    .record(z.string(), z.looseObject({ steps: z.number().int().nonnegative(), ms: z.number() }))
-    .optional()
+  builds: z.array(z.unknown()),
+  history: SimBuildsHistory.optional()
 })
-export type SimBuildsFile = z.infer<typeof SimBuildsFile>
+
+// Keys a newer Pod added at the top ride along in the value and are written back.
+export type SimBuildsFile = {
+  version: 1
+  builds: SimBuildRecord[]
+  history?: z.infer<typeof SimBuildsHistory>
+  // Records this runtime cannot read, written back as they were.
+  unread: unknown[]
+}
 
 /** A build as the pool snapshot and a waiting lease show it. */
 export type SimBuild = z.infer<typeof SimBuildSchema>
@@ -65,11 +89,30 @@ export function createSimBuildsFile(home: SimAppHome): SimJsonFile<SimBuildsFile
     path: home.builds,
     lock: home.buildsLock,
     parse: (json) => {
-      const parsed = SimBuildsFile.safeParse(json)
-      return parsed.success ? parsed.data : null
+      const file = SimBuildsFileLayout.safeParse(json)
+      if (!file.success) {
+        return null
+      }
+      const { known, unread } = simReadRecords(file.data.builds, (record) => {
+        const build = SimBuildRecord.safeParse(record)
+        return build.success ? build.data : null
+      })
+      return { ...file.data, builds: known, unread }
     },
-    empty: () => ({ version: 1, builds: [] })
+    serialize: ({ unread, ...value }) => ({ ...value, builds: [...value.builds, ...unread] }),
+    empty: () => ({ version: 1, builds: [], unread: [] })
   })
+}
+
+/** The build's process as the process control checks it. */
+export function simBuildProcess(build: SimBuildRecord): SimSpawnedRef | null {
+  return build.process
+    ? {
+        pid: build.process.pid,
+        ...(build.process.startedAt !== undefined ? { startedAt: build.process.startedAt } : {}),
+        spawnedAt: build.process.spawnedAt ?? build.startedAt
+      }
+    : null
 }
 
 export function simBuildKey(build: Readonly<{ bundleId: string; fingerprint: string }>): string {
@@ -108,19 +151,27 @@ export function pruneSimBuilds(value: SimBuildsFile, at: number): SimBuildsFile 
   }
 }
 
-/** The file with a build in flight marked done or failed (null when it is not in flight). */
+export type SimBuildEnd =
+  | Readonly<{ kind: 'done' }>
+  | Readonly<{ kind: 'failed'; message: string }>
+  // Something stopped it (claude-acc's cancel, its memory brake): `why`, and its log's last lines.
+  | Readonly<{ kind: 'stopped'; why: string; message: string }>
+
+/** The file with a build in flight marked done, failed or stopped (null when not in flight). */
 export function endSimBuild(
   value: SimBuildsFile,
   buildId: string,
-  end: Readonly<{ at: number; steps: number; failure: string | null }>
+  end: Readonly<{ at: number; steps: number; outcome: SimBuildEnd }>
 ): SimBuildsFile | null {
   const current = value.builds.find((other) => other.buildId === buildId)
   if (current?.state !== 'building') {
     return null
   }
-  current.state = end.failure === null ? 'done' : 'failed'
+  const { outcome } = end
+  current.state = outcome.kind === 'done' ? 'done' : 'failed'
   current.endedAt = end.at
-  if (end.failure === null) {
+  delete current.stopping
+  if (outcome.kind === 'done') {
     current.failures = 0
     delete current.failure
     delete current.retryAt
@@ -128,15 +179,26 @@ export function endSimBuild(
       ...value.history,
       [current.bundleId]: { steps: end.steps, ms: end.at - current.startedAt }
     }
+  } else if (outcome.kind === 'stopped') {
+    current.failure = { message: outcome.message.slice(-1024), stopped: outcome.why.slice(0, 512) }
+    delete current.retryAt
   } else {
     current.failures += 1
-    current.failure = { message: end.failure.slice(-1024) }
+    current.failure = { message: outcome.message.slice(-1024) }
     if (current.failures >= SIM_BUILD_FAILURE_LIMIT) {
       current.retryAt = end.at + simBuildBackoffMs(current.failures)
     }
   }
   return value
 }
+
+/** How long a build may run: 3x its app's last good build, else an hour. */
+export function simBuildLimitMs(file: SimBuildsFile, bundleId: string): number {
+  const last = file.history?.[bundleId]?.ms
+  return last && last > 0 ? 3 * last : SIM_BUILD_DEFAULT_LIMIT_MS
+}
+
+export const SIM_BUILD_DEFAULT_LIMIT_MS = 60 * 60_000
 
 export const SIM_BUILD_WAITING_FOR_MEMORY = 'waiting for memory (claude-acc)'
 

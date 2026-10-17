@@ -4,24 +4,25 @@
 // written there by compare-and-swap under the flock before its process starts, so of two runtimes
 // missing at once one writes it and the other, on its re-read, joins it.
 //
-// The build runs detached (sim-app-build-process.ts). Whoever sees it end (its own child's exit,
-// pushed; else a runtime's `check`, by pid plus start) lands the recipe's output .app in the client
-// cache and marks the build done, or failed with its log's last lines. A failed fingerprint does not loop
-// (the backoff in sim-app-build-records.ts); a changed fingerprint is a new build.
+// The build runs detached (sim-app-build-process.ts); how it ends, and the stop of one that runs
+// past its limit, is sim-app-build-end.ts. A failed fingerprint does not loop (the backoff in
+// sim-app-build-records.ts); a changed fingerprint is a new build. While `ps` cannot say whether a
+// build runs, it runs.
 import { join } from 'node:path'
 import type { SimRecipeApp } from '../../../../shared/pod-sim/sim-recipe'
 import type { SimRegistryFile } from '../../../../shared/pod-sim/sim-registry'
 import type { SimProcessId, SimRuntime } from '../pool/sim-pool-ports'
-import { createSimBuildProgress, readSimBuildTail } from './sim-app-build-log'
-import { simBuildOutput } from './sim-app-build-output'
+import { readSimBuildTail } from './sim-app-build-log'
+import { createSimBuildEnder, type SimBuildFinished } from './sim-app-build-end'
 import { readSimBuildExit, spawnSimBuildProcess } from './sim-app-build-process'
 import {
   createSimBuildsFile,
-  endSimBuild,
   pruneSimBuilds,
   SIM_BUILD_FAILURE_LIMIT,
   simBuildId,
   simBuildKey,
+  simBuildLimitMs,
+  simBuildProcess,
   simBuildView,
   type SimBuild,
   type SimBuildRecord
@@ -39,6 +40,8 @@ export type SimBuildInput = Readonly<{
   app: SimRecipeApp
   fingerprint: string
   worktreeRoot: string
+  // Asked once, only before a new build would start: null to build, else why not.
+  confirm?: () => Promise<string | null>
 }>
 
 export type SimBuildEnsure =
@@ -47,7 +50,7 @@ export type SimBuildEnsure =
   | Readonly<{ state: 'done' }>
   | Readonly<{ state: 'unbuildable'; message: string }>
 
-export type SimBuildFinished = Readonly<{ buildId: string; ok: boolean }>
+export type { SimBuildFinished } from './sim-app-build-end'
 
 export type SimBuilds = {
   /** Joins this fingerprint's build, starts one, or says why not. */
@@ -88,67 +91,32 @@ export function createSimBuilds(options: SimBuildsOptions): SimBuilds {
   const now = options.now ?? Date.now
   const random = options.random ?? (() => Math.random().toString(36).slice(2, 8))
   const file = createSimBuildsFile(home)
-  const progress = createSimBuildProgress()
-  const finishing = new Map<string, Promise<SimBuildFinished | null>>()
+  const ender = createSimBuildEnder({
+    file,
+    clients,
+    control: options.control,
+    now,
+    ...(options.onFinished ? { onFinished: options.onFinished } : {})
+  })
+  const { finish, progress } = ender
 
   /** `running`, `ended` (its exit code is there or its process is gone) or `stale` (never started). */
   const liveness = async (build: SimBuildRecord): Promise<'running' | 'ended' | 'stale'> => {
     if ((await readSimBuildExit(build.statusPath)) !== 'none') {
       return 'ended'
     }
-    if (build.process) {
-      return (await options.control.state(build.process)) === 'exited' ? 'ended' : 'running'
+    const ref = simBuildProcess(build)
+    if (ref) {
+      // Unknown (a busy Mac) runs on: only a process seen gone has ended.
+      return (await options.control.state(ref)) === 'exited' ? 'ended' : 'running'
     }
     const writerGone =
       !sameRef(build.by, options.self) && (await options.runtimeState(build.by)) === 'exited'
     return writerGone || now() - build.startedAt > START_STALE_MS ? 'stale' : 'running'
   }
 
-  const finish = (build: SimBuildRecord): Promise<SimBuildFinished | null> => {
-    const already = finishing.get(build.buildId)
-    if (already) {
-      return already
-    }
-    const work = (async (): Promise<SimBuildFinished | null> => {
-      const code = await readSimBuildExit(build.statusPath)
-      let failure: string | null = null
-      if (code === 0) {
-        const output = await simBuildOutput(build)
-        const landed = output.ok
-          ? await clients.land(
-              output.path,
-              build.bundleId,
-              build.fingerprint,
-              `build:${build.buildId}`
-            )
-          : output
-        failure = landed.ok ? null : landed.message
-      } else {
-        const tail = (await readSimBuildTail(build.logPath)).slice(-12).join('\n')
-        const why =
-          code === 'none' || code === null
-            ? 'the build process ended without an exit status (stopped or killed)'
-            : `the build exited ${code}`
-        failure = `${why}${tail ? `\n${tail}` : ''}`
-      }
-      const { steps } = await progress.advance(build)
-      progress.forget(build.buildId)
-      const at = now()
-      const written = await file.update((value) =>
-        endSimBuild(value, build.buildId, { at, steps, failure })
-      )
-      if (!written.ok || !written.changed) {
-        return null
-      }
-      const finished = { buildId: build.buildId, ok: failure === null }
-      options.onFinished?.(finished)
-      return finished
-    })().finally(() => finishing.delete(build.buildId))
-    finishing.set(build.buildId, work)
-    return work
-  }
-
   const spawnBuild = async (build: SimBuildRecord, app: SimRecipeApp): Promise<void> => {
+    const spawnedAt = Date.now()
     const spawned = await spawnSimBuildProcess(build, {
       logDir: home.buildLogs,
       claudeAcc: options.claudeAcc,
@@ -158,21 +126,25 @@ export function createSimBuilds(options: SimBuildsOptions): SimBuilds {
         void finish(build).catch(() => undefined)
       }
     })
-    const startedAt = spawned.ok ? await options.control.startOf(spawned.pid) : null
+    // Unknown (ps did not answer) or gone (it ended at once): its pid is still its record, and its
+    // status file or a later check says how it ended.
+    const start = spawned.ok ? await options.control.startOf(spawned.pid) : 'gone'
     await file.update((value) => {
       const current = value.builds.find((other) => other.buildId === build.buildId)
       if (current?.state !== 'building') {
         return null
       }
-      if (spawned.ok && startedAt !== null) {
-        current.process = { pid: spawned.pid, startedAt }
+      if (spawned.ok) {
+        current.process = {
+          pid: spawned.pid,
+          spawnedAt,
+          ...(typeof start === 'number' ? { startedAt: start } : {})
+        }
       } else {
         current.state = 'failed'
         current.endedAt = now()
         current.failures += 1
-        current.failure = {
-          message: spawned.ok ? 'the build process ended at once' : spawned.message.slice(0, 1024)
-        }
+        current.failure = { message: spawned.message.slice(0, 1024) }
       }
       return value
     })
@@ -190,6 +162,7 @@ export function createSimBuilds(options: SimBuildsOptions): SimBuilds {
       }
     }
     const key = simBuildKey({ bundleId: app.bundleId, fingerprint: input.fingerprint })
+    let confirmed = false
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const read = await file.read()
       if (!read.ok) {
@@ -218,6 +191,14 @@ export function createSimBuilds(options: SimBuildsOptions): SimBuilds {
         (await clients.find(app.bundleId, input.fingerprint))
       ) {
         return { state: 'done' }
+      }
+      if (!confirmed && input.confirm) {
+        const refused = await input.confirm()
+        if (refused) {
+          return { state: 'unbuildable', message: refused }
+        }
+        confirmed = true
+        continue
       }
       const buildId = simBuildId(input.appId, input.fingerprint, random())
       const record: SimBuildRecord = {
@@ -275,11 +256,18 @@ export function createSimBuilds(options: SimBuildsOptions): SimBuilds {
       const read = await file.read()
       const ended: SimBuildFinished[] = []
       for (const build of read.ok ? read.value.builds : []) {
-        if (build.state === 'building' && (await liveness(build)) === 'ended') {
-          const finished = await finish(build)
-          if (finished) {
-            ended.push(finished)
-          }
+        if (build.state !== 'building') {
+          continue
+        }
+        const state = await liveness(build)
+        const finished =
+          state === 'ended'
+            ? await finish(build)
+            : state === 'running' && read.ok
+              ? await ender.stopIfOverdue(build, simBuildLimitMs(read.value, build.bundleId))
+              : null
+        if (finished) {
+          ended.push(finished)
         }
       }
       return ended

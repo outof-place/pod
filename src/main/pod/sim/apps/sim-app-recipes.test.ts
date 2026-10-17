@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { parseSimRecipe } from '../../../../shared/pod-sim/sim-recipe'
 import { simRefusal } from '../../../../shared/pod-sim/sim-refusals'
 import { pickSimApp, readSimAppRecipe, simIsMainCheckout, simRepoKey } from './sim-app-recipes'
 import { recipeYaml, sandbox, worktree, type Sandbox } from './sim-app.test-support'
@@ -156,5 +157,18 @@ describe('which app a call means', () => {
       ok: false,
       refusal: { code: 'unknown_app', app: 'web', apps: ['mobile', 'operator'] }
     })
+  })
+
+  it('knows only the recipe’s own apps, never a name every object answers to', () => {
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      expect(pickSimApp(recipe, name)).toEqual({
+        ok: false,
+        refusal: { code: 'unknown_app', app: name, apps: ['mobile', 'operator'] }
+      })
+      expect(parseSimRecipe({ ...recipe, default: name })).toMatchObject({
+        recipe: null,
+        diagnostics: [{ path: 'simulators.default', severity: 'error' }]
+      })
+    }
   })
 })

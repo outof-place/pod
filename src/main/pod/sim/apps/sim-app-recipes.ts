@@ -152,7 +152,7 @@ export async function readSimAppRecipe(
       }
     }
     const key = await simRepoKey(worktreeRoot)
-    if (isRecord(parsed.root) && key in parsed.root) {
+    if (isRecord(parsed.root) && Object.hasOwn(parsed.root, key)) {
       return fromSection(parsed.root[key], `${options.overrideFile} (${key})`)
     }
   }
@@ -169,7 +169,7 @@ export async function readSimAppRecipe(
         refusal: { code: 'bad_recipe', file, path: 'simulators', problem: parsed.problem }
       }
     }
-    if (isRecord(parsed.root) && 'simulators' in parsed.root) {
+    if (isRecord(parsed.root) && Object.hasOwn(parsed.root, 'simulators')) {
       return fromSection(parsed.root.simulators, file)
     }
   }
@@ -186,8 +186,8 @@ export function pickSimApp(recipe: SimRecipe, asked?: string): SimAppPick {
   if (id === undefined) {
     return { ok: false, refusal: { code: 'ambiguous_app', apps: ids } }
   }
-  const app = recipe.apps[id]
-  return app
-    ? { ok: true, id, app }
+  // Own keys only: `constructor` or `__proto__` is no app of the recipe's.
+  return Object.hasOwn(recipe.apps, id)
+    ? { ok: true, id, app: recipe.apps[id] }
     : { ok: false, refusal: { code: 'unknown_app', app: id.slice(0, 1024), apps: ids } }
 }

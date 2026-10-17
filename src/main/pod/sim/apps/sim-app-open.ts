@@ -11,7 +11,7 @@ import type { SimAppDevice, SimInstalledRecords } from './sim-app-device'
 import type { SimClientLookup } from './sim-app-client-lookup'
 import { simHopTimer, type SimAppHops } from './sim-app-hops'
 import { launchSimAppOnMetro } from './sim-app-launch'
-import { SIM_METRO_READY_MS, type SimMetros } from './sim-app-metro'
+import { SIM_METRO_READY_MS, type SimMetroEnsure, type SimMetros } from './sim-app-metro'
 import { simAppOnMetro } from './sim-app-metro-http'
 import {
   simAppUnavailable,
@@ -85,7 +85,12 @@ export function createSimAppOpen(
     const ref = { id, bundleId: app.bundleId }
     time.hop('recipe')
     const metroInput = { worktreeRoot: input.worktreeRoot, appId: id, app }
-    const metro = app.metro ? metros.ensure(metroInput) : null
+    // The lease holds a device: its Metro starts now. A failure is an answer, never left unheard.
+    const metro = app.metro
+      ? metros
+          .ensure(metroInput, { start: true })
+          .catch((error: unknown): SimMetroEnsure => ({ ok: false, message: String(error) }))
+      : null
     const found = await deps.lookup.find(
       { worktreeRoot: input.worktreeRoot, id, app, startBuild: false },
       time

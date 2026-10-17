@@ -3,14 +3,19 @@
 // device), not when simctl returns: expo-dev-launcher gives its manifest request 10 s
 // (58.0.11, EXDevLauncherController.m EXDevLauncherDefaultRequestTimeout) and shows its own home
 // screen when that runs out, which a loaded Mac reaches (Expo runs the expo-updates CLI for every
-// manifest). So the wait lasts while the bundle builds (the warm-up says when) plus a grace, and a
-// launch that never reached Metro is retried once.
+// manifest). So the wait lasts while the bundle builds (the warm-up says when) and Metro first
+// answers the list, plus a grace, and a launch that never reached Metro is retried once. A Metro
+// too busy to answer in time, or one bad answer (a 500 mid-reload, a cut body), is asked again; it
+// says it has no list only when it says so three times in a row.
 import type { SimAppDevice } from './sim-app-device'
 import type { SimMetroInput, SimMetros } from './sim-app-metro'
 import { simAppOnMetro, type SimMetroWarm } from './sim-app-metro-http'
 
 /** After the bundle is built, how long the app may take to show up on Metro. */
 export const SIM_APP_CONNECT_MS = 20_000
+/** How long Metro may stay too busy to answer its list at all before Pod stops asking. */
+export const SIM_APP_LIST_PATIENCE_MS = 30_000
+const NO_LIST_IN_A_ROW = 3
 
 export type SimAppLaunched =
   | Readonly<{
@@ -34,7 +39,10 @@ export type SimAppLaunchInput = Readonly<{
 
 type Seen = Readonly<{ on: boolean | null; bundleProblem?: string }>
 
-/** Polls Metro until the app is on it, or `connectMs` past its bundle being built. */
+/**
+ * Polls Metro until the app is on it, or `connectMs` past both its bundle being built and Metro
+ * answering the list; a Metro that never answers is given up SIM_APP_LIST_PATIENCE_MS past the bundle.
+ */
 async function waitOnMetro(
   port: number,
   bundleId: string,
@@ -50,22 +58,30 @@ async function waitOnMetro(
       bundled.problem = warmed.message
     }
   })
-  let answered = false
+  let answeredAt: number | null = null
+  let noList = 0
   for (;;) {
     const on = await simAppOnMetro(port, bundleId, deviceName)
     if (on === true) {
       return { on: true }
     }
-    if (on === 'noList') {
+    noList = on === 'noList' ? noList + 1 : 0
+    if (noList >= NO_LIST_IN_A_ROW) {
       return { on: null }
     }
-    answered ||= on === false
-    if (bundled.at !== null && performance.now() - bundled.at > connectMs) {
-      // A Metro too busy to ever answer cannot say the app is missing.
-      if (!answered) {
-        return { on: null }
+    if (on === false) {
+      answeredAt ??= performance.now()
+    }
+    const at = performance.now()
+    if (bundled.at !== null) {
+      if (answeredAt === null) {
+        // A Metro too busy to ever answer cannot say the app is missing.
+        if (at - bundled.at > Math.max(connectMs, SIM_APP_LIST_PATIENCE_MS)) {
+          return { on: null }
+        }
+      } else if (at - Math.max(bundled.at, answeredAt) > connectMs) {
+        return bundled.problem ? { on: false, bundleProblem: bundled.problem } : { on: false }
       }
-      return bundled.problem ? { on: false, bundleProblem: bundled.problem } : { on: false }
     }
     await new Promise((resolve) => setTimeout(resolve, 250))
   }

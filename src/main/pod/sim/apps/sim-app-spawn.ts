@@ -7,7 +7,6 @@ import { spawnProcess } from '@orca/process-host'
 import { mkdir, open } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { SimProcessFacts } from '../adapters/sim-process-facts'
-import type { SimProcessId } from '../pool/sim-pool-ports'
 
 export type SimDetachedSpec = Readonly<{
   program: string
@@ -37,11 +36,16 @@ export const simSpawnDetached: SimDetachedSpawn = async (spec) => {
       detached: true,
       stdio: ['ignore', log.fd, log.fd]
     })
+    // Listened for before any await: bun can emit a quick child's exit before the spawn wait ends.
+    child.once('exit', (code) => {
+      if (child.pid) {
+        spec.onExit?.(code)
+      }
+    })
     const pid = await new Promise<number>((resolve, reject) => {
       child.once('spawn', () => resolve(child.pid ?? 0))
       child.once('error', reject)
     })
-    child.once('exit', (code) => spec.onExit?.(code))
     child.unref()
     return pid > 0
       ? { ok: true, pid }
@@ -53,23 +57,43 @@ export const simSpawnDetached: SimDetachedSpawn = async (spec) => {
   }
 }
 
+/**
+ * A process the app module spawned, as its record keeps it: the kernel's start when `ps` read it,
+ * and the wall time it was spawned at, which stands in while `ps` could not answer (a busy Mac).
+ */
+export type SimSpawnedRef = Readonly<{ pid: number; startedAt?: number; spawnedAt: number }>
+
 export type SimProcessControl = Readonly<{
-  // `live` only when the pid runs and started when the record says (within 2 s, as claude-acc).
-  state(ref: SimProcessId): Promise<'live' | 'exited' | 'unknown'>
-  // SIGTERM to its process group, SIGKILL after `graceMs` if it still runs.
-  stop(ref: SimProcessId, graceMs?: number): Promise<void>
-  startOf(pid: number): Promise<number | null>
+  // `live` only when the pid runs and started when the record says (within 2 s, as claude-acc),
+  // or, its start never read, within a minute of its spawn; `unknown` while `ps` cannot answer.
+  state(ref: SimSpawnedRef): Promise<'live' | 'exited' | 'unknown'>
+  // SIGTERM to its process group, SIGKILL after `graceMs` if it still runs; `unknown` signals nothing.
+  stop(ref: SimSpawnedRef, graceMs?: number): Promise<'stopped' | 'exited' | 'unknown'>
+  // Its kernel start; `gone` when no such process runs, `unknown` when `ps` did not answer.
+  startOf(pid: number): Promise<number | 'gone' | 'unknown'>
 }>
 
 const START_SLACK_S = 2
+// A spawn's 'spawn' event to the kernel's start of the process: seconds at worst, on a busy Mac.
+const SPAWN_WINDOW_S = 60
 
 export function createSimProcessControl(processes: SimProcessFacts): SimProcessControl {
-  const state = async (ref: SimProcessId): Promise<'live' | 'exited' | 'unknown'> => {
+  const state = async (ref: SimSpawnedRef): Promise<'live' | 'exited' | 'unknown'> => {
     const start = await processes.startOf(ref.pid)
     if (start === 'unknown') {
       return 'unknown'
     }
-    return start.found && Math.abs(start.startedAt - ref.startedAt) <= START_SLACK_S
+    if (!start.found) {
+      return 'exited'
+    }
+    if (ref.startedAt !== undefined) {
+      return Math.abs(start.startedAt - ref.startedAt) <= START_SLACK_S ? 'live' : 'exited'
+    }
+    // Its start was never read: a process of this pid started near its spawn is it (pids do not
+    // come round again within a minute).
+    const spawned = ref.spawnedAt / 1000
+    return start.startedAt >= Math.floor(spawned) - START_SLACK_S &&
+      start.startedAt <= spawned + SPAWN_WINDOW_S
       ? 'live'
       : 'exited'
   }
@@ -87,8 +111,9 @@ export function createSimProcessControl(processes: SimProcessFacts): SimProcessC
   return {
     state,
     async stop(ref, graceMs = 3_000) {
-      if ((await state(ref)) !== 'live') {
-        return
+      const now = await state(ref)
+      if (now !== 'live') {
+        return now
       }
       signal(ref.pid, 'SIGTERM')
       // The pid was this process a moment ago; signal 0 answers without a ps per check.
@@ -104,14 +129,18 @@ export function createSimProcessControl(processes: SimProcessFacts): SimProcessC
       while (performance.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 100))
         if (!runs()) {
-          return
+          return 'stopped'
         }
       }
       signal(ref.pid, 'SIGKILL')
+      return 'stopped'
     },
     async startOf(pid) {
       const start = await processes.startOf(pid)
-      return start !== 'unknown' && start.found ? start.startedAt : null
+      if (start === 'unknown') {
+        return 'unknown'
+      }
+      return start.found ? start.startedAt : 'gone'
     }
   }
 }
