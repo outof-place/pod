@@ -18,6 +18,8 @@ node "$here/lib/acc-guard.mjs" --baseline "$POD_BENCH_ACC_BASELINE"
 suites=("$@")
 [ ${#suites[@]} -gt 0 ] || suites=(polling hooks git-status search startup panes throughput browser)
 for suite in "${suites[@]}"; do
+  # The shared Mac's gate right before each suite: bench hold + GO, /tmp/pod-heavy-state, load, disk.
+  node "$here/lib/heavy-gate.mjs" || exit $?
   echo "==> $suite"
   node "$here/suites/$suite.mjs"
   node "$here/lib/acc-guard.mjs" --check "$POD_BENCH_ACC_BASELINE"
