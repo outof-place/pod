@@ -46,7 +46,7 @@ const MachineIdSchema = z
   .transform((value, ctx) => {
     const id = normalizeExecutionHostId(value)
     if (id !== value) {
-      ctx.addIssue({ code: 'custom', message: 'Unknown machine id' })
+      ctx.addIssue({ code: 'custom', message: 'Malformed machine id' })
       return z.NEVER
     }
     return id
