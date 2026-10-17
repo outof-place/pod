@@ -14,8 +14,8 @@
 #include <string.h>
 #include <unistd.h>
 
-// The snapshot `grep` defaults of the Claude builds claude-og.swift allows, in order. Any other
-// vector is a build this tool was not checked against, so it goes to Claude's ugrep.
+// The snapshot `grep` defaults of Claude 2.1.295 to 2.1.302, in order. Any other vector is a build
+// this tool was not checked against, so it goes to Claude's ugrep.
 static const char *const kUgrepDefaults[] = {
   "-G", "--ignore-files", "--hidden", "-I", "--exclude-dir=.git", "--exclude-dir=.svn",
   "--exclude-dir=.hg", "--exclude-dir=.bzr", "--exclude-dir=.jj", "--exclude-dir=.sl",
@@ -30,8 +30,9 @@ static int has_ugrep_defaults(int argc, char **argv) {
   return 1;
 }
 
-// pod-search installs this link only once og has its ugrep mode. POD_SEARCH_UGREP overrides it
-// (empty: none).
+// Pod's launcher sets POD_SEARCH_UGREP to the bundled entry (<Resources>/pod-search/ugrep-shim/ugrep;
+// empty: none). Without it, the link a developer's own pod-search install makes, once og has its
+// ugrep mode.
 static char *ugrep_entry(void) {
   const char *override = getenv("POD_SEARCH_UGREP");
   if (override != NULL) return *override != '\0' ? strdup(override) : NULL;
