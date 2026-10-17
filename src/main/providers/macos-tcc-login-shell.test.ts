@@ -317,6 +317,37 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     })
   })
 
+  it('gives the startup warm-up 4 s while a spawn waits on it only its own 500 ms (Pod)', async () => {
+    setPlatform('darwin')
+    vi.useFakeTimers()
+    try {
+      let finishWarmup!: (result: typeof ACCEPTED_RESULT) => void
+      runProcessMock.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finishWarmup = resolve
+          })
+      )
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const warmup = prepareMacosTccLoginShell({ warmUp: true })
+      expect(runProcessMock).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 4_000 }))
+      const spawn = prepareMacosTccLoginShell()
+      await vi.advanceTimersByTimeAsync(500)
+      // The spawn that came while PAM was slow goes direct after its own budget...
+      await expect(spawn).resolves.toEqual({ ok: false, conclusive: false, reason: 'timeout' })
+      expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
+      // ...while the warm-up runs on, and its verdict wraps every later spawn without a new probe.
+      finishWarmup(ACCEPTED_RESULT)
+      await expect(warmup).resolves.toEqual(ACCEPTED_OUTCOME)
+      expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
+      expect(await prepareMacosTccLoginShell()).toBeNull()
+      expect(runProcessMock).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('dedupes concurrent successful preflights and caches later terminal spawns', async () => {
     setPlatform('darwin')
 
@@ -565,7 +596,7 @@ describe('probeMacosLoginSessionAlive', () => {
         })
     )
 
-    const warmup = prepareMacosTccLoginShell()
+    const warmup = prepareMacosTccLoginShell({ warmUp: true })
     const freshProbe = probeMacosLoginSessionAlive()
     expect(runProcessMock).toHaveBeenCalledOnce()
 
