@@ -1,6 +1,6 @@
 #!/bin/bash
-# Measurement seams: a PodNative built with POD_MEASURE_SEAMS=1 compiles its probe hooks in
-# (`#if POD_MEASURE_SEAMS`) and marks its Info.plist with PodMeasureSeams = true. Such a build is for
+# Measurement seams: POD_MEASURE_SEAMS=1 marks a PodNative as a test build (it changes only code under
+# `#if POD_MEASURE_SEAMS`) and sets PodMeasureSeams = true in its Info.plist. Such a build is for
 # local test packages only: assemble-one-app.sh signs it but never notarizes it, and
 # release-one-app.sh never asks for one.
 #
