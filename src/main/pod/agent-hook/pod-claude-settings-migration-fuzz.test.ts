@@ -40,8 +40,15 @@ const hook = (command: string, pod?: true): Shape =>
     pod
   )
 
-/** A settings file with Pod's and the user's entries mixed, and what it means without Pod's. */
-function settings(next: () => number): { shape: Shape; userValue: unknown } {
+/** A settings file with Pod's and the user's entries mixed, and what it means without Pod's: the
+ *  events that held only Pod's groups may go or stay empty, every other one stays as it was (a user's
+ *  own empty event too). */
+function settings(next: () => number): {
+  shape: Shape
+  userValue: unknown
+  podOnlyEvents: Set<string>
+  hooksPodOnly: boolean
+} {
   const pick = <T>(items: T[]): T => items[Math.floor(next() * items.length)]
   const user: [string, Value][] = []
   const members: [string, Shape][] = []
@@ -51,6 +58,7 @@ function settings(next: () => number): { shape: Shape; userValue: unknown } {
   }
   const hooks: [string, Shape][] = []
   const userHooks: [string, Value][] = []
+  const podOnlyEvents = new Set<string>()
   for (const event of EVENTS.filter(() => next() < 0.6)) {
     const groups: Shape[] = []
     const userGroups: Value[] = []
@@ -78,6 +86,15 @@ function settings(next: () => number): { shape: Shape; userValue: unknown } {
     }
     hooks.push([event, array(groups)])
     userHooks.push([event, userGroups])
+    if (userGroups.length === 0) {
+      podOnlyEvents.add(event)
+    }
+  }
+  // A user's own empty event (r-orca on v5), anywhere among Pod's: it has to stay.
+  if (next() < 0.35) {
+    const at = Math.floor(next() * (hooks.length + 1))
+    hooks.splice(at, 0, ['UserEmpty', array([])])
+    userHooks.splice(at, 0, ['UserEmpty', []])
   }
   if (hooks.length > 0) {
     members.push(['hooks', object(hooks)])
@@ -116,7 +133,12 @@ function settings(next: () => number): { shape: Shape; userValue: unknown } {
   }
   const order = new Map(members.map(([key], index) => [key, index]))
   user.sort(([a], [b]) => order.get(a)! - order.get(b)!)
-  return { shape: object(members), userValue: Object.fromEntries(user) }
+  return {
+    shape: object(members),
+    userValue: Object.fromEntries(user),
+    podOnlyEvents,
+    hooksPodOnly: userHooks.every(([event]) => podOnlyEvents.has(event))
+  }
 }
 
 /** The shape as JSONC text: random blanks, CRLF or LF, trailing commas, and numbered user comments in
@@ -162,8 +184,9 @@ function render(shape: Shape, next: () => number, comments: string[]): string {
   return write(shape, 0, false) + newline
 }
 
-/** A settings value without empty events and an empty `hooks`, as plain objects. */
-function trimmed(value: unknown): unknown {
+/** A settings value as plain objects, without the Pod-only events left empty and without `hooks` when
+ *  it held only those: a user's own empty event or `hooks` stays and is compared. */
+function trimmed(value: unknown, podOnlyEvents: Set<string>, hooksPodOnly: boolean): unknown {
   const plain: unknown = structuredClone(value)
   if (plain === null || typeof plain !== 'object' || Array.isArray(plain)) {
     return plain
@@ -172,9 +195,10 @@ function trimmed(value: unknown): unknown {
   const hooks = record.hooks
   if (hooks !== null && typeof hooks === 'object' && !Array.isArray(hooks)) {
     const kept = Object.entries(hooks).filter(
-      ([, groups]) => !(Array.isArray(groups) && groups.length === 0)
+      ([event, groups]) =>
+        !(podOnlyEvents.has(event) && Array.isArray(groups) && groups.length === 0)
     )
-    if (kept.length > 0) {
+    if (kept.length > 0 || !hooksPodOnly) {
       record.hooks = Object.fromEntries(kept)
     } else {
       delete record.hooks
@@ -192,11 +216,13 @@ describe('the settings cut on generated files (fuzz)', () => {
       comments: 0,
       crlf: 0,
       trailingComma: 0,
-      lineCommentBeforeClose: 0
+      lineCommentBeforeClose: 0,
+      userEmptyEvent: 0
     }
     for (let seed = 1; seed <= 600; seed += 1) {
       const next = random(seed)
-      const { shape, userValue } = settings(next)
+      const { shape, userValue, podOnlyEvents, hooksPodOnly } = settings(next)
+      seen.userEmptyEvent += JSON.stringify(userValue).includes('"UserEmpty":[]') ? 1 : 0
       const comments: string[] = []
       const text = render(shape, next, comments)
       const errors: ParseError[] = []
@@ -221,7 +247,8 @@ describe('the settings cut on generated files (fuzz)', () => {
         failures.push(`seed ${seed}: the result doesn't parse`)
         continue
       }
-      if (!isDeepStrictEqual(trimmed(getNodeValue(root)), trimmed(userValue))) {
+      const trim = (value: unknown): unknown => trimmed(value, podOnlyEvents, hooksPodOnly)
+      if (!isDeepStrictEqual(trim(getNodeValue(root)), trim(userValue))) {
         failures.push(`seed ${seed}: the user's entries changed`)
       }
       const lost = comments.filter((id) => !new RegExp(`(//|/\\*) ${id}\\b`).test(result.text))
@@ -238,5 +265,6 @@ describe('the settings cut on generated files (fuzz)', () => {
     expect(seen.crlf).toBeGreaterThan(100)
     expect(seen.trailingComma).toBeGreaterThan(100)
     expect(seen.lineCommentBeforeClose).toBeGreaterThan(100)
+    expect(seen.userEmptyEvent).toBeGreaterThan(150)
   })
 })

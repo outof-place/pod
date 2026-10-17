@@ -21,6 +21,7 @@ import {
   type HookDefinition
 } from '../../agent-hooks/installer-utils'
 import { removeManagedStatusLine } from '../../claude/hook-settings'
+import { cutMember, hasComment } from './pod-claude-settings-jsonc-cut'
 
 export const POD_CLAUDE_MIGRATION_LOG_FILE = 'claude-settings-migration.json'
 
@@ -87,121 +88,22 @@ function nextRemoval(
   return null
 }
 
-type Gap = { kind: 'blank' | 'comment' | 'comma'; start: number; end: number }
-
-/** The text between two siblings, or a bracket and a member, as blanks, comments and commas; null
- *  for anything else. */
-function gapParts(text: string, from: number, to: number): Gap[] | null {
-  const parts: Gap[] = []
-  for (let at = from; at < to;) {
-    const start = at
-    if (text[at] === ',') {
-      at += 1
-      parts.push({ kind: 'comma', start, end: at })
-    } else if (text.startsWith('//', at)) {
-      // Why up to the line break: the break is a blank, which ends the comment (\r or \n alone too).
-      const line = text.slice(at, to).search(/[\r\n]/)
-      at = line === -1 ? to : at + line
-      parts.push({ kind: 'comment', start, end: at })
-    } else if (text.startsWith('/*', at)) {
-      const close = text.indexOf('*/', at + 2)
-      if (close === -1 || close + 2 > to) {
-        return null
-      }
-      at = close + 2
-      parts.push({ kind: 'comment', start, end: at })
-    } else if (/\s/.test(text[at])) {
-      while (at < to && /\s/.test(text[at])) {
-        at += 1
-      }
-      parts.push({ kind: 'blank', start, end: at })
-    } else {
-      return null
-    }
-  }
-  return parts
+/** Why removePodClaudeEntries gave null: the first check that failed. */
+export type PodClaudeCutRefusal = {
+  reason?: 'not a JSONC object' | 'no safe cut' | 'unparsable result' | 'changed meaning'
 }
 
-function hasComment(text: string, node: Node): boolean {
-  // Why the inside only: an emptied container's brackets hold nothing but blanks and comments.
-  const parts = gapParts(text, node.offset + 1, node.offset + node.length - 1)
-  return parts === null || parts.some((part) => part.kind === 'comment')
-}
-
-/** `text` without the member or element at `path`. Not jsonc-parser's modify: that rewrites the
- *  whitespace before a closing bracket. This cuts the node with one comma and the blanks beside
- *  it: the comma and blanks after it when it is not the last, else the blanks before it (never a
- *  `//` comment's line break) and the previous sibling's comma, or a trailing comma when it is the
- *  only one. Every other byte stays, a user's comment around it included. */
-function cut(text: string, root: Node, path: JSONPath): string | null {
-  const node = findNodeAtLocation(root, path)
-  const target = node?.parent?.type === 'property' ? node.parent : node
-  const container = target?.parent
-  const siblings = container?.children ?? []
-  const index = target ? siblings.indexOf(target) : -1
-  if (!target || !container || index === -1) {
-    return null
-  }
-  const end = target.offset + target.length
-  if (index < siblings.length - 1) {
-    const parts = gapParts(text, end, siblings[index + 1].offset)
-    const comma = parts?.findIndex((part) => part.kind === 'comma') ?? -1
-    if (!parts || comma === -1) {
-      return null
-    }
-    const before = parts.slice(0, comma).some((part) => part.kind === 'comment')
-      ? text.slice(end, parts[comma].start)
-      : ''
-    const stop = parts[comma + 1]?.kind === 'blank' ? parts[comma + 1].end : parts[comma].end
-    return text.slice(0, target.offset) + before + text.slice(stop)
-  }
-  const previous = index > 0 ? siblings[index - 1] : null
-  const parts = gapParts(
-    text,
-    previous ? previous.offset + previous.length : container.offset + 1,
-    target.offset
-  )
-  if (!parts) {
-    return null
-  }
-  const last = parts.at(-1)
-  let from = last?.kind === 'blank' ? last.start : target.offset
-  const beforeLast = parts.at(-2)
-  // Why: a `//` comment ends at its line break. When the entry's own line goes on after it (`]}`),
-  // the blank's break has to stay, or what follows would be commented out.
-  const lineGoesOn = !/^[^\S\r\n]*[\r\n]/.test(text.slice(end))
-  if (
-    lineGoesOn &&
-    last?.kind === 'blank' &&
-    beforeLast?.kind === 'comment' &&
-    text.startsWith('//', beforeLast.start)
-  ) {
-    const lineBreak = /\r\n|\r|\n/.exec(text.slice(last.start, last.end))
-    from = lineBreak ? last.start + lineBreak.index + lineBreak[0].length : last.end
-  }
-  if (!previous) {
-    // The only member: a trailing comma after it goes too (`{"a": 1,}` would leave `{,}`).
-    const after = gapParts(text, end, container.offset + container.length - 1)
-    const trailing = after?.find((part) => part.kind === 'comma')
-    return trailing
-      ? text.slice(0, from) + text.slice(end, trailing.start) + text.slice(trailing.end)
-      : text.slice(0, from) + text.slice(end)
-  }
-  const comma = parts.find((part) => part.kind === 'comma')
-  if (!comma) {
-    return null
-  }
-  return text.slice(0, comma.start) + text.slice(comma.end, from) + text.slice(end)
-}
-
-/** The text without Pod's entries, and what went; null when the text isn't a JSONC object. */
+/** The text without Pod's entries, and what went; null (the reason in `refusal`) when the text isn't
+ *  a JSONC object or no cut keeps the rest of it as it was. */
 export function removePodClaudeEntries(
   text: string,
-  names: { hookScript: string; statusLineScript: string }
+  names: { hookScript: string; statusLineScript: string },
+  refusal: PodClaudeCutRefusal = {}
 ): { text: string; removed: PodClaudeSettingsRemoval[] } | null {
   const isManaged = createManagedCommandMatcher(names.hookScript)
   let root = parseObject(text)
   if (!root) {
+    refusal.reason = 'not a JSONC object'
     return null
   }
   const original: unknown = getNodeValue(root)
@@ -212,12 +114,17 @@ export function removePodClaudeEntries(
     if (path[0] === 'hooks' && path.length > 1) {
       emptied.add(String(path[1]))
     }
-    const next = cut(text, root, path)
-    root = next === null || next === text ? null : parseObject(next)
-    if (!root) {
+    const next = cutMember(text, root, path)
+    if (next === null || next === text) {
+      refusal.reason = 'no safe cut'
       return null
     }
-    text = next!
+    root = parseObject(next)
+    if (!root) {
+      refusal.reason = 'unparsable result'
+      return null
+    }
+    text = next
     path = nextRemoval(root, isManaged, names.statusLineScript)
   }
   // Events, then `hooks` itself, that Pod's removals left empty. One that holds a user's comment stays.
@@ -228,9 +135,10 @@ export function removePodClaudeEntries(
       (groups.children?.length ?? 0) === 0 &&
       !hasComment(text, groups)
     ) {
-      text = cut(text, root, ['hooks', event]) ?? text
+      text = cutMember(text, root, ['hooks', event]) ?? text
       const reparsed = parseObject(text)
       if (!reparsed) {
+        refusal.reason = 'unparsable result'
         return null
       }
       root = reparsed
@@ -243,12 +151,24 @@ export function removePodClaudeEntries(
     (hooks.children?.length ?? 0) === 0 &&
     !hasComment(text, hooks)
   ) {
-    text = cut(text, root, ['hooks']) ?? text
+    text = cutMember(text, root, ['hooks']) ?? text
   }
   // Why: the text is written to the user's own settings.json; one that doesn't parse, or means more
-  // than the original minus Pod's entries, is never written.
+  // or less than the original minus Pod's entries, is never written. The compare is by value
+  // (getNodeValue drops comments): that comments stay is the cut's own work, held by its fuzz test.
   const final = parseObject(text)
-  if (!final || !sameSettings(getNodeValue(final), withoutRemovals(original, removed))) {
+  if (!final) {
+    refusal.reason = 'unparsable result'
+    return null
+  }
+  // Why structuredClone: getNodeValue builds null-prototype objects, which a strict compare tells apart.
+  if (
+    !isDeepStrictEqual(
+      structuredClone(getNodeValue(final)),
+      expectedSettings(original, removed, emptied, final)
+    )
+  ) {
+    refusal.reason = 'changed meaning'
     return null
   }
   return { text, removed }
@@ -275,23 +195,38 @@ function withoutRemovals(value: unknown, removals: PodClaudeSettingsRemoval[]): 
   return copy
 }
 
-/** Equal settings once empty events and an empty `hooks` are left out (an emptied event that holds a
- *  user's comment stays in the text as `[]`). */
-function sameSettings(left: unknown, right: unknown): boolean {
-  const trimmed = (value: unknown): unknown => {
-    if (!isPlainObject(value) || !isPlainObject(value.hooks)) {
-      return value
-    }
-    const hooks = Object.fromEntries(
-      Object.entries(value.hooks).filter(
-        ([, groups]) => !(Array.isArray(groups) && groups.length === 0)
-      )
-    )
-    const rest = Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'hooks'))
-    return Object.keys(hooks).length > 0 ? { ...rest, hooks } : rest
+/** What the cut text has to mean: the original without each removal, then without the events and the
+ *  `hooks` the cleanup took out, only where Pod's removals emptied them. A user's own empty event or
+ *  `hooks` stays in it, so a cut that took one would not pass. */
+function expectedSettings(
+  original: unknown,
+  removed: PodClaudeSettingsRemoval[],
+  emptied: Set<string>,
+  final: Node
+): unknown {
+  const expected = withoutRemovals(original, removed)
+  if (!isPlainObject(expected) || !isPlainObject(expected.hooks)) {
+    return expected
   }
-  // Why structuredClone: getNodeValue builds null-prototype objects, which a strict compare tells apart.
-  return isDeepStrictEqual(trimmed(structuredClone(left)), trimmed(structuredClone(right)))
+  const hooks = expected.hooks
+  for (const event of emptied) {
+    const groups = hooks[event]
+    if (
+      Array.isArray(groups) &&
+      groups.length === 0 &&
+      !findNodeAtLocation(final, ['hooks', event])
+    ) {
+      Reflect.deleteProperty(hooks, event)
+    }
+  }
+  if (
+    emptied.size > 0 &&
+    Object.keys(hooks).length === 0 &&
+    !findNodeAtLocation(final, ['hooks'])
+  ) {
+    Reflect.deleteProperty(expected, 'hooks')
+  }
+  return expected
 }
 
 function readLog(path: string): MigrationLog {
