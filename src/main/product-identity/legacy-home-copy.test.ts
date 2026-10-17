@@ -1,12 +1,14 @@
 import {
   chmodSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   lstatSync,
   readdirSync,
   readFileSync,
   readlinkSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -270,6 +272,22 @@ describe('copyLegacyHome: the product-only hook files', () => {
     expect(legacyAppFiles(home)).toEqual(before)
     expect(existsSync(join(home, PRODUCT, 'keybindings.json'))).toBe(false)
     expect(existsSync(join(userData, PRODUCT_HOME_COPY_RECORD))).toBe(false)
+  })
+
+  it('finishes a move an earlier start cut short after its hard link', () => {
+    const { home, copy } = scratch()
+    const hooks = sharedHookFolder(home)
+    const productHooks = join(home, PRODUCT, 'agent-hooks')
+    mkdirSync(productHooks, { recursive: true })
+    linkSync(join(hooks, 'pod-agent-hook'), join(productHooks, 'pod-agent-hook'))
+
+    expect(copy()).toMatchObject({ moved: ['pod-agent-hook', 'mcp-lazy'] })
+
+    expect(readlinkSync(join(hooks, 'pod-agent-hook'))).toBe(join(productHooks, 'pod-agent-hook'))
+    // The product rewrites its file by temp + rename; the old path follows.
+    writeFileSync(join(productHooks, '.pod-agent-hook.tmp'), 'native client v2')
+    renameSync(join(productHooks, '.pod-agent-hook.tmp'), join(productHooks, 'pod-agent-hook'))
+    expect(readFileSync(join(hooks, 'pod-agent-hook'), 'utf8')).toBe('native client v2')
   })
 
   it('leaves one the product folder already has where it is', () => {

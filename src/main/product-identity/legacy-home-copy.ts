@@ -70,6 +70,16 @@ function keepModes(source: string, copy: string): void {
   chmodSync(copy, stat.mode & 0o7777)
 }
 
+/** Whether `path` is another name of the file `of` describes: both names of a hard link. */
+function isHardLinkOf(path: string, of: { ino: number; dev: number }): boolean {
+  try {
+    const stat = lstatSync(path)
+    return stat.ino === of.ino && stat.dev === of.dev
+  } catch {
+    return false
+  }
+}
+
 /**
  * Moves the product-only hook files that are still plain files (a link is an earlier move, and a
  * file the product folder already has stays where it is). The product's copy appears before the
@@ -88,21 +98,29 @@ function moveProductOnlyHookEntries(legacyHome: string, productHome: string): st
     } catch {
       continue
     }
-    if (!stat.isFile() || existsSync(target)) {
+    if (!stat.isFile()) {
       continue
     }
-    // Modes apply only to folders made here, as for the copied entries.
-    mkdirSync(productHome, { recursive: true, mode: lstatSync(legacyHome).mode & 0o777 })
-    mkdirSync(productHooks, { recursive: true, mode: lstatSync(legacyHooks).mode & 0o777 })
-    try {
-      linkSync(source, target)
-    } catch {
-      // Why a copy: a home folder on two volumes can't hard-link; staged like the entry copies.
-      const staging = join(productHooks, `.${name}.pod-copying`)
-      rmSync(staging, { force: true })
-      cpSync(source, staging, { errorOnExist: true, force: false, preserveTimestamps: true })
-      chmodSync(staging, stat.mode & 0o7777)
-      renameSync(staging, target)
+    // Why: a move cut short between its hard link and the swap leaves both names on one file, and
+    // the product's next rewrite of its name (temp + rename) would leave the old path behind.
+    const linked = isHardLinkOf(target, stat)
+    if (!linked && existsSync(target)) {
+      continue
+    }
+    if (!linked) {
+      // Modes apply only to folders made here, as for the copied entries.
+      mkdirSync(productHome, { recursive: true, mode: lstatSync(legacyHome).mode & 0o777 })
+      mkdirSync(productHooks, { recursive: true, mode: lstatSync(legacyHooks).mode & 0o777 })
+      try {
+        linkSync(source, target)
+      } catch {
+        // Why a copy: a home folder on two volumes can't hard-link; staged like the entry copies.
+        const staging = join(productHooks, `.${name}.pod-copying`)
+        rmSync(staging, { force: true })
+        cpSync(source, staging, { errorOnExist: true, force: false, preserveTimestamps: true })
+        chmodSync(staging, stat.mode & 0o7777)
+        renameSync(staging, target)
+      }
     }
     const link = join(legacyHooks, `.${name}.pod-link`)
     rmSync(link, { force: true })

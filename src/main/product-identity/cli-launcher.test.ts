@@ -111,7 +111,7 @@ describe.skipIf(process.platform === 'win32')('Pod CLI launcher', () => {
       })
       expect(result.status).toBe(0)
       expect(result.stdout).toBe('podx got worktree ps --json\n')
-      expect(result.stderr).toBe('orca is now podx: podx worktree ps --json\n')
+      expect(result.stderr).toBe('orca is now podx\n')
     }
   })
 

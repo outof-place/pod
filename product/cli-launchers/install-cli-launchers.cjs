@@ -68,7 +68,8 @@ function legacyCliShim(cliName) {
     '\tlink=$(readlink "$self")',
     '\tcase $link in /*) self=$link ;; *) self=$(dirname "$self")/$link ;; esac',
     'done',
-    `echo "orca is now ${cliName}: ${cliName} $*" >&2`,
+    // Why no arguments: stderr lands in agent transcripts, and arguments can carry prompts or tokens.
+    `echo "orca is now ${cliName}" >&2`,
     `exec "$(dirname "$self")/${cliName}" "$@"`,
     ''
   ].join('\n')
