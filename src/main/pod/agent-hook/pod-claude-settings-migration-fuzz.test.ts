@@ -1,0 +1,242 @@
+import { getNodeValue, parseTree, type ParseError } from 'jsonc-parser'
+import { isDeepStrictEqual } from 'node:util'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('electron', () => ({ app: { getPath: () => '/tmp/orca-user-data' } }))
+
+import { removePodClaudeEntries } from './pod-claude-settings-migration'
+
+const names = { hookScript: 'claude-hook.sh', statusLineScript: 'claude-statusline.sh' }
+const CLIENT = '/Users/e2e/.orca/agent-hooks/pod-agent-hook'
+const SHELL = '/bin/sh "$HOME/.orca/agent-hooks/claude-hook.sh"'
+const STATUS = '/bin/sh "${HOME-}/.orca/agent-hooks/claude-statusline.sh"'
+const EVENTS = ['PreToolUse', 'PostToolUse', 'Stop', 'SessionStart', 'Notification', 'PreCompact']
+
+/** mulberry32: the same cases on every run, and a failing seed can be replayed. */
+function random(seed: number): () => number {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let t = state
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+type Value = string | number | boolean | null | Value[] | { [key: string]: Value }
+/** A value to render; `pod` marks Pod's own subtrees, which never get a user comment inside. */
+type Shape = { value: Value; pod?: true; members?: [string, Shape][]; items?: Shape[] }
+
+const leaf = (value: Value, pod?: true): Shape => ({ value, pod })
+const object = (members: [string, Shape][], pod?: true): Shape => ({ value: null, members, pod })
+const array = (items: Shape[], pod?: true): Shape => ({ value: null, items, pod })
+const hook = (command: string, pod?: true): Shape =>
+  object(
+    [
+      ['type', leaf('command', pod)],
+      ['command', leaf(command, pod)]
+    ],
+    pod
+  )
+
+/** A settings file with Pod's and the user's entries mixed, and what it means without Pod's. */
+function settings(next: () => number): { shape: Shape; userValue: unknown } {
+  const pick = <T>(items: T[]): T => items[Math.floor(next() * items.length)]
+  const user: [string, Value][] = []
+  const members: [string, Shape][] = []
+  if (next() < 0.5) {
+    members.push(['model', leaf('opus')])
+    user.push(['model', 'opus'])
+  }
+  const hooks: [string, Shape][] = []
+  const userHooks: [string, Value][] = []
+  for (const event of EVENTS.filter(() => next() < 0.6)) {
+    const groups: Shape[] = []
+    const userGroups: Value[] = []
+    for (let count = 1 + Math.floor(next() * 3); count > 0; count -= 1) {
+      const kind = pick(['pod', 'user', 'mixed'])
+      if (kind === 'pod') {
+        groups.push(object([['hooks', array([hook(pick([CLIENT, SHELL]), true)], true)]], true))
+      } else if (kind === 'user') {
+        const command = pick(['my-guard', 'say done', 'curl https://example.com//x'])
+        groups.push(
+          object([
+            ['matcher', leaf('Bash')],
+            ['hooks', array([hook(command)])]
+          ])
+        )
+        userGroups.push({ matcher: 'Bash', hooks: [{ type: 'command', command }] })
+      } else {
+        const items = [hook('say mixed'), hook(CLIENT, true)]
+        if (next() < 0.5) {
+          items.reverse()
+        }
+        groups.push(object([['hooks', array(items)]]))
+        userGroups.push({ hooks: [{ type: 'command', command: 'say mixed' }] })
+      }
+    }
+    hooks.push([event, array(groups)])
+    userHooks.push([event, userGroups])
+  }
+  if (hooks.length > 0) {
+    members.push(['hooks', object(hooks)])
+    user.push(['hooks', Object.fromEntries(userHooks)])
+  }
+  const statusLine = pick(['pod', 'user', 'none'])
+  if (statusLine === 'pod') {
+    members.push([
+      'statusLine',
+      object(
+        [
+          ['type', leaf('command', true)],
+          ['command', leaf(STATUS, true)]
+        ],
+        true
+      )
+    ])
+  } else if (statusLine === 'user') {
+    members.push([
+      'statusLine',
+      object([
+        ['type', leaf('command')],
+        ['command', leaf('ccstatusline')]
+      ])
+    ])
+    user.push(['statusLine', { type: 'command', command: 'ccstatusline' }])
+  }
+  if (next() < 0.5) {
+    members.push(['env', object([['MY_FLAG', leaf('1')]])])
+    user.push(['env', { MY_FLAG: '1' }])
+  }
+  // Members in a random order: Pod's entries land first, last, alone and in between.
+  for (let i = members.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(next() * (i + 1))
+    ;[members[i], members[j]] = [members[j], members[i]]
+  }
+  const order = new Map(members.map(([key], index) => [key, index]))
+  user.sort(([a], [b]) => order.get(a)! - order.get(b)!)
+  return { shape: object(members), userValue: Object.fromEntries(user) }
+}
+
+/** The shape as JSONC text: random blanks, CRLF or LF, trailing commas, and numbered user comments in
+ *  every gap outside Pod's subtrees. */
+function render(shape: Shape, next: () => number, comments: string[]): string {
+  const newline = next() < 0.3 ? '\r\n' : '\n'
+  const indentUnit = next() < 0.5 ? '\t' : '  '
+  const gap = (depth: number, inPod: boolean): string => {
+    const roll = next()
+    const indent = newline + indentUnit.repeat(depth)
+    if (inPod || roll < 0.35) {
+      return roll < 0.2 ? '' : roll < 0.5 ? ' ' : indent
+    }
+    const id = `c${comments.length}`
+    comments.push(id)
+    return roll < 0.65
+      ? `${indent}// ${id}${indent}`
+      : roll < 0.85
+        ? ` /* ${id} */ `
+        : `${indent}/* ${id} */${indent}`
+  }
+  const write = (node: Shape, depth: number, inPod: boolean): string => {
+    const pod = inPod || node.pod === true
+    if (node.members || node.items) {
+      const [open, close] = node.members ? ['{', '}'] : ['[', ']']
+      const parts = node.members
+        ? node.members.map(
+            ([key, value]) =>
+              `${JSON.stringify(key)}:${next() < 0.5 ? ' ' : ''}${write(value, depth + 1, pod)}`
+          )
+        : node.items!.map((item) => write(item, depth + 1, pod))
+      if (parts.length === 0) {
+        return `${open}${close}`
+      }
+      const body = parts
+        .map((part) => `${gap(depth + 1, pod)}${part}${gap(depth + 1, pod)}`)
+        .join(',')
+      const trailing = !pod && next() < 0.2 ? `,${gap(depth + 1, pod)}` : ''
+      return `${open}${body}${trailing}${gap(depth, pod)}${close}`
+    }
+    return JSON.stringify(node.value)
+  }
+  return write(shape, 0, false) + newline
+}
+
+/** A settings value without empty events and an empty `hooks`, as plain objects. */
+function trimmed(value: unknown): unknown {
+  const plain: unknown = structuredClone(value)
+  if (plain === null || typeof plain !== 'object' || Array.isArray(plain)) {
+    return plain
+  }
+  const record: Record<string, unknown> = Object.fromEntries(Object.entries(plain))
+  const hooks = record.hooks
+  if (hooks !== null && typeof hooks === 'object' && !Array.isArray(hooks)) {
+    const kept = Object.entries(hooks).filter(
+      ([, groups]) => !(Array.isArray(groups) && groups.length === 0)
+    )
+    if (kept.length > 0) {
+      record.hooks = Object.fromEntries(kept)
+    } else {
+      delete record.hooks
+    }
+  }
+  return record
+}
+
+describe('the settings cut on generated files (fuzz)', () => {
+  it('always leaves valid JSONC with every user entry and comment, and none of Pod', () => {
+    const failures: string[] = []
+    // What the cases covered: a fuzz that drifted into trivial files must fail too.
+    const seen = {
+      podRemoved: 0,
+      comments: 0,
+      crlf: 0,
+      trailingComma: 0,
+      lineCommentBeforeClose: 0
+    }
+    for (let seed = 1; seed <= 600; seed += 1) {
+      const next = random(seed)
+      const { shape, userValue } = settings(next)
+      const comments: string[] = []
+      const text = render(shape, next, comments)
+      const errors: ParseError[] = []
+      parseTree(text, errors, { allowTrailingComma: true })
+      if (errors.length > 0) {
+        failures.push(`seed ${seed}: the generator wrote invalid JSONC`)
+        continue
+      }
+      const result = removePodClaudeEntries(text, names)
+      seen.comments += comments.length > 0 ? 1 : 0
+      seen.crlf += text.includes('\r\n') ? 1 : 0
+      seen.trailingComma += /,\s*(\/\*[^*]*\*\/\s*)*[\]}]/.test(text) ? 1 : 0
+      seen.lineCommentBeforeClose += /\/\/ c\d+\r?\n[ \t]*[\]}]/.test(text) ? 1 : 0
+      seen.podRemoved += (result?.removed.length ?? 0) > 0 ? 1 : 0
+      if (!result) {
+        failures.push(`seed ${seed}: refused`)
+        continue
+      }
+      const outErrors: ParseError[] = []
+      const root = parseTree(result.text, outErrors, { allowTrailingComma: true })
+      if (outErrors.length > 0 || !root) {
+        failures.push(`seed ${seed}: the result doesn't parse`)
+        continue
+      }
+      if (!isDeepStrictEqual(trimmed(getNodeValue(root)), trimmed(userValue))) {
+        failures.push(`seed ${seed}: the user's entries changed`)
+      }
+      const lost = comments.filter((id) => !new RegExp(`(//|/\\*) ${id}\\b`).test(result.text))
+      if (lost.length > 0) {
+        failures.push(`seed ${seed}: comments lost: ${lost.join(' ')}`)
+      }
+      if (removePodClaudeEntries(result.text, names)?.removed.length !== 0) {
+        failures.push(`seed ${seed}: Pod's entries left`)
+      }
+    }
+    expect(failures).toEqual([])
+    expect(seen.podRemoved).toBeGreaterThan(450)
+    expect(seen.comments).toBeGreaterThan(450)
+    expect(seen.crlf).toBeGreaterThan(100)
+    expect(seen.trailingComma).toBeGreaterThan(100)
+    expect(seen.lineCommentBeforeClose).toBeGreaterThan(100)
+  })
+})
