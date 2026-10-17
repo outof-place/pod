@@ -7,6 +7,7 @@ import {
 } from '../../../shared/pod-ui-host-pane-restart'
 import { rendererPublicationThrottle } from '../../window/renderer-publication-throttle'
 import { setPodRendererPaneRestart } from '../terminal-exit/pod-terminal-exit-restart'
+import { setPodRendererRetainedExitNotice } from '../terminal-exit/pod-terminal-exit-resume'
 
 const RESTART_TIMEOUT_MS = 5_000
 let nextRequestId = 0
@@ -51,4 +52,18 @@ export function installPodUiHostPaneRestart(): void {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime's authoritative window is the BrowserWindow it attached.
     restartRendererPane(window as BrowserWindow, request)
   )
+  setPodRendererRetainedExitNotice((window, pane) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime's authoritative window is the BrowserWindow it attached.
+    noteRetainedExit(window as BrowserWindow, pane)
+  )
+}
+
+/** Tells the renderer a failed shell's pane was kept, so it drops the pane's agent resume. */
+export function noteRetainedExit(
+  window: BrowserWindow | null | undefined,
+  pane: PodUiHostPaneRestartRequest
+): void {
+  if (window && !window.isDestroyed() && !window.webContents.isCrashed()) {
+    window.webContents.send(POD_UI_HOST_PANE_RESTART_IPC.retained, pane)
+  }
 }

@@ -16,4 +16,6 @@ export type PodUiHostApi = {
   sleepRuntimeTerminals: (worktreeId: string) => Promise<void>
   /** Restart for a failed shell's pane PodNative asked for; returns the unsubscribe. */
   onPaneRestart: (restart: (request: PodUiHostPaneRestartRequest) => boolean) => () => void
+  /** A failed shell's pane main kept, whose agent must not resume; returns the unsubscribe. */
+  onPaneExitRetained: (retained: (pane: PodUiHostPaneRestartRequest) => void) => () => void
 }

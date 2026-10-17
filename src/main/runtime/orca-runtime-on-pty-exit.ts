@@ -15,6 +15,7 @@ import {
   podRetainsFailedLocalExit,
   recordPodTerminalExit
 } from '../pod/terminal-exit/pod-terminal-exits'
+import { forgetPodRetainedPaneResume } from '../pod/terminal-exit/pod-terminal-exit-resume'
 
 export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnected {
   onPtyExit(
@@ -142,6 +143,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       for (const surface of exactSurfaces) {
         if (retainsFailedLocalSurface) {
           recordPodTerminalExit(surface, { exitCode, exitedAt })
+          forgetPodRetainedPaneResume(this, surface)
         } else {
           clearPodTerminalExit(surface.worktreeId, surface.parentTabId, surface.leafId)
         }

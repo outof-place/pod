@@ -25,7 +25,7 @@ vi.mock('../../window/renderer-publication-throttle', () => ({
   rendererPublicationThrottle: { acquire: () => () => {} }
 }))
 
-const { restartRendererPane } = await import('./pod-ui-host-pane-restart')
+const { noteRetainedExit, restartRendererPane } = await import('./pod-ui-host-pane-restart')
 
 const pane = { worktreeId: 'wt', tabId: 'tab', leafId: 'left' }
 
@@ -68,5 +68,13 @@ describe('restartRendererPane (Pod)', () => {
 
   it('answers false without a usable window', async () => {
     await expect(restartRendererPane(null, pane)).resolves.toBe(false)
+  })
+})
+
+describe('noteRetainedExit (Pod)', () => {
+  it("tells this window's renderer which kept pane must not resume its agent", () => {
+    const { win, send } = window(null)
+    noteRetainedExit(win, pane)
+    expect(send).toHaveBeenCalledWith(POD_UI_HOST_PANE_RESTART_IPC.retained, pane)
   })
 })
