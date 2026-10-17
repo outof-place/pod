@@ -243,7 +243,9 @@ export class PodUiHostServer {
                 'browserContextMenu',
                 'browserDownloadCancel',
                 'browserFrameSelect',
+                'browserHardReload',
                 'browserOpenLink',
+                'browserPageZoom',
                 'browserPasskey',
                 'browserTargetUrl'
               ]

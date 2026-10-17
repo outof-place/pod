@@ -20,6 +20,13 @@ class FakeWebContents extends EventEmitter {
     goForward: () => this.calls.push('goForward')
   }
   isDestroyed = () => this.destroyed
+  zoomLevel = 0
+  getZoomLevel = () => this.zoomLevel
+  setZoomLevel = (level: number) => {
+    this.zoomLevel = level
+  }
+  getZoomFactor = () => 1.2 ** this.zoomLevel
+  reloadIgnoringCache = () => this.calls.push('reloadIgnoringCache')
   getURL = () => this.url
   getTitle = () => 'Example'
   isLoading = () => false
@@ -132,8 +139,25 @@ describe('PodBrowserPaneController', () => {
       loading: false,
       canGoBack: false,
       canGoForward: false,
-      agentDriving: false
+      agentDriving: false,
+      zoomPercent: 100
     })
+  })
+
+  it("zooms the page a step at a time, says so in its state, and hard-reloads it", () => {
+    const { panes, wc, sent } = setup()
+    panes.handle(rendezvous)
+    panes.handle(attach)
+    panes.handle({ type: 'browserZoom', pageId: 'page-1', direction: 'in' })
+    expect(wc.zoomLevel).toBe(0.5)
+    expect(sent.at(-1)).toMatchObject({ type: 'browserState', zoomPercent: 110 })
+    panes.handle({ type: 'browserZoom', pageId: 'page-1', direction: 'out' })
+    panes.handle({ type: 'browserZoom', pageId: 'page-1', direction: 'out' })
+    expect(sent.at(-1)).toMatchObject({ zoomPercent: 91 })
+    panes.handle({ type: 'browserZoom', pageId: 'page-1', direction: 'reset' })
+    expect(wc.zoomLevel).toBe(0)
+    panes.handle({ type: 'browserNavigate', pageId: 'page-1', action: 'reloadHard' })
+    expect(wc.calls).toContain('reloadIgnoringCache')
   })
 
   it('sends an attached page frames with its token and releases every texture at once', () => {

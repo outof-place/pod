@@ -23,6 +23,9 @@ export function navigatePanePage(
     case 'reload':
       wc.reload()
       return
+    case 'reloadHard':
+      wc.reloadIgnoringCache()
+      return
     case 'stop':
       wc.stop()
       return

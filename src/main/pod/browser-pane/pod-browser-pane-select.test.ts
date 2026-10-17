@@ -5,6 +5,8 @@ import { PaneSelectMenus } from './pod-browser-pane-select'
 
 class FakeWebContents extends EventEmitter {
   readonly scripts: { world: number; code: string }[] = []
+  zoom = 1
+  getZoomFactor = () => this.zoom
   executeJavaScriptInIsolatedWorld = vi.fn(async (world: number, sources: { code: string }[]) => {
     this.scripts.push(...sources.map(({ code }) => ({ world, code })))
   })
@@ -164,6 +166,18 @@ describe('PaneSelectMenus in an iframe', () => {
     // None of those used up the click.
     wc.emit('console-message', { message: line(), frame })
     expect(onMenu).toHaveBeenCalledTimes(1)
+  })
+
+  it("places the menus in the page view's px at a page zoom", () => {
+    const { wc, menus, onMenu, nonce, frame, line } = frameSetup()
+    wc.zoom = 1.2
+    const own = JSON.stringify({ menuId: 1, x: 10, y: 20, width: 50, height: 10, items: [] })
+    wc.emit('console-message', { message: `\u0000pod-select ${nonce} ${own}` })
+    expect(onMenu).toHaveBeenLastCalledWith(expect.objectContaining({ x: 12, y: 24, width: 60, height: 12 }))
+    // The click at view (180, 264) is CSS (150, 220): the frame's select lands where it did at 100%.
+    menus.noteClick(180, 264)
+    wc.emit('console-message', { message: line(), frame })
+    expect(onMenu).toHaveBeenLastCalledWith(expect.objectContaining({ x: 168, y: 252, width: 72 }))
   })
 
   it("hands the pick to that frame's document only, and nothing once it is gone", () => {

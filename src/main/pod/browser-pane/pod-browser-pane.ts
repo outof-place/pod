@@ -21,6 +21,7 @@ import {
   type PodBrowserFrames
 } from './pod-browser-pane-frames'
 import { followPanePage, panePageState } from './pod-browser-pane-page-events'
+import { nextBrowserPageZoomLevel } from '../../../shared/browser-page-zoom'
 const PANE_FRAME_RATE = 60
 // A page nobody sees and no agent drives. Why 10: a rate change waits for the next tick, so a
 // pane coming back (or an agent's screenshot) waits ≤100 ms; an animated page costs 13 ms/s here
@@ -264,6 +265,11 @@ export class PodBrowserPaneController {
         return
       case 'browserPasskeyChoose':
         this.passkeys.choose(message.pageId, message.requestId, message.credentialId)
+        return
+      case 'browserZoom':
+        // Chromium keeps a zoom per host, so the host's other pages take it too, as in Pod's tabs.
+        wc.setZoomLevel(nextBrowserPageZoomLevel(wc.getZoomLevel(), message.direction))
+        this.sendState(message.pageId)
         return
       case 'browserDownloadCancel':
         if (!this.deps.cancelDownload?.(message.pageId, message.downloadId)) {

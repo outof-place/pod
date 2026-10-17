@@ -166,20 +166,16 @@ export class PaneSelectMenus {
     this.click = null
     const clientX = 'clientX' in value ? finite(value.clientX) : 0
     const clientY = 'clientY' in value ? finite(value.clientY) : 0
+    // The click in the page's CSS px, which the frame's numbers are in.
+    const zoom = this.wc.getZoomFactor()
+    const x = click.x / zoom
+    const y = click.y / zoom
     // The frame's box on the page, from where the same click landed in each.
-    const rect = {
-      x: menu.x + click.x - clientX,
-      y: menu.y + click.y - clientY,
-      width: menu.width,
-      height: menu.height
-    }
+    const rect = { x: menu.x + x - clientX, y: menu.y + y - clientY, width: menu.width, height: menu.height }
     const holdsClick =
-      click.x >= rect.x - 1 &&
-      click.x <= rect.x + rect.width + 1 &&
-      click.y >= rect.y - 1 &&
-      click.y <= rect.y + rect.height + 1
-    // A transformed or zoomed frame moves its box: the menu then opens at the click.
-    const box = holdsClick ? rect : { x: click.x, y: click.y, width: 0, height: 0 }
+      x >= rect.x - 1 && x <= rect.x + rect.width + 1 && y >= rect.y - 1 && y <= rect.y + rect.height + 1
+    // A transformed frame moves its box: the menu then opens at the click.
+    const box = holdsClick ? rect : { x, y, width: 0, height: 0 }
     this.open({ frame, doc, menuId: menu.menuId }, { ...menu, ...box })
   }
 
@@ -190,7 +186,16 @@ export class PaneSelectMenus {
     if (this.routes.size > MAX_OPEN_MENUS && oldest !== undefined) {
       this.routes.delete(oldest)
     }
-    this.onMenu({ ...menu, menuId })
+    // CSS px to the page view's, the space PodNative places the menu in.
+    const zoom = this.wc.getZoomFactor()
+    this.onMenu({
+      ...menu,
+      menuId,
+      x: menu.x * zoom,
+      y: menu.y * zoom,
+      width: menu.width * zoom,
+      height: menu.height * zoom
+    })
   }
 
   /** The menu's line, or null for anything else (including the page trying to sound like it). */
