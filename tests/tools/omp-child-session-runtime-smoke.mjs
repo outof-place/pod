@@ -46,12 +46,12 @@ try {
   )
   const extensionPath = join(scratch, 'orca-agent-status.ts')
   await writeFile(extensionPath, getPiAgentStatusExtensionSource('omp'))
-  process.env.ORCA_PANE_KEY = 'test-parent-pane'
-  process.env.ORCA_AGENT_LAUNCH_TOKEN = 'test-parent-launch'
-  process.env.ORCA_AGENT_HOOK_PORT = String(server.address().port)
-  process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
-  delete process.env.ORCA_AGENT_HOOK_ENDPOINT
-  delete process.env.ORCA_PI_STATUS_OWNED
+  process.env.POD_PANE_KEY = 'test-parent-pane'
+  process.env.POD_AGENT_LAUNCH_TOKEN = 'test-parent-launch'
+  process.env.POD_AGENT_HOOK_PORT = String(server.address().port)
+  process.env.POD_AGENT_HOOK_TOKEN = 'test-token'
+  delete process.env.POD_AGENT_HOOK_ENDPOINT
+  delete process.env.POD_PI_STATUS_OWNED
   const load = async (manager) => {
     const result = await loadExtensions([extensionPath], scratch, new EventBus())
     assert.deepEqual(result.errors, [])

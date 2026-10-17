@@ -52,7 +52,7 @@ describe('Session History session drag data', () => {
       codexHome: '/Users/ada/Library/Application Support/orca/codex-runtime-home/home',
       sessionCwd: '/repo',
       env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
-      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+      envToDelete: ['CODEX_HOME', 'POD_CODEX_HOME'],
       launchConfig: {
         agentCommand: 'claude --dangerously-skip-permissions',
         agentArgs: '--dangerously-skip-permissions',
@@ -60,7 +60,7 @@ describe('Session History session drag data', () => {
       },
       realHomeStartup: {
         command: "cd '/repo' && claude --resume session-1",
-        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME']
+        envToDelete: ['CODEX_HOME', 'POD_CODEX_HOME']
       }
     }
 

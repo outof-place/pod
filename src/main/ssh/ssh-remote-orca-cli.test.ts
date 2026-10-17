@@ -217,7 +217,7 @@ describe('runRemoteOrcaCli', () => {
     })
   })
 
-  it('uses the remote ORCA_TERMINAL_HANDLE as orchestration sender identity', async () => {
+  it('uses the remote POD_TERMINAL_HANDLE as orchestration sender identity', async () => {
     const { runtime, db } = createRuntime()
 
     const result = await runRemoteOrcaCli(
@@ -226,7 +226,7 @@ describe('runRemoteOrcaCli', () => {
         callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: ['orchestration', 'send', '--to', 'term_windows', '--subject', 'ping', '--json'],
         cwd: '/home/alice/repo',
-        env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+        env: { POD_TERMINAL_HANDLE: 'term_ssh' }
       },
       LEGACY_FALLBACK_OPTIONS
     )
@@ -256,8 +256,8 @@ describe('runRemoteOrcaCli', () => {
         argv: ['orchestration', 'send', '--to', 'term_windows', '--subject', 'ping', '--json'],
         cwd: '/home/alice/repo',
         env: {
-          ORCA_TERMINAL_HANDLE: 'term_ssh',
-          ORCA_PANE_KEY: 'tab_ssh:leaf_ssh'
+          POD_TERMINAL_HANDLE: 'term_ssh',
+          POD_PANE_KEY: 'tab_ssh:leaf_ssh'
         }
       },
       LEGACY_FALLBACK_OPTIONS
@@ -309,7 +309,7 @@ describe('runRemoteOrcaCli', () => {
             '--json'
           ],
           cwd: '/home/alice/repo',
-          env: { ORCA_PANE_KEY: 'tab_foreign:leaf_foreign' }
+          env: { POD_PANE_KEY: 'tab_foreign:leaf_foreign' }
         },
         LEGACY_FALLBACK_OPTIONS
       )
@@ -369,8 +369,8 @@ describe('runRemoteOrcaCli', () => {
           ],
           cwd: '/home/alice/repo',
           env: {
-            ORCA_TERMINAL_HANDLE: 'term_ssh',
-            ORCA_PANE_KEY: 'tab_owner:leaf_owner'
+            POD_TERMINAL_HANDLE: 'term_ssh',
+            POD_PANE_KEY: 'tab_owner:leaf_owner'
           }
         },
         LEGACY_FALLBACK_OPTIONS
@@ -441,8 +441,8 @@ describe('runRemoteOrcaCli', () => {
           ],
           cwd: '/home/alice/repo',
           env: {
-            ORCA_TERMINAL_HANDLE: 'term_ssh',
-            ORCA_PANE_KEY: 'tab_ssh:leaf_ssh'
+            POD_TERMINAL_HANDLE: 'term_ssh',
+            POD_PANE_KEY: 'tab_ssh:leaf_ssh'
           }
         },
         LEGACY_FALLBACK_OPTIONS
@@ -540,7 +540,7 @@ describe('runRemoteOrcaCli', () => {
           '--json'
         ],
         cwd: '/home/alice/repo',
-        env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+        env: { POD_TERMINAL_HANDLE: 'term_ssh' }
       },
       LEGACY_FALLBACK_OPTIONS
     )
@@ -553,7 +553,7 @@ describe('runRemoteOrcaCli', () => {
     expect(message?.body).toBe('--literal-body')
   })
 
-  it('uses the remote ORCA_TERMINAL_HANDLE as orchestration check identity', async () => {
+  it('uses the remote POD_TERMINAL_HANDLE as orchestration check identity', async () => {
     const { runtime, db } = createRuntime()
     db.insertMessage({
       from: 'term_windows',
@@ -568,7 +568,7 @@ describe('runRemoteOrcaCli', () => {
         callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: ['orchestration', 'check', '--all', '--json'],
         cwd: '/home/alice/repo',
-        env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+        env: { POD_TERMINAL_HANDLE: 'term_ssh' }
       },
       LEGACY_FALLBACK_OPTIONS
     )
@@ -593,8 +593,8 @@ describe('runRemoteOrcaCli', () => {
         argv: ['orchestration', 'check', '--all', '--json'],
         cwd: '/home/alice/repo',
         env: {
-          ORCA_TERMINAL_HANDLE: 'term_stale_ssh',
-          ORCA_PANE_KEY: 'tab_ssh:leaf_ssh'
+          POD_TERMINAL_HANDLE: 'term_stale_ssh',
+          POD_PANE_KEY: 'tab_ssh:leaf_ssh'
         }
       },
       LEGACY_FALLBACK_OPTIONS
@@ -620,8 +620,8 @@ describe('runRemoteOrcaCli', () => {
         argv: ['orchestration', 'check', '--terminal', 'term_legacy_worker', '--all', '--json'],
         cwd: '/home/alice/repo',
         env: {
-          ORCA_TERMINAL_HANDLE: 'term_stale_ssh',
-          ORCA_PANE_KEY: 'tab_ssh:leaf_ssh'
+          POD_TERMINAL_HANDLE: 'term_stale_ssh',
+          POD_PANE_KEY: 'tab_ssh:leaf_ssh'
         }
       },
       LEGACY_FALLBACK_OPTIONS
@@ -643,7 +643,7 @@ describe('runRemoteOrcaCli', () => {
         callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: ['worktree', 'create', '--repo', 'orca', '--branch', 'fix/x', '--json'],
         cwd: '/home/alice/repo',
-        env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+        env: { POD_TERMINAL_HANDLE: 'term_ssh' }
       },
       {
         execPath: '/host/electron',

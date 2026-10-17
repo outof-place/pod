@@ -6,7 +6,7 @@ type CodexTerminalServerIsolationSettings =
   | undefined
 
 // Why this name: the codex shell wrapper (codex-shell-launch-preflight.ts) reads it to skip --no-daemon.
-const CODEX_ISOLATE_ENV = 'ORCA_CODEX_ISOLATE'
+const CODEX_ISOLATE_ENV = 'POD_CODEX_ISOLATE'
 
 export function isCodexTerminalServerIsolationEnabled(
   settings: CodexTerminalServerIsolationSettings

@@ -167,11 +167,11 @@ describe('materializeCachedNodeRuntime', () => {
       runProcess: typeof runProcess
     }>('@orca/process-host')
     vi.mocked(runProcess).mockImplementationOnce(spawnForReal)
-    vi.stubEnv('ORCA_UNZIP_BIN', path())
+    vi.stubEnv('POD_UNZIP_BIN', path())
 
     await expect(
       materializeCachedNodeRuntime(target, cacheRoot, { fetcher: responseFetcher(archive) })
-    ).rejects.toThrow(/install unzip, or set ORCA_UNZIP_BIN/)
+    ).rejects.toThrow(/install unzip, or set POD_UNZIP_BIN/)
     expect(await readdir(runtimeDirFor(target))).toEqual([])
   })
 

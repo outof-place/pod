@@ -35,7 +35,7 @@ export default function (api) {
   api.on('session_start', (_event, ctx) => {
     setTimeout(() => writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify({
       text: ctx.ui.getEditorText(), hasUI: ctx.hasUI,
-      consumed: !process.env.ORCA_OMP_PREFILL, turns
+      consumed: !process.env.POD_OMP_PREFILL, turns
     })), 1500)
   })
 }`
@@ -46,8 +46,8 @@ export default function (api) {
     buildShellCommandFromArgv(
       [
         'env',
-        `ORCA_OMP_PREFILL=${draft}`,
-        'ORCA_PI_STATUS_OWNED=',
+        `POD_OMP_PREFILL=${draft}`,
+        'POD_PI_STATUS_OWNED=',
         process.env.ORCA_OMP_PROOF_BINARY ?? '',
         '--no-session',
         '--no-extensions',

@@ -225,7 +225,7 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
     // Why: this runs before target resolution because the answer belongs to the
     // other machine — agents detected here would be the wrong host's, and a host
     // that detects none would hide the forwarding problem behind that error.
-    if (process.env.ORCA_CLI_CWD) {
+    if (process.env.POD_CLI_CWD) {
       throw new RuntimeClientError(
         'invalid_environment',
         `orca skills ${verb} writes to the machine that runs it, but this shell forwards ` +

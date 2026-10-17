@@ -7,7 +7,7 @@ import { runtimeAdvertisesBrowserClientHosting } from '../../src/shared/browser-
 
 const TEMPLATE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
 test.skip(!TEMPLATE || process.env.ORCA_E2E_SSH_DOCKER !== '1', 'Needs Docker and server template')
-test.use({ orcaAppExtraEnv: { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE } })
+test.use({ orcaAppExtraEnv: { POD_ORCAD_TEMPLATE_PATH: TEMPLATE } })
 
 test('a backendless managed host does not promise client-hosted browser creation', async ({
   orcaPage: page

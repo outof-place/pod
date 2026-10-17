@@ -7,7 +7,7 @@ import {
 } from './hook-config'
 
 const EVENTS = ['turn_end', 'session_start', 'session_end', 'post_tool'] as const
-const MANAGED_COMMAND = '/Users/tester/.orca/agent-hooks/jcode-hook.sh'
+const MANAGED_COMMAND = '/Users/tester/.pod/agent-hooks/jcode-hook.sh'
 
 describe('jcode hook-config', () => {
   it('appends a [hooks] table when the config has none', () => {
@@ -132,7 +132,7 @@ turn_end = "~/bin/mine" # replaces agent-hooks/jcode-hook.sh
   })
 
   it('repoints a managed entry left behind by a copied home or a platform switch', () => {
-    const stale = '/Users/old/.orca/agent-hooks/jcode-hook.sh'
+    const stale = '/Users/old/.pod/agent-hooks/jcode-hook.sh'
     const source = `[hooks]\nturn_end = ${tomlQuoteString(stale)}\n`
     const result = applyJcodeManagedHooks(source, EVENTS, MANAGED_COMMAND, 'jcode-hook.sh')
     expect(result.userOwnedEvents).toEqual([])

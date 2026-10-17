@@ -36,9 +36,9 @@ function envValue(name: string): string | null {
 
 function getAuthConfig(): AzureDevOpsCreateAuthConfig {
   return {
-    pat: envValue('ORCA_AZURE_DEVOPS_TOKEN') ?? envValue('ORCA_AZURE_DEVOPS_PAT'),
-    accessToken: envValue('ORCA_AZURE_DEVOPS_ACCESS_TOKEN'),
-    username: envValue('ORCA_AZURE_DEVOPS_USERNAME')
+    pat: envValue('POD_AZURE_DEVOPS_TOKEN') ?? envValue('POD_AZURE_DEVOPS_PAT'),
+    accessToken: envValue('POD_AZURE_DEVOPS_ACCESS_TOKEN'),
+    username: envValue('POD_AZURE_DEVOPS_USERNAME')
   }
 }
 
@@ -126,7 +126,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'auth_required',
       error:
-        'Create PR failed: Azure DevOps is not authenticated. Next step: set ORCA_AZURE_DEVOPS_TOKEN in this environment.'
+        'Create PR failed: Azure DevOps is not authenticated. Next step: set POD_AZURE_DEVOPS_TOKEN in this environment.'
     }
   }
   if (status === 409 || lower.includes('already exists') || lower.includes('active pull request')) {

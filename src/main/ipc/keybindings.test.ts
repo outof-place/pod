@@ -30,7 +30,7 @@ vi.mock('../menu/register-app-menu', () => ({
 import { registerKeybindingHandlers } from './keybindings'
 
 const snapshot: KeybindingFileSnapshot = {
-  path: '/Users/example/.orca/keybindings.json',
+  path: '/Users/example/.pod/keybindings.json',
   platform: 'darwin',
   exists: true,
   overrides: {},

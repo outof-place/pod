@@ -62,13 +62,13 @@ test('OMP completion retry clears the rendered working indicator', async ({
         argv: [],
         title: 'omp',
         env: {
-          ORCA_PANE_KEY: paneKey,
-          ORCA_TAB_ID: paneKey.split(':')[0],
-          ORCA_WORKTREE_ID: worktreeId,
-          ORCA_AGENT_HOOK_PORT: String(address.port),
-          ORCA_AGENT_HOOK_TOKEN: endpoint.token,
-          ORCA_AGENT_HOOK_ENV: endpoint.env,
-          ORCA_AGENT_HOOK_VERSION: endpoint.version
+          POD_PANE_KEY: paneKey,
+          POD_TAB_ID: paneKey.split(':')[0],
+          POD_WORKTREE_ID: worktreeId,
+          POD_AGENT_HOOK_PORT: String(address.port),
+          POD_AGENT_HOOK_TOKEN: endpoint.token,
+          POD_AGENT_HOOK_ENV: endpoint.env,
+          POD_AGENT_HOOK_VERSION: endpoint.version
         }
       },
       fetch,

@@ -136,7 +136,7 @@ describe('resolveHostFlagEnvironmentId', () => {
     ).rejects.toThrow('name different Orca servers')
   })
 
-  it('names the ambient variable when ORCA_ENVIRONMENT is the conflicting selector', async () => {
+  it('names the ambient variable when POD_ENVIRONMENT is the conflicting selector', async () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1')])
     resolveEnvironmentMock.mockReturnValue(environment('env-2'))
 
@@ -144,9 +144,9 @@ describe('resolveHostFlagEnvironmentId', () => {
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-1' }), {
         listSshTargets: listSshTargetsMock,
         pairingCode: null,
-        environmentSelector: { value: 'staging', label: 'ORCA_ENVIRONMENT' }
+        environmentSelector: { value: 'staging', label: 'POD_ENVIRONMENT' }
       })
-    ).rejects.toThrow('ORCA_ENVIRONMENT staging name different Orca servers')
+    ).rejects.toThrow('POD_ENVIRONMENT staging name different Orca servers')
   })
 
   it('hands an agent the known environment ids to retry with', async () => {

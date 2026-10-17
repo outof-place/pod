@@ -93,7 +93,7 @@ describe('sandbox OAuth account selection', () => {
     expect(
       resolveMacClaudeLoginTarget({
         router: null,
-        env: { CLAUDE_CONFIG_DIR: profileHome, ORCA_CLAUDE_INJECTED_CONFIG_DIR: profileHome }
+        env: { CLAUDE_CONFIG_DIR: profileHome, POD_CLAUDE_INJECTED_CONFIG_DIR: profileHome }
       })
     ).toEqual({ account: 'system', configDir: null })
   })

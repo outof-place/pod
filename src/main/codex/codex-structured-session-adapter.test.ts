@@ -135,13 +135,13 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codex.connections[0].launch.env).toEqual({
       [CODEX_SPAWN_TOKEN_ENV]: 'spawn-9',
       CODEX_HOME: '/codex/home',
-      ORCA_AGENT_SESSION_ID: 'session-1',
-      ORCA_STRUCTURED_SESSION: '1',
-      ORCA_CLI_COMMAND: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/),
+      POD_AGENT_SESSION_ID: 'session-1',
+      POD_STRUCTURED_SESSION: '1',
+      POD_CLI_COMMAND: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/),
       ...(process.platform !== 'win32'
-        ? { ORCA_CLI_BIN_DIR: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin$/) }
+        ? { POD_CLI_BIN_DIR: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin$/) }
         : {}),
-      ORCA_USER_DATA_PATH: expect.any(String),
+      POD_USER_DATA_PATH: expect.any(String),
       // The test host is unpackaged, so this app's CLI is the dev launcher dir, first on PATH.
       PATH: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[:;]/)
     })

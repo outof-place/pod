@@ -15,18 +15,18 @@ let isolatedUserDataDir = ''
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
-  previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+  previousUserDataPath = process.env.POD_USER_DATA_PATH
   isolatedUserDataDir = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-user-data-'))
-  // Why: Orca-managed Codex hooks resolve through ORCA_USER_DATA_PATH before
+  // Why: Orca-managed Codex hooks resolve through POD_USER_DATA_PATH before
   // the mocked home; an inherited live path would let this test rewrite them.
-  process.env.ORCA_USER_DATA_PATH = isolatedUserDataDir
+  process.env.POD_USER_DATA_PATH = isolatedUserDataDir
 })
 
 afterEach(() => {
   if (previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.POD_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    process.env.POD_USER_DATA_PATH = previousUserDataPath
   }
   rmSync(isolatedUserDataDir, { recursive: true, force: true })
 })
@@ -223,7 +223,7 @@ function hookEnvironment(extraEnv: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return {
     ...env,
     HOME: REMOTE_HOME,
-    ORCA_AGENT_HOOK_ENDPOINT: '',
+    POD_AGENT_HOOK_ENDPOINT: '',
     ...extraEnv
   }
 }
@@ -239,7 +239,7 @@ async function generatePosixScripts(): Promise<Map<string, string>> {
     const status = await entry.install(memory.sftp)
     expect(status.state, `${entry.agent} install status`).toBe('installed')
     const generated = [...memory.fs.files.entries()].filter(
-      ([path]) => path.includes('/.orca/agent-hooks/') && path.endsWith('.sh')
+      ([path]) => path.includes('/.pod/agent-hooks/') && path.endsWith('.sh')
     )
     // Why: Claude ships a second managed script (the statusline usage feed); the stdin lifecycle contract applies to every generated script.
     expect(generated.length, `${entry.agent} generated scripts`).toBeGreaterThan(0)
@@ -279,7 +279,7 @@ describe('Windows managed hook stdin structure', () => {
           expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
         }
       })
-      const hooksDir = join(home, '.orca', 'agent-hooks')
+      const hooksDir = join(home, '.pod', 'agent-hooks')
       const fileNames = readdirSync(hooksDir)
       const mainBatchScripts = fileNames.filter(
         (name) => name.endsWith('-hook.cmd') && !name.startsWith('antigravity-')
@@ -290,12 +290,12 @@ describe('Windows managed hook stdin structure', () => {
         const script = readFileSync(join(hooksDir, fileName), 'utf8')
         // Why: missing-env path must not touch more.com — hang class from #11549.
         expect(script, `${fileName} port guard`).toContain(
-          'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0'
+          'if "%POD_AGENT_HOOK_PORT%"=="" exit /b 0'
         )
         expect(script, `${fileName} token guard`).toContain(
-          'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0'
+          'if "%POD_AGENT_HOOK_TOKEN%"=="" exit /b 0'
         )
-        expect(script, `${fileName} pane guard`).toContain('if "%ORCA_PANE_KEY%"=="" exit /b 0')
+        expect(script, `${fileName} pane guard`).toContain('if "%POD_PANE_KEY%"=="" exit /b 0')
         // Why: pin the rule, not today's three guards — a fourth ORCA_* guard routed to the
         // drain would reintroduce #11549 with this suite green. The pattern spans the guard so
         // it catches both `if "%VAR%"==""` and `if not defined VAR`; the Devin skip names no
@@ -326,15 +326,15 @@ describe('Windows managed hook stdin structure', () => {
       expect(claude, 'claude devin guard present').toContain(
         'if not "%DEVIN_PROJECT_DIR%"=="" goto :orca_agent_hook_drain_stdin'
       )
-      expect(claude.indexOf('if "%ORCA_PANE_KEY%"=="" exit /b 0')).toBeLessThan(
+      expect(claude.indexOf('if "%POD_PANE_KEY%"=="" exit /b 0')).toBeLessThan(
         claude.indexOf('if not "%DEVIN_PROJECT_DIR%"=="" goto :orca_agent_hook_drain_stdin')
       )
 
       // Why (#11549 class): every Windows-local hook now guards before owning stdin —
       // the caller may abandon the pipe, and the payload is discarded on this path anyway.
       const copilot = readFileSync(join(hooksDir, 'copilot-hook.ps1'), 'utf8')
-      expect(copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')).toBeGreaterThan(-1)
-      expect(copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')).toBeLessThan(
+      expect(copilot.indexOf('if (-not $env:POD_AGENT_HOOK_PORT')).toBeGreaterThan(-1)
+      expect(copilot.indexOf('if (-not $env:POD_AGENT_HOOK_PORT')).toBeLessThan(
         copilot.indexOf('[Console]::In.ReadToEnd()')
       )
       // Why: the two encoded-PowerShell launchers own stdin themselves when the managed
@@ -363,8 +363,8 @@ describe('Windows managed hook stdin structure', () => {
       }
 
       const kimi = readFileSync(join(hooksDir, 'kimi-hook.sh'), 'utf8')
-      expect(kimi.indexOf('if [ -z "$ORCA_AGENT_HOOK_PORT" ]')).toBeGreaterThan(-1)
-      expect(kimi.indexOf('if [ -z "$ORCA_AGENT_HOOK_PORT" ]')).toBeLessThan(
+      expect(kimi.indexOf('if [ -z "$POD_AGENT_HOOK_PORT" ]')).toBeGreaterThan(-1)
+      expect(kimi.indexOf('if [ -z "$POD_AGENT_HOOK_PORT" ]')).toBeLessThan(
         kimi.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)
       )
     } finally {
@@ -394,7 +394,7 @@ describe('Windows managed hook stdin structure', () => {
         for (const entry of LOCAL_INSTALLERS) {
           expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
         }
-        const hooksDir = join(home, '.orca', 'agent-hooks')
+        const hooksDir = join(home, '.pod', 'agent-hooks')
         const mainScripts = readdirSync(hooksDir).filter(
           (name) =>
             name === 'antigravity-hook.cmd' ||
@@ -472,9 +472,9 @@ describe('Windows managed hook stdin structure', () => {
             launcher.executable,
             launcher.args,
             hookEnvironment({
-              ORCA_AGENT_HOOK_PORT: '59999',
-              ORCA_AGENT_HOOK_TOKEN: 'token',
-              ORCA_PANE_KEY: 'tab:leaf'
+              POD_AGENT_HOOK_PORT: '59999',
+              POD_AGENT_HOOK_TOKEN: 'token',
+              POD_PANE_KEY: 'tab:leaf'
             })
           )
           expect(insideAPane.exitCode, `${launcher.name} in-pane exit code`).toBe(0)
@@ -527,9 +527,9 @@ describe('Windows managed hook stdin structure', () => {
             name: 'Orca env with dead listener',
             env: hookEnvironment({
               USERPROFILE: home,
-              ORCA_AGENT_HOOK_PORT: '59999',
-              ORCA_AGENT_HOOK_TOKEN: 'token',
-              ORCA_PANE_KEY: 'tab:leaf'
+              POD_AGENT_HOOK_PORT: '59999',
+              POD_AGENT_HOOK_TOKEN: 'token',
+              POD_PANE_KEY: 'tab:leaf'
             })
           },
           {
@@ -563,7 +563,7 @@ describe('Windows managed hook stdin structure', () => {
 
 describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', () => {
   it('emits neutral JSON when the Claude lifecycle script is missing', async () => {
-    const command = getRemoteManagedCommand('/home/dev/.orca/agent-hooks/claude-hook.sh')
+    const command = getRemoteManagedCommand('/home/dev/.pod/agent-hooks/claude-hook.sh')
     const result = await runPosixHook(command)
 
     expect(result.exitCode).toBe(0)
@@ -599,9 +599,9 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
     for (const [agent, script] of scripts) {
       const extraEnv = agent.startsWith('command-code')
         ? {
-            ORCA_AGENT_HOOK_PORT: '1',
-            ORCA_AGENT_HOOK_TOKEN: 'test-token',
-            ORCA_PANE_KEY: 'test-pane'
+            POD_AGENT_HOOK_PORT: '1',
+            POD_AGENT_HOOK_TOKEN: 'test-token',
+            POD_PANE_KEY: 'test-pane'
           }
         : {}
       const result = await runPosixHook(script, extraEnv)

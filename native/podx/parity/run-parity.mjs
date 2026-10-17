@@ -129,8 +129,8 @@ async function runOne(kind, testCase) {
   const env = {
     PATH: process.env.PATH,
     HOME: process.env.HOME,
-    ORCA_USER_DATA_PATH: userData,
-    ORCA_COMPUTER_SCREENSHOT_TMPDIR: path.join(dir, `shots-${kind}`),
+    POD_USER_DATA_PATH: userData,
+    POD_COMPUTER_SCREENSHOT_TMPDIR: path.join(dir, `shots-${kind}`),
     POD_NATIVE_CLI_NODE: nodeWrapper,
     POD_NATIVE_CLI_NODE_ENTRY: cli,
     ...testCase.env

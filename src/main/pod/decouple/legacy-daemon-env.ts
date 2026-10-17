@@ -7,7 +7,7 @@ import type { PtySpawnOptions } from '../../providers/types'
 import { renamedLegacyEnvName } from '../../../shared/pod-legacy-env-names'
 
 /** Where this build's daemon reads a terminal's handle; the codemod renames it with the rest. */
-export const TERMINAL_HANDLE_ENV = 'ORCA_TERMINAL_HANDLE'
+export const TERMINAL_HANDLE_ENV = 'POD_TERMINAL_HANDLE'
 
 export function daemonReadsLegacyEnv(identity: DaemonEndpointIdentity | null): boolean {
   return identity?.terminalHandleEnv !== TERMINAL_HANDLE_ENV

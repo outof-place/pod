@@ -259,8 +259,8 @@ async function verifyTemplate(
 
 export function getOrcadTemplateCandidates(): string[] {
   const candidates: string[] = []
-  if (process.env.ORCA_ORCAD_TEMPLATE_PATH) {
-    candidates.push(process.env.ORCA_ORCAD_TEMPLATE_PATH)
+  if (process.env.POD_ORCAD_TEMPLATE_PATH) {
+    candidates.push(process.env.POD_ORCAD_TEMPLATE_PATH)
   }
   if (process.resourcesPath) {
     candidates.push(join(process.resourcesPath, 'orcad-template'))

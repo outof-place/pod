@@ -22,7 +22,7 @@ import {
 } from './helpers/staging-skill-ssh-target'
 
 const RUN_STAGING = process.env.ORCA_E2E_SKILL_STAGING === '1'
-const AUTH_TOKEN = process.env.ORCA_CLOUD_AUTH_TOKEN?.trim()
+const AUTH_TOKEN = process.env.POD_CLOUD_AUTH_TOKEN?.trim()
 const PHYSICAL_HOST_PAIRING_URL = process.env.ORCA_E2E_SKILL_PHYSICAL_PAIRING_URL?.trim()
 const RUN_HEADLESS_PAIRED = process.env.ORCA_E2E_SKILL_PAIRED_HEADLESS === '1'
 const PHYSICAL_WSL_DISTRO = 'Ubuntu-24.04'
@@ -30,7 +30,7 @@ const SKILL_NAME = `orca-staging-${randomUUID().slice(0, 8)}`
 const SSH_TARGET = RUN_STAGING ? stagingSkillSshTargetFromEnvironment() : null
 
 if (RUN_STAGING && !AUTH_TOKEN) {
-  throw new Error('ORCA_CLOUD_AUTH_TOKEN is required for the noninteractive staging journey.')
+  throw new Error('POD_CLOUD_AUTH_TOKEN is required for the noninteractive staging journey.')
 }
 if (PHYSICAL_HOST_PAIRING_URL && RUN_HEADLESS_PAIRED) {
   throw new Error('staging physical pairing and headless pairing are mutually exclusive')
@@ -38,11 +38,11 @@ if (PHYSICAL_HOST_PAIRING_URL && RUN_HEADLESS_PAIRED) {
 
 test.use({
   orcaAppExtraEnv: {
-    ORCA_ARTIFACTS_API_URL: 'https://cloud-api-staging.onorca.dev',
-    ORCA_CLOUD_API_URL: 'https://auth-staging.onorca.dev',
-    ORCA_CLOUD_AUTH_URL: 'https://auth-staging.onorca.dev',
-    ORCA_CLOUD_CLIENT_ID: 'orca-desktop',
-    ...(AUTH_TOKEN ? { ORCA_CLOUD_AUTH_TOKEN: AUTH_TOKEN } : {})
+    POD_ARTIFACTS_API_URL: 'https://cloud-api-staging.onorca.dev',
+    POD_CLOUD_API_URL: 'https://auth-staging.onorca.dev',
+    POD_CLOUD_AUTH_URL: 'https://auth-staging.onorca.dev',
+    POD_CLOUD_CLIENT_ID: 'orca-desktop',
+    ...(AUTH_TOKEN ? { POD_CLOUD_AUTH_TOKEN: AUTH_TOKEN } : {})
   }
 })
 

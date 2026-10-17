@@ -40,8 +40,8 @@ export async function installCodexHooksRemote(
   // into stale trust keys. Plain SSH keeps its guest-home script contract.
   const redirectedCodexHome = options?.codexHomeDir?.replace(/\/$/, '')
   const remoteScriptPath = redirectedCodexHome
-    ? `${redirectedCodexHome}/.orca/agent-hooks/codex-hook.sh`
-    : `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/codex-hook.sh`
+    ? `${redirectedCodexHome}/.pod/agent-hooks/codex-hook.sh`
+    : `${remoteHome.replace(/\/$/, '')}/.pod/agent-hooks/codex-hook.sh`
   try {
     const config = await readHooksJsonRemote(sftp, remoteConfigPath)
     if (!config) {

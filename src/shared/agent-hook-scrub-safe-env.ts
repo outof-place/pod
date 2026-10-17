@@ -5,7 +5,7 @@
  * DeepSeek Harness runs command hooks through its own shell executor, which drops every
  * variable whose name contains `KEY`, `TOKEN`, `SECRET` or `PASSWORD` before the hook
  * process starts. That is a reasonable credential-scrub default, and it is not something
- * Orca can turn off — but it takes `ORCA_PANE_KEY` and `ORCA_AGENT_LAUNCH_TOKEN` with it,
+ * Orca can turn off — but it takes `POD_PANE_KEY` and `POD_AGENT_LAUNCH_TOKEN` with it,
  * which are the two values a status hook needs to say *which pane* it is reporting for.
  * Without them the hook has nothing to attribute to and exits without posting, so the pane
  * reads as an agent Orca never hears from.
@@ -19,15 +19,15 @@
  * every existing agent, script and test keeps reading what it reads today.
  */
 
-/** Alias for `ORCA_PANE_KEY`. */
-export const ORCA_SCRUB_SAFE_PANE_ENV = 'ORCA_AGENT_PANE' as const
+/** Alias for `POD_PANE_KEY`. */
+export const ORCA_SCRUB_SAFE_PANE_ENV = 'POD_AGENT_PANE' as const
 
-/** Alias for `ORCA_AGENT_LAUNCH_TOKEN`. */
-export const ORCA_SCRUB_SAFE_LAUNCH_ENV = 'ORCA_AGENT_LAUNCH' as const
+/** Alias for `POD_AGENT_LAUNCH_TOKEN`. */
+export const ORCA_SCRUB_SAFE_LAUNCH_ENV = 'POD_AGENT_LAUNCH' as const
 
 const ALIASES: readonly (readonly [source: string, alias: string])[] = [
-  ['ORCA_PANE_KEY', ORCA_SCRUB_SAFE_PANE_ENV],
-  ['ORCA_AGENT_LAUNCH_TOKEN', ORCA_SCRUB_SAFE_LAUNCH_ENV]
+  ['POD_PANE_KEY', ORCA_SCRUB_SAFE_PANE_ENV],
+  ['POD_AGENT_LAUNCH_TOKEN', ORCA_SCRUB_SAFE_LAUNCH_ENV]
 ]
 
 /**

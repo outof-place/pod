@@ -55,17 +55,17 @@ if (process.env.ORCA_CODEX_TRUST_CONTRACT_REQUIRED === '1' && !codexTrustContrac
 beforeEach(() => {
   testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-trust-presets-'))
   testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-trust-presets-user-data-'))
-  testState.previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-  process.env.ORCA_USER_DATA_PATH = testState.userDataDir
+  testState.previousUserDataPath = process.env.POD_USER_DATA_PATH
+  process.env.POD_USER_DATA_PATH = testState.userDataDir
 })
 
 afterEach(() => {
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
   rmSync(testState.userDataDir, { recursive: true, force: true })
   if (testState.previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.POD_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = testState.previousUserDataPath
+    process.env.POD_USER_DATA_PATH = testState.previousUserDataPath
   }
   testState.fakeHomeDir = ''
   testState.userDataDir = ''

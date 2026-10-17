@@ -31,7 +31,7 @@ describe('Codex real-account validation harness', () => {
           HOME: primaryHome,
           USERPROFILE: primaryHome,
           CODEX_HOME: '/unsafe/codex',
-          ORCA_CODEX_HOME: '/unsafe/orca-codex',
+          POD_CODEX_HOME: '/unsafe/orca-codex',
           ZDOTDIR: '/unsafe/zsh',
           SAFE_VALUE: 'preserved'
         }, layout)
@@ -44,7 +44,7 @@ describe('Codex real-account validation harness', () => {
     expect(env.HOME).toBe(layout.homeDir)
     expect(env.USERPROFILE).toBe(layout.homeDir)
     expect(env.CODEX_HOME).toBeUndefined()
-    expect(env.ORCA_CODEX_HOME).toBeUndefined()
+    expect(env.POD_CODEX_HOME).toBeUndefined()
     expect(env.ZDOTDIR).toBeUndefined()
     expect(env.SAFE_VALUE).toBe('preserved')
   })

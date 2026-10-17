@@ -289,8 +289,8 @@ describe('CLI launch redirect: spawning', () => {
         env: expect.objectContaining({
           ELECTRON_RUN_AS_NODE: '1',
           ORCA_CLI_LAUNCH_REDIRECTED: '1',
-          ORCA_NODE_OPTIONS: '--inspect',
-          ORCA_NODE_REPL_EXTERNAL_MODULE: 'external-loader'
+          POD_NODE_OPTIONS: '--inspect',
+          POD_NODE_REPL_EXTERNAL_MODULE: 'external-loader'
         })
       })
     )

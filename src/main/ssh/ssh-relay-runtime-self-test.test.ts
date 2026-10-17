@@ -182,7 +182,7 @@ describe('self-test commands on a real shell', () => {
 
 describe('relay self-test report evaluation', () => {
   it('classifies the loader message a failed addon load reports', () => {
-    const output = `ORCA_RUNTIME_EXIT=0\n${report('n', {
+    const output = `POD_RUNTIME_EXIT=0\n${report('n', {
       ok: false,
       stage: 'load',
       error: "/lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.33' not found"
@@ -194,7 +194,7 @@ describe('relay self-test report evaluation', () => {
   })
 
   it('never turns a PTY spawn failure into a runtime refusal', () => {
-    const output = `ORCA_RUNTIME_EXIT=0\n${report('n', {
+    const output = `POD_RUNTIME_EXIT=0\n${report('n', {
       ok: false,
       stage: 'spawn',
       error: 'posix_openpt: Permission denied'
@@ -215,7 +215,7 @@ describe('Windows relay self-test', () => {
       "Set-Location -LiteralPath 'C:/Users/u/.orca-remote/relay-0.1.0+abc'
       $out = ''; $status = $null
       try { $out = ((& 'C:/Users/o''brien/.orca-remote/runtimes/node-x/node.exe' 'relay.js' '--orca-runtime-selftest' 'feed' 2>&1) | ForEach-Object { "$_" }) -join "\`n"; $status = $LASTEXITCODE } catch { $status = -1; $out = $_.Exception.Message }
-      Write-Output ('ORCA_RUNTIME_EXIT=' + $status)
+      Write-Output ('POD_RUNTIME_EXIT=' + $status)
       Write-Output ($out.Substring(0, [Math]::Min(16000, $out.Length)))"
     `)
   })
@@ -223,13 +223,13 @@ describe('Windows relay self-test', () => {
   it('requires the report to name the pinned Node, since no separate --version runs', () => {
     expect(
       evaluateWindowsRelayRuntimeSelfTest(
-        `ORCA_RUNTIME_EXIT=0\r\n${report('n', { ok: true })}`,
+        `POD_RUNTIME_EXIT=0\r\n${report('n', { ok: true })}`,
         'n'
       )
     ).toMatchObject({ verdict: 'passed' })
     expect(
       evaluateWindowsRelayRuntimeSelfTest(
-        `ORCA_RUNTIME_EXIT=0\r\n${report('n', { ok: true, node: 'v22.16.0' })}`,
+        `POD_RUNTIME_EXIT=0\r\n${report('n', { ok: true, node: 'v22.16.0' })}`,
         'n'
       )
     ).toMatchObject({ verdict: 'failed' })
@@ -241,7 +241,7 @@ describe('Windows relay self-test', () => {
       const nonce = /'--orca-runtime-selftest' '([0-9a-f]+)'/.exec(
         decodeRemotePowerShellScript(command)
       )?.[1]
-      return `ORCA_RUNTIME_EXIT=0\r\n${report(nonce ?? '', { ok: true })}\r\n`
+      return `POD_RUNTIME_EXIT=0\r\n${report(nonce ?? '', { ok: true })}\r\n`
     })
     await expect(
       runPinnedRuntimeSelfTest(conn, 'C:/r', 'C:/n/node.exe', undefined, {
@@ -253,7 +253,7 @@ describe('Windows relay self-test', () => {
   })
 
   it('refuses a runtime whose ConPTY pair was quarantined after upload', () => {
-    const output = `ORCA_RUNTIME_EXIT=0\r\n${report('n', {
+    const output = `POD_RUNTIME_EXIT=0\r\n${report('n', {
       ok: false,
       stage: 'load',
       error: 'bundled ConPTY file missing after upload: C:/r/conpty/OpenConsole.exe'
@@ -270,14 +270,14 @@ describe('runPinnedRuntimeSelfTest', () => {
     vi.mocked(execCommand).mockReset()
   })
 
-  const versionOk = `ORCA_RUNTIME_EXIT=0\nv${NODE_RUNTIME_PIN.version}`
+  const versionOk = `POD_RUNTIME_EXIT=0\nv${NODE_RUNTIME_PIN.version}`
 
   it('passes when both steps answer', async () => {
     vi.mocked(execCommand)
       .mockResolvedValueOnce(versionOk)
       .mockImplementationOnce(async (_conn, command) => {
         const nonce = /--orca-runtime-selftest '([0-9a-f]+)'/.exec(command)?.[1] ?? ''
-        return `ORCA_RUNTIME_EXIT=0\n${report(nonce, { ok: true })}`
+        return `POD_RUNTIME_EXIT=0\n${report(nonce, { ok: true })}`
       })
     await expect(runPinnedRuntimeSelfTest(conn, '/r', '/n')).resolves.toMatchObject({
       verdict: 'passed'
@@ -306,7 +306,7 @@ describe('runPinnedRuntimeSelfTest', () => {
   })
 
   it('does not retry an answered refusal', async () => {
-    vi.mocked(execCommand).mockResolvedValue('ORCA_RUNTIME_EXIT=126\nPermission denied')
+    vi.mocked(execCommand).mockResolvedValue('POD_RUNTIME_EXIT=126\nPermission denied')
     await expect(runPinnedRuntimeSelfTest(conn, '/r', '/n')).resolves.toMatchObject({
       verdict: 'refused',
       refusal: 'noexec'
@@ -315,7 +315,7 @@ describe('runPinnedRuntimeSelfTest', () => {
   })
 
   it('bounds each step by the remaining 30 s budget', async () => {
-    vi.mocked(execCommand).mockResolvedValue('ORCA_RUNTIME_EXIT=126\nPermission denied')
+    vi.mocked(execCommand).mockResolvedValue('POD_RUNTIME_EXIT=126\nPermission denied')
     await runPinnedRuntimeSelfTest(conn, '/r', '/n')
     const timeoutMs = vi.mocked(execCommand).mock.calls[0][2]?.timeoutMs ?? 0
     expect(timeoutMs).toBeGreaterThan(29_000)

@@ -28,7 +28,7 @@ import {
 } from './codex-hook-trust-derivation'
 import { CODEX_EVENTS, CODEX_EVENT_LABEL } from './codex-hook-definition'
 
-const COMMAND = '/home/u/.orca/agent-hooks/codex-hook.sh'
+const COMMAND = '/home/u/.pod/agent-hooks/codex-hook.sh'
 const LABELS = CODEX_EVENTS.map((eventName) => CODEX_EVENT_LABEL[eventName])
 const hashesOf = (answer: CodexHookAnswer) => (answer.kind === 'hashes' ? answer.hashes : null)
 

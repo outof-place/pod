@@ -13,12 +13,12 @@ import { fingerprintCodex, type CodexHookHashes } from './codex-hook-trust-deriv
 
 let userData: string
 let codexPath: string
-const COMMAND = '/home/u/.orca/agent-hooks/codex-hook.sh'
+const COMMAND = '/home/u/.pod/agent-hooks/codex-hook.sh'
 const HASHES = { stop: 'sha256:stop', session_start: 'sha256:start' }
 
 beforeEach(() => {
   userData = mkdtempSync(join(tmpdir(), 'orca-codex-trust-memo-'))
-  vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+  vi.stubEnv('POD_USER_DATA_PATH', userData)
   codexPath = join(userData, 'codex')
   writeFileSync(codexPath, 'codex 0.150.1')
 })

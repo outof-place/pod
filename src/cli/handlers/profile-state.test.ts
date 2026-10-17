@@ -234,8 +234,8 @@ describe('profile-state CLI recovery', () => {
   it('keeps profile-state recovery local when remote selection is configured', async () => {
     const profile = createProfile()
     getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
-    vi.stubEnv('ORCA_PAIRING_CODE', 'remote-pairing-code')
-    vi.stubEnv('ORCA_ENVIRONMENT', 'stale-environment')
+    vi.stubEnv('POD_PAIRING_CODE', 'remote-pairing-code')
+    vi.stubEnv('POD_ENVIRONMENT', 'stale-environment')
 
     await main(['profile', 'state', 'rollback', '--revision', '1', '--json'], profile.userDataPath)
 

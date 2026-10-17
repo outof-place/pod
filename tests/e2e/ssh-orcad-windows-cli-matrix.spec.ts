@@ -74,7 +74,7 @@ function resetScratch(): void {
 
 function launchEnv(): Record<string, string> {
   return {
-    ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE!,
+    POD_ORCAD_TEMPLATE_PATH: TEMPLATE!,
     ORCA_E2E_ROLLOUT_FLAGS_FILE: FLAGS_FILE
   }
 }

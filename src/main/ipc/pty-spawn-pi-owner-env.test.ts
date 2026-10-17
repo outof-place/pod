@@ -48,9 +48,9 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 const ownerEnv = {
-  ORCA_PI_STATUS_OWNED: '1234',
-  ORCA_PRIME_AGENT_STATUS_OWNED: '1234',
-  ORCA_PI_TITLE_MARKER_OWNED: '1234'
+  POD_PI_STATUS_OWNED: '1234',
+  POD_PRIME_AGENT_STATUS_OWNED: '1234',
+  POD_PI_TITLE_MARKER_OWNED: '1234'
 }
 
 describe('Pi ownership deletion requests for persistent daemons', () => {

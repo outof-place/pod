@@ -27,11 +27,11 @@ const LIVE_SESSIONS: Record<string, LiveSession> = {
 type Post = { hook_event_name: string; sessionID?: string }
 
 const ENV_KEYS = [
-  'ORCA_PANE_KEY',
-  'ORCA_OPENCODE_AGENT',
-  'ORCA_AGENT_HOOK_ENDPOINT',
-  'ORCA_AGENT_HOOK_PORT',
-  'ORCA_AGENT_HOOK_TOKEN'
+  'POD_PANE_KEY',
+  'POD_OPENCODE_AGENT',
+  'POD_AGENT_HOOK_ENDPOINT',
+  'POD_AGENT_HOOK_PORT',
+  'POD_AGENT_HOOK_TOKEN'
 ] as const
 
 describe.each(['opencode', 'opencode2'] as const)('%s plugin OpenCode 2 lineage', (agent) => {
@@ -46,11 +46,11 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin OpenCode 2 lineage'
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
-    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
-    process.env.ORCA_OPENCODE_AGENT = agent
-    delete process.env.ORCA_AGENT_HOOK_ENDPOINT
-    process.env.ORCA_AGENT_HOOK_PORT = '59999'
-    process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
+    process.env.POD_PANE_KEY = 'tab-1:leaf-1'
+    process.env.POD_OPENCODE_AGENT = agent
+    delete process.env.POD_AGENT_HOOK_ENDPOINT
+    process.env.POD_AGENT_HOOK_PORT = '59999'
+    process.env.POD_AGENT_HOOK_TOKEN = 'test-token'
   })
 
   afterEach(() => {

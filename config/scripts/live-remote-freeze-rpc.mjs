@@ -13,8 +13,8 @@ export function appendOrcaRpcOutput(output, chunk, bytes, limit = MAX_ORCA_RPC_O
 }
 
 export function resolveOrcaCliCommand({ env = process.env, platform = process.platform } = {}) {
-  if (env.ORCA_CLI_COMMAND?.trim()) {
-    return env.ORCA_CLI_COMMAND.trim()
+  if (env.POD_CLI_COMMAND?.trim()) {
+    return env.POD_CLI_COMMAND.trim()
   }
   if (env.ORCA_DEV_REPO_ROOT) {
     return 'orca-dev'
@@ -43,11 +43,11 @@ export function resolveOrcaCliInvocation({
       prefixArgs: [path.win32.join(env.ORCA_DEV_REPO_ROOT, 'out', 'cli', 'index.js')],
       env: {
         ...env,
-        ORCA_USER_DATA_PATH:
-          env.ORCA_USER_DATA_PATH ?? env.ORCA_DEV_USER_DATA_PATH ?? defaultUserDataPath,
+        POD_USER_DATA_PATH:
+          env.POD_USER_DATA_PATH ?? env.ORCA_DEV_USER_DATA_PATH ?? defaultUserDataPath,
         ORCA_DEV_CLI_INVOCATION: '1',
-        ORCA_APP_EXECUTABLE:
-          env.ORCA_APP_EXECUTABLE ??
+        POD_APP_EXECUTABLE:
+          env.POD_APP_EXECUTABLE ??
           path.win32.join(
             env.ORCA_DEV_REPO_ROOT,
             'node_modules',
@@ -55,7 +55,7 @@ export function resolveOrcaCliInvocation({
             'dist',
             'electron.exe'
           ),
-        ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT: '1'
+        POD_APP_EXECUTABLE_NEEDS_APP_ROOT: '1'
       }
     }
   }

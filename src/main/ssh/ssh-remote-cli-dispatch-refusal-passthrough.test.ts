@@ -46,7 +46,7 @@ it('relays typed dispatch refusal codes from the host CLI unchanged', async () =
       callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
       argv: ['orchestration', 'dispatch', '--task', 'task_1', '--to', 'term_w', '--json'],
       cwd: '/home/alice/repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { POD_TERMINAL_HANDLE: 'term_ssh' }
     },
     {
       execPath: '/host/electron',

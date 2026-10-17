@@ -57,7 +57,7 @@ for (const surface of [
     chmodSync(recorder, 0o755)
     const receipt = (): string => (existsSync(receiptPath) ? readFileSync(receiptPath, 'utf8') : '')
     const host = startOrcadConvertHost('docker', testInfo)
-    const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
+    const session = createRestartSession(testInfo, { POD_ORCAD_TEMPLATE_PATH: TEMPLATE! })
     let app: ElectronApplication | null = null
     try {
       if (!host.exec) {

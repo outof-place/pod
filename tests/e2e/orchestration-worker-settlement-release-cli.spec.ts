@@ -48,7 +48,7 @@ process.stdin.on('data', (chunk) => {
   const request = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'))
   const args = [
     'orchestration', 'send',
-    '--from', request.mismatch ? 'term_foreign' : process.env.ORCA_TERMINAL_HANDLE,
+    '--from', request.mismatch ? 'term_foreign' : process.env.POD_TERMINAL_HANDLE,
     '--to', request.coordinator,
     '--type', 'worker_done',
     '--subject', request.mismatch ? 'wrong sender' : 'completed',
@@ -114,7 +114,7 @@ function readCliLedger(): CliLedgerEntry[] {
 
 function invokeCompiledCli(userDataDir: string, args: string[]) {
   return spawnSync(process.execPath, [cliEntry, ...args], {
-    env: { ...process.env, ORCA_USER_DATA_PATH: userDataDir, ORCA_DEV_CLI_INVOCATION: '1' },
+    env: { ...process.env, POD_USER_DATA_PATH: userDataDir, ORCA_DEV_CLI_INVOCATION: '1' },
     encoding: 'utf8'
   })
 }

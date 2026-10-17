@@ -189,7 +189,7 @@ Generation-aware **latest-wins single-flight** for exclusive host focus:
 - `restart-proxy` does **not** kill Orca; it runs `orca open` + refresh RPCs only.
 - Manual capture if UI fully freezes: `sample Orca 5 -file ~/Desktop/orca-freeze-sample.txt`
 
-The scripts honor `ORCA_CLI_COMMAND`, then use `orca-dev` in a dev runtime, `orca-ide` on Linux, and `orca` elsewhere.
+The scripts honor `POD_CLI_COMMAND`, then use `orca-dev` in a dev runtime, `orca-ide` on Linux, and `orca` elsewhere.
 
 PowerShell equivalent for the first example:
 

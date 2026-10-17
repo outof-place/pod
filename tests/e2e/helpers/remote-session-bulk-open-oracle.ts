@@ -256,7 +256,7 @@ export async function runBulkOpenFreezeOracle(
     sessionCount: sessions.length,
     worktreeCount: worktreeIds.length,
     topology: opts.topology,
-    versionHint: opts.versionHint ?? process.env.ORCA_VERSION ?? 'unknown',
+    versionHint: opts.versionHint ?? process.env.POD_VERSION ?? 'unknown',
     notes
   }
 

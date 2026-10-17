@@ -100,15 +100,15 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
     '}',
     '',
     'export default function (pi) {',
-    '  if (!process.env.ORCA_PANE_KEY) return',
+    '  if (!process.env.POD_PANE_KEY) return',
     ...(kind === 'pi'
       ? [
           '  // Why: child agents inherit the pane env, and the spinner is harmlessly',
           '  // per-process — but the needs-input marker is status the pane reports, so only',
-          '  // one process may assert it. Mirrors ORCA_PI_STATUS_OWNED in the status hook.',
-          '  const markerOwnerPid = process.env.ORCA_PI_TITLE_MARKER_OWNED',
+          '  // one process may assert it. Mirrors POD_PI_STATUS_OWNED in the status hook.',
+          '  const markerOwnerPid = process.env.POD_PI_TITLE_MARKER_OWNED',
           '  const ownsMarker = !markerOwnerPid || markerOwnerPid === String(process.pid)',
-          '  if (ownsMarker) process.env.ORCA_PI_TITLE_MARKER_OWNED = String(process.pid)'
+          '  if (ownsMarker) process.env.POD_PI_TITLE_MARKER_OWNED = String(process.pid)'
         ]
       : []),
 

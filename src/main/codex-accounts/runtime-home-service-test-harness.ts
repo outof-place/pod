@@ -179,8 +179,8 @@ export function setupRuntimeHomeTest(): void {
   vi.stubEnv('USERPROFILE', testState.fakeHomeDir)
   vi.stubEnv('SystemRoot', join(testState.fakeHomeDir, 'Windows'))
   vi.stubEnv('ProgramFiles', join(testState.fakeHomeDir, 'Program Files'))
-  testState.previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-  process.env.ORCA_USER_DATA_PATH = testState.userDataDir
+  testState.previousUserDataPath = process.env.POD_USER_DATA_PATH
+  process.env.POD_USER_DATA_PATH = testState.userDataDir
   mkdirSync(getSystemCodexHomePath(), { recursive: true })
   mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
   writePaneRegistry({
@@ -197,9 +197,9 @@ export function teardownRuntimeHomeTest(): void {
   rmSync(testState.userDataDir, { recursive: true, force: true })
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
   if (testState.previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.POD_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = testState.previousUserDataPath
+    process.env.POD_USER_DATA_PATH = testState.previousUserDataPath
   }
   if (testState.previousCodexHome === undefined) {
     delete process.env.CODEX_HOME

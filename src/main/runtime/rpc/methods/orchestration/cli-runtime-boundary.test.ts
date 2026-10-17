@@ -15,7 +15,7 @@ type CliHandler = (ctx: {
   json: boolean
 }) => Promise<void>
 
-const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
+const originalTerminalHandle = process.env.POD_TERMINAL_HANDLE
 
 describe('orchestration CLI/runtime boundary', () => {
   const h = createOrchestrationRpcHarness()
@@ -55,7 +55,7 @@ describe('orchestration CLI/runtime boundary', () => {
 
   it('creates and gates a PowerShell-stripped dependency through CLI and runtime', async () => {
     ;({ db, ctx } = h.setup())
-    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+    process.env.POD_TERMINAL_HANDLE = 'term_coord'
     const handlers = await loadOrchestrationHandlers()
     const runtimeClient = client()
 
@@ -133,8 +133,8 @@ function objectParams(params: unknown): Record<string, unknown> {
 /** Restores the caller terminal environment so later CLI tests do not inherit this fixture. */
 function restoreTerminalHandle(): void {
   if (originalTerminalHandle === undefined) {
-    delete process.env.ORCA_TERMINAL_HANDLE
+    delete process.env.POD_TERMINAL_HANDLE
   } else {
-    process.env.ORCA_TERMINAL_HANDLE = originalTerminalHandle
+    process.env.POD_TERMINAL_HANDLE = originalTerminalHandle
   }
 }

@@ -130,7 +130,7 @@ export function acquireOrcadInstanceLock(
     pid: process.pid,
     startedAtMs: readStartedAt(process.pid),
     identity,
-    version: (hooks.version ?? (() => process.env.ORCA_VERSION ?? 'unknown'))(),
+    version: (hooks.version ?? (() => process.env.POD_VERSION ?? 'unknown'))(),
     acquiredAt: (hooks.now ?? (() => new Date()))().toISOString(),
     nonce: randomUUID(),
     role: hooks.role ?? 'orcad'
@@ -188,7 +188,7 @@ export function acquireOrcadInstanceLock(
       'orcad_instance_lock_foreign_identity',
       `The orcad data root ${dataRoot} is locked by identity ${existing.identity} (pid ` +
         `${existing.pid}); this process runs as ${identity}. Two identities sharing one data ` +
-        'root corrupts it. Give each its own ORCA_USER_DATA.'
+        'root corrupts it. Give each its own POD_USER_DATA.'
     )
   }
   // The desktop takes this lock only after Electron's single-instance lock, which already proves
@@ -203,7 +203,7 @@ export function acquireOrcadInstanceLock(
       'orcad_instance_lock_held',
       `${describeLockHolder(existing)} (pid ${existing.pid}, started ` +
         `${existing.acquiredAt || 'unknown'}) already owns the data root ${dataRoot}. Stop it ` +
-        'before starting another, or use a different ORCA_USER_DATA.'
+        'before starting another, or use a different POD_USER_DATA.'
     )
   }
   return reclaimAndPublish(lockPath, dataRoot, existingContents, publish, record)

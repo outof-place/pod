@@ -9,26 +9,26 @@
  */
 export function getPosixClaudeShellFunction(): string {
   return `__orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
-if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" && -x "\${__orca_claude_binary}" ]]; then
+if [[ -n "\${POD_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" && -x "\${__orca_claude_binary}" ]]; then
   function claude {
-    local __orca_claude_home __orca_claude_pointer="\${ORCA_CLAUDE_PROFILE_POINTER:-}"
+    local __orca_claude_home __orca_claude_pointer="\${POD_CLAUDE_PROFILE_POINTER:-}"
     # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
     case "$__orca_claude_pointer" in '~/'*) __orca_claude_pointer="\${HOME:-}/\${__orca_claude_pointer#??}" ;; esac
     __orca_claude_home="$(cat "$__orca_claude_pointer" 2>/dev/null || :)"
-    if [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "\${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ]; then
+    if [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "\${POD_CLAUDE_INJECTED_CONFIG_DIR:-}" ]; then
       command claude "$@"; return
     fi
     # Why: Orca's value replaced the user's own at spawn, so System default restores theirs.
-    if [ -z "$__orca_claude_home" ] && [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ -n "\${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ]; then
-      ( unset ORCA_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"; command claude "$@" ); return
+    if [ -z "$__orca_claude_home" ] && [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ -n "\${POD_CLAUDE_USER_CONFIG_DIR:-}" ]; then
+      ( unset POD_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$POD_CLAUDE_USER_CONFIG_DIR"; command claude "$@" ); return
     fi
     if [ -z "$__orca_claude_home" ]; then
-      ( unset CLAUDE_CONFIG_DIR ORCA_CLAUDE_INJECTED_CONFIG_DIR; command claude "$@" ); return
+      ( unset CLAUDE_CONFIG_DIR POD_CLAUDE_INJECTED_CONFIG_DIR; command claude "$@" ); return
     fi
     case "$__orca_claude_home" in /*|[A-Za-z]:*) ;; *) return 1 ;; esac
     # Why -m 700: matches the folder Orca's setup creates; a credentials folder stays private.
     [ -d "$__orca_claude_home" ] || mkdir -p -m 700 -- "$__orca_claude_home" 2>/dev/null
-    ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
+    ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" POD_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
   }
 fi
 unset __orca_claude_binary
@@ -39,28 +39,28 @@ unset __orca_claude_binary
 export function getFishClaudeShellFunction(): string {
   return `
 set -l __orca_claude_type (type -t claude 2>/dev/null)
-if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
+if test -n "$POD_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
   function claude
     # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
-    set -l pointer (string replace -r '^~/' "$HOME/" -- "$ORCA_CLAUDE_PROFILE_POINTER")
+    set -l pointer (string replace -r '^~/' "$HOME/" -- "$POD_CLAUDE_PROFILE_POINTER")
     set -l profile (cat "$pointer" 2>/dev/null)
-    if test -n "$CLAUDE_CONFIG_DIR"; and test "$CLAUDE_CONFIG_DIR" != "$ORCA_CLAUDE_INJECTED_CONFIG_DIR"
+    if test -n "$CLAUDE_CONFIG_DIR"; and test "$CLAUDE_CONFIG_DIR" != "$POD_CLAUDE_INJECTED_CONFIG_DIR"
       command claude $argv
       return $status
     end
-    if test -z "$profile"; and test -n "$CLAUDE_CONFIG_DIR"; and test -n "$ORCA_CLAUDE_USER_CONFIG_DIR"
-      env -u ORCA_CLAUDE_INJECTED_CONFIG_DIR CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR" claude $argv
+    if test -z "$profile"; and test -n "$CLAUDE_CONFIG_DIR"; and test -n "$POD_CLAUDE_USER_CONFIG_DIR"
+      env -u POD_CLAUDE_INJECTED_CONFIG_DIR CLAUDE_CONFIG_DIR="$POD_CLAUDE_USER_CONFIG_DIR" claude $argv
       return $status
     end
     if test -z "$profile"
-      env -u CLAUDE_CONFIG_DIR -u ORCA_CLAUDE_INJECTED_CONFIG_DIR claude $argv
+      env -u CLAUDE_CONFIG_DIR -u POD_CLAUDE_INJECTED_CONFIG_DIR claude $argv
       return $status
     end
     if not string match -qr '^(/|[A-Za-z]:)' -- "$profile"
       return 1
     end
     test -d "$profile"; or mkdir -p -m 700 -- "$profile" 2>/dev/null
-    env CLAUDE_CONFIG_DIR="$profile" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$profile" claude $argv
+    env CLAUDE_CONFIG_DIR="$profile" POD_CLAUDE_INJECTED_CONFIG_DIR="$profile" claude $argv
   end
 end
 set -e __orca_claude_type
@@ -71,22 +71,22 @@ set -e __orca_claude_type
 export function getPowerShellClaudeShellFunction(): string {
   return `
 $orcaClaudeCommand = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($env:ORCA_CLAUDE_PROFILE_POINTER -and $orcaClaudeCommand -and
+if ($env:POD_CLAUDE_PROFILE_POINTER -and $orcaClaudeCommand -and
     $orcaClaudeCommand.CommandType -in @("Application", "ExternalScript")) {
 function Global:claude {
-    $names = @('CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR')
+    $names = @('CLAUDE_CONFIG_DIR', 'POD_CLAUDE_INJECTED_CONFIG_DIR')
     $saved = @{}
     foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
     try {
         $orcaClaudeHome = ''
-        if ($env:ORCA_CLAUDE_PROFILE_POINTER -and (Test-Path -LiteralPath $env:ORCA_CLAUDE_PROFILE_POINTER -PathType Leaf)) {
-            $orcaClaudeHome = [IO.File]::ReadAllText($env:ORCA_CLAUDE_PROFILE_POINTER).TrimEnd()
+        if ($env:POD_CLAUDE_PROFILE_POINTER -and (Test-Path -LiteralPath $env:POD_CLAUDE_PROFILE_POINTER -PathType Leaf)) {
+            $orcaClaudeHome = [IO.File]::ReadAllText($env:POD_CLAUDE_PROFILE_POINTER).TrimEnd()
         }
-        if ($env:CLAUDE_CONFIG_DIR -and $env:CLAUDE_CONFIG_DIR -ne $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR) {
+        if ($env:CLAUDE_CONFIG_DIR -and $env:CLAUDE_CONFIG_DIR -ne $env:POD_CLAUDE_INJECTED_CONFIG_DIR) {
             # The user's own value wins.
         } elseif (-not $orcaClaudeHome) {
-            Remove-Item Env:ORCA_CLAUDE_INJECTED_CONFIG_DIR -ErrorAction SilentlyContinue
-            if ($env:CLAUDE_CONFIG_DIR -and $env:ORCA_CLAUDE_USER_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR = $env:ORCA_CLAUDE_USER_CONFIG_DIR }
+            Remove-Item Env:POD_CLAUDE_INJECTED_CONFIG_DIR -ErrorAction SilentlyContinue
+            if ($env:CLAUDE_CONFIG_DIR -and $env:POD_CLAUDE_USER_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR = $env:POD_CLAUDE_USER_CONFIG_DIR }
             else { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue }
         } elseif (-not [IO.Path]::IsPathRooted($orcaClaudeHome)) {
             $global:LASTEXITCODE = 1
@@ -94,7 +94,7 @@ function Global:claude {
         } else {
             if (-not [IO.Directory]::Exists($orcaClaudeHome)) { $null = New-Item -ItemType Directory -Path $orcaClaudeHome -Force -ErrorAction SilentlyContinue }
             $env:CLAUDE_CONFIG_DIR = $orcaClaudeHome
-            $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR = $orcaClaudeHome
+            $env:POD_CLAUDE_INJECTED_CONFIG_DIR = $orcaClaudeHome
         }
         $binary = Get-Command claude -CommandType Application,ExternalScript -ErrorAction Stop | Select-Object -First 1
         if ($MyInvocation.ExpectingInput) { $input | & $binary.Source @args } else { & $binary.Source @args }

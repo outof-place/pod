@@ -265,16 +265,16 @@ export function buildWslRelaySpawnEnv(
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     WSL_UTF8: '1',
-    ORCA_AGENT_HOOK_PORT: coords.ORCA_AGENT_HOOK_PORT,
-    ORCA_AGENT_HOOK_TOKEN: coords.ORCA_AGENT_HOOK_TOKEN,
-    ORCA_AGENT_HOOK_ENV: coords.ORCA_AGENT_HOOK_ENV,
-    ORCA_AGENT_HOOK_VERSION: coords.ORCA_AGENT_HOOK_VERSION,
+    POD_AGENT_HOOK_PORT: coords.POD_AGENT_HOOK_PORT,
+    POD_AGENT_HOOK_TOKEN: coords.POD_AGENT_HOOK_TOKEN,
+    POD_AGENT_HOOK_ENV: coords.POD_AGENT_HOOK_ENV,
+    POD_AGENT_HOOK_VERSION: coords.POD_AGENT_HOOK_VERSION,
     [WSL_HOOK_RELAY_VERSION_ENV]: bundleVersion,
     [WSL_HOOK_RELAY_INSTANCE_ENV]: instanceKey
   }
   // Why: the relay derives its own guest endpoint path; a /p-translated
   // Windows endpoint here would only add WSLENV noise.
-  delete env.ORCA_AGENT_HOOK_ENDPOINT
+  delete env.POD_AGENT_HOOK_ENDPOINT
   addOrcaWslInteropEnv(env as Record<string, string>)
   return env
 }

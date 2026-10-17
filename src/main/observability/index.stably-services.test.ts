@@ -21,7 +21,7 @@ describe('diagnostic bundle upload without Stably services', () => {
   })
 
   it('keeps the local log but disables bundle upload', () => {
-    for (const name of ['CI', 'GITHUB_ACTIONS', 'DO_NOT_TRACK', 'ORCA_TELEMETRY_DISABLED']) {
+    for (const name of ['CI', 'GITHUB_ACTIONS', 'DO_NOT_TRACK', 'POD_TELEMETRY_DISABLED']) {
       delete process.env[name]
     }
     expect(resolveObservabilityConsent().bundleEnabled).toBe(true)
@@ -30,7 +30,7 @@ describe('diagnostic bundle upload without Stably services', () => {
     expect(resolveObservabilityConsent()).toEqual({
       localFileEnabled: true,
       bundleEnabled: false,
-      disabledReason: 'orca_telemetry_disabled'
+      disabledReason: 'pod_telemetry_disabled'
     })
   })
 })

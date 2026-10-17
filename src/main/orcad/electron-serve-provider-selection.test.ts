@@ -100,7 +100,7 @@ describe('resolveOrcadBrowserProvider Electron preference', () => {
   it('uses the installed Electron app even when a Chromium executable is configured', async () => {
     provider = await resolveOrcadBrowserProvider({
       userDataPath: join(harnessRoot, 'state'),
-      environment: { ORCA_BROWSER_EXECUTABLE: chromiumExecutable },
+      environment: { POD_BROWSER_EXECUTABLE: chromiumExecutable },
       resolveInstalledElectronExecutable: async () => INSTALLED_EXECUTABLE,
       resolveAgentBrowserBinary: () => '/agent-browser'
     })
@@ -117,7 +117,7 @@ describe('resolveOrcadBrowserProvider Electron preference', () => {
 
     provider = await resolveOrcadBrowserProvider({
       userDataPath: join(harnessRoot, 'state'),
-      environment: { ORCA_BROWSER_EXECUTABLE: chromiumExecutable },
+      environment: { POD_BROWSER_EXECUTABLE: chromiumExecutable },
       resolveInstalledElectronExecutable: async () => INSTALLED_EXECUTABLE,
       resolveAgentBrowserBinary: () => '/agent-browser'
     })

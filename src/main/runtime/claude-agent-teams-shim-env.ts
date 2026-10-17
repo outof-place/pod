@@ -10,6 +10,7 @@ import {
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
 import { resolvePathEnvKey } from '../pty/windows-path-segment-merge'
+import { getProductIdentity } from '../product-identity/product-identity'
 
 export type ClaudeAgentTeamsLaunchPlan = {
   command: string
@@ -65,7 +66,7 @@ export function resolveClaudeAgentTeamsShimBin(
 ): string | null {
   // Why: Windows callers pass an env spelt `Path`; reading only `PATH` there would find no CLI at all.
   const pathValue = env[resolvePathEnvKey(env, process.platform)]
-  const override = env.ORCA_AGENT_TEAMS_SHIM_BIN
+  const override = env.POD_AGENT_TEAMS_SHIM_BIN
   if (override) {
     // Why: a bare override name would be resolved by the shim's shell against its cwd, so qualify it or ignore it.
     const qualified = isAbsolute(override) ? override : findExecutableOnPath(override, pathValue)
@@ -84,7 +85,7 @@ export function resolveClaudeAgentTeamsShimBin(
 }
 
 function defaultShimRoot(): string {
-  return join(homedir(), '.orca', 'claude-agent-teams-bin')
+  return join(homedir(), '.pod', 'claude-agent-teams-bin')
 }
 
 function bundledLauncherPath(): string | null {
@@ -92,7 +93,7 @@ function bundledLauncherPath(): string | null {
     return null
   }
   if (process.platform === 'darwin') {
-    return join(process.resourcesPath, 'bin', 'orca')
+    return join(process.resourcesPath, 'bin', getProductIdentity()?.cliName ?? 'orca')
   }
   if (process.platform === 'linux') {
     return join(process.resourcesPath, 'bin', 'orca-ide')
@@ -136,11 +137,11 @@ function unixShimScript(): string {
   return [
     '#!/usr/bin/env sh',
     'set -eu',
-    'orca_bin=${ORCA_AGENT_TEAMS_SHIM_BIN:-}',
+    'orca_bin=${POD_AGENT_TEAMS_SHIM_BIN:-}',
     'case $orca_bin in',
     '  /*|[A-Za-z]:[\\\\/]*) ;;',
     '  *)',
-    '    echo "orca agent-teams tmux shim: ORCA_AGENT_TEAMS_SHIM_BIN must be an absolute path" >&2',
+    '    echo "orca agent-teams tmux shim: POD_AGENT_TEAMS_SHIM_BIN must be an absolute path" >&2',
     '    exit 127',
     '    ;;',
     'esac',
@@ -153,17 +154,17 @@ export function windowsClaudeAgentTeamsShimScript(): string {
   return [
     '@echo off',
     'setlocal',
-    'set "ORCA_SHIM_BIN=%ORCA_AGENT_TEAMS_SHIM_BIN%"',
-    'if not defined ORCA_SHIM_BIN goto :unqualified',
-    'if "%ORCA_SHIM_BIN:~1,1%"==":" goto :run',
-    'if "%ORCA_SHIM_BIN:~0,2%"=="\\\\" goto :run',
+    'set "POD_SHIM_BIN=%POD_AGENT_TEAMS_SHIM_BIN%"',
+    'if not defined POD_SHIM_BIN goto :unqualified',
+    'if "%POD_SHIM_BIN:~1,1%"==":" goto :run',
+    'if "%POD_SHIM_BIN:~0,2%"=="\\\\" goto :run',
     'goto :unqualified',
     ':run',
     // Why: no `call` — its extra percent-expansion pass would rewrite tmux pane args such as `%2` into batch parameters.
-    '"%ORCA_SHIM_BIN%" agent-teams-tmux %*',
+    '"%POD_SHIM_BIN%" agent-teams-tmux %*',
     'exit /b %ERRORLEVEL%',
     ':unqualified',
-    'echo orca agent-teams tmux shim: ORCA_AGENT_TEAMS_SHIM_BIN must be an absolute path 1>&2',
+    'echo orca agent-teams tmux shim: POD_AGENT_TEAMS_SHIM_BIN must be an absolute path 1>&2',
     'exit /b 127',
     ''
   ].join('\r\n')

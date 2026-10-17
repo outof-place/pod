@@ -56,7 +56,7 @@ function createGuest(name: string, beforeInstall?: (index: number) => Promise<vo
   const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
     HOME: home,
     XDG_CONFIG_HOME: join(home, '.config'),
-    ORCA_WSL_HOOK_INSTANCE: name
+    POD_WSL_HOOK_INSTANCE: name
   })
   const requests: Record<string, unknown>[] = []
   dispatcher.onRequest('preflight.detectAgents', async () => ({ agents: [] }))

@@ -95,7 +95,7 @@ export async function createStructuredWorkerSession(args: {
   const sessionId = randomUUID()
   // Registered BEFORE the session is created, because `attach` is what spawns the provider child
   // and the child's environment is read from this registry at spawn time. Registering afterwards
-  // ships a worker with no ORCA_TERMINAL_HANDLE, whose bare `orca orchestration check` then
+  // ships a worker with no POD_TERMINAL_HANDLE, whose bare `orca orchestration check` then
   // resolves to whatever single leaf sits in the worktree — by default the COORDINATOR's pane.
   //
   // The scope is provisionally local; the record's own location is asserted local below, and a

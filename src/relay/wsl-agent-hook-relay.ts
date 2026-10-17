@@ -32,10 +32,10 @@ import {
 } from '../shared/wsl-hook-relay-contract'
 
 async function main(): Promise<void> {
-  const windowsPort = Number(process.env.ORCA_AGENT_HOOK_PORT ?? '')
-  const token = process.env.ORCA_AGENT_HOOK_TOKEN ?? ''
+  const windowsPort = Number(process.env.POD_AGENT_HOOK_PORT ?? '')
+  const token = process.env.POD_AGENT_HOOK_TOKEN ?? ''
   if (!Number.isInteger(windowsPort) || windowsPort <= 0 || token.length === 0) {
-    process.stderr.write('[wsl-hook-relay] missing ORCA_AGENT_HOOK_PORT/TOKEN in env\n')
+    process.stderr.write('[wsl-hook-relay] missing POD_AGENT_HOOK_PORT/TOKEN in env\n')
     process.exit(1)
   }
 

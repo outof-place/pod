@@ -23,7 +23,7 @@ Options:
   --help, -h               Print this text and exit without starting the server.
 
 Environment:
-  ORCA_USER_DATA           Data directory for this instance's profile and state.
+  POD_USER_DATA           Data directory for this instance's profile and state.
 `
 
 type OrcadCommandArguments = OrcadOptions & { help?: boolean }

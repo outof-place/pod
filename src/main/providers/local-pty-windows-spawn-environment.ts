@@ -26,12 +26,12 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
     if (codexHomeWslInfo) {
       if (plan.launchWslDistro && plan.launchWslDistro !== codexHomeWslInfo.distro) {
         delete env.CODEX_HOME
-        delete env.ORCA_CODEX_HOME
+        delete env.POD_CODEX_HOME
       } else {
         env.CODEX_HOME = codexHomeWslInfo.linuxPath
-        env.ORCA_CODEX_HOME = codexHomeWslInfo.linuxPath
+        env.POD_CODEX_HOME = codexHomeWslInfo.linuxPath
         // Why: wsl.exe only imports non-default env vars named in WSLENV.
-        addWslEnvKeys(env, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
+        addWslEnvKeys(env, ['CODEX_HOME', 'POD_CODEX_HOME'])
         if (!plan.launchWslDistro) {
           const resolved = resolveWindowsShellLaunchArgs(
             plan.shellPath,
@@ -51,9 +51,9 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
     } else if (isHostCodexHomeForWsl(env.CODEX_HOME)) {
       // Why: Orca's Codex home is host-local; WSL Codex must use its Linux-side ~/.codex, not a Windows path.
       delete env.CODEX_HOME
-      delete env.ORCA_CODEX_HOME
+      delete env.POD_CODEX_HOME
     } else if (env.CODEX_HOME) {
-      addWslEnvKeys(env, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
+      addWslEnvKeys(env, ['CODEX_HOME', 'POD_CODEX_HOME'])
     }
     if (env.CLAUDE_CONFIG_DIR) {
       // Why: managed WSL Claude passes a Linux CLAUDE_CONFIG_DIR through wsl.exe; non-default vars need WSLENV import.
@@ -67,13 +67,13 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
       addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])
     }
   } else if (codexHomeWslInfo || isWslCodexHomeForHost(env.CODEX_HOME)) {
-    // Why: WSL Codex homes are Linux paths Windows can't use; also drop ORCA_CODEX_HOME (shell-ready restores CODEX_HOME from it).
+    // Why: WSL Codex homes are Linux paths Windows can't use; also drop POD_CODEX_HOME (shell-ready restores CODEX_HOME from it).
     delete env.CODEX_HOME
-    delete env.ORCA_CODEX_HOME
+    delete env.POD_CODEX_HOME
   }
 
   const shellBasename = pathWin32.basename(plan.shellPath).toLowerCase()
-  const codexLaunchPreflightCommand = env.ORCA_CODEX_LAUNCH_PREFLIGHT
+  const codexLaunchPreflightCommand = env.POD_CODEX_LAUNCH_PREFLIGHT
   if (
     codexLaunchPreflightCommand &&
     (shellBasename === 'cmd.exe' || isWindowsGitBashShellPath(plan.shellPath))

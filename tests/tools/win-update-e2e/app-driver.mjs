@@ -35,7 +35,7 @@ const RESTRICTED_E2E_ENV_KEYS = new Set([
   'HOME',
   'USERPROFILE',
   'CODEX_HOME',
-  'ORCA_CODEX_HOME',
+  'POD_CODEX_HOME',
   'ORCA_E2E_HOME_DIR',
   'ORCA_E2E_USER_DATA_DIR'
 ])
@@ -57,7 +57,7 @@ export async function launchInstalledApp({
   const {
     ELECTRON_RUN_AS_NODE: _drop,
     CODEX_HOME: _codexHome,
-    ORCA_CODEX_HOME: _orcaCodexHome,
+    POD_CODEX_HOME: _orcaCodexHome,
     ...cleanEnv
   } = process.env
   void _drop

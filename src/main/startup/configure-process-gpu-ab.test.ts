@@ -28,10 +28,10 @@ describe('enableMainProcessGpuFeatures fork A/B switches', () => {
     }
   })
 
-  it('paces macOS frames with CADisplayLink unless ORCA_CADISPLAYLINK=0', async () => {
+  it('paces macOS frames with CADisplayLink unless POD_CADISPLAYLINK=0', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
-    const original = process.env.ORCA_CADISPLAYLINK
+    const original = process.env.POD_CADISPLAYLINK
 
     try {
       delete process.env.ORCA_E2E_USER_DATA_DIR
@@ -41,9 +41,9 @@ describe('enableMainProcessGpuFeatures fork A/B switches', () => {
         ['0', false]
       ] as const) {
         if (value === undefined) {
-          delete process.env.ORCA_CADISPLAYLINK
+          delete process.env.POD_CADISPLAYLINK
         } else {
-          process.env.ORCA_CADISPLAYLINK = value
+          process.env.POD_CADISPLAYLINK = value
         }
         vi.mocked(app.commandLine.appendSwitch).mockClear()
         enableMainProcessGpuFeatures()
@@ -54,30 +54,30 @@ describe('enableMainProcessGpuFeatures fork A/B switches', () => {
       }
     } finally {
       if (original === undefined) {
-        delete process.env.ORCA_CADISPLAYLINK
+        delete process.env.POD_CADISPLAYLINK
       } else {
-        process.env.ORCA_CADISPLAYLINK = original
+        process.env.POD_CADISPLAYLINK = original
       }
     }
   })
 
-  it('keeps Skia Graphite on macOS only when ORCA_SKIA_GRAPHITE=1', async () => {
+  it('keeps Skia Graphite on macOS only when POD_SKIA_GRAPHITE=1', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
-    const original = process.env.ORCA_SKIA_GRAPHITE
+    const original = process.env.POD_SKIA_GRAPHITE
 
     try {
       delete process.env.ORCA_E2E_USER_DATA_DIR
       setPlatform('darwin')
-      process.env.ORCA_SKIA_GRAPHITE = '1'
+      process.env.POD_SKIA_GRAPHITE = '1'
       vi.mocked(app.commandLine.appendSwitch).mockClear()
       enableMainProcessGpuFeatures()
       expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-skia-graphite')
     } finally {
       if (original === undefined) {
-        delete process.env.ORCA_SKIA_GRAPHITE
+        delete process.env.POD_SKIA_GRAPHITE
       } else {
-        process.env.ORCA_SKIA_GRAPHITE = original
+        process.env.POD_SKIA_GRAPHITE = original
       }
     }
   })

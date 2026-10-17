@@ -19,13 +19,13 @@ type Post = {
 const PANE_A = 'tabA:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const PANE_B = 'tabB:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const ENV_KEYS = [
-  'ORCA_PANE_KEY',
-  'ORCA_OPENCODE_AGENT',
-  'ORCA_AGENT_HOOK_ENDPOINT',
-  'ORCA_AGENT_HOOK_PORT',
-  'ORCA_AGENT_HOOK_TOKEN',
-  'ORCA_AGENT_HOOK_OPENCODE_TUI',
-  'ORCA_OPENCODE_PLUGIN_API'
+  'POD_PANE_KEY',
+  'POD_OPENCODE_AGENT',
+  'POD_AGENT_HOOK_ENDPOINT',
+  'POD_AGENT_HOOK_PORT',
+  'POD_AGENT_HOOK_TOKEN',
+  'POD_AGENT_HOOK_OPENCODE_TUI',
+  'POD_OPENCODE_PLUGIN_API'
 ] as const
 const created = (id: string, parentID?: string): LegacyTuiEvent => ({
   type: 'session.created',
@@ -50,12 +50,12 @@ describe('OpenCode 1 TUI API pane reporting', () => {
     savedArgv = process.argv
     savedEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]))
     process.argv = ['opencode', 'attach', 'http://127.0.0.1:4096']
-    process.env.ORCA_OPENCODE_PLUGIN_API = 'v2'
-    process.env.ORCA_OPENCODE_AGENT = 'opencode'
-    process.env.ORCA_AGENT_HOOK_PORT = '59999'
-    process.env.ORCA_AGENT_HOOK_TOKEN = 'fixture'
-    process.env.ORCA_AGENT_HOOK_OPENCODE_TUI = '1'
-    delete process.env.ORCA_AGENT_HOOK_ENDPOINT
+    process.env.POD_OPENCODE_PLUGIN_API = 'v2'
+    process.env.POD_OPENCODE_AGENT = 'opencode'
+    process.env.POD_AGENT_HOOK_PORT = '59999'
+    process.env.POD_AGENT_HOOK_TOKEN = 'fixture'
+    process.env.POD_AGENT_HOOK_OPENCODE_TUI = '1'
+    delete process.env.POD_AGENT_HOOK_ENDPOINT
     posts = []
     globalThis.fetch = vi.fn(async (_input, init) => {
       posts.push(JSON.parse(String(init?.body)))
@@ -80,7 +80,7 @@ describe('OpenCode 1 TUI API pane reporting', () => {
   })
 
   async function start(paneKey = PANE_A, tui = fakeLegacyTui()) {
-    process.env.ORCA_PANE_KEY = paneKey
+    process.env.POD_PANE_KEY = paneKey
     const name = `orca-status-${Math.random().toString(36).slice(2)}.js`
     writeOpenCodeTuiPlugin(dir, name, getOpenCodePluginSource())
     const plugin: unknown = await import(
@@ -116,7 +116,7 @@ describe('OpenCode 1 TUI API pane reporting', () => {
   }
 
   it('registers a separate object TUI entry while retaining the current server entry', async () => {
-    process.env.ORCA_PANE_KEY = PANE_A
+    process.env.POD_PANE_KEY = PANE_A
     const path = join(dir, 'server.mjs')
     writeFileSync(path, getOpenCodePluginSource())
     const plugin: unknown = await import(pathToFileURL(path).href)
@@ -133,9 +133,9 @@ describe('OpenCode 1 TUI API pane reporting', () => {
   })
 
   it('loads the selected v1 factory through the release fallback once and retains the separate TUI', async () => {
-    process.env.ORCA_OPENCODE_PLUGIN_API = getOpenCodeCliCapabilities('1.18.30').pluginApi
+    process.env.POD_OPENCODE_PLUGIN_API = getOpenCodeCliCapabilities('1.18.30').pluginApi
     process.argv = ['opencode', 'serve']
-    process.env.ORCA_PANE_KEY = PANE_A
+    process.env.POD_PANE_KEY = PANE_A
     const path = join(dir, 'selected-v1-server.mjs')
     writeFileSync(path, getOpenCodePluginSource())
     const plugin: unknown = await import(pathToFileURL(path).href)
@@ -184,7 +184,7 @@ describe('OpenCode 1 TUI API pane reporting', () => {
 
   it('keeps legacy reporting after the release catalog probes setup in the same module', async () => {
     process.argv = ['opencode', 'serve']
-    process.env.ORCA_PANE_KEY = PANE_A
+    process.env.POD_PANE_KEY = PANE_A
     const path = join(dir, 'catalog-probed-server.mjs')
     writeFileSync(path, getOpenCodePluginSource())
     const plugin: unknown = await import(pathToFileURL(path).href)
@@ -314,15 +314,15 @@ describe('OpenCode 1 TUI API pane reporting', () => {
 
   it('keeps newer hosts capability opt-in separate from the process environment', async () => {
     const endpoint = join(dir, 'endpoint.env')
-    process.env.ORCA_AGENT_HOOK_ENDPOINT = endpoint
-    writeFileSync(endpoint, 'ORCA_AGENT_HOOK_PORT=59999\nORCA_AGENT_HOOK_TOKEN=fixture\n')
+    process.env.POD_AGENT_HOOK_ENDPOINT = endpoint
+    writeFileSync(endpoint, 'POD_AGENT_HOOK_PORT=59999\nPOD_AGENT_HOOK_TOKEN=fixture\n')
     const tui = await start()
     tui.navigate('ses_a')
     await pump(tui, [created('ses_a'), status('ses_a', 'busy')])
     expect(posts).toEqual([])
     writeFileSync(
       endpoint,
-      'ORCA_AGENT_HOOK_PORT=59999\nORCA_AGENT_HOOK_TOKEN=fixture\nORCA_AGENT_HOOK_OPENCODE_TUI=1\n'
+      'POD_AGENT_HOOK_PORT=59999\nPOD_AGENT_HOOK_TOKEN=fixture\nPOD_AGENT_HOOK_OPENCODE_TUI=1\n'
     )
     await settle('SessionBusy:ses_a')
   })
@@ -347,7 +347,7 @@ describe('OpenCode 1 TUI API pane reporting', () => {
         process.argv = ['opencode']
       }
       if (kind === 'other-agent') {
-        process.env.ORCA_OPENCODE_AGENT = 'mimo-code'
+        process.env.POD_OPENCODE_AGENT = 'mimo-code'
       }
       if (kind === 'wrong-version') {
         tui.api.app.version = '2.0.16'

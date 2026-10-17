@@ -89,7 +89,7 @@ type StartedHost = Omit<HeadlessOracleHost, 'cleanups'>
 async function startOrcadHost(scratch: string, node: string): Promise<StartedHost> {
   const profile = cliServeProfile(scratch)
   const port = await reserveLoopbackPort()
-  const env = { ...profile.env, ORCA_USER_DATA: profile.userDataDir }
+  const env = { ...profile.env, POD_USER_DATA: profile.userDataDir }
   const launch = (): Promise<ReadyProcess<{ pairingUrl: string; daemon: string }>> =>
     spawnUntilReady({
       label: 'orcad serve',

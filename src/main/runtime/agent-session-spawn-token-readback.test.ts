@@ -15,7 +15,7 @@ describe('spawn token read-back', () => {
   it('finds the token in a NUL-separated environ block', () => {
     const block = [
       'PATH=/usr/bin',
-      'ORCA_AGENT_SESSION_SPAWN_TOKEN=tok-123',
+      'POD_AGENT_SESSION_SPAWN_TOKEN=tok-123',
       'HOME=/home/dev'
     ].join('\0')
     expect(spawnTokenFromEnvironBlock(block)).toBe('tok-123')
@@ -23,7 +23,7 @@ describe('spawn token read-back', () => {
 
   it('answers null for an absent or empty token instead of guessing', () => {
     expect(spawnTokenFromEnvironBlock(['PATH=/usr/bin', 'HOME=/home/dev'].join('\0'))).toBeNull()
-    expect(spawnTokenFromEnvironBlock('ORCA_AGENT_SESSION_SPAWN_TOKEN=')).toBeNull()
+    expect(spawnTokenFromEnvironBlock('POD_AGENT_SESSION_SPAWN_TOKEN=')).toBeNull()
     // A prefix collision is not a match.
     expect(spawnTokenFromEnvironBlock('ORCA_AGENT_SESSION_SPAWN_TOKEN_EXTRA=x')).toBeNull()
   })

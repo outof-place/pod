@@ -33,15 +33,15 @@ const server = Bun.serve({
   }
 })
 Object.assign(process.env, {
-  ORCA_PANE_KEY: 'model-proof',
-  ORCA_AGENT_LAUNCH_TOKEN: 'model-proof',
-  ORCA_TAB_ID: 'model-proof',
-  ORCA_WORKTREE_ID: 'model-proof',
-  ORCA_AGENT_HOOK_PORT: String(server.port),
-  ORCA_AGENT_HOOK_TOKEN: 'model-proof',
-  ORCA_AGENT_HOOK_ENV: 'model-proof'
+  POD_PANE_KEY: 'model-proof',
+  POD_AGENT_LAUNCH_TOKEN: 'model-proof',
+  POD_TAB_ID: 'model-proof',
+  POD_WORKTREE_ID: 'model-proof',
+  POD_AGENT_HOOK_PORT: String(server.port),
+  POD_AGENT_HOOK_TOKEN: 'model-proof',
+  POD_AGENT_HOOK_ENV: 'model-proof'
 })
-delete process.env.ORCA_PI_STATUS_OWNED
+delete process.env.POD_PI_STATUS_OWNED
 const authStorage = await AuthStorage.create(join(root, 'auth.db'))
 authStorage.setRuntimeApiKey('anthropic', 'fake-no-network-proof-key')
 const registry = new ModelRegistry(authStorage, join(root, 'models.yml'))

@@ -137,7 +137,7 @@ describe.skipIf(process.platform === 'win32')(
         readFileSync(join(home, '.claude', 'settings.json'), 'utf8')
       )
       expect(claudeSettings.hooks).toBeTruthy()
-      const script = readFileSync(join(home, '.orca', 'agent-hooks', 'claude-hook.sh'), 'utf8')
+      const script = readFileSync(join(home, '.pod', 'agent-hooks', 'claude-hook.sh'), 'utf8')
       expect(script).toContain('/hook/claude')
     }, 20_000)
   }
@@ -228,10 +228,10 @@ describe('WslHookRelayManager', () => {
       platform: () => 'win32',
       remoteHooksEnabled: () => true,
       hookCoordsEnv: () => ({
-        ORCA_AGENT_HOOK_PORT: '43117',
-        ORCA_AGENT_HOOK_TOKEN: 'tok',
-        ORCA_AGENT_HOOK_ENV: 'production',
-        ORCA_AGENT_HOOK_VERSION: '1'
+        POD_AGENT_HOOK_PORT: '43117',
+        POD_AGENT_HOOK_TOKEN: 'tok',
+        POD_AGENT_HOOK_ENV: 'production',
+        POD_AGENT_HOOK_VERSION: '1'
       }),
       instanceKey: () => 'testinstance',
       resolveBundle: () => ({ jsPath: '/fake/wsl-agent-hook-relay.js', version: '0.1.0+abc' }),

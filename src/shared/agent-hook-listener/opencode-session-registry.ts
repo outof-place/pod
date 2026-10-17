@@ -7,7 +7,7 @@ import type { HookListenerState } from './listener-state'
  *
  * Why this exists: OpenCode 1 `opencode serve` serves every `opencode attach`
  * pane from one server process, so the status plugin's per-post stamp
- * (`process.env.ORCA_PANE_KEY`) is frozen to the pane that started it. The session id is the only
+ * (`process.env.POD_PANE_KEY`) is frozen to the pane that started it. The session id is the only
  * per-event truth that survives — every post carries it — but nothing maps it
  * back to a pane. This registry is that map, filled by the main-process binder
  * (client argv, then creation-correlation against the session store) and read

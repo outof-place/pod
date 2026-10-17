@@ -38,11 +38,11 @@ const PANE_B = 'tabB:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const SES_A = 'ses_f161fd85fffeieT0zYt80ZKorS'
 const SES_B = 'ses_f161fcd7affeffV0OOrMCrTxtQ'
 const ENV_KEYS = [
-  'ORCA_PANE_KEY',
-  'ORCA_OPENCODE_AGENT',
-  'ORCA_AGENT_HOOK_ENDPOINT',
-  'ORCA_AGENT_HOOK_PORT',
-  'ORCA_AGENT_HOOK_TOKEN'
+  'POD_PANE_KEY',
+  'POD_OPENCODE_AGENT',
+  'POD_AGENT_HOOK_ENDPOINT',
+  'POD_AGENT_HOOK_PORT',
+  'POD_AGENT_HOOK_TOKEN'
 ] as const
 
 // Event shapes as OpenCode 2.0.14 delivers them to both server and TUI plugins.
@@ -98,10 +98,10 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
-    process.env.ORCA_OPENCODE_AGENT = 'opencode'
-    delete process.env.ORCA_AGENT_HOOK_ENDPOINT
-    process.env.ORCA_AGENT_HOOK_PORT = '59999'
-    process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
+    process.env.POD_OPENCODE_AGENT = 'opencode'
+    delete process.env.POD_AGENT_HOOK_ENDPOINT
+    process.env.POD_AGENT_HOOK_PORT = '59999'
+    process.env.POD_AGENT_HOOK_TOKEN = 'test-token'
     posts = []
     allPosts = []
     failPosts = false
@@ -221,7 +221,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     ownSession: string,
     script: (tui: ReturnType<typeof fakeTui>) => Promise<void>
   ): Promise<Post[]> {
-    process.env.ORCA_PANE_KEY = paneKey
+    process.env.POD_PANE_KEY = paneKey
     const start = posts.length
     const tui = fakeTui()
     const cleanup = await (await loadPlugin()).default?.setup?.(tui.ctx)
@@ -362,7 +362,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
   })
 
   it('reports nothing for sessions the pane never showed', async () => {
-    process.env.ORCA_PANE_KEY = PANE_A
+    process.env.POD_PANE_KEY = PANE_A
     const tui = fakeTui()
     const cleanup = await (await loadPlugin()).default?.setup?.(tui.ctx)
     const b = turn(SES_B, 'another pane')
@@ -374,7 +374,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
 
   // Why: a turn the TUI did not see end must not hold the pane Working (e.g. across a reconnect).
   it('settles an owned turn once the session data says it ended without an end event', async () => {
-    process.env.ORCA_PANE_KEY = PANE_A
+    process.env.POD_PANE_KEY = PANE_A
     const tui = fakeTui()
     const cleanup = await (await loadPlugin()).default?.setup?.(tui.ctx)
     tui.navigate(SES_A)
@@ -389,7 +389,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
 
   // Why: a turn that fails fast arrives as one burst; each level must post once, not flicker.
   it('does not settle a turn early while its events are still queued', async () => {
-    process.env.ORCA_PANE_KEY = PANE_A
+    process.env.POD_PANE_KEY = PANE_A
     const tui = fakeTui()
     const cleanup = await (await loadPlugin()).default?.setup?.(tui.ctx)
     tui.navigate(SES_A)
@@ -410,7 +410,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
   })
 
   it('re-derives Working for an owned session whose start it missed', async () => {
-    process.env.ORCA_PANE_KEY = PANE_A
+    process.env.POD_PANE_KEY = PANE_A
     const tui = fakeTui()
     const cleanup = await (await loadPlugin()).default?.setup?.(tui.ctx)
     tui.navigate(SES_A)
@@ -439,7 +439,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     const start = async (
       tui: ReturnType<typeof fakeTui>
     ): Promise<(() => Promise<void>) | undefined> => {
-      process.env.ORCA_PANE_KEY = PANE_A
+      process.env.POD_PANE_KEY = PANE_A
       return (await loadPlugin()).default?.setup?.(tui.ctx)
     }
     const childStart = (parentID: string): BusEvent[] => [
@@ -778,7 +778,7 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
       await pump(tui, turn(SES_A, 'A').start)
       await tick(200)
       await waitFor(() => expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`]))
-      process.env.ORCA_AGENT_HOOK_PORT = '59998'
+      process.env.POD_AGENT_HOOK_PORT = '59998'
       await tick(4699)
       expect(statuses(posts)).toEqual([`SessionBusy:${SES_A}`])
       await tick(1)
@@ -811,11 +811,11 @@ describe('OpenCode 2 TUI reporter: each pane reports its own sessions', () => {
     ['a TUI outside an Orca pane', () => fakeTui()]
   ])('stays silent in %s', async (label, make) => {
     if (label === 'the other pane variant') {
-      process.env.ORCA_OPENCODE_AGENT = 'opencode2'
+      process.env.POD_OPENCODE_AGENT = 'opencode2'
     }
-    process.env.ORCA_PANE_KEY = PANE_A
+    process.env.POD_PANE_KEY = PANE_A
     if (label === 'a TUI outside an Orca pane') {
-      delete process.env.ORCA_PANE_KEY
+      delete process.env.POD_PANE_KEY
     }
     const tui = make()
     const cleanup = await (await loadPlugin()).default?.setup?.(tui.ctx)

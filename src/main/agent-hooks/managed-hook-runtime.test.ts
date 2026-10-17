@@ -152,7 +152,7 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
 
       await expect(installManagedHooks(options)).resolves.toEqual({ installers: 0, errors: 0 })
 
-      // Why: no agent config home, no ~/.orca install lock, and no GROK_HOME login-shell probe.
+      // Why: no agent config home, no ~/.pod install lock, and no GROK_HOME login-shell probe.
       expect(await readdir(home)).toEqual([SHELL_NAME])
     }
   )
@@ -175,7 +175,7 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
       errors: 0
     })
 
-    expect((await readdir(home)).sort()).toEqual(['.claude', '.orca', SHELL_NAME])
+    expect((await readdir(home)).sort()).toEqual(['.claude', '.pod', SHELL_NAME])
   })
 
   it('still probes the login shell when Grok is selected', async () => {
@@ -187,6 +187,6 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
       errors: 0
     })
 
-    expect((await readdir(home)).sort()).toEqual(['.grok', '.orca', SHELL_NAME, SHELL_RUNS_NAME])
+    expect((await readdir(home)).sort()).toEqual(['.grok', '.pod', SHELL_NAME, SHELL_RUNS_NAME])
   })
 })

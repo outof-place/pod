@@ -31,14 +31,14 @@ const WORKER_PANE = 'tab_legacy_ssh:33333333-3333-4333-8333-333333333333'
 const COORDINATOR_HANDLE = 'term_legacy_ssh_coord'
 const COORDINATOR_PANE = 'tab_legacy_coord:44444444-4444-4444-8444-444444444444'
 const WORKER_ENV = {
-  ORCA_TERMINAL_HANDLE: WORKER_HANDLE,
-  ORCA_PANE_KEY: WORKER_PANE,
-  ORCA_AGENT_LAUNCH_TOKEN: 'legacy-ssh-token'
+  POD_TERMINAL_HANDLE: WORKER_HANDLE,
+  POD_PANE_KEY: WORKER_PANE,
+  POD_AGENT_LAUNCH_TOKEN: 'legacy-ssh-token'
 }
 const COORDINATOR_ENV = {
-  ORCA_TERMINAL_HANDLE: COORDINATOR_HANDLE,
-  ORCA_PANE_KEY: COORDINATOR_PANE,
-  ORCA_AGENT_LAUNCH_TOKEN: 'legacy-ssh-coordinator-token'
+  POD_TERMINAL_HANDLE: COORDINATOR_HANDLE,
+  POD_PANE_KEY: COORDINATOR_PANE,
+  POD_AGENT_LAUNCH_TOKEN: 'legacy-ssh-coordinator-token'
 }
 const RUNTIME_AUTHORITY = {
   kind: 'ssh' as const,
@@ -91,11 +91,11 @@ function createLegacyRuntime() {
     const worker =
       evidence?.terminalHandle === WORKER_HANDLE &&
       evidence.paneKey === WORKER_PANE &&
-      evidence.launchToken === WORKER_ENV.ORCA_AGENT_LAUNCH_TOKEN
+      evidence.launchToken === WORKER_ENV.POD_AGENT_LAUNCH_TOKEN
     const coordinator =
       evidence?.terminalHandle === COORDINATOR_HANDLE &&
       evidence.paneKey === COORDINATOR_PANE &&
-      evidence.launchToken === COORDINATOR_ENV.ORCA_AGENT_LAUNCH_TOKEN
+      evidence.launchToken === COORDINATOR_ENV.POD_AGENT_LAUNCH_TOKEN
     if (
       (!worker && !coordinator) ||
       evidence.host?.kind !== 'ssh' ||
@@ -108,12 +108,12 @@ function createLegacyRuntime() {
       ? {
           terminalHandle: WORKER_HANDLE,
           paneKey: WORKER_PANE,
-          launchToken: WORKER_ENV.ORCA_AGENT_LAUNCH_TOKEN
+          launchToken: WORKER_ENV.POD_AGENT_LAUNCH_TOKEN
         }
       : {
           terminalHandle: COORDINATOR_HANDLE,
           paneKey: COORDINATOR_PANE,
-          launchToken: COORDINATOR_ENV.ORCA_AGENT_LAUNCH_TOKEN
+          launchToken: COORDINATOR_ENV.POD_AGENT_LAUNCH_TOKEN
         }
     return {
       hostScope: { kind: 'ssh', targetId: RUNTIME_AUTHORITY.targetId },

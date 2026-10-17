@@ -167,12 +167,12 @@ export async function prepareRuntimePtySpawn(
   }
   const sshScopedEnv = stripRemotePaneEnvWhenHooksDisabled(args.connectionId, args.env)
   ctx.env = ctx.claudeAuth ? { ...sshScopedEnv, ...ctx.claudeAuth.envPatch } : sshScopedEnv
-  ctx.requestedAgentTeamsPath = ctx.env?.ORCA_AGENT_TEAMS_TEAM_ID
+  ctx.requestedAgentTeamsPath = ctx.env?.POD_AGENT_TEAMS_TEAM_ID
     ? ctx.env[resolvePathEnvKey(ctx.env, process.platform)]
     : undefined
   ctx.env = ctx.deps.stripSequencedStartupResumeArgv(ctx.env, codexResumeLaunch)
   if (args.preAllocatedHandle) {
-    ctx.env = { ...ctx.env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
+    ctx.env = { ...ctx.env, POD_TERMINAL_HANDLE: args.preAllocatedHandle }
   }
   const launchesCodex = args.launchAgent === 'codex'
   const selectLaunchCodexHome = async (): Promise<string | null> =>

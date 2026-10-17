@@ -8,7 +8,7 @@
 //   node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc,linux-x64-musl
 // macOS cells need /usr/sbin/sshd and this runner's slot (`pnpm build:orcad-prebuilds`, then
 // `--targets darwin-arm64` or `darwin-x64`). Only cells this machine can host run.
-// ORCA_SSH_HOSTILE_HOST_CELLS=id,id narrows the run. .github/workflows/ssh-hostile-hosts.yml runs it.
+// POD_SSH_HOSTILE_HOST_CELLS=id,id narrows the run. .github/workflows/ssh-hostile-hosts.yml runs it.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { getAppPath: () => process.cwd() } }))
@@ -39,7 +39,7 @@ import {
 
 const RUN = process.env.ORCA_RUN_SSH_HOSTILE_HOSTS === '1'
 const SELECTED = new Set(
-  RUN ? selectHostileHostCells(process.env.ORCA_SSH_HOSTILE_HOST_CELLS).map((cell) => cell.id) : []
+  RUN ? selectHostileHostCells(process.env.POD_SSH_HOSTILE_HOST_CELLS).map((cell) => cell.id) : []
 )
 const CELL_TIMEOUT_MS = 15 * 60_000
 

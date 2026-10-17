@@ -9,18 +9,18 @@ import {
 } from '../pi/agent-status-extension-test-harness'
 
 const ownerEnv = {
-  ORCA_PI_STATUS_OWNED: String(AGENT_STATUS_EXTENSION_SELF_PID - 1),
-  ORCA_PRIME_AGENT_STATUS_OWNED: String(AGENT_STATUS_EXTENSION_SELF_PID - 1),
-  ORCA_PI_TITLE_MARKER_OWNED: String(AGENT_STATUS_EXTENSION_SELF_PID - 1)
+  POD_PI_STATUS_OWNED: String(AGENT_STATUS_EXTENSION_SELF_PID - 1),
+  POD_PRIME_AGENT_STATUS_OWNED: String(AGENT_STATUS_EXTENSION_SELF_PID - 1),
+  POD_PI_TITLE_MARKER_OWNED: String(AGENT_STATUS_EXTENSION_SELF_PID - 1)
 }
 const terminalEnv = {
-  ORCA_PANE_KEY: 'new-tab:new-leaf',
-  ORCA_TAB_ID: 'new-tab',
-  ORCA_WORKTREE_ID: 'folder:workspace',
-  ORCA_AGENT_LAUNCH_TOKEN: 'new-launch',
-  ORCA_AGENT_HOOK_PORT: '4321',
-  ORCA_AGENT_HOOK_TOKEN: 'receiver-token',
-  ORCA_PI_SOURCE_AGENT_DIR: 'user-config',
+  POD_PANE_KEY: 'new-tab:new-leaf',
+  POD_TAB_ID: 'new-tab',
+  POD_WORKTREE_ID: 'folder:workspace',
+  POD_AGENT_LAUNCH_TOKEN: 'new-launch',
+  POD_AGENT_HOOK_PORT: '4321',
+  POD_AGENT_HOOK_TOKEN: 'receiver-token',
+  POD_PI_SOURCE_AGENT_DIR: 'user-config',
   KEEP_ME: 'terminal-value'
 }
 

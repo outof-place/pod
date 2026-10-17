@@ -60,7 +60,7 @@ describe('relay pty spawn cwd (#15296)', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('spawns a folder workspace in ORCA_WORKSPACE_ROOT instead of the host default', async () => {
+  it('spawns a folder workspace in POD_WORKSPACE_ROOT instead of the host default', async () => {
     // Why: `folder:<uuid>` carries no path, so the worktree-id split yields nothing and the
     // configured root — delivered in the same env — was silently replaced by $HOME.
     const workspaceRoot = join(root, 'workspace')
@@ -71,9 +71,9 @@ describe('relay pty spawn cwd (#15296)', () => {
       cols: 80,
       rows: 24,
       env: {
-        ORCA_WORKSPACE_ID: workspaceId,
-        ORCA_WORKTREE_ID: workspaceId,
-        ORCA_WORKSPACE_ROOT: workspaceRoot
+        POD_WORKSPACE_ID: workspaceId,
+        POD_WORKTREE_ID: workspaceId,
+        POD_WORKSPACE_ROOT: workspaceRoot
       }
     })
 
@@ -90,9 +90,9 @@ describe('relay pty spawn cwd (#15296)', () => {
         rows: 24,
         launchAgent: 'claude',
         env: {
-          ORCA_WORKSPACE_ID: workspaceId,
-          ORCA_WORKTREE_ID: workspaceId,
-          ORCA_WORKSPACE_ROOT: join(root, 'gone')
+          POD_WORKSPACE_ID: workspaceId,
+          POD_WORKTREE_ID: workspaceId,
+          POD_WORKSPACE_ROOT: join(root, 'gone')
         }
       })
     ).rejects.toThrow(/Cannot determine the working directory/)
@@ -105,7 +105,7 @@ describe('relay pty spawn cwd (#15296)', () => {
         cols: 80,
         rows: 24,
         launchAgent: 'claude',
-        env: { ORCA_WORKTREE_ID: 'folder:b1706d92-9d05-4932-8360-01e00b54305a' }
+        env: { POD_WORKTREE_ID: 'folder:b1706d92-9d05-4932-8360-01e00b54305a' }
       })
     ).rejects.toThrow(/Cannot determine the working directory/)
     expect(mockPtySpawn).not.toHaveBeenCalled()
@@ -133,7 +133,7 @@ describe('relay pty spawn cwd (#15296)', () => {
       cols: 80,
       rows: 24,
       cwd: requested,
-      env: { ORCA_WORKTREE_ID: 'folder:abc', ORCA_WORKSPACE_ROOT: workspaceRoot }
+      env: { POD_WORKTREE_ID: 'folder:abc', POD_WORKSPACE_ROOT: workspaceRoot }
     })
 
     expect(spawnCwd()).toBe(requested)
@@ -151,7 +151,7 @@ describe('relay pty spawn cwd (#15296)', () => {
     await dispatcher.callRequest('pty.spawn', {
       cols: 80,
       rows: 24,
-      env: { ORCA_WORKTREE_ID: 'folder:abc', ORCA_WORKSPACE_ROOT: missing }
+      env: { POD_WORKTREE_ID: 'folder:abc', POD_WORKSPACE_ROOT: missing }
     })
 
     expect(spawnCwd()).toBe(process.env.HOME || homedir())
@@ -190,9 +190,9 @@ describe('relay pty spawn cwd when the relay is not the execution host', () => {
       launchAgent: 'claude',
       shellOverride: 'wsl.exe',
       env: {
-        ORCA_WORKSPACE_ID: 'folder:b1706d92-9d05-4932-8360-01e00b54305a',
-        ORCA_WORKTREE_ID: 'folder:b1706d92-9d05-4932-8360-01e00b54305a',
-        ORCA_WORKSPACE_ROOT: '/home/u/guest-only-project'
+        POD_WORKSPACE_ID: 'folder:b1706d92-9d05-4932-8360-01e00b54305a',
+        POD_WORKTREE_ID: 'folder:b1706d92-9d05-4932-8360-01e00b54305a',
+        POD_WORKSPACE_ROOT: '/home/u/guest-only-project'
       }
     })
 
@@ -207,9 +207,9 @@ describe('relay pty spawn cwd when the relay is not the execution host', () => {
         launchAgent: 'claude',
         shellOverride: 'powershell.exe',
         env: {
-          ORCA_WORKSPACE_ID: 'folder:b1706d92-9d05-4932-8360-01e00b54305a',
-          ORCA_WORKTREE_ID: 'folder:b1706d92-9d05-4932-8360-01e00b54305a',
-          ORCA_WORKSPACE_ROOT: join(root, 'gone')
+          POD_WORKSPACE_ID: 'folder:b1706d92-9d05-4932-8360-01e00b54305a',
+          POD_WORKTREE_ID: 'folder:b1706d92-9d05-4932-8360-01e00b54305a',
+          POD_WORKSPACE_ROOT: join(root, 'gone')
         }
       })
     ).rejects.toThrow(/Cannot determine the working directory/)

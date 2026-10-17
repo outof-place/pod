@@ -23,7 +23,7 @@ afterEach(() => {
 })
 
 it('keeps disabled spawn timing silent', () => {
-  vi.stubEnv('ORCA_PTY_SPAWN_TIMING', '0')
+  vi.stubEnv('POD_PTY_SPAWN_TIMING', '0')
   const timing = createPtySpawnTiming()
   timing.mark('provider_spawn')
   timing.log('pty-1')
@@ -32,7 +32,7 @@ it('keeps disabled spawn timing silent', () => {
 })
 
 it('writes numeric monotonic phase durations through the existing local trace sink', () => {
-  vi.stubEnv('ORCA_PTY_SPAWN_TIMING', '1')
+  vi.stubEnv('POD_PTY_SPAWN_TIMING', '1')
   const timing = createPtySpawnTiming()
   vi.advanceTimersByTime(25)
   timing.mark('preflight')
@@ -57,7 +57,7 @@ it('writes numeric monotonic phase durations through the existing local trace si
 })
 
 it('does not fail a successful spawn when the diagnostic sink throws', () => {
-  vi.stubEnv('ORCA_PTY_SPAWN_TIMING', '1')
+  vi.stubEnv('POD_PTY_SPAWN_TIMING', '1')
   setActiveSink({
     push() {
       throw new Error('disk unavailable')

@@ -168,7 +168,7 @@ describe('LocalPtyProvider', () => {
         rows: 24,
         cwd: 'C:\\repo',
         env: {
-          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+          POD_AGENT_TEAMS_TEAM_ID: 'team-test',
           ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
           PATH: '%orca_path_root%\\agy\\bin;C:\\Windows'
         }
@@ -352,7 +352,7 @@ describe('LocalPtyProvider', () => {
         env: {
           TERM: 'screen-256color',
           PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
-          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+          POD_AGENT_TEAMS_TEAM_ID: 'team-test'
         },
         envToDelete: ['TERM_PROGRAM', 'ORCA_STALE_TEST_ENV']
       })
@@ -371,7 +371,7 @@ describe('LocalPtyProvider', () => {
         rows: 24,
         env: {
           PATH: '/tmp/orca-terminal-attribution/posix:/usr/bin',
-          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+          POD_AGENT_TEAMS_TEAM_ID: 'team-test'
         }
       })
 
@@ -533,7 +533,7 @@ describe('LocalPtyProvider', () => {
       provider.configure({
         buildSpawnEnv: (_id, env) => {
           env.MIMOCODE_HOME = '/tmp/orca-mimocode-overlay'
-          env.ORCA_MIMOCODE_HOME = '/tmp/orca-mimocode-overlay'
+          env.POD_MIMOCODE_HOME = '/tmp/orca-mimocode-overlay'
           return env
         }
       })
@@ -543,7 +543,7 @@ describe('LocalPtyProvider', () => {
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[1]).toEqual(['-l'])
       expect(spawnCall[2].env.ZDOTDIR).toMatch(/shell-ready[\\/]zsh/)
-      expect(spawnCall[2].env.ORCA_SHELL_FEATURES).not.toContain('ready')
+      expect(spawnCall[2].env.POD_SHELL_FEATURES).not.toContain('ready')
     })
 
     it('promotes the agent-teams shim onto the Windows `Path` spelling', async () => {
@@ -562,7 +562,7 @@ describe('LocalPtyProvider', () => {
         rows: 24,
         env: {
           Path: '/tmp/orca-agent-teams-bin:/usr/bin',
-          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+          POD_AGENT_TEAMS_TEAM_ID: 'team-test'
         }
       })
 
@@ -573,13 +573,13 @@ describe('LocalPtyProvider', () => {
 
     it('does not inherit parent Orca pane identity when caller omits pane env', async () => {
       const saved = {
-        ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
-        ORCA_TAB_ID: process.env.ORCA_TAB_ID,
-        ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
+        POD_PANE_KEY: process.env.POD_PANE_KEY,
+        POD_TAB_ID: process.env.POD_TAB_ID,
+        POD_WORKTREE_ID: process.env.POD_WORKTREE_ID
       }
-      process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
-      process.env.ORCA_TAB_ID = 'parent-tab'
-      process.env.ORCA_WORKTREE_ID = 'parent-worktree'
+      process.env.POD_PANE_KEY = 'parent-tab:parent-leaf'
+      process.env.POD_TAB_ID = 'parent-tab'
+      process.env.POD_WORKTREE_ID = 'parent-worktree'
 
       try {
         await provider.spawn({ cols: 80, rows: 24 })
@@ -594,29 +594,29 @@ describe('LocalPtyProvider', () => {
       }
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
-      expect(spawnCall[2].env.ORCA_PANE_KEY).toBeUndefined()
-      expect(spawnCall[2].env.ORCA_TAB_ID).toBeUndefined()
-      expect(spawnCall[2].env.ORCA_WORKTREE_ID).toBeUndefined()
+      expect(spawnCall[2].env.POD_PANE_KEY).toBeUndefined()
+      expect(spawnCall[2].env.POD_TAB_ID).toBeUndefined()
+      expect(spawnCall[2].env.POD_WORKTREE_ID).toBeUndefined()
     })
 
     it('preserves explicit child Orca pane identity over parent env', async () => {
       const saved = {
-        ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
-        ORCA_TAB_ID: process.env.ORCA_TAB_ID,
-        ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
+        POD_PANE_KEY: process.env.POD_PANE_KEY,
+        POD_TAB_ID: process.env.POD_TAB_ID,
+        POD_WORKTREE_ID: process.env.POD_WORKTREE_ID
       }
-      process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
-      process.env.ORCA_TAB_ID = 'parent-tab'
-      process.env.ORCA_WORKTREE_ID = 'parent-worktree'
+      process.env.POD_PANE_KEY = 'parent-tab:parent-leaf'
+      process.env.POD_TAB_ID = 'parent-tab'
+      process.env.POD_WORKTREE_ID = 'parent-worktree'
 
       try {
         await provider.spawn({
           cols: 80,
           rows: 24,
           env: {
-            ORCA_PANE_KEY: 'child-tab:child-leaf',
-            ORCA_TAB_ID: 'child-tab',
-            ORCA_WORKTREE_ID: 'child-worktree'
+            POD_PANE_KEY: 'child-tab:child-leaf',
+            POD_TAB_ID: 'child-tab',
+            POD_WORKTREE_ID: 'child-worktree'
           }
         })
       } finally {
@@ -630,9 +630,9 @@ describe('LocalPtyProvider', () => {
       }
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
-      expect(spawnCall[2].env.ORCA_PANE_KEY).toBe('child-tab:child-leaf')
-      expect(spawnCall[2].env.ORCA_TAB_ID).toBe('child-tab')
-      expect(spawnCall[2].env.ORCA_WORKTREE_ID).toBe('child-worktree')
+      expect(spawnCall[2].env.POD_PANE_KEY).toBe('child-tab:child-leaf')
+      expect(spawnCall[2].env.POD_TAB_ID).toBe('child-tab')
+      expect(spawnCall[2].env.POD_WORKTREE_ID).toBe('child-worktree')
     })
   })
 })

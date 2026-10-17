@@ -248,7 +248,7 @@ func prepareComputerJson(_ response: JSONObject) -> JSONObject {
 
 func computerScreenshotTempDir() -> String? {
   let dir: String
-  if let override = env("ORCA_COMPUTER_SCREENSHOT_TMPDIR"), !override.isEmpty {
+  if let override = env("POD_COMPUTER_SCREENSHOT_TMPDIR"), !override.isEmpty {
     dir = override
   } else {
     dir = nodeTmpdir() + "/orca-computer-use"

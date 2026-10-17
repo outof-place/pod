@@ -181,7 +181,7 @@ function resolveLaunch(userDataDir) {
       label: `orcad (${ORCAD_ENTRY})`,
       command: packagedNodeRuntimePath(ORCAD_DIR, currentTarget()),
       args: [ORCAD_ENTRY, '--port', String(PORT), '--json'],
-      env: { ORCA_USER_DATA: userDataDir }
+      env: { POD_USER_DATA: userDataDir }
     }
   }
   if (target !== 'electron') {
@@ -351,7 +351,7 @@ async function main() {
       )
     }
     log('terminal round trip OK')
-    if (launch.env.ORCA_USER_DATA && process.platform !== 'win32') {
+    if (launch.env.POD_USER_DATA && process.platform !== 'win32') {
       const cliNonce = randomBytes(8).toString('hex')
       orca(pairingCode, [
         'terminal',

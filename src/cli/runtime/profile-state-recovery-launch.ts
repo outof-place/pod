@@ -16,7 +16,7 @@ import {
 import { RuntimeClientError } from './types'
 
 export function canLaunchProfileStateRecovery(): boolean {
-  return process.env.ELECTRON_RUN_AS_NODE === '1' || !!process.env.ORCA_APP_EXECUTABLE?.trim()
+  return process.env.ELECTRON_RUN_AS_NODE === '1' || !!process.env.POD_APP_EXECUTABLE?.trim()
 }
 
 export async function launchProfileStateRecovery(
@@ -36,7 +36,7 @@ export async function launchProfileStateRecovery(
     env: {
       ...stripElectronRunAsNode(process.env),
       ORCA_BACKGROUND_LAUNCH: '1',
-      ORCA_USER_DATA_PATH: userDataPath
+      POD_USER_DATA_PATH: userDataPath
     },
     // Recovery may copy large backups; the lock owner must finish or be explicitly terminated.
     timeoutMs: null

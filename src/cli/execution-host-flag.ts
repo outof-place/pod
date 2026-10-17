@@ -20,7 +20,7 @@ export type HostFlagRoutingSelection = {
   // client. Injected as a thunk so the lookup only happens on the error path we are explaining.
   listSshTargets: () => Promise<SshTargetSummary[]>
   pairingCode: string | null
-  // Why: an ambient ORCA_ENVIRONMENT counts as a selection too, so carry the label to
+  // Why: an ambient POD_ENVIRONMENT counts as a selection too, so carry the label to
   // name the real source in the conflict message.
   environmentSelector: { value: string; label: string } | null
 }

@@ -14,7 +14,7 @@ import { wireHeadlessServeRuntime } from '../orca-runtime-test-scenario-builders
 describe('OrcaRuntimeService', () => {
   it('restores captured native Claude Agent Teams mode with fresh service env', async () => {
     setPlatform('linux')
-    // Why: native panes write their tmux shim under ~/.orca.
+    // Why: native panes write their tmux shim under ~/.pod.
     const home = await mkdtemp(join(tmpdir(), 'orca-agent-teams-home-'))
     vi.stubEnv('HOME', home)
     vi.stubEnv('USERPROFILE', home)
@@ -60,9 +60,9 @@ describe('OrcaRuntimeService', () => {
       env: {
         CLAUDE_PROFILE: 'captured',
         // Why: native panes need an absolute CLI; without one the plan degrades to in-process teammates.
-        ORCA_AGENT_TEAMS_SHIM_BIN: '/opt/orca/bin/orca-ide',
-        ORCA_AGENT_TEAMS_TEAM_ID: 'stale-team',
-        ORCA_AGENT_TEAMS_TOKEN: 'stale-token',
+        POD_AGENT_TEAMS_SHIM_BIN: '/opt/orca/bin/orca-ide',
+        POD_AGENT_TEAMS_TEAM_ID: 'stale-team',
+        POD_AGENT_TEAMS_TOKEN: 'stale-token',
         TMUX: '/tmp/orca-claude-agent-teams/stale-team,0,1'
       },
       launchAgent: 'claude',
@@ -71,9 +71,9 @@ describe('OrcaRuntimeService', () => {
         agentArgs: '--teammate-mode auto',
         agentEnv: {
           CLAUDE_PROFILE: 'captured',
-          ORCA_AGENT_TEAMS_SHIM_BIN: '/opt/orca/bin/orca-ide',
-          ORCA_AGENT_TEAMS_TEAM_ID: 'stale-team',
-          ORCA_AGENT_TEAMS_TOKEN: 'stale-token',
+          POD_AGENT_TEAMS_SHIM_BIN: '/opt/orca/bin/orca-ide',
+          POD_AGENT_TEAMS_TEAM_ID: 'stale-team',
+          POD_AGENT_TEAMS_TOKEN: 'stale-token',
           TMUX: '/tmp/orca-claude-agent-teams/stale-team,0,1'
         }
       }
@@ -86,12 +86,12 @@ describe('OrcaRuntimeService', () => {
     expect(spawnCall?.env).toMatchObject({
       CLAUDE_PROFILE: 'captured',
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
-      ORCA_AGENT_TEAMS_SHIM_BIN: '/opt/orca/bin/orca-ide',
+      POD_AGENT_TEAMS_SHIM_BIN: '/opt/orca/bin/orca-ide',
       TMUX_PANE: '%1'
     })
-    expect(spawnCall?.env?.ORCA_AGENT_TEAMS_TEAM_ID).toMatch(/^team-/)
-    expect(spawnCall?.env?.ORCA_AGENT_TEAMS_TEAM_ID).not.toBe('stale-team')
-    expect(spawnCall?.env?.ORCA_AGENT_TEAMS_TOKEN).not.toBe('stale-token')
+    expect(spawnCall?.env?.POD_AGENT_TEAMS_TEAM_ID).toMatch(/^team-/)
+    expect(spawnCall?.env?.POD_AGENT_TEAMS_TEAM_ID).not.toBe('stale-team')
+    expect(spawnCall?.env?.POD_AGENT_TEAMS_TOKEN).not.toBe('stale-token')
     expect(spawnCall?.env?.TMUX).not.toBe('/tmp/orca-claude-agent-teams/stale-team,0,1')
     expect(revealTerminalSession).toHaveBeenCalledWith(
       TEST_WORKTREE_ID,
@@ -108,8 +108,8 @@ describe('OrcaRuntimeService', () => {
       })
     )
     const revealedLaunchConfig = revealTerminalSession.mock.calls[0]?.[1]?.launchConfig
-    expect(revealedLaunchConfig?.agentEnv.ORCA_AGENT_TEAMS_TEAM_ID).not.toBe('stale-team')
-    expect(revealedLaunchConfig?.agentEnv.ORCA_AGENT_TEAMS_TOKEN).not.toBe('stale-token')
+    expect(revealedLaunchConfig?.agentEnv.POD_AGENT_TEAMS_TEAM_ID).not.toBe('stale-team')
+    expect(revealedLaunchConfig?.agentEnv.POD_AGENT_TEAMS_TOKEN).not.toBe('stale-token')
   })
 
   it('does not apply current Agent Teams mode to captured plain Claude resumes', async () => {
@@ -191,15 +191,15 @@ describe('OrcaRuntimeService', () => {
       tabId,
       leafId,
       env: {
-        ORCA_PANE_KEY: `${tabId}:${leafId}`,
-        ORCA_TAB_ID: tabId
+        POD_PANE_KEY: `${tabId}:${leafId}`,
+        POD_TAB_ID: tabId
       }
     })
 
     const spawnedEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
-    expect(spawnedEnv.ORCA_TAB_ID).toBe(tabId)
-    expect(spawnedEnv.ORCA_PANE_KEY).toBe(`${tabId}:${leafId}`)
+    expect(spawnedEnv.POD_TAB_ID).toBe(tabId)
+    expect(spawnedEnv.POD_PANE_KEY).toBe(`${tabId}:${leafId}`)
   })
 
   it('does not adopt web mirror ids as host terminal ids', async () => {
@@ -222,9 +222,9 @@ describe('OrcaRuntimeService', () => {
 
     const spawnedEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
-    expect(spawnedEnv.ORCA_TAB_ID).not.toBe(tabId)
-    expect(spawnedEnv.ORCA_TAB_ID).not.toMatch(/^web-terminal-/)
-    expect(spawnedEnv.ORCA_PANE_KEY).toMatch(`${spawnedEnv.ORCA_TAB_ID}:`)
+    expect(spawnedEnv.POD_TAB_ID).not.toBe(tabId)
+    expect(spawnedEnv.POD_TAB_ID).not.toMatch(/^web-terminal-/)
+    expect(spawnedEnv.POD_PANE_KEY).toMatch(`${spawnedEnv.POD_TAB_ID}:`)
   })
 
   it('creates background terminal sessions while the renderer graph is unavailable', async () => {

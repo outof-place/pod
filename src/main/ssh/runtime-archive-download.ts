@@ -17,7 +17,7 @@ export const RUNTIME_ARCHIVE_RETRY_DELAYS_MS = [1_000, 3_000, 9_000]
 /**
  * Why the extractor needs a message of its own: `unzip` is absent from a minimal POSIX install,
  * and a bare `spawn unzip ENOENT` names neither the missing tool nor the override. A misconfigured
- * `ORCA_UNZIP_BIN` whose parent is a file reports ENOTDIR instead, which is the same verdict.
+ * `POD_UNZIP_BIN` whose parent is a file reports ENOTDIR instead, which is the same verdict.
  *
  * The errno is the program path's, not the caller's: `runProcess` leaves cwd unset, so the child
  * inherits the parent's without resolving it. Measured on macOS, Linux and Windows — spawn still
@@ -48,7 +48,7 @@ export async function extractRuntimeArchive(
   } catch (error) {
     if (isDefinitiveAbsence(error)) {
       const override = archivePath.endsWith('.zip')
-        ? ', or set ORCA_UNZIP_BIN to an unzip-compatible extractor.'
+        ? ', or set POD_UNZIP_BIN to an unzip-compatible extractor.'
         : '.'
       throw new Error(
         `${label} archive extraction could not run ${command.file}: install ${command.label}${override}`,

@@ -113,7 +113,7 @@ describe.skipIf(!enabled)('real OrbStack template clones', () => {
         expect(lines(right)).not.toContain(line)
       }
       const [first, second] = launches.map((launch) => launch.vmEnv)
-      expect(first?.ORCA_AGENT_HOOK_TOKEN).not.toBe(second?.ORCA_AGENT_HOOK_TOKEN)
+      expect(first?.POD_AGENT_HOOK_TOKEN).not.toBe(second?.POD_AGENT_HOOK_TOKEN)
       expect(first?.CLAUDE_CODE_OAUTH_TOKEN).toMatch(/^pod-sandbox-no-credential-/)
       expect(first?.CLAUDE_CODE_OAUTH_TOKEN).not.toBe(second?.CLAUDE_CODE_OAUTH_TOKEN)
       console.info(`[clones] ${JSON.stringify({ left: lines(left), right: lines(right) })}`)

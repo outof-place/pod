@@ -119,9 +119,9 @@ describe('registerPtyHandlers', () => {
       tabId,
       leafId,
       env: {
-        ORCA_PANE_KEY: makePaneKey(tabId, leafId),
-        ORCA_TAB_ID: tabId,
-        ORCA_WORKTREE_ID: worktreeId
+        POD_PANE_KEY: makePaneKey(tabId, leafId),
+        POD_TAB_ID: tabId,
+        POD_WORKTREE_ID: worktreeId
       }
     })
     await new Promise<void>((resolve) => setImmediate(resolve))
@@ -214,7 +214,7 @@ describe('registerPtyHandlers', () => {
       sessionId: 'pty-runtime-reservation',
       tabId,
       leafId,
-      env: { ORCA_PANE_KEY: paneKey }
+      env: { POD_PANE_KEY: paneKey }
     }
 
     const rendererSpawn = handlers.get('pty:spawn')!(null, {
@@ -348,9 +348,9 @@ describe('registerPtyHandlers', () => {
       tabId: 'tab-race',
       leafId,
       env: {
-        ORCA_PANE_KEY: paneKey,
-        ORCA_TAB_ID: 'tab-race',
-        ORCA_WORKTREE_ID: 'repo-1::/tmp'
+        POD_PANE_KEY: paneKey,
+        POD_TAB_ID: 'tab-race',
+        POD_WORKTREE_ID: 'repo-1::/tmp'
       }
     }) as Promise<{ id: string }>
     await Promise.resolve()
@@ -363,7 +363,7 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'repo-1::/tmp',
       tabId: 'tab-race',
       leafId,
-      env: { ORCA_PANE_KEY: paneKey },
+      env: { POD_PANE_KEY: paneKey },
       persistHostSessionBinding: true
     })
     await vi.waitFor(() => expect(providerSpawn).toHaveBeenCalledTimes(1))
@@ -546,7 +546,7 @@ describe('registerPtyHandlers', () => {
         preAllocatedHandle: 'term-live-owner',
         tabId,
         leafId,
-        env: { ORCA_PANE_KEY: paneKey },
+        env: { POD_PANE_KEY: paneKey },
         persistHostSessionBinding: true
       })
       ownerPublished = true
@@ -580,9 +580,9 @@ describe('registerPtyHandlers', () => {
         tabId,
         leafId,
         env: {
-          ORCA_PANE_KEY: paneKey,
-          ORCA_TAB_ID: tabId,
-          ORCA_WORKTREE_ID: worktreeId
+          POD_PANE_KEY: paneKey,
+          POD_TAB_ID: tabId,
+          POD_WORKTREE_ID: worktreeId
         },
         telemetry: {
           agent_kind: 'codex',
@@ -649,7 +649,7 @@ describe('registerPtyHandlers', () => {
         preAllocatedHandle: 'term-live-owner',
         tabId,
         leafId,
-        env: { ORCA_PANE_KEY: paneKey },
+        env: { POD_PANE_KEY: paneKey },
         persistHostSessionBinding: true,
         adoptedStablePane: adoptedOwner,
         agentSessionEnsure: {

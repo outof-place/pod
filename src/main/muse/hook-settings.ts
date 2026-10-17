@@ -63,7 +63,7 @@ export function getMuseRemoteConfigPath(remoteHome: string): string {
 }
 
 export function getMuseRemoteManagedHooksPath(remoteHome: string): string {
-  return `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${MUSE_MANAGED_HOOKS_FILE_NAME}`
+  return `${remoteHome.replace(/\/$/, '')}/.pod/agent-hooks/${MUSE_MANAGED_HOOKS_FILE_NAME}`
 }
 
 export function getMuseManagedCommand(scriptPath: string): string {

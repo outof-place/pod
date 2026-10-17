@@ -53,7 +53,7 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
-  delete process.env.ORCA_ORCAD_PREBUILDS_DIR
+  delete process.env.POD_ORCAD_PREBUILDS_DIR
 })
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
@@ -103,7 +103,7 @@ describe('resolveOrcadPrebuildsDir', () => {
   })
 
   it('honours an explicit override', () => {
-    process.env.ORCA_ORCAD_PREBUILDS_DIR = '/custom/prebuilds'
+    process.env.POD_ORCAD_PREBUILDS_DIR = '/custom/prebuilds'
     expect(resolveOrcadPrebuildsDir('/opt/orcad/orcad.js')).toBe('/custom/prebuilds')
   })
 })

@@ -200,7 +200,7 @@ describe('the orchestration guide an agent loads', () => {
 
   it('has no chat-only section and grows only by the Orca session ID line', () => {
     expect(kernel.split('\n').length - 1).toBeLessThanOrEqual(MAIN_KERNEL_LINES)
-    expect(kernel).not.toMatch(/chat|session:<id>|ORCA_CLI_COMMAND|\/clear|end your turn/i)
+    expect(kernel).not.toMatch(/chat|session:<id>|POD_CLI_COMMAND|\/clear|end your turn/i)
     expect(kernel).toContain(
       '`ORCA status --json` shows your Orca session ID as `caller.orcaSessionId` when you have one.'
     )

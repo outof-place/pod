@@ -113,7 +113,7 @@ describe('relay pty fd-leak patch on the install path', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // The host-npm path is opt-in; these cases cover it.
-    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
+    vi.stubEnv('POD_SSH_REMOTE_RUNTIME', 'legacy')
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     sftpCapture.paths.length = 0
     vi.mocked(parseUnameToRelayPlatform).mockReturnValue('linux-x64')

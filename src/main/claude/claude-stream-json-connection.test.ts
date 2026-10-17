@@ -117,7 +117,7 @@ async function open(
 function launchedArgv(spec: ProcessSpec | undefined): string[] {
   const argv = [spec?.program ?? '', ...(spec?.args ?? [])]
   // A supervised launch carries the provider's argv after the supervisor script's '--'.
-  return spec?.env?.ORCA_PROVIDER_SUPERVISOR_SPEC ? argv.slice(argv.indexOf('--') + 1) : argv
+  return spec?.env?.POD_PROVIDER_SUPERVISOR_SPEC ? argv.slice(argv.indexOf('--') + 1) : argv
 }
 
 function childEnv(): Record<string, string | undefined> {
@@ -178,14 +178,14 @@ describe('Claude stream-json connection', () => {
     vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', undefined)
     vi.stubEnv('ORCA_CONNECTION_MARKER', 'inherited')
     // An Orca launched inside another structured session inherits that session's id.
-    vi.stubEnv('ORCA_AGENT_SESSION_ID', 'a0b1c2d3-0000-4000-8000-00000000abcd')
+    vi.stubEnv('POD_AGENT_SESSION_ID', 'a0b1c2d3-0000-4000-8000-00000000abcd')
     const scenario = scriptScenario([HOLD_OPEN])
     const connection = await open(
       launchFor(scenario, {
-        ORCA_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666',
+        POD_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666',
         CLAUDE_CONFIG_DIR: '/accounts/managed/home',
         ANTHROPIC_AUTH_TOKEN: 'configured-token',
-        ORCA_AGENT_SESSION_SPAWN_TOKEN: 'spawn-9',
+        POD_AGENT_SESSION_SPAWN_TOKEN: 'spawn-9',
         CLAUDE_CODE_CHILD_SESSION: 'configured-child-session',
         CLAUDE_CODE_SESSION_ID: 'configured-session',
         CLAUDE_CODE_BRIDGE_SESSION_ID: 'configured-bridge-session'
@@ -199,10 +199,10 @@ describe('Claude stream-json connection', () => {
     // The managed home is pinned verbatim: the CLI keys credential lookup on the literal string.
     expect(env.CLAUDE_CONFIG_DIR).toBe('/accounts/managed/home')
     expect(env.ANTHROPIC_AUTH_TOKEN).toBe('configured-token')
-    expect(env.ORCA_AGENT_SESSION_SPAWN_TOKEN).toBe('spawn-9')
+    expect(env.POD_AGENT_SESSION_SPAWN_TOKEN).toBe('spawn-9')
     expect(env.ORCA_CONNECTION_MARKER).toBe('inherited')
     // The session's own id reaches the spawned child over the inherited one.
-    expect(env.ORCA_AGENT_SESSION_ID).toBe('f7a1c0de-1111-4222-8333-444455556666')
+    expect(env.POD_AGENT_SESSION_ID).toBe('f7a1c0de-1111-4222-8333-444455556666')
     expect(env.ANTHROPIC_API_KEY).toBeUndefined()
     expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
     expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined()

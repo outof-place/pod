@@ -246,7 +246,7 @@ export function addComputerAndStatusCases(add) {
       { responses: { 'status.get': [{ error: { code: 'boom', message: 'no' } }] } }
     ],
     ['status closed', { responses: { 'status.get': [{ close: true }] } }],
-    ['status not running', { env: { ORCA_USER_DATA_PATH: '/nonexistent/podx-parity' } }],
+    ['status not running', { env: { POD_USER_DATA_PATH: '/nonexistent/podx-parity' } }],
     [
       'status stale no transports',
       {
@@ -297,7 +297,7 @@ export function addComputerAndStatusCases(add) {
     ['status number metadata falls back', { userData: { 'orca-runtime.json': '5' } }],
     [
       'status agent session falls back',
-      { env: { ORCA_AGENT_SESSION_ID: 'sess-1' }, ...status(ready) }
+      { env: { POD_AGENT_SESSION_ID: 'sess-1' }, ...status(ready) }
     ]
   ]) {
     add(name, ['status'], extra)

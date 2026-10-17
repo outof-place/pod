@@ -75,8 +75,8 @@ beforeEach(() => {
   mocks.requestSingleInstanceLock.mockReturnValue(true)
   mocks.whenReady.mockResolvedValue(undefined)
   mocks.showMessageBox.mockResolvedValue({ response: 0 })
-  vi.stubEnv('ORCA_USER_DATA_PATH', '/stale/inherited/root')
-  vi.stubEnv('ORCA_BYPASS_SINGLE_INSTANCE_LOCK', '1')
+  vi.stubEnv('POD_USER_DATA_PATH', '/stale/inherited/root')
+  vi.stubEnv('POD_BYPASS_SINGLE_INSTANCE_LOCK', '1')
   vi.stubEnv('ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK', '0')
 })
 afterEach(() => {
@@ -164,7 +164,7 @@ describe('Electron recovery preflight', () => {
         return true
       })
       expect(runProfileStateRecoveryPreflight(item.argv)).toBe(true)
-      expect(process.env.ORCA_USER_DATA_PATH).toBe(item.root)
+      expect(process.env.POD_USER_DATA_PATH).toBe(item.root)
       expect(process.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
       expect(mocks.background).toHaveBeenCalledOnce()
       expect(mocks.requestSingleInstanceLock).toHaveBeenCalledOnce()

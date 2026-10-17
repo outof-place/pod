@@ -159,7 +159,7 @@ describe('bundled Orca runtime handoff', () => {
       expect(fixture.spawn).toHaveBeenCalledWith({
         program: join('/slot', '..', 'runtimes', `node-${SHA}`, 'bin', 'node'),
         args: ['/slot/orcad.js', '--port', '0'],
-        env: expect.objectContaining({ ORCA_BUNDLED_LAUNCHER_CHANNEL: '1' }),
+        env: expect.objectContaining({ POD_BUNDLED_LAUNCHER_CHANNEL: '1' }),
         detached: true,
         stdio: ['inherit', 'inherit', 'inherit', 'ipc']
       })

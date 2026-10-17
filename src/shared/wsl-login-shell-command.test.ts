@@ -297,7 +297,7 @@ describe('wsl login shell command helpers', () => {
     expect(command).toContain('getent passwd')
     expect(command).toContain('if [ -z "$_orca_wsl_shell" ] || [ ! -x "$_orca_wsl_shell" ]; then')
     expect(command).toContain('_orca_shell_ready_root=""')
-    expect(command).toContain('if [ -n "${ORCA_USER_DATA_PATH:-}" ]; then')
+    expect(command).toContain('if [ -n "${POD_USER_DATA_PATH:-}" ]; then')
     expect(command).toContain('_orca_wsl_shell_name=$(basename "$_orca_wsl_shell"')
     expect(command).toContain('bash)')
     expect(command).toContain('--rcfile "${_orca_shell_ready_root}/bash/rcfile"')
@@ -311,16 +311,16 @@ describe('wsl login shell command helpers', () => {
 describe('in-guest wrapper root resolution', () => {
   // Why this test exists: the wrapper tree is content-addressed, so its path
   // carries a hash the guest cannot derive. A previous revision of this script
-  // rebuilt the root as `${ORCA_USER_DATA_PATH}/shell-ready`, which stopped
+  // rebuilt the root as `${POD_USER_DATA_PATH}/shell-ready`, which stopped
   // matching -- every WSL pane then fell through to an unwrapped `exec $shell -l`
   // and silently lost the ready marker, OSC 133, and the launch preflight.
   it('prefers the host-published root over the legacy user-data guess', () => {
     const script = buildWslInteractiveLoginShellCommand()
-    expect(script).toContain('if [ -n "${ORCA_SHELL_READY_ROOT:-}" ]; then')
-    expect(script).toContain('_orca_shell_ready_root="${ORCA_SHELL_READY_ROOT%/}"')
+    expect(script).toContain('if [ -n "${POD_SHELL_READY_ROOT:-}" ]; then')
+    expect(script).toContain('_orca_shell_ready_root="${POD_SHELL_READY_ROOT%/}"')
     // The legacy branch must remain reachable only as a fallback, so an older
-    // host that exports just ORCA_USER_DATA_PATH still wraps its shells.
-    expect(script).toContain('elif [ -n "${ORCA_USER_DATA_PATH:-}" ]; then')
+    // host that exports just POD_USER_DATA_PATH still wraps its shells.
+    expect(script).toContain('elif [ -n "${POD_USER_DATA_PATH:-}" ]; then')
   })
 
   it('resolves the published root ahead of the legacy path under a real shell', () => {
@@ -328,9 +328,9 @@ describe('in-guest wrapper root resolution', () => {
     // Run only the root-resolution prologue, then report what it picked.
     const prologue = script.split('_orca_wsl_shell_name=')[0] as string
     const probe = [
-      'ORCA_SHELL_READY_ROOT=/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready',
-      'ORCA_USER_DATA_PATH=/mnt/c/ud',
-      'export ORCA_SHELL_READY_ROOT ORCA_USER_DATA_PATH',
+      'POD_SHELL_READY_ROOT=/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready',
+      'POD_USER_DATA_PATH=/mnt/c/ud',
+      'export POD_SHELL_READY_ROOT POD_USER_DATA_PATH',
       prologue,
       'printf "%s" "$_orca_shell_ready_root"'
     ].join('\n')

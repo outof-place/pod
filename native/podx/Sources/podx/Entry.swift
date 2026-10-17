@@ -21,8 +21,8 @@ func run(_ args: [String]) -> Never {
   }
   // Remote targets, SSH bridges, relayed cwds and pre-command flags take Node-only paths.
   guard let first = args.first, !first.hasPrefix("--"),
-    !envSet("ORCA_PAIRING_CODE"), !envSet("ORCA_REMOTE_PAIRING"), !envSet("ORCA_ENVIRONMENT"),
-    !envSet("ORCA_SSH_BRIDGE_CREDENTIAL"), !envSet("ORCA_CLI_CWD")
+    !envSet("POD_PAIRING_CODE"), !envSet("POD_REMOTE_PAIRING"), !envSet("POD_ENVIRONMENT"),
+    !envSet("ORCA_SSH_BRIDGE_CREDENTIAL"), !envSet("POD_CLI_CWD")
   else { execNodeCli(args) }
 
   let parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(args, specs: COMMAND_SPECS))

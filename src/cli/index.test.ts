@@ -253,8 +253,8 @@ describe('command aliases dispatch to the canonical handler', () => {
   })
 
   it('keeps `agent-context` local when remote environment variables are set', async () => {
-    vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
-    vi.stubEnv('ORCA_ENVIRONMENT', 'stale-environment')
+    vi.stubEnv('POD_PAIRING_CODE', 'pairing-code')
+    vi.stubEnv('POD_ENVIRONMENT', 'stale-environment')
     try {
       await main(['agent-context', '--json'], '/tmp/repo')
 
@@ -274,8 +274,8 @@ describe('artifact runtime routing', () => {
   })
 
   it('uses the desktop runtime despite remote-selection environment fallbacks', async () => {
-    vi.stubEnv('ORCA_ENVIRONMENT', 'remote-environment')
-    vi.stubEnv('ORCA_PAIRING_CODE', 'remote-pairing-code')
+    vi.stubEnv('POD_ENVIRONMENT', 'remote-environment')
+    vi.stubEnv('POD_PAIRING_CODE', 'remote-pairing-code')
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     callMock.mockResolvedValue(okFixture('artifact-list', { status: 'ok', value: [] }))
     runtimeClientConstructorMock.mockClear()

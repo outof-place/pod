@@ -324,8 +324,8 @@ describe('OrcaRuntimeService', () => {
     const initialSpawnEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
     expectStablePaneKeyEnv(initialSpawnEnv)
-    const initialLeafId = initialSpawnEnv.ORCA_PANE_KEY.slice(
-      `${initialSpawnEnv.ORCA_TAB_ID}:`.length
+    const initialLeafId = initialSpawnEnv.POD_PANE_KEY.slice(
+      `${initialSpawnEnv.POD_TAB_ID}:`.length
     )
     // Why: the renderer treats a missing surfaceOwner as "reveal the owner", which
     // scrolled the sidebar to background CLI creates.
@@ -334,7 +334,7 @@ describe('OrcaRuntimeService', () => {
       title: null,
       activate: false,
       surfaceOwner: false,
-      tabId: initialSpawnEnv.ORCA_TAB_ID,
+      tabId: initialSpawnEnv.POD_TAB_ID,
       leafId: initialLeafId
     })
   })
@@ -589,13 +589,13 @@ describe('OrcaRuntimeService', () => {
     const setupEnv = (spawn.mock.calls[1]![0] as { env?: Record<string, string> }).env ?? {}
     expectStablePaneKeyEnv(mainEnv)
     expectStablePaneKeyEnv(setupEnv)
-    expect(setupEnv.ORCA_TAB_ID).toBe(mainEnv.ORCA_TAB_ID)
-    const mainLeafId = mainEnv.ORCA_PANE_KEY!.slice(`${mainEnv.ORCA_TAB_ID!}:`.length)
+    expect(setupEnv.POD_TAB_ID).toBe(mainEnv.POD_TAB_ID)
+    const mainLeafId = mainEnv.POD_PANE_KEY!.slice(`${mainEnv.POD_TAB_ID!}:`.length)
     expect(revealTerminalSession).toHaveBeenLastCalledWith(
       result.worktree.id,
       expect.objectContaining({
         ptyId: 'pty-cli-setup-setup',
-        tabId: mainEnv.ORCA_TAB_ID,
+        tabId: mainEnv.POD_TAB_ID,
         activate: false,
         splitFromLeafId: mainLeafId,
         splitDirection: 'vertical'

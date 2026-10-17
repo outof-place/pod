@@ -139,7 +139,7 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
         // Stock cases replay this replacement after the fixture installs its own widgets.
         DEBIAN_PREVENT_KEYBOARD_CHANGES: '1',
         ZDOTDIR: wrapperDir,
-        ORCA_HISTFILE: join(home, 'scoped-history')
+        POD_HISTFILE: join(home, 'scoped-history')
       }
       const launcher = prependOrcaCliDirToChildPath(env, { isPackaged: false, userDataPath: home })
       const features = selectShellStartupFeatures({
@@ -149,7 +149,7 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
         waitsForShellReady: !historyOnly,
         emitsStartupIdentity: false
       })
-      env.ORCA_SHELL_FEATURES = encodeShellStartupFeatures(features)
+      env.POD_SHELL_FEATURES = encodeShellStartupFeatures(features)
       if (!historyOnly) {
         env[POSIX_SHELL_STARTUP_COMMAND_ENV] = 'O_SU=$((${O_SU:-0}+1))'
       }

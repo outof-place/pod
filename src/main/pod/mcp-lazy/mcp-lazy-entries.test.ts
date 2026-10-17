@@ -13,7 +13,7 @@ import {
   type McpServerEntry
 } from './mcp-lazy-entries'
 
-const SHIM = '/Users/u/.orca/agent-hooks/mcp-lazy'
+const SHIM = '/Users/u/.pod/agent-hooks/mcp-lazy'
 const chrome: McpServerEntry = {
   type: 'stdio',
   command: '/opt/node/bin/chrome-devtools-mcp',
@@ -60,7 +60,7 @@ describe('mcp-lazy entries', () => {
   })
 
   it('quotes a shim path with a quote in it, and refuses one Claude Code would expand', () => {
-    const odd = "/Users/o'neil/.orca/agent-hooks/mcp-lazy"
+    const odd = "/Users/o'neil/.pod/agent-hooks/mcp-lazy"
     expect(wrappedShimPath(wrapEntry('x', magic, odd))).toBe(odd)
     expect(() => wrapScript('/Users/${USER}/mcp-lazy')).toThrow()
   })

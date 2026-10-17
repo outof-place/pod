@@ -54,22 +54,22 @@ export function withPodSandboxLaunchChoice(
   return { ...planEnv, [POD_ORBSTACK_SANDBOX_LAUNCH_ENV]: choice }
 }
 /**
- * Why a prefix: the pane's Mac shell keeps its own ORCA_AGENT_HOOK_TOKEN and no ANTHROPIC_API_KEY;
+ * Why a prefix: the pane's Mac shell keeps its own POD_AGENT_HOOK_TOKEN and no ANTHROPIC_API_KEY;
  * `POD_SANDBOX_VM_<NAME>` reaches the VM through ORBENV and becomes `<NAME>` only there.
  */
 export const POD_SANDBOX_VM_ENV_PREFIX = 'POD_SANDBOX_VM_'
 
 // Why: orb passes only ORBENV-listed variables into Linux; these route hook posts to this pane.
 export const SANDBOX_FORWARDED_ENV = [
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_TERMINAL_HANDLE',
-  'ORCA_AGENT_LAUNCH_TOKEN',
-  'ORCA_AGENT_HOOK_PORT',
-  'ORCA_AGENT_HOOK_ENV',
-  'ORCA_AGENT_HOOK_VERSION',
-  'ORCA_AGENT_HOOK_TRANSPORT',
+  'POD_PANE_KEY',
+  'POD_TAB_ID',
+  'POD_WORKTREE_ID',
+  'POD_TERMINAL_HANDLE',
+  'POD_AGENT_LAUNCH_TOKEN',
+  'POD_AGENT_HOOK_PORT',
+  'POD_AGENT_HOOK_ENV',
+  'POD_AGENT_HOOK_VERSION',
+  'POD_AGENT_HOOK_TRANSPORT',
   'COLORTERM'
 ] as const
 
@@ -151,8 +151,8 @@ export function applyPodOrbstackTerminalOverride(
       wantsSandbox(spawnOptions.env, sandbox.agentsByDefault)
     ) {
       const env = spawnOptions.env ?? {}
-      const hookPort = Number(env.ORCA_AGENT_HOOK_PORT)
-      const hookToken = env.ORCA_AGENT_HOOK_TOKEN
+      const hookPort = Number(env.POD_AGENT_HOOK_PORT)
+      const hookToken = env.POD_AGENT_HOOK_TOKEN
       const relay =
         Number.isInteger(hookPort) && hookPort > 0 && hookToken
           ? (startSandboxRelay?.(sandbox.machine, { port: hookPort, token: hookToken }) ?? null)

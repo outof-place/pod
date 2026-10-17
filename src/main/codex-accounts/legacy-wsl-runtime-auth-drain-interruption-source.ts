@@ -1,7 +1,7 @@
 /** Interruption fixtures must never signal the runner's inherited process group. */
 export const DRAIN_APPLY_INTERRUPTION_JS = String.raw`
 function interruptDrainApply(ancestorDepth) {
-  const expectedText = process.env.ORCA_DRAIN_APPLY_PID || ''
+  const expectedText = process.env.POD_DRAIN_APPLY_PID || ''
   if (!/^[1-9][0-9]*$/.test(expectedText)) throw new Error('Missing owned apply PID')
   const expectedPid = Number(expectedText)
   if (!Number.isSafeInteger(expectedPid) || expectedPid <= 1 || expectedPid === process.pid) {

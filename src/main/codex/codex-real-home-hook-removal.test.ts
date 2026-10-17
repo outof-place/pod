@@ -70,7 +70,7 @@ beforeEach(() => {
   userDataDir = join(root, 'user-data')
   mkdirSync(home)
   mkdirSync(userDataDir)
-  vi.stubEnv('ORCA_USER_DATA_PATH', userDataDir)
+  vi.stubEnv('POD_USER_DATA_PATH', userDataDir)
   vi.stubEnv('CODEX_HOME', '')
   homedirMock.mockReturnValue(home)
 })

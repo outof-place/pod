@@ -134,9 +134,9 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
       wslDistro: 'Ubuntu',
       wslLinuxConfigDir: f.profileHome,
       envPatch: {
-        ORCA_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca-dev',
+        POD_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca-dev',
         CLAUDE_CONFIG_DIR: f.profileHome,
-        ORCA_CLAUDE_INJECTED_CONFIG_DIR: f.profileHome
+        POD_CLAUDE_INJECTED_CONFIG_DIR: f.profileHome
       }
     })
     // The failed first setup left no marker, so this launch ran setup again; the next refreshes
@@ -328,7 +328,7 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     const prepared = await f.router.preparation('Ubuntu')
     expect(prepared.wslLinuxConfigDir).toBe(join(guest.home, '.claude'))
     expect(prepared.envPatch).toEqual({
-      ORCA_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca-dev'
+      POD_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca-dev'
     })
     expect(await f.router.runningDistros()).toEqual(['Ubuntu'])
   })

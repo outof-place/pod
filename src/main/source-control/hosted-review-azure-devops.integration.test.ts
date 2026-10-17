@@ -24,8 +24,8 @@ function sendJson(res: ServerResponse, body: unknown): void {
 
 describe('Azure DevOps hosted review integration', () => {
   beforeEach(() => {
-    process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'local-pat' }
-    delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
+    process.env = { ...OLD_ENV, POD_AZURE_DEVOPS_TOKEN: 'local-pat' }
+    delete process.env.POD_AZURE_DEVOPS_API_BASE_URL
     _resetAzureDevOpsRepoRefCache()
   })
 
@@ -89,7 +89,7 @@ describe('Azure DevOps hosted review integration', () => {
       if (!address || typeof address === 'string') {
         throw new Error('expected TCP server address')
       }
-      process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = `http://127.0.0.1:${address.port}/acme/Project`
+      process.env.POD_AZURE_DEVOPS_API_BASE_URL = `http://127.0.0.1:${address.port}/acme/Project`
 
       await execFileAsync('git', ['init'], { cwd: repoPath })
       await execFileAsync(
@@ -198,7 +198,7 @@ describe('Azure DevOps hosted review integration', () => {
       if (!address || typeof address === 'string') {
         throw new Error('expected TCP server address')
       }
-      process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = `http://127.0.0.1:${address.port}/acme/Project`
+      process.env.POD_AZURE_DEVOPS_API_BASE_URL = `http://127.0.0.1:${address.port}/acme/Project`
 
       await execFileAsync('git', ['init'], { cwd: repoPath })
       await execFileAsync(

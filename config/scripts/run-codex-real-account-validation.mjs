@@ -34,12 +34,12 @@ const RESTRICTED_ENV_KEYS = [
   'HOMEDRIVE',
   'HOMEPATH',
   'CODEX_HOME',
-  'ORCA_CODEX_HOME',
+  'POD_CODEX_HOME',
   'ORCA_E2E_HOME_DIR',
   'ORCA_E2E_USER_DATA_DIR',
-  'ORCA_USER_DATA_PATH',
+  'POD_USER_DATA_PATH',
   'ZDOTDIR',
-  'ORCA_ORIG_ZDOTDIR',
+  'POD_ORIG_ZDOTDIR',
   'BASH_ENV',
   'ENV',
   'ELECTRON_RUN_AS_NODE'
@@ -80,7 +80,7 @@ export function createValidationEnv(inheritedEnv, layout) {
     NODE_ENV: 'development',
     ORCA_E2E_HOME_DIR: layout.homeDir,
     ORCA_E2E_USER_DATA_DIR: layout.userDataDir,
-    ORCA_USER_DATA_PATH: layout.userDataDir
+    POD_USER_DATA_PATH: layout.userDataDir
   }
 }
 
@@ -360,8 +360,8 @@ function validationCliCommand() {
   if (process.env.ORCA_VALIDATION_CLI) {
     return process.env.ORCA_VALIDATION_CLI
   }
-  if (process.env.ORCA_CLI_COMMAND) {
-    return process.env.ORCA_CLI_COMMAND
+  if (process.env.POD_CLI_COMMAND) {
+    return process.env.POD_CLI_COMMAND
   }
   return process.platform === 'linux' ? 'orca-ide' : 'orca'
 }
@@ -370,7 +370,7 @@ async function probeTerminalEnvironment(terminalHandle, launchEnv) {
   const marker = `__ORCA_CODEX_VALIDATION_${randomUUID()}__`
   const command = [
     'node -e',
-    `"console.log('${marker}:' + JSON.stringify({home: require('node:os').homedir(), codexHome: process.env.CODEX_HOME || null, orcaCodexHome: process.env.ORCA_CODEX_HOME || null}))"`
+    `"console.log('${marker}:' + JSON.stringify({home: require('node:os').homedir(), codexHome: process.env.CODEX_HOME || null, orcaCodexHome: process.env.POD_CODEX_HOME || null}))"`
   ].join(' ')
   const cli = validationCliCommand()
   execFileSync(
