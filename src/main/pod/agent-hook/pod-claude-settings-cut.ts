@@ -212,7 +212,12 @@ export class PodClaudeSettingsCut {
       return false
     }
     const refusal: PodClaudeCutRefusal = {}
-    const result = removePodClaudeEntries(text, this.options.names(), refusal)
+    let result: ReturnType<typeof removePodClaudeEntries> = null
+    try {
+      result = removePodClaudeEntries(text, this.options.names(), refusal)
+    } catch {
+      refusal.reason = 'unexpected error'
+    }
     if (result === null) {
       // Why once, and apart from "none of Pod": a file the cut refuses keeps whatever Pod has in it.
       if (!this.refusalLogged) {

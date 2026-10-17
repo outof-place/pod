@@ -145,6 +145,19 @@ describe('PodClaudeSettingsCut', () => {
     expect(readFileSync(settingsPath, 'utf8')).toBe('{"hooks": ')
   })
 
+  it('refuses a file with a key twice once, without throwing', async () => {
+    const text = `{"hooks":{"Stop":[],"Stop":[{"hooks":[${POD_ENTRY}]}]}}`
+    writeFileSync(settingsPath, text)
+    const scan = vi.fn(async () => [])
+    const { cut, log } = cutWith(scan)
+    await expect(cut.arm()).resolves.toBeUndefined()
+    expect(cut.pending).toBe(false)
+    expect(log).toHaveBeenCalledWith('pod-claude-settings-cut-refused', {
+      reason: 'duplicate keys'
+    })
+    expect(readFileSync(settingsPath, 'utf8')).toBe(text)
+  })
+
   it('waits while the table is unreadable, and watches the newest set of older claudes', async () => {
     writeFileSync(settingsPath, WITH_POD)
     let answer: number[] | null = null
