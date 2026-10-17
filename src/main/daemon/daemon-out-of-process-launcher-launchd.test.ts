@@ -11,7 +11,7 @@ const harness = vi.hoisted(() => ({
   holdDaemonAdoptionLease: vi.fn(),
   darwinDaemonHostForSpawn: vi.fn(),
   sweepDeadDaemonLaunchdJobs: vi.fn(),
-  jobs: { paths: vi.fn(), writePlist: vi.fn(), bootout: vi.fn() }
+  jobs: { paths: vi.fn(), writePlist: vi.fn(), bootout: vi.fn(), signal: vi.fn() }
 }))
 
 vi.mock('./client', () => ({
