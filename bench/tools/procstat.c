@@ -1,10 +1,10 @@
 // procstat: CPU time and memory of one app's process set, as one JSON object on stdout.
 //
-//   procstat [--root PID]... [--argv STR]...
+//   procstat [--root PID]... [--argv STR]... [--exe PATH]...
 //
-// Selects every --root pid, every process whose argv contains an --argv string, and all their
-// descendants. Per process: cumulative user+system CPU (ns), resident size and phys_footprint
-// (the "Memory" column of Activity Monitor), from proc_pid_rusage, and the first 512 bytes of argv. Also the host's cumulative
+// Selects every --root pid, every process whose argv contains an --argv string, every process
+// whose executable (proc_pidpath) is an --exe path, and all their descendants. Per process: cumulative user+system CPU (ns), resident size and phys_footprint
+// (the "Memory" column of Activity Monitor) and cumulative interrupt and package-idle wakeups, from proc_pid_rusage, and the first 512 bytes of argv. Also the host's cumulative
 // busy and idle CPU time, so a caller can tell how busy the rest of the machine was.
 #include <libproc.h>
 #include <mach/mach.h>
@@ -62,14 +62,17 @@ static int read_argv(pid_t pid, char *out, size_t cap) {
 int main(int argc, char **argv) {
   pid_t roots[64];
   const char *needles[16];
-  int nroots = 0, nneedles = 0;
+  const char *exes[8];
+  int nroots = 0, nneedles = 0, nexes = 0;
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "--root") && i + 1 < argc && nroots < 64) {
       roots[nroots++] = (pid_t)atoi(argv[++i]);
     } else if (!strcmp(argv[i], "--argv") && i + 1 < argc && nneedles < 16) {
       needles[nneedles++] = argv[++i];
+    } else if (!strcmp(argv[i], "--exe") && i + 1 < argc && nexes < 8) {
+      exes[nexes++] = argv[++i];
     } else {
-      fprintf(stderr, "usage: procstat [--root PID]... [--argv STR]...\n");
+      fprintf(stderr, "usage: procstat [--root PID]... [--argv STR]... [--exe PATH]...\n");
       return 2;
     }
   }
@@ -88,6 +91,14 @@ int main(int argc, char **argv) {
     pid_t pid = procs[i].kp_proc.p_pid;
     for (int r = 0; r < nroots; r++) {
       if (pid == roots[r]) selected[i] = 1;
+    }
+    if (!selected[i] && nexes > 0) {
+      char exe[PROC_PIDPATHINFO_MAXSIZE] = "";
+      if (proc_pidpath(pid, exe, sizeof(exe)) > 0) {
+        for (int k = 0; k < nexes; k++) {
+          if (!strcmp(exe, exes[k])) selected[i] = 1;
+        }
+      }
     }
     if (!selected[i] && nneedles > 0 && read_argv(pid, args, sizeof(args)) == 0) {
       for (int k = 0; k < nneedles; k++) {
@@ -134,8 +145,10 @@ int main(int argc, char **argv) {
     json_string(path);
     printf(",\"args\":");
     json_string(args);
-    printf(",\"cpuNs\":%llu,\"rss\":%llu,\"footprint\":%llu}", (unsigned long long)cpu,
-           (unsigned long long)ri.ri_resident_size, (unsigned long long)ri.ri_phys_footprint);
+    printf(",\"cpuNs\":%llu,\"rss\":%llu,\"footprint\":%llu,\"interruptWakeups\":%llu,\"idleWakeups\":%llu}",
+           (unsigned long long)cpu, (unsigned long long)ri.ri_resident_size,
+           (unsigned long long)ri.ri_phys_footprint, (unsigned long long)ri.ri_interrupt_wkups,
+           (unsigned long long)ri.ri_pkg_idle_wkups);
     total_cpu += cpu;
     total_rss += ri.ri_resident_size;
     total_fp += ri.ri_phys_footprint;

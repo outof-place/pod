@@ -388,6 +388,47 @@ each app installs.
 - **Runs.** The default is 6 replays of all events per app, alternating which app goes first.
   A first pair is a discarded warmup.
 
+### 11. Idle cost with the native UI (`suites/native-idle.mjs`)
+
+This suite measures what Pod 1.0 costs while nothing happens: CPU (ms/s), wakeups/s and
+memory (`phys_footprint`). It counts PodNative, its runtime with the runtime's helpers, and
+the terminal daemon. The terminals' shells are not counted. It runs on its own, not from
+`run-final.sh`:
+
+```sh
+POD_BENCH_POD_APP=<re-id'd copy of Pod.app> node bench/suites/native-idle.mjs [--launches 2] [--window-s 300]
+```
+
+- **States.** One launch goes through them in order:
+  - no terminal;
+  - 1 idle terminal;
+  - 8 idle terminals;
+  - the 8 closed again through Close Terminals (`worktree.sleep`).
+
+  Each state gets a window (300 s by default), after a 60 s warmup at the start and 30 s to
+  settle after each change.
+- **Window mode.** PodNative runs as `--background`. Its window is laid out and drawn, but never
+  ordered in, so nothing shows on screen. That is neither a visible window nor a closed one: git
+  and the tab snapshots treat it as on screen, the status bar as hidden. The rows say so.
+- **Variants.** Each variant gets its own launches, in ABBA order.
+  - `acc-on` is the default config. It reads a claude-acc state, here a stub one: PodNative's
+    mac-e2e fixtures, rewritten at claude-acc's live rates by their writer.
+  - `acc-off` (`POD_NATIVE_NO_ACC=1`) is the breakdown without it.
+- **Isolation.** Each launch gets:
+  - an APFS clone of the re-id'd bundle, with a fresh profile and `HOME`;
+  - `open -n -g` with its whole environment given (empty `USER`/`LOGNAME`);
+  - a guard `PATH` whose `claude` and `codex` are stubs and whose `security` is the gate-2 shim.
+
+  A watchdog stops the launch on any real `claude` or `codex` in the run's tree, or on a new
+  SecurityAgent. After each launch the suite checks three things: that `~/.claude/settings.json`
+  and the agent-hook dirs are unchanged, that the shim saw only `find` calls, and that
+  claude-acc's install is unchanged (`lib/acc-guard.mjs`).
+- **Sampling.** `tools/procstat.c` reads every process of the launch at each window's edges:
+  PodNative by its executable, the runtime and daemons the profile records, and their
+  descendants. `extra.breakdown` splits the numbers by process class. A window counts only when
+  the load gate held at its start. PodNative's own `--measure` report is kept next to them as a
+  cross-check.
+
 ## Running without taking the desktop
 
 Two questions decide whether the visible-window latency run can happen while someone uses the
