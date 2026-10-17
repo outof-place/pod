@@ -118,4 +118,99 @@ struct InputLanesTests {
         #expect(ran.wait(for: 1, seconds: 0) != nil)
         #expect(ran.wait(for: 2, seconds: 0.2) == nil)
     }
+
+    @Test("a lane stuck past its deadline plus the grace is given up on: the calls behind it answer wedged unsent, the next runs on a fresh lane, other devices never wait")
+    func wedgedLaneIsAbandoned() throws {
+        let lanes = InputLanes(maxDepth: 4, wedgeGraceMs: 300)
+        let wedges = WedgeLog()
+        lanes.onWedge = { wedges.append($0) }
+        let dispatcher = DeadlineDispatcher()
+        let answers = Answers(), ran = Answers()
+        let stuck = DispatchSemaphore(value: 0)
+        defer { stuck.signal() }
+        func body(_ id: Int) -> @Sendable () -> Reply {
+            { ran.sink(id)(.result(Data("{}".utf8))); return .result(Data("{}".utf8)) }
+        }
+        // A call that never returns from its private call, and one queued behind it.
+        lanes.submit(udid: Self.deviceA, call: dispatcher.start("hid", deadlineMs: 50, reply: answers.sink(1))) {
+            stuck.wait()
+            return .result(Data("{}".utf8))
+        }
+        lanes.submit(udid: Self.deviceA, call: dispatcher.start("hid", deadlineMs: 5_000, reply: answers.sink(2)), body(2))
+        lanes.submit(udid: Self.deviceB, call: dispatcher.start("hid", deadlineMs: 5_000, reply: answers.sink(3)), body(3))
+        #expect(answers.wait(for: 3) != nil, "device B is served while A is stuck")
+        #expect(code(answers.wait(for: 1)) == .timeout)
+        // Still within the grace: the lane is kept, so a call joins the queue.
+        lanes.submit(udid: Self.deviceA, call: dispatcher.start("hid", deadlineMs: 5_000, reply: answers.sink(4)), body(4))
+        #expect(wedges.all.isEmpty)
+        usleep(400_000)
+
+        lanes.submit(udid: Self.deviceA, call: dispatcher.start("hid", deadlineMs: 5_000, reply: answers.sink(5)), body(5))
+        #expect(code(answers.wait(for: 2)) == .wedged)
+        #expect(code(answers.wait(for: 4)) == .wedged)
+        guard case .result? = answers.wait(for: 5) else {
+            Issue.record("the call after the wedge did not run on a fresh lane")
+            return
+        }
+        let wedge = try #require(wedges.all.first)
+        #expect(wedges.all.count == 1)
+        #expect(wedge.udid == Self.deviceA && wedge.dropped == 2 && wedge.abandoned == 1)
+        #expect(wedge.stuckMs >= 400)
+        #expect(ran.wait(for: 2, seconds: 0.1) == nil && ran.wait(for: 4, seconds: 0) == nil, "wedged calls were never sent")
+
+        // The stuck call finally returns on the abandoned lane: nothing else happens.
+        stuck.signal()
+        usleep(50_000)
+        lanes.submit(udid: Self.deviceA, call: dispatcher.start("hid", deadlineMs: 5_000, reply: answers.sink(6)), body(6))
+        guard case .result? = answers.wait(for: 6) else {
+            Issue.record("the fresh lane stopped serving")
+            return
+        }
+        #expect(wedges.all.count == 1)
+    }
+
+    @Test("each wedge reaches the runtime as an inputWedged event; the second stuck thread advises a recycle")
+    func wedgeEvents() throws {
+        let lanes = InputLanes(maxDepth: 4, wedgeGraceMs: 0)
+        let methods = HelperMethods(
+            environment: ["DEVELOPER_DIR": "/Applications/Xcode.app/Contents/Developer", "POD_SIM_FORCE_UNKNOWN_BUILD": "1"],
+            inputFallback: RecordingDriver(stalled: ""), accessibilityFallback: NoPublicAccessibilityFallback(), inputLanes: lanes)
+        let events = EventLog()
+        methods.events.listen { name, params in events.append(name, params) }
+        let dispatcher = DeadlineDispatcher()
+        let answers = Answers()
+        let stuck = DispatchSemaphore(value: 0)
+        defer { for _ in 0..<2 { stuck.signal() } }
+        for (index, udid) in [Self.deviceA, Self.deviceB].enumerated() {
+            lanes.submit(udid: udid, call: dispatcher.start("hid", deadlineMs: 10, reply: answers.sink(index))) {
+                stuck.wait()
+                return .result(Data("{}".utf8))
+            }
+        }
+        usleep(60_000)
+        for (index, udid) in [Self.deviceA, Self.deviceB].enumerated() {
+            lanes.submit(udid: udid, call: dispatcher.start("hid", deadlineMs: 5_000, reply: answers.sink(10 + index))) { .result(Data("{}".utf8)) }
+            _ = answers.wait(for: 10 + index)
+        }
+        let sent = events.all
+        #expect(sent.map(\.name) == ["inputWedged", "inputWedged"])
+        let decoded = try sent.map { try JSONDecoder().decode(InputWedgedEvent.self, from: $0.params) }
+        #expect(decoded.map(\.udid) == [Self.deviceA, Self.deviceB])
+        #expect(decoded.map(\.recycleAdvised) == [false, true])
+        #expect(decoded.map(\.abandoned) == [1, 2])
+    }
+}
+
+private final class WedgeLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var wedges: [LaneWedge] = []
+    func append(_ wedge: LaneWedge) { lock.withLock { wedges.append(wedge) } }
+    var all: [LaneWedge] { lock.withLock { wedges } }
+}
+
+private final class EventLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var events: [(name: String, params: Data)] = []
+    func append(_ name: String, _ params: Data) { lock.withLock { events.append((name, params)) } }
+    var all: [(name: String, params: Data)] { lock.withLock { events } }
 }

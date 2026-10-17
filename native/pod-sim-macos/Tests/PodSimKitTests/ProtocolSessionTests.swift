@@ -206,4 +206,23 @@ struct HelperDeadlineTests {
             #expect(reply["result"] is [String: Any])
         }
     }
+
+    @Test("an event goes out as one id-less line after hello, and is dropped before it")
+    func eventsAfterHello() throws {
+        let outbox = Outbox(), handler = TimedHandler()
+        let (session, initial) = makeSession(handler, outbox)
+        var framer = initial
+        session.emit(event: "inputWedged", params: Data(#"{"udid":"A"}"#.utf8))
+        #expect(outbox.all.isEmpty)
+        for event in framer.push(lines(hello)) { session.receive(event) }
+        _ = waitFor(outbox, count: 1, within: 2)
+        session.emit(event: "inputWedged", params: Data(#"{"udid":"A"}"#.utf8))
+        let frame = try #require(outbox.all.last)
+        #expect(outbox.all.count == 2)
+        #expect(frame.last == 0x0A && !frame.dropLast().contains(0x0A))
+        let line = try #require(try JSONSerialization.jsonObject(with: frame) as? [String: Any])
+        #expect(line.keys.sorted() == ["event", "params"])
+        #expect(line["event"] as? String == "inputWedged")
+        #expect((line["params"] as? [String: Any])?["udid"] as? String == "A")
+    }
 }

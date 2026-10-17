@@ -1,5 +1,7 @@
+import CPodSimSurface
 import CoreGraphics
 import Foundation
+import IOSurface
 import Testing
 @testable import PodSimKit
 
@@ -7,7 +9,9 @@ import Testing
 /// -enable-testing --filter PerformanceProbeTests`):
 /// - `POD_SIM_BENCH=1`: what the device lane adds to a `hid` call, against the concurrent queue it replaced.
 /// - `POD_SIM_PROBE_UDID=<udid>` with `POD_SIM_DEVICE_SET=<set>`: `ax` per phase on a booted device,
-///   whatever app is frontmost; `POD_SIM_PROBE_FILTER` adds a filtered run.
+///   whatever app is frontmost; `POD_SIM_PROBE_FILTER` adds a filtered run; `POD_SIM_PROBE_SHOTS=1`
+///   times a screenshot's phases (the remote surface read, the copy, the PNG and JPEG encodes, the
+///   write) and a settle hash on whatever the device shows.
 @Suite("Performance probes")
 struct PerformanceProbeTests {
     private static let environment = ProcessInfo.processInfo.environment
@@ -53,6 +57,77 @@ struct PerformanceProbeTests {
         }
         print("hid lane: request to work start, µs: \(Self.percentiles(lane))")
         print("concurrent queue (before): request to work start, µs: \(Self.percentiles(replaced))")
+    }
+
+    @Test("a screenshot's phases on a booted device", .enabled(if: environment["POD_SIM_PROBE_SHOTS"] == "1"))
+    func screenshotPhases() throws {
+        let udid = try #require(Self.environment["POD_SIM_PROBE_UDID"]).uppercased()
+        let methods = HelperMethods(environment: Self.environment)
+        let device = try methods.helperContext.simulatorService.flatMap { $0.device(udid: udid) }.get()
+        let port = try DisplayPort.main(of: device).get()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("pod-sim-probe-\(getpid())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var remote: [Double] = [], copy: [Double] = [], png: [Double] = [], write: [Double] = [], jpeg: [Double] = [], hash: [Double] = []
+        let writer = ImageWriter()
+        func ms(_ since: UInt64) -> Double { Double(DispatchTime.now().uptimeNanoseconds - since) / 1_000_000 }
+        var bytes = 0
+        for round in 0..<30 {
+            var started = DispatchTime.now().uptimeNanoseconds
+            let surface = try #require(port.surface())
+            remote.append(ms(started))
+            started = DispatchTime.now().uptimeNanoseconds
+            let pixels = try #require(PixelCopy.of(surface))
+            copy.append(ms(started))
+            started = DispatchTime.now().uptimeNanoseconds
+            var out: UnsafeMutablePointer<UInt8>?
+            var size = 0
+            #expect(pod_sim_png_encode(pixels.pixels.assumingMemoryBound(to: UInt8.self), pixels.width, pixels.height, pixels.stride, &out, &size) == 0)
+            png.append(ms(started))
+            bytes = size
+            started = DispatchTime.now().uptimeNanoseconds
+            try Data(bytesNoCopy: try #require(out), count: size, deallocator: .free).write(to: directory.appendingPathComponent("\(round).png"))
+            write.append(ms(started))
+            started = DispatchTime.now().uptimeNanoseconds
+            _ = writer.write(surface: surface, to: directory.appendingPathComponent("\(round).jpg").path, ImageOptions(format: .jpeg, scale: 1, quality: 0.8))
+            jpeg.append(ms(started))
+            let grid = TileGrid(width: IOSurfaceGetWidth(surface), height: IOSurfaceGetHeight(surface))
+            var hashes = [UInt64](repeating: 0, count: grid.count)
+            var before: UInt32 = 0, after: UInt32 = 0
+            started = DispatchTime.now().uptimeNanoseconds
+            _ = hashes.withUnsafeMutableBufferPointer {
+                pod_sim_tile_hashes(Unmanaged.passUnretained(surface).toOpaque(), UInt32(grid.tile), $0.baseAddress, $0.count, &before, &after)
+            }
+            hash.append(ms(started))
+        }
+        print("screenshot phases, ms (PNG \(bytes / 1024) KB):")
+        print("  remote framebufferSurface \(Self.percentiles(remote))")
+        print("  seed-stable copy          \(Self.percentiles(copy))")
+        print("  PNG encode                \(Self.percentiles(png))")
+        print("  PNG write                 \(Self.percentiles(write))")
+        print("  JPEG (copy+encode+write)  \(Self.percentiles(jpeg))")
+        print("  settle tile hash          \(Self.percentiles(hash))")
+    }
+
+    /// The old-style damage callback (idb v1.7.2 SimDisplayRenderable-Protocol.h says it delivers an
+    /// empty array on modern CoreSimulator): whether it carries any geometry here.
+    @Test("damage rectangles from CoreSimulator", .enabled(if: environment["POD_SIM_PROBE_DAMAGE"] == "1"))
+    func damageRectangles() throws {
+        let udid = try #require(Self.environment["POD_SIM_PROBE_UDID"]).uppercased()
+        let methods = HelperMethods(environment: Self.environment)
+        let device = try methods.helperContext.simulatorService.flatMap { $0.device(udid: udid) }.get()
+        let port = try DisplayPort.main(of: device).get()
+        let selector = NSSelectorFromString("registerCallbackWithUUID:damageRectanglesCallback:")
+        print("descriptor responds to the damage callback: \(port.descriptor.responds(to: selector))")
+        let counts = DamageCounts()
+        let token = UUID()
+        let registered = ObjCGuard.attempt("damageRectanglesCallback") {
+            (port.descriptor as AnyObject).registerDamageCallback(uuid: token) { rects in counts.add(rects) }
+        }
+        print("register: \(registered)")
+        Thread.sleep(forTimeInterval: 3)
+        _ = ObjCGuard.attempt("unregisterDamage") { (port.descriptor as AnyObject).unregisterDamageCallback(uuid: token) }
+        print("damage callbacks in 3 s: \(counts.summary)")
     }
 
     @Test("a fresh connection's first tap lands", .enabled(if: environment["POD_SIM_PROBE_TAP_LABEL"] != nil))
@@ -116,4 +191,29 @@ struct PerformanceProbeTests {
             print("  waiting on the device ms: \(Self.percentiles(transport))")
         }
     }
+}
+
+@objc private protocol PodSimDamageCallbacks {
+    @objc(registerCallbackWithUUID:damageRectanglesCallback:)
+    func registerDamageCallback(uuid: UUID, callback: @escaping (Any?) -> Void)
+    @objc(unregisterDamageRectanglesCallbackWithUUID:)
+    func unregisterDamageCallback(uuid: UUID)
+}
+
+private final class DamageCounts: @unchecked Sendable {
+    private let lock = NSLock()
+    private var calls = 0
+    private var rects = 0
+    private var sample = ""
+
+    func add(_ value: Any?) {
+        lock.withLock {
+            calls += 1
+            let array = value as? [Any] ?? []
+            rects += array.count
+            if sample.isEmpty, let first = array.first { sample = "\(first)" }
+        }
+    }
+
+    var summary: String { lock.withLock { "\(calls) calls, \(rects) rectangles, first \(sample.isEmpty ? "none" : sample)" } }
 }

@@ -28,9 +28,10 @@ final class DisplayPort: @unchecked Sendable {
     let udid: String
     /// Which port won and what the others were, for the self-test's note.
     let selection: String
-    private let descriptor: NSObject
+    let descriptor: NSObject
 
-    private init(udid: String, descriptor: NSObject, selection: String) {
+    /// From `main(of:)`; tests pass a stand-in descriptor.
+    init(udid: String, descriptor: NSObject, selection: String) {
         self.udid = udid
         self.descriptor = descriptor
         self.selection = selection

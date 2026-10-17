@@ -114,7 +114,8 @@ log "test signature (keychain access, timestamp server)"
 preflight_sign
 # mac.icon is an Icon Composer document, which electron-builder compiles with actool 26+. A runner
 # whose default Xcode is older (macos-15 ships 16.4) names an Xcode 26 in POD_ICON_DEVELOPER_DIR,
-# for packaging only: the Swift helpers keep the default toolchain.
+# for packaging only: pod-sim, built inside electron-builder, gets the DEVELOPER_DIR this script was
+# started with (POD_RELEASE_DEVELOPER_DIR, product/helper-names.cjs).
 icon_developer_dir=${POD_ICON_DEVELOPER_DIR:-$(xcode-select -p)}
 actool_version=$(DEVELOPER_DIR="$icon_developer_dir" xcrun actool --version |
   sed -n '/short-bundle-version/{n;s/.*<string>\([0-9]*\).*/\1/p;}')
@@ -163,8 +164,8 @@ rm -rf dist
 # A release version (X.Y.Z or X.Y.Z-rcN) gets the integer CFBundleVersion its outer carries too;
 # other versions (test builds) keep electron-builder's default, the version itself.
 build_version=$(product/scripts/pod-build-number.sh "$version" 2>/dev/null || true)
-DEVELOPER_DIR="$icon_developer_dir" POD_RELEASE=1 POD_VERSION="$version" POD_BUILD_VERSION="$build_version" \
-  POD_ARCH="$arch" with_timestamp_retry \
+POD_RELEASE_DEVELOPER_DIR="${DEVELOPER_DIR:-}" DEVELOPER_DIR="$icon_developer_dir" \
+  POD_RELEASE=1 POD_VERSION="$version" POD_BUILD_VERSION="$build_version" POD_ARCH="$arch" with_timestamp_retry \
   pnpm exec electron-builder --config product/electron-builder.pod.cjs --mac "--$arch" --publish never
 
 app="dist/mac-$arch/$display_name.app"

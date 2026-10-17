@@ -4,10 +4,21 @@
 // lookups follow through src/main/product-identity/product-helper-names.ts (same table, in
 // src/shared/product-helper-names.ts).
 //
+// Pod's own helpers are named Pod from the start; the ones the packaging places and signs by name
+// are listed here too (POD_SIM).
+//
 //   node product/helper-names.cjs --check <Product.app>   lists every Orca name a user can see
-const { execFileSync } = require('node:child_process')
-const { existsSync, readdirSync, renameSync, statSync } = require('node:fs')
-const { basename, join } = require('node:path')
+const { execFileSync, spawnSync } = require('node:child_process')
+const {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  statSync
+} = require('node:fs')
+const { basename, dirname, join } = require('node:path')
 
 const COMPUTER_USE_NAME = 'Orca Computer Use'
 const COMPUTER_USE_EXECUTABLE = 'orca-computer-use-macos'
@@ -89,6 +100,98 @@ function renameSignedHelpers(resourcesDir, identity) {
   }
 }
 
+/**
+ * pod-sim, the iOS simulator helper (native/pod-sim-macos), where the runtime looks for it
+ * (src/main/pod/sim/helper/sim-helper-path.ts). Viewers admit its frame messages by its signing
+ * identifier (CPodSimSurface/include/pod_sim_frame.h), so it is signed as codes.pod.sim: osx-sign
+ * would otherwise name a bare executable after its file.
+ */
+const POD_SIM = {
+  path: 'Contents/Resources/bin/pod-sim',
+  identifier: 'codes.pod.sim',
+  build: join('native', 'pod-sim-macos', 'scripts', 'build.sh'),
+  output: join('native', 'pod-sim-macos', '.build', 'release', 'pod-sim')
+}
+
+/**
+ * The environment pod-sim builds in: the Xcode the release itself runs under (the runbook's
+ * DEVELOPER_DIR). release.sh points DEVELOPER_DIR at the Xcode whose actool compiles the app icon
+ * for the whole electron-builder run, and passes the one it was started with as
+ * POD_RELEASE_DEVELOPER_DIR (empty: none, so xcode-select's Xcode builds it). Outside release.sh
+ * DEVELOPER_DIR is passed as it is.
+ */
+function podSimBuildEnv(env) {
+  const { POD_RELEASE_DEVELOPER_DIR: releaseDeveloperDir, ...rest } = env
+  if (releaseDeveloperDir === undefined) {
+    return rest
+  }
+  const { DEVELOPER_DIR: _actoolDeveloperDir, ...withoutActool } = rest
+  return releaseDeveloperDir
+    ? { ...withoutActool, DEVELOPER_DIR: releaseDeveloperDir }
+    : withoutActool
+}
+
+/** Builds pod-sim for `arch` (electron-builder's arm64, x64 or universal) and places it in the app. */
+function installPodSimHelper(appPath, repoRoot, arch) {
+  const archArgs = { arm64: ['--arch', 'arm64'], x64: ['--arch', 'x86_64'], universal: [] }[arch]
+  if (!archArgs) {
+    throw new Error(`product: no pod-sim build for arch ${arch}`)
+  }
+  execFileSync('bash', [join(repoRoot, POD_SIM.build), ...archArgs], {
+    cwd: repoRoot,
+    env: podSimBuildEnv(process.env),
+    stdio: 'inherit'
+  })
+  const target = join(appPath, POD_SIM.path)
+  mkdirSync(dirname(target), { recursive: true })
+  copyFileSync(join(repoRoot, POD_SIM.output), target)
+  chmodSync(target, 0o755)
+}
+
+/** osx-sign's per-file options, with pod-sim's signing identifier added for its file. */
+function podSimSignOptions(appPath, optionsForFile) {
+  const podSim = join(appPath, POD_SIM.path)
+  return (filePath) => {
+    const options = optionsForFile(filePath)
+    return filePath === podSim
+      ? {
+          ...options,
+          additionalArguments: [
+            ...(options.additionalArguments ?? []),
+            '--identifier',
+            POD_SIM.identifier
+          ]
+        }
+      : options
+  }
+}
+
+/** After signing: pod-sim is in the app, valid, hardened, and named codes.pod.sim. */
+function assertPodSimSigned(appPath) {
+  const podSim = join(appPath, POD_SIM.path)
+  if (!existsSync(podSim)) {
+    throw new Error(`product: ${POD_SIM.path} is missing from ${basename(appPath)}`)
+  }
+  execFileSync('codesign', ['--verify', '--strict', podSim], { stdio: 'inherit' })
+  // codesign -d prints to stderr.
+  const { stderr } = spawnSync('codesign', ['-d', '--verbose=2', podSim], { encoding: 'utf8' })
+  const problems = podSimSignatureProblems(stderr ?? '')
+  if (problems.length > 0) {
+    throw new Error(`product: ${POD_SIM.path}: ${problems.join('; ')}`)
+  }
+}
+
+function podSimSignatureProblems(details) {
+  const problems = []
+  if (!details.split('\n').includes(`Identifier=${POD_SIM.identifier}`)) {
+    problems.push(`its identifier is not ${POD_SIM.identifier}`)
+  }
+  if (!/^CodeDirectory .*flags=0x\w+\([^)]*runtime[^)]*\)/m.test(details)) {
+    problems.push('it is not signed with the hardened runtime')
+  }
+  return problems
+}
+
 function isSigned(path) {
   try {
     execFileSync('codesign', ['--display', path], { stdio: 'ignore' })
@@ -163,7 +266,13 @@ if (require.main === module) {
 }
 
 module.exports = {
+  POD_SIM,
   assertNoUpstreamNames,
+  assertPodSimSigned,
+  installPodSimHelper,
+  podSimBuildEnv,
+  podSimSignOptions,
+  podSimSignatureProblems,
   productHelperNameTable,
   renameComputerUseExecutable,
   renameSignedHelpers,

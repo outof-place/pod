@@ -11,6 +11,15 @@ struct SimDeviceHandle: @unchecked Sendable {
     let screenPixels: CGSize
 
     var isBooted: Bool { state == "Booted" }
+
+    /// When this boot started: another value than an attachment saw means the device rebooted since.
+    var lastBootedAt: Date? {
+        let selector = NSSelectorFromString("lastBootedAt")
+        guard object.responds(to: selector) else { return nil }
+        let read = ObjCGuard.attempt("lastBootedAt") { object.value(forKey: "lastBootedAt") as? Date }
+        guard case .success(let date) = read else { return nil }
+        return date
+    }
 }
 
 /// CoreSimulator's service context and a device set: the default one (what simctl, Xcode and the

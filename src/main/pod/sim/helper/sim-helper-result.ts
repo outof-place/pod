@@ -14,6 +14,8 @@ export type SimHelperUnavailableReason =
   | 'badHello'
   | 'crashed'
   | 'timeout'
+  // Replaced on the helper's own advice: threads stuck in private calls (inputWedged) added up.
+  | 'wedged'
   | 'stopped'
 
 export type SimHelperFailure =

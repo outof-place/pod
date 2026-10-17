@@ -28,7 +28,13 @@ public struct HelperContext: Sendable {
     public static let deviceSetEnvironmentKey = "POD_SIM_DEVICE_SET"
 
     public static func discover(environment: [String: String]) -> HelperContext {
-        discover(environment: environment, facts: XcodeEnvironmentResolver.resolve(environment: environment), loadFrameworks: PrivateFrameworks.load)
+        // The Xcode is the first whose SimulatorKit has a row in the table this context uses (forced
+        // unknown or not: the choice of Xcode does not change under the drill).
+        let table = VersionTableSource.load(overridePath: environment[VersionTable.overrideEnvironmentKey].flatMap { $0.isEmpty ? nil : $0 }).table
+        let facts = XcodeEnvironmentResolver.resolve(environment: environment, isKnown: {
+            table.lookup($0, forcedUnknown: false, implemented: SelftestRunner.implemented).entry != nil
+        })
+        return discover(environment: environment, facts: facts, loadFrameworks: PrivateFrameworks.load)
     }
 
     /// `loadFrameworks` runs only when the table picked an implementation for this build: an unknown

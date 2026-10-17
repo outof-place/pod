@@ -15,8 +15,17 @@
 //   noisy         writes junk and an oversized line on stdout before each reply
 //   hidHang       hid's private call never returns: the helper answers its own timeout after
 //                 `hidTimeoutMs` (default 400) while other calls go on being answered
+//   wedge         every hid sends an inputWedged event (recycleAdvised from `recycleAdvised`,
+//                 default true) and answers `wedged`
 // `screenshotDelayMs` delays every screenshot answer (any mode). `hidLog` appends each hid call to
 // `<dir>/hid.log` as it arrives (`<kind> <phase> <x>`); `hidDelayFirstMs` holds the first hid answer.
+// startStream and stopStream append `<spawn> <method> <udid> <token> <nonce | ->` to
+// `<dir>/streams.log` and keep a stream table, as the helper does, written to
+// `<dir>/streams-<spawn>.json` (`{"<udid> <token>": nonce}`) on each change: a stop with a nonce
+// stops only that generation, an unknown stream is notAttached. On spawns after the first,
+// startStream refuses the tokens in `goneViewers` (the viewer is gone) and answers after
+// `replayReplyMs`; on the first, a start of a token in `endStreams` is followed by a streamEnded
+// event (viewerGone).
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -52,6 +61,50 @@ const error = (id, code, message) => send({ id, error: { code, message } })
 let authenticated = false
 let held = null
 let hidCalls = 0
+const streams = new Map()
+const saveStreams = () =>
+  writeFileSync(
+    join(dir, `streams-${spawnNumber}.json`),
+    JSON.stringify(Object.fromEntries(streams))
+  )
+
+function stream(id, method, params) {
+  const name = `${params.udid} ${params.token}`
+  appendFileSync(
+    join(dir, 'streams.log'),
+    `${spawnNumber} ${method} ${params.udid} ${params.token} ${params.nonce ?? '-'}\n`
+  )
+  if (method === 'stopStream') {
+    if (!streams.has(name) || (params.nonce && streams.get(name) !== params.nonce)) {
+      return error(id, 'notAttached', `no stream ${params.token} for ${params.udid}`)
+    }
+    streams.delete(name)
+    saveStreams()
+    return send({ id, result: { ...fixture.results.stopStream, token: params.token } })
+  }
+  if (spawnNumber > 1 && (config.goneViewers ?? []).includes(params.token)) {
+    return error(id, 'failed', `no viewer has checked in ${params.service}`)
+  }
+  streams.set(name, params.nonce)
+  saveStreams()
+  const answer = () =>
+    send({
+      id,
+      result: { ...fixture.results.startStream, udid: params.udid, token: params.token }
+    })
+  if (spawnNumber > 1 && config.replayReplyMs) {
+    return setTimeout(answer, config.replayReplyMs)
+  }
+  answer()
+  if (spawnNumber === 1 && (config.endStreams ?? []).includes(params.token)) {
+    streams.delete(name)
+    saveStreams()
+    send({
+      event: 'streamEnded',
+      params: { udid: params.udid, token: params.token, nonce: params.nonce, reason: 'viewerGone' }
+    })
+  }
+}
 
 function screenshot(id, params) {
   if (mode === 'hang') {
@@ -112,7 +165,24 @@ createInterface({ input: process.stdin }).on('line', (line) => {
         )
       : send({ id, result: fixture.results.attachDisplay })
   }
+  if (method === 'startStream' || method === 'stopStream') {
+    return stream(id, method, params)
+  }
+  if (method === 'settle') {
+    return send({ id, result: { ...fixture.results.settle, udid: params.udid } })
+  }
   if (method === 'hid') {
+    if (mode === 'wedge') {
+      send({
+        event: 'inputWedged',
+        params: {
+          ...fixture.events.inputWedged,
+          udid: params.udid,
+          recycleAdvised: config.recycleAdvised ?? true
+        }
+      })
+      return error(id, 'wedged', 'hid: the device input was stuck in a private call')
+    }
     if (mode === 'hidHang') {
       setTimeout(
         () => error(id, 'timeout', 'hid passed its 15000 ms deadline in the helper'),

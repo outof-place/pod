@@ -49,10 +49,14 @@ final class InputSessions: @unchecked Sendable {
             }
             let mine = step.2!
             let connected = DTUHIDTransport.connect(device).map { Session(udid: device.udid, transport: $0, device: device.object) }
-            lock.withLock {
+            let kept = lock.withLock { () -> Bool in
+                // A connect forgotten meanwhile (a wedged lane) keeps nothing: a newer one owns the device.
+                guard connecting[device.udid] === mine else { return false }
                 connecting[device.udid] = nil
                 if case .success(let session) = connected { sessions[device.udid] = session }
+                return true
             }
+            if !kept, case .success(let session) = connected { session.transport.close() }
             mine.leave()
             return connected
         }
@@ -64,6 +68,16 @@ final class InputSessions: @unchecked Sendable {
             if sessions[session.udid] === session { sessions[session.udid] = nil }
         }
         session.transport.close()
+    }
+
+    /// Drops the device's connection and any connect under way, for a lane given up on (InputLanes):
+    /// the next call connects afresh. Never waits, since the stuck call may hold the old connection.
+    func forget(_ udid: String) {
+        let dropped = lock.withLock { () -> Session? in
+            connecting[udid] = nil
+            return sessions.removeValue(forKey: udid)
+        }
+        dropped?.transport.close()
     }
 
     /// Sends the steps in order, waiting between them.

@@ -20,7 +20,7 @@ enum DeviceProbes {
             stats = attachment.stats()
         }
         let surface = attachment.currentSurface
-        stats = attachment.stop()
+        stats = attachment.stop(nil)
         let size = surface.map { "\(IOSurfaceGetWidth($0))x\(IOSurfaceGetHeight($0))" }
         return displayOutcome(stats, surfaceSize: size, waitMs: waitMs, selection: port.selection)
     }

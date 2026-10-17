@@ -2,9 +2,13 @@
 // sits behind this one process, so a recycle drops them all: the helper answers `timeout` itself
 // past each method's deadline, and only a helper silent past that plus a margin is replaced. A
 // crash restarts it after a backoff; booted devices survive it (CoreSimulator owns them). Every
-// call answers a typed result, and nothing here throws, from a call or from a timer.
+// call answers a typed result, and nothing here throws, from a call or from a timer. Live views
+// (startStream) outlive a replacement: the new helper streams them again, each viewer's rendezvous
+// name still checked in, and other devices' views come back after the restart's short gap.
 import { randomBytes } from 'node:crypto'
 import { SimHelperConnection, type SimHelperSpawner } from './sim-helper-connection'
+import { actOnSimHelperEvent, type SimHelperEvent } from './sim-helper-events'
+import { SimHelperLiveViews } from './sim-helper-live-views'
 import { simHelperEnvironment, type SimHelperLaunchOptions } from './sim-helper-env'
 import { resolveSimHelperBinary, simHelperBinaryStamp } from './sim-helper-path'
 import {
@@ -55,6 +59,8 @@ export type SimHelperSupervisorOptions = SimHelperLaunchOptions & {
   spawn?: SimHelperSpawner
   log?: (message: string) => void
   onState?: (state: SimHelperState) => void
+  /** Each event of the running helper once acted on, and streamEnded (helperRestart) for a refused replay. */
+  onEvent?: (event: SimHelperEvent) => void
 }
 
 type Ready = { connection: SimHelperConnection; hello: SimHelperReport }
@@ -70,6 +76,7 @@ export class SimHelperSupervisor {
   private waiters: (() => void)[] = []
   // The build that refused this runtime's token or protocol; refused again until it changes.
   private refused: { binary: string; stamp: string | null } | null = null
+  private readonly liveViews = new SimHelperLiveViews()
   private readonly log: (message: string) => void
 
   constructor(private readonly options: SimHelperSupervisorOptions) {
@@ -100,6 +107,7 @@ export class SimHelperSupervisor {
     method: M,
     params: SimHelperParams<M>
   ): Promise<SimHelperResult<SimHelperValue<M>>> {
+    this.liveViews.calling(method, params)
     const ready = await this.whenReady(Date.now() + (this.options.readyTimeoutMs ?? 15_000))
     if (!ready.ok) {
       return ready
@@ -128,6 +136,7 @@ export class SimHelperSupervisor {
         message: `${method} answered an unknown shape`
       })
     }
+    this.liveViews.accepted(method, params)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: parsed by SIM_HELPER_METHODS[method].result, the schema SimHelperValue<M> is inferred from.
     return { ok: true, value: parsed.data as SimHelperValue<M> }
   }
@@ -226,7 +235,8 @@ export class SimHelperSupervisor {
       token: randomBytes(32).toString('hex'),
       spawn: this.options.spawn,
       log: this.log,
-      onExit: (failure) => this.onExit(connection, failure)
+      onExit: (failure) => this.onExit(connection, failure),
+      onEvent: (event) => this.onEvent(connection, event)
     })
     this.connection = connection
     this.setState({ state: 'starting', attempt: this.attempt })
@@ -237,6 +247,15 @@ export class SimHelperSupervisor {
       if (hello.ok) {
         this.readySince = Date.now()
         this.setState({ state: 'ready', pid: connection.pid, hello: hello.value })
+        // Live views of the helper this one replaced (none on a first start).
+        const budgetMs = (this.options.callBudgetMs ?? simHelperCallBudgetMs)('startStream')
+        void this.liveViews.replay(
+          connection,
+          budgetMs,
+          () => this.connection === connection,
+          this.log,
+          (ended) => this.onEvent(connection, { event: 'streamEnded', params: ended })
+        )
         return
       }
       this.log(hello.failure.message)
@@ -260,6 +279,17 @@ export class SimHelperSupervisor {
     return this.options.resolveBinary
       ? this.options.resolveBinary()
       : resolveSimHelperBinary({ packaged: this.options.packaged })
+  }
+
+  private onEvent(connection: SimHelperConnection, event: SimHelperEvent): void {
+    if (this.connection === connection) {
+      actOnSimHelperEvent(event, {
+        log: this.log,
+        recycle: (failure) => connection.kill(failure),
+        forgetView: (view) => this.liveViews.ended(view),
+        listener: this.options.onEvent
+      })
+    }
   }
 
   private onExit(connection: SimHelperConnection, failure: SimHelperFailure): void {

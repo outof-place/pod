@@ -18,7 +18,7 @@ final class DeadlineDispatcher: @unchecked Sendable {
 
     /// Starts the deadline clock now, for a caller that runs the work on its own queue.
     func start(_ method: String, deadlineMs: Int, reply: @escaping @Sendable (Reply) -> Void) -> DeadlineCall {
-        let call = DeadlineCall(reply)
+        let call = DeadlineCall(reply, deadlineNs: clock_gettime_nsec_np(CLOCK_UPTIME_RAW) + UInt64(deadlineMs) * 1_000_000)
         timers.asyncAfter(deadline: .now() + .milliseconds(deadlineMs)) {
             call.finish(.error(HelperError(.timeout, "\(method) passed its \(deadlineMs) ms deadline in the helper")))
         }
@@ -30,9 +30,12 @@ final class DeadlineDispatcher: @unchecked Sendable {
 final class DeadlineCall: @unchecked Sendable {
     private let lock = NSLock()
     private var reply: (@Sendable (Reply) -> Void)?
+    /// When the deadline answers `timeout`, CLOCK_UPTIME_RAW nanoseconds.
+    let deadlineNs: UInt64
 
-    init(_ reply: @escaping @Sendable (Reply) -> Void) {
+    init(_ reply: @escaping @Sendable (Reply) -> Void, deadlineNs: UInt64) {
         self.reply = reply
+        self.deadlineNs = deadlineNs
     }
 
     /// True once an answer went out (the work's, or the deadline's `timeout`).

@@ -2,15 +2,17 @@
 //   POD_SIM_REAL=1 [POD_SIM_REAL_UDID=<booted throwaway device>] [POD_SIM_DEVICE_SET=<its set>] \
 //     pnpm test src/main/pod/sim/helper/sim-helper-real.test.ts
 // With a UDID it also takes a screenshot of that device. Never point it at a device a session holds.
+// POD_SIM_REAL_APP=<a packaged Pod.app> runs the helper that app ships, found as a packaged runtime finds it.
 import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { resolveSimHelperBinary } from './sim-helper-path'
+import { resolveSimHelperBinary, simHelperCandidates } from './sim-helper-path'
 import { SimHelperSupervisor } from './sim-helper-supervisor'
 
 const real = process.env.POD_SIM_REAL === '1'
 const udid = process.env.POD_SIM_REAL_UDID
+const packagedApp = process.env.POD_SIM_REAL_APP
 const supervisor = new SimHelperSupervisor({
   packaged: false,
   // Explicit: the helper never inherits POD_SIM_* from this process.
@@ -34,6 +36,28 @@ describe.skipIf(!real)('pod-sim helper, real binary', () => {
       expect(['ok', 'unsupported', 'failed']).toContain(hello.value.capabilities.screenshot.status)
     }
   })
+
+  it.skipIf(!packagedApp)(
+    'the helper a packaged app ships is found where the runtime looks and passes hello',
+    async () => {
+      const resourcesPath = join(packagedApp ?? '', 'Contents', 'Resources')
+      const binary = resolveSimHelperBinary({ packaged: true, resourcesPath })
+      expect(binary).toBe(simHelperCandidates({ packaged: true, resourcesPath })[0])
+      const packaged = new SimHelperSupervisor({
+        packaged: true,
+        resolveBinary: () => binary,
+        helloTimeoutMs: 30_000,
+        readyTimeoutMs: 30_000
+      })
+      try {
+        const hello = await packaged.hello(30_000)
+        expect(hello.ok).toBe(true)
+        expect(hello.ok && hello.value.table.known).toBe(true)
+      } finally {
+        await packaged.stop()
+      }
+    }
+  )
 
   it.skipIf(!udid)(
     'a device self-test says device only with frames, surfaceOnly without',

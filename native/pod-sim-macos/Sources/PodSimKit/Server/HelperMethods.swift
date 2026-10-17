@@ -1,18 +1,6 @@
 import Foundation
 import IOSurface
 
-public struct AttachDisplayResult: Codable, Equatable, Sendable {
-    public struct Surface: Codable, Equatable, Sendable {
-        public let width: Int
-        public let height: Int
-        public let id: UInt32
-    }
-
-    public let udid: String
-    public let surface: Surface?
-    public let alreadyAttached: Bool
-}
-
 /// Protocol v1's methods. Each runs under its deadline (DeadlineDispatcher): `hid` on its device's
 /// lane in arrival order (InputLanes), the rest on a concurrent work queue. Per-device state lives in
 /// the display registry and the lanes, so two devices never wait on each other.
@@ -21,14 +9,20 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
     private let context: HelperContext
     private let startup: SelftestReport
     private let startupJSON: Data
-    private let displays = DisplayRegistry<DisplayAttachment>()
-    private let screenshots = Screenshots()
+    let displays = DisplayRegistry<DisplayAttachment>()
+    let deviceLocks = DeviceLocks()
+    /// `streamEnded` events in the order streams ended, and the detaches they lead to.
+    let streamEnds = DispatchQueue(label: "pod-sim.stream-ended", qos: .utility)
+    let screenshots = Screenshots()
     // Main-display descriptors by device: a screenshot then costs one remote call instead of a
     // dozen. A proxy whose device shut down or rebooted stops answering and is looked up again.
-    private let portLock = NSLock()
-    private var ports: [String: DisplayPort] = [:]
+    let portLock = NSLock()
+    var ports: [String: DisplayPort] = [:]
     private let dispatcher = DeadlineDispatcher()
-    private let inputLanes = InputLanes()
+    private let inputLanes: InputLanes
+    /// Lanes given up on before the helper asks to be replaced: each keeps a thread stuck in a private call.
+    static let recycleAfterAbandonedLanes = 2
+    public let events = HelperEvents()
     let inputFallback: PublicInputFallback
     let accessibilityFallback: PublicAccessibilityFallback
 
@@ -36,13 +30,27 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
         self.init(environment: environment, inputFallback: NoPublicInputFallback(), accessibilityFallback: NoPublicAccessibilityFallback())
     }
 
-    init(environment: [String: String], inputFallback: PublicInputFallback, accessibilityFallback: PublicAccessibilityFallback) {
+    init(
+        environment: [String: String], inputFallback: PublicInputFallback, accessibilityFallback: PublicAccessibilityFallback,
+        inputLanes: InputLanes = InputLanes()
+    ) {
         self.environment = environment
         self.inputFallback = inputFallback
         self.accessibilityFallback = accessibilityFallback
+        self.inputLanes = inputLanes
         context = HelperContext.discover(environment: environment)
         startup = SelftestRunner.run(SelftestOptions(environment: environment), context: context)
         startupJSON = (try? WireJSON.encoder.encode(startup)) ?? Data("{}".utf8)
+        inputLanes.onWedge = { [weak self] wedge in self?.inputWedged(wedge) }
+    }
+
+    /// A device's input stuck in a private call: its connection goes, its next call connects afresh,
+    /// and the runtime hears of it (and replaces the helper once stuck threads add up).
+    private func inputWedged(_ wedge: LaneWedge) {
+        InputSessions.shared.forget(wedge.udid)
+        events.emit("inputWedged", InputWedgedEvent(
+            udid: wedge.udid, stuckMs: wedge.stuckMs, dropped: wedge.dropped, abandoned: wedge.abandoned,
+            recycleAdvised: wedge.abandoned >= Self.recycleAfterAbandonedLanes))
     }
 
     public func helloResult() -> Data { startupJSON }
@@ -67,8 +75,11 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
         switch request.method {
         case "selftest": run = { self.selftest(request.params) }
         case "attachDisplay": run = { self.attachDisplay(request.params) }
-        case "displayStats": run = { self.withAttachment(request.params) { .encoding($0.stats()) } }
+        case "displayStats": run = { self.displayStats(request.params) }
         case "detachDisplay": run = { self.detachDisplay(request.params) }
+        case "startStream": run = { self.startStream(request.params) }
+        case "stopStream": run = { self.stopStream(request.params) }
+        case "settle": run = { self.settle(request.params) }
         case "screenshot": run = { self.screenshot(request.params) }
         case "hid": run = { self.hid(request.params) }
         case "ax": run = { self.ax(request.params) }
@@ -91,54 +102,6 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
             if let udid = params.udid, UUID(uuidString: udid) == nil { return .error(HelperError(.badParams, "udid is not a UUID")) }
             let options = SelftestOptions(udid: params.udid, waitMs: min(max(params.waitMs ?? 1500, 100), 10_000), environment: environment)
             return .encoding(SelftestRunner.run(options, context: context))
-        }
-    }
-
-    private struct DeviceParams: Decodable {
-        let udid: String
-    }
-
-    private func attachDisplay(_ params: Data) -> Reply {
-        decode(DeviceParams.self, params) { params in
-            if let refusal = refusal(for: startup.capabilities.display, .display) { return .error(refusal) }
-            let udid = params.udid.uppercased()
-            // A device that shut down left an attachment on a framebuffer that is gone, this one too:
-            // its attach then answers deviceNotBooted and its stats notAttached, never frozen counts.
-            displays.drop { !self.isBooted($0) }
-            let attached = booted(udid).flatMap(DisplayPort.main(of:)).flatMap { fresh in
-                portLock.withLock { ports[udid] = fresh }
-                return displays.attach(udid, isCurrent: { existing in
-                    guard let stale = existing.staleness(against: fresh) else { return true }
-                    HelperLog.note("attachDisplay \(udid): replacing the attachment: \(stale)")
-                    return false
-                }, make: { DisplayAttachment(port: fresh) })
-            }
-            switch attached {
-            case .failure(let error): return .error(error)
-            case .success(let (attachment, already)):
-                let surface = attachment.currentSurface.map {
-                    AttachDisplayResult.Surface(width: IOSurfaceGetWidth($0), height: IOSurfaceGetHeight($0), id: IOSurfaceGetID($0))
-                }
-                return .encoding(AttachDisplayResult(udid: attachment.port.udid, surface: surface, alreadyAttached: already))
-            }
-        }
-    }
-
-    private func detachDisplay(_ params: Data) -> Reply {
-        decode(DeviceParams.self, params) { params in
-            switch displays.detach(params.udid.uppercased()) {
-            case .failure(let error): return .error(error)
-            case .success(let stats): return .encoding(stats)
-            }
-        }
-    }
-
-    private func withAttachment(_ params: Data, _ body: (DisplayAttachment) -> Reply) -> Reply {
-        decode(DeviceParams.self, params) { params in
-            guard let attachment = displays.attachment(params.udid.uppercased()) else {
-                return .error(HelperError(.notAttached, "no display attached for \(params.udid)"))
-            }
-            return body(attachment)
         }
     }
 
@@ -183,6 +146,10 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
     // MARK: - plumbing
 
     private func mainSurface(_ udid: String) -> Result<IOSurfaceRef, HelperError> {
+        // An attachment that still shows this boot holds the surface already: no remote call at all.
+        if case .success(let attachment) = currentAttachment(udid), let surface = attachment.currentSurface {
+            return .success(surface)
+        }
         // The device's state is local to CoreSimulator's client: cheap, and a shut-down device's
         // cached proxy is never read.
         if case .failure(let error) = booted(udid) {
@@ -204,7 +171,7 @@ public final class HelperMethods: MethodHandler, @unchecked Sendable {
         }
     }
 
-    private func isBooted(_ udid: String) -> Bool {
+    func isBooted(_ udid: String) -> Bool {
         if case .success = booted(udid) { true } else { false }
     }
 

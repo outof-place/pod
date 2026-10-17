@@ -3,6 +3,7 @@
 import type { Readable, Writable } from 'node:stream'
 import { spawnProcess } from '@orca/process-host'
 import type { PipedProcessSpec } from '@orca/process-host/process-spec'
+import { parseSimHelperEvent, type SimHelperEvent } from './sim-helper-events'
 import {
   SIM_HELPER_MAX_FRAME_BYTES,
   SIM_HELPER_PROTOCOL_VERSION,
@@ -40,6 +41,8 @@ export type SimHelperConnectionOptions = {
   log: (message: string) => void
   /** Once, on a later tick, when the process is gone for any reason (never inside the constructor). */
   onExit: (failure: SimHelperFailure) => void
+  /** Each known event line the helper sends unasked; unknown ones are logged and dropped. */
+  onEvent?: (event: SimHelperEvent) => void
 }
 
 type Pending = {
@@ -203,6 +206,15 @@ export class SimHelperConnection {
       parsed = JSON.parse(line)
     } catch {
       this.options.log(`[pod-sim] ignored a line that is not JSON: ${line.slice(0, 200)}`)
+      return
+    }
+    if (typeof parsed === 'object' && parsed !== null && 'event' in parsed && !('id' in parsed)) {
+      const event = parseSimHelperEvent(parsed)
+      if (event.ok) {
+        this.options.onEvent?.(event.event)
+      } else {
+        this.options.log(`[pod-sim] ignored ${event.reason}: ${line.slice(0, 200)}`)
+      }
       return
     }
     const frame = SimHelperReplyFrame.safeParse(parsed)

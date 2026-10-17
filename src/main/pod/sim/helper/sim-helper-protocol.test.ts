@@ -11,8 +11,15 @@ import {
   SIM_HELPER_PROTOCOL_VERSION,
   SIM_HELPER_TOKEN_ENV,
   SimHelperHidAction,
-  SimHelperReport
+  SimHelperReport,
+  simStreamNonce
 } from './sim-helper-protocol'
+import {
+  SIM_HELPER_EVENTS,
+  SIM_HELPER_STREAM_END_REASONS,
+  parseSimHelperEvent
+} from './sim-helper-events'
+import { SimHelperXcode } from './sim-helper-xcode'
 
 // The helper's Swift tests decode the same file (native/pod-sim-macos/Tests/PodSimKitTests).
 const fixture = JSON.parse(
@@ -53,10 +60,54 @@ describe('pod-sim protocol v1 as the runtime reads it', () => {
     ['hidPasteAlert', SIM_HELPER_METHODS.hid.result],
     ['hidDegraded', SIM_HELPER_METHODS.hid.result],
     ['ax', SIM_HELPER_METHODS.ax.result],
-    ['axDegraded', SIM_HELPER_METHODS.ax.result]
+    ['axDegraded', SIM_HELPER_METHODS.ax.result],
+    ['displayStatsStreaming', SIM_HELPER_METHODS.displayStats.result],
+    ['startStream', SIM_HELPER_METHODS.startStream.result],
+    ['stopStream', SIM_HELPER_METHODS.stopStream.result],
+    ['settle', SIM_HELPER_METHODS.settle.result],
+    ['settleWithMotion', SIM_HELPER_METHODS.settle.result],
+    ['xcodeChosen', SimHelperXcode]
   ] as const)('keeps every key of the fixture result %s, optional ones too', (key, schema) => {
     // zod drops keys it does not know, so a key only one side has fails here.
     expect(schema.parse(fixture.results[key])).toEqual(fixture.results[key])
+  })
+
+  it('keeps every key of the events the helper sends, and reads each from its line', () => {
+    expect(Object.keys(SIM_HELPER_EVENTS)).toEqual(Object.keys(fixture.events))
+    for (const name of ['inputWedged', 'streamEnded'] as const) {
+      expect(SIM_HELPER_EVENTS[name].parse(fixture.events[name])).toEqual(fixture.events[name])
+      expect(parseSimHelperEvent({ event: name, params: fixture.events[name] })).toEqual({
+        ok: true,
+        event: { event: name, params: fixture.events[name] }
+      })
+    }
+    expect([...SIM_HELPER_STREAM_END_REASONS]).toEqual(fixture.streamEndReasons)
+    expect(
+      parseSimHelperEvent({
+        event: 'streamEnded',
+        params: { ...fixture.events.streamEnded, nonce: 1953 }
+      })
+    ).toEqual({ ok: false, reason: 'an event of an unknown shape' })
+  })
+
+  it('sends a live view its nonce as 16 hex digits the helper decodes, never zero', () => {
+    expect(SIM_HELPER_METHODS.startStream.params.parse(fixture.requests.startStream)).toEqual(
+      fixture.requests.startStream
+    )
+    expect(SIM_HELPER_METHODS.stopStream.params.parse(fixture.requests.stopStream)).toEqual(
+      fixture.requests.stopStream
+    )
+    const { nonce: _nonce, ...withoutNonce } = fixture.requests.startStream
+    expect(SIM_HELPER_METHODS.startStream.params.safeParse(withoutNonce).success).toBe(false)
+    for (const nonce of ['0000000000000000', '9E3779B97F4A7C15', '9e3779b97f4a7c1']) {
+      const params = { ...fixture.requests.startStream, nonce }
+      expect(SIM_HELPER_METHODS.startStream.params.safeParse(params).success).toBe(false)
+    }
+    const made = new Set(Array.from({ length: 64 }, () => simStreamNonce()))
+    expect(made.size).toBe(64)
+    for (const nonce of made) {
+      expect(nonce).toMatch(/^[0-9a-f]{16}$/)
+    }
   })
 
   it('decodes the helper results the fixture freezes', () => {

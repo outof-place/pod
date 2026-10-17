@@ -18,9 +18,15 @@ let package = Package(
             name: "CPodSimObjC",
             path: "Sources/CPodSimObjC"
         ),
+        // The frame wire to PodNative, settle's tile hashes and the parallel PNG encoder.
+        .target(
+            name: "CPodSimSurface",
+            path: "Sources/CPodSimSurface",
+            linkerSettings: [.linkedLibrary("z"), .linkedLibrary("bsm"), .linkedFramework("Security"), .linkedFramework("IOSurface")]
+        ),
         .target(
             name: "PodSimKit",
-            dependencies: ["CPodSimObjC"],
+            dependencies: ["CPodSimObjC", "CPodSimSurface"],
             path: "Sources/PodSimKit"
         ),
         .executableTarget(

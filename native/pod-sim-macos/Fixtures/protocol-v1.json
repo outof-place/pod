@@ -19,6 +19,7 @@
     "simctlFailed",
     "timeout",
     "busy",
+    "wedged",
     "internal"
   ],
   "methods": [
@@ -29,13 +30,19 @@
     "detachDisplay",
     "screenshot",
     "hid",
-    "ax"
+    "ax",
+    "startStream",
+    "stopStream",
+    "settle"
   ],
   "deadlinesMs": {
     "selftest": 20000,
     "attachDisplay": 5000,
     "displayStats": 2000,
     "detachDisplay": 5000,
+    "startStream": 5000,
+    "stopStream": 2000,
+    "settle": 25000,
     "screenshot": 8000,
     "hid": 15000,
     "ax": 5000
@@ -526,6 +533,115 @@
       "ms": 1290,
       "transport": "fallback",
       "degraded": "ax: AccessibilityPlatformTranslation 601 is not in the version table for ax"
+    },
+    "displayStatsStreaming": {
+      "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
+      "seconds": 20.02,
+      "frameCallbacks": 1204,
+      "surfaceCallbacks": 1,
+      "seedChanges": 1204,
+      "callbackMicros": { "n": 512, "p50": 5.3, "p95": 8.6, "max": 34.7 },
+      "streams": [
+        { "token": 1953, "framesSent": 1204, "framesDropped": 0, "surfaceSends": 1, "seq": 1204 },
+        { "token": 77, "framesSent": 310, "framesDropped": 2, "surfaceSends": 2, "seq": 312 }
+      ]
+    },
+    "startStream": {
+      "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
+      "token": 1953,
+      "surface": { "width": 1206, "height": 2622, "id": 77 },
+      "scale": 3
+    },
+    "stopStream": {
+      "token": 1953,
+      "framesSent": 1204,
+      "framesDropped": 0,
+      "surfaceSends": 1,
+      "seq": 1204
+    },
+    "settle": {
+      "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
+      "outcome": "settled",
+      "waitedMs": 523,
+      "windowMs": 400,
+      "basis": "pixelsAndTree",
+      "motion": [],
+      "ignored": [{ "x": 24, "y": 312, "width": 6, "height": 38 }],
+      "treeStable": true,
+      "fingerprint": "33ef18e57b51af54",
+      "alertSuspected": false,
+      "hashes": 18,
+      "hashMicros": 812.5,
+      "treeReads": 3
+    },
+    "settleWithMotion": {
+      "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
+      "outcome": "settledWithMotion",
+      "waitedMs": 3007,
+      "windowMs": 400,
+      "basis": "pixels",
+      "motion": [
+        { "x": 16, "y": 300, "width": 370, "height": 52 },
+        { "x": 16, "y": 372, "width": 370, "height": 52 }
+      ],
+      "ignored": [],
+      "hashes": 92,
+      "hashMicros": 1103.2,
+      "treeReads": 0
+    },
+    "xcodeChosen": {
+      "developerDir": "/Applications/Xcode.app/Contents/Developer",
+      "source": "xcode-select",
+      "version": "27.0",
+      "build": "27A266a",
+      "chosenBecause": "DEVELOPER_DIR names Xcode 26.6 (17F113), whose SimulatorKit 955.7 has no row; xcode-select points to Xcode 27.0 (27A266a), whose SimulatorKit 1005.2 has a version-table row",
+      "candidates": [
+        {
+          "developerDir": "/Applications/Xcode-26.6.app/Contents/Developer",
+          "source": "DEVELOPER_DIR",
+          "version": "26.6",
+          "build": "17F113",
+          "simulatorKit": "955.7",
+          "known": false
+        },
+        {
+          "developerDir": "/Applications/Xcode.app/Contents/Developer",
+          "source": "xcode-select",
+          "version": "27.0",
+          "build": "27A266a",
+          "simulatorKit": "1005.2",
+          "known": true
+        }
+      ]
+    }
+  },
+  "requests": {
+    "startStream": {
+      "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
+      "service": "codes.pod.native.sim.0123456789abcdef0123456789abcdef",
+      "token": 1953,
+      "nonce": "9e3779b97f4a7c15"
+    },
+    "stopStream": {
+      "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
+      "token": 1953,
+      "nonce": "9e3779b97f4a7c15"
+    }
+  },
+  "streamEndReasons": ["viewerGone", "deviceShutDown", "deviceRebooted", "detached"],
+  "events": {
+    "inputWedged": {
+      "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
+      "stuckMs": 17412,
+      "dropped": 3,
+      "abandoned": 2,
+      "recycleAdvised": true
+    },
+    "streamEnded": {
+      "udid": "8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0",
+      "token": 1953,
+      "nonce": "9e3779b97f4a7c15",
+      "reason": "viewerGone"
     }
   }
 }

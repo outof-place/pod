@@ -64,6 +64,22 @@ public final class ProtocolSession: @unchecked Sendable {
         return .result(handler.helloResult())
     }
 
+    /// An event line (HelperEvents); dropped before `hello` and when over the frame limit.
+    public func emit(event name: String, params: Data) {
+        guard lock.withLock({ authenticated }) else { return }
+        var frame = Data("{\"event\":".utf8)
+        frame.append((try? WireJSON.encoder.encode(name)) ?? Data("\"\"".utf8))
+        frame.append(Data(",\"params\":".utf8))
+        frame.append(params)
+        frame.append(Data("}".utf8))
+        guard frame.count <= HelperProtocol.maxFrameBytes else {
+            HelperLog.note("event \(name) of \(frame.count) bytes is over the frame limit; dropped")
+            return
+        }
+        frame.append(0x0A)
+        send(frame)
+    }
+
     private func reply(id: Int?, _ outcome: Reply) {
         var frame = Self.frame(id: id, outcome)
         // The limit holds both ways: a reply too big for the runtime to read becomes a typed error.

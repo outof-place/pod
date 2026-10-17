@@ -178,6 +178,8 @@ module.exports = {
     installAgentLauncher(resourcesDir, Arch[context.arch])
     installAgentHook(resourcesDir, Arch[context.arch])
     installMcpLazy(resourcesDir, Arch[context.arch])
+    // The iOS simulator helper, built here so a package never carries a stale or missing one.
+    helperNames.installPodSimHelper(join(resourcesDir, '..', '..'), repoRoot, Arch[context.arch])
     writeFileSync(
       join(resourcesDir, 'product-upstream.json'),
       `${JSON.stringify(readOrcaUpstream())}\n`
@@ -198,8 +200,19 @@ module.exports = {
       PodUIHostFeatures: ['headless']
     },
     hardenedRuntime: true,
-    // Least-privilege entitlements per nested executable instead of Electron's set for all of them.
-    sign: signWithProductEntitlements,
+    // Least-privilege entitlements per nested executable instead of Electron's set for all of them,
+    // and pod-sim signed under the identifier its viewers admit.
+    sign: async (options, packager) => {
+      const withPodSim =
+        typeof options.optionsForFile === 'function'
+          ? {
+              ...options,
+              optionsForFile: helperNames.podSimSignOptions(options.app, options.optionsForFile)
+            }
+          : options
+      await signWithProductEntitlements(withPodSim, packager)
+      helperNames.assertPodSimSigned(options.app)
+    },
     ...(productElectronEntitlements()
       ? {
           entitlements: productElectronEntitlements(),

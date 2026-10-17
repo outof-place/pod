@@ -14,8 +14,19 @@ struct ReportFixtureTests {
         return try #require(root["results"] as? [String: Any])
     }
 
-    private func roundTrips<T: Codable>(_ type: T.Type, _ key: String) throws {
-        let fixture = try #require(try fixtureResults()[key])
+    private func fixtureEvents() throws -> [String: Any] {
+        try #require(fixtureRoot()["events"] as? [String: Any])
+    }
+
+    private func fixtureRoot() throws -> [String: Any] {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/protocol-v1.json")
+        return try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+    }
+
+    private func roundTrips<T: Codable>(_ type: T.Type, _ key: String, events: Bool = false) throws {
+        let fixture = try #require(try (events ? fixtureEvents() : fixtureResults())[key])
         let decoded = try JSONDecoder().decode(type, from: JSONSerialization.data(withJSONObject: fixture))
         let encoded = try JSONSerialization.jsonObject(with: WireJSON.encoder.encode(decoded))
         #expect(NSDictionary(dictionary: encoded as? [String: Any] ?? [:]).isEqual(to: fixture as? [String: Any] ?? ["missing": key]))
@@ -28,13 +39,39 @@ struct ReportFixtureTests {
     }
 
     @Test("display and screenshot results keep the fixture's shape and its optional keys",
-          arguments: ["attachDisplay", "displayStats", "screenshot", "screenshotSimctl"])
+          arguments: ["attachDisplay", "displayStats", "displayStatsStreaming", "screenshot", "screenshotSimctl", "startStream", "stopStream"])
     func results(_ key: String) throws {
         switch key {
         case "attachDisplay": try roundTrips(AttachDisplayResult.self, key)
-        case "displayStats": try roundTrips(DisplayStats.self, key)
+        case "displayStats", "displayStatsStreaming": try roundTrips(DisplayStats.self, key)
+        case "startStream": try roundTrips(StartStreamResult.self, key)
+        case "stopStream": try roundTrips(StreamStats.self, key)
         default: try roundTrips(ScreenshotResult.self, key)
         }
+    }
+
+    @Test("settle results, the Xcode choice and the events keep the fixture's shape",
+          arguments: ["settle", "settleWithMotion", "xcodeChosen", "inputWedged", "streamEnded"])
+    func stageTwoBShapes(_ key: String) throws {
+        switch key {
+        case "xcodeChosen": try roundTrips(XcodeInfo.self, key)
+        case "inputWedged": try roundTrips(InputWedgedEvent.self, key, events: true)
+        case "streamEnded": try roundTrips(StreamEndedEvent.self, key, events: true)
+        default: try roundTrips(SettleResult.self, key)
+        }
+    }
+
+    @Test("the stream end reasons and the stream requests are the runtime's")
+    func streamVocabulary() throws {
+        let root = try fixtureRoot()
+        #expect(StreamEndReason.allCases.map(\.rawValue) == root["streamEndReasons"] as? [String])
+        let requests = try #require(root["requests"] as? [String: Any])
+        let start = try JSONDecoder().decode(
+            HelperMethods.StartStreamParams.self, from: JSONSerialization.data(withJSONObject: try #require(requests["startStream"])))
+        #expect(start.token == 1_953 && FrameStream.nonce(start.nonce) == 0x9e37_79b9_7f4a_7c15)
+        let stop = try JSONDecoder().decode(
+            HelperMethods.StopStreamParams.self, from: JSONSerialization.data(withJSONObject: try #require(requests["stopStream"])))
+        #expect(stop.nonce == start.nonce)
     }
 
     @Test("hid and ax results keep the fixture's shape and its optional keys",

@@ -9,11 +9,15 @@ import {
   type SimHelperState,
   type SimHelperSupervisorOptions
 } from './sim-helper-supervisor'
+import type { SimHelperEvent } from './sim-helper-events'
 
 // A real child process speaking protocol v1 (see its header for the modes).
 const FAKE = join(__dirname, '__fixtures__', 'fake-pod-sim.mjs')
 const UDID = '8B1C2D3E-4F50-6172-8394-A5B6C7D8E9F0'
 const OTHER_UDID = '01C2D240-07BE-4772-AB65-D00D78C451A0'
+const SERVICE = 'codes.pod.native.dev.sim.0123456789abcdef0123456789abcdef'
+// A live view's nonce per token, as simStreamNonce() would make them.
+const nonce = (n: number): string => n.toString(16).padStart(16, '0')
 const running: { supervisor: SimHelperSupervisor; dir: string }[] = []
 
 type FakeConfig = {
@@ -24,6 +28,10 @@ type FakeConfig = {
   hidTimeoutMs?: number
   hidLog?: boolean
   hidDelayFirstMs?: number
+  recycleAdvised?: boolean
+  goneViewers?: number[]
+  replayReplyMs?: number
+  endStreams?: number[]
 }
 
 function harness(config: string | FakeConfig, options: Partial<SimHelperSupervisorOptions> = {}) {
@@ -66,7 +74,17 @@ function harness(config: string | FakeConfig, options: Partial<SimHelperSupervis
   }
   const envOf = (spawn: number): Record<string, string> =>
     JSON.parse(readFileSync(join(dir, `env-${spawn}.json`), 'utf8'))
-  return { supervisor, states, spawns, envOf, binary, dir }
+  const streamLog = (): string[] => {
+    try {
+      return readFileSync(join(dir, 'streams.log'), 'utf8').trim().split('\n').filter(Boolean)
+    } catch {
+      return []
+    }
+  }
+  // What a spawn streams now, as the fake helper keeps it: `{"<udid> <token>": nonce}`.
+  const streamsOf = (spawn: number): Record<string, string> =>
+    JSON.parse(readFileSync(join(dir, `streams-${spawn}.json`), 'utf8'))
+  return { supervisor, states, spawns, envOf, binary, dir, streamLog, streamsOf }
 }
 
 // Generous: each fake spawn is a Node start, slow on a loaded machine.
@@ -197,6 +215,133 @@ describe('pod-sim helper supervisor', () => {
     expect(await hid).toMatchObject({ ok: false, failure: { kind: 'error', code: 'timeout' } })
     expect(spawns()).toHaveLength(1)
     expect(supervisor.state()).toMatchObject({ state: 'ready', pid: spawns()[0]?.pid })
+  })
+
+  it('a wedged hid queue the helper copes with alone is reported and leaves the helper and its live views be', async () => {
+    const events: SimHelperEvent[] = []
+    const { supervisor, spawns, streamLog } = harness(
+      { mode: 'wedge', recycleAdvised: false },
+      { onEvent: (event) => events.push(event) }
+    )
+    expect(
+      (
+        await supervisor.call('startStream', {
+          udid: OTHER_UDID,
+          service: SERVICE,
+          token: 7,
+          nonce: nonce(7)
+        })
+      ).ok
+    ).toBe(true)
+    const tap = await supervisor.call('hid', { udid: UDID, action: { kind: 'tap', x: 1, y: 1 } })
+    expect(tap).toMatchObject({ ok: false, failure: { kind: 'error', code: 'wedged' } })
+    await until(() => events.length === 1)
+    expect(events[0]).toMatchObject({
+      event: 'inputWedged',
+      params: { udid: UDID, recycleAdvised: false }
+    })
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(spawns()).toHaveLength(1)
+    expect(streamLog()).toEqual([`1 startStream ${OTHER_UDID} 7 ${nonce(7)}`])
+  })
+
+  it('recycleAdvised replaces the helper with backoff, and the new one streams every live view again but the stopped and the gone', async () => {
+    const events: SimHelperEvent[] = []
+    const { supervisor, spawns, states, streamLog } = harness(
+      { mode: 'wedge', goneViewers: [9] },
+      { onEvent: (event) => events.push(event) }
+    )
+    for (const token of [7, 8, 9]) {
+      expect(
+        (
+          await supervisor.call('startStream', {
+            udid: OTHER_UDID,
+            service: SERVICE,
+            token,
+            nonce: nonce(token)
+          })
+        ).ok
+      ).toBe(true)
+    }
+    expect((await supervisor.call('stopStream', { udid: OTHER_UDID, token: 8 })).ok).toBe(true)
+    await supervisor.call('hid', { udid: UDID, action: { kind: 'tap', x: 1, y: 1 } })
+    await until(() => spawns().length === 2 && supervisor.state().state === 'ready')
+    await until(() => streamLog().filter((line) => line.startsWith('2 ')).length === 2)
+    expect(streamLog().filter((line) => line.startsWith('2 '))).toEqual([
+      `2 startStream ${OTHER_UDID} 7 ${nonce(7)}`,
+      `2 startStream ${OTHER_UDID} 9 ${nonce(9)}`
+    ])
+    // The view the new helper refused ends for its listener, as one the helper ended would.
+    await until(() => events.length === 2)
+    expect(events).toEqual([
+      expect.objectContaining({ event: 'inputWedged' }),
+      {
+        event: 'streamEnded',
+        params: { udid: OTHER_UDID, token: 9, nonce: nonce(9), reason: 'helperRestart' }
+      }
+    ])
+    expect(states).toContainEqual(
+      expect.objectContaining({
+        state: 'restarting',
+        failure: expect.objectContaining({ reason: 'wedged' })
+      })
+    )
+    // The viewer of 9 is gone: it is not tried again on the next replacement.
+    await supervisor.call('hid', { udid: UDID, action: { kind: 'tap', x: 1, y: 1 } })
+    await until(() => streamLog().some((line) => line.startsWith('3 ')))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(streamLog().filter((line) => line.startsWith('3 '))).toEqual([
+      `3 startStream ${OTHER_UDID} 7 ${nonce(7)}`
+    ])
+  })
+
+  it('a view the helper ended on its own is reported and never streamed again by a replacement', async () => {
+    const events: SimHelperEvent[] = []
+    const { supervisor, spawns, streamLog } = harness(
+      { mode: 'wedge', endStreams: [8] },
+      { onEvent: (event) => events.push(event) }
+    )
+    for (const token of [7, 8]) {
+      const params = { udid: OTHER_UDID, service: SERVICE, token, nonce: nonce(token) }
+      expect((await supervisor.call('startStream', params)).ok).toBe(true)
+    }
+    await until(() => events.length === 1)
+    expect(events[0]).toEqual({
+      event: 'streamEnded',
+      params: { udid: OTHER_UDID, token: 8, nonce: nonce(8), reason: 'viewerGone' }
+    })
+    await supervisor.call('hid', { udid: UDID, action: { kind: 'tap', x: 1, y: 1 } })
+    await until(() => spawns().length === 2 && streamLog().some((line) => line.startsWith('2 ')))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(streamLog().filter((line) => line.startsWith('2 '))).toEqual([
+      `2 startStream ${OTHER_UDID} 7 ${nonce(7)}`
+    ])
+  })
+
+  it("a replay racing the caller's own stop and fresh start of the same token leaves the caller's stream running", async () => {
+    const { supervisor, spawns, streamLog, streamsOf } = harness({
+      mode: 'wedge',
+      replayReplyMs: 400
+    })
+    const first = { udid: OTHER_UDID, service: SERVICE, token: 7, nonce: nonce(0x71) }
+    expect((await supervisor.call('startStream', first)).ok).toBe(true)
+    await supervisor.call('hid', { udid: UDID, action: { kind: 'tap', x: 1, y: 1 } })
+    // The new helper took the replay's start and holds its answer: the caller restarts the view now.
+    await until(() => streamLog().includes(`2 startStream ${OTHER_UDID} 7 ${nonce(0x71)}`))
+    expect(spawns()).toHaveLength(2)
+    expect((await supervisor.call('stopStream', { udid: OTHER_UDID, token: 7 })).ok).toBe(true)
+    const fresh = { ...first, nonce: nonce(0x72) }
+    expect((await supervisor.call('startStream', fresh)).ok).toBe(true)
+    await until(() => streamLog().filter((line) => line.startsWith('2 ')).length >= 4)
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(streamLog().filter((line) => line.startsWith('2 '))).toEqual([
+      `2 startStream ${OTHER_UDID} 7 ${nonce(0x71)}`,
+      `2 stopStream ${OTHER_UDID} 7 -`,
+      `2 startStream ${OTHER_UDID} 7 ${nonce(0x72)}`,
+      // The replay's own stop names its generation, so it misses the caller's.
+      `2 stopStream ${OTHER_UDID} 7 ${nonce(0x71)}`
+    ])
+    expect(streamsOf(2)).toEqual({ [`${OTHER_UDID} 7`]: nonce(0x72) })
   })
 
   it('a helper that misses its own deadline plus the margin is recycled, reason timeout', async () => {

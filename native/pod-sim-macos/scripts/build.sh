@@ -1,10 +1,12 @@
 #!/bin/bash
-# Builds pod-sim into native/pod-sim-macos/.build/release/pod-sim (universal unless --single-arch)
-# and signs it the way Pod's packaging signs a new helper: hardened runtime, the empty entitlements
-# of product/entitlements/none.plist, Developer ID when the login keychain has one (ad hoc otherwise,
+# Builds pod-sim into native/pod-sim-macos/.build/release/pod-sim (universal unless --single-arch,
+# this Mac's architecture, or --arch, one named) and signs it the way Pod's packaging signs it:
+# identifier codes.pod.sim (viewers admit it by that), hardened runtime, the empty entitlements of
+# product/entitlements/none.plist, Developer ID when the login keychain has one (ad hoc otherwise,
 # which stage 0 showed loads SimulatorKit too). POD_SIM_SIGN_IDENTITY overrides the identity.
+# Packaging (product/electron-builder.pod.cjs) runs it with --arch and signs the copy again.
 #
-#   native/pod-sim-macos/scripts/build.sh [--single-arch]
+#   native/pod-sim-macos/scripts/build.sh [--single-arch | --arch arm64|x86_64]
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
@@ -13,11 +15,15 @@ SLICES="$HERE/.build/universal-slices"
 ENTITLEMENTS="$REPO/product/entitlements/none.plist"
 IDENTIFIER=codes.pod.sim
 
-if [[ "${1:-}" == "--single-arch" ]]; then
-  TRIPLES=("$(uname -m)-apple-macosx")
-else
-  TRIPLES=(arm64-apple-macosx x86_64-apple-macosx)
-fi
+case "${1:-}" in
+  --single-arch) TRIPLES=("$(uname -m)-apple-macosx") ;;
+  --arch)
+    [[ "${2:-}" == arm64 || "${2:-}" == x86_64 ]] || { echo "build.sh: --arch takes arm64 or x86_64" >&2; exit 64; }
+    TRIPLES=("$2-apple-macosx")
+    ;;
+  "") TRIPLES=(arm64-apple-macosx x86_64-apple-macosx) ;;
+  *) echo "usage: build.sh [--single-arch | --arch arm64|x86_64]" >&2; exit 64 ;;
+esac
 
 rm -rf "$SLICES"
 mkdir -p "$SLICES" "$(dirname "$OUT")"

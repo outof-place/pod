@@ -3,8 +3,18 @@
 // ship in one bundle, so there is one version and no compatibility window. Wire: one JSON object per
 // line on the helper's stdio, at most SIM_HELPER_MAX_FRAME_BYTES before the newline. The shared
 // fixture native/pod-sim-macos/Fixtures/protocol-v1.json is decoded by both sides' tests.
+import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { SimNode } from '../../../../shared/pod-sim/sim-results'
+import {
+  SimHelperAttachResult,
+  SimHelperDisplayStats,
+  SimHelperScreenshot,
+  SimHelperSettleResult,
+  SimHelperStartStreamResult,
+  SimHelperStreamStats
+} from './sim-helper-display-results'
+import { SimHelperXcode } from './sim-helper-xcode'
 
 export const SIM_HELPER_PROTOCOL_VERSION = 1
 export const SIM_HELPER_MAX_FRAME_BYTES = 1_048_576
@@ -39,6 +49,9 @@ export const SIM_HELPER_ERROR_CODES = [
   // The device's hid queue is full (16 calls running or waiting); nothing was sent. Coalesce touch
   // moves, and resend a touch up, which a dropped one would leave the finger down.
   'busy',
+  // The hid call waited behind one stuck in a private call; the device's queue and input connection
+  // were reset and this call was never sent. Send it again (an inputWedged event says more).
+  'wedged',
   'internal'
 ] as const
 export type SimHelperErrorCode = (typeof SIM_HELPER_ERROR_CODES)[number]
@@ -71,14 +84,7 @@ const Framework = z.object({ path: z.string(), version: z.string(), build: z.str
 export const SimHelperReport = z.object({
   protocol: z.number().int(),
   helper: z.object({ version: z.string(), pid: z.number().int() }),
-  xcode: z
-    .object({
-      developerDir: z.string(),
-      source: z.enum(['DEVELOPER_DIR', 'xcode-select']),
-      version: z.string().optional(),
-      build: z.string().optional()
-    })
-    .optional(),
+  xcode: SimHelperXcode.optional(),
   coreSimulator: Framework.optional(),
   simulatorKit: Framework.optional(),
   // The running macOS and its AccessibilityPlatformTranslation, which key `ax` (not Xcode).
@@ -123,36 +129,6 @@ export const SimHelperReport = z.object({
 })
 /** `hello`'s result (the start-up self-test) and `selftest`'s. */
 export type SimHelperReport = z.infer<typeof SimHelperReport>
-
-export const SimHelperAttachResult = z.object({
-  udid: z.string(),
-  surface: z
-    .object({ width: z.number().int(), height: z.number().int(), id: z.number().int() })
-    .optional(),
-  alreadyAttached: z.boolean()
-})
-
-export const SimHelperDisplayStats = z.object({
-  udid: z.string(),
-  seconds: z.number(),
-  // One per presented frame; 0 while the screen is static.
-  frameCallbacks: z.number().int(),
-  surfaceCallbacks: z.number().int(),
-  // Frames whose surface seed changed: what a viewer redraws.
-  seedChanges: z.number().int()
-})
-
-export const SimHelperScreenshot = z.object({
-  path: z.string(),
-  format: z.enum(['png', 'jpeg']),
-  width: z.number().int(),
-  height: z.number().int(),
-  bytes: z.number().int(),
-  // `simctl`: `simctl io screenshot`, when the framebuffer path is off or failed (fallbackReason says why).
-  source: z.enum(['surface', 'simctl']),
-  ms: z.number().int(),
-  fallbackReason: z.string().optional()
-})
 
 const Udid = z.object({ udid: z.string() })
 
@@ -286,6 +262,21 @@ export const SimHelperAxResult = z.object({
 export type SimHelperAxResult = z.infer<typeof SimHelperAxResult>
 
 /** Each method's params and result; params are what the runtime sends. */
+/**
+ * A live view's nonce: 64 random bits as 16 lowercase hex digits (a JSON number cannot carry 64
+ * bits), never all zero. pod-sim puts it in every frame-wire message (pod_sim_frame.h).
+ */
+export const SimHelperStreamNonce = z.string().regex(/^(?!0{16})[0-9a-f]{16}$/)
+
+export function simStreamNonce(): string {
+  for (;;) {
+    const nonce = randomBytes(8).toString('hex')
+    if (nonce !== '0000000000000000') {
+      return nonce
+    }
+  }
+}
+
 export const SIM_HELPER_METHODS = {
   selftest: {
     params: z.object({ udid: z.string().optional(), waitMs: z.number().int().optional() }),
@@ -327,6 +318,41 @@ export const SIM_HELPER_METHODS = {
       hitTest: z.boolean().optional()
     }),
     result: SimHelperAxResult
+  },
+  startStream: {
+    params: z.object({
+      udid: z.string(),
+      // The viewer's launchd rendezvous name, checked in before this call:
+      // codes.pod.native(.dev)?.sim.<32 hex> (src/main/pod/sim-pane/pod-sim-pane-protocol.ts).
+      service: z.string(),
+      // The ui-host simAttach token, 1 to 2^31 - 1, carried in every message.
+      token: z.number().int(),
+      // simStreamNonce(), given to the viewer with the rendezvous too: it keeps only this stream's
+      // messages. The same view started again (a reboot, a helper restart) keeps its nonce.
+      nonce: SimHelperStreamNonce
+    }),
+    result: SimHelperStartStreamResult
+  },
+  stopStream: {
+    params: z.object({
+      udid: z.string(),
+      token: z.number().int(),
+      // Only this generation: a stream started again under the same token with another nonce stays.
+      nonce: SimHelperStreamNonce.optional()
+    }),
+    result: SimHelperStreamStats
+  },
+  settle: {
+    params: z.object({
+      udid: z.string(),
+      // 100 to 5000, default 400.
+      windowMs: z.number().int().optional(),
+      // 200 to 20000 and at least windowMs, default 5000.
+      timeoutMs: z.number().int().optional(),
+      // 1 to 200, default 48.
+      smallPt: z.number().optional()
+    }),
+    result: SimHelperSettleResult
   }
 } as const
 export type SimHelperMethod = keyof typeof SIM_HELPER_METHODS
@@ -349,7 +375,12 @@ export const SIM_HELPER_DEADLINES_MS = {
   // Connecting (4.2 s at most), an action of at most 8 s or a paste, and the closing barrier (2 s).
   hid: 15_000,
   // A 2.5 s walk budget plus one request in flight.
-  ax: 5_000
+  ax: 5_000,
+  // An attach (a dozen remote calls) and the viewer's name lookup.
+  startStream: 5_000,
+  stopStream: 2_000,
+  // timeoutMs (at most 20 s) plus the accessibility read under way when it passes.
+  settle: 25_000
 } as const satisfies Record<SimHelperMethod, number>
 
 /** How far past its own deadline a helper may be silent before the runtime calls it hung. */

@@ -6,6 +6,7 @@ public enum SelftestText {
         var lines: [String] = []
         if let xcode = report.xcode {
             lines.append("Xcode \(xcode.version ?? "?") (\(xcode.build ?? "?")) at \(xcode.developerDir), from \(xcode.source.rawValue)")
+            if let reason = xcode.chosenBecause { lines.append("  chosen because \(reason)") }
         }
         if let core = report.coreSimulator { lines.append("CoreSimulator \(core.version) (\(core.build))") }
         if let kit = report.simulatorKit { lines.append("SimulatorKit \(kit.version) (\(kit.build)) at \(kit.path)") }

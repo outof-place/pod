@@ -16,6 +16,11 @@ public enum HelperProtocol {
         "attachDisplay": 5_000,
         "displayStats": 2_000,
         "detachDisplay": 5_000,
+        // An attach (a dozen remote calls) and the viewer's name lookup.
+        "startStream": 5_000,
+        "stopStream": 2_000,
+        // timeoutMs (at most 20 s) plus the accessibility read under way when it passes.
+        "settle": 25_000,
         // The framebuffer read, else `simctl io screenshot` (6 s cap).
         "screenshot": 8_000,
         // Connecting (a 4 s liveness reply at most) plus an action of at most 10 s (HIDLimits).
@@ -38,6 +43,8 @@ public enum HelperErrorCode: String, CaseIterable, Codable, Sendable {
     case timeout
     /// The device's `hid` lane is full (InputLanes.maxDepth); nothing was sent.
     case busy
+    /// The call waited behind one stuck in a private call, and the lane was given up on; nothing was sent.
+    case wedged
     case `internal`
 }
 

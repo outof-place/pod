@@ -16,6 +16,7 @@ public enum HelperServer {
 
         let methods = HelperMethods(environment: environment)
         let session = ProtocolSession(token: token, handler: methods, send: writer.write)
+        methods.events.listen { name, params in session.emit(event: name, params: params) }
         let reader = Thread {
             var framer = LineFramer(maxFrameBytes: HelperProtocol.maxFrameBytes)
             var buffer = [UInt8](repeating: 0, count: 65_536)
