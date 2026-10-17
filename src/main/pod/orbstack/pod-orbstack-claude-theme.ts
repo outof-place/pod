@@ -13,7 +13,15 @@ export function readMacClaudeTheme(
   read: (path: string) => string = (path) => readFileSync(path, 'utf8')
 ): string | null {
   try {
-    const file = resolveClaudeGlobalConfigFile({ env, homeDir, style: 'posix', exists: existsSync })
+    const file = resolveClaudeGlobalConfigFile({
+      env: {
+        CLAUDE_CONFIG_DIR: env.CLAUDE_CONFIG_DIR,
+        CLAUDE_CODE_CUSTOM_OAUTH_URL: env.CLAUDE_CODE_CUSTOM_OAUTH_URL
+      },
+      homeDir,
+      style: 'posix',
+      exists: existsSync
+    })
     const parsed: unknown = JSON.parse(read(file))
     const theme =
       typeof parsed === 'object' && parsed !== null && 'theme' in parsed ? parsed.theme : null
