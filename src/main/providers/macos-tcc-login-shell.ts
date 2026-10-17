@@ -16,10 +16,11 @@ const MACOS_PRINTF_PATH = '/usr/bin/printf'
 const LOGIN_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -l -- "$@"'
 const DIRECT_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -- "$@"'
 const LOGIN_PREFLIGHT_TIMEOUT_MS = 500
-// Pod: the daemon's startup warm-up runs off the spawn path, so a PAM stack slowed by load (a
-// launchd job's daemon starts with its runtime) gets the death-watch bound; a spawn still waits
-// on it no longer than LOGIN_PREFLIGHT_TIMEOUT_MS, and its verdict wraps every later spawn.
-const LOGIN_WARMUP_TIMEOUT_MS = 4_000
+// Pod: a probe's own bound (pipe and PTY), the death-watch's: under load PAM answers slowly (a
+// launchd job's daemon starts with its runtime) and a 500 ms cap read that as a hang. A spawn still
+// waits on a probe no longer than LOGIN_PREFLIGHT_TIMEOUT_MS; the probe runs on and its verdict
+// wraps every later spawn.
+const LOGIN_PROBE_TIMEOUT_MS = 4_000
 // Why: the death-watch probe runs off the spawn path, so it can afford a bound
 // that outlasts a PAM stack answering slowly rather than misreading it as a hang.
 const LOGIN_SESSION_WATCH_PROBE_TIMEOUT_MS = 4_000
@@ -69,7 +70,7 @@ function loginPreflightRetryDelayMs(failureCount: number): number {
 async function runLoginPreflight(
   username: string,
   accountHome: string,
-  timeoutMs = LOGIN_PREFLIGHT_TIMEOUT_MS,
+  timeoutMs = LOGIN_PROBE_TIMEOUT_MS,
   signal?: AbortSignal
 ): Promise<LoginPreflightOutcome> {
   try {
@@ -113,7 +114,7 @@ async function verifyRejectedLoginPreflightUnderPty(
   const ptyOutcome = await runMacosLoginSessionPtyProbe(
     username,
     accountHome,
-    LOGIN_PREFLIGHT_TIMEOUT_MS,
+    LOGIN_PROBE_TIMEOUT_MS,
     LOGIN_PREFLIGHT_MAX_BUFFER_BYTES
   )
   // Why: a pipe-sensitive PAM stack must not override the production-shaped PTY oracle.
@@ -154,8 +155,7 @@ function cacheConclusiveLoginPreflightOutcome(outcome: LoginPreflightOutcome): v
 
 function loginPreflightSucceeds(
   username: string,
-  accountHome: string,
-  timeoutMs: number
+  accountHome: string
 ): Promise<LoginPreflightOutcome> {
   const cached = cachedOutcome()
   if (cached) {
@@ -165,8 +165,7 @@ function loginPreflightSucceeds(
     const cacheEpoch = loginPreflightCacheEpoch
     // Why: simultaneous pane restores share one PAM child instead of multiplying
     // subprocesses at exactly the point terminal startup is already busiest.
-    const pipeProbe = runLoginPreflight(username, accountHome, timeoutMs)
-    loginPreflightInFlight = pipeProbe.then(async (pipeOutcome) => {
+    loginPreflightInFlight = runLoginPreflight(username, accountHome).then(async (pipeOutcome) => {
       const outcome = await verifyRejectedLoginPreflightUnderPty(username, accountHome, pipeOutcome)
       // Why: cache only a conclusive PAM verdict; a killed/timed-out probe is
       // environmental and must be retried next spawn, not stuck forever (F1).
@@ -207,7 +206,7 @@ function loginPreflightSucceeds(
  */
 export async function prepareMacosTccLoginShell(
   options: { warmUp?: boolean } = {}
-): Promise<LoginPreflightOutcome | null> {
+): Promise<PreparedLoginShell | null> {
   if (process.platform !== 'darwin' || isDisabledByEnv()) {
     return null
   }
@@ -235,21 +234,25 @@ export async function prepareMacosTccLoginShell(
   if (!username || !accountHome) {
     return null
   }
-  if (options.warmUp) {
-    return loginPreflightSucceeds(username, accountHome, LOGIN_WARMUP_TIMEOUT_MS)
-  }
-  return withinSpawnBudget(
-    loginPreflightSucceeds(username, accountHome, LOGIN_PREFLIGHT_TIMEOUT_MS)
-  )
+  const probe = loginPreflightSucceeds(username, accountHome)
+  return options.warmUp ? probe : withinSpawnBudget(probe)
 }
 
-/** Pod: a spawn's wait on a probe (a warm-up's may run longer), bounded by its own budget; the
- *  probe runs on and caches its verdict. */
-function withinSpawnBudget(probe: Promise<LoginPreflightOutcome>): Promise<LoginPreflightOutcome> {
+/** Pod: a probe's outcome, or a spawn's wait on it that ran out (`budgetExpired`: no probe said so). */
+export type PreparedLoginShell = LoginPreflightOutcome & { budgetExpired?: true }
+
+/** Pod: a spawn waits on a probe no longer than its own budget, then goes direct; the probe runs on
+ *  and caches its verdict. */
+function withinSpawnBudget(probe: Promise<LoginPreflightOutcome>): Promise<PreparedLoginShell> {
   let timer: ReturnType<typeof setTimeout> | undefined
-  const budget = new Promise<LoginPreflightOutcome>((resolve) => {
-    const timedOut: LoginPreflightOutcome = { ok: false, conclusive: false, reason: 'timeout' }
-    timer = setTimeout(() => resolve(timedOut), LOGIN_PREFLIGHT_TIMEOUT_MS)
+  const budget = new Promise<PreparedLoginShell>((resolve) => {
+    const expired: PreparedLoginShell = {
+      ok: false,
+      conclusive: false,
+      reason: 'timeout',
+      budgetExpired: true
+    }
+    timer = setTimeout(() => resolve(expired), LOGIN_PREFLIGHT_TIMEOUT_MS)
   })
   return Promise.race([probe, budget]).finally(() => clearTimeout(timer))
 }

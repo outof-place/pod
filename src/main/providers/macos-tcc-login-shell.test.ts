@@ -113,7 +113,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
       cwd: '/Users/ada',
       maxOutputBytes: 1024,
       signal: undefined,
-      timeoutMs: 500
+      timeoutMs: 4_000
     })
   })
 
@@ -162,7 +162,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
 
     await expect(prepareMacosTccLoginShell()).resolves.toEqual(ACCEPTED_OUTCOME)
 
-    expect(ptyProbeMock).toHaveBeenCalledWith('ada', '/Users/ada', 500, 1_024)
+    expect(ptyProbeMock).toHaveBeenCalledWith('ada', '/Users/ada', 4_000, 1_024)
     expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
   })
 
@@ -317,7 +317,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     })
   })
 
-  it('gives the startup warm-up 4 s while a spawn waits on it only its own 500 ms (Pod)', async () => {
+  it('lets a spawn wait on a slow probe only its own 500 ms, then wraps later spawns (Pod)', async () => {
     setPlatform('darwin')
     vi.useFakeTimers()
     try {
@@ -334,10 +334,15 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
       expect(runProcessMock).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 4_000 }))
       const spawn = prepareMacosTccLoginShell()
       await vi.advanceTimersByTimeAsync(500)
-      // The spawn that came while PAM was slow goes direct after its own budget...
-      await expect(spawn).resolves.toEqual({ ok: false, conclusive: false, reason: 'timeout' })
+      // The spawn that came while PAM was slow goes direct after its own budget, marked as such...
+      await expect(spawn).resolves.toEqual({
+        ok: false,
+        conclusive: false,
+        reason: 'timeout',
+        budgetExpired: true
+      })
       expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
-      // ...while the warm-up runs on, and its verdict wraps every later spawn without a new probe.
+      // ...while the probe runs on, and its verdict wraps every later spawn without a new probe.
       finishWarmup(ACCEPTED_RESULT)
       await expect(warmup).resolves.toEqual(ACCEPTED_OUTCOME)
       expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
@@ -346,6 +351,40 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('backs off a warm-up its own 4 s bound killed instead of caching a refusal (Pod)', async () => {
+    setPlatform('darwin')
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    runProcessMock.mockReturnValue(TIMED_OUT_RESULT)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(prepareMacosTccLoginShell({ warmUp: true })).resolves.toEqual({
+      ok: false,
+      conclusive: false,
+      reason: 'timeout'
+    })
+    expect(ptyProbeMock).not.toHaveBeenCalled()
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
+    // No refusal cached: within the backoff nothing runs, after it the probe runs again.
+    expect(await prepareMacosTccLoginShell()).toBeNull()
+    expect(runProcessMock).toHaveBeenCalledOnce()
+    now += 5_000
+    runProcessMock.mockReturnValue(ACCEPTED_RESULT)
+    await expect(prepareMacosTccLoginShell()).resolves.toEqual(ACCEPTED_OUTCOME)
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
+  })
+
+  it("keeps the pipe's refusal when the 4 s PTY confirmation times out (Pod)", async () => {
+    setPlatform('darwin')
+    runProcessMock.mockReturnValue(REJECTED_RESULT)
+    ptyProbeMock.mockResolvedValue({ ok: false, conclusive: false, reason: 'timeout' })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(prepareMacosTccLoginShell()).resolves.toEqual(REJECTED_OUTCOME)
+    expect(ptyProbeMock).toHaveBeenCalledWith('ada', '/Users/ada', 4_000, 1_024)
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
   })
 
   it('dedupes concurrent successful preflights and caches later terminal spawns', async () => {

@@ -19,10 +19,8 @@ import {
   DAEMON_EXIT_ENDPOINT_OCCUPIED,
   DaemonEndpointUnavailableError
 } from './daemon-endpoint-ownership'
-import {
-  prepareMacosTccLoginShell,
-  probeMacosLoginSessionAlive
-} from '../providers/macos-tcc-login-shell'
+import { probeMacosLoginSessionAlive } from '../providers/macos-tcc-login-shell'
+import { createDaemonLoginPreflight } from './daemon-login-preflight'
 import { MacosLoginSessionDeathWatch } from './macos-login-session-death-watch'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import { readCurrentDaemonReadyIdentity } from './daemon-ready-identity'
@@ -148,15 +146,8 @@ async function main(): Promise<void> {
 
   // Why: detached daemons destroy stderr, so the preflight's console.warn is lost;
   // surface a degraded TCC attribution here where it's diagnosable (F2).
-  // Pod: every probe that ran is logged with its duration, an accepted one too.
-  const runMacosLoginPreflight = async (warmUp = false): Promise<void> => {
-    const startedAtMs = Date.now()
-    const outcome = await prepareMacosTccLoginShell({ warmUp })
-    if (outcome) {
-      const durationMs = Date.now() - startedAtMs
-      daemonLog.log('macos-login-preflight', { ...outcome, durationMs, warmUp })
-    }
-  }
+  // Pod: every probe that ran, with its duration (daemon-login-preflight.ts).
+  const runMacosLoginPreflight = createDaemonLoginPreflight((e, d) => daemonLog.log(e, d))
   // Why: warm the PAM probe at idle startup so the first terminal spawn doesn't
   // pay it under load — shrinking the window where a slow probe degrades (F1/F7).
   void runMacosLoginPreflight(true)
