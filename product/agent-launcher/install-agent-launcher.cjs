@@ -2,7 +2,7 @@
 // Pod's shell wrappers keep that directory first on every terminal's PATH (ORCA_CLI_BIN_DIR), so the
 // links shadow the user's own installs only inside Pod terminals. electron-builder signs the binary.
 const { execFileSync } = require('node:child_process')
-const { chmodSync, rmSync, symlinkSync } = require('node:fs')
+const { chmodSync, readdirSync, rmSync, symlinkSync } = require('node:fs')
 const { join } = require('node:path')
 
 const LAUNCHER = 'pod-agent-launcher'
@@ -23,7 +23,11 @@ function installAgentLauncher(resourcesDir, arch) {
       '-O',
       '-target',
       `${cpu}-apple-macosx${MACOS_MINIMUM}`,
-      join(__dirname, 'main.swift'),
+      // main.swift plus the feature files beside it (agent-search.swift)
+      ...readdirSync(__dirname)
+        .filter((name) => name.endsWith('.swift'))
+        .sort()
+        .map((name) => join(__dirname, name)),
       '-o',
       launcherPath
     ],
