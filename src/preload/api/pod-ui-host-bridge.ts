@@ -2,6 +2,10 @@ import { ipcRenderer } from 'electron'
 import { POD_UI_HOST_QUIT_IPC } from '../../shared/pod-ui-host-quit'
 import { POD_UI_HOST_SLEEP_IPC } from '../../shared/pod-ui-host-sleep'
 import {
+  POD_UI_HOST_PANE_RESTART_IPC,
+  PodUiHostPaneRestartRequest
+} from '../../shared/pod-ui-host-pane-restart'
+import {
   isPodUiHostSurfaceNavigation,
   POD_UI_HOST_SURFACE_IPC
 } from '../../shared/pod-ui-host-surface'
@@ -39,5 +43,17 @@ export const podUiHostApi = {
   beginRuntimeSleep: (worktreeId) => ipcRenderer.send(POD_UI_HOST_SLEEP_IPC.begin, worktreeId),
   sleepRuntimeTerminals: async (worktreeId) => {
     await ipcRenderer.invoke(POD_UI_HOST_SLEEP_IPC.runtimeTerminals, worktreeId)
+  },
+  onPaneRestart: (restart) => {
+    const listener = (_event: Electron.IpcRendererEvent, requestId: unknown, request: unknown) => {
+      const parsed = PodUiHostPaneRestartRequest.safeParse(request)
+      ipcRenderer.send(
+        POD_UI_HOST_PANE_RESTART_IPC.restarted,
+        requestId,
+        parsed.success && restart(parsed.data)
+      )
+    }
+    ipcRenderer.on(POD_UI_HOST_PANE_RESTART_IPC.restart, listener)
+    return () => ipcRenderer.removeListener(POD_UI_HOST_PANE_RESTART_IPC.restart, listener)
   }
 } satisfies PreloadApi['podUiHost']

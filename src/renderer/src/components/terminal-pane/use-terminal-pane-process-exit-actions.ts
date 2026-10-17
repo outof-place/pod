@@ -10,6 +10,7 @@ import {
   resolvePaneRestartStartup,
   resolveTerminalProcessExitRestartStartup
 } from './terminal-process-exit-restart'
+import { registerPodPaneRestarter } from '@/pod/ui-host/use-pod-ui-host-pane-restart'
 import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
@@ -201,6 +202,21 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       )
     },
     [clearPaneProcessExit, handleRestartCodexPane]
+  )
+
+  // Fork-only (Pod): PodNative's Restart, through this window (use-pod-ui-host-pane-restart.ts).
+  useEffect(
+    () =>
+      registerPodPaneRestarter(tabId, (leafId) => {
+        const pane = managerRef.current?.getPanes().find((candidate) => candidate.leafId === leafId)
+        if (!pane) {
+          return false
+        }
+        clearPaneProcessExit(pane.id)
+        handleRestartCodexPane(pane.id, null)
+        return true
+      }),
+    [clearPaneProcessExit, handleRestartCodexPane, managerRef, tabId]
   )
 
   const handleCloseExitedPane = useCallback(

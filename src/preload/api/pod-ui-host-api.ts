@@ -1,5 +1,6 @@
 import type { PodUiHostQuitBlockers } from '../../shared/pod-ui-host-quit'
 import type { PodUiHostSurfaceNavigation } from '../../shared/pod-ui-host-surface'
+import type { PodUiHostPaneRestartRequest } from '../../shared/pod-ui-host-pane-restart'
 
 /** Fork-only (Pod): one-app's quit questions from main (src/shared/pod-ui-host-quit.ts). */
 export type PodUiHostApi = {
@@ -13,4 +14,6 @@ export type PodUiHostApi = {
   beginRuntimeSleep: (worktreeId: string) => void
   /** After: the runtime sleeps the worktree's PTYs no pane here bound, and holds it asleep. */
   sleepRuntimeTerminals: (worktreeId: string) => Promise<void>
+  /** Restart for a failed shell's pane PodNative asked for; returns the unsubscribe. */
+  onPaneRestart: (restart: (request: PodUiHostPaneRestartRequest) => boolean) => () => void
 }
