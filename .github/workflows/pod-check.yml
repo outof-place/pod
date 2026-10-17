@@ -1,6 +1,8 @@
-# Runs Pod's checks on main or a candidate branch (stack/cand-*): typecheck and unit tests. The macOS
-# build runs only when dispatched by hand with `-f macos=true` before a release; a default run ends
-# green with it skipped. Nothing else: no rebase, no pull request, no issue, and nothing from Orca.
+# Runs Pod's checks on main or a candidate branch (stack/cand-*): the generated-layer check, the
+# typecheck and the unit tests, one after another in one job on Pod's own runner (labels pod-ci, an
+# isolated OrbStack VM without the Mac's files), so a run costs no GitHub minutes. The macOS build is
+# not here: it runs locally before a release. Nothing else: no rebase, no pull request, no issue, and
+# nothing from Orca.
 #
 #   gh workflow run pod-check.yml -R outof-place/pod -f ref=stack/cand-<n>
 #
@@ -16,16 +18,11 @@ on:
         required: false
         type: string
         default: main
-      macos:
-        description: Also run the macOS build (macOS minutes cost the most).
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
-# One run at a time: dispatch only on an empty queue, since a newer dispatch replaces a pending one.
+# One run at a time on the one runner: a newer dispatch replaces a pending one.
 concurrency:
   group: pod-check
   cancel-in-progress: false
@@ -34,21 +31,16 @@ env:
   UNIT_SHARDS: '5'
 
 jobs:
-  target:
-    name: Resolve the ref to check
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      head_sha: ${{ steps.resolve.outputs.head_sha }}
+  check:
+    name: Pod check
+    runs-on: [self-hosted, linux, arm64, pod-ci]
+    timeout-minutes: 150
     steps:
-      - name: Resolve
-        id: resolve
+      # Why only these: a branch is checked once it is a candidate.
+      - name: Only main and candidates
         env:
-          GH_TOKEN: ${{ github.token }}
           CHECK_REF: ${{ inputs.ref }}
         run: |
-          set -euo pipefail
-          # Why only these: every run costs minutes, so a branch is checked once it is a candidate.
           case "$CHECK_REF" in
             main | stack/cand-*) ;;
             *)
@@ -56,48 +48,23 @@ jobs:
               exit 1
               ;;
           esac
-          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$CHECK_REF" --jq .sha)
-          echo "Checking $CHECK_REF at $sha" >> "$GITHUB_STEP_SUMMARY"
-          echo "head_sha=$sha" >> "$GITHUB_OUTPUT"
-
-  typecheck:
-    name: Typecheck
-    needs: target
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
-    steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.target.outputs.head_sha }}
+          ref: ${{ inputs.ref }}
           persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: node
-          node-version: '24'
-      # Commits land on main after the generated layers, so they must leave every codemod current.
-      - name: Generated layers are current
-        run: bash scripts/pod-generated.sh --check
-      - run: pnpm tc
-
-  unit:
-    name: Unit tests ${{ matrix.shard }}
-    needs: target
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4, 5]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.target.outputs.head_sha }}
-          persist-credentials: false
+      - name: Record the commit
+        env:
+          CHECK_REF: ${{ inputs.ref }}
+        run: echo "Checking $CHECK_REF at $(git rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
           node-version: '24'
           cache-electron-package: 'true'
+      # Commits land on main after the generated layers, so they must leave every codemod current.
+      - name: Generated layers are current
+        run: bash scripts/pod-generated.sh --check
+      - run: pnpm tc
       - run: node config/scripts/install-electron-package-binary.mjs
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -110,37 +77,21 @@ jobs:
           if [ -f config/scripts/fetch-claude-acc-payload.mjs ]; then
             node config/scripts/fetch-claude-acc-payload.mjs
           fi
-      # ORCA_BALANCE_UNIT_SHARDS selects the balanced CI file list, which leaves out the
-      # cross-version harness and the live-shell tests.
-      # One retry: a few grammar-loading tests time out under full-suite load.
-      - name: Test shard
+      # The hosted check's five shards, one after another: the same balanced file lists.
+      # ORCA_BALANCE_UNIT_SHARDS selects them, which leaves out the cross-version harness and the
+      # live-shell tests. One retry: a few grammar-loading tests time out under full-suite load.
+      - name: Unit tests
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
           ORCA_BALANCE_UNIT_SHARDS: '1'
         run: |
           ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
           export ORCA_SHARD_SOURCE_SHA
-          node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
-            "--shard=${{ matrix.shard }}/$UNIT_SHARDS" --maxWorkers=4 --retry=1
-
-  build:
-    name: macOS build
-    needs: target
-    if: inputs.macos
-    # The free 3-core macos-15 may run short of memory on `pnpm build`; POD_MAC_RUNNER switches it (CONTRIBUTING.md).
-    runs-on: ${{ vars.POD_MAC_RUNNER || 'macos-15' }}
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.target.outputs.head_sha }}
-          persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: node
-          node-version: '24'
-      - uses: ./.github/actions/install-mobile-dependencies
-      - name: Build
-        env:
-          ORCA_BACKGROUND_LAUNCH: '1'
-        run: pnpm build
+          failed=0
+          for shard in $(seq 1 "$UNIT_SHARDS"); do
+            echo "::group::Unit tests $shard/$UNIT_SHARDS"
+            node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
+              "--shard=$shard/$UNIT_SHARDS" --maxWorkers=4 --retry=1 || failed=1
+            echo "::endgroup::"
+          done
+          exit "$failed"
