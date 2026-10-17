@@ -37,6 +37,7 @@ import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../shared/agent-
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-closed'
 import { AGENT_LAUNCH_TARGET_FORBIDDEN_CODE } from '../../../shared/agent-launch-target-forbidden'
 import { POD_CLAUDE_ACCOUNTS_MANAGED_CODE } from '../../../shared/pod-claude-accounts-managed'
+import { POD_SSH_NOT_CONNECTED_CODE } from '../../../shared/pod-ssh-port-events'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -169,7 +170,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES),
   ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES),
   // Fork-only (Pod): Pod's Claude account RPCs refuse; claude-acc owns the accounts.
-  POD_CLAUDE_ACCOUNTS_MANAGED_CODE
+  POD_CLAUDE_ACCOUNTS_MANAGED_CODE,
+  // Fork-only (Pod): a port forward call on an SSH host that is not connected.
+  POD_SSH_NOT_CONNECTED_CODE
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
