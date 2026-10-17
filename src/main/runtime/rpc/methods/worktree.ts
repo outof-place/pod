@@ -31,7 +31,7 @@ import {
 } from '../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { readsWorktreeRemovalMarker } from '../worktree-removal-marker-projection'
-import { assertForeignArchiveApproved } from '../../foreign-removal-archive'
+import { withApprovedArchive } from '../../foreign-removal-archive'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
@@ -273,19 +273,19 @@ export const WORKTREE_METHODS = [
       // resolution costs a scan and throws for an id two hosts share. Other selectors stay unstamped.
       const explicitWorktreeId = getExplicitWorktreeIdSelector(params.worktree)
       const repoId = explicitWorktreeId ? splitWorktreeId(explicitWorktreeId)?.repoId : undefined
-      if (params.runHooks === true) {
-        await assertForeignArchiveApproved(runtime, params.worktree, params.archiveTrustHash)
-      }
-      const result = await runtime.removeManagedWorktree(params.worktree, {
-        force: params.force === true,
-        runHooks: params.runHooks === true,
-        allowUnverifiedPtyStop: params.allowUnverifiedPtyStop === true,
-        allowFailedArchiveHook: params.allowFailedArchiveHook === true,
-        ...(resolvedHostId ? { hostId: resolvedHostId } : {}),
-        // Why: only a client that shows the `removing` marker can wait out Git's delete; older
-        // clients get the acceptance and never see the row again.
-        ...(readsWorktreeRemovalMarker(context) ? { waitForBackgroundRemoval: true } : {})
-      })
+      // Pod: the archive hash this removal approved, checked where the script would run.
+      const result = await withApprovedArchive(params.archiveTrustHash, () =>
+        runtime.removeManagedWorktree(params.worktree, {
+          force: params.force === true,
+          runHooks: params.runHooks === true,
+          allowUnverifiedPtyStop: params.allowUnverifiedPtyStop === true,
+          allowFailedArchiveHook: params.allowFailedArchiveHook === true,
+          ...(resolvedHostId ? { hostId: resolvedHostId } : {}),
+          // Why: only a client that shows the `removing` marker can wait out Git's delete; older
+          // clients get the acceptance and never see the row again.
+          ...(readsWorktreeRemovalMarker(context) ? { waitForBackgroundRemoval: true } : {})
+        })
+      )
       return {
         removed: true,
         ...result,

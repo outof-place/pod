@@ -26,6 +26,7 @@ import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
+import { assertForeignArchiveApproved } from './foreign-removal-archive'
 import {
   removesInBackground,
   startBackgroundWorktreeRemoval,
@@ -86,6 +87,12 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   // PTY stop and `removeWorktree`, so a throw here leaves every one of them untouched (#19334).
   let archiveHookOverride: ArchiveHookOverride | undefined
   if (hooks?.scripts.archive && args.runHooks) {
+    // Pod: in someone else's checkout only with this removal's approval of exactly this script.
+    assertForeignArchiveApproved(
+      args.store.getWorktreeMeta(args.target.id),
+      hooks.scripts.archive,
+      canonicalPath
+    )
     const result = await runHook(
       'archive',
       canonicalPath,
