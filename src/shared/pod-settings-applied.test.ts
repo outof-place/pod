@@ -71,6 +71,7 @@ const APPLIED_FOR_PODNATIVE = [
   'promptCacheTimerEnabled',
   'promptCacheTtlMs',
   'nestedWorkerMaxDepth',
+  'tabAutoGenerateTitle',
   // Browser: PodNative's link handling reads them
   'openLinksInApp',
   'openLinksInAppModifierInverts',
