@@ -10,6 +10,7 @@ import type { Repo } from '../shared/repo-types'
 import type { CreateWorktreeResult } from '../shared/worktree/create-types'
 import type { WorktreeDefaultTabsLaunch } from '../shared/worktree/launch-types'
 import { getDefaultTabCommandTrustContent } from './effective-hook-config'
+import { hookRunContent } from '../shared/orca-yaml-run-content'
 
 export type OrcaYamlSetupTrust = { contentHash: string; scriptContent: string }
 
@@ -25,7 +26,7 @@ export function orcaYamlSetupTrust(
   if (!scriptContent || policy === 'local-only') {
     return undefined
   }
-  return { contentHash: createHash('sha256').update(scriptContent).digest('hex'), scriptContent }
+  return { contentHash: sha256(scriptContent), scriptContent }
 }
 
 export type SetupTrustStore = {
@@ -33,12 +34,32 @@ export type SetupTrustStore = {
   getUI?: () => { trustedOrcaHooks?: PersistedTrustedOrcaHooks }
 }
 
+/** Everything a create would start in the new worktree (`hookRunContent`), and its hash. */
+export function setupRunTrust(
+  repo: Repo,
+  yamlHooks: OrcaHooks | null
+): OrcaYamlSetupTrust | undefined {
+  const scriptContent = hookRunContent('setup', repo.hookSettings, yamlHooks)
+  return scriptContent ? { contentHash: sha256(scriptContent), scriptContent } : undefined
+}
+
+/** What a removal's archive run would start (the repo's own script included), and its hash. */
+export function archiveRunTrust(
+  repo: Repo,
+  yamlHooks: OrcaHooks | null
+): OrcaYamlSetupTrust | undefined {
+  const scriptContent = hookRunContent('archive', repo.hookSettings, yamlHooks)
+  return scriptContent ? { contentHash: sha256(scriptContent), scriptContent } : undefined
+}
+
 /**
- * Null when the create may run the new worktree's shared setup: its content is the one the user
- * approved for this create (`approvedHash`), or the one recorded for the repo, or the repo is
- * trusted whole while its id is unique (the clients' rule). The last two don't count for a create
- * from someone else's code (`isForeign`, asked only when they would decide). Otherwise what still
- * needs trust; a store without UI state trusts nothing but an approved hash.
+ * Null when the create may run the new worktree's setup. Anything is allowed by the hash approved
+ * for this create (`approvedHash`) of everything it would start. Someone else's code (`isForeign`)
+ * needs exactly that, the repo's own script included, since in that checkout `make clean` runs the
+ * other branch's Makefile. The repo's own code needs trust only for orca.yaml's shared commands:
+ * their approved hash, the one recorded for the repo, or repo-wide trust while its id is unique
+ * (the clients' rule). Otherwise what still needs trust; a store without UI state trusts nothing
+ * but an approved hash.
  */
 export async function untrustedCreateSetup(
   store: SetupTrustStore,
@@ -47,17 +68,48 @@ export async function untrustedCreateSetup(
   approvedHash: string | undefined,
   isForeign: () => Promise<boolean>
 ): Promise<NonNullable<CreateWorktreeResult['setupTrust']> | null> {
+  const run = setupRunTrust(repo, yamlHooks)
+  if (!run || run.contentHash === approvedHash) {
+    return null
+  }
+  if (await isForeign()) {
+    return { status: 'needs-trust', contentHash: run.contentHash }
+  }
   const trust = orcaYamlSetupTrust(repo, yamlHooks)
   if (!trust || trust.contentHash === approvedHash) {
     return null
   }
   const record = store.getUI?.().trustedOrcaHooks?.[repo.id]
   const uniqueId = store.getRepos().filter((other) => other.id === repo.id).length <= 1
-  const recorded = record?.setup?.contentHash === trust.contentHash || (record?.all && uniqueId)
-  if (recorded && !(await isForeign())) {
+  if (record?.setup?.contentHash === trust.contentHash || (record?.all && uniqueId)) {
     return null
   }
   return { status: 'needs-trust', contentHash: trust.contentHash }
+}
+
+/**
+ * Pod: whether a removal that asked for hooks may run the archive script of a worktree made from
+ * someone else's code (`foreignOrigin`): only with the hash approved for this removal of the
+ * script that would run there, the repo's own included. Repo-wide and recorded trust don't count,
+ * and an agent's `--run-hooks` is no approval. Null when allowed; otherwise the refusal.
+ */
+export function untrustedRemovalArchive(
+  foreignOrigin: boolean | undefined,
+  archiveScript: string | undefined,
+  approvedHash: string | undefined,
+  worktreePath: string
+): Error | null {
+  const script = archiveScript?.trim()
+  if (!foreignOrigin || !script || sha256(script) === approvedHash) {
+    return null
+  }
+  return new Error(
+    `orca.yaml archive hook not run for ${worktreePath}: this worktree holds someone else's code, so its archive script needs approval for this removal. Remove it from Pod, which asks, or without --run-hooks.`
+  )
+}
+
+function sha256(content: string): string {
+  return createHash('sha256').update(content).digest('hex')
 }
 
 /** Default tabs still open, without their commands, while the setup they share needs trust. */
