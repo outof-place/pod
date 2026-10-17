@@ -1,6 +1,6 @@
 // Fork-only (Pod): a browser pane's input, from PodNative's wire events to what an offscreen
 // WebContents takes. Electron-free so the mapping is testable on its own.
-import type { InputEvent } from 'electron'
+import type { InputEvent, WebContents } from 'electron'
 import type { PodBrowserInputEvent } from './pod-browser-pane-protocol'
 
 type Button = 'left' | 'right' | 'middle'
@@ -187,5 +187,16 @@ export function isNavigablePaneUrl(url: string): boolean {
     return NAVIGABLE_PROTOCOLS.has(new URL(url).protocol)
   } catch {
     return false
+  }
+}
+
+/** What `PaneInputState.map` made of an event, done to the page. */
+export function applyPaneInput(wc: WebContents, action: PaneInputAction): void {
+  if (action.kind === 'send') {
+    wc.sendInputEvent(action.input)
+  } else if (action.kind === 'insertText') {
+    void wc.insertText(action.text)
+  } else if (action.kind === 'edit') {
+    wc[action.command]()
   }
 }
