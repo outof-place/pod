@@ -98,7 +98,9 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     onRow: (row) => events.relay(row)
   })
   // Memory only: a restart mints fresh tokens and CAs on the next launch; quitting drops them all.
-  const e2eAnthropic = resolveOrbstackE2eAnthropic()
+  const e2eAnthropic = resolveOrbstackE2eAnthropic(process.env, () =>
+    sandboxClaudeLoginAllowed(registry)
+  )
   // Sandboxed agents can use the Mac's own Claude Code login (opt-in), never refreshed. The switch
   // is read per launch and request; POD_SANDBOX_ANTHROPIC=off is a hard off; E2E runs never get it.
   if (e2eAnthropic) {
