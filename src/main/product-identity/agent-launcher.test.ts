@@ -100,10 +100,12 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
     script(hooks, 'claude-hook.sh', 'ps -o pri= -p $$')
     const client = statusLineClient(hooks)
     // The agent, a tool's shell and the command it runs (two levels down), a hook, the statusline.
+    // Why the sleep: the launcher no longer waits for the watcher; a real agent's first child comes
+    // hundreds of ms after its exec, long after the watcher follows it.
     script(
       join(root, 'tree'),
       'claude',
-      `echo $$; ps -o pri= -p $$; sh -c "sh -c \\"ps -o pri= -p \\\\$\\\\$\\""; ${join(hooks, 'claude-hook.sh')}; ${client}`
+      `echo $$; ps -o pri= -p $$; sleep 0.2; sh -c "sh -c \\"ps -o pri= -p \\\\$\\\\$\\""; ${join(hooks, 'claude-hook.sh')}; ${client}`
     )
     const tree = run('claude', [], [binDir, join(root, 'tree')])
     const own = run('claude', [], [binDir, join(root, 'tree')], { POD_AGENT_TREE: '0' })
@@ -137,7 +139,7 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
     script(
       join(root, 'native'),
       'claude',
-      `ps -o pri= -p $$; sh -c 'exec "${client}"'; "${client}"; sh -c 'exec "${join(hooks, 'pod-agent-hook')}" statusline'; /bin/bash -c 'exec -a status "${client}"'; /bin/bash -c 'exec -a "${client}" /bin/ps -o pri= -p $$'`
+      `ps -o pri= -p $$; sleep 0.2; sh -c 'exec "${client}"'; "${client}"; sh -c 'exec "${join(hooks, 'pod-agent-hook')}" statusline'; /bin/bash -c 'exec -a status "${client}"'; /bin/bash -c 'exec -a "${client}" /bin/ps -o pri= -p $$'`
     )
     const result = run('claude', [], [binDir, join(root, 'native')])
     const [agent, viaShell, direct, byArgv, renamed, impostor] = result.stdout
