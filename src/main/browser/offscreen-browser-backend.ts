@@ -32,8 +32,9 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     private readonly browserManager: BrowserManager,
     private readonly options: {
       getAgentBrowserBridge?: () => Pick<AgentBrowserBridge, 'onPageClosed'> | null
-      // Fork-only (Pod): one-app's native browser panes render these pages offscreen.
-      extraWebPreferences?: WebPreferences
+      // Fork-only (Pod): one-app's native browser panes render these pages offscreen, each at the
+      // display scale known when it opens (asked once per page).
+      extraWebPreferences?: () => WebPreferences
       onWindowCreated?: (browserPageId: string, win: BrowserWindow) => void
     } = {}
   ) {}
@@ -67,7 +68,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
-        ...this.options.extraWebPreferences
+        ...this.options.extraWebPreferences?.()
       }
     })
 

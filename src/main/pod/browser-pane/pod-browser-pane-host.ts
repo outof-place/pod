@@ -1,7 +1,7 @@
 // Fork-only (Pod): sets one-app's browser panes up. Browser pages become offscreen WebContents with
 // shared textures (the headless offscreen backend, plus two options), so the runtime routes browser
 // tab creation there instead of to the hidden window's <webview>s.
-import { app, type WebContents } from 'electron'
+import { app, screen, type WebContents } from 'electron'
 import { OffscreenBrowserBackend } from '../../browser/offscreen-browser-backend'
 import { browserManager } from '../../browser/browser-manager'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -12,7 +12,6 @@ import { addPodCdpProxySink } from '../browser/cdp-proxy-hooks'
 import { setPodBrowserPaneHooks } from './pod-browser-pane-hooks'
 import type { PodBrowserPaneServerMessage } from './pod-browser-pane-protocol'
 import { PodBrowserPaneController } from './pod-browser-pane'
-import { POD_BROWSER_PANE_SCALE } from './pod-browser-pane-frames'
 
 export function installPodBrowserPanes(options: {
   runtime: Pick<OrcaRuntimeService, 'setOffscreenBrowserBackend'>
@@ -29,14 +28,15 @@ export function installPodBrowserPanes(options: {
     send: options.send,
     openDevTools: (wc: WebContents) =>
       wc.openDevTools({ mode: 'detach', activate: !isBackgroundLaunch() }),
-    log: options.log
+    log: options.log,
+    mainDisplayScale: () => screen.getPrimaryDisplay().scaleFactor
   })
   options.runtime.setOffscreenBrowserBackend(
     new OffscreenBrowserBackend(browserManager, {
       getAgentBrowserBridge: () => state.agentBrowserBridge,
-      extraWebPreferences: {
-        offscreen: { useSharedTexture: true, deviceScaleFactor: POD_BROWSER_PANE_SCALE }
-      },
+      extraWebPreferences: () => ({
+        offscreen: { useSharedTexture: true, deviceScaleFactor: panes.newPageScale() }
+      }),
       onWindowCreated: (browserPageId, win) => panes.trackPage(browserPageId, win)
     })
   )

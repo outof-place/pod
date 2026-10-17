@@ -2,8 +2,9 @@
 // to PodNative's random launchd name as an IOSurface Mach port (native/pod-peer-identity-macos
 // browser_frames.c); PodNative checks the sender by audit token.
 
-// The device scale offscreen pages render at: Retina pixels on every Mac display Pod targets.
-export const POD_BROWSER_PANE_SCALE = 2
+// The device scale a page opens at before PodNative reported any display's, when the main display's
+// can't be read either: Retina.
+export const POD_BROWSER_PANE_DEFAULT_SCALE = 2
 
 export type PodBrowserFrames = {
   browserConnect: (service: string) => boolean
@@ -23,8 +24,11 @@ export type PodBrowserFrames = {
 
 export type PodBrowserPaneStats = { framesSent: number; sendFailures: number; sendNs: number }
 
-/** What a page's paint needs to go out: its pane's token (null: no pane) and whether it shows. */
-export type PaneFrameTarget = { token: number | null; visible: boolean; seq: number }
+/**
+ * What a page's paint needs to go out: its pane's token (null: no pane), whether it shows, and the
+ * device scale it renders at (fixed when it opened).
+ */
+export type PaneFrameTarget = { token: number | null; visible: boolean; seq: number; scale: number }
 
 export class PaneFramePump {
   readonly stats: PodBrowserPaneStats = { framesSent: 0, sendFailures: 0, sendNs: 0 }
@@ -85,7 +89,7 @@ export class PaneFramePump {
         widget: info.widgetType === 'popup' ? 1 : 0,
         popupX: Math.round(info.contentRect?.x ?? 0),
         popupY: Math.round(info.contentRect?.y ?? 0),
-        scaleX100: POD_BROWSER_PANE_SCALE * 100
+        scaleX100: Math.round(target.scale * 100)
       })
       this.count(result)
     } finally {
