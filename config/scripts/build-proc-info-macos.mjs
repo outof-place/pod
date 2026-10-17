@@ -5,9 +5,12 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 
 const repoRoot = path.resolve(import.meta.dirname, '../..')
-const sourcePaths = ['proc_info.c', 'proc_tty_names.c', 'proc_api_arguments.c'].map((name) =>
-  path.join(repoRoot, 'native', 'proc-info-darwin', 'src', name)
-)
+const sourcePaths = [
+  'proc_info.c',
+  'proc_tty_names.c',
+  'proc_api_arguments.c',
+  'proc_open_paths.c'
+].map((name) => path.join(repoRoot, 'native', 'proc-info-darwin', 'src', name))
 export const defaultOutputPath = path.join(
   repoRoot,
   'native',

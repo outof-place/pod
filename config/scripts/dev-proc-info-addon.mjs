@@ -23,7 +23,9 @@ export function prepareDevProcInfoAddon(repoRoot) {
       'proc_tty_names.c',
       'proc_tty_names.h',
       'proc_api_arguments.c',
-      'proc_api_arguments.h'
+      'proc_api_arguments.h',
+      'proc_open_paths.c',
+      'proc_open_paths.h'
     ].map((name) => mtimeMs(path.join(addonDir, 'src', name)))
   )
   if (mtimeMs(addon) >= sourceMtime) {
