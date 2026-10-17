@@ -303,21 +303,47 @@ function ghosttyAccountState(id = GHOSTTY_ID) {
   }
 }
 
+// Whether cfprefsd knows the clone's domain: `defaults read` fails for one that doesn't exist.
+// Its output (the values) is never kept.
+function benchDomainExists() {
+  try {
+    execFileSync('/usr/bin/defaults', ['read', 'codes.pod.bench.ghostty'], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
 // The clone's own traces in the account's Library (its preferences and saved state under
-// codes.pod.bench.ghostty), a known leftover: moved to the Trash after the last round, and listed.
-// `defaultsExport` after that says whether cfprefsd still holds the domain.
-function trashBenchTraces() {
+// codes.pod.bench.ghostty), a known leftover, after the last round. Only when this run created the
+// domain (it didn't exist before the first round): `defaults delete` of exactly that domain, a
+// literal here (the lead's OK, 2026-10-17), then the plist and saved state left on disk to the
+// Trash. Returns what it did and the domain's state after.
+function clearBenchTraces(existedBefore) {
+  const existedAfter = benchDomainExists()
+  let deleted = false
+  if (!existedBefore && existedAfter) {
+    execFileSync('/usr/bin/defaults', ['delete', 'codes.pod.bench.ghostty'], { stdio: 'ignore' })
+    deleted = true
+  }
   const trashed = []
   for (const trace of [
     path.join(ACCOUNT_HOME, 'Library/Preferences', `${BENCH_GHOSTTY_ID}.plist`),
     path.join(ACCOUNT_HOME, 'Library/Saved Application State', `${BENCH_GHOSTTY_ID}.savedState`)
   ]) {
-    if (existsSync(trace)) {
+    if (!existedBefore && existsSync(trace)) {
       execFileSync('/usr/bin/trash', [trace])
       trashed.push(trace.replace(ACCOUNT_HOME, '~'))
     }
   }
-  return { trashed, afterTrash: ghosttyAccountState(BENCH_GHOSTTY_ID) }
+  return {
+    existedBefore,
+    existedAfter,
+    deleted,
+    trashed,
+    existsAfterCleanup: benchDomainExists(),
+    afterCleanup: ghosttyAccountState(BENCH_GHOSTTY_ID)
+  }
 }
 
 // The clone's processes and their descendants (its shell), by executable (lib/run-tree.mjs).
@@ -379,6 +405,7 @@ const rounds = Number(options.rounds)
 const samples = Object.fromEntries(names.map((name) => [name, []]))
 const ghosttyBefore = names.includes('ghostty') ? ghosttyAccountState() : null
 const benchBefore = ghosttyBefore ? ghosttyAccountState(BENCH_GHOSTTY_ID) : null
+const benchExistedBefore = ghosttyBefore ? benchDomainExists() : null
 for (let round = 0; round < rounds; round += 1) {
   const order = names.map((_, i) => names[(i + round) % names.length])
   for (const name of order) {
@@ -397,12 +424,15 @@ const ghosttyAccount = ghosttyBefore && {
   before: ghosttyBefore,
   after: ghosttyAfter,
   changed: Object.keys(ghosttyBefore).filter((key) => JSON.stringify(ghosttyBefore[key]) !== JSON.stringify(ghosttyAfter[key])),
-  // The clone's own domain: before the first round, and what was trashed after the last.
-  bench: { id: BENCH_GHOSTTY_ID, before: benchBefore, ...trashBenchTraces() }
+  // The clone's own domain: before the first round, and what its cleanup did after the last.
+  bench: { id: BENCH_GHOSTTY_ID, before: benchBefore, ...clearBenchTraces(benchExistedBefore) }
 }
 if (ghosttyAccount) {
   log(`the account's Ghostty domain: ${ghosttyAccount.changed.length ? `CHANGED (${ghosttyAccount.changed.join(', ')})` : 'unchanged'}`)
-  log(`${BENCH_GHOSTTY_ID}: trashed ${ghosttyAccount.bench.trashed.join(', ') || 'nothing'}`)
+  const { bench } = ghosttyAccount
+  log(
+    `${BENCH_GHOSTTY_ID}: ${bench.existedBefore ? 'existed before the run, left alone' : `${bench.deleted ? 'deleted' : 'never created'}, trashed ${bench.trashed.join(', ') || 'nothing'}`}; ${bench.existsAfterCleanup ? 'STILL there' : 'gone'}`
+  )
 }
 const versions = {
   ghostty: appVersion(GHOSTTY),
