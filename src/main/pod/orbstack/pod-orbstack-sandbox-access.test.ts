@@ -27,10 +27,10 @@ describe('createSandboxAccess', () => {
     const { relays, ensured } = fakeRelays()
     const access = createSandboxAccess({ relays, readPrivacy: () => OPEN_PRIVACY })
     const started = access.start('pod-a-sbx', hookServer)
-    expect(Object.keys(started.vmEnv)).toEqual(['ORCA_AGENT_HOOK_TOKEN'])
-    expect(started.vmEnv.ORCA_AGENT_HOOK_TOKEN).not.toBe('server-token')
+    expect(Object.keys(started.vmEnv)).toEqual(['POD_AGENT_HOOK_TOKEN'])
+    expect(started.vmEnv.POD_AGENT_HOOK_TOKEN).not.toBe('server-token')
     expect(ensured[0]?.routes.anthropic).toBeNull()
-    expect(ensured[0]?.routes.hook.authorize(started.vmEnv.ORCA_AGENT_HOOK_TOKEN ?? '')).toBe(true)
+    expect(ensured[0]?.routes.hook.authorize(started.vmEnv.POD_AGENT_HOOK_TOKEN ?? '')).toBe(true)
     expect(ensured[0]?.routes.hook.authorize('server-token')).toBe(false)
   })
 
@@ -59,12 +59,12 @@ describe('createSandboxAccess', () => {
     const a = access.start('pod-a-sbx', hookServer).vmEnv
     const b = access.start('pod-b-sbx', hookServer).vmEnv
     expect(a.ANTHROPIC_API_KEY).not.toBe(b.ANTHROPIC_API_KEY)
-    expect(a.ORCA_AGENT_HOOK_TOKEN).not.toBe(b.ORCA_AGENT_HOOK_TOKEN)
+    expect(a.POD_AGENT_HOOK_TOKEN).not.toBe(b.POD_AGENT_HOOK_TOKEN)
     expect(access.start('pod-a-sbx', hookServer).vmEnv.ANTHROPIC_API_KEY).toBe(a.ANTHROPIC_API_KEY)
     access.forget('pod-a-sbx')
     const again = access.start('pod-a-sbx', hookServer).vmEnv
     expect(again.ANTHROPIC_API_KEY).not.toBe(a.ANTHROPIC_API_KEY)
-    expect(again.ORCA_AGENT_HOOK_TOKEN).not.toBe(a.ORCA_AGENT_HOOK_TOKEN)
+    expect(again.POD_AGENT_HOOK_TOKEN).not.toBe(a.POD_AGENT_HOOK_TOKEN)
   })
 
   it('binds the credential source to each launch and releases it with the sandbox', () => {
@@ -106,7 +106,7 @@ describe('createSandboxAccess', () => {
       readPrivacy: () => ({ env: {}, telemetryOff: false, featureFlagsOff: false })
     })
     expect(Object.keys(access.start('pod-a-sbx', hookServer).vmEnv)).toEqual([
-      'ORCA_AGENT_HOOK_TOKEN'
+      'POD_AGENT_HOOK_TOKEN'
     ])
   })
 
@@ -117,7 +117,7 @@ describe('createSandboxAccess', () => {
     const first = access.start('pod-a-sbx', hookServer)
     access.forget('pod-a-sbx')
     expect(stopped).toEqual(['pod-a-sbx'])
-    expect(ensured[0]?.routes.hook.authorize(first.vmEnv.ORCA_AGENT_HOOK_TOKEN ?? '')).toBe(false)
+    expect(ensured[0]?.routes.hook.authorize(first.vmEnv.POD_AGENT_HOOK_TOKEN ?? '')).toBe(false)
     access.start('pod-a-sbx', hookServer)
     expect(ensured[1]?.routes.anthropic?.route.caCertPem).not.toBe(
       ensured[0]?.routes.anthropic?.route.caCertPem

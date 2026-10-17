@@ -70,7 +70,7 @@ for (const launch of LAUNCHES) {
       extraEnv: {
         ORCA_BACKGROUND_LAUNCH: '1',
         POD_ACC_LIFECYCLE: 'off',
-        ORCA_CLI_INSTALL_PATH: path.join(root, 'bin', 'podx')
+        POD_CLI_INSTALL_PATH: path.join(root, 'bin', 'podx')
       },
       userDataDir
     })
@@ -78,7 +78,7 @@ for (const launch of LAUNCHES) {
     if (
       !args.includes('--use-mock-keychain') ||
       isolation.env.POD_ACC_LIFECYCLE !== 'off' ||
-      !isolation.env.ORCA_CLI_INSTALL_PATH?.startsWith(root)
+      !isolation.env.POD_CLI_INSTALL_PATH?.startsWith(root)
     ) {
       throw new Error(
         'Refusing to launch a packaged app that could reach the real keychain, agents or CLI link'

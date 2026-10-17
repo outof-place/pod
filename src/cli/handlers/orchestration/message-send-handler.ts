@@ -78,14 +78,14 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     if (
       (type === 'worker_done' || type === 'heartbeat') &&
       !getOptionalStringFlag(flags, 'from') &&
-      !process.env.ORCA_TERMINAL_HANDLE &&
+      !process.env.POD_TERMINAL_HANDLE &&
       !readInjectedAgentSessionId()
     ) {
       // Why: focus isn't lifecycle authority — an identity-less subprocess must fail closed rather than guess the worker.
       throwNoActiveSenderTerminal()
     }
 
-    // Why: lifecycle senders preserve ORCA_TERMINAL_HANDLE across restarts for older runtimes.
+    // Why: lifecycle senders preserve POD_TERMINAL_HANDLE across restarts for older runtimes.
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const sendParams = {
       from,
@@ -102,7 +102,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       senderPaneKey:
         from === undefined || readInjectedAgentSessionId()
           ? undefined
-          : process.env.ORCA_PANE_KEY || undefined,
+          : process.env.POD_PANE_KEY || undefined,
       waitForLifecycleSettlement: type === 'worker_done' ? true : undefined,
       devMode: isDevCliInvocation()
     }

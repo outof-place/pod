@@ -36,7 +36,7 @@ function fixture() {
   const fake = join(bin, 'claude')
   writeFileSync(
     fake,
-    '#!/bin/sh\nprintf "HOME=%s KEY=%s TWIN=%s\\n" "${CLAUDE_CONFIG_DIR-default}" "${ANTHROPIC_API_KEY-none}" "${ORCA_CLAUDE_INJECTED_CONFIG_DIR-none}"\nexit 23\n'
+    '#!/bin/sh\nprintf "HOME=%s KEY=%s TWIN=%s\\n" "${CLAUDE_CONFIG_DIR-default}" "${ANTHROPIC_API_KEY-none}" "${POD_CLAUDE_INJECTED_CONFIG_DIR-none}"\nexit 23\n'
   )
   chmodSync(fake, 0o700)
   const pointer = join(root, 'selected')
@@ -56,7 +56,7 @@ function fixture() {
         '-i',
         `HOME=${root}`,
         `PATH=${bin}:/usr/bin:/bin`,
-        `ORCA_CLAUDE_PROFILE_POINTER=${pointer}`,
+        `POD_CLAUDE_PROFILE_POINTER=${pointer}`,
         'ANTHROPIC_API_KEY=fake',
         ...env,
         shell,
@@ -75,7 +75,7 @@ function fixture() {
 }
 const injected = (home: string) => [
   `CLAUDE_CONFIG_DIR=${home}`,
-  `ORCA_CLAUDE_INJECTED_CONFIG_DIR=${home}`
+  `POD_CLAUDE_INJECTED_CONFIG_DIR=${home}`
 ]
 
 describe.each(SHELLS)('the claude function in %s', (shell) => {
@@ -114,7 +114,7 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
 
   it('restores the user’s own value Orca replaced when switched back to System default', () => {
     const f = fixture()
-    const own = ['ORCA_CLAUDE_USER_CONFIG_DIR=/user/own']
+    const own = ['POD_CLAUDE_USER_CONFIG_DIR=/user/own']
     writeFileSync(f.pointer, f.a)
     const account = f.run(shell, [...injected(f.a), ...own])
     expect(account.stdout).toBe(`HOME=${f.a} KEY=fake TWIN=${f.a}\n`)
@@ -122,16 +122,16 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
     const restored = f.run(shell, [...injected(f.a), ...own])
     expect(restored.stdout).toBe('HOME=/user/own KEY=fake TWIN=none\n')
     // An rc export still wins, and a value the user unset stays unset.
-    const rc = ['CLAUDE_CONFIG_DIR=/rc/own', `ORCA_CLAUDE_INJECTED_CONFIG_DIR=${f.a}`, ...own]
+    const rc = ['CLAUDE_CONFIG_DIR=/rc/own', `POD_CLAUDE_INJECTED_CONFIG_DIR=${f.a}`, ...own]
     expect(f.run(shell, rc).stdout).toBe(`HOME=/rc/own KEY=fake TWIN=${f.a}\n`)
-    const unset = f.run(shell, [`ORCA_CLAUDE_INJECTED_CONFIG_DIR=${f.a}`, ...own])
+    const unset = f.run(shell, [`POD_CLAUDE_INJECTED_CONFIG_DIR=${f.a}`, ...own])
     expect(unset.stdout).toBe('HOME=default KEY=fake TWIN=none\n')
   })
 
   it('reads a WSL pane’s home-relative pointer against $HOME', () => {
     const f = fixture()
     writeFileSync(f.pointer, f.a)
-    const relative = f.run(shell, ['ORCA_CLAUDE_PROFILE_POINTER=~/selected'])
+    const relative = f.run(shell, ['POD_CLAUDE_PROFILE_POINTER=~/selected'])
     expect(relative.stdout).toBe(`HOME=${f.a} KEY=fake TWIN=${f.a}\n`)
   })
 
@@ -179,7 +179,7 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
 
 it("leaves the shell's Anthropic auth alone in the PowerShell function", () => {
   const script = getPowerShellClaudeShellFunction()
-  expect(script).toContain("$names = @('CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR')")
+  expect(script).toContain("$names = @('CLAUDE_CONFIG_DIR', 'POD_CLAUDE_INJECTED_CONFIG_DIR')")
   expect(script).not.toMatch(/ANTHROPIC|CLAUDE_CODE_OAUTH_TOKEN|AWS_BEARER_TOKEN_BEDROCK/)
 })
 
@@ -207,16 +207,16 @@ it('prints no Orca text from the PowerShell function and creates a missing accou
 
 it('trims the PowerShell pointer read as POSIX command substitution does', () => {
   expect(getPowerShellClaudeShellFunction()).toContain(
-    '[IO.File]::ReadAllText($env:ORCA_CLAUDE_PROFILE_POINTER).TrimEnd()'
+    '[IO.File]::ReadAllText($env:POD_CLAUDE_PROFILE_POINTER).TrimEnd()'
   )
 })
 
 it('restores the user’s own value on PowerShell System default rather than removing it', () => {
   const script = getPowerShellClaudeShellFunction()
   expect(script).toContain(
-    'if ($env:CLAUDE_CONFIG_DIR -and $env:ORCA_CLAUDE_USER_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR = $env:ORCA_CLAUDE_USER_CONFIG_DIR }'
+    'if ($env:CLAUDE_CONFIG_DIR -and $env:POD_CLAUDE_USER_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR = $env:POD_CLAUDE_USER_CONFIG_DIR }'
   )
   expect(script).not.toContain(
-    'Remove-Item Env:CLAUDE_CONFIG_DIR, Env:ORCA_CLAUDE_INJECTED_CONFIG_DIR'
+    'Remove-Item Env:CLAUDE_CONFIG_DIR, Env:POD_CLAUDE_INJECTED_CONFIG_DIR'
   )
 })

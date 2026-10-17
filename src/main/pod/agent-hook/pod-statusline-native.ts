@@ -26,9 +26,9 @@ export function getPodAgentStatusLineInstallPath(): string {
  *  script (Pod still writes it), else a silent drain. The script's path keeps the slot
  *  recognisably managed, by this Pod and by one before the client. */
 export function podStatusLineCommand(scriptFileName: string): string {
-  const statusLine = `"\${HOME-}/.orca/agent-hooks/${POD_AGENT_STATUSLINE_FILE_NAME}"`
-  const client = `"\${HOME-}/.orca/agent-hooks/${POD_AGENT_HOOK_FILE_NAME}"`
-  const script = `"\${HOME-}/.orca/agent-hooks/${scriptFileName}"`
+  const statusLine = `"\${HOME-}/.pod/agent-hooks/${POD_AGENT_STATUSLINE_FILE_NAME}"`
+  const client = `"\${HOME-}/.pod/agent-hooks/${POD_AGENT_HOOK_FILE_NAME}"`
+  const script = `"\${HOME-}/.pod/agent-hooks/${scriptFileName}"`
   return [
     `if [ -x ${statusLine} ]; then exec ${statusLine}; fi`,
     `if [ -x ${client} ]; then exec ${client} statusline; fi`,

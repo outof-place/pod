@@ -75,9 +75,9 @@ describe('PtyHandler', () => {
       rows: 30,
       cwd: '/tmp',
       env: {
-        ORCA_PANE_KEY: 'tab-5:1',
-        ORCA_TAB_ID: 'tab-5',
-        ORCA_WORKTREE_ID: 'wt-5'
+        POD_PANE_KEY: 'tab-5:1',
+        POD_TAB_ID: 'tab-5',
+        POD_WORKTREE_ID: 'wt-5'
       }
     })
     const state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
@@ -87,36 +87,36 @@ describe('PtyHandler', () => {
     dispatcher = createMockDispatcher()
     handler = createTestPtyHandler(dispatcher)
     handler.addEnvAugmenter(() => ({
-      ORCA_AGENT_HOOK_PORT: '12345',
-      ORCA_AGENT_HOOK_TOKEN: 'abc-uuid'
+      POD_AGENT_HOOK_PORT: '12345',
+      POD_AGENT_HOOK_TOKEN: 'abc-uuid'
     }))
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     // Why seeded: a revived pane must not inherit a feature selection from the
     // relay process's own environment.
-    const oldShellFeatures = process.env.ORCA_SHELL_FEATURES
-    process.env.ORCA_SHELL_FEATURES = 'ready,identity,markers,overlay'
+    const oldShellFeatures = process.env.POD_SHELL_FEATURES
+    process.env.POD_SHELL_FEATURES = 'ready,identity,markers,overlay'
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
       if (oldShellFeatures === undefined) {
-        delete process.env.ORCA_SHELL_FEATURES
+        delete process.env.POD_SHELL_FEATURES
       } else {
-        process.env.ORCA_SHELL_FEATURES = oldShellFeatures
+        process.env.POD_SHELL_FEATURES = oldShellFeatures
       }
       killSpy.mockRestore()
     }
 
     expect(mockPtySpawn).toHaveBeenCalledTimes(1)
     const callArgs = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
-    expect(callArgs.env.ORCA_PANE_KEY).toBe('tab-5:1')
-    expect(callArgs.env.ORCA_TAB_ID).toBe('tab-5')
-    expect(callArgs.env.ORCA_WORKTREE_ID).toBe('wt-5')
-    expect(callArgs.env.ORCA_AGENT_HOOK_PORT).toBe('12345')
-    expect(callArgs.env.ORCA_AGENT_HOOK_TOKEN).toBe('abc-uuid')
+    expect(callArgs.env.POD_PANE_KEY).toBe('tab-5:1')
+    expect(callArgs.env.POD_TAB_ID).toBe('tab-5')
+    expect(callArgs.env.POD_WORKTREE_ID).toBe('wt-5')
+    expect(callArgs.env.POD_AGENT_HOOK_PORT).toBe('12345')
+    expect(callArgs.env.POD_AGENT_HOOK_TOKEN).toBe('abc-uuid')
     expect(callArgs.env.TERM).toBe('xterm-256color')
     expect(callArgs.env.TERM_PROGRAM).toBe('Orca')
-    expect(callArgs.env.ORCA_SHELL_FEATURES).not.toContain('ready')
-    expect(callArgs.env.ORCA_SHELL_FEATURES).not.toContain('identity')
+    expect(callArgs.env.POD_SHELL_FEATURES).not.toContain('ready')
+    expect(callArgs.env.POD_SHELL_FEATURES).not.toContain('identity')
   })
 
   it('fences both revived worktree identity and cwd with rollback', async () => {
@@ -430,10 +430,10 @@ describe('PtyHandler', () => {
   })
 
   it('revive preserves attach identity metadata without exporting hook identity env', async () => {
-    const oldPaneKey = process.env.ORCA_PANE_KEY
-    const oldTabId = process.env.ORCA_TAB_ID
-    delete process.env.ORCA_PANE_KEY
-    delete process.env.ORCA_TAB_ID
+    const oldPaneKey = process.env.POD_PANE_KEY
+    const oldTabId = process.env.POD_TAB_ID
+    delete process.env.POD_PANE_KEY
+    delete process.env.POD_TAB_ID
     try {
       await dispatcher.callRequest('pty.spawn', {
         cols: 90,
@@ -445,14 +445,14 @@ describe('PtyHandler', () => {
       })
     } finally {
       if (oldPaneKey === undefined) {
-        delete process.env.ORCA_PANE_KEY
+        delete process.env.POD_PANE_KEY
       } else {
-        process.env.ORCA_PANE_KEY = oldPaneKey
+        process.env.POD_PANE_KEY = oldPaneKey
       }
       if (oldTabId === undefined) {
-        delete process.env.ORCA_TAB_ID
+        delete process.env.POD_TAB_ID
       } else {
-        process.env.ORCA_TAB_ID = oldTabId
+        process.env.POD_TAB_ID = oldTabId
       }
     }
     const state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
@@ -462,27 +462,27 @@ describe('PtyHandler', () => {
     dispatcher = createMockDispatcher()
     handler = createTestPtyHandler(dispatcher)
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
-    delete process.env.ORCA_PANE_KEY
-    delete process.env.ORCA_TAB_ID
+    delete process.env.POD_PANE_KEY
+    delete process.env.POD_TAB_ID
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
       killSpy.mockRestore()
       if (oldPaneKey === undefined) {
-        delete process.env.ORCA_PANE_KEY
+        delete process.env.POD_PANE_KEY
       } else {
-        process.env.ORCA_PANE_KEY = oldPaneKey
+        process.env.POD_PANE_KEY = oldPaneKey
       }
       if (oldTabId === undefined) {
-        delete process.env.ORCA_TAB_ID
+        delete process.env.POD_TAB_ID
       } else {
-        process.env.ORCA_TAB_ID = oldTabId
+        process.env.POD_TAB_ID = oldTabId
       }
     }
 
     const callArgs = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
-    expect(callArgs.env.ORCA_PANE_KEY).toBeUndefined()
-    expect(callArgs.env.ORCA_TAB_ID).toBeUndefined()
+    expect(callArgs.env.POD_PANE_KEY).toBeUndefined()
+    expect(callArgs.env.POD_TAB_ID).toBeUndefined()
 
     await expect(
       dispatcher.callRequest('pty.attach', {

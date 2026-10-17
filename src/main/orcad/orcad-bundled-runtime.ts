@@ -12,7 +12,7 @@ import {
 import { NODE_RUNTIME_PIN, nodeRuntimeAsset } from '../../shared/node-runtime-pin'
 
 export class OrcadBundledRuntimeError extends Error {}
-export const ORCAD_BUNDLED_LAUNCHER_ENV = 'ORCA_BUNDLED_LAUNCHER_CHANNEL'
+export const ORCAD_BUNDLED_LAUNCHER_ENV = 'POD_BUNDLED_LAUNCHER_CHANNEL'
 
 /**
  * The pinned Node a packaged slot in `directory` runs on, or null for an unpackaged entry.

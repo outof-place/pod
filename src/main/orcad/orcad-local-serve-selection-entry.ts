@@ -1,7 +1,7 @@
 /**
  * `orca serve`'s app-side question, run by the CLI with the app's own executable under
  * ELECTRON_RUN_AS_NODE: prepare this machine's orcad slot if it can serve, and print one
- * `ORCA_SERVE_RUNTIME` line saying which host to run. Diagnostics go to stderr.
+ * `POD_SERVE_RUNTIME` line saying which host to run. Diagnostics go to stderr.
  */
 import { join } from 'node:path'
 import process from 'node:process'

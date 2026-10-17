@@ -97,7 +97,7 @@ describe('agent process recognition', () => {
 
   it('does not classify embedded fresh-launch text as an agent command', () => {
     for (const command of [
-      `echo 'omp --config "$ORCA_OMP_FRESH_CONFIG"'`,
+      `echo 'omp --config "$POD_OMP_FRESH_CONFIG"'`,
       `echo '${withFreshOmpLaunch('omp', 'posix')}'`
     ]) {
       expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()

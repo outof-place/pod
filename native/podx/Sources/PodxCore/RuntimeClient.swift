@@ -20,13 +20,13 @@ public struct RuntimeMetadata {
 }
 
 /// Where the runtime's data lives; the codemod renames it with the rest.
-public let USER_DATA_ENV = "ORCA_USER_DATA_PATH"
+public let USER_DATA_ENV = "POD_USER_DATA_PATH"
 
 public func userDataPath() -> String {
   if let path = env(USER_DATA_ENV), !path.isEmpty {
     return path
   }
-  // Why: the bash launcher defaulted ORCA_USER_DATA_PATH to Pod's profile before Node ran.
+  // Why: the bash launcher defaulted POD_USER_DATA_PATH to Pod's profile before Node ran.
   return (env("HOME") ?? "") + "/Library/Application Support/" + PRODUCT_USER_DATA_NAME
 }
 

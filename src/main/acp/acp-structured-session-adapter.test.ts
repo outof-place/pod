@@ -70,11 +70,11 @@ describe('ACP structured session adapter: acquire', () => {
     const launch = rig.child().launch
     expect(launch.envToDelete).toEqual(expect.arrayContaining([...ACP_CHILD_ENV_TO_DELETE]))
     expect(launch.envToDelete).toEqual(
-      expect.arrayContaining(['ORCA_PANE_KEY', 'ORCA_AGENT_PANE', ...AGENT_HOOK_RUNTIME_ENV_KEYS])
+      expect.arrayContaining(['POD_PANE_KEY', 'POD_AGENT_PANE', ...AGENT_HOOK_RUNTIME_ENV_KEYS])
     )
     expect(launch.env).toMatchObject({
-      ORCA_AGENT_SESSION_ID: SESSION,
-      ORCA_AGENT_SESSION_SPAWN_TOKEN: 'spawn-1'
+      POD_AGENT_SESSION_ID: SESSION,
+      POD_AGENT_SESSION_SPAWN_TOKEN: 'spawn-1'
     })
   })
 

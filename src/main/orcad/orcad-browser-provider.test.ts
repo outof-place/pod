@@ -197,7 +197,7 @@ describe('cross-platform browser provider paths', () => {
 })
 
 describe('resolveOrcadBrowserProvider', () => {
-  it('uses ORCA_BROWSER_EXECUTABLE when Electron is absent', async () => {
+  it('uses POD_BROWSER_EXECUTABLE when Electron is absent', async () => {
     const executable = join(root, process.platform === 'win32' ? 'chromium.exe' : 'chromium')
     await writeFile(executable, '')
     if (process.platform !== 'win32') {
@@ -206,7 +206,7 @@ describe('resolveOrcadBrowserProvider', () => {
 
     const provider = await resolveOrcadBrowserProvider({
       userDataPath: root,
-      environment: { ORCA_BROWSER_EXECUTABLE: executable },
+      environment: { POD_BROWSER_EXECUTABLE: executable },
       resolveInstalledElectronExecutable: async () => null,
       resolveAgentBrowserBinary: () => '/agent-browser'
     })
@@ -238,7 +238,7 @@ describe('resolveOrcadBrowserProvider', () => {
     await expect(
       resolveOrcadBrowserProvider({
         userDataPath: root,
-        environment: { ORCA_BROWSER_EXECUTABLE: executable },
+        environment: { POD_BROWSER_EXECUTABLE: executable },
         resolveInstalledElectronExecutable: async () => null,
         resolveAgentBrowserBinary: () => null
       })
@@ -246,13 +246,13 @@ describe('resolveOrcadBrowserProvider', () => {
     expect(runtimeBrowserUnavailableCause()).toEqual({ reason: 'driver_missing' })
   })
 
-  it('reports an ORCA_BROWSER_EXECUTABLE path that does not exist', async () => {
+  it('reports an POD_BROWSER_EXECUTABLE path that does not exist', async () => {
     const missing = join(root, 'absent-chromium')
 
     await expect(
       resolveOrcadBrowserProvider({
         userDataPath: root,
-        environment: { ORCA_BROWSER_EXECUTABLE: missing },
+        environment: { POD_BROWSER_EXECUTABLE: missing },
         resolveInstalledElectronExecutable: async () => null,
         resolveAgentBrowserBinary: () => '/agent-browser'
       })
@@ -264,7 +264,7 @@ describe('resolveOrcadBrowserProvider', () => {
   })
 
   it.skipIf(process.platform === 'win32')(
-    'separates a non-executable ORCA_BROWSER_EXECUTABLE from a missing one',
+    'separates a non-executable POD_BROWSER_EXECUTABLE from a missing one',
     async () => {
       const executable = join(root, 'unchmodded-chromium')
       await writeFile(executable, '')
@@ -273,7 +273,7 @@ describe('resolveOrcadBrowserProvider', () => {
       await expect(
         resolveOrcadBrowserProvider({
           userDataPath: root,
-          environment: { ORCA_BROWSER_EXECUTABLE: executable },
+          environment: { POD_BROWSER_EXECUTABLE: executable },
           resolveInstalledElectronExecutable: async () => null,
           resolveAgentBrowserBinary: () => '/agent-browser'
         })
@@ -312,7 +312,7 @@ describe('resolveOrcadBrowserProvider', () => {
     await expect(
       resolveOrcadBrowserProvider({
         userDataPath: root,
-        environment: { ORCA_BROWSER_EXECUTABLE: join(root, 'absent-chromium') },
+        environment: { POD_BROWSER_EXECUTABLE: join(root, 'absent-chromium') },
         resolveInstalledElectronExecutable: async () => '/opt/Orca/orca-ide',
         resolveAgentBrowserBinary: () => null
       })
@@ -331,7 +331,7 @@ describe('resolveOrcadBrowserProvider', () => {
     await expect(
       resolveOrcadBrowserProvider({
         userDataPath: root,
-        environment: { ORCA_BROWSER_EXECUTABLE: executable },
+        environment: { POD_BROWSER_EXECUTABLE: executable },
         resolveInstalledElectronExecutable: async () => null,
         resolveAgentBrowserBinary: () => '/agent-browser'
       })
@@ -352,7 +352,7 @@ describe('resolveOrcadBrowserProvider', () => {
 
     const provider = await resolveOrcadBrowserProvider({
       userDataPath: root,
-      environment: { ORCA_BROWSER_EXECUTABLE: executable },
+      environment: { POD_BROWSER_EXECUTABLE: executable },
       resolveInstalledElectronExecutable: async () => null,
       resolveAgentBrowserBinary: () => '/agent-browser'
     })

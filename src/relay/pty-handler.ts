@@ -190,7 +190,7 @@ function requireRelaySpawnCwd(
 ): string {
   const resolution: RelaySpawnCwdResolution = resolveRelaySpawnCwd({
     requestedCwd: params.cwd,
-    worktreeId: typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID,
+    worktreeId: typeof params.worktreeId === 'string' ? params.worktreeId : env?.POD_WORKTREE_ID,
     env,
     launchAgent: isTuiAgent(params.launchAgent) ? params.launchAgent : undefined,
     // A WSL shell executes in a guest, so the relay's own statSync is not the right question.
@@ -258,7 +258,7 @@ type ManagedPty = {
   disposed?: boolean
   /** True once external cleanup observers have been notified. */
   exitListenerNotified?: boolean
-  /** Renderer-supplied paneKey (ORCA_PANE_KEY); captured so exit observers can evict per-pane cache state. */
+  /** Renderer-supplied paneKey (POD_PANE_KEY); captured so exit observers can evict per-pane cache state. */
   paneKey?: string
   tabId?: string
   /** Attach-only identity metadata (RPC). Separate from paneKey/tabId, which also drive shell env/revive hooks. */
@@ -467,7 +467,7 @@ type PtyProcessSummary = {
   /** Age on the HOST's clock. Published instead of a creation timestamp so a client with a skewed
    *  clock cannot compute a negative or enormous age and act on it. */
   hostAgeMs?: number
-  /** True when this PTY was spawned for an Orca pane (`ORCA_PANE_KEY`). False means a bare relay
+  /** True when this PTY was spawned for an Orca pane (`POD_PANE_KEY`). False means a bare relay
    *  shell. Absent from a host that predates the field — which is neither. */
   paneBound?: boolean
   /** See {@link ManagedPty.ownerClientInstanceId}. Omitted when this host cannot attest one. */
@@ -908,7 +908,7 @@ export class PtyHandler {
         COLORTERM: 'truecolor',
         TERM_PROGRAM: 'Orca',
         TERM_PROGRAM_VERSION:
-          rendererEnv?.ORCA_APP_VERSION || process.env.ORCA_APP_VERSION || '0.0.0-dev',
+          rendererEnv?.POD_APP_VERSION || process.env.POD_APP_VERSION || '0.0.0-dev',
         FORCE_HYPERLINK: '1'
       },
       explicitEnv
@@ -947,15 +947,15 @@ export class PtyHandler {
     // on, yet an inherited Orca HISTFILE must not scope a pane to someone else's
     // worktree on the disabled and revive paths either.
     dropInheritedOrcaHistFile(result)
-    // Why unconditionally: ORCA_HISTFILE is Orca-owned and minted below by
+    // Why unconditionally: POD_HISTFILE is Orca-owned and minted below by
     // injectRelayHistoryEnv, which also runs only with isolation on. An
     // inherited one (the relay can be launched from an Orca pane) would
     // otherwise reach the wrapper on the disabled and revive paths, scoping the
     // pane to another worktree's history file — and wrapping a zsh pane that
     // nothing asked to wrap, since `history` is selected on its presence.
-    delete result.ORCA_HISTFILE
+    delete result.POD_HISTFILE
     // Why: the codex wrapper runs this path as hook prep, and a relay pane never gets one of its own.
-    delete result.ORCA_CODEX_LAUNCH_PREFLIGHT
+    delete result.POD_CODEX_LAUNCH_PREFLIGHT
     // Why: match local/daemon precedence so defaults/augmenters can't resurrect explicitly-removed values.
     for (const key of envToDelete) {
       delete result[key]
@@ -972,7 +972,7 @@ export class PtyHandler {
     // spawn that specified no identity would then inherit someone else's, and every agent's
     // hook would report against that pane. Drop it before mirroring, so an alias can only
     // ever carry identity this spawn actually asked for.
-    for (const key of ['ORCA_PANE_KEY', 'ORCA_AGENT_LAUNCH_TOKEN'] as const) {
+    for (const key of ['POD_PANE_KEY', 'POD_AGENT_LAUNCH_TOKEN'] as const) {
       if (!rendererEnv || !Object.hasOwn(rendererEnv, key)) {
         delete result[key]
       }
@@ -1920,7 +1920,7 @@ export class PtyHandler {
   ): Promise<RelayAgentSessionCreateResult> {
     const env = params.env as Record<string, string> | undefined
     const worktreeId =
-      typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
+      typeof params.worktreeId === 'string' ? params.worktreeId : env?.POD_WORKTREE_ID
     // Must be the filesystem split, matching requireRelaySpawnCwd: a `::workspace:<uuid>` id would
     // otherwise fence a directory the spawn never enters.
     const worktreePath = worktreeId
@@ -2058,10 +2058,10 @@ export class PtyHandler {
     } while (this.ptys.has(id) || this.pendingReviveIds.has(id))
 
     // Why: augmenter values override renderer env so remote paths and hook coords win over local userData.
-    const paneKey = typeof env?.ORCA_PANE_KEY === 'string' ? env.ORCA_PANE_KEY : undefined
+    const paneKey = typeof env?.POD_PANE_KEY === 'string' ? env.POD_PANE_KEY : undefined
     // Why: kept so a restarted runtime can re-adopt this PTY under its original handle (survives revive).
     const terminalHandle =
-      typeof env?.ORCA_TERMINAL_HANDLE === 'string' ? env.ORCA_TERMINAL_HANDLE : undefined
+      typeof env?.POD_TERMINAL_HANDLE === 'string' ? env.POD_TERMINAL_HANDLE : undefined
     const command = typeof params.command === 'string' ? params.command : undefined
     const launchAgent = isTuiAgent(params.launchAgent) ? params.launchAgent : undefined
     const terminalWindowsWslDistro =
@@ -2073,7 +2073,7 @@ export class PtyHandler {
       { id, paneKey, shell, command, launchAgent },
       envToDelete
     )
-    delete spawnEnv.ORCA_OPENCODE_PLUGIN_API
+    delete spawnEnv.POD_OPENCODE_PLUGIN_API
     // Relay input streams lack driving-input provenance, so native intent is unavailable.
     for (const key of [
       OPENCODE_STARTUP_PROMPT_SHA256_ENV,
@@ -2103,7 +2103,7 @@ export class PtyHandler {
       wslShell: isRelayWslShell(shell)
     })
     const worktreeId =
-      typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
+      typeof params.worktreeId === 'string' ? params.worktreeId : env?.POD_WORKTREE_ID
     const historyIsolationEnabled = params.historyIsolationEnabled === true
     // Deliberately not reached by wsl.exe: a guest fish writes its history file
     // inside the distro, where relay deletion cannot reach it (STA-4682).
@@ -2188,7 +2188,7 @@ export class PtyHandler {
     onPhysicalSpawnCommitted?.()
 
     // Why: capture paneKey so the exit listener can evict per-pane caches without a separate ptyId→paneKey map.
-    const tabId = typeof env?.ORCA_TAB_ID === 'string' ? env.ORCA_TAB_ID : undefined
+    const tabId = typeof env?.POD_TAB_ID === 'string' ? env.POD_TAB_ID : undefined
     const attachIdentity = {
       paneKey: typeof params.paneKey === 'string' ? params.paneKey : paneKey,
       tabId: typeof params.tabId === 'string' ? params.tabId : tabId
@@ -2229,7 +2229,7 @@ export class PtyHandler {
       ...(terminalWindowsWslDistro ? { wslDistro: terminalWindowsWslDistro } : {}),
       shellCwd: cwd,
       shellPathEnv: spawnEnv.PATH,
-      agentLaunchToken: ptyEnv.ORCA_AGENT_LAUNCH_TOKEN?.trim() || undefined,
+      agentLaunchToken: ptyEnv.POD_AGENT_LAUNCH_TOKEN?.trim() || undefined,
       ownerBackend: resolvePtyOwnerBackend({
         platform: process.platform,
         shellPath: shell,
@@ -3238,19 +3238,19 @@ export class PtyHandler {
     if (!ptyMod) {
       return
     }
-    // Why: pane identity comes from the serialized entry (not env) since hook scripts exit without ORCA_PANE_KEY.
+    // Why: pane identity comes from the serialized entry (not env) since hook scripts exit without POD_PANE_KEY.
     const revivedEnv: Record<string, string> = {}
     if (entry.paneKey) {
-      revivedEnv.ORCA_PANE_KEY = entry.paneKey
+      revivedEnv.POD_PANE_KEY = entry.paneKey
     }
     if (entry.tabId) {
-      revivedEnv.ORCA_TAB_ID = entry.tabId
+      revivedEnv.POD_TAB_ID = entry.tabId
     }
     if (entry.worktreeId) {
-      revivedEnv.ORCA_WORKTREE_ID = entry.worktreeId
+      revivedEnv.POD_WORKTREE_ID = entry.worktreeId
     }
     if (entry.terminalHandle) {
-      revivedEnv.ORCA_TERMINAL_HANDLE = entry.terminalHandle
+      revivedEnv.POD_TERMINAL_HANDLE = entry.terminalHandle
     }
     const explicitTerm =
       typeof entry.explicitTerm === 'string' && entry.explicitTerm.length > 0
@@ -3359,7 +3359,7 @@ export class PtyHandler {
         limit: REPLAY_BUFFER_MAX
       }),
       paneKey: entry.paneKey,
-      agentLaunchToken: ptyEnv.ORCA_AGENT_LAUNCH_TOKEN?.trim() || undefined,
+      agentLaunchToken: ptyEnv.POD_AGENT_LAUNCH_TOKEN?.trim() || undefined,
       tabId: entry.tabId,
       attachIdentity: entry.attachIdentity,
       worktreeId: entry.worktreeId,

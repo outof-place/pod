@@ -92,7 +92,7 @@ async function startOrcadServe(
     label: 'orcad serve',
     program: orcadRuntime!,
     args: [path.join(slotDir, 'orcad.js'), '--bind', '127.0.0.1', '--port', '0', '--json'],
-    env: { ...host.env, ORCA_USER_DATA: host.userDataDir },
+    env: { ...host.env, POD_USER_DATA: host.userDataDir },
     timeoutMs: 120_000,
     parseReady: (stdout) => {
       const newline = stdout.indexOf('\n')
@@ -111,7 +111,7 @@ async function startOrcadServe(
   }
 }
 
-// Why: an SSH-managed orcad on this machine runs under ~/.orca, beside the desktop's own profile.
+// Why: an SSH-managed orcad on this machine runs under ~/.pod, beside the desktop's own profile.
 test("Electron serve starts beside a live daemon another profile's orcad forked", async () => {
   const other = cliServeProfile(scratch)
   const orcad = await startOrcadServe(other)
@@ -219,7 +219,7 @@ test('each serve host refuses a profile the other holds', async () => {
     const refused = await runProcess({
       program: orcadRuntime!,
       args: [path.join(slotDir, 'orcad.js'), '--bind', '127.0.0.1', '--port', '0', '--json'],
-      env: { ...host.env, ORCA_USER_DATA: host.userDataDir },
+      env: { ...host.env, POD_USER_DATA: host.userDataDir },
       timeoutMs: 60_000
     })
     expect(refused.code).toBe(ORCAD_EXIT_CONFIGURATION)
@@ -255,7 +255,7 @@ function profileLockRole(userDataDir: string): unknown {
 }
 
 // Needs out/orcad-template for this runner's target, as a packaged install carries.
-test('`orca serve` runs on orcad by default and on Electron with ORCA_SERVE_RUNTIME=electron', async () => {
+test('`orca serve` runs on orcad by default and on Electron with POD_SERVE_RUNTIME=electron', async () => {
   const profile = cliServeProfile(scratch)
   try {
     const byDefault = await startCliServe(profile)
@@ -268,7 +268,7 @@ test('`orca serve` runs on orcad by default and on Electron with ORCA_SERVE_RUNT
     }
 
     // Electron serve publishes no build-health block yet, which is what tells the two apart.
-    const electron = await startCliServe(profile, { ORCA_SERVE_RUNTIME: 'electron' })
+    const electron = await startCliServe(profile, { POD_SERVE_RUNTIME: 'electron' })
     try {
       expect(electron.stderr()).not.toContain('[serve] running on orcad')
       expect(electron.readiness.health).toBeUndefined()

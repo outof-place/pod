@@ -64,14 +64,14 @@ export function releaseJavascriptConfiguration(root, env = process.env) {
   const { version, packageManager } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
   const identity = releaseBuildIdentity(`v${version}`)
   assert.equal(env.ORCA_BUILD_IDENTITY, identity, 'Release build identity differs from version')
-  assert(env.ORCA_DIAGNOSTICS_TOKEN_URL, 'Missing release diagnostics URL')
+  assert(env.POD_DIAGNOSTICS_TOKEN_URL, 'Missing release diagnostics URL')
   assert(env.ORCA_POSTHOG_WRITE_KEY, 'Missing release telemetry key')
   return {
     sourceSha,
     version,
     packageManager,
     identity,
-    diagnosticsTokenUrl: env.ORCA_DIAGNOSTICS_TOKEN_URL,
+    diagnosticsTokenUrl: env.POD_DIAGNOSTICS_TOKEN_URL,
     telemetryKeySha256: sha256(env.ORCA_POSTHOG_WRITE_KEY)
   }
 }

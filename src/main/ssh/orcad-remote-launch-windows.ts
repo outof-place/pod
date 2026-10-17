@@ -100,9 +100,9 @@ export function windowsOrcadLaunchCommand(
     WINDOWS_BREAKAWAY_PROCESS_FILE_FLAG,
     joinRemotePath(host, dir, ORCAD_WINDOWS_PROCESS_FILENAME),
     WINDOWS_BREAKAWAY_ENV_FLAG,
-    `ORCA_VERSION=${spec.fullVersion}`,
+    `POD_VERSION=${spec.fullVersion}`,
     WINDOWS_BREAKAWAY_ENV_FLAG,
-    `ORCA_USER_DATA=${spec.userDataDir}`,
+    `POD_USER_DATA=${spec.userDataDir}`,
     ...orcadManagedLaunchEnv(spec).flatMap(([name, value]) => [
       WINDOWS_BREAKAWAY_ENV_FLAG,
       `${name}=${value}`

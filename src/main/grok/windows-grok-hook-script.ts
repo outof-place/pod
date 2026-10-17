@@ -9,7 +9,7 @@ export const GROK_HOME_ENVELOPE_MAX_LENGTH = 4096
 
 const WINDOWS_GROK_HOOK_POST_COMMAND = buildWindowsAgentHookPostCommand('grok', [
   // Why: attach grokHome before payload@- without string-replacing the shared template.
-  '  --data-urlencode "grokHome=%ORCA_GROK_HOME%" ^'
+  '  --data-urlencode "grokHome=%POD_GROK_HOME%" ^'
 ])
 
 /**
@@ -31,19 +31,19 @@ export function buildWindowsGrokHookScript(): string {
     // value on the curl line is then eaten as a delayed reference — silently mangling
     // paneKey and dropping worktreeId. `!` is legal in a Windows path.
     'setlocal DisableDelayedExpansion',
-    'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+    'if defined POD_AGENT_HOOK_ENDPOINT if exist "%POD_AGENT_HOOK_ENDPOINT%" call "%POD_AGENT_HOOK_ENDPOINT%" 2>nul',
     ...buildWindowsHookEnvironmentGuardLines(),
-    'set "ORCA_GROK_HOME="',
+    'set "POD_GROK_HOME="',
     'if not defined GROK_HOME goto :orca_grok_home_ready',
     `if not "%GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" goto :orca_grok_home_ready`,
     // Why (#14221): `setx GROK_HOME "C:\path\"` stores a literal trailing quote, which
     // unbalances the trailing-backslash `if` below (exit 255) and truncates the curl
     // argument. `"` is illegal in a Windows path, so strip it rather than preserve it.
-    'set "ORCA_GROK_HOME=%GROK_HOME:"=%"',
-    'if not defined ORCA_GROK_HOME goto :orca_grok_home_ready',
-    'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."',
+    'set "POD_GROK_HOME=%GROK_HOME:"=%"',
+    'if not defined POD_GROK_HOME goto :orca_grok_home_ready',
+    'if "%POD_GROK_HOME:~-1%"=="\\" set "POD_GROK_HOME=%POD_GROK_HOME%."',
     // Why: the trailing-backslash safety sentinel counts toward the relay envelope.
-    `if not "%ORCA_GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" set "ORCA_GROK_HOME="`,
+    `if not "%POD_GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" set "POD_GROK_HOME="`,
     ':orca_grok_home_ready',
     WINDOWS_GROK_HOOK_POST_COMMAND,
     'exit /b 0',

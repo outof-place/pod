@@ -74,7 +74,7 @@ it('launches each acquisition under the current selection, not the account it wa
   expect(routed.claudeConfigDir).toBe(home)
   expect(routed.env).toMatchObject({
     CLAUDE_CONFIG_DIR: home,
-    ORCA_CLAUDE_INJECTED_CONFIG_DIR: home
+    POD_CLAUDE_INJECTED_CONFIG_DIR: home
   })
 
   settings.activeClaudeManagedAccountId = null

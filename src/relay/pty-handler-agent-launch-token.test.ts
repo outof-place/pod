@@ -52,7 +52,7 @@ describe('execution-host launch token authority', () => {
       cols: 80,
       rows: 24,
       cwd: tmpdir(),
-      env: { ORCA_PANE_KEY: PANE, ORCA_WORKTREE_ID: 'folder:workspace', ...env },
+      env: { POD_PANE_KEY: PANE, POD_WORKTREE_ID: 'folder:workspace', ...env },
       ...extra
     })
 
@@ -60,23 +60,23 @@ describe('execution-host launch token authority', () => {
     'retains the final successfully spawned environment on %s',
     async (platform) => {
       Object.defineProperty(process, 'platform', { configurable: true, value: platform })
-      handler.addEnvAugmenter(() => ({ ORCA_AGENT_LAUNCH_TOKEN: 'augmented-live' }))
-      await spawn({ ORCA_AGENT_LAUNCH_TOKEN: 'renderer-before-augmentation' })
-      expect(mockPtySpawn.mock.calls[0][2].env.ORCA_AGENT_LAUNCH_TOKEN).toBe('augmented-live')
+      handler.addEnvAugmenter(() => ({ POD_AGENT_LAUNCH_TOKEN: 'augmented-live' }))
+      await spawn({ POD_AGENT_LAUNCH_TOKEN: 'renderer-before-augmentation' })
+      expect(mockPtySpawn.mock.calls[0][2].env.POD_AGENT_LAUNCH_TOKEN).toBe('augmented-live')
       expect(handler.getAgentLaunchToken(PANE)).toBe('augmented-live')
     }
   )
 
   it('keeps deleted and inherited launch identities unverifiable', async () => {
-    vi.stubEnv('ORCA_AGENT_LAUNCH_TOKEN', 'inherited-stale')
+    vi.stubEnv('POD_AGENT_LAUNCH_TOKEN', 'inherited-stale')
     await spawn()
     expect(handler.getAgentLaunchToken(PANE)).toBeUndefined()
     await spawn(
       {
-        ORCA_PANE_KEY: 'tab-b:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-        ORCA_AGENT_LAUNCH_TOKEN: 'deleted'
+        POD_PANE_KEY: 'tab-b:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        POD_AGENT_LAUNCH_TOKEN: 'deleted'
       },
-      { envToDelete: ['ORCA_AGENT_LAUNCH_TOKEN'] }
+      { envToDelete: ['POD_AGENT_LAUNCH_TOKEN'] }
     )
     expect(
       handler.getAgentLaunchToken('tab-b:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
@@ -85,8 +85,8 @@ describe('execution-host launch token authority', () => {
   })
 
   it('never chooses an arbitrary root when two current PTYs share a pane', async () => {
-    await spawn({ ORCA_AGENT_LAUNCH_TOKEN: 'first' })
-    await spawn({ ORCA_AGENT_LAUNCH_TOKEN: 'second' })
+    await spawn({ POD_AGENT_LAUNCH_TOKEN: 'first' })
+    await spawn({ POD_AGENT_LAUNCH_TOKEN: 'second' })
     expect(handler.getAgentLaunchToken(PANE)).toBeUndefined()
     expect(handler.getTmuxManagedPty(PANE)).toBeNull()
   })
@@ -95,14 +95,14 @@ describe('execution-host launch token authority', () => {
     mockPtySpawn.mockImplementationOnce(() => {
       throw new Error('spawn failed')
     })
-    await expect(spawn({ ORCA_AGENT_LAUNCH_TOKEN: 'never-started' })).rejects.toThrow(
+    await expect(spawn({ POD_AGENT_LAUNCH_TOKEN: 'never-started' })).rejects.toThrow(
       'spawn failed'
     )
     expect(handler.getAgentLaunchToken(PANE)).toBeUndefined()
   })
 
   it('retirement hides authority and accepted attach restores only the existing token', async () => {
-    await spawn({ ORCA_AGENT_LAUNCH_TOKEN: 'actual-live' })
+    await spawn({ POD_AGENT_LAUNCH_TOKEN: 'actual-live' })
     await dispatcher.callRequest('pty.shutdown', { id: testPtyId(1) })
     expect(handler.isPaneSurfaceRetired(PANE)).toBe(true)
     expect(handler.getAgentLaunchToken(PANE)).toBeUndefined()
@@ -125,7 +125,7 @@ describe('execution-host launch token authority', () => {
     ])
     await dispatcher.callRequest('pty.revive', { state })
     expect(mockPtySpawn).toHaveBeenCalledOnce()
-    expect(mockPtySpawn.mock.calls[0][2].env.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
+    expect(mockPtySpawn.mock.calls[0][2].env.POD_AGENT_LAUNCH_TOKEN).toBeUndefined()
     expect(handler.getAgentLaunchToken(PANE)).toBeUndefined()
   })
 })

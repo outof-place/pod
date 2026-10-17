@@ -28,7 +28,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
         HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst1'
+        POD_WSL_HOOK_INSTANCE: 'inst1'
       })
       const source = '// orca opencode status plugin\nexport const Plugin = () => ({})\n'
       const res = install({ opencodePluginSource: source })
@@ -47,7 +47,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
         HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst-pi'
+        POD_WSL_HOOK_INSTANCE: 'inst-pi'
       })
       const source = '// @orca-managed-pi-extension\nexport default {}\n'
       const res = install({ piExtensionSource: source, launchKind: 'pi' })
@@ -61,7 +61,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
         HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst-v2'
+        POD_WSL_HOOK_INSTANCE: 'inst-v2'
       })
       const source = '// opencode2\n'
       const res = install({ opencode2PluginSource: source })
@@ -80,7 +80,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
         HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst1'
+        POD_WSL_HOOK_INSTANCE: 'inst1'
       })
       const source = '// v1\n'
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
@@ -104,14 +104,14 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
       // this branch today; it exists so a plugin-only overlay can't outlive a source
       // dir becoming resolvable. Simulated by mutating the env the factory captured.
       const userConfig = join(home, 'my-opencode')
-      const env: NodeJS.ProcessEnv = { HOME: home, ORCA_WSL_HOOK_INSTANCE: 'inst1' }
+      const env: NodeJS.ProcessEnv = { HOME: home, POD_WSL_HOOK_INSTANCE: 'inst1' }
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), env)
       const source = '// v1\n'
       install({ opencodePluginSource: source })
 
       mkdirSync(userConfig, { recursive: true })
       writeFileSync(join(userConfig, 'opencode.json'), '{"model":"late"}')
-      env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = userConfig
+      env.POD_OPENCODE_SOURCE_CONFIG_DIR = userConfig
 
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
       const dir = install({ opencodePluginSource: source }).overlayDirs.opencode as string
@@ -123,7 +123,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
         HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst1'
+        POD_WSL_HOOK_INSTANCE: 'inst1'
       })
       const source = '// v1\n'
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
@@ -141,7 +141,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
         HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst1'
+        POD_WSL_HOOK_INSTANCE: 'inst1'
       })
       install({ opencodePluginSource: '// v1\n' })
       // Why: a mid-session Orca upgrade ships new plugin source; future spawns must see it.
@@ -155,7 +155,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
         HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst1'
+        POD_WSL_HOOK_INSTANCE: 'inst1'
       })
       const source = '// v1\n'
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
@@ -176,8 +176,8 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
       writeFileSync(join(userConfig, 'opencode.json'), '{"model":"user-set"}')
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
         HOME: home,
-        ORCA_OPENCODE_SOURCE_CONFIG_DIR: userConfig,
-        ORCA_WSL_HOOK_INSTANCE: 'inst1'
+        POD_OPENCODE_SOURCE_CONFIG_DIR: userConfig,
+        POD_WSL_HOOK_INSTANCE: 'inst1'
       })
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
       const dir = install({ opencodePluginSource: '// v1\n' }).overlayDirs.opencode as string
@@ -196,7 +196,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
       writeFileSync(join(defaultConfig, 'opencode.json'), '{"model":"default"}')
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
         HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst1'
+        POD_WSL_HOOK_INSTANCE: 'inst1'
       })
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
       const dir = install({ opencodePluginSource: '// v1\n' }).overlayDirs.opencode as string

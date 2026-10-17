@@ -178,10 +178,10 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
           CODEX_HOME: directory,
           TERM: 'xterm-256color',
           ORCA_BACKGROUND_LAUNCH: '1',
-          ORCA_PANE_KEY: PANE_KEY,
-          ORCA_TAB_ID: TAB_ID,
-          ORCA_WORKTREE_ID: WORKTREE_ID,
-          ORCA_AGENT_LAUNCH_TOKEN: LAUNCH_TOKEN
+          POD_PANE_KEY: PANE_KEY,
+          POD_TAB_ID: TAB_ID,
+          POD_WORKTREE_ID: WORKTREE_ID,
+          POD_AGENT_LAUNCH_TOKEN: LAUNCH_TOKEN
         }
       }
     )

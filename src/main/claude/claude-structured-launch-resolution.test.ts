@@ -197,14 +197,14 @@ describe('claude structured launch resolution', () => {
   it('names the child by the Orca session id, over any id the configured overlay carries', async () => {
     // The Orca-minted id, never the provider's: the provider id rotates on /clear.
     const launch = await resolverFor(record(), () => ({
-      ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd'
+      POD_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd'
     }))({ identity: IDENTITY })
 
     expect(launch.env).toMatchObject({
-      ORCA_AGENT_SESSION_ID: SESSION_ID,
-      ORCA_CLI_COMMAND: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/)
+      POD_AGENT_SESSION_ID: SESSION_ID,
+      POD_CLI_COMMAND: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/)
     })
-    expect(launch.env?.ORCA_AGENT_SESSION_ID).not.toBe(launch.providerSessionId)
+    expect(launch.env?.POD_AGENT_SESSION_ID).not.toBe(launch.providerSessionId)
   })
 
   it('forces session-state events on when the inherited overlay disables them', async () => {
@@ -616,7 +616,7 @@ describe('readable Claude thinking', () => {
         (env?.PATH ?? env?.Path ?? '').split(delimiter)
       // The launch's PATH is the probe's plus Orca's own CLI directory, which holds no `claude` or
       // runtime, so both resolve the same binary and the same shims in the same order.
-      const orcaCliDir = launch.env?.ORCA_CLI_COMMAND ? dirname(launch.env.ORCA_CLI_COMMAND) : null
+      const orcaCliDir = launch.env?.POD_CLI_COMMAND ? dirname(launch.env.POD_CLI_COMMAND) : null
       expect(segments(launch.env).filter((dir) => dir !== orcaCliDir)).toEqual(segments(asked?.env))
       expect(segments(asked?.env)[0] === binDir).toBe(sibling)
       expect(asked?.env).toMatchObject({ PROJECT_SHIM: '1' })

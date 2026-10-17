@@ -13,7 +13,7 @@ import { UNIX_SOCKET_STREAM_MAX_BUFFERED_BYTES } from './rpc/unix-socket-stream-
 
 describe('local stream reply ceiling', () => {
   beforeEach(() => {
-    vi.stubEnv('ORCA_LOCAL_STREAM_TRANSPORT', '1')
+    vi.stubEnv('POD_LOCAL_STREAM_TRANSPORT', '1')
   })
   afterEach(() => {
     vi.unstubAllEnvs()

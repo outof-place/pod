@@ -148,7 +148,7 @@ describe.skipIf(process.platform === 'win32')(
         // The child must read its own environment, the way the agent binary does;
         // expanding it in the caller would just echo the caller's value back.
         const launch = withoutEnvCommand(
-          ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+          ['CODEX_HOME', 'POD_CODEX_HOME'],
           `sh -c 'printf "LAUNCHED:%s" "\${CODEX_HOME-unset}"'`,
           'posix'
         )
@@ -161,11 +161,11 @@ describe.skipIf(process.platform === 'win32')(
       })
 
       it('clears an exported variable with no wrapper installed', () => {
-        const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
+        const clear = clearEnvCommand('POD_PI_PREFILL', 'posix')
         const probe =
           shell.name === 'fish'
-            ? `set -gx ORCA_PI_PREFILL draft; ${clear}; set -q ORCA_PI_PREFILL; and echo STILL; or echo CLEARED`
-            : `ORCA_PI_PREFILL=draft; export ORCA_PI_PREFILL; ${clear}; echo "\${ORCA_PI_PREFILL:+STILL}\${ORCA_PI_PREFILL:-CLEARED}"`
+            ? `set -gx POD_PI_PREFILL draft; ${clear}; set -q POD_PI_PREFILL; and echo STILL; or echo CLEARED`
+            : `POD_PI_PREFILL=draft; export POD_PI_PREFILL; ${clear}; echo "\${POD_PI_PREFILL:+STILL}\${POD_PI_PREFILL:-CLEARED}"`
         expect(runInShell(shell, probe).trim()).toBe('CLEARED')
       })
 
@@ -185,11 +185,11 @@ describe.skipIf(process.platform === 'win32')(
         ['already set', true],
         ['already unset', false]
       ])('exits 0 and writes nothing to stderr when the variable is %s', (_label, preset) => {
-        const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
+        const clear = clearEnvCommand('POD_PI_PREFILL', 'posix')
         const setUp = preset
           ? shell.name === 'fish'
-            ? 'set -gx ORCA_PI_PREFILL draft; '
-            : 'ORCA_PI_PREFILL=draft; export ORCA_PI_PREFILL; '
+            ? 'set -gx POD_PI_PREFILL draft; '
+            : 'POD_PI_PREFILL=draft; export POD_PI_PREFILL; '
           : ''
         const stderr = execFileSync(shell.path, ['-c', `${setUp}${clear} 2>&1 1>/dev/null`], {
           encoding: 'utf8',
@@ -206,12 +206,12 @@ describe.skipIf(process.platform === 'win32')(
       it.runIf(['bash', 'zsh'].includes(shell.name))(
         'clears even when `test` is aliased away in an interactive shell',
         () => {
-          const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
+          const clear = clearEnvCommand('POD_PI_PREFILL', 'posix')
           const script = [
             'alias test=false',
-            'ORCA_PI_PREFILL=draft; export ORCA_PI_PREFILL',
+            'POD_PI_PREFILL=draft; export POD_PI_PREFILL',
             clear,
-            'echo "RESULT=${ORCA_PI_PREFILL:+STILL}${ORCA_PI_PREFILL:-CLEARED}"'
+            'echo "RESULT=${POD_PI_PREFILL:+STILL}${POD_PI_PREFILL:-CLEARED}"'
           ].join('\n')
           const out = execFileSync(shell.path, ['-i'], {
             input: `${script}\n`,
@@ -240,23 +240,23 @@ describe.skipIf(process.platform === 'win32')(
       // have — is permanently deleted from every future session. Reachable from
       // the clipboard command, which may run with no injected value at all.
       it.runIf(shell.name === 'fish')('never deletes a lone universal variable', () => {
-        const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
-        const probe = `set -Ux ORCA_PI_PREFILL persisted; ${clear}; set -q ORCA_PI_PREFILL; and echo "RESULT=$ORCA_PI_PREFILL"; or echo RESULT=DESTROYED; set -Ue ORCA_PI_PREFILL`
+        const clear = clearEnvCommand('POD_PI_PREFILL', 'posix')
+        const probe = `set -Ux POD_PI_PREFILL persisted; ${clear}; set -q POD_PI_PREFILL; and echo "RESULT=$POD_PI_PREFILL"; or echo RESULT=DESTROYED; set -Ue POD_PI_PREFILL`
         expect(runInShell(shell, probe)).toContain('RESULT=persisted')
       })
 
       // A universal shadowed by the injected global: the global goes, theirs
       // comes back. That is the wanted outcome, not a missed erase.
       it.runIf(shell.name === 'fish')('reveals a shadowed universal instead of deleting it', () => {
-        const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
-        const probe = `set -Ux ORCA_PI_PREFILL mine; set -gx ORCA_PI_PREFILL injected; ${clear}; echo "RESULT=$ORCA_PI_PREFILL"; set -Ue ORCA_PI_PREFILL`
+        const clear = clearEnvCommand('POD_PI_PREFILL', 'posix')
+        const probe = `set -Ux POD_PI_PREFILL mine; set -gx POD_PI_PREFILL injected; ${clear}; echo "RESULT=$POD_PI_PREFILL"; set -Ue POD_PI_PREFILL`
         expect(runInShell(shell, probe)).toContain('RESULT=mine')
       })
 
       it.runIf(['bash', 'zsh'].includes(shell.name))(
         'never enables errexit when $fish_pid misfires',
         () => {
-          const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
+          const clear = clearEnvCommand('POD_PI_PREFILL', 'posix')
           const probe = `fish_pid=1; export fish_pid; ${clear} 2>/dev/null; printf '%s' "$-"`
           expect(runInShell(shell, probe).trim()).not.toContain('e')
         }

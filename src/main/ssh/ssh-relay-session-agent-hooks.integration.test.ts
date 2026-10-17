@@ -272,9 +272,9 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
       rows: 40,
       cwd: '/home/orca/project',
       env: {
-        ORCA_PANE_KEY: `tab-ssh:${SSH_LEAF_ID}`,
-        ORCA_TAB_ID: 'tab-ssh',
-        ORCA_WORKTREE_ID: 'wt-ssh'
+        POD_PANE_KEY: `tab-ssh:${SSH_LEAF_ID}`,
+        POD_TAB_ID: 'tab-ssh',
+        POD_WORKTREE_ID: 'wt-ssh'
       }
     })
 
@@ -283,9 +283,9 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     expect(relay.ptySpawnRequests[0]).toMatchObject({
       cwd: '/home/orca/project',
       env: {
-        ORCA_PANE_KEY: `tab-ssh:${SSH_LEAF_ID}`,
-        ORCA_TAB_ID: 'tab-ssh',
-        ORCA_WORKTREE_ID: 'wt-ssh'
+        POD_PANE_KEY: `tab-ssh:${SSH_LEAF_ID}`,
+        POD_TAB_ID: 'tab-ssh',
+        POD_WORKTREE_ID: 'wt-ssh'
       }
     })
 

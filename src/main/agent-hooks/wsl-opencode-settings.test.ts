@@ -60,7 +60,7 @@ beforeEach(() => {
   const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
     HOME: home,
     XDG_CONFIG_HOME: xdg,
-    ORCA_WSL_HOOK_INSTANCE: 'settings-fixture'
+    POD_WSL_HOOK_INSTANCE: 'settings-fixture'
   })
   dispatcher.onRequest('preflight.detectAgents', async () => ({ agents: [] }))
   dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (request) => {

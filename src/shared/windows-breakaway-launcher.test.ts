@@ -224,14 +224,14 @@ describe('orcad Windows breakaway launcher', () => {
     const withEnv = [
       ...orcadArgv.slice(0, 3),
       '--env',
-      'ORCA_VERSION=0.2.0+bb01',
+      'POD_VERSION=0.2.0+bb01',
       '--env',
-      'ORCA_USER_DATA=C:/Users/Ann Lee/.orca',
+      'POD_USER_DATA=C:/Users/Ann Lee/.orca',
       ...orcadArgv.slice(3)
     ]
     expect(
       parseWindowsBreakawayLaunchRequest(ORCAD_WINDOWS_BREAKAWAY_CONTRACT, withEnv)?.env
-    ).toEqual({ ORCA_VERSION: '0.2.0+bb01', ORCA_USER_DATA: 'C:/Users/Ann Lee/.orca' })
+    ).toEqual({ POD_VERSION: '0.2.0+bb01', POD_USER_DATA: 'C:/Users/Ann Lee/.orca' })
     expect(() =>
       parseWindowsBreakawayLaunchRequest(ORCAD_WINDOWS_BREAKAWAY_CONTRACT, [
         ...orcadArgv.slice(0, 3),

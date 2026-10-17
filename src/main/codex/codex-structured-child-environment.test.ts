@@ -27,7 +27,7 @@ describe('buildCodexStructuredChildEnvironment', () => {
           env: {
             EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
             CODEX_HOME: '/shell/home',
-            ORCA_CLI_BIN_DIR: '/inherited/unowned-cli'
+            POD_CLI_BIN_DIR: '/inherited/unowned-cli'
           }
         },
         'spawn-token',
@@ -37,13 +37,13 @@ describe('buildCodexStructuredChildEnvironment', () => {
       EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
       CODEX_HOME: '/pinned/home',
       [CODEX_SPAWN_TOKEN_ENV]: 'spawn-token',
-      ORCA_AGENT_SESSION_ID: 'session-not-a-worker',
-      ORCA_STRUCTURED_SESSION: '1',
-      ORCA_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),
+      POD_AGENT_SESSION_ID: 'session-not-a-worker',
+      POD_STRUCTURED_SESSION: '1',
+      POD_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),
       ...(process.platform !== 'win32'
-        ? { ORCA_CLI_BIN_DIR: expect.stringMatching(DEV_CLI_BIN_DIR) }
+        ? { POD_CLI_BIN_DIR: expect.stringMatching(DEV_CLI_BIN_DIR) }
         : {}),
-      ORCA_USER_DATA_PATH: expect.any(String),
+      POD_USER_DATA_PATH: expect.any(String),
       // The test host is unpackaged, so this app's CLI is the dev launcher dir, first on PATH.
       PATH: expect.stringMatching(DEV_CLI_BIN_FIRST)
     })
@@ -62,13 +62,13 @@ describe('buildCodexStructuredChildEnvironment', () => {
     expect(buildCodexStructuredChildEnvironment(launch, 'spawn-token', sessionId)).toEqual({
       [CODEX_SPAWN_TOKEN_ENV]: 'spawn-token',
       // Not a worker, so no handle: the id alone names this chat as a caller.
-      ORCA_AGENT_SESSION_ID: sessionId,
-      ORCA_STRUCTURED_SESSION: '1',
-      ORCA_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),
+      POD_AGENT_SESSION_ID: sessionId,
+      POD_STRUCTURED_SESSION: '1',
+      POD_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),
       ...(process.platform !== 'win32'
-        ? { ORCA_CLI_BIN_DIR: expect.stringMatching(DEV_CLI_BIN_DIR) }
+        ? { POD_CLI_BIN_DIR: expect.stringMatching(DEV_CLI_BIN_DIR) }
         : {}),
-      ORCA_USER_DATA_PATH: expect.any(String),
+      POD_USER_DATA_PATH: expect.any(String),
       PATH: expect.stringMatching(DEV_CLI_BIN_FIRST)
     })
 
@@ -84,11 +84,11 @@ describe('buildCodexStructuredChildEnvironment', () => {
     })
     try {
       const env = buildCodexStructuredChildEnvironment(launch, 'spawn-token', sessionId)
-      expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
-      expect(env.ORCA_AGENT_SESSION_ID).toBe(sessionId)
-      expect(env.ORCA_CLI_COMMAND).toMatch(DEV_CLI_LAUNCHER)
+      expect(env.POD_TERMINAL_HANDLE).toBe(handle)
+      expect(env.POD_AGENT_SESSION_ID).toBe(sessionId)
+      expect(env.POD_CLI_COMMAND).toMatch(DEV_CLI_LAUNCHER)
       // A pane key here would leak into hook-emitted agent statuses, which assume a PTY leaf.
-      expect(env.ORCA_PANE_KEY).toBeUndefined()
+      expect(env.POD_PANE_KEY).toBeUndefined()
     } finally {
       structuredWorkerIdentities.forget(handle)
     }
@@ -106,9 +106,9 @@ const ENV_REPORTING_APP_SERVER = String.raw`
       return send({
         id: message.id,
         result: {
-          sessionId: process.env.ORCA_AGENT_SESSION_ID ?? null,
-          cliCommand: process.env.ORCA_CLI_COMMAND ?? null,
-          cliBinDir: process.env.ORCA_CLI_BIN_DIR ?? null,
+          sessionId: process.env.POD_AGENT_SESSION_ID ?? null,
+          cliCommand: process.env.POD_CLI_COMMAND ?? null,
+          cliBinDir: process.env.POD_CLI_BIN_DIR ?? null,
           path: process.env.PATH ?? process.env.Path ?? null
         }
       })
@@ -124,7 +124,7 @@ describe('the spawned Codex child', () => {
   it("runs with its own session id and this app's CLI, over an id inherited by Orca itself", async () => {
     // The builder's output is an overlay on process.env, so only the spawned child proves the id
     // survives the merge — an Orca launched inside another session inherits that session's id.
-    vi.stubEnv('ORCA_AGENT_SESSION_ID', 'a0b1c2d3-0000-4000-8000-00000000abcd')
+    vi.stubEnv('POD_AGENT_SESSION_ID', 'a0b1c2d3-0000-4000-8000-00000000abcd')
     const sessionId = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
     const env = buildCodexStructuredChildEnvironment(
       {

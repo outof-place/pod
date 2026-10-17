@@ -40,7 +40,7 @@ describe('the terminal identity probe', () => {
   it('runs the full leaf check for a handle with no live PTY', () => {
     // `getLiveLeafForHandle` is the one that re-checks `rendererGraphEpoch`, and that check is the
     // entire reason the sender is validated: a long-lived shell keeps a stale
-    // `ORCA_TERMINAL_HANDLE` across a window reload. A cheaper probe would start passing it.
+    // `POD_TERMINAL_HANDLE` across a window reload. A cheaper probe would start passing it.
     const { calls, probes: p } = probes({})
     expect(resolveTerminalIdentityFromProbes('term_1', p).live).toBe(true)
     expect(calls.assertLiveLeaf).toHaveBeenCalledTimes(1)

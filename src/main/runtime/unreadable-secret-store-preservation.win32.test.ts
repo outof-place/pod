@@ -10,7 +10,7 @@ import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
  * What a *successful* harden does to a reader that cannot read.
  *
  * Path hardening writes a protected DACL granting only the SIDs the running process holds. Where
- * the data root came from somewhere else — a relocated `ORCA_USER_DATA_PATH`, a share, a roaming
+ * the data root came from somewhere else — a relocated `POD_USER_DATA_PATH`, a share, a roaming
  * profile, a backup restored under a recreated local account, or a harden whose `/reset` landed
  * and whose `/grant` did not — the file ends up granting a SID this process does not have. It then
  * reads as `EPERM` while its *directory* stays writable, because file hardening is synchronous on

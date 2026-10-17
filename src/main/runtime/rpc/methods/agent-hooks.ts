@@ -15,7 +15,7 @@ export const AGENT_HOOK_METHODS = [
       return await prepareManagedWslCodexHomeBeforeShellLaunch({
         env: {
           CODEX_HOME: params.codexHome,
-          ORCA_CODEX_HOME: params.orcaCodexHome,
+          POD_CODEX_HOME: params.orcaCodexHome,
           WSL_DISTRO_NAME: params.wslDistro
         },
         hooksEnabled: isAgentStatusHooksEnabledForAgent(runtime.getClientSettings(), 'codex')

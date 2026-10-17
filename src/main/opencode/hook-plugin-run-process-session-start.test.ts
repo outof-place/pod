@@ -19,7 +19,7 @@ type PluginHooks = {
 }
 type PluginModule = { OrcaOpenCodeStatusPlugin?: (ctx: unknown) => Promise<PluginHooks> }
 
-const ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_AGENT_HOOK_PORT', 'ORCA_AGENT_HOOK_TOKEN'] as const
+const ENV_KEYS = ['POD_PANE_KEY', 'POD_AGENT_HOOK_PORT', 'POD_AGENT_HOOK_TOKEN'] as const
 
 // OpenCode 1 `run` loads the plugin in-process; the host already shows the run as Working from the
 // process, so a session-start idle row there would only blink the pane.
@@ -36,9 +36,9 @@ describe('OpenCode plugin session start inside a `run` process', () => {
     savedEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]))
     savedArgv = process.argv
     savedFetch = globalThis.fetch
-    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
-    process.env.ORCA_AGENT_HOOK_PORT = '45678'
-    process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
+    process.env.POD_PANE_KEY = 'tab-1:leaf-1'
+    process.env.POD_AGENT_HOOK_PORT = '45678'
+    process.env.POD_AGENT_HOOK_TOKEN = 'test-token'
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body: unknown = JSON.parse(String(init?.body))
       const payload =

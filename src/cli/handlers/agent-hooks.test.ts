@@ -429,7 +429,7 @@ describe('agent hooks CLI handler', () => {
   it('does nothing for a native pane, so an old shell wrapper still exits 0', async () => {
     const home = '/Users/jin/Library/Application Support/orca/codex-runtime-home/home'
     vi.stubEnv('CODEX_HOME', home)
-    vi.stubEnv('ORCA_CODEX_HOME', home)
+    vi.stubEnv('POD_CODEX_HOME', home)
     vi.stubEnv('WSL_DISTRO_NAME', '')
 
     await main(['agent', 'hooks', 'prepare-codex'], userDataPath)
@@ -442,7 +442,7 @@ describe('agent hooks CLI handler', () => {
   it('forwards WSL pane routing to the runtime exactly once', async () => {
     const home = '/home/jin/.local/share/orca/codex-runtime-home/home'
     vi.stubEnv('CODEX_HOME', home)
-    vi.stubEnv('ORCA_CODEX_HOME', home)
+    vi.stubEnv('POD_CODEX_HOME', home)
     vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu-24.04')
     callMock.mockResolvedValue({ result: { state: 'installed' } })
 
@@ -457,7 +457,7 @@ describe('agent hooks CLI handler', () => {
 
   it('fails open when WSL runtime preparation is unavailable', async () => {
     vi.stubEnv('CODEX_HOME', '/home/jin/.local/share/orca/codex-runtime-home/home')
-    vi.stubEnv('ORCA_CODEX_HOME', '/home/jin/.local/share/orca/codex-runtime-home/home')
+    vi.stubEnv('POD_CODEX_HOME', '/home/jin/.local/share/orca/codex-runtime-home/home')
     vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
     callMock.mockRejectedValue(new Error('method_not_found'))
 

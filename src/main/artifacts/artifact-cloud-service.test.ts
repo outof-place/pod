@@ -313,8 +313,8 @@ describe('ArtifactCloudService record authorization', () => {
 
   it('keeps the idempotency key stable across an auth-refresh retry', async () => {
     const { service, profileId, userDataPath } = await setup()
-    vi.stubEnv('ORCA_CLOUD_API_URL', 'http://localhost:4100')
-    vi.stubEnv('ORCA_CLOUD_CLIENT_ID', 'desktop-client')
+    vi.stubEnv('POD_CLOUD_API_URL', 'http://localhost:4100')
+    vi.stubEnv('POD_CLOUD_CLIENT_ID', 'desktop-client')
     saveOrcaCloudSession(profileId, userDataPath, {
       accessToken: 'access-old',
       refreshToken: 'refresh-old',

@@ -31,10 +31,10 @@ describe.skipIf(process.platform === 'win32')('Grok POSIX hook stdin without EOF
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...process.env,
-        ORCA_PANE_KEY: 'pane-1',
-        ORCA_AGENT_HOOK_PORT: '',
-        ORCA_AGENT_HOOK_TOKEN: '',
-        ORCA_AGENT_HOOK_ENDPOINT: ''
+        POD_PANE_KEY: 'pane-1',
+        POD_AGENT_HOOK_PORT: '',
+        POD_AGENT_HOOK_TOKEN: '',
+        POD_AGENT_HOOK_ENDPOINT: ''
       }
     })
     let stderr = ''

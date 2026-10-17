@@ -16,7 +16,7 @@ const shellEnv = {
   UNSET: undefined
 }
 
-const processEnv = { PATH: '/orca/bin', HOME: '/home/me', ORCA_USER_DATA_PATH: '/orca' }
+const processEnv = { PATH: '/orca/bin', HOME: '/home/me', POD_USER_DATA_PATH: '/orca' }
 
 describe('structuredAgentBaseEnvironment', () => {
   it('is the whole shell snapshot, and nothing else, when inheriting all', () => {
@@ -48,7 +48,7 @@ describe('structuredAgentBaseEnvironment', () => {
     ).toEqual({
       PATH: '/shell/bin',
       HOME: '/home/me',
-      ORCA_USER_DATA_PATH: '/orca',
+      POD_USER_DATA_PATH: '/orca',
       LANG: 'en_US.UTF-8',
       SSH_AUTH_SOCK: '/tmp/agent.sock',
       CODEX_LB_API_KEY: 'lb-key'

@@ -26,8 +26,8 @@ describe('vitest real-agent-home write guard', () => {
       vi.stubEnv('ORCA_REAL_CLAUDE_CLI_TEST', value)
       vi.stubEnv('CLAUDE_CONFIG_DIR', '/tmp/explicit-claude-profile')
       vi.stubEnv('CODEX_HOME', '/tmp/inherited-codex-profile')
-      vi.stubEnv('ORCA_USER_DATA_PATH', '/tmp/inherited-orca-state')
-      vi.stubEnv('ORCA_CODEX_LAUNCH_PREFLIGHT', '/tmp/inherited-live-cli')
+      vi.stubEnv('POD_USER_DATA_PATH', '/tmp/inherited-orca-state')
+      vi.stubEnv('POD_CODEX_LAUNCH_PREFLIGHT', '/tmp/inherited-live-cli')
 
       clearInheritedAgentStateEnv()
 
@@ -35,8 +35,8 @@ describe('vitest real-agent-home write guard', () => {
         value === '1' ? '/tmp/explicit-claude-profile' : undefined
       )
       expect(process.env.CODEX_HOME).toBeUndefined()
-      expect(process.env.ORCA_USER_DATA_PATH).toBeUndefined()
-      expect(process.env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
+      expect(process.env.POD_USER_DATA_PATH).toBeUndefined()
+      expect(process.env.POD_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
       expect(() => rmSync(missingRealFolder('.claude'), { force: true })).toThrow(
         /real-agent-home guard/
       )

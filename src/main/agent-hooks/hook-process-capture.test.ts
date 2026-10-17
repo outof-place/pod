@@ -14,7 +14,7 @@ describe('Claude outer hook process capture', () => {
     async (timeZone) => {
       const home = await mkdtemp(join(tmpdir(), 'orca-presence-hook-'))
       try {
-        const dir = join(home, '.orca', 'agent-hooks')
+        const dir = join(home, '.pod', 'agent-hooks')
         await mkdir(dir, { recursive: true })
         await writeFile(
           join(dir, 'claude-hook.sh'),
@@ -29,7 +29,7 @@ describe('Claude outer hook process capture', () => {
             '-i',
             `HOME=${home}`,
             'PATH=/usr/bin:/bin',
-            'ORCA_PANE_KEY=presence-test-pane',
+            'POD_PANE_KEY=presence-test-pane',
             // Why: the agent's shell zone may differ from Orca's; the identity must not.
             ...(timeZone ? [`TZ=${timeZone}`] : []),
             '/bin/sh',

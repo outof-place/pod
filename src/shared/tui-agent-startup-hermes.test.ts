@@ -21,7 +21,7 @@ describe('hermes startup plans', () => {
 
     const script = unwrapPosixShellScript(plan?.launchCommand)
     expect(script).toContain("'--provider' 'anthropic' '--yolo' '--tui'")
-    expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe('run privately')
+    expect(plan?.env?.POD_HERMES_STARTUP_QUERY).toBe('run privately')
   })
 
   it.each([
@@ -86,7 +86,7 @@ describe('hermes startup plans', () => {
     expect(script).not.toContain('override')
     expect(script).not.toContain("'--cli'")
     expect(script.match(/'--tui'/g)).toHaveLength(1)
-    expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe('automation prompt')
+    expect(plan?.env?.POD_HERMES_STARTUP_QUERY).toBe('automation prompt')
   })
 
   it('preserves wrapper tokens before the Hermes executable', () => {
@@ -186,7 +186,7 @@ describe('hermes startup plans', () => {
       })
 
       expect(plan?.launchCommand).not.toContain(prompt)
-      expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe(prompt)
+      expect(plan?.env?.POD_HERMES_STARTUP_QUERY).toBe(prompt)
     }
   )
 

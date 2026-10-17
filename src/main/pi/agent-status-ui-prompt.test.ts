@@ -4,7 +4,7 @@ import { PANE_KEY } from '../../shared/agent-hook-listener-test-harness'
 import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
 import { createAgentStatusExtensionHarness } from './agent-status-extension-test-harness'
 
-const HOOK_ENV = { ORCA_PANE_KEY: PANE_KEY, ORCA_AGENT_HOOK_ENV: 'production' }
+const HOOK_ENV = { POD_PANE_KEY: PANE_KEY, POD_AGENT_HOOK_ENV: 'production' }
 
 function createHarness() {
   const state = createHookListenerState()

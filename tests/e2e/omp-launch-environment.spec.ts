@@ -81,8 +81,8 @@ export default function (api) {
  api.on('session_start', (_event, ctx) => {
   writeFileSync(process.env.ORCA_PATH_PROBE_OUTPUT || ${JSON.stringify(result)}, JSON.stringify({
    data: process.env.XDG_DATA_HOME, config: process.env.PI_CONFIG_DIR,
-   source: process.env.ORCA_OMP_SOURCE_AGENT_DIR,
-   status: process.env.ORCA_OMP_STATUS_EXTENSION,
+   source: process.env.POD_OMP_SOURCE_AGENT_DIR,
+   status: process.env.POD_OMP_STATUS_EXTENSION,
    session: ctx.sessionManager.getSessionFile(), pid: process.pid
   }))
  })
@@ -182,11 +182,11 @@ export default function (api) {
         'XDG_STATE_HOME',
         'XDG_CACHE_HOME',
         'PI_CONFIG_DIR',
-        'ORCA_OMP_SOURCE_AGENT_DIR',
-        'ORCA_OMP_STATUS_EXTENSION',
-        'ORCA_PI_STATUS_OWNED',
+        'POD_OMP_SOURCE_AGENT_DIR',
+        'POD_OMP_STATUS_EXTENSION',
+        'POD_PI_STATUS_OWNED',
         'ZDOTDIR',
-        'ORCA_ORIG_ZDOTDIR'
+        'POD_ORIG_ZDOTDIR'
       ].flatMap((key) => ['-u', key]),
       `ORCA_PATH_PROBE_OUTPUT=${baselineResult}`,
       `HOME=${home}`,

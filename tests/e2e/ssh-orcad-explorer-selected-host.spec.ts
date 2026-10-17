@@ -19,8 +19,8 @@ for (const selectedHost of ['A', 'B'] as const) {
     test.setTimeout(5 * 60_000)
     const hostA = startOrcadConvertHost('docker', testInfo)
     const hostB = startOrcadConvertHost('docker', testInfo)
-    const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
-    const otherSession = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
+    const session = createRestartSession(testInfo, { POD_ORCAD_TEMPLATE_PATH: TEMPLATE! })
+    const otherSession = createRestartSession(testInfo, { POD_ORCAD_TEMPLATE_PATH: TEMPLATE! })
     let app: ElectronApplication | null = null
     let otherApp: ElectronApplication | null = null
     try {

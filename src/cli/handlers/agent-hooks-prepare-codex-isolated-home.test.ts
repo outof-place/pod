@@ -24,14 +24,14 @@ vi.mock('node:os', async () => {
   return { ...actual, homedir: () => homes.current }
 })
 vi.mock('electron', () => ({
-  app: { getPath: () => process.env.ORCA_USER_DATA_PATH }
+  app: { getPath: () => process.env.POD_USER_DATA_PATH }
 }))
 vi.mock('../runtime-client', () => ({
   RuntimeClient: class {
     call = call
   },
   RuntimeClientError: Error,
-  getDefaultUserDataPath: () => process.env.ORCA_USER_DATA_PATH
+  getDefaultUserDataPath: () => process.env.POD_USER_DATA_PATH
 }))
 
 import { main } from '../index'
@@ -81,14 +81,14 @@ beforeEach(() => {
   )
   for (const home of [appHome, realHome]) {
     mkdirSync(join(home, '.codex'), { recursive: true })
-    mkdirSync(join(home, '.orca', 'agent-hooks'), { recursive: true })
+    mkdirSync(join(home, '.pod', 'agent-hooks'), { recursive: true })
     writeFileSync(join(home, '.codex', 'hooks.json'), '{\n  "hooks": {}\n}\n')
     writeFileSync(join(home, '.codex', 'config.toml'), 'model = "user-model"\n')
-    writeFileSync(join(home, '.orca', 'agent-hooks', SCRIPT_NAME), '# another Orca wrote this\n')
+    writeFileSync(join(home, '.pod', 'agent-hooks', SCRIPT_NAME), '# another Orca wrote this\n')
   }
-  vi.stubEnv('ORCA_USER_DATA_PATH', appUserData)
+  vi.stubEnv('POD_USER_DATA_PATH', appUserData)
   vi.stubEnv('CODEX_HOME', managedHome)
-  vi.stubEnv('ORCA_CODEX_HOME', managedHome)
+  vi.stubEnv('POD_CODEX_HOME', managedHome)
   vi.stubEnv('WSL_DISTRO_NAME', '')
   grantInternals.setGrantSessionRunner(stubMissingCodexBinary)
 })

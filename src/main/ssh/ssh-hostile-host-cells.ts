@@ -225,7 +225,7 @@ export function canRunHostileHostCell(cell: HostileHostCell, machine: HostileHos
 }
 
 /**
- * `ORCA_SSH_HOSTILE_HOST_CELLS=a,b` narrows a run and every named cell must be hostable here;
+ * `POD_SSH_HOSTILE_HOST_CELLS=a,b` narrows a run and every named cell must be hostable here;
  * unset or empty runs every cell this machine can host.
  */
 export function selectHostileHostCells(

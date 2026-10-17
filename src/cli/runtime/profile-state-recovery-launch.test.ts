@@ -49,18 +49,18 @@ afterEach(() => vi.unstubAllEnvs())
 describe('profile-state recovery launch', () => {
   it('preserves direct participation only for plain Node without an explicit Electron executable', () => {
     vi.stubEnv('ELECTRON_RUN_AS_NODE', undefined)
-    vi.stubEnv('ORCA_APP_EXECUTABLE', undefined)
+    vi.stubEnv('POD_APP_EXECUTABLE', undefined)
     expect(canLaunchProfileStateRecovery()).toBe(false)
     vi.stubEnv('ELECTRON_RUN_AS_NODE', '1')
     expect(canLaunchProfileStateRecovery()).toBe(true)
     vi.stubEnv('ELECTRON_RUN_AS_NODE', undefined)
-    vi.stubEnv('ORCA_APP_EXECUTABLE', '/explicit/Orca')
+    vi.stubEnv('POD_APP_EXECUTABLE', '/explicit/Orca')
     expect(canLaunchProfileStateRecovery()).toBe(true)
   })
 
   it('uses a foreground-safe serve request and binds the canonical recovery root', async () => {
     vi.stubEnv('ELECTRON_RUN_AS_NODE', '1')
-    vi.stubEnv('ORCA_USER_DATA_PATH', '/stale/root')
+    vi.stubEnv('POD_USER_DATA_PATH', '/stale/root')
     expect(await launchProfileStateRecovery(request)).toEqual(result)
     expect(mocks.run).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -73,7 +73,7 @@ describe('profile-state recovery launch', () => {
         ],
         env: expect.objectContaining({
           ORCA_BACKGROUND_LAUNCH: '1',
-          ORCA_USER_DATA_PATH: realpathSync('.')
+          POD_USER_DATA_PATH: realpathSync('.')
         }),
         timeoutMs: null
       })

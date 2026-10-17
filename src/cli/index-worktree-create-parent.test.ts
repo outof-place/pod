@@ -240,7 +240,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('passes folder workspace environment lineage through worktree.create', async () => {
-    process.env.ORCA_WORKSPACE_ID = 'folder:folder-1'
+    process.env.POD_WORKSPACE_ID = 'folder:folder-1'
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),

@@ -10,7 +10,7 @@ import { relayBundleCandidates } from './relay-bundle-paths'
 afterEach(() => vi.unstubAllEnvs())
 
 it('lists the WSL guest bundle dirs in the order the WSL relays searched them', () => {
-  vi.stubEnv('ORCA_RELAY_PATH', join('/env', 'relay'))
+  vi.stubEnv('POD_RELAY_PATH', join('/env', 'relay'))
   const resources = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
   Object.defineProperty(process, 'resourcesPath', { value: '/res', configurable: true })
   try {

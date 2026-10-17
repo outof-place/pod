@@ -23,7 +23,7 @@ function makeExistingDirectory(): string {
   return dir
 }
 
-const ENV_KEYS = ['ORCA_USER_DATA_PATH', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'] as const
+const ENV_KEYS = ['POD_USER_DATA_PATH', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'] as const
 const savedEnv = new Map<string, string | undefined>()
 
 beforeEach(() => {
@@ -52,14 +52,14 @@ afterEach(() => {
 describe('resolveWslInteropSpawnCwd', () => {
   it('names the app-owned directory first, so no worktree can be the answer', () => {
     const userData = makeExistingDirectory()
-    process.env.ORCA_USER_DATA_PATH = userData
+    process.env.POD_USER_DATA_PATH = userData
     process.env.USERPROFILE = makeExistingDirectory()
 
     expect(resolveWslInteropSpawnCwd()).toBe(userData)
   })
 
   it('skips a candidate that does not resolve instead of naming it', () => {
-    process.env.ORCA_USER_DATA_PATH = join(tmpdir(), 'orca-wsl-spawn-cwd-never-created')
+    process.env.POD_USER_DATA_PATH = join(tmpdir(), 'orca-wsl-spawn-cwd-never-created')
     const profile = makeExistingDirectory()
     process.env.USERPROFILE = profile
 
@@ -78,12 +78,12 @@ describe('resolveWslInteropSpawnCwd', () => {
     // started and was deleted underneath it hours later. A memo that is never
     // re-validated reproduces the original bug one layer up.
     const doomed = makeExistingDirectory()
-    process.env.ORCA_USER_DATA_PATH = doomed
+    process.env.POD_USER_DATA_PATH = doomed
     const survivor = makeExistingDirectory()
     expect(resolveWslInteropSpawnCwd()).toBe(doomed)
 
     rmSync(doomed, { recursive: true, force: true })
-    process.env.ORCA_USER_DATA_PATH = survivor
+    process.env.POD_USER_DATA_PATH = survivor
 
     expect(resolveWslInteropSpawnCwd()).toBe(survivor)
   })

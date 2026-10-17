@@ -64,7 +64,7 @@ describe.skipIf(skip)('real pinned-Node launcher lifecycle', () => {
             traceLauncherPhase('before-booting')
             console.log('booting:' + process.pid)
             console.log('runtime:' + process.versions.node)
-            console.log('channel-env:' + (process.env.ORCA_BUNDLED_LAUNCHER_CHANNEL ?? 'absent'))
+            console.log('channel-env:' + (process.env.POD_BUNDLED_LAUNCHER_CHANNEL ?? 'absent'))
             traceLauncherPhase('booting-written')
             process.on('exit', code => console.log('runtime-exit:' + code))
             const keepalive = setInterval(() => {}, 1_000)

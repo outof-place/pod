@@ -507,12 +507,12 @@ describe('RelayAgentHookServer', () => {
     await server.start()
     try {
       const env = server.buildPtyEnv()
-      expect(env.ORCA_AGENT_HOOK_PORT).toMatch(/^\d+$/)
-      expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
-      expect(env.ORCA_AGENT_HOOK_ENV).toBe('remote')
-      expect(env.ORCA_AGENT_HOOK_VERSION).toBe('1')
-      expect(env.ORCA_AGENT_HOOK_TRANSPORT).toBe('raw-json-v1')
-      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeTruthy()
+      expect(env.POD_AGENT_HOOK_PORT).toMatch(/^\d+$/)
+      expect(env.POD_AGENT_HOOK_TOKEN).toBeTruthy()
+      expect(env.POD_AGENT_HOOK_ENV).toBe('remote')
+      expect(env.POD_AGENT_HOOK_VERSION).toBe('1')
+      expect(env.POD_AGENT_HOOK_TRANSPORT).toBe('raw-json-v1')
+      expect(env.POD_AGENT_HOOK_ENDPOINT).toBeTruthy()
     } finally {
       server.stop()
     }
@@ -523,9 +523,9 @@ describe('RelayAgentHookServer', () => {
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start({ publishEndpoint: false })
     try {
-      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+      expect(server.buildPtyEnv().POD_AGENT_HOOK_ENDPOINT).toBeUndefined()
       expect(server.publishEndpointFile()).toBe(true)
-      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBeTruthy()
+      expect(server.buildPtyEnv().POD_AGENT_HOOK_ENDPOINT).toBeTruthy()
     } finally {
       server.stop()
     }

@@ -250,7 +250,7 @@ export type AgentHookInstallManagedHooksParams = {
 
 /** Feature-flag env var. Read once at process start by Orca and the relay.
  *  Remote agent hooks ship as the default SSH behavior; set "0" to opt out. */
-export const ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV = 'ORCA_FEATURE_REMOTE_AGENT_HOOKS' as const
+export const ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV = 'POD_FEATURE_REMOTE_AGENT_HOOKS' as const
 
 export function isRemoteAgentHooksEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const raw = env[ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]

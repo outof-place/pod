@@ -15,7 +15,7 @@ import { DSH_HOOK_EVENTS } from './hook-settings'
 
 // Why: getSharedManagedScriptPath() writes under homedir()/.orca and the patch layer
 // resolves via DSH_HOME ?? ~/.dsh. Point the home env at a temp dir and clear DSH_HOME so
-// install/remove never touches the real ~/.orca or a developer's own DSH home.
+// install/remove never touches the real ~/.pod or a developer's own DSH home.
 // Why both names: os.homedir() reads $HOME on POSIX and %USERPROFILE% on Windows, and this
 // file asserts the Windows script name too — setting only HOME would let a Windows run edit
 // the developer's real home.
@@ -54,9 +54,9 @@ afterEach(() => {
 })
 
 const configPath = (): string => join(home, '.dsh', 'cordis.patch.yml')
-const managedHooksPath = (): string => join(home, '.orca', 'agent-hooks', 'dsh-hooks.json')
+const managedHooksPath = (): string => join(home, '.pod', 'agent-hooks', 'dsh-hooks.json')
 const scriptPath = (): string =>
-  join(home, '.orca', 'agent-hooks', process.platform === 'win32' ? 'dsh-hook.cmd' : 'dsh-hook.sh')
+  join(home, '.pod', 'agent-hooks', process.platform === 'win32' ? 'dsh-hook.cmd' : 'dsh-hook.sh')
 
 function readManagedHooks(): { hooks: Record<string, unknown[]> } {
   const parsed: { hooks: Record<string, unknown[]> } = JSON.parse(
@@ -92,14 +92,14 @@ describe('DshHookService', () => {
   })
 
   it('restores the pane identity DSH scrubs before anything reads it', () => {
-    // DSH drops env names containing KEY/TOKEN, so the script has to recover ORCA_PANE_KEY
-    // and ORCA_AGENT_LAUNCH_TOKEN from their aliases before the guard or the spool run.
+    // DSH drops env names containing KEY/TOKEN, so the script has to recover POD_PANE_KEY
+    // and POD_AGENT_LAUNCH_TOKEN from their aliases before the guard or the spool run.
     new DshHookService().install()
     const script = readFileSync(scriptPath(), 'utf-8')
-    const restoreAt = script.indexOf('ORCA_AGENT_PANE')
-    const guardAt = script.indexOf('ORCA_AGENT_HOOK_PORT')
+    const restoreAt = script.indexOf('POD_AGENT_PANE')
+    const guardAt = script.indexOf('POD_AGENT_HOOK_PORT')
     expect(restoreAt).toBeGreaterThan(-1)
-    expect(script).toContain('ORCA_AGENT_LAUNCH')
+    expect(script).toContain('POD_AGENT_LAUNCH')
     expect(restoreAt).toBeLessThan(guardAt)
   })
 

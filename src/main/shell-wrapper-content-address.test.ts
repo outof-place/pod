@@ -24,8 +24,8 @@ function makeBase(): string {
 describe('resolveShellWrapperRoot', () => {
   it('gives builds with different wrapper contents different trees', () => {
     const base = makeBase()
-    expect(resolveShellWrapperRoot(base, builderFor('ORCA_SHELL_READY_MARKER'))).not.toEqual(
-      resolveShellWrapperRoot(base, builderFor('ORCA_SHELL_FEATURES'))
+    expect(resolveShellWrapperRoot(base, builderFor('POD_SHELL_READY_MARKER'))).not.toEqual(
+      resolveShellWrapperRoot(base, builderFor('POD_SHELL_FEATURES'))
     )
   })
 

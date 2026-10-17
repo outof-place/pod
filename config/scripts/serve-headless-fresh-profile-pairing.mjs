@@ -48,7 +48,7 @@ let stopAttempts = 0
 // is only for local headless testing, not packaged production.
 const childEnv = { ...process.env }
 delete childEnv.CODEX_HOME
-delete childEnv.ORCA_CODEX_HOME
+delete childEnv.POD_CODEX_HOME
 Object.assign(childEnv, {
   // Why: a fresh temporary Orca profile must not make the default Codex lane
   // read or mutate the developer profile during a pairing smoke test.

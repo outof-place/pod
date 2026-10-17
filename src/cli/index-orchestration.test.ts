@@ -55,7 +55,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('formats group orchestration sends in text mode', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
+    process.env.POD_TERMINAL_HANDLE = 'term_sender'
     callMock.mockResolvedValueOnce({
       id: 'req_send',
       ok: true,
@@ -87,12 +87,12 @@ describe('orca cli worktree awareness', () => {
 
   it("refuses an agent session's caller flag naming another caller before any request", async () => {
     // One chokepoint for every verb: the spec says which flag names the caller.
-    process.env.ORCA_AGENT_SESSION_ID = 'f7a1c0de-1111-4222-8333-444455556666'
+    process.env.POD_AGENT_SESSION_ID = 'f7a1c0de-1111-4222-8333-444455556666'
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     try {
       await main(['orchestration', 'check', '--terminal', 'term_sibling', '--json'], '/tmp/repo')
     } finally {
-      delete process.env.ORCA_AGENT_SESSION_ID
+      delete process.env.POD_AGENT_SESSION_ID
     }
 
     expect(callMock).not.toHaveBeenCalled()
@@ -147,7 +147,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('rejects unknown task-update status with an enum-aware error', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+    process.env.POD_TERMINAL_HANDLE = 'term_coord'
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const priorExitCode = process.exitCode
@@ -172,7 +172,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('passes the caller terminal handle through orchestration task-create', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_creator'
+    process.env.POD_TERMINAL_HANDLE = 'term_creator'
     callMock.mockResolvedValueOnce({
       id: 'req_task_create',
       ok: true,
@@ -210,8 +210,8 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('passes dev mode to injected orchestration dispatches', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
-    process.env.ORCA_USER_DATA_PATH = '/tmp/orca-dev'
+    process.env.POD_TERMINAL_HANDLE = 'term_sender'
+    process.env.POD_USER_DATA_PATH = '/tmp/orca-dev'
     callMock.mockResolvedValueOnce({
       id: 'req_dispatch',
       ok: true,
@@ -239,8 +239,8 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('passes dev mode from an explicit dev CLI marker with a custom profile path', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
-    process.env.ORCA_USER_DATA_PATH = '/tmp/federation-acceptance-profile'
+    process.env.POD_TERMINAL_HANDLE = 'term_sender'
+    process.env.POD_USER_DATA_PATH = '/tmp/federation-acceptance-profile'
     process.env.ORCA_DEV_CLI_INVOCATION = '1'
     callMock.mockResolvedValueOnce({
       id: 'req_dispatch',

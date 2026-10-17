@@ -188,14 +188,14 @@ describe('HermesHookService', () => {
           {
             env: {
               ...process.env,
-              ORCA_AGENT_HOOK_PORT: String(address.port),
-              ORCA_AGENT_HOOK_TOKEN: 'token-1',
-              ORCA_AGENT_HOOK_ENDPOINT: '',
-              ORCA_PANE_KEY: PANE_KEY,
-              ORCA_TAB_ID: 'tab-1',
-              ORCA_WORKTREE_ID: 'wt-1',
-              ORCA_AGENT_HOOK_ENV: 'production',
-              ORCA_AGENT_HOOK_VERSION: '1'
+              POD_AGENT_HOOK_PORT: String(address.port),
+              POD_AGENT_HOOK_TOKEN: 'token-1',
+              POD_AGENT_HOOK_ENDPOINT: '',
+              POD_PANE_KEY: PANE_KEY,
+              POD_TAB_ID: 'tab-1',
+              POD_WORKTREE_ID: 'wt-1',
+              POD_AGENT_HOOK_ENV: 'production',
+              POD_AGENT_HOOK_VERSION: '1'
             },
             encoding: 'utf-8'
           },

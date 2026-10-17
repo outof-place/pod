@@ -47,7 +47,7 @@ export function assertOrcadDataRootIsPrivate(
       throw new OrcadInstanceLockError(
         'orcad_data_root_shared',
         `Could not restrict the orcad data root ${dataRoot} to this user. orcad stores ` +
-          'credentials there unsealed, so it refuses to start. Point ORCA_USER_DATA at a ' +
+          'credentials there unsealed, so it refuses to start. Point POD_USER_DATA at a ' +
           'directory this account owns.'
       )
     }
@@ -67,7 +67,7 @@ export function assertOrcadDataRootIsPrivate(
     throw new OrcadInstanceLockError(
       'orcad_data_root_wrong_owner',
       `The orcad data root ${dataRoot} is owned by uid ${stats.uid}, not by uid ${uid} running ` +
-        'this process. Give orcad its own data root (ORCA_USER_DATA) or chown this one.'
+        'this process. Give orcad its own data root (POD_USER_DATA) or chown this one.'
     )
   }
   if ((stats.mode & 0o077) === 0) {
@@ -92,7 +92,7 @@ export function assertOrcadDataRootIsPrivate(
       'orcad_data_root_shared',
       `The orcad data root ${dataRoot} is accessible to other users (mode ` +
         `${(mode & 0o777).toString(8)}) and could not be tightened. orcad stores credentials ` +
-        'there unsealed, so it refuses to start. Run `chmod 700` on it, or point ORCA_USER_DATA ' +
+        'there unsealed, so it refuses to start. Run `chmod 700` on it, or point POD_USER_DATA ' +
         'at a private directory.'
     )
   }

@@ -24,7 +24,7 @@ const options = {
   userDataPath: '/fixture',
   resolveInstalledElectronExecutable: async () => '/fixture/electron',
   resolveAgentBrowserBinary: () => '/fixture/driver',
-  environment: { ORCA_BROWSER_EXECUTABLE: '/fixture/chromium' }
+  environment: { POD_BROWSER_EXECUTABLE: '/fixture/chromium' }
 }
 
 it('does not launch a provider after pre-cancellation', async () => {

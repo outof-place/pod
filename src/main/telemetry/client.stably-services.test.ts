@@ -41,7 +41,7 @@ describe('telemetry without Stably services', () => {
   const envStash = { ...process.env }
 
   beforeEach(() => {
-    for (const name of ['CI', 'GITHUB_ACTIONS', 'DO_NOT_TRACK', 'ORCA_TELEMETRY_DISABLED']) {
+    for (const name of ['CI', 'GITHUB_ACTIONS', 'DO_NOT_TRACK', 'POD_TELEMETRY_DISABLED']) {
       delete process.env[name]
     }
     PostHogMock.mockClear()

@@ -194,7 +194,7 @@ describe('MobilePage pairing connection mode', () => {
 
     await user.click(screen.getByRole('button', { name: 'Open Android install guide' }))
 
-    expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://www.onorca.dev/docs/android-apk')
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://pod.codes/docs/android-apk')
   })
 
   it('defaults signed-in pairing to Anywhere and remints when same-network is selected', async () => {

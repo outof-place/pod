@@ -25,9 +25,9 @@ function sendJson(res: ServerResponse, body: unknown): void {
 
 describe('Bitbucket hosted review integration', () => {
   beforeEach(() => {
-    process.env = { ...OLD_ENV, ORCA_BITBUCKET_ACCESS_TOKEN: 'local-token' }
-    delete process.env.ORCA_BITBUCKET_EMAIL
-    delete process.env.ORCA_BITBUCKET_API_TOKEN
+    process.env = { ...OLD_ENV, POD_BITBUCKET_ACCESS_TOKEN: 'local-token' }
+    delete process.env.POD_BITBUCKET_EMAIL
+    delete process.env.POD_BITBUCKET_API_TOKEN
     _resetBitbucketRepoRefCache()
     __resetHostedReviewBranchCacheForTests()
   })
@@ -87,7 +87,7 @@ describe('Bitbucket hosted review integration', () => {
         throw new Error('expected TCP server address')
       }
 
-      process.env.ORCA_BITBUCKET_API_BASE_URL = `http://127.0.0.1:${address.port}/2.0`
+      process.env.POD_BITBUCKET_API_BASE_URL = `http://127.0.0.1:${address.port}/2.0`
       await execFileAsync('git', ['init'], { cwd: repoPath })
       await execFileAsync('git', ['remote', 'add', 'origin', 'git@bitbucket.org:team/repo.git'], {
         cwd: repoPath
@@ -173,7 +173,7 @@ describe('Bitbucket hosted review integration', () => {
         throw new Error('expected TCP server address')
       }
 
-      process.env.ORCA_BITBUCKET_API_BASE_URL = `http://127.0.0.1:${address.port}/2.0`
+      process.env.POD_BITBUCKET_API_BASE_URL = `http://127.0.0.1:${address.port}/2.0`
       await execFileAsync('git', ['init'], { cwd: repoPath })
       await execFileAsync('git', ['remote', 'add', 'origin', 'git@bitbucket.org:team/repo.git'], {
         cwd: repoPath

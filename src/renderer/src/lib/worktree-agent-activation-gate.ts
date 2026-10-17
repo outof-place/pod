@@ -184,7 +184,7 @@ export async function runWorktreeAgentActivationGate(
   }
 
   // Why either signal rather than a preference: a relay row's worktreeId can be seeded from the
-  // host's own ORCA_WORKTREE_ID, so it must widen the id-prefix match, never replace it — a session
+  // host's own POD_WORKTREE_ID, so it must widen the id-prefix match, never replace it — a session
   // dropped from this set is a live agent the gate would fork a second writer onto.
   const liveWorkspaceSessions = sessions.filter(
     (session) =>

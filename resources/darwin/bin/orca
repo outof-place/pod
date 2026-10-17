@@ -25,8 +25,8 @@ ELECTRON="$CONTENTS/MacOS/Orca"
 # launcher model instead of requiring a separate npm-distributed binary.
 CLI="$CONTENTS/Resources/app.asar.unpacked/out/cli/index.js"
 
-export ORCA_NODE_OPTIONS="${NODE_OPTIONS-}"
-export ORCA_NODE_REPL_EXTERNAL_MODULE="${NODE_REPL_EXTERNAL_MODULE-}"
+export POD_NODE_OPTIONS="${NODE_OPTIONS-}"
+export POD_NODE_REPL_EXTERNAL_MODULE="${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
 

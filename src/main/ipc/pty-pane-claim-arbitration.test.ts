@@ -149,7 +149,7 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-headless',
       leafId,
-      env: { ORCA_PANE_KEY: makePaneKey('tab-headless', leafId) },
+      env: { POD_PANE_KEY: makePaneKey('tab-headless', leafId) },
       persistHostSessionBinding: true
     })
 
@@ -488,12 +488,12 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'repo-1::/tmp',
       tabId: 'tab-race',
       leafId,
-      env: { ORCA_PANE_KEY: paneKey },
+      env: { POD_PANE_KEY: paneKey },
       persistHostSessionBinding: true
     })
     await Promise.resolve()
 
-    // Why: SSH can strip ORCA_PANE_KEY before spawn; tab/leaf metadata must still dedupe against runtime materialization.
+    // Why: SSH can strip POD_PANE_KEY before spawn; tab/leaf metadata must still dedupe against runtime materialization.
     const rendererSpawn = handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24,
@@ -502,8 +502,8 @@ describe('registerPtyHandlers', () => {
       tabId: 'tab-race',
       leafId,
       env: {
-        ORCA_TAB_ID: 'tab-race',
-        ORCA_WORKTREE_ID: 'repo-1::/tmp'
+        POD_TAB_ID: 'tab-race',
+        POD_WORKTREE_ID: 'repo-1::/tmp'
       }
     }) as Promise<{ id: string }>
     await vi.waitFor(() => expect(providerSpawn).toHaveBeenCalledTimes(1))

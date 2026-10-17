@@ -121,7 +121,7 @@ describe('a pane whose process belongs to an agent launch', () => {
         worktreeId,
         tabId,
         leafId,
-        env: { ORCA_PANE_KEY: paneKey, ORCA_WORKTREE_ID: worktreeId }
+        env: { POD_PANE_KEY: paneKey, POD_WORKTREE_ID: worktreeId }
       })
     )
   }

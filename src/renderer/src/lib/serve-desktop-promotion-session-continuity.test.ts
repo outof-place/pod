@@ -223,7 +223,7 @@ describe('#8457 headless serve promotion preserves surviving agent sessions', ()
         platform: 'darwin',
         isDev: false,
         isServeMode: true,
-        env: { ORCA_BYPASS_SINGLE_INSTANCE_LOCK: '1' }
+        env: { POD_BYPASS_SINGLE_INSTANCE_LOCK: '1' }
       })
     ).toBe(false)
   })

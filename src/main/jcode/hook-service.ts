@@ -44,14 +44,14 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     // drained it, and observer hooks are given a null stdin. Without this the server
     // sees no event name and normalizeJcodeEvent drops every event, so a Windows pane
     // would show no jcode status at all.
-    const payloadFile = '%ORCA_JCODE_PAYLOAD_FILE%'
+    const payloadFile = '%POD_JCODE_PAYLOAD_FILE%'
     return [
       '@echo off',
       // EnableDelayedExpansion so `!JCODE_HOOK_PAYLOAD!` is written verbatim: plain
       // `%VAR%` expansion re-parses the JSON's quotes and `&` as batch syntax.
       'setlocal EnableDelayedExpansion',
       // Why: endpoint file holds the live port/token; a PTY that outlives an Orca restart carries stale env, so `call` it to refresh (else PTY env).
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      'if defined POD_AGENT_HOOK_ENDPOINT if exist "%POD_AGENT_HOOK_ENDPOINT%" call "%POD_AGENT_HOOK_ENDPOINT%" 2>nul',
       // Why the guard comes first here, unlike the POSIX script: on Windows a hook
       // that owns stdin outside an Orca pane can hang forever, because the caller
       // abandons the pipe rather than closing it (#11549). A jcode gate that exits
@@ -62,7 +62,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       // to our stdin and waits for us, so drain it before the POST or a tool input
       // larger than the pipe buffer stalls the agent mid-write.
       `if "%JCODE_HOOK_EVENT%"=="pre_tool" ${WINDOWS_HOOK_STDIN_DRAIN_COMMAND}`,
-      `set "ORCA_JCODE_PAYLOAD_FILE=%TEMP%\\orca-jcode-hook-%RANDOM%%RANDOM%.json"`,
+      `set "POD_JCODE_PAYLOAD_FILE=%TEMP%\\orca-jcode-hook-%RANDOM%%RANDOM%.json"`,
       `>"${payloadFile}" echo(!JCODE_HOOK_PAYLOAD!`,
       // Input redirection avoids spawning cmd's extra pipeline shells on every event.
       `<"${payloadFile}" ${buildWindowsAgentHookPostCommand('jcode', [
@@ -82,8 +82,8 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     ...buildPosixLegacyHookEnvLines(),
     // Why: endpoint file holds the live port/token; PTYs that outlive an Orca restart carry stale env, so source it to reach the new server (else PTY env).
     // Why: silence the `.` builtin (2>/dev/null + `|| :`) so a TOCTOU race or CRLF-mangled line can't leak shell parse errors into agent transcripts (fail-open).
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    'if [ -n "$POD_AGENT_HOOK_ENDPOINT" ] && [ -r "$POD_AGENT_HOOK_ENDPOINT" ]; then',
+    '  . "$POD_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     // Why before the env guard: pre_tool is jcode's gate — it writes the tool input to
     // our stdin and waits for us, so stdin must be drained before ANY exit path or a
@@ -91,7 +91,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'if [ "$JCODE_HOOK_EVENT" = pre_tool ]; then',
     `  ${POSIX_HOOK_STDIN_DRAIN_COMMAND}`,
     'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    'if [ -z "$POD_AGENT_HOOK_PORT" ] || [ -z "$POD_AGENT_HOOK_TOKEN" ] || [ -z "$POD_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
     // Why the env var rather than a stdin capture: jcode hands the hook its payload as
@@ -213,7 +213,7 @@ export class JcodeHookService {
     // Why: remote-Windows is out of scope for v1 (same as Devin); assume POSIX.
     const remoteConfigPath = getJcodeRemoteConfigPath(remoteHome)
     const remoteScriptFileName = getJcodePosixManagedScriptFileName()
-    const remoteScriptPath = `${remoteHome.replace(/\/+$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
+    const remoteScriptPath = `${remoteHome.replace(/\/+$/, '')}/.pod/agent-hooks/${remoteScriptFileName}`
     try {
       const body = await readTextFileRemote(sftp, remoteConfigPath)
       const content = body === null ? '' : body

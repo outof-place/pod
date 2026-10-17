@@ -91,8 +91,8 @@ describe('diagnostics IPC handlers', () => {
     getDiagnosticsStatusMock.mockReset()
     uploadDiagnosticBundleMock.mockReset()
     delete (globalThis as { ORCA_BUILD_IDENTITY?: unknown }).ORCA_BUILD_IDENTITY
-    delete (globalThis as { ORCA_DIAGNOSTICS_TOKEN_URL?: unknown }).ORCA_DIAGNOSTICS_TOKEN_URL
-    process.env.ORCA_DIAGNOSTICS_TOKEN_URL = 'https://diagnostics.example.com/diagnostics/token'
+    delete (globalThis as { POD_DIAGNOSTICS_TOKEN_URL?: unknown }).POD_DIAGNOSTICS_TOKEN_URL
+    process.env.POD_DIAGNOSTICS_TOKEN_URL = 'https://diagnostics.example.com/diagnostics/token'
     getDiagnosticsStatusMock.mockReturnValue({
       localFileEnabled: true,
       bundleEnabled: true,
@@ -142,11 +142,11 @@ describe('diagnostics IPC handlers', () => {
     })
     const globalOverrides = globalThis as {
       ORCA_BUILD_IDENTITY?: 'stable'
-      ORCA_DIAGNOSTICS_TOKEN_URL?: string
+      POD_DIAGNOSTICS_TOKEN_URL?: string
     }
     globalOverrides.ORCA_BUILD_IDENTITY = 'stable'
-    globalOverrides.ORCA_DIAGNOSTICS_TOKEN_URL = 'https://official.example.com/diagnostics/token'
-    process.env.ORCA_DIAGNOSTICS_TOKEN_URL = 'https://attacker.example.com/diagnostics/token'
+    globalOverrides.POD_DIAGNOSTICS_TOKEN_URL = 'https://official.example.com/diagnostics/token'
+    process.env.POD_DIAGNOSTICS_TOKEN_URL = 'https://attacker.example.com/diagnostics/token'
     collectDiagnosticBundleMock.mockReturnValue(bundle)
     readFileSyncMock.mockReturnValue(bundle.payload)
     const collect = handlers.get('diagnostics:collectBundle')!

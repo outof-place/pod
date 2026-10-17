@@ -69,7 +69,7 @@ export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWork
   // the agent launch down with it (the regression that reverted #14863).
   const clearEnvNames =
     args.session.agent === 'codex' && args.session.codexHome === null
-      ? (['CODEX_HOME', 'ORCA_CODEX_HOME'] as const)
+      ? (['CODEX_HOME', 'POD_CODEX_HOME'] as const)
       : undefined
   return buildAiVaultResumeForWorktree(args, true, clearEnvNames).command
 }

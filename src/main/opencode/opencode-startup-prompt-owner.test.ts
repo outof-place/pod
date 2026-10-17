@@ -47,9 +47,9 @@ function fixture() {
   ownership.ptyIncarnationById.set(result.id, result.incarnationId)
   const context = {
     env: {
-      ORCA_OPENCODE_STARTUP_PROMPT_NONCE: 'nonce',
+      POD_OPENCODE_STARTUP_PROMPT_NONCE: 'nonce',
       ORCA_OPENCODE_STARTUP_PROMPT_SHA256: 'digest',
-      ORCA_AGENT_LAUNCH_TOKEN: 'launch'
+      POD_AGENT_LAUNCH_TOKEN: 'launch'
     },
     deps: { runtime },
     result,

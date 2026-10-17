@@ -38,11 +38,11 @@ export function getWindowsClaudeHookEntry(): string {
     '@echo off',
     // Inherited delayed expansion would eat exclamation marks in the profile path.
     'setlocal DisableDelayedExpansion',
-    `set "ORCA_CLAUDE_HOOK_IMPL=%~dp0${PAYLOAD_FILE_NAME}"`,
-    'if not exist "%ORCA_CLAUDE_HOOK_IMPL%" goto :missing_impl',
+    `set "POD_CLAUDE_HOOK_IMPL=%~dp0${PAYLOAD_FILE_NAME}"`,
+    'if not exist "%POD_CLAUDE_HOOK_IMPL%" goto :missing_impl',
     // Transfer control without CALL's second expansion of percent signs in the path.
     // A payload that exists but cannot start (locked, quarantined) falls through to the neutral reply.
-    '"%ORCA_CLAUDE_HOOK_IMPL%"',
+    '"%POD_CLAUDE_HOOK_IMPL%"',
     ':missing_impl',
     'echo {}',
     ...buildWindowsHookEnvironmentGuardLines(),

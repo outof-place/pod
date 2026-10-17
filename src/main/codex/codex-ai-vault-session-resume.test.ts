@@ -18,7 +18,7 @@ const ROLLOUT_RELATIVE_PATH = join(
 let userDataRoot: string
 beforeEach(() => {
   userDataRoot = mkdtempSync(join(tmpdir(), 'orca-codex-resume-user-data-'))
-  vi.stubEnv('ORCA_USER_DATA_PATH', userDataRoot)
+  vi.stubEnv('POD_USER_DATA_PATH', userDataRoot)
 })
 afterEach(() => {
   vi.restoreAllMocks()

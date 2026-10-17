@@ -74,7 +74,7 @@ async function startServer(writes: { terminal: string; text: string }[] = []) {
 
 describe('OrcaRuntimeRpcServer local stream transport', () => {
   beforeEach(() => {
-    vi.stubEnv('ORCA_LOCAL_STREAM_TRANSPORT', '1')
+    vi.stubEnv('POD_LOCAL_STREAM_TRANSPORT', '1')
   })
   afterEach(() => {
     vi.unstubAllEnvs()
@@ -205,7 +205,7 @@ describe('OrcaRuntimeRpcServer local stream transport', () => {
   })
 
   it('answers the upgrade like an older runtime when the kill switch is set', async () => {
-    vi.stubEnv('ORCA_LOCAL_STREAM_TRANSPORT', '0')
+    vi.stubEnv('POD_LOCAL_STREAM_TRANSPORT', '0')
     const { server, endpoint, authToken } = await startServer()
     try {
       const client = await openLocalStreamTestClient(endpoint, authToken)

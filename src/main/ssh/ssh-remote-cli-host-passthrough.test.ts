@@ -71,11 +71,11 @@ describe('buildHostCliEnv', () => {
       bridgeCredential: 'sshb_test',
       hostEnv: { PATH: '/host/bin', NODE_OPTIONS: '--inspect' },
       remoteEnv: {
-        ORCA_TERMINAL_HANDLE: 'term_remote',
-        ORCA_WORKTREE_ID: 'repo::/home/alice/wt',
-        ORCA_PANE_KEY: 'pane-9',
-        ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
-        ORCA_WORKSPACE_ID: 'ws-1',
+        POD_TERMINAL_HANDLE: 'term_remote',
+        POD_WORKTREE_ID: 'repo::/home/alice/wt',
+        POD_PANE_KEY: 'pane-9',
+        POD_AGENT_LAUNCH_TOKEN: 'launch-secret',
+        POD_WORKSPACE_ID: 'ws-1',
         [ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]: 'wsl',
         [ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]: 'caller-host',
         [ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]: 'caller-incarnation',
@@ -84,7 +84,7 @@ describe('buildHostCliEnv', () => {
         // subprocess (PATH would break host binary lookup; user-data would
         // retarget the CLI at a different local instance).
         PATH: '/remote/bin',
-        ORCA_USER_DATA_PATH: '/remote/user-data'
+        POD_USER_DATA_PATH: '/remote/user-data'
       },
       userDataPath: '/host/user-data',
       remoteCwd: '/home/alice/wt/sub',
@@ -96,40 +96,40 @@ describe('buildHostCliEnv', () => {
       }
     })
 
-    expect(env.ORCA_TERMINAL_HANDLE).toBe('term_remote')
-    expect(env.ORCA_WORKTREE_ID).toBe('repo::/home/alice/wt')
-    expect(env.ORCA_PANE_KEY).toBe('pane-9')
-    expect(env.ORCA_AGENT_LAUNCH_TOKEN).toBe('launch-secret')
-    expect(env.ORCA_WORKSPACE_ID).toBe('ws-1')
+    expect(env.POD_TERMINAL_HANDLE).toBe('term_remote')
+    expect(env.POD_WORKTREE_ID).toBe('repo::/home/alice/wt')
+    expect(env.POD_PANE_KEY).toBe('pane-9')
+    expect(env.POD_AGENT_LAUNCH_TOKEN).toBe('launch-secret')
+    expect(env.POD_WORKSPACE_ID).toBe('ws-1')
     expect(env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]).toBe('ssh')
     expect(env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]).toBe('saved-target')
     expect(env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]).toBe('connection-incarnation')
     expect(env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]).toBe('runtime-attachment')
     expect(env.PATH).toBe('/host/bin')
-    expect(env.ORCA_USER_DATA_PATH).toBe('/host/user-data')
-    expect(env.ORCA_CLI_CWD).toBe('/home/alice/wt/sub')
-    expect(env.ORCA_CLI_COMMAND).toBe('orca')
+    expect(env.POD_USER_DATA_PATH).toBe('/host/user-data')
+    expect(env.POD_CLI_CWD).toBe('/home/alice/wt/sub')
+    expect(env.POD_CLI_COMMAND).toBe('orca')
     expect(env.ELECTRON_RUN_AS_NODE).toBe('1')
     expect(env.NODE_OPTIONS).toBeUndefined()
-    expect(env.ORCA_NODE_OPTIONS).toBe('--inspect')
+    expect(env.POD_NODE_OPTIONS).toBe('--inspect')
   })
 
   it.each([
-    ['dev host', { ORCA_DEV_REPO_ROOT: '/repo', ORCA_CLI_COMMAND: 'orca-dev' }],
-    ['packaged Linux host', { ORCA_CLI_COMMAND: 'orca-ide' }],
+    ['dev host', { ORCA_DEV_REPO_ROOT: '/repo', POD_CLI_COMMAND: 'orca-dev' }],
+    ['packaged Linux host', { POD_CLI_COMMAND: 'orca-ide' }],
     ['local host', {}],
-    ['WSL host', { WSL_DISTRO_NAME: 'Ubuntu', ORCA_CLI_COMMAND: 'orca-ide' }],
+    ['WSL host', { WSL_DISTRO_NAME: 'Ubuntu', POD_CLI_COMMAND: 'orca-ide' }],
     ['Windows host', { ComSpec: 'C:\\Windows\\System32\\cmd.exe' }]
   ])('pins %s recovery to the remote shim', (_name, hostEnv) => {
     const env = buildHostCliEnv({
       bridgeCredential: 'sshb_test',
       hostEnv,
-      remoteEnv: { ORCA_CLI_COMMAND: 'untrusted-remote-command' },
+      remoteEnv: { POD_CLI_COMMAND: 'untrusted-remote-command' },
       userDataPath: '/host/user-data',
       remoteCwd: '/srv/repo'
     })
 
-    expect(env.ORCA_CLI_COMMAND).toBe('orca')
+    expect(env.POD_CLI_COMMAND).toBe('orca')
   })
 
   it('never lets a remote command claim a local agent session', () => {
@@ -138,21 +138,21 @@ describe('buildHostCliEnv', () => {
     const env = buildHostCliEnv({
       bridgeCredential: 'sshb_test',
       hostEnv: {
-        ORCA_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666',
-        ORCA_STRUCTURED_SESSION: '1'
+        POD_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666',
+        POD_STRUCTURED_SESSION: '1'
       },
       remoteEnv: {
-        ORCA_TERMINAL_HANDLE: 'term_remote',
-        ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd'
+        POD_TERMINAL_HANDLE: 'term_remote',
+        POD_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd'
       },
       userDataPath: '/host/user-data',
       remoteCwd: '/srv/repo'
     })
 
-    expect(env.ORCA_AGENT_SESSION_ID).toBeUndefined()
-    expect(env.ORCA_STRUCTURED_SESSION).toBeUndefined()
+    expect(env.POD_AGENT_SESSION_ID).toBeUndefined()
+    expect(env.POD_STRUCTURED_SESSION).toBeUndefined()
     // The remote command still speaks as its own terminal.
-    expect(env.ORCA_TERMINAL_HANDLE).toBe('term_remote')
+    expect(env.POD_TERMINAL_HANDLE).toBe('term_remote')
   })
 
   it('namespaces identical remote artifact paths by stable SSH target', () => {
@@ -297,7 +297,7 @@ describe('runHostOrcaCliPassthrough', () => {
         callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: ['orchestration', 'task-create', '--spec', 'do the thing', '--json'],
         cwd: '/home/alice/wt',
-        env: { ORCA_TERMINAL_HANDLE: 'term_remote' }
+        env: { POD_TERMINAL_HANDLE: 'term_remote' }
       },
       { ...BASE_OPTIONS, spawn: spawn as never }
     )
@@ -326,8 +326,8 @@ describe('runHostOrcaCliPassthrough', () => {
       '--json'
     ])
     expect(options.env.ELECTRON_RUN_AS_NODE).toBe('1')
-    expect(options.env.ORCA_CLI_CWD).toBe('/home/alice/wt')
-    expect(options.env.ORCA_TERMINAL_HANDLE).toBe('term_remote')
+    expect(options.env.POD_CLI_CWD).toBe('/home/alice/wt')
+    expect(options.env.POD_TERMINAL_HANDLE).toBe('term_remote')
     // Why: stdin must be closed even without a payload so CLI handlers that
     // stream stdin see EOF instead of hanging forever.
     expect(child.stdin.end).toHaveBeenCalledWith()

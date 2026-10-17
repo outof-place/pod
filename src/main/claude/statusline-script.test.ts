@@ -22,7 +22,7 @@ describe('getManagedStatusLineScript (posix)', () => {
     const script = getManagedStatusLineScript('local')
     expect(script).toBe(getManagedStatusLineScript('posix'))
     const guardIndex = script.indexOf('*\'"rate_limits"\'*')
-    const endpointIndex = script.indexOf('ORCA_AGENT_HOOK_ENDPOINT')
+    const endpointIndex = script.indexOf('POD_AGENT_HOOK_ENDPOINT')
     const curlIndex = script.indexOf('curl -sS')
     expect(guardIndex).toBeGreaterThan(-1)
     expect(guardIndex).toBeLessThan(endpointIndex)
@@ -46,7 +46,7 @@ describe('getManagedStatusLineScript (win32 local)', () => {
     const captureIndex = script.indexOf('more.com')
     // Why: the \"-escaped needle makes findstr match the quoted JSON key, not any path containing rate_limits.
     const guardIndex = script.indexOf('findstr.exe" /c:\\"rate_limits\\"')
-    const endpointIndex = script.indexOf('call "%ORCA_AGENT_HOOK_ENDPOINT%"')
+    const endpointIndex = script.indexOf('call "%POD_AGENT_HOOK_ENDPOINT%"')
     const curlIndex = script.indexOf('curl.exe')
     expect(captureIndex).toBeGreaterThan(-1)
     expect(guardIndex).toBeGreaterThan(captureIndex)
@@ -60,15 +60,15 @@ describe('getManagedStatusLineScript (win32 local)', () => {
     const script = getManagedStatusLineScript('local')
     // Why: the stable leaf UUID stays filename-safe even when a host-supplied tab id does not,
     // while the delimiter replacement keeps a surviving legacy numeric key valid on Windows.
-    expect(script).toContain('set "ORCA_STATUSLINE_PANE_ID=%ORCA_PANE_KEY:~-36%"')
-    expect(script).toContain('set "ORCA_STATUSLINE_PANE_ID=%ORCA_STATUSLINE_PANE_ID::=_%"')
+    expect(script).toContain('set "POD_STATUSLINE_PANE_ID=%POD_PANE_KEY:~-36%"')
+    expect(script).toContain('set "POD_STATUSLINE_PANE_ID=%POD_STATUSLINE_PANE_ID::=_%"')
     expect(script).toContain(
-      'set "ORCA_STATUSLINE_PAYLOAD_FILE=%TEMP%\\orca-claude-statusline-%ORCA_STATUSLINE_PANE_ID%.tmp"'
+      'set "POD_STATUSLINE_PAYLOAD_FILE=%TEMP%\\orca-claude-statusline-%POD_STATUSLINE_PANE_ID%.tmp"'
     )
-    expect(script).toContain('--data-urlencode "payload@%ORCA_STATUSLINE_PAYLOAD_FILE%"')
+    expect(script).toContain('--data-urlencode "payload@%POD_STATUSLINE_PAYLOAD_FILE%"')
     expect(script).not.toContain('payload@-')
     const curlIndex = script.indexOf('curl.exe')
-    const delIndex = script.indexOf('del "%ORCA_STATUSLINE_PAYLOAD_FILE%"')
+    const delIndex = script.indexOf('del "%POD_STATUSLINE_PAYLOAD_FILE%"')
     expect(delIndex).toBeGreaterThan(curlIndex)
   })
 
@@ -77,11 +77,11 @@ describe('getManagedStatusLineScript (win32 local)', () => {
     const script = getManagedStatusLineScript('local')
     // Why: the posted field comes from an always-defined variable so an unset
     // CLAUDE_CONFIG_DIR yields "configDir=" (matching POSIX + the null snapshot).
-    expect(script).toContain('set "ORCA_STATUSLINE_CONFIG_DIR_FIELD=configDir="')
+    expect(script).toContain('set "POD_STATUSLINE_CONFIG_DIR_FIELD=configDir="')
     expect(script).toContain(
-      'if defined CLAUDE_CONFIG_DIR set "ORCA_STATUSLINE_CONFIG_DIR_FIELD=configDir=%CLAUDE_CONFIG_DIR%"'
+      'if defined CLAUDE_CONFIG_DIR set "POD_STATUSLINE_CONFIG_DIR_FIELD=configDir=%CLAUDE_CONFIG_DIR%"'
     )
-    expect(script).toContain('--data-urlencode "%ORCA_STATUSLINE_CONFIG_DIR_FIELD%"')
+    expect(script).toContain('--data-urlencode "%POD_STATUSLINE_CONFIG_DIR_FIELD%"')
     expect(script).not.toContain('"configDir=%CLAUDE_CONFIG_DIR%"')
   })
 
@@ -89,7 +89,7 @@ describe('getManagedStatusLineScript (win32 local)', () => {
     stubPlatform('win32')
     const script = getManagedStatusLineScript('local')
     const paneGuardIndex = script.indexOf(
-      'if "%ORCA_PANE_KEY%"=="" goto :orca_agent_hook_drain_stdin'
+      'if "%POD_PANE_KEY%"=="" goto :orca_agent_hook_drain_stdin'
     )
     const captureIndex = script.indexOf('more.com')
     expect(paneGuardIndex).toBeGreaterThan(-1)
@@ -102,16 +102,16 @@ describe('getManagedStatusLineScript (win32 local)', () => {
     const script = getManagedStatusLineScript('local')
     const captureIndex = script.indexOf('more.com')
     const stampIndex = script.indexOf(
-      'set "ORCA_STATUSLINE_STAMP_FILE=%TEMP%\\orca-claude-statusline-last-%ORCA_STATUSLINE_PANE_ID%.tmp"'
+      'set "POD_STATUSLINE_STAMP_FILE=%TEMP%\\orca-claude-statusline-last-%POD_STATUSLINE_PANE_ID%.tmp"'
     )
     const throttleIndex = script.indexOf(
-      `if %ORCA_STATUSLINE_ELAPSED% GEQ 0 if %ORCA_STATUSLINE_ELAPSED% LSS ${CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS} goto :orca_statusline_cleanup`
+      `if %POD_STATUSLINE_ELAPSED% GEQ 0 if %POD_STATUSLINE_ELAPSED% LSS ${CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS} goto :orca_statusline_cleanup`
     )
     const findstrIndex = script.indexOf('findstr.exe')
     const stampWriteIndex = script.indexOf(
-      'if defined ORCA_STATUSLINE_NOW (>"%ORCA_STATUSLINE_STAMP_FILE%" echo %ORCA_STATUSLINE_NOW%)'
+      'if defined POD_STATUSLINE_NOW (>"%POD_STATUSLINE_STAMP_FILE%" echo %POD_STATUSLINE_NOW%)'
     )
-    const tokenGuardIndex = script.indexOf('if "%ORCA_AGENT_HOOK_TOKEN%"=="" goto')
+    const tokenGuardIndex = script.indexOf('if "%POD_AGENT_HOOK_TOKEN%"=="" goto')
     const curlIndex = script.indexOf('curl.exe')
     // Why: the check precedes findstr so throttled ticks skip that spawn too, but the stamp
     // only advances after every post guard passes — skipped ticks must not defer the next post.
@@ -121,16 +121,16 @@ describe('getManagedStatusLineScript (win32 local)', () => {
     expect(stampWriteIndex).toBeGreaterThan(tokenGuardIndex)
     expect(stampWriteIndex).toBeLessThan(curlIndex)
     // Fail-open shape: undefined elapsed (unparseable time/stamp) proceeds to the probe.
-    expect(script).toContain('if not defined ORCA_STATUSLINE_ELAPSED goto :orca_statusline_probe')
+    expect(script).toContain('if not defined POD_STATUSLINE_ELAPSED goto :orca_statusline_probe')
     expect(script).toContain(
-      'for /f "delims=0123456789" %%d in ("%ORCA_STATUSLINE_LAST%") do set "ORCA_STATUSLINE_LAST="'
+      'for /f "delims=0123456789" %%d in ("%POD_STATUSLINE_LAST%") do set "POD_STATUSLINE_LAST="'
     )
     expect(script).toContain(
-      'if defined ORCA_STATUSLINE_NOW if defined ORCA_STATUSLINE_LAST set /a "ORCA_STATUSLINE_ELAPSED=ORCA_STATUSLINE_NOW-ORCA_STATUSLINE_LAST" 2>nul'
+      'if defined POD_STATUSLINE_NOW if defined POD_STATUSLINE_LAST set /a "POD_STATUSLINE_ELAPSED=POD_STATUSLINE_NOW-POD_STATUSLINE_LAST" 2>nul'
     )
     // cmd parses leading-zero numbers as octal; 1%%x %% 100 defuses 08/09.
     expect(script).toContain('(1%%a %% 100)*3600+(1%%b %% 100)*60+(1%%c %% 100)')
-    expect(script).toContain('set "ORCA_STATUSLINE_TIME=%TIME: =0%"')
+    expect(script).toContain('set "POD_STATUSLINE_TIME=%TIME: =0%"')
   })
 })
 
@@ -138,9 +138,9 @@ describe('statusline curl throttle (posix)', () => {
   it('checks the per-pane stamp after the env guards and before curl', () => {
     stubPlatform('darwin')
     const script = getManagedStatusLineScript('local')
-    const envGuardIndex = script.indexOf('-z "$ORCA_AGENT_HOOK_PORT"')
+    const envGuardIndex = script.indexOf('-z "$POD_AGENT_HOOK_PORT"')
     const durationIndex = script.indexOf('"total_duration_ms"')
-    const stampIndex = script.indexOf('orca-claude-statusline-last-${orca_statusline_pane_id}')
+    const stampIndex = script.indexOf('orca-claude-statusline-last-${pod_statusline_pane_id}')
     const intervalIndex = script.indexOf(`-lt ${CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS}`)
     const curlIndex = script.indexOf('curl -sS')
     expect(envGuardIndex).toBeLessThan(stampIndex)
@@ -151,10 +151,10 @@ describe('statusline curl throttle (posix)', () => {
     // Why: the allow-list (not a mere digits check) matters — leading-zero values like 008 are
     // invalid octal inside $(( )) and abort the whole script under dash, wedging the stamp.
     expect(script).toContain(
-      'case "$orca_statusline_now" in 0|[1-9]|[1-9][0-9]*) ;; *) orca_statusline_now='
+      'case "$pod_statusline_now" in 0|[1-9]|[1-9][0-9]*) ;; *) pod_statusline_now='
     )
     expect(script).toContain(
-      'case "$orca_statusline_last" in 0|[1-9]|[1-9][0-9]*) ;; *) orca_statusline_last='
+      'case "$pod_statusline_last" in 0|[1-9]|[1-9][0-9]*) ;; *) pod_statusline_last='
     )
   })
 })
@@ -222,9 +222,9 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
         env: {
           PATH: `${join(dir, 'stub-bin')}:${process.env.PATH ?? ''}`,
           TMPDIR: dir,
-          ORCA_AGENT_HOOK_PORT: '65535',
-          ORCA_AGENT_HOOK_TOKEN: 'test-token',
-          ORCA_PANE_KEY: paneKey
+          POD_AGENT_HOOK_PORT: '65535',
+          POD_AGENT_HOOK_TOKEN: 'test-token',
+          POD_PANE_KEY: paneKey
         },
         stdio: ['pipe', 'ignore', 'pipe']
       })

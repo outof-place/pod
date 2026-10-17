@@ -88,7 +88,7 @@ describe('pod-agent-hook, the native managed Claude hook', () => {
 
   it('runs in exec form from Claude 2.1.139, copied beside claude-hook.sh', () => {
     const hook = podManagedClaudeHook(claude, SCRIPT, { claudeVersion: '2.1.296' }, true, bundled)
-    const installPath = join(home, '.orca', 'agent-hooks', 'pod-agent-hook')
+    const installPath = join(home, '.pod', 'agent-hooks', 'pod-agent-hook')
     expect(hook).toEqual({ type: 'command', command: installPath, args: [], timeout: 10 })
     expect(readFileSync(installPath, 'utf8')).toBe(readFileSync(bundled, 'utf8'))
     expect(statSync(installPath).mode & 0o777).toBe(0o755)
@@ -133,12 +133,12 @@ describe('pod-agent-hook, the native managed Claude hook', () => {
   it('records the resolved data folder of the Pod that installed it, beside the client', () => {
     const userData = join(home, 'Library', 'Application Support', 'Pod')
     mkdirSync(userData, { recursive: true })
-    vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+    vi.stubEnv('POD_USER_DATA_PATH', userData)
     const installPath = getPodAgentHookInstallPath()
     const record = `${installPath}${POD_AGENT_HOOK_USER_DATA_SUFFIX}`
     expect(installPodAgentHookBinary(bundled, installPath)).toBe(true)
     expect(readFileSync(record, 'utf8')).toBe(`${realpathSync(userData)}\n`)
-    vi.stubEnv('ORCA_USER_DATA_PATH', '')
+    vi.stubEnv('POD_USER_DATA_PATH', '')
     expect(installPodAgentHookBinary(bundled, installPath)).toBe(true)
     expect(existsSync(record)).toBe(false)
     vi.unstubAllEnvs()

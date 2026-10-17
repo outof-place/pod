@@ -4,9 +4,9 @@ const MANAGED_MARKER = '# Orca managed WSL CLI launcher'
 const BRIDGE_MANAGED_MARKER = '# Orca managed WSL CLI PowerShell bridge'
 
 const FIND_INTEROP_POWERSHELL = `if command -v powershell.exe >/dev/null 2>&1; then
-  ORCA_POWERSHELL=powershell.exe
+  POD_POWERSHELL=powershell.exe
 elif [ -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe ]; then
-  ORCA_POWERSHELL=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
+  POD_POWERSHELL=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
 else
   echo "Orca WSL CLI requires Windows interop and could not find powershell.exe." >&2
   exit 1
@@ -27,9 +27,9 @@ export function buildColocatedWslLauncher(
   return buildLauncher(
     windowsLauncherPath,
     '"$(dirname -- "$0")/orca-wsl-bridge.ps1"',
-    `ORCA_POWERSHELL=$(wslpath -u ${quoteShell(windowsPowerShellPath)})
-if [ ! -x "$ORCA_POWERSHELL" ]; then
-  echo "Orca WSL CLI requires Windows interop and access to $ORCA_POWERSHELL." >&2
+    `POD_POWERSHELL=$(wslpath -u ${quoteShell(windowsPowerShellPath)})
+if [ ! -x "$POD_POWERSHELL" ]; then
+  echo "Orca WSL CLI requires Windows interop and access to $POD_POWERSHELL." >&2
   exit 1
 fi`
   )
@@ -44,22 +44,22 @@ function buildLauncher(
   return `#!/usr/bin/env bash
 set -euo pipefail
 ${MANAGED_MARKER}
-# ORCA_WIN_LAUNCHER_B64=${encodedTarget}
-ORCA_WIN_LAUNCHER=${quoteShell(windowsLauncherPath)}
-ORCA_BRIDGE_PS1=${bridgePathExpression}
+# POD_WIN_LAUNCHER_B64=${encodedTarget}
+POD_WIN_LAUNCHER=${quoteShell(windowsLauncherPath)}
+POD_BRIDGE_PS1=${bridgePathExpression}
 ${resolvePowerShell}
 # Why: a shell can outlive a deleted worktree; keep explicit CLI selectors and
 # help usable, and repair cwd before any WSL interop tool tries to resolve it.
-ORCA_WSL_CWD=$(pwd -P 2>/dev/null) || {
-  ORCA_WSL_CWD=/
+POD_WSL_CWD=$(pwd -P 2>/dev/null) || {
+  POD_WSL_CWD=/
   cd /
 }
-ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
-ORCA_WSL_CWD_WIN=$(wslpath -w "$ORCA_WSL_CWD")
+POD_BRIDGE_PS1_WIN=$(wslpath -w "$POD_BRIDGE_PS1")
+POD_WSL_CWD_WIN=$(wslpath -w "$POD_WSL_CWD")
 if [ -n "\${WSL_DISTRO_NAME:-}" ]; then
   set -- -WslDistro "$WSL_DISTRO_NAME" "$@"
 fi
-exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"
+exec "$POD_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$POD_BRIDGE_PS1_WIN" "$POD_WIN_LAUNCHER" -WslCwd "$POD_WSL_CWD_WIN" "$@"
 `
 }
 
@@ -70,9 +70,9 @@ export function buildWslBridgeScript(app?: {
 }): string {
   const setAppEnv = app
     ? [
-        `$env:ORCA_USER_DATA_PATH = ${quotePowerShellLiteral(app.userDataPath)}`,
+        `$env:POD_USER_DATA_PATH = ${quotePowerShellLiteral(app.userDataPath)}`,
         // Why: WSLENV /p maps this guest-only dir back; an app the CLI starts must not inherit it.
-        'Remove-Item Env:ORCA_WSL_CLI_DIR -ErrorAction SilentlyContinue',
+        'Remove-Item Env:POD_WSL_CLI_DIR -ErrorAction SilentlyContinue',
         ...(app.cliEntryPath ? buildDevCliEnv(app.cliEntryPath) : [])
       ]
     : []
@@ -136,15 +136,15 @@ try {
     $ForwardArgs = @($args[$ForwardArgStart..($args.Count - 1)])
   }
   if ([string]::IsNullOrEmpty($WslCwd)) {
-    Remove-Item Env:ORCA_CLI_CWD -ErrorAction SilentlyContinue
+    Remove-Item Env:POD_CLI_CWD -ErrorAction SilentlyContinue
   } else {
-    $env:ORCA_CLI_CWD = $WslCwd
+    $env:POD_CLI_CWD = $WslCwd
   }
   # Do not let an inherited Windows environment choose the caller's account location.
   if ([string]::IsNullOrEmpty($WslDistro)) {
-    Remove-Item Env:ORCA_CLI_WSL_DISTRO -ErrorAction SilentlyContinue
+    Remove-Item Env:POD_CLI_WSL_DISTRO -ErrorAction SilentlyContinue
   } else {
-    $env:ORCA_CLI_WSL_DISTRO = $WslDistro
+    $env:POD_CLI_WSL_DISTRO = $WslDistro
   }
   $LauncherDirectory = Split-Path -Parent $OrcaLauncher
   Push-Location -LiteralPath $LauncherDirectory
@@ -181,9 +181,9 @@ exit $exitCode
 function buildDevCliEnv(cliEntryPath: string): string[] {
   return [
     "$env:ELECTRON_RUN_AS_NODE = '1'",
-    "if (-not $env:ORCA_APP_EXECUTABLE) { $env:ORCA_APP_EXECUTABLE = $OrcaLauncher; $env:ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT = '1' }",
-    '$env:ORCA_NODE_OPTIONS = $env:NODE_OPTIONS',
-    '$env:ORCA_NODE_REPL_EXTERNAL_MODULE = $env:NODE_REPL_EXTERNAL_MODULE',
+    "if (-not $env:POD_APP_EXECUTABLE) { $env:POD_APP_EXECUTABLE = $OrcaLauncher; $env:POD_APP_EXECUTABLE_NEEDS_APP_ROOT = '1' }",
+    '$env:POD_NODE_OPTIONS = $env:NODE_OPTIONS',
+    '$env:POD_NODE_REPL_EXTERNAL_MODULE = $env:NODE_REPL_EXTERNAL_MODULE',
     'Remove-Item Env:NODE_OPTIONS, Env:NODE_REPL_EXTERNAL_MODULE -ErrorAction SilentlyContinue',
     `$ForwardArgs = @(${quotePowerShellLiteral(cliEntryPath)}) + $ForwardArgs`
   ]
@@ -248,7 +248,7 @@ export function buildSafeRemoveCommand(commandPath: string, legacyCommandPath?: 
 }
 
 export function parseManagedLauncherTarget(content: string): string | null {
-  const encoded = content.match(/^# ORCA_WIN_LAUNCHER_B64=([A-Za-z0-9+/=]+)$/m)?.[1]
+  const encoded = content.match(/^# POD_WIN_LAUNCHER_B64=([A-Za-z0-9+/=]+)$/m)?.[1]
   if (encoded) {
     try {
       return Buffer.from(encoded, 'base64').toString('utf8')
@@ -257,7 +257,7 @@ export function parseManagedLauncherTarget(content: string): string | null {
     }
   }
 
-  const legacyTarget = content.match(/^ORCA_WIN_LAUNCHER='((?:[^']|'"'"')*)'$/m)?.[1]
+  const legacyTarget = content.match(/^POD_WIN_LAUNCHER='((?:[^']|'"'"')*)'$/m)?.[1]
   return legacyTarget ? legacyTarget.replaceAll(`'"'"'`, "'") : null
 }
 

@@ -2467,7 +2467,7 @@ private struct WindowCapture {
     }
 
     private static func captureImage(windowId: CGWindowID, bounds: CGRect) -> CapturedImage? {
-        if ProcessInfo.processInfo.environment["ORCA_COMPUTER_USE_SCK_SCREENSHOTS"] == "1",
+        if ProcessInfo.processInfo.environment["POD_COMPUTER_USE_SCK_SCREENSHOTS"] == "1",
            let image = captureImageWithScreenCaptureKit(windowId: windowId, bounds: bounds) {
             return CapturedImage(image: image, engine: "screenCaptureKit")
         }
@@ -4168,7 +4168,7 @@ private func runAgent(socketPath: String, token: String?) {
     let delegate = AgentRuntime(socketPath: socketPath, token: token)
     app.delegate = delegate
     // Why: SCK is reliable once this code runs as a signed app with a real TCC identity.
-    setenv("ORCA_COMPUTER_USE_SCK_SCREENSHOTS", "1", 1)
+    setenv("POD_COMPUTER_USE_SCK_SCREENSHOTS", "1", 1)
     app.run()
 }
 

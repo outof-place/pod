@@ -69,12 +69,12 @@ describe('orca claude-teams CLI handler', () => {
       }
     })
     previousRunAsNode = process.env.ELECTRON_RUN_AS_NODE
-    previousPaneKey = process.env.ORCA_PANE_KEY
+    previousPaneKey = process.env.POD_PANE_KEY
     previousExitCode = process.exitCode
     // The `orca` launcher runs Orca's Electron binary as Node, so the CLI process
     // itself carries ELECTRON_RUN_AS_NODE=1. Reproduce that inherited flag here.
     process.env.ELECTRON_RUN_AS_NODE = '1'
-    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    process.env.POD_PANE_KEY = 'tab-1:leaf-1'
   })
 
   afterEach(() => {
@@ -84,9 +84,9 @@ describe('orca claude-teams CLI handler', () => {
       process.env.ELECTRON_RUN_AS_NODE = previousRunAsNode
     }
     if (previousPaneKey === undefined) {
-      delete process.env.ORCA_PANE_KEY
+      delete process.env.POD_PANE_KEY
     } else {
-      process.env.ORCA_PANE_KEY = previousPaneKey
+      process.env.POD_PANE_KEY = previousPaneKey
     }
     process.exitCode = previousExitCode
   })

@@ -32,14 +32,14 @@ function cloneProcessEnv(): Record<string, string> {
 // Why: with system-default real-home routing, the headless Codex commit run
 // must use the user's own ~/.codex. If Orca itself was launched from a nested
 // Orca terminal it can inherit an Orca-owned CODEX_HOME override; strip only
-// that (CODEX_HOME matching the private ORCA_CODEX_HOME marker), preserving a
+// that (CODEX_HOME matching the private POD_CODEX_HOME marker), preserving a
 // user-set CODEX_HOME.
 function withoutOrcaCodexHomeOverride(base: Record<string, string>): Record<string, string> {
   const env = { ...base }
-  if (env.ORCA_CODEX_HOME && env.CODEX_HOME === env.ORCA_CODEX_HOME) {
+  if (env.POD_CODEX_HOME && env.CODEX_HOME === env.POD_CODEX_HOME) {
     delete env.CODEX_HOME
   }
-  delete env.ORCA_CODEX_HOME
+  delete env.POD_CODEX_HOME
   return env
 }
 
@@ -78,11 +78,11 @@ function prepareShellConfigDirEnv(
   // both kinds consume — see src/main/pi/titlebar-extension-service.ts.
   const sourceVar =
     agentId === 'opencode' || agentId === 'opencode2'
-      ? 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+      ? 'POD_OPENCODE_SOURCE_CONFIG_DIR'
       : agentId === 'pi'
-        ? 'ORCA_PI_SOURCE_AGENT_DIR'
+        ? 'POD_PI_SOURCE_AGENT_DIR'
         : agentId === 'omp'
-          ? 'ORCA_OMP_SOURCE_AGENT_DIR'
+          ? 'POD_OMP_SOURCE_AGENT_DIR'
           : undefined
 
   const value = readInheritedOrShellEnvVar(configVar, sourceVar, base)

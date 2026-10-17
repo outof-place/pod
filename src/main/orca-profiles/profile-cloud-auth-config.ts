@@ -56,7 +56,7 @@ export function getOrcaCloudAuthConfig(
   const allowLoopbackHttp = !packaged
   const cleanEndpointUrl = (value: string | undefined): string | null =>
     cleanUrl(value, allowLoopbackHttp)
-  const configuredApiBaseUrl = env.ORCA_CLOUD_API_URL?.trim()
+  const configuredApiBaseUrl = env.POD_CLOUD_API_URL?.trim()
   // Why: packaged releases cannot depend on launch-time environment injection;
   // these first-party endpoints and the public OAuth client ID are not secrets.
   const apiBaseUrl = configuredApiBaseUrl
@@ -64,7 +64,7 @@ export function getOrcaCloudAuthConfig(
     : packaged
       ? PRODUCTION_API_BASE_URL
       : null
-  const clientId = env.ORCA_CLOUD_CLIENT_ID?.trim() || (packaged ? PRODUCTION_CLIENT_ID : undefined)
+  const clientId = env.POD_CLOUD_CLIENT_ID?.trim() || (packaged ? PRODUCTION_CLIENT_ID : undefined)
   if (!apiBaseUrl || !clientId) {
     return {
       configured: false,
@@ -72,38 +72,38 @@ export function getOrcaCloudAuthConfig(
     }
   }
 
-  const authBaseUrl = cleanEndpointUrl(env.ORCA_CLOUD_AUTH_URL) ?? apiBaseUrl
+  const authBaseUrl = cleanEndpointUrl(env.POD_CLOUD_AUTH_URL) ?? apiBaseUrl
   return {
     configured: true,
     config: {
       apiBaseUrl,
       authorizeEndpoint:
-        cleanEndpointUrl(env.ORCA_CLOUD_AUTHORIZE_URL) ??
+        cleanEndpointUrl(env.POD_CLOUD_AUTHORIZE_URL) ??
         endpoint(authBaseUrl, '/v1/desktop/auth/authorize'),
       sessionEndpoint:
-        cleanEndpointUrl(env.ORCA_CLOUD_SESSION_URL) ??
+        cleanEndpointUrl(env.POD_CLOUD_SESSION_URL) ??
         endpoint(apiBaseUrl, '/v1/desktop/auth/session'),
       refreshEndpoint:
-        cleanEndpointUrl(env.ORCA_CLOUD_REFRESH_URL) ??
+        cleanEndpointUrl(env.POD_CLOUD_REFRESH_URL) ??
         endpoint(apiBaseUrl, '/v1/desktop/auth/refresh'),
       capabilitiesEndpoint:
-        cleanEndpointUrl(env.ORCA_CLOUD_CAPABILITIES_URL) ??
+        cleanEndpointUrl(env.POD_CLOUD_CAPABILITIES_URL) ??
         endpoint(apiBaseUrl, '/v1/desktop/auth/capabilities'),
       profileEndpoint:
-        cleanEndpointUrl(env.ORCA_CLOUD_PROFILE_URL) ??
+        cleanEndpointUrl(env.POD_CLOUD_PROFILE_URL) ??
         endpoint(apiBaseUrl, '/v1/desktop/auth/profile'),
       orgEndpoint:
-        cleanEndpointUrl(env.ORCA_CLOUD_ORG_URL) ?? endpoint(apiBaseUrl, '/v1/desktop/auth/org'),
+        cleanEndpointUrl(env.POD_CLOUD_ORG_URL) ?? endpoint(apiBaseUrl, '/v1/desktop/auth/org'),
       logoutEndpoint:
-        cleanEndpointUrl(env.ORCA_CLOUD_LOGOUT_URL) ??
+        cleanEndpointUrl(env.POD_CLOUD_LOGOUT_URL) ??
         endpoint(apiBaseUrl, '/v1/desktop/auth/logout'),
       relayTokenEndpoint:
-        cleanEndpointUrl(env.ORCA_CLOUD_RELAY_TOKEN_URL) ??
+        cleanEndpointUrl(env.POD_CLOUD_RELAY_TOKEN_URL) ??
         endpoint(apiBaseUrl, '/v1/desktop/auth/relay-token'),
       relayDirectorUrl:
-        cleanOrigin(env.ORCA_RELAY_URL, allowLoopbackHttp) ?? PRODUCTION_RELAY_DIRECTOR_URL,
+        cleanOrigin(env.POD_RELAY_URL, allowLoopbackHttp) ?? PRODUCTION_RELAY_DIRECTOR_URL,
       clientId,
-      scope: env.ORCA_CLOUD_AUTH_SCOPE?.trim() || DEFAULT_SCOPE
+      scope: env.POD_CLOUD_AUTH_SCOPE?.trim() || DEFAULT_SCOPE
     }
   }
 }
@@ -125,7 +125,7 @@ export function allowsPlaintextOrcaCloudSession(
   packaged: boolean = isPackagedOrcaBuild()
 ): boolean {
   return (
-    env.ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION === '1' && env.NODE_ENV !== 'production' && !packaged
+    env.POD_CLOUD_ALLOW_PLAINTEXT_SESSION === '1' && env.NODE_ENV !== 'production' && !packaged
   )
 }
 
@@ -133,5 +133,5 @@ export function isOrcaCloudDevAuthEnabled(
   env: NodeJS.ProcessEnv = process.env,
   packaged: boolean = isPackagedOrcaBuild()
 ): boolean {
-  return env.ORCA_CLOUD_DEV_AUTH === '1' && env.NODE_ENV !== 'production' && !packaged
+  return env.POD_CLOUD_DEV_AUTH === '1' && env.NODE_ENV !== 'production' && !packaged
 }

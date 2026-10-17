@@ -26,7 +26,7 @@ function getEnvVars(): { name: string; description: string }[] {
       )
     },
     {
-      name: '$ORCA_WORKSPACE_NAME',
+      name: '$POD_WORKSPACE_NAME',
       description: translate(
         'auto.components.settings.RepositoryHooksSection.0fa21e19ec',
         'Name of the workspace, usually based on the branch name.'

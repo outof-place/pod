@@ -31,7 +31,7 @@ async function writeCli(): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    'console.log(JSON.stringify({profile:process.env.ORCA_USER_DATA_PATH, args:process.argv.slice(2), electron:process.env.ELECTRON_RUN_AS_NODE}))'
+    'console.log(JSON.stringify({profile:process.env.POD_USER_DATA_PATH, args:process.argv.slice(2), electron:process.env.ELECTRON_RUN_AS_NODE}))'
   )
 }
 
@@ -52,7 +52,7 @@ describe('orcad profile CLI launcher', () => {
         args,
         env: {
           ...process.env,
-          ORCA_USER_DATA_PATH: '/another/owner',
+          POD_USER_DATA_PATH: '/another/owner',
           ELECTRON_RUN_AS_NODE: '1',
           NODE_OPTIONS: '--require /missing/inherited/preload'
         },

@@ -52,7 +52,7 @@ it('keeps delivered ranges frozen and isolated from reentrant flushes and dispos
 describe('leading-edge flush', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
-    vi.stubEnv('ORCA_TERMINAL_OUTPUT_LEADING_EDGE', '1')
+    vi.stubEnv('POD_TERMINAL_OUTPUT_LEADING_EDGE', '1')
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -163,7 +163,7 @@ describe('leading-edge flush', () => {
   })
 
   it('restores timer-only batching with the kill switch', () => {
-    vi.stubEnv('ORCA_TERMINAL_OUTPUT_LEADING_EDGE', '0')
+    vi.stubEnv('POD_TERMINAL_OUTPUT_LEADING_EDGE', '0')
     const { batcher, delivered } = collect()
     batcher.push('k')
     expect(delivered).toHaveLength(0)
@@ -176,7 +176,7 @@ describe('leading-edge flush', () => {
 describe('Pod input flush', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
-    vi.stubEnv('ORCA_TERMINAL_OUTPUT_LEADING_EDGE', '1')
+    vi.stubEnv('POD_TERMINAL_OUTPUT_LEADING_EDGE', '1')
     vi.stubEnv('POD_TERMINAL_INPUT_FLUSH', '1')
   })
   afterEach(() => {

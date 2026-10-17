@@ -9,7 +9,7 @@ import { z } from 'zod'
  * fence, so an update or rollback in flight keeps the server up. User-started servers never
  * carry it.
  */
-export const ORCAD_MANAGED_ACTIVATION_ROOT_ENV = 'ORCA_ORCAD_MANAGED_ACTIVATION_ROOT'
+export const ORCAD_MANAGED_ACTIVATION_ROOT_ENV = 'POD_ORCAD_MANAGED_ACTIVATION_ROOT'
 /** Test-only quiet period; a client forwards it to the servers it launches. */
 export const ORCAD_E2E_IDLE_TIMEOUT_ENV = 'ORCA_E2E_ORCAD_IDLE_TIMEOUT_MS'
 export const ORCAD_IDLE_EXIT_TIMEOUT_MS = 15 * 60_000

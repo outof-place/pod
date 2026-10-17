@@ -27,7 +27,7 @@ function lastSpawnSpec(): ProcessSpec {
 }
 
 function decodedSupervisorSpec(spec: ProcessSpec): Record<string, unknown> {
-  return JSON.parse(Buffer.from(spec.env!.ORCA_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString())
+  return JSON.parse(Buffer.from(spec.env!.POD_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString())
 }
 
 const folder = mkdtempSync(join(tmpdir(), 'orca-agent-launch-'))
@@ -81,7 +81,7 @@ describe('spawnSourceControlAgent', () => {
 
     expect(child.supervised).toBeUndefined()
     expect(lastSpawnSpec()).toMatchObject({ program: 'C:/tools/agent.exe', args: ['--print'] })
-    expect(lastSpawnSpec().env).not.toHaveProperty('ORCA_PROVIDER_SUPERVISOR_SPEC')
+    expect(lastSpawnSpec().env).not.toHaveProperty('POD_PROVIDER_SUPERVISOR_SPEC')
   })
 })
 

@@ -47,7 +47,7 @@ export function getLocalHookFields(): readonly [LocalHookField, LocalHookField] 
       ),
       placeholder: translate(
         'auto.components.settings.RepositoryHooksSection.9b821fa19d',
-        '# e.g. echo "Cleaning up $ORCA_WORKSPACE_NAME"'
+        '# e.g. echo "Cleaning up $POD_WORKSPACE_NAME"'
       )
     }
   ]

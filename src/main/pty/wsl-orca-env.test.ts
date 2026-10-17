@@ -9,15 +9,15 @@ import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from './
 
 describe('addOrcaWslInteropEnv', () => {
   it('marks the Orca terminal handle for Windows to WSL env import', () => {
-    const env: Record<string, string> = { ORCA_TERMINAL_HANDLE: 'term_wsl' }
+    const env: Record<string, string> = { POD_TERMINAL_HANDLE: 'term_wsl' }
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:ORCA_SHELL_READY_ROOT/p')
+    expect(env.WSLENV).toBe('POD_TERMINAL_HANDLE/u:POD_SHELL_READY_ROOT/p')
   })
 
   // Why this is published at all: the wrapper tree is content-addressed, so the
-  // in-guest login script cannot rebuild its path from ORCA_USER_DATA_PATH -- it
+  // in-guest login script cannot rebuild its path from POD_USER_DATA_PATH -- it
   // cannot derive the hash segment. Without this the guest finds no wrapper and
   // every WSL pane launches unwrapped: no ready marker, so every startup command
   // waits out the full readiness timeout.
@@ -26,10 +26,10 @@ describe('addOrcaWslInteropEnv', () => {
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.ORCA_SHELL_READY_ROOT).toBe(getShellReadyWrapperRoot())
-    expect(isAbsolute(env.ORCA_SHELL_READY_ROOT as string)).toBe(true)
+    expect(env.POD_SHELL_READY_ROOT).toBe(getShellReadyWrapperRoot())
+    expect(isAbsolute(env.POD_SHELL_READY_ROOT as string)).toBe(true)
     // /p, not /u: the guest reads a Windows path through /mnt/c.
-    expect(env.WSLENV?.split(':')).toContain('ORCA_SHELL_READY_ROOT/p')
+    expect(env.WSLENV?.split(':')).toContain('POD_SHELL_READY_ROOT/p')
   })
 
   it('imports setup-gated startup env into WSL without path translation', () => {
@@ -41,7 +41,7 @@ describe('addOrcaWslInteropEnv', () => {
     addOrcaWslInteropEnv(env)
 
     expect(env.WSLENV?.split(':')).toEqual([
-      'ORCA_SHELL_READY_ROOT/p',
+      'POD_SHELL_READY_ROOT/p',
       `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
       `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`
     ])
@@ -49,36 +49,36 @@ describe('addOrcaWslInteropEnv', () => {
 
   it('preserves existing WSLENV entries and does not duplicate the handle entry', () => {
     const env: Record<string, string> = {
-      WSLENV: 'FOO/u:ORCA_TERMINAL_HANDLE/u:BAR/p'
+      WSLENV: 'FOO/u:POD_TERMINAL_HANDLE/u:BAR/p'
     }
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.WSLENV).toBe('FOO/u:ORCA_TERMINAL_HANDLE/u:BAR/p:ORCA_SHELL_READY_ROOT/p')
+    expect(env.WSLENV).toBe('FOO/u:POD_TERMINAL_HANDLE/u:BAR/p:POD_SHELL_READY_ROOT/p')
   })
 
   it('marks OMP status and hook env for Windows to WSL import', () => {
     const env: Record<string, string> = {
-      ORCA_TERMINAL_HANDLE: 'term_wsl',
-      ORCA_USER_DATA_PATH: 'C:\\Users\\jin\\AppData\\Roaming\\Orca',
-      ORCA_CLI_COMMAND: 'orca-ide',
-      ORCA_WSL_CLI_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\wsl-managed-cli\\hash',
-      ORCA_CODEX_LAUNCH_PREFLIGHT: 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
-      ORCA_CODEX_ISOLATE: '0',
-      ORCA_OMP_FRESH_CONFIG: 'C:\\Orca\\fresh-session.yml',
-      ORCA_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\orca-agent-status.ts',
-      ORCA_PRIME_AGENT_STATUS_EXTENSION: 'C:\\stale\\orca-agent-status.ts',
-      ORCA_PANE_KEY: 'tab-1:leaf-1',
-      ORCA_TAB_ID: 'tab-1',
-      ORCA_WORKTREE_ID: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
-      ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
-      ORCA_OPENCODE_AGENT: 'opencode2',
-      ORCA_AGENT_HOOK_PORT: '4567',
-      ORCA_AGENT_HOOK_TOKEN: 'token',
-      ORCA_AGENT_HOOK_ENV: 'dev',
-      ORCA_AGENT_HOOK_VERSION: '1',
-      ORCA_AGENT_HOOK_TRANSPORT: 'raw-json-v1',
-      ORCA_WSL_HOOK_INSTANCE: 'testinstance',
+      POD_TERMINAL_HANDLE: 'term_wsl',
+      POD_USER_DATA_PATH: 'C:\\Users\\jin\\AppData\\Roaming\\Orca',
+      POD_CLI_COMMAND: 'orca-ide',
+      POD_WSL_CLI_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\wsl-managed-cli\\hash',
+      POD_CODEX_LAUNCH_PREFLIGHT: 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
+      POD_CODEX_ISOLATE: '0',
+      POD_OMP_FRESH_CONFIG: 'C:\\Orca\\fresh-session.yml',
+      POD_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\orca-agent-status.ts',
+      POD_PRIME_AGENT_STATUS_EXTENSION: 'C:\\stale\\orca-agent-status.ts',
+      POD_PANE_KEY: 'tab-1:leaf-1',
+      POD_TAB_ID: 'tab-1',
+      POD_WORKTREE_ID: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+      POD_AGENT_LAUNCH_TOKEN: 'launch-secret',
+      POD_OPENCODE_AGENT: 'opencode2',
+      POD_AGENT_HOOK_PORT: '4567',
+      POD_AGENT_HOOK_TOKEN: 'token',
+      POD_AGENT_HOOK_ENV: 'dev',
+      POD_AGENT_HOOK_VERSION: '1',
+      POD_AGENT_HOOK_TRANSPORT: 'raw-json-v1',
+      POD_WSL_HOOK_INSTANCE: 'testinstance',
       ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
       ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'local',
       ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu'
@@ -86,26 +86,26 @@ describe('addOrcaWslInteropEnv', () => {
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.WSLENV).toContain('ORCA_TERMINAL_HANDLE/u')
-    expect(env.WSLENV).toContain('ORCA_USER_DATA_PATH/p')
-    expect(env.WSLENV).toContain('ORCA_CLI_COMMAND/u')
-    expect(env.WSLENV).toContain('ORCA_WSL_CLI_DIR/p')
-    expect(env.WSLENV).toContain('ORCA_CODEX_LAUNCH_PREFLIGHT/p')
-    expect(env.WSLENV).toContain('ORCA_CODEX_ISOLATE/u')
-    expect(env.WSLENV).toContain('ORCA_OMP_STATUS_EXTENSION/p')
-    expect(env.WSLENV).toContain('ORCA_OMP_FRESH_CONFIG/p')
-    expect(env.WSLENV).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
-    expect(env.WSLENV).toContain('ORCA_PANE_KEY/u')
-    expect(env.WSLENV).toContain('ORCA_TAB_ID/u')
-    expect(env.WSLENV).toContain('ORCA_WORKTREE_ID/u')
-    expect(env.WSLENV).toContain('ORCA_AGENT_LAUNCH_TOKEN/u')
-    expect(env.WSLENV).toContain('ORCA_OPENCODE_AGENT/u')
-    expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_PORT/u')
-    expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_TOKEN/u')
-    expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_ENV/u')
-    expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_VERSION/u')
-    expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_TRANSPORT/u')
-    expect(env.WSLENV).toContain('ORCA_WSL_HOOK_INSTANCE/u')
+    expect(env.WSLENV).toContain('POD_TERMINAL_HANDLE/u')
+    expect(env.WSLENV).toContain('POD_USER_DATA_PATH/p')
+    expect(env.WSLENV).toContain('POD_CLI_COMMAND/u')
+    expect(env.WSLENV).toContain('POD_WSL_CLI_DIR/p')
+    expect(env.WSLENV).toContain('POD_CODEX_LAUNCH_PREFLIGHT/p')
+    expect(env.WSLENV).toContain('POD_CODEX_ISOLATE/u')
+    expect(env.WSLENV).toContain('POD_OMP_STATUS_EXTENSION/p')
+    expect(env.WSLENV).toContain('POD_OMP_FRESH_CONFIG/p')
+    expect(env.WSLENV).not.toContain('POD_PRIME_AGENT_STATUS_EXTENSION')
+    expect(env.WSLENV).toContain('POD_PANE_KEY/u')
+    expect(env.WSLENV).toContain('POD_TAB_ID/u')
+    expect(env.WSLENV).toContain('POD_WORKTREE_ID/u')
+    expect(env.WSLENV).toContain('POD_AGENT_LAUNCH_TOKEN/u')
+    expect(env.WSLENV).toContain('POD_OPENCODE_AGENT/u')
+    expect(env.WSLENV).toContain('POD_AGENT_HOOK_PORT/u')
+    expect(env.WSLENV).toContain('POD_AGENT_HOOK_TOKEN/u')
+    expect(env.WSLENV).toContain('POD_AGENT_HOOK_ENV/u')
+    expect(env.WSLENV).toContain('POD_AGENT_HOOK_VERSION/u')
+    expect(env.WSLENV).toContain('POD_AGENT_HOOK_TRANSPORT/u')
+    expect(env.WSLENV).toContain('POD_WSL_HOOK_INSTANCE/u')
     expect(env.WSLENV).toContain('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u')
     expect(env.WSLENV).toContain('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID/u')
     expect(env.WSLENV).toContain('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION/u')
@@ -143,24 +143,24 @@ describe('addOrcaWslInteropEnv', () => {
 
   it('path-translates a Windows hook endpoint but passes a guest-side one untouched', () => {
     const windowsEnv: Record<string, string> = {
-      ORCA_AGENT_HOOK_ENDPOINT: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\agent-hooks\\endpoint.cmd'
+      POD_AGENT_HOOK_ENDPOINT: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\agent-hooks\\endpoint.cmd'
     }
     addOrcaWslInteropEnv(windowsEnv)
-    expect(windowsEnv.WSLENV).toContain('ORCA_AGENT_HOOK_ENDPOINT/p')
+    expect(windowsEnv.WSLENV).toContain('POD_AGENT_HOOK_ENDPOINT/p')
 
     const guestEnv: Record<string, string> = {
-      ORCA_AGENT_HOOK_ENDPOINT: '/home/jin/.orca-wsl/agent-hooks/port-4567/endpoint.env'
+      POD_AGENT_HOOK_ENDPOINT: '/home/jin/.orca-wsl/agent-hooks/port-4567/endpoint.env'
     }
     addOrcaWslInteropEnv(guestEnv)
-    expect(guestEnv.WSLENV).toContain('ORCA_AGENT_HOOK_ENDPOINT/u')
-    expect(guestEnv.WSLENV).not.toContain('ORCA_AGENT_HOOK_ENDPOINT/p')
+    expect(guestEnv.WSLENV).toContain('POD_AGENT_HOOK_ENDPOINT/u')
+    expect(guestEnv.WSLENV).not.toContain('POD_AGENT_HOOK_ENDPOINT/p')
   })
 
   it('tags pre-translated Linux setup paths /u so WSLENV does not translate them again (#9206)', () => {
     const env: Record<string, string> = {
       ORCA_ROOT_PATH: '/home/jin/repo',
       ORCA_WORKTREE_PATH: '/home/jin/repo-worktrees/fix-1',
-      ORCA_WORKSPACE_NAME: 'fix-1',
+      POD_WORKSPACE_NAME: 'fix-1',
       CONDUCTOR_ROOT_PATH: '/home/jin/repo',
       GHOSTX_ROOT_PATH: '/home/jin/repo'
     }
@@ -198,26 +198,26 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).not.toContain('ORCA_WORKTREE_PATH/u')
   })
 
-  it('always tags ORCA_WORKSPACE_NAME /u because it is a name, not a path', () => {
-    const env: Record<string, string> = { ORCA_WORKSPACE_NAME: 'fix-1' }
+  it('always tags POD_WORKSPACE_NAME /u because it is a name, not a path', () => {
+    const env: Record<string, string> = { POD_WORKSPACE_NAME: 'fix-1' }
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.WSLENV).toBe('ORCA_SHELL_READY_ROOT/p:ORCA_WORKSPACE_NAME/u')
+    expect(env.WSLENV).toBe('POD_SHELL_READY_ROOT/p:POD_WORKSPACE_NAME/u')
   })
 
   it('does not register setup vars that are absent from the env', () => {
-    const env: Record<string, string> = { ORCA_TERMINAL_HANDLE: 'term_wsl' }
+    const env: Record<string, string> = { POD_TERMINAL_HANDLE: 'term_wsl' }
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:ORCA_SHELL_READY_ROOT/p')
+    expect(env.WSLENV).toBe('POD_TERMINAL_HANDLE/u:POD_SHELL_READY_ROOT/p')
   })
 
   it('crosses the inline-image protocol hint into the guest untranslated (/u)', () => {
-    const env: Record<string, string> = { ORCA_IMAGE_PROTOCOL: 'kitty' }
+    const env: Record<string, string> = { POD_IMAGE_PROTOCOL: 'kitty' }
     addOrcaWslInteropEnv(env)
-    expect(env.WSLENV).toContain('ORCA_IMAGE_PROTOCOL/u')
+    expect(env.WSLENV).toContain('POD_IMAGE_PROTOCOL/u')
   })
 
   it('marks the WSL hook relay version for import on relay spawn envs', () => {
@@ -225,17 +225,17 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_WSL_HOOK_RELAY_VERSION: '0.1.0+abc'
     }
     addOrcaWslInteropEnv(env)
-    expect(env.WSLENV).toBe('ORCA_SHELL_READY_ROOT/p:ORCA_WSL_HOOK_RELAY_VERSION/u')
+    expect(env.WSLENV).toBe('POD_SHELL_READY_ROOT/p:ORCA_WSL_HOOK_RELAY_VERSION/u')
   })
 
   it('crosses a guest-side OpenCode config overlay untranslated (/u)', () => {
     const env: Record<string, string> = {
       OPENCODE_CONFIG_DIR: '/home/jin/.orca-relay/opencode-overlays/abc',
-      ORCA_OPENCODE_CONFIG_DIR: '/home/jin/.orca-relay/opencode-overlays/abc'
+      POD_OPENCODE_CONFIG_DIR: '/home/jin/.orca-relay/opencode-overlays/abc'
     }
     addOrcaWslInteropEnv(env)
     expect(env.WSLENV).toContain('OPENCODE_CONFIG_DIR/u')
-    expect(env.WSLENV).toContain('ORCA_OPENCODE_CONFIG_DIR/u')
+    expect(env.WSLENV).toContain('POD_OPENCODE_CONFIG_DIR/u')
     expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR/p')
   })
 
@@ -245,17 +245,17 @@ describe('addOrcaWslInteropEnv', () => {
     // would adopt Orca's Windows overlay as its config root.
     const env: Record<string, string> = {
       OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\opencode-overlays\\abc',
-      ORCA_OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\opencode-overlays\\abc'
+      POD_OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\opencode-overlays\\abc'
     }
     addOrcaWslInteropEnv(env)
     expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR')
-    expect(env.WSLENV).not.toContain('ORCA_OPENCODE_CONFIG_DIR')
+    expect(env.WSLENV).not.toContain('POD_OPENCODE_CONFIG_DIR')
   })
 
   it('does not register the OpenCode config vars when they are absent', () => {
-    const env: Record<string, string> = { ORCA_TERMINAL_HANDLE: 'term_wsl' }
+    const env: Record<string, string> = { POD_TERMINAL_HANDLE: 'term_wsl' }
     addOrcaWslInteropEnv(env)
     expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR')
-    expect(env.WSLENV).not.toContain('ORCA_OPENCODE_CONFIG_DIR')
+    expect(env.WSLENV).not.toContain('POD_OPENCODE_CONFIG_DIR')
   })
 })

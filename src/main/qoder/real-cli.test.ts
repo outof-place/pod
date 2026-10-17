@@ -68,7 +68,7 @@ it.skipIf(process.env.ORCA_REAL_QODER_CLI_TEST !== '1')(
         HOME: sandbox.home,
         USERPROFILE: sandbox.home,
         ...server.buildPtyEnv(),
-        ORCA_PANE_KEY: makePaneKey(randomUUID(), randomUUID()),
+        POD_PANE_KEY: makePaneKey(randomUUID(), randomUUID()),
         ORCA_BACKGROUND_LAUNCH: '1'
       }
       const command = process.env.ORCA_QODER_CLI_PATH ?? join(realHome, '.local', 'bin', 'qodercli')

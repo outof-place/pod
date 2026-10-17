@@ -542,8 +542,8 @@ describe('resolvePiSourceAgentDir', () => {
     const env = {
       HOME: mkdtempSync(join(tmpdir(), 'plugin-overlay-env-')),
       PI_CODING_AGENT_DIR: '/tmp/parent-orca-pi-overlay',
-      ORCA_PI_CODING_AGENT_DIR: '/tmp/parent-orca-pi-overlay',
-      ORCA_PI_SOURCE_AGENT_DIR: '/user/.pi/agent'
+      POD_PI_CODING_AGENT_DIR: '/tmp/parent-orca-pi-overlay',
+      POD_PI_SOURCE_AGENT_DIR: '/user/.pi/agent'
     }
     try {
       expect(resolvePiSourceAgentDir(env, undefined, 'pi')).toBe('/user/.pi/agent')
@@ -557,7 +557,7 @@ describe('resolvePiSourceAgentDir', () => {
     const env = {
       HOME: mkdtempSync(join(tmpdir(), 'plugin-overlay-env-')),
       PI_CODING_AGENT_DIR: '/user/custom-omp-agent',
-      ORCA_PI_SOURCE_AGENT_DIR: '/user/.pi/agent'
+      POD_PI_SOURCE_AGENT_DIR: '/user/.pi/agent'
     }
     try {
       expect(resolvePiSourceAgentDir(env, undefined, 'omp')).toBe('/user/custom-omp-agent')

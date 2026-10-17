@@ -154,10 +154,10 @@ async function runBuiltCli(
   const child = spawn(process.execPath, [CLI_PATH, ...args], {
     env: {
       ...process.env,
-      ORCA_USER_DATA_PATH: userDataPath,
-      ORCA_TERMINAL_HANDLE: TERMINAL_HANDLE,
-      ORCA_PANE_KEY: PANE_KEY,
-      ORCA_AGENT_LAUNCH_TOKEN: LAUNCH_TOKEN
+      POD_USER_DATA_PATH: userDataPath,
+      POD_TERMINAL_HANDLE: TERMINAL_HANDLE,
+      POD_PANE_KEY: PANE_KEY,
+      POD_AGENT_LAUNCH_TOKEN: LAUNCH_TOKEN
     },
     stdio: ['ignore', 'pipe', 'pipe']
   })

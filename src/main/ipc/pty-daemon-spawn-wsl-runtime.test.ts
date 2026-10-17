@@ -468,7 +468,7 @@ describe('registerPtyHandlers', () => {
             command: 'claude',
             env: {
               PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
-              ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+              POD_AGENT_TEAMS_TEAM_ID: 'team-test',
               TERM_PROGRAM: 'Orca'
             },
             envToDelete: ['TERM_PROGRAM']
@@ -491,11 +491,11 @@ describe('registerPtyHandlers', () => {
         mockedApp.isPackaged = false
         try {
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
-            ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env'
+            POD_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env'
           })
-          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
-          expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
-          expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+          expect(env.POD_AGENT_HOOK_ENDPOINT).toBeUndefined()
+          expect(env.POD_AGENT_HOOK_PORT).toBe('5678')
+          expect(env.POD_AGENT_HOOK_TOKEN).toBe('agent-token')
         } finally {
           mockedApp.isPackaged = prev
         }
@@ -512,7 +512,7 @@ describe('registerPtyHandlers', () => {
           spawnOptions = await daemonSpawnAndGetOptions(
             {
               PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
-              ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+              POD_AGENT_TEAMS_TEAM_ID: 'team-test',
               TERM_PROGRAM: 'Orca'
             },
             undefined,
@@ -533,7 +533,7 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
         expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['TERM_PROGRAM']))
       })
-      it('injects dev-mode ORCA_USER_DATA_PATH + dev CLI PATH on the daemon path', async () => {
+      it('injects dev-mode POD_USER_DATA_PATH + dev CLI PATH on the daemon path', async () => {
         // Why: the mocked `app` is a plain object, so we can flip isPackaged for the test's scope.
         const { app } = await import('electron')
         const mockedApp = app as unknown as { isPackaged: boolean }
@@ -541,7 +541,7 @@ describe('registerPtyHandlers', () => {
         mockedApp.isPackaged = false
         try {
           const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' })
-          expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
+          expect(env.POD_USER_DATA_PATH).toBe('/tmp/orca-user-data')
           expect(env.PATH).toContain(join('/tmp/orca-user-data', 'cli', 'bin'))
         } finally {
           mockedApp.isPackaged = prev
@@ -556,7 +556,7 @@ describe('registerPtyHandlers', () => {
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
             PATH: '/system/bin'
           })
-          expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
+          expect(env.POD_USER_DATA_PATH).toBe('/tmp/orca-user-data')
           expect(env.PATH).toContain(
             `${join('/tmp/orca-user-data', 'cli', 'bin')}${delimiter}/system/bin`
           )

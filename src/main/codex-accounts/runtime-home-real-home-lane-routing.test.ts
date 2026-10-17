@@ -94,9 +94,9 @@ describe('CodexRuntimeHomeService', () => {
       )
     }
     const previousCodexHome = process.env.CODEX_HOME
-    const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
+    const previousOrcaCodexHome = process.env.POD_CODEX_HOME
     process.env.CODEX_HOME = getRuntimeCodexHomePath()
-    process.env.ORCA_CODEX_HOME = getRuntimeCodexHomePath()
+    process.env.POD_CODEX_HOME = getRuntimeCodexHomePath()
     try {
       // Background fetchers prefer ambient CODEX_HOME when passed null, so an
       // explicit path proves nested Orca launches cannot poll the managed home.
@@ -105,7 +105,7 @@ describe('CodexRuntimeHomeService', () => {
         codexHomePath: getSystemCodexHomePath()
       })
       process.env.CODEX_HOME = getSystemCodexHomePath()
-      delete process.env.ORCA_CODEX_HOME
+      delete process.env.POD_CODEX_HOME
       expect(service.isHostSystemDefaultRealHomeSelected()).toBe(true)
       process.env.CODEX_HOME = join(testState.fakeHomeDir, 'user-owned-codex-home')
       expect(service.isHostSystemDefaultRealHomeSelected()).toBe(false)
@@ -120,9 +120,9 @@ describe('CodexRuntimeHomeService', () => {
         process.env.CODEX_HOME = previousCodexHome
       }
       if (previousOrcaCodexHome === undefined) {
-        delete process.env.ORCA_CODEX_HOME
+        delete process.env.POD_CODEX_HOME
       } else {
-        process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
+        process.env.POD_CODEX_HOME = previousOrcaCodexHome
       }
     }
   })

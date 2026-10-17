@@ -38,10 +38,10 @@ export function injectRelayHistoryEnv(
   shell: string,
   options: { wsl?: boolean } = {}
 ): string | null {
-  // Why first: same reason as the desktop path — an inherited ORCA_HISTFILE
+  // Why first: same reason as the desktop path — an inherited POD_HISTFILE
   // would otherwise survive every early return below and let the remote wrapper
   // re-export another worktree's history path.
-  delete env.ORCA_HISTFILE
+  delete env.POD_HISTFILE
   // Why: HISTFILE stays exported, so a relay (or a client) launched from an Orca
   // pane carries the launching worktree's path into this one; honouring it below
   // would scope every pane to that worktree's history file.
@@ -98,7 +98,7 @@ export function injectRelayHistoryEnv(
     // the first prompt. The wrapper restores it from here (#11044) — the same
     // contract the desktop PTY path uses. Under WSL it holds the guest-visible
     // path and stays out of WSLENV, matching the desktop; no wrapper reads it there.
-    env.ORCA_HISTFILE = env.HISTFILE
+    env.POD_HISTFILE = env.HISTFILE
     return HISTORY_ROOT
   } catch {
     return null

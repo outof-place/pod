@@ -29,7 +29,7 @@ for (const workspace of ['worktree', 'folder'] as const) {
   {}, testInfo) => {
     test.setTimeout(5 * 60_000)
     const host = startOrcadConvertHost('docker', testInfo)
-    const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
+    const session = createRestartSession(testInfo, { POD_ORCAD_TEMPLATE_PATH: TEMPLATE! })
     let app: ElectronApplication | null = null
     try {
       if (!host.exec) {

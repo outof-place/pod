@@ -48,7 +48,7 @@ function payload(overrides: Partial<AgentStatusPayload> = {}): AgentStatusPayloa
 
 describe('setAgentStatus freshness requests on rejected frames', () => {
   it('skips the deferred freshness scan when an inherited terminal status is suppressed', () => {
-    // A nested child hook inherits ORCA_PANE_KEY, so its `done` is dropped while the parent works.
+    // A nested child hook inherits POD_PANE_KEY, so its `done` is dropped while the parent works.
     const { requestFreshness, actions } = setup(existingEntry())
 
     actions.setAgentStatus(PANE_KEY, payload({ agentType: 'codex' }), undefined, {

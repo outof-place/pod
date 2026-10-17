@@ -58,7 +58,7 @@ export function buildUnixCliLauncher(
   if (runtime === 'node') {
     return `#!/usr/bin/env sh
 set -eu
-export ORCA_USER_DATA_PATH=${quoteShell(userDataPath)}
+export POD_USER_DATA_PATH=${quoteShell(userDataPath)}
 unset NODE_OPTIONS NODE_REPL_EXTERNAL_MODULE ELECTRON_RUN_AS_NODE
 exec ${quoteShell(execPathValue)} ${quoteShell(cliEntryPath)} "$@"
 `
@@ -67,13 +67,13 @@ exec ${quoteShell(execPathValue)} ${quoteShell(cliEntryPath)} "$@"
 set -euo pipefail
 ELECTRON=${quoteShell(execPathValue)}
 CLI=${quoteShell(cliEntryPath)}
-export ORCA_USER_DATA_PATH=${quoteShell(userDataPath)}
-if [ -z "\${ORCA_APP_EXECUTABLE:-}" ]; then
-  export ORCA_APP_EXECUTABLE="$ELECTRON"
-  export ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1
+export POD_USER_DATA_PATH=${quoteShell(userDataPath)}
+if [ -z "\${POD_APP_EXECUTABLE:-}" ]; then
+  export POD_APP_EXECUTABLE="$ELECTRON"
+  export POD_APP_EXECUTABLE_NEEDS_APP_ROOT=1
 fi
-export ORCA_NODE_OPTIONS="\${NODE_OPTIONS-}"
-export ORCA_NODE_REPL_EXTERNAL_MODULE="\${NODE_REPL_EXTERNAL_MODULE-}"
+export POD_NODE_OPTIONS="\${NODE_OPTIONS-}"
+export POD_NODE_REPL_EXTERNAL_MODULE="\${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
 ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"
@@ -89,13 +89,13 @@ export function buildWindowsDevLauncher(
 setlocal
 set "ELECTRON=${escapeWindowsBatchValue(execPathValue)}"
 set "CLI=${escapeWindowsBatchValue(cliEntryPath)}"
-set "ORCA_USER_DATA_PATH=${escapeWindowsBatchValue(userDataPath)}"
-if not defined ORCA_APP_EXECUTABLE (
-  set "ORCA_APP_EXECUTABLE=%ELECTRON%"
-  set "ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1"
+set "POD_USER_DATA_PATH=${escapeWindowsBatchValue(userDataPath)}"
+if not defined POD_APP_EXECUTABLE (
+  set "POD_APP_EXECUTABLE=%ELECTRON%"
+  set "POD_APP_EXECUTABLE_NEEDS_APP_ROOT=1"
 )
-set "ORCA_NODE_OPTIONS=%NODE_OPTIONS%"
-set "ORCA_NODE_REPL_EXTERNAL_MODULE=%NODE_REPL_EXTERNAL_MODULE%"
+set "POD_NODE_OPTIONS=%NODE_OPTIONS%"
+set "POD_NODE_REPL_EXTERNAL_MODULE=%NODE_REPL_EXTERNAL_MODULE%"
 set NODE_OPTIONS=
 set NODE_REPL_EXTERNAL_MODULE=
 set ELECTRON_RUN_AS_NODE=1
@@ -106,15 +106,15 @@ set ELECTRON_RUN_AS_NODE=1
 export function buildWindowsForwarder(launcherPath: string): string {
   return `@echo off
 setlocal
-set "ORCA_LAUNCHER=${escapeWindowsBatchValue(launcherPath)}"
-"%ORCA_LAUNCHER%" %*
+set "POD_LAUNCHER=${escapeWindowsBatchValue(launcherPath)}"
+"%POD_LAUNCHER%" %*
 `
 }
 
 export function extractManagedUnixLauncherTarget(content: string): string | null {
   if (
     !content.includes('ELECTRON_RUN_AS_NODE=1') ||
-    !content.includes('ORCA_NODE_OPTIONS') ||
+    !content.includes('POD_NODE_OPTIONS') ||
     !content.includes('NODE_REPL_EXTERNAL_MODULE')
   ) {
     return null

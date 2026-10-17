@@ -115,8 +115,8 @@ describe('JcodeHookService', () => {
   })
 
   it.each([
-    '/Users/previous/.orca/agent-hooks/jcode-hook.sh',
-    'C:\\Users\\previous\\.orca\\agent-hooks\\jcode-hook.cmd'
+    '/Users/previous/.pod/agent-hooks/jcode-hook.sh',
+    'C:\\Users\\previous\\.pod\\agent-hooks\\jcode-hook.cmd'
   ])('recognizes a stale managed command %s without a local script', (stalePath) => {
     const service = new JcodeHookService()
     const configPath = getJcodeConfigPath()
@@ -140,7 +140,7 @@ describe('JcodeHookService', () => {
   it('does not report complete stale event coverage as installed when the current script exists', () => {
     const service = new JcodeHookService()
     service.install()
-    const staleCommand = getJcodeManagedCommand('/Users/previous/.orca/agent-hooks/jcode-hook.sh')
+    const staleCommand = getJcodeManagedCommand('/Users/previous/.pod/agent-hooks/jcode-hook.sh')
     writeFileSync(
       getJcodeConfigPath(),
       `[hooks]\n${JCODE_HOOK_EVENTS.map((event) => `${event} = ${tomlQuoteString(staleCommand)}`).join('\n')}\n`,

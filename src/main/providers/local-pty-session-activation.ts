@@ -65,8 +65,8 @@ export function activateLocalPtySession(args: {
     ptyAgentSessionIds.add(id)
   }
   ptyShellPath.set(id, plan.shellPath)
-  if (env.ORCA_TERMINAL_HANDLE) {
-    ptyTerminalHandle.set(id, env.ORCA_TERMINAL_HANDLE)
+  if (env.POD_TERMINAL_HANDLE) {
+    ptyTerminalHandle.set(id, env.POD_TERMINAL_HANDLE)
   }
   if (spawn.worktreeId) {
     ptyWorktreeId.set(id, spawn.worktreeId)

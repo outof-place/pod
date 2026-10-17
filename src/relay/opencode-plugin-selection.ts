@@ -23,17 +23,17 @@ export function applyOpenCodePluginSelection(
   capabilities: OpenCodeCliCapabilities | null | undefined,
   wsl: boolean
 ): void {
-  delete env.ORCA_OPENCODE_PLUGIN_API
+  delete env.POD_OPENCODE_PLUGIN_API
   if (!capabilities || capabilities.pluginApi === 'unknown') {
     return
   }
-  env.ORCA_OPENCODE_PLUGIN_API = capabilities.pluginApi
+  env.POD_OPENCODE_PLUGIN_API = capabilities.pluginApi
   for (let index = envToDelete.length - 1; index >= 0; index -= 1) {
-    if (envToDelete[index] === 'ORCA_OPENCODE_PLUGIN_API') {
+    if (envToDelete[index] === 'POD_OPENCODE_PLUGIN_API') {
       envToDelete.splice(index, 1)
     }
   }
   if (wsl) {
-    addWslEnvKeys(env, ['ORCA_OPENCODE_PLUGIN_API'])
+    addWslEnvKeys(env, ['POD_OPENCODE_PLUGIN_API'])
   }
 }

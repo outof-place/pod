@@ -57,7 +57,7 @@ describe('AgentHookServer Grok discovery retries', () => {
     await server.start({ env: 'production' })
     try {
       const env = server.buildPtyEnv()
-      const endpoint = { port: env.ORCA_AGENT_HOOK_PORT, token: env.ORCA_AGENT_HOOK_TOKEN }
+      const endpoint = { port: env.POD_AGENT_HOOK_PORT, token: env.POD_AGENT_HOOK_TOKEN }
       const listener = vi.fn()
       server.setListener(listener)
 
@@ -96,7 +96,7 @@ describe('AgentHookServer Grok discovery retries', () => {
     await server.start({ env: 'production' })
     try {
       const env = server.buildPtyEnv()
-      const endpoint = { port: env.ORCA_AGENT_HOOK_PORT, token: env.ORCA_AGENT_HOOK_TOKEN }
+      const endpoint = { port: env.POD_AGENT_HOOK_PORT, token: env.POD_AGENT_HOOK_TOKEN }
       await postGrokHook(endpoint, { hookEventName: 'UserPromptSubmit', prompt: 'old prompt' })
       await postGrokHook(endpoint, {
         hookEventName: 'Stop',
