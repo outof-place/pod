@@ -14,10 +14,13 @@ type StreamParams = SimHelperParams<'startStream'>
 // Each startStream the helper accepted is a generation of its view: a view started again under the
 // same token is a newer one, even with the same params.
 type View = { params: StreamParams; generation: number }
+// Ends that came before their start's reply was handled (both lines in one read), kept briefly.
+const MAX_EARLY_ENDS = 64
 
 export class SimHelperLiveViews {
   // Started and not stopped, by udid and token.
   private readonly views = new Map<string, View>()
+  private readonly earlyEnds = new Set<string>()
   private generations = 0
 
   get size(): number {
@@ -43,7 +46,7 @@ export class SimHelperLiveViews {
       return
     }
     const parsed = SIM_HELPER_METHODS.startStream.params.safeParse(params)
-    if (parsed.success) {
+    if (parsed.success && !this.earlyEnds.delete(stream(parsed.data))) {
       this.generations += 1
       this.views.set(key(parsed.data), { params: parsed.data, generation: this.generations })
     }
@@ -53,6 +56,11 @@ export class SimHelperLiveViews {
   ended(event: SimHelperStreamEnded): void {
     if (this.views.get(key(event))?.params.nonce === event.nonce) {
       this.views.delete(key(event))
+      return
+    }
+    this.earlyEnds.add(stream(event))
+    if (this.earlyEnds.size > MAX_EARLY_ENDS) {
+      this.earlyEnds.delete(this.earlyEnds.values().next().value ?? '')
     }
   }
 
@@ -104,6 +112,10 @@ export class SimHelperLiveViews {
 
 function key(params: { udid: string; token: number }): string {
   return `${params.udid.toUpperCase()} ${params.token}`
+}
+
+function stream(params: { udid: string; token: number; nonce: string }): string {
+  return `${key(params)} ${params.nonce}`
 }
 
 function sameStream(a: StreamParams, b: StreamParams): boolean {
