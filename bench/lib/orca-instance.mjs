@@ -3,6 +3,7 @@
 // real profile (~/Library/Application Support/orca) or the user's running Orca.
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -24,6 +25,7 @@ import {
 } from './acc-guard.mjs'
 import { BENCH_ROOT, TOOLS_BIN, log, sleep } from './bench-session.mjs'
 import { rootOfPid, signalIfSame, signalRunTreeSync, stopRunTree } from './run-tree.mjs'
+import { guardVerdict, installedClaudeVersion, prepareGuard } from './guard-path.mjs'
 
 const HOME = os.homedir()
 export const ORCA_APP = process.env.POD_BENCH_ORCA_APP ?? '/Applications/Orca.app'
@@ -227,6 +229,8 @@ export function benchRepo() {
  * .zshrc only logs each prompt's time. Orca's zsh wrapper restores ZDOTDIR, so panes never read the
  * user's own shell config.
  */
+const PROMPT_HOOK = 'zmodload zsh/datetime\nprecmd() { print -r -- $EPOCHREALTIME >> $POD_BENCH_PROMPT_LOG }\nPS1="%# "\n'
+
 export function createProfile(settings = {}) {
   mkdirSync(PROFILE_BASE, { recursive: true })
   const ud = mkdtempSync(path.join(PROFILE_BASE, 'p'))
@@ -242,10 +246,7 @@ export function createProfile(settings = {}) {
   }
   seed.ui = { ...seed.ui, lastUpdateCheckAt: Date.now() }
   writeFileSync(path.join(ud, 'orca-data.json'), `${JSON.stringify(seed, null, 2)}\n`)
-  writeFileSync(
-    path.join(zdot, '.zshrc'),
-    'zmodload zsh/datetime\nprecmd() { print -r -- $EPOCHREALTIME >> $POD_BENCH_PROMPT_LOG }\nPS1="%# "\n'
-  )
+  writeFileSync(path.join(zdot, '.zshrc'), PROMPT_HOOK)
   writeFileSync(path.join(home, '.hushlogin'), '')
   // roots: the pids this run spawned against the profile, with their start times; apps: the bundles
   // it ran them from.
@@ -263,6 +264,31 @@ export function promptTimes(profile) {
     .map((line) => Number(line) * 1000)
 }
 
+// The profile's guard PATH (lib/guard-path.mjs), made at its first launch from that app's agent
+// catalog: stubs first in HOME's shells and in the hermetic ZDOTDIR's, the bench tools in front.
+function ensureGuard(profile, info) {
+  if (profile.guard) return profile.guard
+  profile.guard = prepareGuard(profile.ud, {
+    ud: profile.ud,
+    homes: [profile.home, profile.zdot],
+    fronts: [TOOLS_BIN],
+    tree: info.dev ? undefined : info.realPath,
+    claudeVersion: installedClaudeVersion()
+  })
+  // build_guard_home rewrote ZDOTDIR's .zshrc: the prompt-time hook goes back after the guard.
+  appendFileSync(path.join(profile.zdot, '.zshrc'), PROMPT_HOOK)
+  return profile.guard
+}
+
+/** Fails the run when the guard saw a stub reached off its PATH, or claude run past --version. */
+function checkGuard(profile) {
+  if (!profile.guard) return
+  const verdict = guardVerdict(profile.ud, profile.guard.fronts)
+  if (!verdict.ok) {
+    throw new Error(`guard PATH of ${profile.ud}: ${verdict.problems.join('; ')}`)
+  }
+}
+
 export function launchEnv(profile, { visible = false } = {}) {
   const presentation = visible
     ? // Only for the visible-window latency run, in a slot the user agreed to.
@@ -270,7 +296,8 @@ export function launchEnv(profile, { visible = false } = {}) {
     : // foreground-activation-policy.ts: no Dock tile, no menu bar, no window, no activation.
       { ORCA_E2E_HEADLESS: '1', ORCA_BACKGROUND_LAUNCH: '1' }
   return {
-    PATH: `${TOOLS_BIN}:/usr/bin:/bin:/usr/sbin:/sbin`,
+    PATH: profile.guard?.path ?? `${TOOLS_BIN}:/usr/bin:/bin:/usr/sbin:/sbin`,
+    ...(profile.guard?.env ?? {}),
     HOME: profile.home,
     SHELL: '/bin/zsh',
     TMPDIR: process.env.TMPDIR ?? '/tmp',
@@ -348,6 +375,7 @@ function assertIsolated(profile) {
 export function spawnInstance(appPath, profile) {
   assertIsolated(profile)
   const info = describeApp(appPath)
+  ensureGuard(profile, info)
   const env = launchEnv(profile)
   assertAccOff(env)
   const spawnedAt = Date.now()
@@ -373,6 +401,7 @@ export async function launchInstance(appPath, profile, { visible = false } = {})
     throw new Error(`refusing a visible launch of a one-app runtime: ${info.realPath}`)
   }
   const { playwright } = loadPlaywright()
+  ensureGuard(profile, info)
   const env = launchEnv(profile, { visible })
   assertAccOff(env)
   const spawnedAt = Date.now()
@@ -610,6 +639,7 @@ export async function closeInstance(instance) {
   }
   await killProfileProcesses(instance.profile)
   releaseInstance(instance.pid)
+  checkGuard(instance.profile)
   checkAcc(`after closing ${instance.info.realPath}`)
   if (!instance.info.dev && !instance.info.realPath.startsWith('/Applications/')) {
     lsUnregister(instance.info.realPath)
@@ -622,6 +652,7 @@ export async function closeInstance(instance) {
 /** Kills anything still running for the profile; the files stay until the run dir goes. */
 export async function removeProfile(profile) {
   await killProfileProcesses(profile)
+  checkGuard(profile)
 }
 
 /** Chromium caches a first launch builds; moving them aside makes the next launch "cold". */
