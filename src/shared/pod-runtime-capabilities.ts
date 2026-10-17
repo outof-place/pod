@@ -52,6 +52,9 @@ export const POD_AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY =
 export const POD_SETTINGS_NETWORK_PROXY_RUNTIME_CAPABILITY =
   'pod.settings.network-proxy.v1' as const
 
+/** podImport.orcaDetect, orcaPreview and orcaApply: Import from Orca, for this machine's own clients. */
+export const POD_ORCA_IMPORT_RUNTIME_CAPABILITY = 'pod.orca-import.v1' as const
+
 /**
  * plugins.install, remove and the marketplace calls: Settings › Plugins without Pod's window. A
  * client offers them only on a host that lists this.
@@ -106,5 +109,6 @@ export const POD_RUNTIME_CAPABILITIES = [
   POD_WORKSPACE_ROWS_RUNTIME_CAPABILITY,
   POD_NOTIFICATION_SOURCES_RUNTIME_CAPABILITY,
   POD_SESSION_TABS_RESTART_TERMINAL_RUNTIME_CAPABILITY,
-  POD_SESSION_TABS_PANE_LAYOUT_SYNC_RUNTIME_CAPABILITY
+  POD_SESSION_TABS_PANE_LAYOUT_SYNC_RUNTIME_CAPABILITY,
+  POD_ORCA_IMPORT_RUNTIME_CAPABILITY
 ] as const
