@@ -366,7 +366,12 @@ async function measureLaunch(variant, index) {
   if (launch.accHome) {
     // claude-acc's live write rates on the stub state (mac-e2e live-writer.py), for the whole launch.
     const state = path.join(launch.accHome, '.local/share/claude-acc')
-    writer = spawn('/usr/bin/python3', ['-I', path.join(state, '..', 'live-writer.py'), state, String(totalS + 60)], { stdio: 'ignore' })
+    // A harness process (harness() keeps it out of every snapshot), with an env of its own: never
+    // this process's, which carries the caller's canary.
+    writer = spawn('/usr/bin/python3', ['-I', path.join(state, '..', 'live-writer.py'), state, String(totalS + 60)], {
+      env: { PATH: '/usr/bin:/bin' },
+      stdio: 'ignore'
+    })
   }
   const launchedAt = Date.now()
   // The shell that sources open-app.sh starts from a near-empty env with the canary in it; app_open
