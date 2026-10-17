@@ -13,9 +13,14 @@ import { TOOLS_BIN, sleep } from './bench-session.mjs'
 
 const run = promisify(execFile)
 export const PROCSTAT = path.join(TOOLS_BIN, 'procstat')
+// procstat takes at most 64 --root pids per call (tools/procstat.c).
+const MAX_ROOTS = 64
 
 // A root is { pid, startUs }: the pid a run spawned and the start time it had then.
 function treeArgs(work, { scan = false, roots = [] } = {}) {
+  if (roots.length > MAX_ROOTS) {
+    throw new Error(`${roots.length} roots: procstat takes at most ${MAX_ROOTS} per call`)
+  }
   const args = ['--exe-prefix', `${work}/`]
   for (const root of roots) args.push('--root', String(root.pid))
   if (scan) args.push('--argv', `${work}/`, '--argv', `${work.replace(/^\/private/, '')}/`)
@@ -83,10 +88,21 @@ export function signalTargets(
 
 /** The start time each of these pids has right now (absent: not running). */
 export function startTimes(pids) {
-  if (pids.length === 0) return new Map()
-  const args = pids.flatMap((pid) => ['--root', String(pid)])
-  const snap = JSON.parse(execFileSync(PROCSTAT, args, { encoding: 'utf8', maxBuffer: 16 << 20 }))
-  return new Map(snap.procs.map((proc) => [proc.pid, proc.startUs]))
+  const times = new Map()
+  const unique = [...new Set(pids)]
+  for (let at = 0; at < unique.length; at += MAX_ROOTS) {
+    const args = unique.slice(at, at + MAX_ROOTS).flatMap((pid) => ['--root', String(pid)])
+    const snap = JSON.parse(execFileSync(PROCSTAT, args, { encoding: 'utf8', maxBuffer: 16 << 20 }))
+    for (const proc of snap.procs) times.set(proc.pid, proc.startUs)
+  }
+  return times
+}
+
+/** Signals each target still running as the same process (pid and start time); returns what it sent. */
+export function signalIfSame(targets, signal) {
+  const signalled = []
+  signalAll(targets, signal, signalled)
+  return signalled
 }
 
 function signalAll(targets, signal, signalled) {

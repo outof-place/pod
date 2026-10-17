@@ -7,7 +7,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileS
 import os from 'node:os'
 import path from 'node:path'
 import { after, test } from 'node:test'
-import { PROFILE_BASE, cli, describeApp, launchInstance, removeProfile } from './orca-instance.mjs'
+import { PROFILE_BASE, cli, describeApp, killRoot, launchInstance, removeProfile } from './orca-instance.mjs'
 import { rootOfPid } from './run-tree.mjs'
 
 after(() => {
@@ -121,6 +121,20 @@ test("a profile's cleanup stops its own processes and leaves a stranger that nam
     for (const child of [own, crashpad, reused, ...strangers]) {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
     }
+  }
+})
+
+test("the claude-acc guard's kill of the app's own pid needs the start time recorded at launch", async () => {
+  const child = spawn('/bin/sleep', ['30'], { stdio: 'ignore' })
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    const root = rootOfPid(child.pid)
+    assert.deepEqual(killRoot({ roots: new Map([[child.pid, { ...root, startUs: root.startUs - 1 }]]) }, child.pid), [])
+    assert.deepEqual(killRoot({ roots: new Map() }, child.pid), [], 'not a recorded root')
+    process.kill(child.pid, 0)
+    assert.equal(killRoot({ roots: new Map([[child.pid, root]]) }, child.pid).length, 1)
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
   }
 })
 
