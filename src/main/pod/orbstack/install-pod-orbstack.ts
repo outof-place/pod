@@ -7,7 +7,7 @@ import { probeClaudeCliVersion } from '../../claude/claude-hook-event-versions'
 import { resolveClaudeCommand } from '../../codex-cli/command'
 import { getMainHttpClient } from '../../network/http-client'
 import { createClaudeReleaseCache, sandboxClaudePlatform } from './pod-orbstack-claude-release'
-import { readMacClaudeTheme } from './pod-orbstack-claude-theme'
+import { readMacClaudeChoices } from './pod-orbstack-mac-claude-choices'
 import { isPodOrbstackEnabled } from './pod-orbstack-flag'
 import { createPodOrbstackMachines } from './pod-orbstack-machines'
 import { loadPodOrbstackRecipe } from './pod-orbstack-recipe'
@@ -138,7 +138,7 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     ...(templatesAllowed ? { templates } : {}),
     log,
     onProgress: (worktreeId, kind, step) => events.progress(worktreeId, kind, step),
-    readClaudeTheme: () => readMacClaudeTheme(),
+    readClaudeChoices: () => readMacClaudeChoices(),
     prepareClaudeRelease: resolveOrbstackSkipAgentInstall()
       ? async () => null
       : async () => releases.prepare(await probeClaudeCliVersion(resolveClaudeCommand()))

@@ -3,6 +3,7 @@ import {
   buildSandboxClaudeConfig,
   buildSandboxHookScript,
   buildSandboxManagedSettings,
+  buildSandboxUserSettings,
   provisionSandbox,
   resolveSandboxMounts,
   SETUP_WORKTREE,
@@ -30,29 +31,25 @@ describe('sandbox Claude config', () => {
   it('trusts only the mounted worktree and opens on the prompt', () => {
     expect(JSON.parse(buildSandboxClaudeConfig('/Users/me/web.worktrees/a'))).toEqual({
       hasCompletedOnboarding: true,
-      theme: 'dark',
       projects: { '/Users/me/web.worktrees/a': { hasTrustDialogAccepted: true } }
     })
-  })
-
-  it('marks the installed version seen and keeps the Mac theme', () => {
-    const config = JSON.parse(
-      buildSandboxClaudeConfig('/Users/me/web', { agentVersion: '2.1.302', theme: 'light-ansi' })
-    )
-    expect(config).toMatchObject({
+    expect(JSON.parse(buildSandboxClaudeConfig('/Users/me/web', '2.1.302'))).toEqual({
       hasCompletedOnboarding: true,
       lastOnboardingVersion: '2.1.302',
       lastReleaseNotesSeen: '2.1.302',
-      theme: 'light-ansi'
+      projects: { '/Users/me/web': { hasTrustDialogAccepted: true } }
     })
-    // Nothing that authenticates or points elsewhere comes in.
-    expect(Object.keys(config).sort()).toEqual([
-      'hasCompletedOnboarding',
-      'lastOnboardingVersion',
-      'lastReleaseNotesSeen',
-      'projects',
-      'theme'
-    ])
+  })
+
+  it("carries only the Mac user's theme and accepted bypass warning into the VM's settings", () => {
+    expect(
+      JSON.parse(
+        buildSandboxUserSettings({ theme: 'light', skipDangerousModePermissionPrompt: true })
+      )
+    ).toEqual({ theme: 'light', skipDangerousModePermissionPrompt: true })
+    expect(
+      buildSandboxUserSettings({ theme: null, skipDangerousModePermissionPrompt: false })
+    ).toBe('')
   })
 })
 
@@ -97,7 +94,7 @@ describe('provisionSandbox', () => {
       name: 'pod-web-1a2b3c4d-sbx',
       mounts: ['/Users/me/web.worktrees/a', '/Users/me/web/.git'],
       release,
-      theme: 'light'
+      choices: { theme: 'light', skipDangerousModePermissionPrompt: true }
     })
 
     expect(result).toEqual({ agentVersion: '2.1.295' })
@@ -133,7 +130,7 @@ describe('provisionSandbox', () => {
     // One exec writes every per-worktree file; its arguments carry them base64-encoded.
     const setups = calls.filter((call) => call.args.includes(SETUP_WORKTREE))
     expect(setups).toHaveLength(1)
-    const [hookFile, script, trust, managed, ...mounts] = setups[0]?.args.slice(7) ?? []
+    const [hookFile, script, trust, managed, settings, ...mounts] = setups[0]?.args.slice(7) ?? []
     const decode = (text = ''): string => Buffer.from(text, 'base64').toString()
     expect(hookFile).toBe('claude-hook.sh')
     expect(decode(script)).toContain('127.0.0.1')
@@ -141,8 +138,11 @@ describe('provisionSandbox', () => {
     expect(decode(trust)).not.toContain('.git"')
     expect(JSON.parse(decode(trust))).toMatchObject({
       hasCompletedOnboarding: true,
-      lastOnboardingVersion: '2.1.295',
-      theme: 'light'
+      lastOnboardingVersion: '2.1.295'
+    })
+    expect(JSON.parse(decode(settings))).toEqual({
+      theme: 'light',
+      skipDangerousModePermissionPrompt: true
     })
     expect(decode(managed)).toContain('"DISABLE_AUTOUPDATER": "1"')
     expect(mounts).toEqual(['/Users/me/web.worktrees/a', '/Users/me/web/.git'])

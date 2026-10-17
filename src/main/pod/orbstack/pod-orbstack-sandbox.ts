@@ -15,6 +15,10 @@ import {
   SANDBOX_RELEASE_FILES,
   type SandboxClaudeRelease
 } from './pod-orbstack-claude-release'
+import {
+  NO_SANDBOX_CLAUDE_CHOICES,
+  type SandboxClaudeChoices
+} from './pod-orbstack-mac-claude-choices'
 import type { OrbstackToolResult, OrbstackToolRunner } from './pod-orbstack-tools'
 
 // Why managed: Claude merges it over user settings, so the agent's own config cannot drop Pod's hooks.
@@ -66,22 +70,31 @@ export function buildSandboxManagedSettings(claudeVersion: string | null): strin
 /**
  * A VM-local ~/.claude.json that trusts only the mounted worktree; the Mac's file never enters.
  * Why onboarded: the Mac's user already went through Claude Code's first run, so the sandbox opens
- * on its prompt, in the Mac's theme, instead of the theme picker and the release notes.
+ * on its prompt instead of the first-run screens and the release notes.
  */
 export function buildSandboxClaudeConfig(
   worktreePath: string,
-  options: { agentVersion?: string | null; theme?: string | null } = {}
+  agentVersion: string | null = null
 ): string {
-  const { agentVersion, theme } = options
   const base = {
     hasCompletedOnboarding: true,
     ...(agentVersion
       ? { lastOnboardingVersion: agentVersion, lastReleaseNotesSeen: agentVersion }
-      : {}),
-    theme: theme ?? 'dark'
+      : {})
   }
   const change = applyClaudeFolderTrust(base, [toClaudeTrustKey(worktreePath, 'posix')])
   return `${JSON.stringify(change.kind === 'changed' ? change.config : base, null, 2)}\n`
+}
+
+/** The VM user's ~/.claude/settings.json: the Mac's choices only, or '' when there are none. */
+export function buildSandboxUserSettings(choices: SandboxClaudeChoices): string {
+  const settings = {
+    ...(choices.theme ? { theme: choices.theme } : {}),
+    ...(choices.skipDangerousModePermissionPrompt
+      ? { skipDangerousModePermissionPrompt: true }
+      : {})
+  }
+  return Object.keys(settings).length ? `${JSON.stringify(settings, null, 2)}\n` : ''
 }
 
 /** The worktree, plus its git dir when that lives elsewhere (linked worktrees). */
@@ -150,8 +163,8 @@ export async function provisionSandbox(args: {
   release: SandboxClaudeRelease | null
   /** Progress, in words a user reads. */
   onStep?: (step: string) => void
-  /** The Mac's Claude Code theme; null writes Claude's dark one. */
-  theme?: string | null
+  /** What the Mac's user chose in Claude Code; none when absent. */
+  choices?: SandboxClaudeChoices
 }): Promise<{ agentVersion: string | null }> {
   const { agentVersion } = await provisionSandboxBase(args)
   args.onStep?.('Setting up the worktree')
@@ -261,16 +274,17 @@ export async function installSandboxClaude(args: {
 
 /**
  * The per-worktree part in one exec (each `orb run` costs 20-140 ms): mounts checked, Pod's hook
- * script, the trusted worktree, managed settings, and fresh host keys if the image has sshd.
- * Arguments: hook file name, then the three files base64-encoded, then the mounts.
+ * script, the trusted worktree, managed settings, the user's choices, and fresh host keys if the
+ * image has sshd. Arguments: hook file name, then the four files base64-encoded, then the mounts.
  */
 export const SETUP_WORKTREE = `set -eu
-hook="$1" script="$2" trust="$3" managed="$4"; shift 4
+hook="$1" script="$2" trust="$3" managed="$4" settings="$5"; shift 5
 for path in "$@"; do test -d "$path" || { echo "mount $path: not visible in the sandbox" >&2; exit 1; }; done
 mkdir -p "$HOME/.orca/agent-hooks"
 printf '%s' "$script" | base64 -d > "$HOME/.orca/agent-hooks/$hook"
 chmod 755 "$HOME/.orca/agent-hooks/$hook"
 [ -n "$trust" ] && { [ -e "$HOME/.claude.json" ] || printf '%s' "$trust" | base64 -d > "$HOME/.claude.json"; }
+[ -n "$settings" ] && { mkdir -p "$HOME/.claude"; [ -e "$HOME/.claude/settings.json" ] || printf '%s' "$settings" | base64 -d > "$HOME/.claude/settings.json"; }
 printf '%s' "$managed" | base64 -d | sudo -n sh -c 'mkdir -p /etc/claude-code && cat > ${MANAGED_SETTINGS_PATH}'
 if [ -e /etc/ssh/sshd_config ] && ! ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1; then sudo -n ssh-keygen -A >/dev/null; fi
 `
@@ -280,7 +294,7 @@ export async function provisionSandboxWorktree(args: {
   name: string
   mounts: readonly string[]
   agentVersion: string | null
-  theme?: string | null
+  choices?: SandboxClaudeChoices
 }): Promise<void> {
   const base64 = (text: string): string => Buffer.from(text).toString('base64')
   const [worktreePath] = args.mounts
@@ -294,15 +308,9 @@ export async function provisionSandboxWorktree(args: {
     'pod-setup',
     getPosixManagedScriptFileName(),
     base64(buildSandboxHookScript()),
-    worktreePath
-      ? base64(
-          buildSandboxClaudeConfig(worktreePath, {
-            agentVersion: args.agentVersion,
-            theme: args.theme ?? null
-          })
-        )
-      : '',
+    worktreePath ? base64(buildSandboxClaudeConfig(worktreePath, args.agentVersion)) : '',
     base64(buildSandboxManagedSettings(args.agentVersion)),
+    base64(buildSandboxUserSettings(args.choices ?? NO_SANDBOX_CLAUDE_CHOICES)),
     ...args.mounts
   ])
 }

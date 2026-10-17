@@ -10,6 +10,10 @@ import {
 } from './pod-orbstack-recipe'
 import type { PodOrbstackMachineKind, PodOrbstackRegistry } from './pod-orbstack-registry'
 import type { SandboxClaudeRelease } from './pod-orbstack-claude-release'
+import {
+  NO_SANDBOX_CLAUDE_CHOICES,
+  type SandboxClaudeChoices
+} from './pod-orbstack-mac-claude-choices'
 import { provisionSandbox, resolveSandboxMounts } from './pod-orbstack-sandbox'
 import {
   cloneSandbox,
@@ -42,8 +46,8 @@ type MachineDeps = {
   /** The release of the Mac's Claude Code version a new sandbox installs; null skips Claude (E2E). */
   prepareClaudeRelease?: () => Promise<SandboxClaudeRelease | null>
   provision?: typeof provisionSandbox
-  /** The Mac's Claude Code theme a new sandbox opens in; null writes Claude's dark one. */
-  readClaudeTheme?: () => string | null
+  /** What the Mac's user chose in Claude Code, for a new sandbox to open the same way. */
+  readClaudeChoices?: () => SandboxClaudeChoices
   resolveMounts?: typeof resolveSandboxMounts
   /** Mints the sandbox's hook token once it is ready. */
   onSandboxCreated?: (name: string) => void
@@ -216,12 +220,12 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
         networkIsolated: true
       }
       deps.registry.upsert({ ...entry, state: 'creating' })
-      const theme = deps.readClaudeTheme?.() ?? null
+      const choices = deps.readClaudeChoices?.() ?? NO_SANDBOX_CLAUDE_CHOICES
       try {
         const cloned = await fromTemplate(name, async (templates) => {
           const template = await sandboxTemplate(deps.run, templates, release, onStep)
           return template
-            ? cloneSandbox({ run: deps.run, templates, template, name, mounts, onStep, theme })
+            ? cloneSandbox({ run: deps.run, templates, template, name, mounts, onStep, choices })
             : null
         })
         const { agentVersion } =
@@ -232,7 +236,7 @@ export function createPodOrbstackMachines(deps: MachineDeps) {
             mounts,
             release,
             onStep,
-            theme
+            choices
           }))
         deps.registry.upsert({
           ...entry,
