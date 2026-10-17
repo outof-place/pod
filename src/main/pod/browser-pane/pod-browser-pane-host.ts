@@ -29,7 +29,9 @@ export function installPodBrowserPanes(options: {
     openDevTools: (wc: WebContents) =>
       wc.openDevTools({ mode: 'detach', activate: !isBackgroundLaunch() }),
     log: options.log,
-    mainDisplayScale: () => screen.getPrimaryDisplay().scaleFactor
+    mainDisplayScale: () => screen.getPrimaryDisplay().scaleFactor,
+    cancelDownload: (browserPageId, downloadId) =>
+      browserManager.cancelPodPaneDownload({ browserPageId, downloadId })
   })
   options.runtime.setOffscreenBrowserBackend(
     new OffscreenBrowserBackend(browserManager, {
