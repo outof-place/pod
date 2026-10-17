@@ -68,7 +68,8 @@ type OrcaTestFixtures = {
   launchEnv: NodeJS.ProcessEnv
   // Fork-only (Pod): writes the isolated HOME before launch, for specs that start from per-user
   // state an earlier version left (pod-decouple-legacy-home.spec.ts). Never the developer's home.
-  orcaAppSeedHome: ((isolatedHome: string) => void) | null
+  // An object, because Playwright takes a function passed to test.use for a fixture.
+  orcaAppSeedHome: { seed: (isolatedHome: string) => void } | null
 }
 
 type OrcaWorkerFixtures = {
@@ -215,7 +216,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       extraEnv: orcaAppExtraEnv,
       userDataDir
     })
-    orcaAppSeedHome?.(homeIsolation.isolatedHome)
+    orcaAppSeedHome?.seed(homeIsolation.isolatedHome)
     // Why: ORCA_E2E_SLOWMO_MS adds a pause between every Playwright action so a
     // developer running with ORCA_E2E_FORCE_HEADFUL=1 can actually watch what
     // the test does. Defaults to 0 (no slowdown) for normal runs.

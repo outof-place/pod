@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  addLegacyEnvTwins,
   adoptLegacyEnvNames,
   ENV_DECOUPLED,
   ENV_SPELLINGS,
@@ -108,6 +109,21 @@ describe.runIf(ENV_DECOUPLED)('the overlap after the codemod', () => {
     ])
     const names = [current('CODEX_HOME')]
     expect(withCurrentEnvSpellingToDelete(names, undefined)).toBe(names)
+  })
+
+  it('twins every renamed name a terminal carries, except what the shell wrapper consumes', () => {
+    const env: Record<string, string> = {
+      [current('PANE_KEY')]: 'tab-1:pane',
+      [current('TAB_ID')]: 'tab-1',
+      [legacy('TAB_ID')]: 'explicit',
+      [current('HISTFILE')]: '/history/zsh_history',
+      [current('ORIG_ZDOTDIR')]: '/Users/me'
+    }
+    addLegacyEnvTwins(env)
+    expect(env[legacy('PANE_KEY')]).toBe('tab-1:pane')
+    expect(env[legacy('TAB_ID')]).toBe('explicit')
+    expect(env).not.toHaveProperty(legacy('HISTFILE'))
+    expect(env).not.toHaveProperty(legacy('ORIG_ZDOTDIR'))
   })
 
   it('drops the inherited ORCA_ spelling of each renamed name, and only that', () => {

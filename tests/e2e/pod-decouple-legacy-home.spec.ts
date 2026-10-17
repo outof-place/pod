@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   readdirSync,
@@ -59,7 +60,7 @@ test.use({
   orcaAppExtraEnv: {
     POD_E2E_PRODUCT_IDENTITY_PATH: path.join(process.cwd(), 'product/identity.json')
   },
-  orcaAppSeedHome: seedLegacyHome
+  orcaAppSeedHome: { seed: seedLegacyHome }
 })
 
 test('the first start moves only its own hook files and copies the shared state', async ({
@@ -102,10 +103,16 @@ test('the first start moves only its own hook files and copies the shared state'
     expect(readlinkSync(path.join(legacy, name)), name).toBe(path.join(product, name))
     expect(lstatSync(path.join(product, name)).isFile(), name).toBe(true)
   }
-  // Shared state is copied, never moved: both apps keep theirs.
-  expect(readFileSync(path.join(product, 'keybindings.json'), 'utf8')).toBe(
-    SHARED_FILES['keybindings.json']!.body
+  // Shared state is copied, never moved: both apps keep theirs. Pod then fills in its own defaults.
+  expect(JSON.parse(readFileSync(path.join(product, 'keybindings.json'), 'utf8'))).toMatchObject(
+    JSON.parse(SHARED_FILES['keybindings.json']!.body)
   )
   expect(lstatSync(path.join(product, 'agent-hooks')).isDirectory()).toBe(true)
-  expect(filesUnder(path.join(product, 'agent-hooks'))).not.toContain('claude-hook.sh')
+  // Hook scripts both apps write are never copied over: Pod installs its own.
+  for (const name of ['agent-hooks/claude-hook.sh', 'agent-hooks/codex-hook.sh']) {
+    const file = path.join(product, name)
+    if (existsSync(file)) {
+      expect(readFileSync(file, 'utf8'), name).not.toBe(SHARED_FILES[name]!.body)
+    }
+  }
 })

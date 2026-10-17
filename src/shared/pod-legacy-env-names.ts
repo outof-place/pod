@@ -95,13 +95,19 @@ export function stripInheritedLegacyEnv(env: Record<string, string | undefined>)
   }
 }
 
+// The shell wrapper reads these and unsets them before the user's shell runs (shell-templates.ts),
+// so a twin would outlive the name it mirrors.
+const WRAPPER_CONSUMED = new Set(
+  ['HISTFILE', 'ORIG_ZDOTDIR'].map((name) => `${ENV_SPELLINGS.current}${name}`)
+)
+
 /** In place, on a new terminal's final env: the ORCA_ spelling of each renamed name it carries, with
  *  the same value, for agents and scripts that still read ORCA_ names. One the env sets itself (a
  *  request's explicit legacy name) keeps its value. */
 export function addLegacyEnvTwins(env: Record<string, string>): void {
   for (const [current, legacy] of LEGACY_SPELLING) {
     const value = env[current]
-    if (value !== undefined && env[legacy] === undefined) {
+    if (value !== undefined && env[legacy] === undefined && !WRAPPER_CONSUMED.has(current)) {
       env[legacy] = value
     }
   }
