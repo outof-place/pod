@@ -21,7 +21,7 @@ test.use({
   }
 })
 
-test('a fresh product profile keeps per-user state in its own home and exports only its env names', async ({
+test('a fresh product profile keeps per-user state in its own home; legacy env names only mirror its own', async ({
   electronApp,
   orcaPage
 }, testInfo) => {
@@ -43,20 +43,29 @@ test('a fresh product profile keeps per-user state in its own home and exports o
     })
     .toBe(true)
 
-  const terminalNames = readFileSync(dump, 'utf8')
-    .split('\n')
-    .map((line) => line.slice(0, line.indexOf('=')))
-  // Whatever the app process inherited (the harness's own inputs) passes through; nothing the app
-  // adds may carry the legacy prefix.
+  const terminalEnv = new Map(
+    readFileSync(dump, 'utf8')
+      .split('\n')
+      .filter((line) => line.includes('='))
+      .map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)])
+  )
+  // Whatever the app process inherited (the harness's own inputs) passes through. Every other
+  // legacy-prefixed name is, for one release, the twin of a POD_ name with the same value.
   const inherited = new Set(
     await electronApp.evaluate(() =>
       Object.keys(process.env).filter((name) => name.startsWith('ORCA_'))
     )
   )
-  expect(
-    terminalNames.filter((name) => name.startsWith(LEGACY_ENV_PREFIX) && !inherited.has(name))
-  ).toEqual([])
-  expect(terminalNames).toEqual(expect.arrayContaining(['POD_PANE_KEY', 'POD_TAB_ID']))
+  const legacyAdded = [...terminalEnv.keys()].filter(
+    (name) => name.startsWith(LEGACY_ENV_PREFIX) && !inherited.has(name)
+  )
+  for (const name of legacyAdded) {
+    const twin = `POD_${name.slice(LEGACY_ENV_PREFIX.length)}`
+    expect(terminalEnv.get(name), name).toBe(terminalEnv.get(twin))
+  }
+  expect([...terminalEnv.keys()]).toEqual(
+    expect.arrayContaining(['POD_PANE_KEY', 'POD_TAB_ID', `${LEGACY_ENV_PREFIX}PANE_KEY`])
+  )
 
   // Hook scripts install lazily; the keybindings file is per-user state the app writes on demand.
   const home = await electronApp.evaluate(({ app }) => app.getPath('home'))
