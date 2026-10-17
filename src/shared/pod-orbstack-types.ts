@@ -98,6 +98,11 @@ export type PodOrbstackStatus = {
   links: PodOrbstackWorktreeLink[]
   /** Sandboxed agents may use this Mac's Claude Code login (opt-in). */
   sandboxClaudeLogin: boolean
+  /**
+   * What the switch hands sandboxes: the Mac's login, an E2E profile's fake (no keychain, no real
+   * token), or nothing (an E2E profile without the fake). Optional: older runtimes don't send it.
+   */
+  sandboxCredentialSource?: PodOrbstackSandboxCredentialSource
   /** Worktree ids with a create or remove in flight. */
   busyWorktreeIds: string[]
   /** Commands that failed while reading the status; the rest is still shown. */
@@ -106,6 +111,8 @@ export type PodOrbstackStatus = {
   /** Optional: machines Pod made since OrbStack started; older runtimes don't send it. */
   churn?: PodOrbstackChurn
 }
+
+export type PodOrbstackSandboxCredentialSource = 'mac-login' | 'e2e-stub' | 'none'
 
 /** Pod's machine creates since OrbStack started; past `warnAt` its address pool may run out. */
 export type PodOrbstackChurn = {

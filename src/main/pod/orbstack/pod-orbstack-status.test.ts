@@ -116,6 +116,19 @@ describe('readPodOrbstackStatus', () => {
     expect((await read('unknown')).churn).toEqual(churn)
   })
 
+  it('says what the Claude login switch hands sandboxes, when the runtime knows', async () => {
+    const read = (source?: 'mac-login' | 'e2e-stub' | 'none') =>
+      readPodOrbstackStatus({
+        paths,
+        run: fakeRunner('Stopped', []),
+        registry: registry(),
+        busyWorktreeIds: [],
+        ...(source ? { sandboxCredentialSource: source } : {})
+      })
+    expect((await read('e2e-stub')).sandboxCredentialSource).toBe('e2e-stub')
+    expect((await read()).sandboxCredentialSource).toBeUndefined()
+  })
+
   it('runs no machine or container commands while OrbStack is stopped', async () => {
     const calls: string[] = []
     const status = await readPodOrbstackStatus({

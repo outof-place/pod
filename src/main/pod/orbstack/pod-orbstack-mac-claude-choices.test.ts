@@ -1,5 +1,8 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { readMacClaudeChoices } from './pod-orbstack-mac-claude-choices'
+import { readCappedConfig, readMacClaudeChoices } from './pod-orbstack-mac-claude-choices'
 
 describe('readMacClaudeChoices', () => {
   const reading = (files: Record<string, string>) => (path: string) => {
@@ -64,6 +67,18 @@ describe('readMacClaudeChoices', () => {
         theme: null,
         skipDangerousModePermissionPrompt: false
       })
+    }
+  })
+
+  it('never reads a config past the size cap whole', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pod-orbstack-choices-'))
+    try {
+      const file = join(dir, 'settings.json')
+      writeFileSync(file, JSON.stringify({ theme: 'light' }))
+      expect(readCappedConfig(file)).toContain('light')
+      expect(() => readCappedConfig(file, 4)).toThrow(/past 4 bytes/)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 })

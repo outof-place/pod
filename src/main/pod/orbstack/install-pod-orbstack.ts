@@ -94,6 +94,11 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   )
   // Sandboxed agents can use the Mac's own Claude Code login (opt-in), never refreshed. The switch
   // is read per launch and request; POD_SANDBOX_ANTHROPIC=off is a hard off; E2E runs never get it.
+  const sandboxCredentialSource = e2eAnthropic
+    ? 'e2e-stub'
+    : process.env.ORCA_E2E_USER_DATA_DIR
+      ? 'none'
+      : 'mac-login'
   if (e2eAnthropic) {
     setPodSandboxAnthropicCredentials(e2eAnthropic.credentials)
   } else if (!process.env.ORCA_E2E_USER_DATA_DIR) {
@@ -168,7 +173,8 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
         diskSizes,
         containers,
         busyWorktreeIds: machines.busyWorktreeIds(),
-        churn: churn.snapshot()
+        churn: churn.snapshot(),
+        sandboxCredentialSource
       }),
     readStats: (names) => stats.read(names),
     ...(templatesAllowed ? { setTemplates: (on: boolean) => templates.setEnabled(on) } : {}),
