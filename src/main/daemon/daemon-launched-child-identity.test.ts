@@ -34,7 +34,8 @@ const LAUNCH_OPTIONS: DaemonChildSpawnOptions = {
   tokenPath: '/fake/token',
   pidPath: '/fake/daemon.pid',
   launchNonce: 'nonce-a',
-  macosLoginSessionWatch: false
+  macosLoginSessionWatch: false,
+  macosDisclaimResponsibility: false
 }
 
 function fakeDaemonChild(pid: number): FakeDaemonChild {
@@ -169,6 +170,69 @@ describe('launchDaemonChild durable-scope fallback', () => {
     await expect(launchDaemonChild(LAUNCH_OPTIONS)).rejects.toThrow(
       'Daemon could not take the endpoint: occupied'
     )
+    expect(spawnDaemonChildProcessMock).toHaveBeenCalledOnce()
+  })
+})
+
+describe('launchDaemonChild disclaim fallback (macOS)', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  function failingLauncherThenDaemon(exitCode: number): FakeDaemonChild {
+    const broken = fakeDaemonChild(4242)
+    const daemon = fakeDaemonChild(4343)
+    spawnDaemonChildProcessMock.mockImplementation((options: DaemonChildSpawnOptions) => {
+      if (options.macosDisclaimResponsibility) {
+        queueMicrotask(() => {
+          broken.exitCode = exitCode
+          broken.emit('exit', exitCode)
+        })
+        return broken
+      }
+      queueMicrotask(() => daemon.emit('message', { type: 'ready', pid: 4343, startedAtMs: 1 }))
+      return daemon
+    })
+    return broken
+  }
+
+  it('retries once without the disclaiming launcher when it fails (a stale launcher exits 64)', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    failingLauncherThenDaemon(64)
+
+    const launched = await launchDaemonChild({
+      ...LAUNCH_OPTIONS,
+      macosDisclaimResponsibility: true
+    })
+
+    expect(
+      spawnDaemonChildProcessMock.mock.calls.map(([options]) => options.macosDisclaimResponsibility)
+    ).toEqual([true, false])
+    expect(launched.identity.pid).toBe(4343)
+    expect(warn).toHaveBeenCalledOnce()
+  })
+
+  it('does not retry when another daemon owns the endpoint', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    failingLauncherThenDaemon(DAEMON_EXIT_ENDPOINT_OCCUPIED)
+
+    await expect(
+      launchDaemonChild({ ...LAUNCH_OPTIONS, macosDisclaimResponsibility: true })
+    ).rejects.toThrow('Daemon could not take the endpoint: occupied')
+    expect(spawnDaemonChildProcessMock).toHaveBeenCalledOnce()
+  })
+
+  it('does not retry a launch that never asked to disclaim', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const child = fakeDaemonChild(4242)
+    spawnDaemonChildProcessMock.mockImplementation(() => {
+      queueMicrotask(() => {
+        child.exitCode = 1
+        child.emit('exit', 1)
+      })
+      return child
+    })
+
+    await expect(launchDaemonChild(LAUNCH_OPTIONS)).rejects.toThrow()
     expect(spawnDaemonChildProcessMock).toHaveBeenCalledOnce()
   })
 })

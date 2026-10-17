@@ -2,6 +2,8 @@
 // app, right now, be able to list this folder? macOS attributes a TCC grant to the process that
 // forked the child, so only a fresh child of the current app binary can tell the user whether
 // restarting the terminal service is the remedy or whether they must re-allow Orca first.
+// Pod: a fresh GUI daemon is responsible for itself as the app's identity
+// (daemon-responsibility-darwin.ts), the one this child is judged by, so the answer holds.
 
 import { isAbsolute } from 'node:path'
 import { runProcess } from '@orca/process-host'

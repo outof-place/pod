@@ -2,7 +2,7 @@
 // Pod's shell wrappers keep that directory first on every terminal's PATH (ORCA_CLI_BIN_DIR), so the
 // links shadow the user's own installs only inside Pod terminals. electron-builder signs the binary.
 // Next to bin, agent-shell holds what claude gets with POD_CLAUDE_OG=1 (claude-og.swift).
-const { execFileSync } = require('node:child_process')
+const { execFileSync, spawnSync } = require('node:child_process')
 const { chmodSync, copyFileSync, mkdirSync, readdirSync, rmSync, symlinkSync } = require('node:fs')
 const { join } = require('node:path')
 
@@ -53,6 +53,18 @@ function installAgentLauncher(resourcesDir, arch) {
     if (policy.role !== APP_ROLE) {
       throw new Error(`product: ${LAUNCHER} reported role ${policy.role}, expected ${APP_ROLE}`)
     }
+    assertDisclaimExecHonored(launcherPath)
+  }
+}
+
+// Why: a macOS that stops honoring the disclaim must fail the build, not ship a daemon that quietly
+// stays attributed to the app process (the launcher then prints its fallback line and execs on).
+function assertDisclaimExecHonored(launcherPath) {
+  const run = spawnSync(launcherPath, ['--disclaim-exec', '/usr/bin/true'], { encoding: 'utf8' })
+  if (run.status !== 0 || run.stderr.includes(`${LAUNCHER}: `)) {
+    throw new Error(
+      `product: ${LAUNCHER} --disclaim-exec did not take (exit ${run.status}): ${run.stderr.trim()}`
+    )
   }
 }
 
@@ -85,4 +97,4 @@ function installAgentShell(resourcesDir, cpu) {
   copyFileSync(join(source, 'bash', 'bashenv'), join(shellDir, 'bash', 'bashenv'))
 }
 
-module.exports = { AGENT_COMMANDS, installAgentLauncher }
+module.exports = { AGENT_COMMANDS, assertDisclaimExecHonored, installAgentLauncher }
