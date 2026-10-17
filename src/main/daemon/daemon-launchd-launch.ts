@@ -1,12 +1,13 @@
-// Fork-only (Pod): the macOS daemon as a launchd job in the user's GUI domain (POD_DAEMON_LAUNCHD=1).
-// A forked daemon stays in the coalition of the runtime that started it, so a Force Quit of that
-// runtime kills it and every session (incident #2); a job gets a coalition of its own. (It does not
-// get P-cores: pod-rootd measured a ProcessType Interactive job's bursts on E-cores too, M10.)
+// Fork-only (Pod): the macOS daemon as a launchd job in the user's GUI domain (kill switch
+// POD_DAEMON_LAUNCHD=0). A job leads its own coalition for its whole life, and launchservicesd
+// gives an app exec'd into a coalition with a live leader no coalition of its own. A forked daemon
+// sits in the runtime's coalition, which loses its leader when the runtime quits; an app started
+// from a terminal could then own it, and its quit or Force Quit ends every session (M10).
 import { EventEmitter } from 'node:events'
 import { readFileSync, unlinkSync } from 'node:fs'
 import { runProcess } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
-import { daemonNodeExecutable } from './daemon-app-scheduling-policy'
+import { daemonAppPolicyLaunch, daemonNodeExecutable } from './daemon-app-scheduling-policy'
 import {
   buildDaemonChildEnv,
   buildDaemonScriptArgs,
@@ -29,8 +30,12 @@ const DAEMON_EXIT_TIMEOUT_S = 7
 // launchd's default soft NOFILE for a job is 256; a daemon holds several descriptors per PTY.
 const DAEMON_NUMBER_OF_FILES = 10_240
 
-export function isLaunchdDaemonLaunchEnabled(): boolean {
-  return process.platform === 'darwin' && process.env.POD_DAEMON_LAUNCHD === '1'
+export function isLaunchdDaemonLaunchEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (process.platform !== 'darwin') {
+    return false
+  }
+  // Why opt-in under vitest: a unit test on a Mac would bootstrap real jobs in the user's GUI domain.
+  return env.VITEST ? env.POD_DAEMON_LAUNCHD === '1' : env.POD_DAEMON_LAUNCHD !== '0'
 }
 
 /** Where one launch's job lives (daemon-host side): its label and files. */
@@ -122,21 +127,27 @@ export async function launchDaemonViaLaunchd(
   jobs: DaemonLaunchdJobs,
   launchctl: RunLaunchctl = runLaunchctl
 ): Promise<DaemonLaunchdOutcome> {
-  const program = daemonNodeExecutable(options.relocatedExecPath)
+  const executable = daemonNodeExecutable(options.relocatedExecPath)
   const uid = process.getuid?.()
-  if (!program || uid === undefined) {
+  if (!executable || uid === undefined) {
     throw new Error('no executable or user for a launchd daemon')
   }
   const paths = jobs.paths({ userDataPath: options.userDataPath, launchNonce: options.launchNonce })
   removeQuietly(paths.reportPath)
+  // Why the daemon's own executable: a job is its own TCC responsible process, not its spawner.
+  const scriptArgs = [
+    ...buildDaemonScriptArgs(options, executable),
+    DAEMON_LAUNCHD_REPORT_ARG,
+    paths.reportPath
+  ]
+  // Same app scheduling policy as a fork; taskpolicy execs in place, so the job's pid stays leader.
+  const launch = daemonAppPolicyLaunch(options.forkEntryPath, scriptArgs, executable) ?? {
+    program: executable,
+    args: [options.forkEntryPath, ...scriptArgs]
+  }
   jobs.writePlist(paths, {
-    program,
-    args: [
-      options.forkEntryPath,
-      ...buildDaemonScriptArgs(options),
-      DAEMON_LAUNCHD_REPORT_ARG,
-      paths.reportPath
-    ],
+    program: launch.program,
+    args: launch.args,
     env: buildDaemonChildEnv(options),
     cwd: options.userDataPath,
     exitTimeoutSeconds: DAEMON_EXIT_TIMEOUT_S,

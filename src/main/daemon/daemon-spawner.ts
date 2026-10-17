@@ -32,6 +32,8 @@ export type DaemonPidFile = {
    *  `null` when it detected none. Absent on records no daemon wrote (adoption) or that predate
    *  durable-scope launching. */
   cgroupUnit?: string | null
+  /** Pod (macOS): the launchd job a daemon runs as (daemon-launchd-launch.ts); absent on a fork. */
+  launchdLabel?: string
 }
 
 export type DaemonProcessHandle = {
