@@ -102,6 +102,11 @@ export const WorktreeCreate = z
       )
       .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
       .optional(),
+    // Pod: the orca.yaml setup content hash the user approved for this create (sha256 hex).
+    setupTrustHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
     // Why: some clients (e.g. desktop) pass a pre-built launch command so the
     // first terminal pane launches the selected agent instead of an idle shell.
     // Clients that can't quote for the host shell send `startupAgent` instead.

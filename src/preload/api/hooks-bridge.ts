@@ -4,7 +4,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PreloadApi } from '../api-types'
 
 export const hooksApi = {
-  check: (args: { repoId: string; hostId?: ExecutionHostId }) =>
+  check: (args: { repoId: string; hostId?: ExecutionHostId; ref?: string }) =>
     ipcRenderer.invoke('hooks:check', args),
 
   inspectSetupScriptImports: (args: { repoId: string; hostId?: ExecutionHostId }) =>

@@ -47,6 +47,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   runHooks?: boolean
   activate?: boolean
   setupDecision?: 'run' | 'skip' | 'inherit'
+  /** See `CreateWorktreeArgs.setupTrustHash`. */
+  setupTrustHash?: string
   awaitTerminalProvisioning?: boolean
   observeSetupCompletion?: boolean
   createdWithAgent?: TuiAgent

@@ -284,7 +284,8 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
-      'refs/remotes/origin/main'
+      'refs/remotes/origin/main',
+      undefined
     )
   })
 
@@ -353,6 +354,7 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       'ENG-42',
+      undefined,
       undefined,
       undefined,
       undefined,

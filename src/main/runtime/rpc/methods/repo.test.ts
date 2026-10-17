@@ -389,12 +389,12 @@ describe('repo RPC methods', () => {
       })
     )
 
-    expect(runtime.getRepoHooks).toHaveBeenCalledWith('repo-1')
+    expect(runtime.getRepoHooks).toHaveBeenCalledWith('repo-1', undefined)
     expect(hooksResponse).toMatchObject({
       ok: true,
       result: { setupTrust: { contentHash: 'hash-1', scriptContent: 'pnpm install' } }
     })
-    expect(runtime.checkRepoHooks).toHaveBeenCalledWith('repo-1')
+    expect(runtime.checkRepoHooks).toHaveBeenCalledWith('repo-1', undefined)
     expect(runtime.inspectRepoSetupScriptImports).toHaveBeenCalledWith('repo-1')
     expect(runtime.readRepoIssueCommand).toHaveBeenCalledWith('repo-1')
     expect(runtime.writeRepoIssueCommand).toHaveBeenCalledWith('repo-1', 'Fix it')

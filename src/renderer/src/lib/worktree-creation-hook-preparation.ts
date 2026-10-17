@@ -14,6 +14,7 @@ export async function prepareWorktreeCreationHooks(
   }
 
   const isCancelled = (): boolean => !useAppStore.getState().pendingWorktreeCreations[creationId]
+  let setupTrustHash: string | undefined
   const confirmHook = (kind: 'setup' | 'vmRecipe'): Promise<'run' | 'skip'> =>
     ensureHooksConfirmed(
       useAppStore.getState,
@@ -21,7 +22,11 @@ export async function prepareWorktreeCreationHooks(
       kind,
       preparation.executionHostId,
       undefined,
-      isCancelled
+      isCancelled,
+      // Pod: asked on the base's orca.yaml, which is what the create runs.
+      kind === 'setup'
+        ? { baseRef: request.baseBranch, onTrusted: (hash) => (setupTrustHash = hash) }
+        : undefined
     )
   const trustDecision = await confirmHook('setup')
   if (isCancelled()) {
@@ -63,6 +68,7 @@ export async function prepareWorktreeCreationHooks(
     hookPreparation: undefined,
     executionHostId: request.executionHostId ?? preparation.executionHostId,
     setupDecision: trustDecision === 'skip' ? 'skip' : request.setupDecision,
+    ...(setupTrustHash ? { setupTrustHash } : {}),
     issueCommand
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {

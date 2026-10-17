@@ -274,7 +274,7 @@ import {
   UpdatePrState,
   UpdatePrTitle
 } from './github-pull-request-update-params'
-import { RepoSelector, SlugRepo } from './github-repo-target-params'
+import { RepoHooksSelector, RepoSelector, SlugRepo } from './github-repo-target-params'
 import {
   IssuesList,
   RateLimit,
@@ -1261,8 +1261,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.clone': RepoClone,
   'repo.create': RepoCreate,
   'repo.gitAvailable': null,
-  'repo.hooks': RepoSelector,
-  'repo.hooksCheck': RepoSelector,
+  'repo.hooks': RepoHooksSelector,
+  'repo.hooksCheck': RepoHooksSelector,
   'repo.issueCommandRead': RepoSelector,
   'repo.issueCommandWrite': RepoIssueCommandWrite,
   'repo.list': null,
