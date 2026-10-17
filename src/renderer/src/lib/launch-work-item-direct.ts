@@ -164,7 +164,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     undefined,
     undefined,
     undefined,
-    { baseRef: resolvedBaseBranch, onTrusted: (hash) => (setupTrustHash = hash) }
+    {
+      baseRef: resolvedBaseBranch,
+      foreign: itemType === 'pr',
+      onTrusted: (hash) => (setupTrustHash = hash)
+    }
   )
   const finalSetupDecision: SetupDecision =
     trustDecision === 'skip' ? 'skip' : setupResolution.decision

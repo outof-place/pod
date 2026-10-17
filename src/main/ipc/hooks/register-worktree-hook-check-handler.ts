@@ -6,7 +6,7 @@ import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatc
 import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
 import { parseOrcaYaml, hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../hooks'
 import { isENOENT } from '../filesystem-path-containment'
-import { readOrcaYamlAtRef, repoGitShowExec } from '../../orca-yaml-at-ref'
+import { isOwnBranch, readOrcaYamlAtRef, repoGitShowExec } from '../../orca-yaml-at-ref'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
@@ -30,12 +30,14 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
       if (isFolderRepo(repo)) {
         return { status: 'ok', hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
-      // Pod: the ref's committed orca.yaml, the base a create from it runs.
+      // Pod: the ref's committed orca.yaml, the base a create from it runs, and whether the ref is
+      // the repo's own branch (a create from any other asks every time).
       if (typeof args.ref === 'string' && args.ref) {
         const exec = repoGitShowExec(store, repo)
-        return exec
-          ? readOrcaYamlAtRef(exec, args.ref)
+        const read = exec
+          ? await readOrcaYamlAtRef(exec, args.ref)
           : { status: 'error', hasHooks: false, hooks: null, mayNeedUpdate: false }
+        return { ...read, baseOwned: await isOwnBranch(exec, args.ref) }
       }
 
       const connectionId = getStoredRepoSshConnectionId(repo)

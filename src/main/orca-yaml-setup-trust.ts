@@ -36,22 +36,25 @@ export type SetupTrustStore = {
 /**
  * Null when the create may run the new worktree's shared setup: its content is the one the user
  * approved for this create (`approvedHash`), or the one recorded for the repo, or the repo is
- * trusted whole while its id is unique (the clients' rule). Otherwise what still needs trust; a
- * store without UI state trusts nothing but an approved hash.
+ * trusted whole while its id is unique (the clients' rule). The last two don't count for a create
+ * from someone else's code (`isForeign`, asked only when they would decide). Otherwise what still
+ * needs trust; a store without UI state trusts nothing but an approved hash.
  */
-export function untrustedCreateSetup(
+export async function untrustedCreateSetup(
   store: SetupTrustStore,
   repo: Repo,
   yamlHooks: OrcaHooks | null,
-  approvedHash: string | undefined
-): NonNullable<CreateWorktreeResult['setupTrust']> | null {
+  approvedHash: string | undefined,
+  isForeign: () => Promise<boolean>
+): Promise<NonNullable<CreateWorktreeResult['setupTrust']> | null> {
   const trust = orcaYamlSetupTrust(repo, yamlHooks)
   if (!trust || trust.contentHash === approvedHash) {
     return null
   }
   const record = store.getUI?.().trustedOrcaHooks?.[repo.id]
   const uniqueId = store.getRepos().filter((other) => other.id === repo.id).length <= 1
-  if (record?.setup?.contentHash === trust.contentHash || (record?.all && uniqueId)) {
+  const recorded = record?.setup?.contentHash === trust.contentHash || (record?.all && uniqueId)
+  if (recorded && !(await isForeign())) {
     return null
   }
   return { status: 'needs-trust', contentHash: trust.contentHash }
@@ -65,5 +68,5 @@ export function withoutTabCommands(
 }
 
 export function needsTrustWarning(worktreePath: string): string {
-  return `orca.yaml setup skipped for ${worktreePath}: its content isn't trusted yet. Approve it in Pod, then run it from the worktree.`
+  return `orca.yaml setup skipped for ${worktreePath}: its content isn't trusted yet. Pod asks about it on the next create, or run the setup yourself in the worktree.`
 }
