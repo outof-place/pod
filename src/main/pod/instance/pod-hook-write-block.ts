@@ -7,7 +7,7 @@ import { hasPodHeadlessUiHostSwitches } from '../ui-host/pod-ui-host-launch'
  * user. Every other instance (a dev or bench build, its own userData, `--serve`, a headless host,
  * a test launch's mock keychain, a background or E2E launch) shares the account with the user's
  * live sessions, so it must not write what they all read: ~/.claude/settings.json and the scripts
- * under ~/.orca/agent-hooks. A HOME override isolates nothing: Electron's getPath('home') comes from
+ * under ~/.pod/agent-hooks. A HOME override isolates nothing: Electron's getPath('home') comes from
  * the user database, and the dev runtimes that rewrote the user's hooks all night had one.
  *
  * No Electron here: the CLI links the hook controls too. Main installs the full check

@@ -37,8 +37,8 @@ function requireStringFlag(ctx: HandlerContext, name: string): string {
 }
 
 function cloudOptions(ctx: HandlerContext): ArtifactCloudOptions {
-  const apiUrl = stringFlag(ctx, 'api-url') ?? process.env.ORCA_ARTIFACTS_API_URL?.trim()
-  const authToken = process.env.ORCA_CLOUD_AUTH_TOKEN?.trim()
+  const apiUrl = stringFlag(ctx, 'api-url') ?? process.env.POD_ARTIFACTS_API_URL?.trim()
+  const authToken = process.env.POD_CLOUD_AUTH_TOKEN?.trim()
   return {
     ...(apiUrl ? { apiUrl } : {}),
     ...(authToken ? { authToken } : {})

@@ -64,7 +64,7 @@ describe('registerPtyHandlers', () => {
   posixOnlyIt('wraps macOS spawns in login(1) with SHELL restored by the trampoline', async () => {
     const originalShell = process.env.SHELL
     // Re-enable the TCC login wrapper the suite-level beforeEach disables.
-    delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+    delete process.env.POD_DISABLE_MACOS_LOGIN_SHELL
     process.env.SHELL = '/bin/zsh'
     loginPreflightExecFileMock.mockImplementation(
       (
@@ -100,7 +100,7 @@ describe('registerPtyHandlers', () => {
       expect(options.env.SHELL).toBe('/bin/zsh')
     } finally {
       resetMacosLoginShellPreflightForTests()
-      process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = '1'
+      process.env.POD_DISABLE_MACOS_LOGIN_SHELL = '1'
       if (originalShell === undefined) {
         delete process.env.SHELL
       } else {
@@ -123,9 +123,9 @@ describe('registerPtyHandlers', () => {
       expect(shell).toBe('/bin/zsh')
       expect(args).toEqual(['-l'])
       expect(options.env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
-      expect(options.env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
+      expect(options.env.POD_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
       expect(options.env.ZDOTDIR).toBe(join(getShellReadyWrapperRoot(), 'zsh'))
-      expect(options.env.ORCA_SHELL_FEATURES).not.toContain('ready')
+      expect(options.env.POD_SHELL_FEATURES).not.toContain('ready')
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
@@ -148,9 +148,9 @@ describe('registerPtyHandlers', () => {
     })
     process.env.SHELL = '/bin/zsh'
     openCodeBuildPtyEnvMock.mockImplementationOnce(() => ({
-      ORCA_OPENCODE_HOOK_PORT: '4567',
-      ORCA_OPENCODE_HOOK_TOKEN: 'opencode-token',
-      ORCA_OPENCODE_PTY_ID: 'test-pty'
+      POD_OPENCODE_HOOK_PORT: '4567',
+      POD_OPENCODE_HOOK_TOKEN: 'opencode-token',
+      POD_OPENCODE_PTY_ID: 'test-pty'
     }))
 
     try {
@@ -161,12 +161,12 @@ describe('registerPtyHandlers', () => {
       expect(shell).toBe('/bin/zsh')
       expect(args).toEqual(['-l'])
       expect(options.env.OPENCODE_CONFIG_DIR).toBeUndefined()
-      expect(options.env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+      expect(options.env.POD_OPENCODE_CONFIG_DIR).toBeUndefined()
       expect(options.env.PI_CODING_AGENT_DIR).toBe('/tmp/user-pi-agent')
-      expect(options.env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
-      expect(options.env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
+      expect(options.env.POD_PI_CODING_AGENT_DIR).toBeUndefined()
+      expect(options.env.POD_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
       expect(options.env.ZDOTDIR).toBe(join(getShellReadyWrapperRoot(), 'zsh'))
-      expect(options.env.ORCA_SHELL_FEATURES).not.toContain('ready')
+      expect(options.env.POD_SHELL_FEATURES).not.toContain('ready')
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
@@ -256,7 +256,7 @@ describe('registerPtyHandlers', () => {
         })
 
         const [, , options] = spawnMock.mock.calls[0]!
-        expect(options.env.ORCA_SHELL_FEATURES).not.toContain('ready')
+        expect(options.env.POD_SHELL_FEATURES).not.toContain('ready')
         expect(options.env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe('codex')
 
         await Promise.resolve()
@@ -289,7 +289,7 @@ describe('registerPtyHandlers', () => {
       })
 
       const [, , options] = spawnMock.mock.calls[0]!
-      expect(options.env.ORCA_SHELL_FEATURES).toContain('ready')
+      expect(options.env.POD_SHELL_FEATURES).toContain('ready')
       expect(options.env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe("codex 'linked issue context'")
       expect(mockProc.proc.write).not.toHaveBeenCalled()
 
@@ -360,7 +360,7 @@ describe('registerPtyHandlers', () => {
       })
 
       const [, , options] = spawnMock.mock.calls[0]!
-      expect(options.env.ORCA_SHELL_FEATURES).toContain('ready')
+      expect(options.env.POD_SHELL_FEATURES).toContain('ready')
       expect(options.env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe(
         "codex --prefill 'linked issue context'"
       )

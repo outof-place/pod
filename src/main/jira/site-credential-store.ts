@@ -26,7 +26,7 @@ const cachedTokens = new Map<string, string>()
 export const credentialErrors = new Map<string, string>()
 
 function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+  return join(homedir(), '.pod')
 }
 
 function getSiteFilePath(): string {

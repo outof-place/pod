@@ -56,11 +56,11 @@ describe('AgentHookServer Muse session log polling', () => {
     await server.start({ env: 'production' })
     try {
       const env = server.buildPtyEnv()
-      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/muse`, {
+      const response = await fetch(`http://127.0.0.1:${env.POD_AGENT_HOOK_PORT}/hook/muse`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          'X-Orca-Agent-Hook-Token': env.POD_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify({
           paneKey: PANE_KEY,

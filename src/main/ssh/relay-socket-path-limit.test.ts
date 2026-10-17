@@ -173,7 +173,7 @@ describe('relay launch with a long remote $HOME', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // The host-npm path is opt-in; these cases cover it.
-    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
+    vi.stubEnv('POD_SSH_REMOTE_RUNTIME', 'legacy')
   })
 
   it('keeps the launched socket path inside the remote sun_path limit', async () => {

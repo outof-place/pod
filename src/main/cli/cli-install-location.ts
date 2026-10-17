@@ -84,7 +84,7 @@ export abstract class CliInstallLocation {
       join(this.homePath, 'AppData', 'Local')
     this.processPathEnv = options.processPathEnv ?? process.env.PATH ?? process.env.Path ?? null
     this.commandPathOverride =
-      options.commandPathOverride ?? process.env.ORCA_CLI_INSTALL_PATH ?? null
+      options.commandPathOverride ?? process.env.POD_CLI_INSTALL_PATH ?? null
     // Why: resolved once here (getStatus is hot); /usr/local/bin is absent on Apple Silicon, so fall back to user-writable ~/.local/bin.
     this.productCliName =
       options.productCliName === undefined

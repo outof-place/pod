@@ -56,7 +56,7 @@ test('a managed orcad stops after idling and starts again on the next connect', 
   test.setTimeout(15 * 60_000)
   const target = startDockerSshRelayTarget(testInfo)
   const session = createRestartSession(testInfo, {
-    ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE!,
+    POD_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE!,
     [ORCAD_E2E_IDLE_TIMEOUT_ENV]: String(IDLE_TIMEOUT_MS)
   })
   let app: ElectronApplication | null = null
@@ -173,7 +173,7 @@ test('a live managed process that does not answer remains unverifiable', async (
   )
   test.setTimeout(5 * 60_000)
   const target = startDockerSshRelayTarget(testInfo)
-  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
+  const session = createRestartSession(testInfo, { POD_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
   let app: ElectronApplication | null = null
   let pausedPid: string | null = null
   try {
@@ -233,7 +233,7 @@ test('a killed managed orcad comes back with its terminal, and starts fresh afte
   )
   test.setTimeout(15 * 60_000)
   const target = startDockerSshRelayTarget(testInfo)
-  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
+  const session = createRestartSession(testInfo, { POD_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
   let app: ElectronApplication | null = null
   try {
     const launched = await session.launch()

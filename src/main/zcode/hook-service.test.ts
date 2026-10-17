@@ -163,7 +163,7 @@ describe('ZCodeHookService', () => {
     zcodeHookService.install()
     const scriptPath = join(
       hoisted.home,
-      '.orca',
+      '.pod',
       'agent-hooks',
       process.platform === 'win32' ? 'zcode-hook.cmd' : 'zcode-hook.sh'
     )

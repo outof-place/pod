@@ -72,19 +72,19 @@ export type ZshStartupHookSpec = {
 }
 
 const AGENT_TEAMS_PATH_RESTORE_BLOCK = `__orca_restore_agent_teams_path() {
-  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+  [[ -n "\${POD_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
-    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+    "\${POD_AGENT_TEAMS_SHIM_DIR}"|"\${POD_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
   esac
-  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+  export PATH="\${POD_AGENT_TEAMS_SHIM_DIR}:$PATH"
 }
 __orca_restore_agent_teams_path`
 
-const OPENCODE_CONFIG_DIR_RESTORE = `[[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"`
-const MIMOCODE_HOME_RESTORE = `[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"`
-const REMOTE_CLI_BIN_DIR_RESTORE = `[[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac`
+const OPENCODE_CONFIG_DIR_RESTORE = `[[ -n "\${POD_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${POD_OPENCODE_CONFIG_DIR}"`
+const MIMOCODE_HOME_RESTORE = `[[ -n "\${POD_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${POD_MIMOCODE_HOME}"`
+const REMOTE_CLI_BIN_DIR_RESTORE = `[[ -n "\${POD_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${POD_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${POD_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac`
 const CODEX_HOME_RESTORE = `# Why: Codex must keep using Orca's runtime CODEX_HOME after rc files.
-[[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"`
+[[ -n "\${POD_CODEX_HOME:-}" ]] && export CODEX_HOME="\${POD_CODEX_HOME}"`
 
 /**
  * The OSC 133 hooks, defined at top level so their bodies are parsed before the

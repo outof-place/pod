@@ -76,7 +76,7 @@ beforeEach(async () => {
   const endpoint = join(dir, 'endpoint.cmd')
   writeFileSync(
     endpoint,
-    'set ORCA_AGENT_HOOK_PORT=12345\nset ORCA_AGENT_HOOK_TOKEN=private-token\nset ORCA_AGENT_HOOK_ENV=test\nset ORCA_AGENT_HOOK_VERSION=1\n'
+    'set POD_AGENT_HOOK_PORT=12345\nset POD_AGENT_HOOK_TOKEN=private-token\nset POD_AGENT_HOOK_ENV=test\nset POD_AGENT_HOOK_VERSION=1\n'
   )
   vi.stubEnv(OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV, endpoint)
   claim = vi.fn(async () => ({ ok: true, json: async () => ({ allowed: true }) }))
@@ -642,7 +642,7 @@ describe('installed-version native prompt intent plugin', () => {
       }
       writeFileSync(
         join(dir, 'endpoint.cmd'),
-        `set ORCA_AGENT_HOOK_PORT=${address.port}\nset ORCA_AGENT_HOOK_TOKEN=private-token\nset ORCA_AGENT_HOOK_ENV=test\nset ORCA_AGENT_HOOK_VERSION=1\n`
+        `set POD_AGENT_HOOK_PORT=${address.port}\nset POD_AGENT_HOOK_TOKEN=private-token\nset POD_AGENT_HOOK_ENV=test\nset POD_AGENT_HOOK_VERSION=1\n`
       )
       const f = fixture()
       const dispose = await setup(f.ctx)

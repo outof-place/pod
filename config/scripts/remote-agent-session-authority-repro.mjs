@@ -364,7 +364,7 @@ async function startServer(port) {
     ...process.env,
     [pathKey]: `${binPath}${pathDelimiter}${process.env[pathKey] ?? ''}`,
     ORCA_DEV_USER_DATA_PATH: profilePath,
-    ORCA_USER_DATA_PATH: profilePath,
+    POD_USER_DATA_PATH: profilePath,
     ORCA_REPRO_SPAWN_MARKER: spawnMarkerPath,
     ORCA_REPRO_EXIT_TRIGGER: exitTriggerPath,
     ORCA_REPRO_INPUT_MARKER: inputMarkerPath,

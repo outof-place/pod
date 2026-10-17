@@ -54,10 +54,10 @@ function appendLedger(envName, event) {
   } catch {}
 }
 async function emitAuthorityHook(hookEventName) {
-  const port = process.env.ORCA_AGENT_HOOK_PORT
-  const token = process.env.ORCA_AGENT_HOOK_TOKEN
-  const launchToken = process.env.ORCA_AGENT_LAUNCH_TOKEN
-  if (!port || !token || !launchToken || !process.env.ORCA_PANE_KEY) return
+  const port = process.env.POD_AGENT_HOOK_PORT
+  const token = process.env.POD_AGENT_HOOK_TOKEN
+  const launchToken = process.env.POD_AGENT_LAUNCH_TOKEN
+  if (!port || !token || !launchToken || !process.env.POD_PANE_KEY) return
   try {
     const response = await fetch('http://127.0.0.1:' + port + '/hook/codex', {
       method: 'POST',
@@ -66,11 +66,11 @@ async function emitAuthorityHook(hookEventName) {
         'X-Orca-Agent-Hook-Token': token
       },
       body: JSON.stringify({
-        paneKey: process.env.ORCA_PANE_KEY,
-        tabId: process.env.ORCA_TAB_ID,
-        worktreeId: process.env.ORCA_WORKTREE_ID,
-        env: process.env.ORCA_AGENT_HOOK_ENV,
-        version: process.env.ORCA_AGENT_HOOK_VERSION,
+        paneKey: process.env.POD_PANE_KEY,
+        tabId: process.env.POD_TAB_ID,
+        worktreeId: process.env.POD_WORKTREE_ID,
+        env: process.env.POD_AGENT_HOOK_ENV,
+        version: process.env.POD_AGENT_HOOK_VERSION,
         launchToken,
         payload: {
           hook_event_name: hookEventName,

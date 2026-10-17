@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 
-const executablePath = process.env.ORCA_BROWSER_EXECUTABLE
+const executablePath = process.env.POD_BROWSER_EXECUTABLE
 
 // Why 120s rather than the 30s global default: one macOS run took 30s and timed out,
 // while a Linux run with an empty ~/.agent-browser was 2.8s — so the cost looks like a
@@ -26,7 +26,7 @@ describe('ExternalChromiumBrowserProcess integration', () => {
       )
       const provider = await resolveOrcadBrowserProvider({
         userDataPath: root,
-        environment: { ORCA_BROWSER_EXECUTABLE: executablePath },
+        environment: { POD_BROWSER_EXECUTABLE: executablePath },
         resolveInstalledElectronExecutable: async () => null
       })
       try {

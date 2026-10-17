@@ -4,7 +4,7 @@ import { getClaudeManagedHookPlan } from './claude-managed-hook-events'
 import { applyManagedHooks } from './hook-settings'
 
 const SCRIPT_FILE_NAME = 'claude-hook.sh'
-const MANAGED_COMMAND = '/home/dev/.orca/agent-hooks/claude-hook.sh'
+const MANAGED_COMMAND = '/home/dev/.pod/agent-hooks/claude-hook.sh'
 const managedHook: HookCommandConfig = { type: 'command', command: MANAGED_COMMAND, timeout: 10 }
 const STATUS_ONLY = [
   'PreToolUse',

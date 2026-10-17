@@ -24,12 +24,12 @@ export const ZSH_WRAPPER_DIR_MARKER_CONTENT = `# Orca-generated zsh startup wrap
 export const ZSH_FEATURE_CHANNEL_BLOCK = `builtin typeset -ga _orca_shell_features
 _orca_shell_features=(\${(s:,:)\${${SHELL_STARTUP_FEATURE_ENV}:-}})
 builtin unset ${SHELL_STARTUP_FEATURE_ENV}
-# Why ORCA_HISTFILE is consumed HERE and not in the deferred hook: a user config
+# Why POD_HISTFILE is consumed HERE and not in the deferred hook: a user config
 # that replaces precmd_functions wholesale drops the hook, and an exported value
 # nothing will ever consume is then inherited by every child of this pane,
 # including a nested Orca (#11146). Captured non-exported, it cannot escape.
-builtin typeset -g _orca_histfile="\${ORCA_HISTFILE:-}"
-builtin unset ORCA_HISTFILE
+builtin typeset -g _orca_histfile="\${POD_HISTFILE:-}"
+builtin unset POD_HISTFILE
 __orca_has_feature() { (( \${_orca_shell_features[(Ie)$1]} )) }`
 
 /** The bash rcfile equivalent of ZSH_FEATURE_CHANNEL_BLOCK. */
@@ -52,12 +52,12 @@ export const SHELL_STARTUP_IDENTITY_MARKER_BLOCK = `__orca_has_feature identity 
  * instead of one inside Orca's wrapper dir, so #11044 cannot happen rather than
  * having to be repaired afterwards.
  *
- * ORCA_ORIG_ZDOTDIR is consumed: it has done its job, and leaving it exported
+ * POD_ORIG_ZDOTDIR is consumed: it has done its job, and leaving it exported
  * would hand a stale value to everything this pane launches.
  *
  * Why the value is vetted rather than trusted: the launch config only sets this
  * when it resolved a usable dir, but a pane also inherits its parent's
- * environment, so a stale ORCA_ORIG_ZDOTDIR written by an older build can arrive
+ * environment, so a stale POD_ORIG_ZDOTDIR written by an older build can arrive
  * on its own. Handing that back would point ZDOTDIR at an Orca wrapper dir — the
  * self-loop the Node-side ownership check exists to prevent, arriving by a route
  * that check never sees. Identification stays positive, as it is in Node: a
@@ -77,12 +77,12 @@ export const ZSH_ZDOTDIR_HANDBACK_BLOCK = `__orca_usable_zdotdir() {
   done
   return 1
 }
-if __orca_usable_zdotdir "\${ORCA_ORIG_ZDOTDIR:-}"; then
-  builtin export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"
+if __orca_usable_zdotdir "\${POD_ORIG_ZDOTDIR:-}"; then
+  builtin export ZDOTDIR="$POD_ORIG_ZDOTDIR"
 else
   builtin unset ZDOTDIR
 fi
-builtin unset ORCA_ORIG_ZDOTDIR ORCA_ZSHENV_SOURCE_DIR
+builtin unset POD_ORIG_ZDOTDIR ORCA_ZSHENV_SOURCE_DIR
 builtin unfunction __orca_usable_zdotdir`
 
 /**
@@ -126,20 +126,20 @@ export { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from './bash-prompt-command-com
  * wrapper dir the replacement lands INSIDE it. Per-worktree history was a
  * silent no-op on the primary platform as a result (#11044).
  *
- * `builtin unset ORCA_HISTFILE` is the root-cause fix for #11146: the variable
+ * `builtin unset POD_HISTFILE` is the root-cause fix for #11146: the variable
  * cannot be inherited by anything the shell later spawns if it no longer exists
  * once it has been consumed. HISTFILE itself stays exported.
  */
-export const BASH_HISTFILE_RESTORE_BLOCK = `if [[ -n "\${ORCA_HISTFILE:-}" ]]; then
-  HISTFILE="$ORCA_HISTFILE"
-  builtin unset ORCA_HISTFILE
+export const BASH_HISTFILE_RESTORE_BLOCK = `if [[ -n "\${POD_HISTFILE:-}" ]]; then
+  HISTFILE="$POD_HISTFILE"
+  builtin unset POD_HISTFILE
 elif [[ "\${HISTFILE:-}" == "$ZDOTDIR/.zsh_history" ]]; then
   # Why also when Orca injected nothing: /etc/zshrc derived this from Orca's
   # wrapper ZDOTDIR, so history would accumulate INSIDE the wrapper dir and the
   # user's real history would be invisible — the plain #11044 bug, with no
   # per-worktree scoping involved. Matching the exact clobbered value means a
   # HISTFILE the user set deliberately is never touched.
-  HISTFILE="\${ORCA_ORIG_ZDOTDIR:-$HOME}/.zsh_history"
+  HISTFILE="\${POD_ORIG_ZDOTDIR:-$HOME}/.zsh_history"
 fi`
 
 // Why: zsh precmd fires before zle switches the PTY into line-editing mode,

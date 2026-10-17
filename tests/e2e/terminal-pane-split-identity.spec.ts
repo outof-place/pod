@@ -1,6 +1,6 @@
 /**
  * E2E tests for splitting terminal panes and the stable UUID leaf identity each
- * split pane carries into its PTY binding, ORCA_PANE_KEY, and context menu.
+ * split pane carries into its PTY binding, POD_PANE_KEY, and context menu.
  *
  * User Prompt:
  * - terminal panes can be split
@@ -76,7 +76,7 @@ test.describe('Terminal Panes', () => {
     ).toBe(false)
   })
 
-  test('terminal process receives ORCA_PANE_KEY with the active UUID leaf id', async ({
+  test('terminal process receives POD_PANE_KEY with the active UUID leaf id', async ({
     orcaPage
   }) => {
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
@@ -89,7 +89,7 @@ test.describe('Terminal Panes', () => {
     const ptyId = await discoverActivePtyId(orcaPage)
     const marker = `ORCA_PANE_KEY_E2E_${Date.now()}`
 
-    await execInTerminal(orcaPage, ptyId, `printf '${marker}=%s\\n' "$ORCA_PANE_KEY"`)
+    await execInTerminal(orcaPage, ptyId, `printf '${marker}=%s\\n' "$POD_PANE_KEY"`)
     await waitForTerminalOutput(orcaPage, `${marker}=${expectedPaneKey}`)
 
     expect(activeLeafId).toMatch(UUID_RE)

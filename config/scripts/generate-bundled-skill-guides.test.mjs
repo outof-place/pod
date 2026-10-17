@@ -401,13 +401,13 @@ describe('bundled skill guide generator', () => {
   // G2, second half: the ladder is pre-resolution guidance and belongs only to the stub —
   // every path that delivers a guide body has already resolved an executable. Guides keep
   // the `ORCA` placeholder rule. Red until the guide bodies drop their ladders; retiring
-  // those also retires the ORCA_CLI_COMMAND/orca-dev/orca-ide assertions in
+  // those also retires the POD_CLI_COMMAND/orca-dev/orca-ide assertions in
   // 'keeps CLI guide examples safe across shells and Linux command names' above, which
   // pin the opposite contract.
   it('keeps the CLI resolver ladder out of every guide body', async () => {
     for (const name of CANONICAL_GUIDE_NAMES) {
       const source = await readFile(path.join(projectDir, 'skill-guides', `${name}.md`), 'utf8')
-      expect(source, name).not.toContain('ORCA_CLI_COMMAND')
+      expect(source, name).not.toContain('POD_CLI_COMMAND')
     }
   })
 

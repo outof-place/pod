@@ -145,27 +145,27 @@ describe('OrcaRuntimeService', () => {
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
     const sourceEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
-    const sourceLeafId = sourceEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+    const sourceLeafId = sourceEnv.POD_PANE_KEY.slice(`${sourceEnv.POD_TAB_ID}:`.length)
 
     const split = await runtime.splitTerminal(handle, { direction: 'vertical' })
     expect(split).toMatchObject({
       handle: expect.stringMatching(/^term_/),
-      tabId: sourceEnv.ORCA_TAB_ID,
+      tabId: sourceEnv.POD_TAB_ID,
       paneRuntimeId: -1
     })
 
     const splitEnv =
       (spawn.mock.calls[1]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
-    const splitLeafId = splitEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+    const splitLeafId = splitEnv.POD_PANE_KEY.slice(`${sourceEnv.POD_TAB_ID}:`.length)
     expect(split.leafId).toBe(splitLeafId)
     expect(splitTerminal).not.toHaveBeenCalled()
-    expect(splitEnv.ORCA_TAB_ID).toBe(sourceEnv.ORCA_TAB_ID)
-    expect(splitEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
+    expect(splitEnv.POD_TAB_ID).toBe(sourceEnv.POD_TAB_ID)
+    expect(splitEnv.POD_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
     expect(revealTerminalSession).toHaveBeenLastCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-split',
       title: null,
       activate: true,
-      tabId: sourceEnv.ORCA_TAB_ID,
+      tabId: sourceEnv.POD_TAB_ID,
       leafId: splitLeafId,
       splitFromLeafId: sourceLeafId,
       splitDirection: 'vertical'
@@ -175,7 +175,7 @@ describe('OrcaRuntimeService', () => {
     const publishedTabs = runtime['mobileSessionTabsByWorktree'].get(TEST_WORKTREE_ID)!.tabs
     const siblingSurfaces = publishedTabs.filter(
       (tab): tab is Extract<typeof tab, { type: 'terminal' }> =>
-        tab.type === 'terminal' && tab.parentTabId === sourceEnv.ORCA_TAB_ID
+        tab.type === 'terminal' && tab.parentTabId === sourceEnv.POD_TAB_ID
     )
     expect(siblingSurfaces.length).toBe(2)
     for (const surface of siblingSurfaces) {
@@ -429,11 +429,11 @@ describe('OrcaRuntimeService', () => {
       | { cwd?: string; env?: Record<string, string>; worktreeId?: string }
       | undefined
     const sourceEnv = sourceCall?.env ?? {}
-    const sourceLeafId = sourceEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+    const sourceLeafId = sourceEnv.POD_PANE_KEY.slice(`${sourceEnv.POD_TAB_ID}:`.length)
 
     await expect(runtime.splitTerminal(handle, { direction: 'vertical' })).resolves.toMatchObject({
       handle: expect.stringMatching(/^term_/),
-      tabId: sourceEnv.ORCA_TAB_ID,
+      tabId: sourceEnv.POD_TAB_ID,
       paneRuntimeId: -1
     })
 
@@ -441,7 +441,7 @@ describe('OrcaRuntimeService', () => {
       | { cwd?: string; env?: Record<string, string>; worktreeId?: string }
       | undefined
     const splitEnv = splitCall?.env ?? {}
-    const splitLeafId = splitEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+    const splitLeafId = splitEnv.POD_PANE_KEY.slice(`${sourceEnv.POD_TAB_ID}:`.length)
     expect(sourceCall).toMatchObject({
       cwd: folderPath,
       worktreeId: TEST_FOLDER_WORKSPACE_KEY
@@ -451,16 +451,16 @@ describe('OrcaRuntimeService', () => {
       worktreeId: TEST_FOLDER_WORKSPACE_KEY
     })
     expectStablePaneKeyEnv(splitEnv)
-    expect(splitEnv.ORCA_TAB_ID).toBe(sourceEnv.ORCA_TAB_ID)
-    expect(splitEnv.ORCA_WORKSPACE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
-    expect(splitEnv.ORCA_PROJECT_GROUP_ID).toBe(TEST_FOLDER_PROJECT_GROUP_ID)
-    expect(splitEnv.ORCA_WORKSPACE_ROOT).toBe(folderPath)
-    expect(splitEnv.ORCA_WORKTREE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
+    expect(splitEnv.POD_TAB_ID).toBe(sourceEnv.POD_TAB_ID)
+    expect(splitEnv.POD_WORKSPACE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
+    expect(splitEnv.POD_PROJECT_GROUP_ID).toBe(TEST_FOLDER_PROJECT_GROUP_ID)
+    expect(splitEnv.POD_WORKSPACE_ROOT).toBe(folderPath)
+    expect(splitEnv.POD_WORKTREE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
     expect(revealTerminalSession).toHaveBeenLastCalledWith(TEST_FOLDER_WORKSPACE_KEY, {
       ptyId: 'pty-folder-split',
       title: null,
       activate: true,
-      tabId: sourceEnv.ORCA_TAB_ID,
+      tabId: sourceEnv.POD_TAB_ID,
       leafId: splitLeafId,
       splitFromLeafId: sourceLeafId,
       splitDirection: 'vertical'
@@ -580,12 +580,12 @@ describe('OrcaRuntimeService', () => {
       const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
       const spawnedEnv = spawnCall?.env ?? {}
       expectStablePaneKeyEnv(spawnedEnv)
-      const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
+      const spawnedLeafId = spawnedEnv.POD_PANE_KEY.slice(`${spawnedEnv.POD_TAB_ID}:`.length)
       expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
         ptyId: 'pty-bg',
         title: null,
         activate: false,
-        tabId: spawnedEnv.ORCA_TAB_ID,
+        tabId: spawnedEnv.POD_TAB_ID,
         leafId: spawnedLeafId
       })
       expect(warn).toHaveBeenCalledWith(

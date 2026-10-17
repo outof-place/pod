@@ -13,7 +13,7 @@ beforeEach(() => {
   configDir = join(root, 'xdg', 'opencode')
   mkdirSync(configDir, { recursive: true })
   vi.stubEnv('XDG_CONFIG_HOME', join(root, 'xdg'))
-  vi.stubEnv('ORCA_OPENCODE_PLUGIN_API', 'v2')
+  vi.stubEnv('POD_OPENCODE_PLUGIN_API', 'v2')
   setAppEnvironment({
     getPath: () => join(root, 'profile'),
     getAppPath: () => process.cwd(),

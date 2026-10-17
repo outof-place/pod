@@ -111,7 +111,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '',
   'Behavior:',
   '  Most commands require a running Orca runtime. If Orca is not open yet, run `orca open` first.',
-  '  Remote runtime access can also be supplied with ORCA_PAIRING_CODE or ORCA_ENVIRONMENT.',
+  '  Remote runtime access can also be supplied with POD_PAIRING_CODE or POD_ENVIRONMENT.',
   '  Use selectors for discovery and handles for repeated live terminal operations.',
   '',
   'Agent Sessions And Worktrees:',

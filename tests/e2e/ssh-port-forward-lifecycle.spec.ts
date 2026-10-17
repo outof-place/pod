@@ -40,7 +40,7 @@ import {
 } from './helpers/ssh-port-forward-transport-evidence'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
-const FORCE_SYSTEM_SSH = process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1'
+const FORCE_SYSTEM_SSH = process.env.POD_SSH_FORCE_SYSTEM_TRANSPORT === '1'
 const REMOTE_PORT = 7860
 const REFRESH_BARRIER_PORT = 7861
 const SCAN_REFRESH_PORT = 7862

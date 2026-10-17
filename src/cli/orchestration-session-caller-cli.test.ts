@@ -1,14 +1,14 @@
 /**
  * A command that runs inside a structured agent session is that session: the injected
- * `ORCA_AGENT_SESSION_ID` names the caller, and nothing resolves or guesses a terminal for it.
+ * `POD_AGENT_SESSION_ID` names the caller, and nothing resolves or guesses a terminal for it.
  *
  * One rule for every verb that names a caller: a caller flag may restate the session, but a flag
  * naming anyone else is refused — never silently dropped, never allowed to win. A session address
  * the CLI cannot place is left to the host, whose `/clear` lineage decides.
  * The #21097 accident was a chat that named a sibling's terminal and consumed that sibling's mail.
  *
- * The session env here is the hardest case, a chat that inherited a pane's `ORCA_TERMINAL_HANDLE`
- * and `ORCA_PANE_KEY` (an Orca launched from an Orca terminal), and the implicit-terminal guess has
+ * The session env here is the hardest case, a chat that inherited a pane's `POD_TERMINAL_HANDLE`
+ * and `POD_PANE_KEY` (an Orca launched from an Orca terminal), and the implicit-terminal guess has
  * a sibling to find.
  */
 
@@ -33,10 +33,10 @@ const SESSION = 'f7a1c0de-1111-4222-8333-444455556666'
 /** The session a `/clear` continued as SESSION: the chat's orchestration address stays this one's. */
 const ROOT = '0b5e2d7c-9a41-4c3e-8f62-7d1a3e5b9c08'
 const IDENTITY_ENV = [
-  'ORCA_AGENT_SESSION_ID',
-  'ORCA_TERMINAL_HANDLE',
-  'ORCA_PANE_KEY',
-  'ORCA_STRUCTURED_SESSION'
+  'POD_AGENT_SESSION_ID',
+  'POD_TERMINAL_HANDLE',
+  'POD_PANE_KEY',
+  'POD_STRUCTURED_SESSION'
 ] as const
 const originalEnv = Object.fromEntries(IDENTITY_ENV.map((name) => [name, process.env[name]]))
 
@@ -246,9 +246,9 @@ function setEnv(env: Partial<Record<(typeof IDENTITY_ENV)[number], string>>): vo
 /** A chat with its id, plus a pane identity it inherited from the Orca that launched it. */
 function asSessionWithInheritedPane(): void {
   setEnv({
-    ORCA_AGENT_SESSION_ID: SESSION,
-    ORCA_TERMINAL_HANDLE: 'term_inherited_pane',
-    ORCA_PANE_KEY: 'tab_inherited:11111111-1111-4111-8111-111111111111'
+    POD_AGENT_SESSION_ID: SESSION,
+    POD_TERMINAL_HANDLE: 'term_inherited_pane',
+    POD_PANE_KEY: 'tab_inherited:11111111-1111-4111-8111-111111111111'
   })
 }
 
@@ -377,7 +377,7 @@ describe.each([
 
 describe('the identity a session presents', () => {
   it("lets a structured worker restate its own minted handle, and nobody else's", async () => {
-    setEnv({ ORCA_AGENT_SESSION_ID: SESSION, ORCA_TERMINAL_HANDLE: 'structworker_self' })
+    setEnv({ POD_AGENT_SESSION_ID: SESSION, POD_TERMINAL_HANDLE: 'structworker_self' })
 
     await invoke('send', flagMap({ from: 'structworker_self', to: 'run:run_1', subject: 's' }))
     expect(callsTo('send')[0]?.from).toBeUndefined()
@@ -390,7 +390,7 @@ describe('the identity a session presents', () => {
   })
 
   it("sends a structured worker's lifecycle report as the session, not refused as identity-less", async () => {
-    setEnv({ ORCA_AGENT_SESSION_ID: SESSION })
+    setEnv({ POD_AGENT_SESSION_ID: SESSION })
 
     await invoke(
       'send',
@@ -402,7 +402,7 @@ describe('the identity a session presents', () => {
   })
 
   it('never treats a session that has an id as identity-less, even beside the old marker', async () => {
-    setEnv({ ORCA_AGENT_SESSION_ID: SESSION, ORCA_STRUCTURED_SESSION: '1' })
+    setEnv({ POD_AGENT_SESSION_ID: SESSION, POD_STRUCTURED_SESSION: '1' })
 
     await invoke('check', flagMap({}))
 
@@ -411,7 +411,7 @@ describe('the identity a session presents', () => {
   })
 
   it('keeps the identity-less refusal, without --from advice, for a child that has no id', async () => {
-    setEnv({ ORCA_STRUCTURED_SESSION: '1' })
+    setEnv({ POD_STRUCTURED_SESSION: '1' })
 
     await expect(invoke('reply', flagMap({ id: 'msg_1', body: 'b' }))).rejects.toMatchObject({
       code: 'no_active_sender_terminal',
@@ -422,7 +422,7 @@ describe('the identity a session presents', () => {
   })
 
   it('leaves a terminal agent exactly as it was: its own handle is the caller', async () => {
-    setEnv({ ORCA_TERMINAL_HANDLE: 'term_pty', ORCA_PANE_KEY: 'tab_pty:1:2' })
+    setEnv({ POD_TERMINAL_HANDLE: 'term_pty', POD_PANE_KEY: 'tab_pty:1:2' })
     callMock.mockImplementation(async (name: string) =>
       name === 'terminal.resolveIdentity' ? { result: { identity: { live: true } } } : RESULT
     )
@@ -447,7 +447,7 @@ describe('the identity a session presents', () => {
     expect(await preview({})).toBe(`orca_session_id:${SESSION}`)
     // Not a caller flag: it names the text to preview, so it is never fenced.
     expect(await preview({ from: 'term_sibling' })).toBe('term_sibling')
-    setEnv({ ORCA_AGENT_SESSION_ID: SESSION, ORCA_TERMINAL_HANDLE: 'structworker_self' })
+    setEnv({ POD_AGENT_SESSION_ID: SESSION, POD_TERMINAL_HANDLE: 'structworker_self' })
     expect(await preview({})).toBe('structworker_self')
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
   })
@@ -517,8 +517,8 @@ describe('a host refusal of the session', () => {
 describe('the orchestration envelope', () => {
   it('carries the injected id beside whatever terminal evidence the process also has', () => {
     const envelope = createOrchestrationCompatibilityEnvelope({
-      ORCA_AGENT_SESSION_ID: ` ${SESSION} `,
-      ORCA_TERMINAL_HANDLE: 'term_inherited_pane'
+      POD_AGENT_SESSION_ID: ` ${SESSION} `,
+      POD_TERMINAL_HANDLE: 'term_inherited_pane'
     })
 
     expect(envelope.orchestrationCompatibilityEvidence).toEqual({
@@ -529,15 +529,15 @@ describe('the orchestration envelope', () => {
 
   it('binds whichever current Orca CLI the agent reached, not only the one the session names', () => {
     // A login shell can put another install's `orca` first, and the packaged Windows launcher
-    // rewrites ORCA_CLI_COMMAND in its own process. Neither matters: the id rides the envelope
+    // rewrites POD_CLI_COMMAND in its own process. Neither matters: the id rides the envelope
     // and the pinned instance is the one dialed.
-    vi.stubEnv('ORCA_USER_DATA_PATH', '/data/session-orca')
+    vi.stubEnv('POD_USER_DATA_PATH', '/data/session-orca')
     try {
       const envelope = createOrchestrationCompatibilityEnvelope({
-        ORCA_AGENT_SESSION_ID: SESSION,
-        ORCA_CLI_COMMAND: 'orca',
-        ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER: '1',
-        ORCA_USER_DATA_PATH: '/data/session-orca'
+        POD_AGENT_SESSION_ID: SESSION,
+        POD_CLI_COMMAND: 'orca',
+        POD_WINDOWS_PACKAGED_CLI_LAUNCHER: '1',
+        POD_USER_DATA_PATH: '/data/session-orca'
       })
 
       expect(envelope.orchestrationCompatibilityEvidence).toEqual({ agentSessionId: SESSION })
@@ -549,14 +549,14 @@ describe('the orchestration envelope', () => {
 
   it('claims no session without an injected id', () => {
     expect(
-      createOrchestrationCompatibilityEnvelope({ ORCA_AGENT_SESSION_ID: '  ' })
+      createOrchestrationCompatibilityEnvelope({ POD_AGENT_SESSION_ID: '  ' })
         .orchestrationCompatibilityEvidence
     ).toBeUndefined()
   })
 
   it('keeps a WSL stamp beside the id, so the host can refuse the cross-host claim', () => {
     const envelope = createOrchestrationCompatibilityEnvelope({
-      ORCA_AGENT_SESSION_ID: SESSION,
+      POD_AGENT_SESSION_ID: SESSION,
       ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
       ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'local',
       ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu'

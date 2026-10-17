@@ -72,12 +72,12 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '_orca_shell_ready_root=""',
     // Why the explicit root first: the wrapper tree is content-addressed, so its
     // path carries a hash the guest cannot derive. The host publishes the
-    // resolved root and WSLENV /p-translates it. The ORCA_USER_DATA_PATH branch
+    // resolved root and WSLENV /p-translates it. The POD_USER_DATA_PATH branch
     // stays as the fallback for an older host that exports only that.
-    'if [ -n "${ORCA_SHELL_READY_ROOT:-}" ]; then',
-    '  _orca_shell_ready_root="${ORCA_SHELL_READY_ROOT%/}"',
-    'elif [ -n "${ORCA_USER_DATA_PATH:-}" ]; then',
-    '  _orca_shell_ready_root="${ORCA_USER_DATA_PATH%/}/shell-ready"',
+    'if [ -n "${POD_SHELL_READY_ROOT:-}" ]; then',
+    '  _orca_shell_ready_root="${POD_SHELL_READY_ROOT%/}"',
+    'elif [ -n "${POD_USER_DATA_PATH:-}" ]; then',
+    '  _orca_shell_ready_root="${POD_USER_DATA_PATH%/}/shell-ready"',
     'fi',
     '_orca_wsl_shell_name=$(basename "$_orca_wsl_shell" | tr "[:upper:]" "[:lower:]")',
     'case "$_orca_wsl_shell_name" in',

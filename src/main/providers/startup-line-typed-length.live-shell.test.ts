@@ -91,8 +91,8 @@ async function typeIntoZsh(text: string, userConfigSeconds: number): Promise<str
     cols: 200,
     rows: 40,
     cwd: home,
-    // Why ORCA_ORIG_ZDOTDIR: the user's config is read from the sandbox home, not the real one.
-    env: { ...env, ...launch.env, ORCA_ORIG_ZDOTDIR: home, TERM: 'xterm-256color' }
+    // Why POD_ORIG_ZDOTDIR: the user's config is read from the sandbox home, not the real one.
+    env: { ...env, ...launch.env, POD_ORIG_ZDOTDIR: home, TERM: 'xterm-256color' }
   })
   const scan = createShellStartupOutputScanState()
   let resolveReady: ((signal: { postMarkerBytesObserved: boolean }) => void) | null = null

@@ -284,7 +284,7 @@ run_launchservices_probe() {
       --stdout "$stdout_file" \
       --stderr "$stderr_file" \
       --env ELECTRON_ENABLE_LOGGING=1 \
-      --env ORCA_STARTUP_DIAGNOSTICS=trace \
+      --env POD_STARTUP_DIAGNOSTICS=trace \
       --env ORCA_STARTUP_DIAGNOSTICS_TRACE_LIMIT=30000 \
       --env ORCA_STARTUP_DIAGNOSTICS_FILE="$bootstrap_file" \
       --env "$extra_env_name=$extra_env_value" \
@@ -294,7 +294,7 @@ run_launchservices_probe() {
       --stdout "$stdout_file" \
       --stderr "$stderr_file" \
       --env ELECTRON_ENABLE_LOGGING=1 \
-      --env ORCA_STARTUP_DIAGNOSTICS=trace \
+      --env POD_STARTUP_DIAGNOSTICS=trace \
       --env ORCA_STARTUP_DIAGNOSTICS_TRACE_LIMIT=30000 \
       --env ORCA_STARTUP_DIAGNOSTICS_FILE="$bootstrap_file" \
       "$APP_DIR" &
@@ -322,7 +322,7 @@ run_direct_exec_probe() {
   } >"$OUT_DIR/$label.meta"
 
   ELECTRON_ENABLE_LOGGING=1 \
-    ORCA_STARTUP_DIAGNOSTICS=trace \
+    POD_STARTUP_DIAGNOSTICS=trace \
     ORCA_STARTUP_DIAGNOSTICS_TRACE_LIMIT=30000 \
     ORCA_STARTUP_DIAGNOSTICS_FILE="$bootstrap_file" \
     "$APP_DIR/Contents/MacOS/Orca" >"$stdout_file" 2>"$stderr_file" &
@@ -360,7 +360,7 @@ ensure_no_existing_orca
 download_and_copy_app
 write_app_report
 run_launchservices_probe "launchservices-trace"
-run_launchservices_probe "launchservices-bypass-lock" "ORCA_BYPASS_SINGLE_INSTANCE_LOCK" "1"
+run_launchservices_probe "launchservices-bypass-lock" "POD_BYPASS_SINGLE_INSTANCE_LOCK" "1"
 run_direct_exec_probe
 write_system_log_snapshot
 package_results

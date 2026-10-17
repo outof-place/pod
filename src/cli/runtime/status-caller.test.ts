@@ -10,7 +10,7 @@ import { RuntimeClient } from './client'
 
 const SESSION = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
 const RUNTIME_ID = 'runtime-caller'
-const IDENTITY_ENV = ['ORCA_AGENT_SESSION_ID', 'ORCA_TERMINAL_HANDLE', 'ORCA_PANE_KEY'] as const
+const IDENTITY_ENV = ['POD_AGENT_SESSION_ID', 'POD_TERMINAL_HANDLE', 'POD_PANE_KEY'] as const
 
 type ReceivedRequest = RuntimeOrchestrationEnvelope & {
   id: string
@@ -117,8 +117,8 @@ describe.skipIf(process.platform === 'win32')(
     }
 
     it('asks the host as the session its environment names, and prints the Orca session ID it resolved', async () => {
-      process.env.ORCA_AGENT_SESSION_ID = SESSION
-      process.env.ORCA_TERMINAL_HANDLE = 'term_tui'
+      process.env.POD_AGENT_SESSION_ID = SESSION
+      process.env.POD_TERMINAL_HANDLE = 'term_tui'
       const caller = { orcaSessionId: `orca_session_id:${SESSION}`, live: true }
       callerShowReply = { result: { caller } }
 
@@ -134,8 +134,8 @@ describe.skipIf(process.platform === 'win32')(
     })
 
     it.each([
-      ['a terminal agent', { ORCA_TERMINAL_HANDLE: 'term_mine', ORCA_PANE_KEY: 'tab_1:leaf_1' }],
-      ['a pane key alone', { ORCA_PANE_KEY: 'tab_1:leaf_1' }],
+      ['a terminal agent', { POD_TERMINAL_HANDLE: 'term_mine', POD_PANE_KEY: 'tab_1:leaf_1' }],
+      ['a pane key alone', { POD_PANE_KEY: 'tab_1:leaf_1' }],
       ['a plain shell', {}]
     ])('prints exactly the readiness status for %s, without asking the host', async (_who, env) => {
       Object.assign(process.env, env)
@@ -151,7 +151,7 @@ describe.skipIf(process.platform === 'win32')(
     })
 
     it("reports the host's refusal of the session instead of an Orca session ID", async () => {
-      process.env.ORCA_AGENT_SESSION_ID = SESSION
+      process.env.POD_AGENT_SESSION_ID = SESSION
       callerShowReply = {
         error: { code: 'session_caller_not_live', message: `Agent session ${SESSION} has ended.` }
       }
@@ -166,7 +166,7 @@ describe.skipIf(process.platform === 'win32')(
     })
 
     it('leaves the caller out when the host predates the method', async () => {
-      process.env.ORCA_AGENT_SESSION_ID = SESSION
+      process.env.POD_AGENT_SESSION_ID = SESSION
       callerShowReply = { error: { code: 'method_not_found', message: 'Unknown method' } }
 
       expect(JSON.parse(await status(true)).result).not.toHaveProperty('caller')

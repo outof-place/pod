@@ -1,5 +1,5 @@
 import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
-const DAEMON_SESSION_SCROLLBACK_ENV_VAR = 'ORCA_DAEMON_SESSION_SCROLLBACK_ROWS'
+const DAEMON_SESSION_SCROLLBACK_ENV_VAR = 'POD_DAEMON_SESSION_SCROLLBACK_ROWS'
 
 // Why a flat live window and not full renderer depth: retained grid is the daemon's dominant heap
 // term and session count is unbounded — a host owning 100+ terminals at full depth retained ~1 GB

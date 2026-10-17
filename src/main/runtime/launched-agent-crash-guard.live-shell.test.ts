@@ -49,13 +49,13 @@ let savedLoginOptOut: string | undefined
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-crash-guard-'))
   // The production spawn: a pane on macOS runs under `login` unless the user opted out.
-  savedLoginOptOut = process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
-  delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+  savedLoginOptOut = process.env.POD_DISABLE_MACOS_LOGIN_SHELL
+  delete process.env.POD_DISABLE_MACOS_LOGIN_SHELL
 })
 
 afterEach(() => {
   if (savedLoginOptOut !== undefined) {
-    process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = savedLoginOptOut
+    process.env.POD_DISABLE_MACOS_LOGIN_SHELL = savedLoginOptOut
   }
   rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })

@@ -211,7 +211,7 @@ describe('absolute file CLI paths', () => {
     })
 
     // Why: WSL_DISTRO_NAME only arrives if interop forwards it, but the launcher
-    // always sets ORCA_CLI_CWD, which reaches the handler as the invocation cwd.
+    // always sets POD_CLI_CWD, which reaches the handler as the invocation cwd.
     it('falls back to the distro named by a UNC cwd', async () => {
       mockWorktreeShow(uncRoot)
 

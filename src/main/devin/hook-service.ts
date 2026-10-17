@@ -44,7 +44,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       '@echo off',
       'setlocal',
       // Why: endpoint file holds the live port/token; a PTY that outlives an Orca restart carries stale env, so `call` it to refresh (else PTY env).
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      'if defined POD_AGENT_HOOK_ENDPOINT if exist "%POD_AGENT_HOOK_ENDPOINT%" call "%POD_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookPostCommand('devin'),
       'exit /b 0',
@@ -59,25 +59,25 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     ...buildPosixHookSpoolLines('devin'),
     // Why: endpoint file holds the live port/token; PTYs that outlive an Orca restart carry stale env, so source it to reach the new server (else PTY env).
     // Why: silence the `.` builtin (2>/dev/null + `|| :`) so a TOCTOU race or CRLF-mangled line can't leak shell parse errors into agent transcripts (fail-open).
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    'if [ -n "$POD_AGENT_HOOK_ENDPOINT" ] && [ -r "$POD_AGENT_HOOK_ENDPOINT" ]; then',
+    '  . "$POD_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    'if [ -z "$POD_AGENT_HOOK_PORT" ] || [ -z "$POD_AGENT_HOOK_TOKEN" ] || [ -z "$POD_PANE_KEY" ]; then',
     '  spool_hook_event',
     '  exit 0',
     'fi',
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in shell is unsafe (quotes/newlines); post as form fields instead.
     // Why: pipe payload to curl's stdin (payload@-) not an inline arg, so large tool output stays off the command line (EDR false positives).
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/devin" \\',
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${POD_AGENT_HOOK_PORT}/hook/devin" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    '  -H "X-Orca-Agent-Hook-Token: ${POD_AGENT_HOOK_TOKEN}" \\',
+    '  --data-urlencode "paneKey=${POD_PANE_KEY}" \\',
+    '  --data-urlencode "tabId=${POD_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${POD_AGENT_LAUNCH_TOKEN}" \\',
+    '  --data-urlencode "worktreeId=${POD_WORKTREE_ID}" \\',
+    '  --data-urlencode "env=${POD_AGENT_HOOK_ENV}" \\',
+    '  --data-urlencode "version=${POD_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || spool_hook_event',
     'exit 0',
     ''
@@ -174,7 +174,7 @@ export class DevinHookService {
     // Why: remote-Windows is out of scope for v1; process.platform here is the local box, not the remote, so assume POSIX.
     const remoteConfigPath = getDevinRemoteConfigPath(remoteHome)
     const remoteScriptFileName = getDevinPosixManagedScriptFileName()
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
+    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.pod/agent-hooks/${remoteScriptFileName}`
     // Why: SFTP I/O fails far more often than local fs; wrap the flow so failures surface as a structured error, not an unhandled rejection.
     try {
       // Why: Devin config.json is JSONC (comments), so JSON.parse rejects it; parse via jsonc-parser.

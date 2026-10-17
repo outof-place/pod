@@ -153,7 +153,7 @@ function OrcaCloudDevSubsection(): React.JSX.Element {
           title={translate('auto.components.settings.DevToolsPane.orcaCloud', 'Orca Cloud')}
           description={translate(
             'auto.components.settings.DevToolsPane.orcaCloudDescription',
-            'Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID are set.'
+            'Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once POD_CLOUD_API_URL and POD_CLOUD_CLIENT_ID are set.'
           )}
         />
         <Badge variant="outline" className="mt-0.5">
@@ -193,7 +193,7 @@ function OrcaCloudDevSubsection(): React.JSX.Element {
           {authStatus?.setupMessage ??
             translate(
               'auto.components.settings.DevToolsPane.orcaCloudNotConfigured',
-              'Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build.'
+              'Set POD_CLOUD_API_URL and POD_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build.'
             )}
         </p>
       )}

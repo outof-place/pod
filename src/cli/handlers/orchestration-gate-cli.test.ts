@@ -32,11 +32,11 @@ import { main } from '../index'
 import { RuntimeClientError } from '../runtime/types'
 import { okFixture, queueFixtures } from '../test-fixtures'
 
-const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
-const originalPaneKey = process.env.ORCA_PANE_KEY
+const originalTerminalHandle = process.env.POD_TERMINAL_HANDLE
+const originalPaneKey = process.env.POD_PANE_KEY
 // Why: a structured-session marker inherited from the runner diverts these cases to the
 // structured refusal, so which branch they exercise would depend on who ran them.
-const originalStructuredSession = process.env.ORCA_STRUCTURED_SESSION
+const originalStructuredSession = process.env.POD_STRUCTURED_SESSION
 
 const restoreEnv = (name: string, value: string | undefined): void => {
   if (value === undefined) {
@@ -55,18 +55,18 @@ describe('orchestration gate commands carry caller identity', () => {
     getTerminalHandleMock.mockReset()
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    delete process.env.ORCA_TERMINAL_HANDLE
-    delete process.env.ORCA_PANE_KEY
-    delete process.env.ORCA_STRUCTURED_SESSION
+    delete process.env.POD_TERMINAL_HANDLE
+    delete process.env.POD_PANE_KEY
+    delete process.env.POD_STRUCTURED_SESSION
     process.exitCode = 0
   })
 
   afterEach(() => {
     logSpy.mockRestore()
     errorSpy.mockRestore()
-    restoreEnv('ORCA_TERMINAL_HANDLE', originalTerminalHandle)
-    restoreEnv('ORCA_PANE_KEY', originalPaneKey)
-    restoreEnv('ORCA_STRUCTURED_SESSION', originalStructuredSession)
+    restoreEnv('POD_TERMINAL_HANDLE', originalTerminalHandle)
+    restoreEnv('POD_PANE_KEY', originalPaneKey)
+    restoreEnv('POD_STRUCTURED_SESSION', originalStructuredSession)
     process.exitCode = 0
   })
 
@@ -74,7 +74,7 @@ describe('orchestration gate commands carry caller identity', () => {
     callMock.mock.calls.find((call) => call[0] === method)?.[1] as Record<string, unknown>
 
   it('sends the bound coordinator handle to gateCreate', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+    process.env.POD_TERMINAL_HANDLE = 'term_coord'
     queueFixtures(
       callMock,
       okFixture('req_identity', { identity: { handle: 'term_coord', live: true } }),
@@ -93,8 +93,8 @@ describe('orchestration gate commands carry caller identity', () => {
   })
 
   it('remints a stale environment handle before authorizing gateCreate', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale'
-    process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
+    process.env.POD_TERMINAL_HANDLE = 'term_stale'
+    process.env.POD_PANE_KEY = 'tab_coord:leaf_coord'
     callMock.mockImplementation(async (method: string) => {
       if (method === 'terminal.resolveIdentity') {
         return okFixture('req_identity', { identity: { handle: 'term_stale', live: false } })
@@ -148,7 +148,7 @@ describe('orchestration gate commands carry caller identity', () => {
   })
 
   it('scopes gate-list to the caller when no Run is named', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+    process.env.POD_TERMINAL_HANDLE = 'term_coord'
     queueFixtures(
       callMock,
       okFixture('req_identity', { identity: { handle: 'term_coord', live: true } }),
@@ -202,7 +202,7 @@ describe('orchestration gate commands carry caller identity', () => {
   })
 
   it('reports idempotent recovery when a mutation connection drops', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+    process.env.POD_TERMINAL_HANDLE = 'term_coord'
     callMock
       .mockResolvedValueOnce(
         okFixture('req_identity', { identity: { handle: 'term_coord', live: true } })

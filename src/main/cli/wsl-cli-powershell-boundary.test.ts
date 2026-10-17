@@ -89,7 +89,7 @@ describe('WSL CLI PowerShell boundary', () => {
     const launcher = buildWslLauncher('C:\\Program Files\\Orca\\orca.exe')
     const bridge = buildWslBridgeScript()
 
-    expect(launcher).toContain('"$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"')
+    expect(launcher).toContain('"$POD_WIN_LAUNCHER" -WslCwd "$POD_WSL_CWD_WIN" "$@"')
     expect(bridge).not.toContain('[CmdletBinding')
     expect(bridge).not.toMatch(/^param\(/m)
     expect(bridge).toContain('$ForwardArgs = @($args[$ForwardArgStart..($args.Count - 1)])')
@@ -111,7 +111,7 @@ describe('WSL CLI PowerShell boundary', () => {
         await writeFile(bridgePath, buildWslBridgeScript(), 'utf8')
         await writeFile(
           targetPath,
-          'process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.env.ORCA_CLI_CWD ?? null, distro: process.env.ORCA_CLI_WSL_DISTRO ?? null }))\n',
+          'process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.env.POD_CLI_CWD ?? null, distro: process.env.POD_CLI_WSL_DISTRO ?? null }))\n',
           'utf8'
         )
         const invocations = [
@@ -157,8 +157,8 @@ describe('WSL CLI PowerShell boundary', () => {
               windowsHide: true,
               env: {
                 ...process.env,
-                ORCA_CLI_CWD: 'stale',
-                ORCA_CLI_WSL_DISTRO: 'stale-distro',
+                POD_CLI_CWD: 'stale',
+                POD_CLI_WSL_DISTRO: 'stale-distro',
                 WSL_DISTRO_NAME: 'wrong-distro'
               }
             }
@@ -204,7 +204,7 @@ describe('WSL CLI PowerShell boundary', () => {
         await writeFile(bridgePath, buildWslBridgeScript({ userDataPath, cliEntryPath }), 'utf8')
         await writeFile(
           cliEntryPath,
-          'console.error("to stderr"); const e = process.env; console.log(JSON.stringify({ argv: process.argv.slice(2), owner: e.ORCA_USER_DATA_PATH, app: e.ORCA_APP_EXECUTABLE, nodeOptions: e.NODE_OPTIONS ?? null, stashed: e.ORCA_NODE_OPTIONS, cliDir: e.ORCA_WSL_CLI_DIR ?? null }))\n',
+          'console.error("to stderr"); const e = process.env; console.log(JSON.stringify({ argv: process.argv.slice(2), owner: e.POD_USER_DATA_PATH, app: e.POD_APP_EXECUTABLE, nodeOptions: e.NODE_OPTIONS ?? null, stashed: e.POD_NODE_OPTIONS, cliDir: e.POD_WSL_CLI_DIR ?? null }))\n',
           'utf8'
         )
         const result = spawnSync(
@@ -226,9 +226,9 @@ describe('WSL CLI PowerShell boundary', () => {
             windowsHide: true,
             env: {
               ...process.env,
-              ORCA_APP_EXECUTABLE: '',
+              POD_APP_EXECUTABLE: '',
               NODE_OPTIONS: '--max-old-space-size=4096',
-              ORCA_WSL_CLI_DIR: 'C:\\guest-only'
+              POD_WSL_CLI_DIR: 'C:\\guest-only'
             }
           }
         )

@@ -31,7 +31,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
   const baseEnvWithAuth = ctx.claudeAuth
     ? { ...sshSourceEnv, ...ctx.claudeAuth.envPatch }
     : sshSourceEnv
-  const spawnPaneKey = baseEnvWithAuth?.ORCA_PANE_KEY
+  const spawnPaneKey = baseEnvWithAuth?.POD_PANE_KEY
   const parsedSpawnPaneKey = parseValidPaneKey(spawnPaneKey)
   const verifiedPaneKey =
     parsedSpawnPaneKey &&
@@ -108,29 +108,29 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       }
     }
   }
-  ctx.requestedAgentTeamsPath = ctx.baseEnv?.ORCA_AGENT_TEAMS_TEAM_ID
+  ctx.requestedAgentTeamsPath = ctx.baseEnv?.POD_AGENT_TEAMS_TEAM_ID
     ? ctx.baseEnv[resolvePathEnvKey(ctx.baseEnv, process.platform)]
     : undefined
   ctx.agentTeamsEnvToDelete = shouldRefreshAgentTeamsEnv ? ['TERM_PROGRAM'] : undefined
   const canForwardPaneEnv = !args.connectionId || isRemoteAgentHooksEnabled()
   if (ctx.baseEnv && ctx.stablePaneKey && canForwardPaneEnv) {
-    ctx.baseEnv.ORCA_PANE_KEY = ctx.stablePaneKey
+    ctx.baseEnv.POD_PANE_KEY = ctx.stablePaneKey
     if (typeof args.tabId === 'string') {
-      ctx.baseEnv.ORCA_TAB_ID = args.tabId
+      ctx.baseEnv.POD_TAB_ID = args.tabId
     } else if (!args.connectionId) {
-      delete ctx.baseEnv.ORCA_TAB_ID
+      delete ctx.baseEnv.POD_TAB_ID
     }
     if (typeof args.worktreeId === 'string') {
-      ctx.baseEnv.ORCA_WORKTREE_ID = args.worktreeId
+      ctx.baseEnv.POD_WORKTREE_ID = args.worktreeId
     } else if (!args.connectionId) {
-      delete ctx.baseEnv.ORCA_WORKTREE_ID
+      delete ctx.baseEnv.POD_WORKTREE_ID
     }
   } else if (ctx.baseEnv) {
-    // Why: ORCA_PANE_KEY crosses into shells/hook registries; only a key proven to match this spawn's tab+leaf may cross the IPC boundary.
-    delete ctx.baseEnv.ORCA_PANE_KEY
-    delete ctx.baseEnv.ORCA_TAB_ID
-    delete ctx.baseEnv.ORCA_WORKTREE_ID
-    delete ctx.baseEnv.ORCA_AGENT_LAUNCH_TOKEN
+    // Why: POD_PANE_KEY crosses into shells/hook registries; only a key proven to match this spawn's tab+leaf may cross the IPC boundary.
+    delete ctx.baseEnv.POD_PANE_KEY
+    delete ctx.baseEnv.POD_TAB_ID
+    delete ctx.baseEnv.POD_WORKTREE_ID
+    delete ctx.baseEnv.POD_AGENT_LAUNCH_TOKEN
   }
   // Why: jcode runs one server/client daemon per runtime dir, so a per-pane
   // dir keeps every PTY on its own daemon (hooks inherit the pane key instead
@@ -170,7 +170,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     }
   }
   ctx.validatedPaneKey = ctx.stablePaneKey
-  // Why: SSH can strip ORCA_PANE_KEY when remote hooks are off; IPC tab/leaf metadata still names the pane.
+  // Why: SSH can strip POD_PANE_KEY when remote hooks are off; IPC tab/leaf metadata still names the pane.
   ctx.reservationPaneKey = ctx.metadataPaneKey ?? ctx.validatedPaneKey
   ctx.validatedLeafId = ctx.verifiedLeafId ?? ctx.metadataLeafId
   ctx.spawnTiming.mark('pane_env')

@@ -32,9 +32,9 @@ export function loadOldSerializer(path: string): NamedSerializer {
   return loadSerializerBuild('old', path)
 }
 
-// ORCA_NEW_SERIALIZE_ADDON compares two arbitrary refs without reinstalling node_modules.
-export const NEW_SERIALIZER: NamedSerializer = process.env.ORCA_NEW_SERIALIZE_ADDON
-  ? loadSerializerBuild('new', process.env.ORCA_NEW_SERIALIZE_ADDON)
+// POD_NEW_SERIALIZE_ADDON compares two arbitrary refs without reinstalling node_modules.
+export const NEW_SERIALIZER: NamedSerializer = process.env.POD_NEW_SERIALIZE_ADDON
+  ? loadSerializerBuild('new', process.env.POD_NEW_SERIALIZE_ADDON)
   : { name: 'new', create: () => new SerializeAddon() }
 
 export type { GridDiff } from './serialize-grid-cell-descriptors'

@@ -40,9 +40,9 @@ export type PaneAgentResumePlan = {
   startup: PaneAgentResumeStartup | null
 }
 
-/** Kill switch: ORCA_HEADLESS_AGENT_RESUME=0 restores the shell-only headless behavior. */
+/** Kill switch: POD_HEADLESS_AGENT_RESUME=0 restores the shell-only headless behavior. */
 export function isHeadlessAgentResumeEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.ORCA_HEADLESS_AGENT_RESUME !== '0'
+  return env.POD_HEADLESS_AGENT_RESUME !== '0'
 }
 
 /** Terminal-agent resume for a host with no renderer: the records the renderer keeps on desktop

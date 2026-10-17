@@ -55,7 +55,7 @@ it('keeps Cursor account credentials independent of the native Electron cookie j
       userDataDir: join(root, 'profile'),
       extraEnv: {
         ORCA_BACKGROUND_LAUNCH: '1',
-        ORCA_DISABLE_CODEX_TRUST_RPC: '1',
+        POD_DISABLE_CODEX_TRUST_RPC: '1',
         ORCA_CURSOR_WIRE_RESULT: resultPath
       }
     })

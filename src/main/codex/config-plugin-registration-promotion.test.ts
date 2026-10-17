@@ -62,8 +62,8 @@ let previousUserDataPath: string | undefined
 beforeEach(() => {
   tmpHome = mkdtempSync(join(tmpdir(), 'orca-codex-registration-home-'))
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-registration-user-data-'))
-  previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-  process.env.ORCA_USER_DATA_PATH = userDataDir
+  previousUserDataPath = process.env.POD_USER_DATA_PATH
+  process.env.POD_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(tmpHome)
   registrationTestState.failAtomicWrite = false
   // Why: promotion writes into homedir()/.codex — if the mock ever fails to
@@ -77,9 +77,9 @@ afterEach(() => {
   rmSync(tmpHome, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.POD_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    process.env.POD_USER_DATA_PATH = previousUserDataPath
   }
   vi.clearAllMocks()
 })

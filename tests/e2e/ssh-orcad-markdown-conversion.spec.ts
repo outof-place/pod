@@ -15,7 +15,7 @@ test('retained Markdown lists documents on its managed owner after conversion', 
 {}, testInfo) => {
   test.setTimeout(4 * 60_000)
   const host = startOrcadConvertHost('docker', testInfo)
-  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
+  const session = createRestartSession(testInfo, { POD_ORCAD_TEMPLATE_PATH: TEMPLATE! })
   let app: ElectronApplication | null = null
   try {
     const first = await session.launch()

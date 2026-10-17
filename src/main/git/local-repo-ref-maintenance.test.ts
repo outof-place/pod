@@ -36,13 +36,13 @@ function target(wslDistro?: string): ReturnType<typeof createLocalRepoRefMainten
 beforeEach(() => {
   gitExecFileAsyncMock.mockReset()
   readRepoCommonDirFromGitMock.mockReset()
-  delete process.env.ORCA_DISABLE_REPO_REF_MAINTENANCE
+  delete process.env.POD_DISABLE_REPO_REF_MAINTENANCE
   _resetCanonicalRepoKeyCacheForTests()
   _resetLocalRepoRefMaintenanceForTests()
 })
 
 afterEach(() => {
-  delete process.env.ORCA_DISABLE_REPO_REF_MAINTENANCE
+  delete process.env.POD_DISABLE_REPO_REF_MAINTENANCE
   _resetLocalRepoRefMaintenanceForTests()
   vi.restoreAllMocks()
 })
@@ -134,7 +134,7 @@ describe('local repo ref maintenance target', () => {
 
 describe('local repo ref maintenance scheduling', () => {
   it('schedules nothing when the kill switch is set', () => {
-    process.env.ORCA_DISABLE_REPO_REF_MAINTENANCE = '1'
+    process.env.POD_DISABLE_REPO_REF_MAINTENANCE = '1'
     const arm = vi.spyOn(getLocalRepoRefMaintenance(), 'arm')
 
     armLocalRepoRefMaintenance({ key: 'local::/repo/.git', repoPath: '/repo' })

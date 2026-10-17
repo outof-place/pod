@@ -58,8 +58,8 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-hook in the app bundle
   it('is an executable that answers "{}" and stays silent outside a Pod pane', () => {
     expect(statSync(hookPath).mode & 0o111).not.toBe(0)
     const outside = runHook('{"hook_event_name":"Stop"}\n', {
-      ORCA_AGENT_HOOK_PORT: String(port),
-      ORCA_AGENT_HOOK_TOKEN: 'tok'
+      POD_AGENT_HOOK_PORT: String(port),
+      POD_AGENT_HOOK_TOKEN: 'tok'
     })
     expect(outside.status).toBe(0)
     expect(outside.stdout).toBe('{}\n')
@@ -69,15 +69,15 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-hook in the app bundle
   it("posts the hook JSON with the pane's metadata, as claude-hook.sh does", async () => {
     received.length = 0
     const status = await runHookAsync('{"hook_event_name":"Stop","cwd":"/tmp/zażółć"}\n\n', {
-      ORCA_AGENT_HOOK_PORT: String(port),
-      ORCA_AGENT_HOOK_TOKEN: 'tok',
-      ORCA_AGENT_HOOK_ENV: 'production',
-      ORCA_AGENT_HOOK_VERSION: '1',
-      ORCA_AGENT_HOOK_TRANSPORT: 'raw-json-v1',
-      ORCA_PANE_KEY: 'tab-1:leaf-1',
-      ORCA_TAB_ID: 'tab-1',
-      ORCA_WORKTREE_ID: 'repo::/w',
-      ORCA_AGENT_LAUNCH_TOKEN: 'lt'
+      POD_AGENT_HOOK_PORT: String(port),
+      POD_AGENT_HOOK_TOKEN: 'tok',
+      POD_AGENT_HOOK_ENV: 'production',
+      POD_AGENT_HOOK_VERSION: '1',
+      POD_AGENT_HOOK_TRANSPORT: 'raw-json-v1',
+      POD_PANE_KEY: 'tab-1:leaf-1',
+      POD_TAB_ID: 'tab-1',
+      POD_WORKTREE_ID: 'repo::/w',
+      POD_AGENT_LAUNCH_TOKEN: 'lt'
     })
     expect(status).toBe(0)
     expect(received).toHaveLength(1)

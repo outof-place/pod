@@ -352,7 +352,7 @@ describe('materializeOrcadArtifact cancellation', () => {
 
 describe('packaged template lookup', () => {
   const originalResourcesPath = process.resourcesPath
-  const originalTemplatePath = process.env.ORCA_ORCAD_TEMPLATE_PATH
+  const originalTemplatePath = process.env.POD_ORCAD_TEMPLATE_PATH
   let previousEnvironment: AppEnvironment | null = null
 
   afterEach(() => {
@@ -362,9 +362,9 @@ describe('packaged template lookup', () => {
       writable: true
     })
     if (originalTemplatePath === undefined) {
-      delete process.env.ORCA_ORCAD_TEMPLATE_PATH
+      delete process.env.POD_ORCAD_TEMPLATE_PATH
     } else {
-      process.env.ORCA_ORCAD_TEMPLATE_PATH = originalTemplatePath
+      process.env.POD_ORCAD_TEMPLATE_PATH = originalTemplatePath
     }
     if (previousEnvironment) {
       setAppEnvironment(previousEnvironment)
@@ -379,7 +379,7 @@ describe('packaged template lookup', () => {
     mkdirSync(resourcesDir)
     renameSync(fixture.templateDir, join(resourcesDir, 'orcad-template'))
     const userData = join(root, 'userData')
-    delete process.env.ORCA_ORCAD_TEMPLATE_PATH
+    delete process.env.POD_ORCAD_TEMPLATE_PATH
     Object.defineProperty(process, 'resourcesPath', {
       value: resourcesDir,
       configurable: true,

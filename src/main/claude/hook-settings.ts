@@ -131,7 +131,7 @@ export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandC
 
 function getWindowsPowerShellLifecycleCommand(scriptPath: string): string {
   const scriptFileName = win32.basename(scriptPath)
-  const quotedRelativePath = quotePowerShellLiteral(`.orca\\agent-hooks\\${scriptFileName}`)
+  const quotedRelativePath = quotePowerShellLiteral(`.pod\\agent-hooks\\${scriptFileName}`)
   return (
     `$scriptPath = Join-Path $env:USERPROFILE ${quotedRelativePath}; ` +
     'if (Test-Path -LiteralPath $scriptPath -PathType Leaf) { & $scriptPath; exit $LASTEXITCODE }; ' +

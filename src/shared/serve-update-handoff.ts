@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 
-export const SERVE_UPDATE_HANDOFF_PATH_ENV = 'ORCA_SERVE_UPDATE_HANDOFF_PATH'
+export const SERVE_UPDATE_HANDOFF_PATH_ENV = 'POD_SERVE_UPDATE_HANDOFF_PATH'
 export const SERVE_UPDATE_HANDOFF_FILE = 'serve-update-handoff.json'
 
 export type ServeUpdateHandoffState =

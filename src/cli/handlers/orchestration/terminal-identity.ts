@@ -30,10 +30,10 @@ export async function resolveOrchestrationTerminalHandle(
   if (explicit) {
     return explicit
   }
-  const envHandle = process.env.ORCA_TERMINAL_HANDLE
+  const envHandle = process.env.POD_TERMINAL_HANDLE
   if (envHandle && envHandle.length > 0) {
     if (flagName === 'from' && options.validateEnvHandle) {
-      // Why: long-lived shells can retain a stale ORCA_TERMINAL_HANDLE after remint; don't bake it into coordinator preambles.
+      // Why: long-lived shells can retain a stale POD_TERMINAL_HANDLE after remint; don't bake it into coordinator preambles.
       const live = await isLiveTerminalHandle(envHandle, client)
       if (!live) {
         const reminted = await resolveOrchestrationPaneTerminalHandle(client)
@@ -64,7 +64,7 @@ export async function resolveOrchestrationTerminalHandle(
  *
  * `terminal.resolveIdentity`, never `terminal.show`: `show` is a PTY verb, so it missed for a
  * structured worker and reported `terminal_handle_stale` for a handle that was perfectly live —
- * which then failed every coordinator verb, because the pane remint below needs an `ORCA_PANE_KEY`
+ * which then failed every coordinator verb, because the pane remint below needs an `POD_PANE_KEY`
  * a structured child deliberately does not carry.
  */
 async function isLiveTerminalHandle(handle: string, client: RuntimeClient): Promise<boolean> {
@@ -123,7 +123,7 @@ async function resolveOrchestrationPaneTerminalHandle(
   client: RuntimeClient,
   options: { optional?: boolean } = {}
 ): Promise<string | undefined> {
-  const paneKey = process.env.ORCA_PANE_KEY
+  const paneKey = process.env.POD_PANE_KEY
   if (!paneKey || paneKey.length === 0) {
     return undefined
   }
@@ -232,15 +232,15 @@ function structuredSessionRefusal(flagName: 'from' | 'terminal'): RuntimeClientE
 export function throwNoActiveSenderTerminal(): never {
   // Lifecycle sends refuse here before the structured guard above ever runs, so this is the only
   // place left that would tell an identity-less session to pass a handle it does not have. A stale
-  // ORCA_TERMINAL_HANDLE is a different case — that caller HAS an identity, so it keeps the advice
+  // POD_TERMINAL_HANDLE is a different case — that caller HAS an identity, so it keeps the advice
   // to re-run under a live one.
-  if (hasStructuredSessionMarker() && !process.env.ORCA_TERMINAL_HANDLE) {
+  if (hasStructuredSessionMarker() && !process.env.POD_TERMINAL_HANDLE) {
     throw structuredSessionRefusal('from')
   }
   throw new RuntimeClientError(
     'no_active_sender_terminal',
     'Could not determine the sender terminal for this orchestration command. ' +
       "Pass --from with your own terminal's handle — another pane's handle would act on its mailbox — " +
-      'or run the command inside a live Orca terminal with ORCA_TERMINAL_HANDLE set.'
+      'or run the command inside a live Orca terminal with POD_TERMINAL_HANDLE set.'
   )
 }

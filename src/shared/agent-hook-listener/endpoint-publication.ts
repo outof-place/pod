@@ -36,16 +36,16 @@ export function writeEndpointFile(
   const tmpPath = join(endpointDir, `.endpoint-${process.pid}-${randomUUID()}.tmp`)
   const prefix = process.platform === 'win32' ? 'set ' : ''
   const valuesToWrite: [string, string][] = [
-    ['ORCA_AGENT_HOOK_PORT', String(fields.port)],
-    ['ORCA_AGENT_HOOK_TOKEN', fields.token],
-    ['ORCA_AGENT_HOOK_ENV', fields.env],
-    ['ORCA_AGENT_HOOK_VERSION', fields.version]
+    ['POD_AGENT_HOOK_PORT', String(fields.port)],
+    ['POD_AGENT_HOOK_TOKEN', fields.token],
+    ['POD_AGENT_HOOK_ENV', fields.env],
+    ['POD_AGENT_HOOK_VERSION', fields.version]
   ]
   if (fields.transport) {
-    valuesToWrite.push(['ORCA_AGENT_HOOK_TRANSPORT', fields.transport])
+    valuesToWrite.push(['POD_AGENT_HOOK_TRANSPORT', fields.transport])
   }
   if (fields.openCodeTui) {
-    valuesToWrite.push(['ORCA_AGENT_HOOK_OPENCODE_TUI', '1'])
+    valuesToWrite.push(['POD_AGENT_HOOK_OPENCODE_TUI', '1'])
   }
   for (const [key, value] of valuesToWrite) {
     if (!isShellSafeEndpointValue(value)) {
@@ -56,7 +56,16 @@ export function writeEndpointFile(
       return false
     }
   }
-  const lines = [...valuesToWrite.map(([key, value]) => `${prefix}${key}=${value}`), '']
+  // Fork-only (Pod): for one release the file also carries the ORCA_ spelling, which hook scripts
+  // and clients installed before the decouple read. TODO(pod): drop it in the release after.
+  const legacyPrefix = 'ORCA_' // pod-decouple:keep
+  const legacy = valuesToWrite.map(
+    ([key, value]): [string, string] => [`${legacyPrefix}${key.slice('POD_'.length)}`, value]
+  )
+  const lines = [
+    ...[...valuesToWrite, ...legacy].map(([key, value]) => `${prefix}${key}=${value}`),
+    ''
+  ]
   let tmpWritten = false
   try {
     // Why: 0o700 owner-only so the dir doesn't leak this install's existence to other local users.

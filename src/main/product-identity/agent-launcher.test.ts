@@ -96,7 +96,7 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
   })
 
   it("gives the agent's tools and hooks its priority, not Pod's statusline, and its watcher leaves with it", () => {
-    const hooks = join(root, 'home', '.orca', 'agent-hooks')
+    const hooks = join(root, 'home', '.pod', 'agent-hooks')
     script(hooks, 'claude-hook.sh', 'ps -o pri= -p $$')
     const client = statusLineClient(hooks)
     // The agent, a tool's shell and the command it runs (two levels down), a hook, the statusline.
@@ -127,7 +127,7 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
   })
 
   it("keeps Pod's statusline client at default by its program, through sh -c or directly, never by argv", () => {
-    const hooks = join(root, 'home', '.orca', 'agent-hooks')
+    const hooks = join(root, 'home', '.pod', 'agent-hooks')
     const client = statusLineClient(hooks)
     script(hooks, 'pod-agent-hook', 'ps -o pri= -p $$')
     // As Pod's statusLine runs it (sh -c, then exec), with no shell in between, and the older

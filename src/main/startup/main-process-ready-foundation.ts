@@ -167,7 +167,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   // and must not gate the first window (STA-5765).
   scheduleSecretProtectionGapReport({
     dataFile: profile.dataFile,
-    force: process.env.ORCA_ALWAYS_REPORT_SECRET_PROTECTION === '1',
+    force: process.env.POD_ALWAYS_REPORT_SECRET_PROTECTION === '1',
     deferUntilFirstWindow: !state.isServeMode,
     skipInDevelopment: is.dev
   })

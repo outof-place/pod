@@ -140,13 +140,13 @@ describe('Claude profile namespace', () => {
     expect(
       readUserClaudeConfigDir({
         CLAUDE_CONFIG_DIR: '/data/claude-profiles/a/home',
-        ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/data/claude-profiles/a/home'
+        POD_CLAUDE_INJECTED_CONFIG_DIR: '/data/claude-profiles/a/home'
       })
     ).toBeUndefined()
     expect(
       readUserClaudeConfigDir({
         CLAUDE_CONFIG_DIR: '/cfg/claude',
-        ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/data/claude-profiles/a/home'
+        POD_CLAUDE_INJECTED_CONFIG_DIR: '/data/claude-profiles/a/home'
       })
     ).toBe(resolve('/cfg/claude'))
   })

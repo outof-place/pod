@@ -52,7 +52,7 @@ export type AppApi = {
   onStructuredAgentSessionsHeldChanged: (callback: (held: boolean) => void) => () => void
   /** Reconciles legacy worker authority around persisted terminal reconnect. */
   recoverLegacyWorkerTerminalsForRendererStartup: () => Promise<void>
-  /** Emits a startup benchmark marker when ORCA_STARTUP_DIAGNOSTICS is enabled. */
+  /** Emits a startup benchmark marker when POD_STARTUP_DIAGNOSTICS is enabled. */
   startupDiagnostic: (event: string, details?: Record<string, unknown>) => Promise<void>
   /** macOS active input mode, or layout ID when no IME is selected (e.g. `com.apple.keylayout.PolishPro`).
    *  Distinguishes CJK IMEs and Option-layer-composing layouts that look like US QWERTY (issue #1205).

@@ -95,7 +95,7 @@ describe.skipIf(process.platform === 'win32')('WSL public-manager settings lifet
     const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
       HOME: home,
       XDG_CONFIG_HOME: join(home, '.config'),
-      ORCA_WSL_HOOK_INSTANCE: 'independent-manager'
+      POD_WSL_HOOK_INSTANCE: 'independent-manager'
     })
     dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
       requests.push(params)
@@ -132,7 +132,7 @@ describe.skipIf(process.platform === 'win32')('WSL public-manager settings lifet
     manager = new WslHookRelayManager({
       platform: () => 'win32',
       remoteHooksEnabled: () => true,
-      hookCoordsEnv: () => ({ ORCA_AGENT_HOOK_PORT: '43117', ORCA_AGENT_HOOK_TOKEN: 'fixture' }),
+      hookCoordsEnv: () => ({ POD_AGENT_HOOK_PORT: '43117', POD_AGENT_HOOK_TOKEN: 'fixture' }),
       instanceKey: () => 'independent',
       resolveBundle: () => ({ jsPath: join(root, 'relay.js'), version: 'fixture' }),
       readBundle: () => Buffer.from('// fixture'),

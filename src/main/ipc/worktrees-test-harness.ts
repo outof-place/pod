@@ -265,7 +265,7 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     (repoArg: { path: string }, worktreePath: string) => ({
       ORCA_ROOT_PATH: repoArg.path,
       ORCA_WORKTREE_PATH: worktreePath,
-      ORCA_WORKSPACE_NAME: worktreePath.split('/').at(-1) ?? '',
+      POD_WORKSPACE_NAME: worktreePath.split('/').at(-1) ?? '',
       CONDUCTOR_ROOT_PATH: repoArg.path,
       GHOSTX_ROOT_PATH: repoArg.path
     })

@@ -489,7 +489,7 @@ describe('registerPtyHandlers', () => {
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1, undefined)
         expect(runtime.onPtyExit).not.toHaveBeenCalledWith('remote-pty', 0, undefined)
       })
-      it('strips ORCA_PANE_KEY/TAB_ID/WORKTREE_ID from SSH spawn env when remote agent hooks are disabled', async () => {
+      it('strips POD_PANE_KEY/TAB_ID/WORKTREE_ID from SSH spawn env when remote agent hooks are disabled', async () => {
         const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
           id: 'ssh-pty'
         }))
@@ -517,17 +517,17 @@ describe('registerPtyHandlers', () => {
         } as never)
         handlers.clear()
         registerPtyHandlers(mainWindow as never)
-        const prevFlag = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
-        process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '0'
+        const prevFlag = process.env.POD_FEATURE_REMOTE_AGENT_HOOKS
+        process.env.POD_FEATURE_REMOTE_AGENT_HOOKS = '0'
         try {
           await handlers.get('pty:spawn')!(null, {
             cols: 80,
             rows: 24,
             env: {
               FOO: 'bar',
-              ORCA_PANE_KEY: 'tab-1:0',
-              ORCA_TAB_ID: 'tab-1',
-              ORCA_WORKTREE_ID: 'wt-1'
+              POD_PANE_KEY: 'tab-1:0',
+              POD_TAB_ID: 'tab-1',
+              POD_WORKTREE_ID: 'wt-1'
             },
             tabId: 'tab-1',
             leafId: '11111111-1111-4111-8111-111111111111',
@@ -535,21 +535,21 @@ describe('registerPtyHandlers', () => {
           })
           const env = sshSpawn.mock.calls.at(-1)![0].env
           expect(env.FOO).toBe('bar')
-          expect(env.ORCA_PANE_KEY).toBeUndefined()
-          expect(env.ORCA_TAB_ID).toBeUndefined()
-          expect(env.ORCA_WORKTREE_ID).toBeUndefined()
-          expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+          expect(env.POD_PANE_KEY).toBeUndefined()
+          expect(env.POD_TAB_ID).toBeUndefined()
+          expect(env.POD_WORKTREE_ID).toBeUndefined()
+          expect(env.POD_AGENT_HOOK_TOKEN).toBeUndefined()
           // Why: the local hook server's userData-relative endpoint path is meaningless on the remote box; assert no leak.
-          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+          expect(env.POD_AGENT_HOOK_ENDPOINT).toBeUndefined()
         } finally {
           if (prevFlag === undefined) {
-            delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+            delete process.env.POD_FEATURE_REMOTE_AGENT_HOOKS
           } else {
-            process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = prevFlag
+            process.env.POD_FEATURE_REMOTE_AGENT_HOOKS = prevFlag
           }
         }
       })
-      it('forwards ORCA_PANE_KEY/TAB_ID/WORKTREE_ID over SSH by default', async () => {
+      it('forwards POD_PANE_KEY/TAB_ID/WORKTREE_ID over SSH by default', async () => {
         const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
           id: 'ssh-pty'
         }))
@@ -577,8 +577,8 @@ describe('registerPtyHandlers', () => {
         } as never)
         handlers.clear()
         registerPtyHandlers(mainWindow as never)
-        const prevFlag = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
-        delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        const prevFlag = process.env.POD_FEATURE_REMOTE_AGENT_HOOKS
+        delete process.env.POD_FEATURE_REMOTE_AGENT_HOOKS
         try {
           const leafId = '22222222-2222-4222-8222-222222222222'
           const paneKey = makePaneKey('tab-2', leafId)
@@ -587,27 +587,27 @@ describe('registerPtyHandlers', () => {
             rows: 24,
             env: {
               FOO: 'bar',
-              ORCA_PANE_KEY: paneKey,
-              ORCA_TAB_ID: 'tab-2',
-              ORCA_WORKTREE_ID: 'wt-2'
+              POD_PANE_KEY: paneKey,
+              POD_TAB_ID: 'tab-2',
+              POD_WORKTREE_ID: 'wt-2'
             },
             connectionId: 'ssh-1',
             tabId: 'tab-2',
             leafId
           })
           const env = sshSpawn.mock.calls.at(-1)![0].env
-          expect(env.ORCA_PANE_KEY).toBe(paneKey)
-          expect(env.ORCA_TAB_ID).toBe('tab-2')
-          expect(env.ORCA_WORKTREE_ID).toBe('wt-2')
+          expect(env.POD_PANE_KEY).toBe(paneKey)
+          expect(env.POD_TAB_ID).toBe('tab-2')
+          expect(env.POD_WORKTREE_ID).toBe('wt-2')
           // Local hook server coords must NOT cross the wire — the relay is the source of truth.
-          expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
-          expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
-          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+          expect(env.POD_AGENT_HOOK_TOKEN).toBeUndefined()
+          expect(env.POD_AGENT_HOOK_PORT).toBeUndefined()
+          expect(env.POD_AGENT_HOOK_ENDPOINT).toBeUndefined()
         } finally {
           if (prevFlag === undefined) {
-            delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+            delete process.env.POD_FEATURE_REMOTE_AGENT_HOOKS
           } else {
-            process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = prevFlag
+            process.env.POD_FEATURE_REMOTE_AGENT_HOOKS = prevFlag
           }
         }
       })

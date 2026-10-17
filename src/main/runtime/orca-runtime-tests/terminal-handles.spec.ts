@@ -694,7 +694,7 @@ describe('OrcaRuntimeService', () => {
   it('drops a stale leaf when a woken agent PTY is re-keyed to a new leaf on renderer reload', async () => {
     const runtime = createRuntime()
     const tabId = 'tab-1'
-    // Why: the agent's pre-allocated ORCA_TERMINAL_HANDLE gives its PTY a handleByPtyId entry — the condition the reload preservation loop keys on.
+    // Why: the agent's pre-allocated POD_TERMINAL_HANDLE gives its PTY a handleByPtyId entry — the condition the reload preservation loop keys on.
     runtime.preAllocateHandleForPty('pty-agent')
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.syncWindowGraph(TEST_WINDOW_ID, {

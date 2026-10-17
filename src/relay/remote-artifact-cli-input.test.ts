@@ -69,7 +69,7 @@ function forwardingParams(stdin: string): RemoteArtifactCliForwardingParams {
   return {
     argv: ['artifacts', 'share', 'report.md'],
     cwd: '/workspace',
-    env: { ORCA_WORKSPACE_ID: 'workspace-1' },
+    env: { POD_WORKSPACE_ID: 'workspace-1' },
     stdin,
     artifactInput: {
       sourceKey: '/workspace/report.md',

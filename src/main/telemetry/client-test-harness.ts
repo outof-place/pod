@@ -95,7 +95,7 @@ export function makeFakeStore(settings: GlobalSettings): Store {
 
 const CONSENT_ENV_VARS = [
   'DO_NOT_TRACK',
-  'ORCA_TELEMETRY_DISABLED',
+  'POD_TELEMETRY_DISABLED',
   'CI',
   'GITHUB_ACTIONS',
   'GITLAB_CI',

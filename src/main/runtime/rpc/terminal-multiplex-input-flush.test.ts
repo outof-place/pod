@@ -22,7 +22,7 @@ type Viewer = {
 describe('Pod input flush for local-stream multiplex viewers', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setImmediate', 'performance'] })
-    vi.stubEnv('ORCA_TERMINAL_OUTPUT_LEADING_EDGE', '1')
+    vi.stubEnv('POD_TERMINAL_OUTPUT_LEADING_EDGE', '1')
     vi.stubEnv('POD_TERMINAL_INPUT_FLUSH', '1')
   })
   afterEach(() => {

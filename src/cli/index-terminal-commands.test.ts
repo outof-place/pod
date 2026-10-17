@@ -583,7 +583,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('exits nonzero when terminal wait returns an unsatisfied blocked result', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.POD_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValueOnce({
       id: 'req_terminal_wait',
       ok: true,

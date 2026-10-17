@@ -119,14 +119,14 @@ describePosix('generated shell wrapper files', () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'orca-wrapper-snapshot-'))
-    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    previousUserDataPath = process.env.POD_USER_DATA_PATH
   })
 
   afterEach(() => {
     if (previousUserDataPath === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.POD_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+      process.env.POD_USER_DATA_PATH = previousUserDataPath
     }
     rmSync(root, { recursive: true, force: true })
   })
@@ -137,7 +137,7 @@ describePosix('generated shell wrapper files', () => {
   })
 
   it('daemon wrappers', async () => {
-    process.env.ORCA_USER_DATA_PATH = root
+    process.env.POD_USER_DATA_PATH = root
     getDaemonShellLaunchConfig('/bin/zsh', STARTUP_COMMAND_FEATURES)
     await expectWrapperFiles('daemon', getDaemonShellReadyWrapperRoot())
   })
@@ -157,7 +157,7 @@ describePosix('generated shell wrapper files', () => {
     [
       'daemon',
       (): void => {
-        process.env.ORCA_USER_DATA_PATH = root
+        process.env.POD_USER_DATA_PATH = root
         getDaemonShellLaunchConfig('/bin/zsh', STARTUP_COMMAND_FEATURES)
       },
       (): string => getDaemonShellReadyWrapperRoot()
@@ -173,7 +173,7 @@ describePosix('generated shell wrapper files', () => {
   })
 
   it('fish shell-ready init commands', async () => {
-    process.env.ORCA_USER_DATA_PATH = root
+    process.env.POD_USER_DATA_PATH = root
     const local = getLocalShellLaunchConfig('/usr/bin/fish', STARTUP_COMMAND_FEATURES)
     const daemon = getDaemonShellLaunchConfig('/usr/bin/fish', STARTUP_COMMAND_FEATURES)
     await expect(local.args?.[2]).toMatchFileSnapshot(snapshotPath('local', 'fish-init'))

@@ -70,7 +70,7 @@ describe('PtyHandler', () => {
     handler.setExitListener((evt) => exits.push(evt))
 
     await dispatcher.callRequest('pty.spawn', {
-      env: { ORCA_PANE_KEY: 'tab-2:1' }
+      env: { POD_PANE_KEY: 'tab-2:1' }
     })
     expect(onExitCb).toBeDefined()
     onExitCb!({ exitCode: 0 })
@@ -93,7 +93,7 @@ describe('PtyHandler', () => {
     handler.setExitListener((evt) => exits.push(evt))
 
     await dispatcher.callRequest('pty.spawn', {
-      env: { ORCA_PANE_KEY: 'tab-shutdown:0' }
+      env: { POD_PANE_KEY: 'tab-shutdown:0' }
     })
     let settled = false
     const shutdown = dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: true })
@@ -138,11 +138,11 @@ describe('PtyHandler', () => {
 
     await dispatcher.callRequest('pty.spawn', {
       cwd: '/repo',
-      env: { ORCA_WORKTREE_ID: 'repo-id::/repo' }
+      env: { POD_WORKTREE_ID: 'repo-id::/repo' }
     })
     await dispatcher.callRequest('pty.spawn', {
       cwd: '/sibling',
-      env: { ORCA_WORKTREE_ID: 'repo-id::/sibling' }
+      env: { POD_WORKTREE_ID: 'repo-id::/sibling' }
     })
 
     let settled = false
@@ -312,8 +312,8 @@ describe('PtyHandler', () => {
     const exits: { id: string; paneKey?: string }[] = []
     handler.setExitListener((evt) => exits.push(evt))
 
-    await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: 'tab-dispose:0' } })
-    await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: 'tab-dispose:1' } })
+    await dispatcher.callRequest('pty.spawn', { env: { POD_PANE_KEY: 'tab-dispose:0' } })
+    await dispatcher.callRequest('pty.spawn', { env: { POD_PANE_KEY: 'tab-dispose:1' } })
     expect(handler.activePtyCount).toBe(2)
 
     const dispose = handler.dispose()

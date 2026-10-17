@@ -149,7 +149,7 @@ async function launchPackagedOldProfile(args: {
       NODE_ENV: 'production',
       ORCA_BACKGROUND_LAUNCH: '1',
       ORCA_E2E_HEADLESS: '1',
-      ORCA_BYPASS_SINGLE_INSTANCE_LOCK: '1'
+      POD_BYPASS_SINGLE_INSTANCE_LOCK: '1'
     }
   })
   forwardElectronProcessLogs(app, args.testInfo)

@@ -33,10 +33,10 @@ internal static class OrcaRemoteCliLauncher
     {
         try
         {
-            string nodePath = RequireEnvironmentVariable("ORCA_RELAY_NODE_PATH");
-            string relayDirectory = RequireEnvironmentVariable("ORCA_RELAY_DIR");
-            string socketPath = RequireEnvironmentVariable("ORCA_RELAY_SOCKET_PATH");
-            string credentialFile = Environment.GetEnvironmentVariable("ORCA_RELAY_CREDENTIAL_FILE");
+            string nodePath = RequireEnvironmentVariable("POD_RELAY_NODE_PATH");
+            string relayDirectory = RequireEnvironmentVariable("POD_RELAY_DIR");
+            string socketPath = RequireEnvironmentVariable("POD_RELAY_SOCKET_PATH");
+            string credentialFile = Environment.GetEnvironmentVariable("POD_RELAY_CREDENTIAL_FILE");
             if (String.IsNullOrEmpty(credentialFile))
             {
                 credentialFile = socketPath + ".credential";
@@ -228,15 +228,15 @@ export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliI
         contents: [
           '#!/usr/bin/env sh',
           'set -eu',
-          `ORCA_RELAY_NODE_PATH=\${ORCA_RELAY_NODE_PATH:-${quoteSh(env.nodePath)}}`,
-          `ORCA_RELAY_DIR=\${ORCA_RELAY_DIR:-${quoteSh(env.relayDir)}}`,
-          `ORCA_RELAY_SOCKET_PATH=\${ORCA_RELAY_SOCKET_PATH:-${quoteSh(env.sockPath)}}`,
-          `ORCA_RELAY_CREDENTIAL_FILE=\${ORCA_RELAY_CREDENTIAL_FILE:-${quoteSh(env.credentialFile ?? `${env.sockPath}.credential`)}}`,
-          'if [ ! -S "$ORCA_RELAY_SOCKET_PATH" ]; then',
-          '  echo "Orca SSH CLI bridge cannot find the relay socket: $ORCA_RELAY_SOCKET_PATH" >&2',
+          `POD_RELAY_NODE_PATH=\${POD_RELAY_NODE_PATH:-${quoteSh(env.nodePath)}}`,
+          `POD_RELAY_DIR=\${POD_RELAY_DIR:-${quoteSh(env.relayDir)}}`,
+          `POD_RELAY_SOCKET_PATH=\${POD_RELAY_SOCKET_PATH:-${quoteSh(env.sockPath)}}`,
+          `POD_RELAY_CREDENTIAL_FILE=\${POD_RELAY_CREDENTIAL_FILE:-${quoteSh(env.credentialFile ?? `${env.sockPath}.credential`)}}`,
+          'if [ ! -S "$POD_RELAY_SOCKET_PATH" ]; then',
+          '  echo "Orca SSH CLI bridge cannot find the relay socket: $POD_RELAY_SOCKET_PATH" >&2',
           '  exit 1',
           'fi',
-          'exec "$ORCA_RELAY_NODE_PATH" "$ORCA_RELAY_DIR/relay.js" --sock-path "$ORCA_RELAY_SOCKET_PATH" --credential-file "$ORCA_RELAY_CREDENTIAL_FILE" --orca-cli "$@"',
+          'exec "$POD_RELAY_NODE_PATH" "$POD_RELAY_DIR/relay.js" --sock-path "$POD_RELAY_SOCKET_PATH" --credential-file "$POD_RELAY_CREDENTIAL_FILE" --orca-cli "$@"',
           ''
         ].join('\n')
       }

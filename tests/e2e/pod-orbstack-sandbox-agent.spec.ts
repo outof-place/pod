@@ -58,7 +58,7 @@ test.setTimeout(8 * 60_000)
 
 // Runs inside the sandbox: posts Claude-shaped hook events through the script Pod installed.
 const FAKE_AGENT = `#!/bin/sh
-hook="$HOME/.orca/agent-hooks/claude-hook.sh"
+hook="$HOME/.pod/agent-hooks/claude-hook.sh"
 emit() {
   printf '{"hook_event_name":"%s","session_id":"pod-e2e-sandbox","cwd":"%s","prompt":"hello from the sandbox"}' "$1" "$PWD" | /bin/sh "$hook" >/dev/null 2>>"${repoPath}/hook.log"
 }
@@ -218,7 +218,7 @@ test('a Claude launch runs in the worktree sandbox and its hook status reaches P
         leafId,
         launchAgent: 'claude',
         command,
-        // Why: pane identity env (ORCA_PANE_KEY) is attached only to a spawn that carries an env.
+        // Why: pane identity env (POD_PANE_KEY) is attached only to a spawn that carries an env.
         env: {}
       })
       return `${tab.id}:${leafId}`

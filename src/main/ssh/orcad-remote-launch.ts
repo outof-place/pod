@@ -117,8 +117,8 @@ export function orcadLaunchCommand(host: RemoteHostPlatform, spec: OrcadLaunchSp
     `{ chmod 600 ${pidFile} ${log} 2>/dev/null || :; } &&`,
     // A stop request the previous process never consumed must not stop this one.
     `rm -f ${shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_STOP_REQUEST_FILENAME))} &&`,
-    `ORCA_VERSION=${shellEscape(spec.fullVersion)}`,
-    `ORCA_USER_DATA=${shellEscape(spec.userDataDir)}`,
+    `POD_VERSION=${shellEscape(spec.fullVersion)}`,
+    `POD_USER_DATA=${shellEscape(spec.userDataDir)}`,
     ...orcadManagedLaunchEnv(spec).map(([name, value]) => `${name}=${shellEscape(value)}`),
     // Keep $! equal to the runtime PID rather than a waiting shell's PID.
     // Older clients identify the live PID by orcad.js; the pinned launcher loads the body in-place.

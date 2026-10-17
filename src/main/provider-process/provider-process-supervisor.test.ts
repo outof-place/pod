@@ -32,7 +32,7 @@ describe('structured provider supervision', () => {
     ])
     expect(spec.env.PATH).toBe('/bin')
     expect(
-      JSON.parse(Buffer.from(spec.env.ORCA_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString())
+      JSON.parse(Buffer.from(spec.env.POD_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString())
     ).toEqual(
       expect.objectContaining({
         cwd: '/work/repo',
@@ -44,10 +44,10 @@ describe('structured provider supervision', () => {
       })
     )
     expect(
-      JSON.parse(Buffer.from(spec.env.ORCA_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString())
+      JSON.parse(Buffer.from(spec.env.POD_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString())
     ).not.toHaveProperty('env')
     expect(POSIX_PROVIDER_SUPERVISOR_SCRIPT).toContain(
-      'delete childEnv.ORCA_PROVIDER_SUPERVISOR_SPEC'
+      'delete childEnv.POD_PROVIDER_SUPERVISOR_SPEC'
     )
     expect(POSIX_PROVIDER_SUPERVISOR_SCRIPT).toContain('delete childEnv.ELECTRON_RUN_AS_NODE')
     expect(spec.env.ELECTRON_RUN_AS_NODE).toBe('1')
@@ -64,7 +64,7 @@ describe('structured provider supervision', () => {
 
     expect(spec).toMatchObject({ program: process.execPath, detached: true, supervised: true })
     expect(
-      JSON.parse(Buffer.from(spec.env.ORCA_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString())
+      JSON.parse(Buffer.from(spec.env.POD_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString())
     ).toMatchObject({ lifetime: 'one-shot' })
   })
 
@@ -79,7 +79,7 @@ describe('structured provider supervision', () => {
     expect(spec.env).not.toHaveProperty('NODE_OPTIONS')
     expect(spec.env).not.toHaveProperty('NODE_REPL_EXTERNAL_MODULE')
     expect(
-      JSON.parse(Buffer.from(spec.env.ORCA_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString()).nodeEnv
+      JSON.parse(Buffer.from(spec.env.POD_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString()).nodeEnv
     ).toEqual({ NODE_OPTIONS: '--require /missing.js', NODE_REPL_EXTERNAL_MODULE: '/repl.js' })
   })
 

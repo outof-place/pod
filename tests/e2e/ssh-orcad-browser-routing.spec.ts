@@ -42,7 +42,7 @@ test('retained and new browser tabs keep SSH routing and login cookies after man
   const target = startDockerSshRelayTarget(testInfo)
   const scratch = createRetentionFixtureDirectory()
   const template = path.join(scratch, 'template')
-  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: template })
+  const session = createRestartSession(testInfo, { POD_ORCAD_TEMPLATE_PATH: template })
   let app: ElectronApplication | null = null
   try {
     startSshRemoteOnlyBrowserFixture(target)

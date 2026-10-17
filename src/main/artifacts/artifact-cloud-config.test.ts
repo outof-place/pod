@@ -13,7 +13,7 @@ describe('resolveArtifactCloudApiUrl', () => {
     expect(
       resolveArtifactCloudApiUrl(
         undefined,
-        { ORCA_ARTIFACTS_API_URL: 'http://127.0.0.1:45961' },
+        { POD_ARTIFACTS_API_URL: 'http://127.0.0.1:45961' },
         false
       )
     ).toBe('http://127.0.0.1:45961')

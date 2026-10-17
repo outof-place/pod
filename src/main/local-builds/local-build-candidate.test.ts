@@ -135,7 +135,7 @@ describe('loadLocalBuildCandidate', () => {
       const zipRoot = join(directory, 'zip-root')
       const resources = join(zipRoot, 'Orca.app', 'Contents', 'Resources')
       await mkdir(resources, { recursive: true })
-      await writeFile(join(resources, 'orca-local-build.json'), JSON.stringify(compatibility()))
+      await writeFile(join(resources, 'pod-local-build.json'), JSON.stringify(compatibility()))
       const artifactName = 'orca-macos-arm64.zip'
       const artifactPath = join(directory, artifactName)
       await execFileAsync('/usr/bin/zip', ['-qry', artifactPath, 'Orca.app'], { cwd: zipRoot })

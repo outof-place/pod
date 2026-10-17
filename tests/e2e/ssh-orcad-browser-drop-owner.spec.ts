@@ -80,7 +80,7 @@ test('managed Files drag cannot load a desktop same-path HTML file', async ({
   writeFileSync(filePath, '<html><body>DESKTOP_BROWSER_DROP_OWNER</body></html>')
   const host = startOrcadConvertHost('docker', testInfo)
   const server = await startBrowserSplitPageServer()
-  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
+  const session = createRestartSession(testInfo, { POD_ORCAD_TEMPLATE_PATH: TEMPLATE! })
   let app: ElectronApplication | null = null
   try {
     if (!host.exec) {

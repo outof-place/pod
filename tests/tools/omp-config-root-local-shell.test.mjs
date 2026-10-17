@@ -65,7 +65,7 @@ for (const shell of shells) {
         if (config === '') {
           expect(actual).toBe('.omp')
         }
-        expect(managed.ORCA_OMP_SOURCE_AGENT_DIR).toBe(
+        expect(managed.POD_OMP_SOURCE_AGENT_DIR).toBe(
           join(fixture.home, actual || '.omp', 'agent')
         )
       }

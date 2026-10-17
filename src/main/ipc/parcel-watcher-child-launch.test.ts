@@ -35,7 +35,7 @@ class LaunchChild extends EventEmitter {
 
 describe('launchWatcherChild', () => {
   beforeEach(() => {
-    vi.stubEnv('ORCA_WATCHER_CHILD_PID_FILE', '/tmp/orca-watcher.pid')
+    vi.stubEnv('POD_WATCHER_CHILD_PID_FILE', '/tmp/orca-watcher.pid')
     forkMock.mockReturnValue(new LaunchChild())
     releaseReservationMock.mockReset()
     signalPhysicalExitMock.mockReset()

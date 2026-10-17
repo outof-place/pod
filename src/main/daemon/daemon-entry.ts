@@ -346,7 +346,7 @@ async function main(): Promise<void> {
 
 // Only auto-run when executed directly (not imported for testing, or for the build guard's
 // load check — see config/scripts/build-orcad.mjs).
-const isDirectExecution = !process.env.VITEST && !process.env.ORCA_DAEMON_ENTRY_LOAD_CHECK
+const isDirectExecution = !process.env.VITEST && !process.env.POD_DAEMON_ENTRY_LOAD_CHECK
 if (isDirectExecution) {
   main().catch((err) => {
     console.error('[daemon] Fatal:', err)

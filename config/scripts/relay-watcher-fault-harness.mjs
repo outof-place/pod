@@ -275,7 +275,7 @@ async function main() {
       ],
       {
         cwd: dirname(relayEntry),
-        env: { ...process.env, ORCA_WATCHER_CHILD_PID_FILE: pidFile },
+        env: { ...process.env, POD_WATCHER_CHILD_PID_FILE: pidFile },
         stdio: ['ignore', 'pipe', 'pipe']
       }
     )

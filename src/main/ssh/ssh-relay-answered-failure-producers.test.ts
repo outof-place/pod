@@ -120,7 +120,7 @@ describe.runIf(posix)('system-ssh directory upload', () => {
 
 describe('system sftp batch', () => {
   beforeEach(() => {
-    vi.stubEnv('ORCA_SYSTEM_SFTP_PATH', '/fixture/sftp')
+    vi.stubEnv('POD_SYSTEM_SFTP_PATH', '/fixture/sftp')
   })
 
   it('reports a Windows file permission refusal as the host answering', async () => {

@@ -10,7 +10,7 @@ const OWNER_FILE_PATTERN = /^owner-([\da-f-]{36})\.json$/i
 type GrokHookOwner = { token: string; pid: number }
 
 function ownerDirectory(): string {
-  return join(homedir(), '.orca', 'agent-hooks', 'grok-owners')
+  return join(homedir(), '.pod', 'agent-hooks', 'grok-owners')
 }
 
 function ownerPath(directory = ownerDirectory()): string {

@@ -11,7 +11,7 @@ const WSL_RATE_LIMIT_PTY_CWD_DIR = 'orca-rate-limit-pty-cwd'
 // Claude's discovery cannot walk a whole filesystem — reject a root-like user
 // data path and scope to tmpdir instead (see runaway-cpu-hidden-usage-pty-design.md).
 function resolveUserDataRoot(userDataPath?: string | null): string {
-  const root = userDataPath?.trim() || process.env.ORCA_USER_DATA_PATH?.trim()
+  const root = userDataPath?.trim() || process.env.POD_USER_DATA_PATH?.trim()
   if (root && !isRootLikePath(root)) {
     return root
   }

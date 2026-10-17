@@ -18,7 +18,7 @@ import { provisionClaudeProfile } from './claude-profile-provisioning'
 const USER_HOOK = { matcher: '', hooks: [{ type: 'command', command: 'notify-me' }] }
 const ORCA_HOOK = {
   matcher: '',
-  hooks: [{ type: 'command', command: '"$HOME/.orca/agent-hooks/claude-hook.sh"' }]
+  hooks: [{ type: 'command', command: '"$HOME/.pod/agent-hooks/claude-hook.sh"' }]
 }
 // What Claude writes on a finished sign-in.
 const LOGIN = { emailAddress: 'p@example.com' }

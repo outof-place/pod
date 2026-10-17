@@ -253,8 +253,8 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         ...((process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
           process.env.ORCA_E2E_SSH_DOCKER === '1' ||
           process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1') &&
-        !cleanEnv.ORCA_RELAY_PATH
-          ? { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
+        !cleanEnv.POD_RELAY_PATH
+          ? { POD_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
           : {}),
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
       }

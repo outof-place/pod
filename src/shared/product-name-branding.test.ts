@@ -33,11 +33,11 @@ describe('brandProductName', () => {
     for (const literal of [
       'orca.yaml',
       'orca://pair',
-      '~/.orca/keys',
+      '~/.pod/keys',
       'https://example.com/orca',
       'acme/orca-notes',
       '/orca-linear',
-      'ORCA_TELEMETRY_DISABLED',
+      'POD_TELEMETRY_DISABLED',
       'github.com/stablyai/orca',
       'onorca.dev'
     ]) {

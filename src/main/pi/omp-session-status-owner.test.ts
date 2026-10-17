@@ -86,8 +86,8 @@ describe('OMP session status ownership', () => {
       sessionManager: { getSessionId: () => 'separate', getSessionFile: () => '/separate.jsonl' }
     }
     await harness.callHook('session_start', {}, parent)
-    harness.processEnv.ORCA_PANE_KEY = 'pane-2'
-    harness.processEnv.ORCA_AGENT_LAUNCH_TOKEN = 'launch-2'
+    harness.processEnv.POD_PANE_KEY = 'pane-2'
+    harness.processEnv.POD_AGENT_LAUNCH_TOKEN = 'launch-2'
     harness.reload()
     await harness.callHook('agent_start', {}, separate)
     await settle()

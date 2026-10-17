@@ -65,7 +65,7 @@ export function setRepoMaintenanceActivityProbe(probe: RepoMaintenanceActivityPr
 
 /** Support escape hatch: kills the sweep without touching the user's git config. */
 function isDisabled(): boolean {
-  return process.env.ORCA_DISABLE_REPO_REF_MAINTENANCE === '1'
+  return process.env.POD_DISABLE_REPO_REF_MAINTENANCE === '1'
 }
 
 function localMaintenanceOptions(): RepoRefMaintenanceOptions {

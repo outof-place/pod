@@ -87,10 +87,10 @@ it.each(['1.18.32', '2.0.16'])(
       cwd: tmpdir(),
       command: 'opencode --standalone',
       launchAgent: 'opencode',
-      env: { ORCA_PANE_KEY: 'tab-oc:leaf', ORCA_OPENCODE_PLUGIN_API: 'untrusted' },
-      envToDelete: ['ORCA_OPENCODE_PLUGIN_API', 'ORCA_OPENCODE_PLUGIN_API']
+      env: { POD_PANE_KEY: 'tab-oc:leaf', POD_OPENCODE_PLUGIN_API: 'untrusted' },
+      envToDelete: ['POD_OPENCODE_PLUGIN_API', 'POD_OPENCODE_PLUGIN_API']
     })
-    expect(spawnedEnvironment().ORCA_OPENCODE_PLUGIN_API).toBe(capabilities.pluginApi)
+    expect(spawnedEnvironment().POD_OPENCODE_PLUGIN_API).toBe(capabilities.pluginApi)
     const state = await serialize()
     expect(JSON.parse(state)).toMatchObject([
       { openCodeCapabilities: capabilities, envToDelete: [] }
@@ -98,11 +98,11 @@ it.each(['1.18.32', '2.0.16'])(
 
     await restartHandler()
     await dispatcher.callRequest('pty.revive', { state })
-    expect(spawnedEnvironment().ORCA_OPENCODE_PLUGIN_API).toBe(capabilities.pluginApi)
+    expect(spawnedEnvironment().POD_OPENCODE_PLUGIN_API).toBe(capabilities.pluginApi)
     const second = await serialize()
     await restartHandler()
     await dispatcher.callRequest('pty.revive', { state: second })
-    expect(spawnedEnvironment().ORCA_OPENCODE_PLUGIN_API).toBe(capabilities.pluginApi)
+    expect(spawnedEnvironment().POD_OPENCODE_PLUGIN_API).toBe(capabilities.pluginApi)
     expect(mocks.probe).toHaveBeenCalledOnce()
   }
 )
@@ -113,7 +113,7 @@ it.each([
   { version: '3.0.0', pluginApi: 'v1' },
   { version: 2, pluginApi: 'v1' }
 ])('keeps legacy or unverifiable serialized selection unset: %j', async (openCodeCapabilities) => {
-  handler.addEnvAugmenter(() => ({ ORCA_OPENCODE_PLUGIN_API: 'v1' }))
+  handler.addEnvAugmenter(() => ({ POD_OPENCODE_PLUGIN_API: 'v1' }))
   await dispatcher.callRequest('pty.revive', {
     state: JSON.stringify([
       {
@@ -126,17 +126,17 @@ it.each([
       }
     ])
   })
-  expect(spawnedEnvironment().ORCA_OPENCODE_PLUGIN_API).toBeUndefined()
+  expect(spawnedEnvironment().POD_OPENCODE_PLUGIN_API).toBeUndefined()
   expect(mocks.probe).not.toHaveBeenCalled()
 })
 
 it('carries a selected API into WSL without dropping other forwarded keys', () => {
-  const env = { WSLENV: 'XDG_DATA_HOME/p', ORCA_OPENCODE_PLUGIN_API: 'untrusted' }
-  const envToDelete = ['ORCA_OPENCODE_PLUGIN_API', 'OTHER_ENV']
+  const env = { WSLENV: 'XDG_DATA_HOME/p', POD_OPENCODE_PLUGIN_API: 'untrusted' }
+  const envToDelete = ['POD_OPENCODE_PLUGIN_API', 'OTHER_ENV']
   applyOpenCodePluginSelection(env, envToDelete, getOpenCodeCliCapabilities('1.18.32'), true)
   expect(env).toMatchObject({
-    ORCA_OPENCODE_PLUGIN_API: 'v1',
-    WSLENV: 'XDG_DATA_HOME/p:ORCA_OPENCODE_PLUGIN_API'
+    POD_OPENCODE_PLUGIN_API: 'v1',
+    WSLENV: 'XDG_DATA_HOME/p:POD_OPENCODE_PLUGIN_API'
   })
   expect(envToDelete).toEqual(['OTHER_ENV'])
 })

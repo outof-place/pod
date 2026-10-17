@@ -222,7 +222,7 @@ describe('createPtySubprocess', () => {
         rows: 24,
         shellOverride: 'cmd.exe',
         terminalWindowsPowerShellImplementation: 'pwsh.exe',
-        env: { ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
+        env: { POD_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
       })
     } finally {
       if (platform) {
@@ -234,10 +234,10 @@ describe('createPtySubprocess', () => {
       'cmd.exe',
       [
         '/K',
-        'chcp 65001 > nul & if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
+        'chcp 65001 > nul & if defined POD_CODEX_LAUNCH_PREFLIGHT call %POD_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%POD_CODEX_LAUNCH_PREFLIGHT%%POD_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
       ],
       expect.objectContaining({
-        env: expect.objectContaining({ ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE: '"' })
+        env: expect.objectContaining({ POD_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE: '"' })
       })
     )
   })
@@ -288,7 +288,7 @@ describe('createPtySubprocess', () => {
         cwd: 'C:\\repo\\orca',
         shellOverride: 'cmd.exe',
         command: `codex ${'x'.repeat(7000)}`,
-        env: { ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
+        env: { POD_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
       })
     } finally {
       if (platform) {
@@ -300,7 +300,7 @@ describe('createPtySubprocess', () => {
       'cmd.exe',
       [
         '/K',
-        'chcp 65001 > nul & if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
+        'chcp 65001 > nul & if defined POD_CODEX_LAUNCH_PREFLIGHT call %POD_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%POD_CODEX_LAUNCH_PREFLIGHT%%POD_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
       ],
       expect.any(Object)
     )
@@ -321,7 +321,7 @@ describe('createPtySubprocess', () => {
         rows: 24,
         cwd: 'C:\\Users\\jin\\repo',
         shellOverride: 'C:\\PortableGit\\bin\\bash.exe',
-        env: { ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
+        env: { POD_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
       })
     } finally {
       if (platform) {
@@ -341,7 +341,7 @@ describe('createPtySubprocess', () => {
         cwd: 'C:\\Users\\jin\\repo',
         env: expect.objectContaining({
           CHERE_INVOKING: '1',
-          ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT
+          POD_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT
         })
       })
     )
@@ -408,8 +408,8 @@ describe('createPtySubprocess', () => {
     spawnMock.mockImplementation(() => {
       throw new Error('File not found: ')
     })
-    const previousVersion = process.env.ORCA_APP_VERSION
-    process.env.ORCA_APP_VERSION = '1.4.178-test'
+    const previousVersion = process.env.POD_APP_VERSION
+    process.env.POD_APP_VERSION = '1.4.178-test'
 
     try {
       await expect(
@@ -424,9 +424,9 @@ describe('createPtySubprocess', () => {
       )
     } finally {
       if (previousVersion === undefined) {
-        delete process.env.ORCA_APP_VERSION
+        delete process.env.POD_APP_VERSION
       } else {
-        process.env.ORCA_APP_VERSION = previousVersion
+        process.env.POD_APP_VERSION = previousVersion
       }
       if (platform) {
         Object.defineProperty(process, 'platform', platform)

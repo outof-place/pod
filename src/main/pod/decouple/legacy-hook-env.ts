@@ -10,7 +10,7 @@ import { legacyEnvName } from '../../../shared/pod-legacy-env-names'
 /** This runtime's data folder, resolved: what an ORCA_ endpoint must lie in. The runtime's own
  *  env, set at its start; a terminal's env is the very thing in doubt. Null when it has none. */
 export function bakedPodUserData(env: NodeJS.ProcessEnv = process.env): string | null {
-  const userData = env.ORCA_USER_DATA_PATH
+  const userData = env.POD_USER_DATA_PATH
   if (!userData) {
     return null
   }
@@ -23,19 +23,19 @@ export function bakedPodUserData(env: NodeJS.ProcessEnv = process.env): string |
 
 // The pane env the scripts read; the codemod renames these with the rest.
 const PANE_HOOK_ENV = [
-  'ORCA_AGENT_HOOK_ENDPOINT',
-  'ORCA_AGENT_HOOK_PORT',
-  'ORCA_AGENT_HOOK_TOKEN',
-  'ORCA_AGENT_HOOK_ENV',
-  'ORCA_AGENT_HOOK_VERSION',
-  'ORCA_AGENT_HOOK_TRANSPORT',
-  'ORCA_AGENT_HOOK_NODE',
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN',
-  'ORCA_AGENT_PANE',
-  'ORCA_AGENT_LAUNCH'
+  'POD_AGENT_HOOK_ENDPOINT',
+  'POD_AGENT_HOOK_PORT',
+  'POD_AGENT_HOOK_TOKEN',
+  'POD_AGENT_HOOK_ENV',
+  'POD_AGENT_HOOK_VERSION',
+  'POD_AGENT_HOOK_TRANSPORT',
+  'POD_AGENT_HOOK_NODE',
+  'POD_PANE_KEY',
+  'POD_TAB_ID',
+  'POD_WORKTREE_ID',
+  'POD_AGENT_LAUNCH_TOKEN',
+  'POD_AGENT_PANE',
+  'POD_AGENT_LAUNCH'
 ] as const
 
 const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`

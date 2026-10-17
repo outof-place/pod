@@ -28,7 +28,7 @@ export async function runCompiledOrcaCli(
     args: [path.join(process.cwd(), 'out', 'cli', 'index.js'), ...args],
     env: {
       ...process.env,
-      ORCA_USER_DATA_PATH: userDataDir,
+      POD_USER_DATA_PATH: userDataDir,
       ORCA_DEV_CLI_INVOCATION: '1'
     },
     timeoutMs,

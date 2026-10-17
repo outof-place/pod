@@ -205,7 +205,7 @@ describe('openCodexAppServerConnection', () => {
 
       expect(
         JSON.parse(
-          Buffer.from(String(specs[0]?.env?.ORCA_PROVIDER_SUPERVISOR_SPEC), 'base64').toString()
+          Buffer.from(String(specs[0]?.env?.POD_PROVIDER_SUPERVISOR_SPEC), 'base64').toString()
         )
       ).toMatchObject({ closeRequest: 'stdin-end' })
       await connection.close()

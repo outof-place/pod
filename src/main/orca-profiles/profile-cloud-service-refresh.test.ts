@@ -90,8 +90,8 @@ function futureExpiresAt(): number {
 }
 
 function configureCloudEnv(): void {
-  vi.stubEnv('ORCA_CLOUD_API_URL', 'https://orca-cloud.example')
-  vi.stubEnv('ORCA_CLOUD_CLIENT_ID', 'desktop-client')
+  vi.stubEnv('POD_CLOUD_API_URL', 'https://orca-cloud.example')
+  vi.stubEnv('POD_CLOUD_CLIENT_ID', 'desktop-client')
 }
 
 function mockSuccessfulConnect(expiresAt = futureExpiresAt()): void {
@@ -127,8 +127,8 @@ describe('Orca cloud profile service session refresh', () => {
     safeStorageMock.encryptString.mockImplementation((value: string) => Buffer.from(value, 'utf-8'))
     safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
     vi.unstubAllEnvs()
-    vi.stubEnv('ORCA_CLOUD_API_URL', '')
-    vi.stubEnv('ORCA_CLOUD_CLIENT_ID', '')
+    vi.stubEnv('POD_CLOUD_API_URL', '')
+    vi.stubEnv('POD_CLOUD_CLIENT_ID', '')
   })
 
   afterEach(() => {

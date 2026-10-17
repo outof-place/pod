@@ -163,7 +163,7 @@ async function launchPackagedPairedClient(args: {
       env: {
         ...homeIsolation.env,
         NODE_ENV: 'production',
-        ORCA_BYPASS_SINGLE_INSTANCE_LOCK: '1',
+        POD_BYPASS_SINGLE_INSTANCE_LOCK: '1',
         ORCA_E2E_HEADLESS: '1'
       }
     })

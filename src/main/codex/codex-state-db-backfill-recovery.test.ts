@@ -499,10 +499,10 @@ describe('Codex state DB backfill recovery', () => {
 describe.skipIf(process.platform === 'win32')('Codex backfill supervisor owner lock', () => {
   it('recovers a dead owner whose PID was reused with a different start identity', async () => {
     const userData = await createTemporaryRoot()
-    vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+    vi.stubEnv('POD_USER_DATA_PATH', userData)
     const home = join(userData, 'managed-home')
     const lockRoot = resolveCodexBackfillSupervisorLockRoot(home)
-    const lockParent = join(lockRoot, '.orca')
+    const lockParent = join(lockRoot, '.pod')
     const token = '00000000-0000-4000-8000-000000000000'
     const ownerPath = join(lockParent, `managed-hook-install.owner-${token}.json`)
     const lockPath = join(lockParent, 'managed-hook-install.lock')
@@ -525,7 +525,7 @@ describe.skipIf(process.platform === 'win32')('Codex backfill supervisor owner l
 
   it('does not interfere with a live supervisor from another Orca instance', async () => {
     const userData = await createTemporaryRoot()
-    vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+    vi.stubEnv('POD_USER_DATA_PATH', userData)
     const home = join(userData, 'managed-home')
     let releaseFirst!: () => void
     const first = withCodexBackfillSupervisorLock(
@@ -539,7 +539,7 @@ describe.skipIf(process.platform === 'win32')('Codex backfill supervisor owner l
           readFile(
             join(
               resolveCodexBackfillSupervisorLockRoot(home),
-              '.orca',
+              '.pod',
               'managed-hook-install.lock'
             ),
             'utf8'

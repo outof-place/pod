@@ -177,7 +177,7 @@ export async function openAcpAdapterRig(
       command: `/opt/bin/${spec.command}`,
       args: spec.args({ fullAccess: false, pluginDir: null }),
       cwd: '/workspace/project',
-      env: { PATH: '/usr/bin', ORCA_PANE_KEY: 'tab-1:pane-1', ORCA_AGENT_HOOK_PORT: '1234' },
+      env: { PATH: '/usr/bin', POD_PANE_KEY: 'tab-1:pane-1', POD_AGENT_HOOK_PORT: '1234' },
       envToDelete: [],
       fullAccess: false,
       resume: null,

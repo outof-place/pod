@@ -18,7 +18,7 @@ export function shouldWatchLayoutRoundTrip(env: NodeJS.ProcessEnv = process.env)
   return (
     env.NODE_ENV === 'development' ||
     Boolean(env.ORCA_E2E_USER_DATA_DIR) ||
-    env.ORCA_LAYOUT_ROUND_TRIP_CHECK === '1'
+    env.POD_LAYOUT_ROUND_TRIP_CHECK === '1'
   )
 }
 

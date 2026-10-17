@@ -26,7 +26,7 @@ it('gives the localhost SSH journey its same-filesystem server and agent prerequ
   }
   const run = job.steps.find((step) => step.name === 'Run localhost SSH terminal and hook journey')
   expect(run.env.ORCA_E2E_SSH_LOCALHOST).toBe('1')
-  expect(run.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS).toBe('1')
+  expect(run.env.POD_FEATURE_REMOTE_AGENT_HOOKS).toBe('1')
   expect(run.run).toContain(spec)
   expect(run.run).toContain('--project=electron-headless')
   expect(run.run).not.toContain('--retries')

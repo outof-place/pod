@@ -4,7 +4,7 @@
 // the caller's cwd, else the Pod folder workspace holding cwd, else ORCA_WORKTREE_PATH: cwd wins
 // over ORCA_WORKTREE_*, so a subagent working in another worktree gets a lease of its own. Every
 // root is a realpath, and the runtime resolves the lease's worktreeId from that realpath, never
-// from the caller's ORCA_WORKTREE_ID. The holder is the nearest agent CLI up the caller's process
+// from the caller's POD_WORKTREE_ID. The holder is the nearest agent CLI up the caller's process
 // tree, else the agent session Pod's agent-status store has for the pane, else the pane itself,
 // else (outside Pod) the process that ran podx; never the podx process, which ends with the call.
 // `--holder <name>` splits one holder into several, so parallel flows in one agent process (and

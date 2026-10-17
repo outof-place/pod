@@ -27,9 +27,9 @@ describe('prependOrcaCliDirToChildPath', () => {
       installFakeAppEnvironment({ getCliLauncherPath: () => launcher })
       const env: Record<string, string> = {
         PATH: `/usr/bin:${join(USER_DATA, 'cli', 'bin')}::/bin`,
-        ORCA_USER_DATA_PATH: '/parent/profile',
-        ORCA_CLI_COMMAND: '/parent/orca',
-        ORCA_CLI_BIN_DIR: '/parent/bin'
+        POD_USER_DATA_PATH: '/parent/profile',
+        POD_CLI_COMMAND: '/parent/orca',
+        POD_CLI_BIN_DIR: '/parent/bin'
       }
       expect(
         prependOrcaCliDirToChildPath(env, {
@@ -40,9 +40,9 @@ describe('prependOrcaCliDirToChildPath', () => {
         })
       ).toBe(launcher)
       expect(env.PATH).toBe(`${join(USER_DATA, 'cli', 'bin')}:/usr/bin:/bin`)
-      expect(env.ORCA_USER_DATA_PATH).toBe(USER_DATA)
-      expect(env.ORCA_CLI_COMMAND).toBe(launcher)
-      expect(env.ORCA_CLI_BIN_DIR).toBe(join(USER_DATA, 'cli', 'bin'))
+      expect(env.POD_USER_DATA_PATH).toBe(USER_DATA)
+      expect(env.POD_CLI_COMMAND).toBe(launcher)
+      expect(env.POD_CLI_BIN_DIR).toBe(join(USER_DATA, 'cli', 'bin'))
       expect(shim.ensureLinuxTerminalOrcaCliShimDir).not.toHaveBeenCalled()
     }
   )
@@ -57,7 +57,7 @@ describe('prependOrcaCliDirToChildPath', () => {
       platform: 'linux'
     })
     expect(env.PATH).toBe(`${SHIM_DIR}:/usr/local/bin:/usr/bin`)
-    expect(env.ORCA_CLI_BIN_DIR).toBe(SHIM_DIR)
+    expect(env.POD_CLI_BIN_DIR).toBe(SHIM_DIR)
     expect(shim.ensureLinuxTerminalOrcaCliShimDir).toHaveBeenCalledWith({
       userDataPath: USER_DATA
     })
@@ -75,14 +75,14 @@ describe('prependOrcaCliDirToChildPath', () => {
 
   it('leaves packaged Linux PATH untouched when no shim could be written', () => {
     shim.ensureLinuxTerminalOrcaCliShimDir.mockReturnValue(null)
-    const env: Record<string, string> = { PATH: '/usr/bin', ORCA_CLI_BIN_DIR: '/old-host/cli' }
+    const env: Record<string, string> = { PATH: '/usr/bin', POD_CLI_BIN_DIR: '/old-host/cli' }
     prependOrcaCliDirToChildPath(env, {
       isPackaged: true,
       userDataPath: USER_DATA,
       platform: 'linux'
     })
     expect(env.PATH).toBe('/usr/bin')
-    expect(env.ORCA_CLI_BIN_DIR).toBeUndefined()
+    expect(env.POD_CLI_BIN_DIR).toBeUndefined()
   })
 
   it('leads packaged macOS PATH with the bundled CLI dir', () => {
@@ -94,15 +94,15 @@ describe('prependOrcaCliDirToChildPath', () => {
       platform: 'darwin'
     })
     expect(env.PATH).toBe(`${join(RESOURCES, 'bin')}:/usr/bin`)
-    expect(env.ORCA_CLI_BIN_DIR).toBe(join(RESOURCES, 'bin'))
+    expect(env.POD_CLI_BIN_DIR).toBe(join(RESOURCES, 'bin'))
     expect(shim.ensureLinuxTerminalOrcaCliShimDir).not.toHaveBeenCalled()
   })
 
   it('leads packaged Windows PATH with the bundled CLI dir under the env block spelling', () => {
     const env: Record<string, string> = {
       Path: 'C:\\Windows\\System32',
-      ORCA_CLI_BIN_DIR: '/parent-host/cli',
-      ORCA_WSL_CLI_DIR: '/guest/orca/bin'
+      POD_CLI_BIN_DIR: '/parent-host/cli',
+      POD_WSL_CLI_DIR: '/guest/orca/bin'
     }
     prependOrcaCliDirToChildPath(env, {
       isPackaged: true,
@@ -112,8 +112,8 @@ describe('prependOrcaCliDirToChildPath', () => {
     })
     expect(env.Path).toBe(`${join(RESOURCES, 'bin')};C:\\Windows\\System32`)
     expect(env.PATH).toBeUndefined()
-    expect(env.ORCA_CLI_BIN_DIR).toBeUndefined()
-    expect(env.ORCA_WSL_CLI_DIR).toBe('/guest/orca/bin')
+    expect(env.POD_CLI_BIN_DIR).toBeUndefined()
+    expect(env.POD_WSL_CLI_DIR).toBe('/guest/orca/bin')
   })
 
   it('leaves a packaged darwin/win32 PATH alone with no resources root', () => {
@@ -140,7 +140,7 @@ describe('prependOrcaCliDirToChildPath', () => {
       platform
     })
     expect(env.PATH).toBe(`${join(USER_DATA, 'cli', 'bin')}${pathDelimiter}/usr/bin`)
-    expect(env.ORCA_CLI_BIN_DIR).toBe(
+    expect(env.POD_CLI_BIN_DIR).toBe(
       platform === 'win32' ? undefined : join(USER_DATA, 'cli', 'bin')
     )
     expect(shim.ensureLinuxTerminalOrcaCliShimDir).not.toHaveBeenCalled()

@@ -45,7 +45,7 @@ describe.each(['renderer', 'runtime'])('%s retired OpenCode environment deletion
       expect(deletions?.includes('OPENCODE_CONFIG_DIR') ?? false).toBe(deleted)
       expect(env.OPENCODE_CONFIG_DIR).toBe(explicit)
       if (daemon) {
-        vi.stubEnv('ORCA_USER_DATA_PATH', getAppEnvironment().getPath('userData'))
+        vi.stubEnv('POD_USER_DATA_PATH', getAppEnvironment().getPath('userData'))
         for (const inherited of [legacy, '/daemon/user-config']) {
           vi.stubEnv('OPENCODE_CONFIG_DIR', inherited)
           const request = { sessionId: 'pane', cols: 80, rows: 24, env, envToDelete: deletions }

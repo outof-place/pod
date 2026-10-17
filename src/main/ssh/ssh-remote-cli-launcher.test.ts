@@ -137,10 +137,10 @@ describe('SSH remote Orca CLI launcher', () => {
           encoding: 'utf8',
           env: {
             ...process.env,
-            ORCA_RELAY_NODE_PATH: process.execPath,
-            ORCA_RELAY_DIR: relayDir,
-            ORCA_RELAY_SOCKET_PATH: sockPath,
-            ORCA_RELAY_CREDENTIAL_FILE: credentialFile
+            POD_RELAY_NODE_PATH: process.execPath,
+            POD_RELAY_DIR: relayDir,
+            POD_RELAY_SOCKET_PATH: sockPath,
+            POD_RELAY_CREDENTIAL_FILE: credentialFile
           }
         }
       )
@@ -163,10 +163,10 @@ describe('SSH remote Orca CLI launcher', () => {
         encoding: 'utf8',
         env: {
           ...process.env,
-          ORCA_RELAY_NODE_PATH: process.execPath,
-          ORCA_RELAY_DIR: relayDir,
-          ORCA_RELAY_SOCKET_PATH: sockPath,
-          ORCA_RELAY_CREDENTIAL_FILE: ''
+          POD_RELAY_NODE_PATH: process.execPath,
+          POD_RELAY_DIR: relayDir,
+          POD_RELAY_SOCKET_PATH: sockPath,
+          POD_RELAY_CREDENTIAL_FILE: ''
         }
       })
       expect(defaulted.status, defaulted.stderr).toBe(0)

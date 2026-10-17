@@ -4,7 +4,7 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 export function getWslAccountTarget(cwd: string): { runtime: 'wsl'; wslDistro: string } | null {
   const distro =
     process.platform === 'win32'
-      ? process.env.ORCA_CLI_WSL_DISTRO?.trim() || parseWslUncPath(cwd)?.distro
+      ? process.env.POD_CLI_WSL_DISTRO?.trim() || parseWslUncPath(cwd)?.distro
       : undefined
   return distro ? { runtime: 'wsl', wslDistro: distro } : null
 }

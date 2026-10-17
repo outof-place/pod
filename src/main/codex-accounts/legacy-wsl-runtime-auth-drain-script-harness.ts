@@ -151,7 +151,7 @@ process.exit(result.status ?? 1)
       '/bin/sh',
       [
         '-c',
-        `ORCA_DRAIN_APPLY_PID=$$; export ORCA_DRAIN_APPLY_PID;\n${_internals.applyLegacyAuthScript}`,
+        `POD_DRAIN_APPLY_PID=$$; export POD_DRAIN_APPLY_PID;\n${_internals.applyLegacyAuthScript}`,
         'sh',
         legacyHome,
         join(root, 'absent-active-home'),

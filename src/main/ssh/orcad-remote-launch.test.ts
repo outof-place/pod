@@ -56,8 +56,8 @@ describe('orcadLaunchCommand', () => {
 
   it('exports the version and the shared data root the deploy decided on', () => {
     const command = orcadLaunchCommand(posix, SPEC)
-    expect(command).toContain(`ORCA_VERSION '${SPEC.fullVersion}'`.replace(' ', '='))
-    expect(command).toContain(`ORCA_USER_DATA='${SPEC.userDataDir}'`)
+    expect(command).toContain(`POD_VERSION '${SPEC.fullVersion}'`.replace(' ', '='))
+    expect(command).toContain(`POD_USER_DATA='${SPEC.userDataDir}'`)
   })
 
   it('names the activation fence on every launch, which enables idle exit', () => {

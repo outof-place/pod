@@ -156,10 +156,10 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(undefined, 'm4air')
   })
 
-  it('routes `host name` through an ambient ORCA_ENVIRONMENT, unlike the pinned `host list`', async () => {
+  it('routes `host name` through an ambient POD_ENVIRONMENT, unlike the pinned `host list`', async () => {
     // Why: the pin used to cover the whole `host` family, which silently answered for this machine
     // when the shell was pointed at another one. `host name` describes one runtime, so it routes.
-    process.env.ORCA_ENVIRONMENT = 'm4air'
+    process.env.POD_ENVIRONMENT = 'm4air'
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
     fakeMachineNameRuntime('M4 Air')
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -270,10 +270,10 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     process.exitCode = 0
   })
 
-  it('keeps `host list` local when ORCA_ENVIRONMENT is set ambiently', async () => {
+  it('keeps `host list` local when POD_ENVIRONMENT is set ambiently', async () => {
     // Why: the ambient variable produced the same two-machine listing as the explicit flag, with
     // no flag to reject. Pinning the family is what makes `runtimeId: local` true in both cases.
-    process.env.ORCA_ENVIRONMENT = 'm4air'
+    process.env.POD_ENVIRONMENT = 'm4air'
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
     queueSshTargetLookups(1)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

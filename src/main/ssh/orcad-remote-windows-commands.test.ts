@@ -121,7 +121,7 @@ describe('Windows orcad commands run node.exe directly', () => {
       `${NODE} ${SCRIPT} slot-runtime ${slot} clear-stop-request`
     )
     expect(windowsOrcadLaunchCommand(host, spec, SLOT_NODE)).toMatchInlineSnapshot(
-      `"C:\\Users\\u\\.orca-remote\\runtimes\\node-ab\\node.exe C:/Users/u/.orca-remote/orcad-0.2.0+bb01/orcad.js --windows-breakaway-launch --stdout-file C:/Users/u/.orca-remote/orcad-0.2.0+bb01/.orcad-readiness --stderr-file C:/Users/u/.orca-remote/orcad-0.2.0+bb01/orcad.log --stderr-keep-previous --process-file C:/Users/u/.orca-remote/orcad-0.2.0+bb01/.orcad-process.json --env ORCA_VERSION=0.2.0+bb01 --env ORCA_USER_DATA=C:/Users/u/.orca --env ORCA_ORCAD_MANAGED_ACTIVATION_ROOT=C:/Users/u/.orca-remote/.orcad-activation-transaction --orcad-args --json --bind "127.0.0.1" --port "7777""`
+      `"C:\\Users\\u\\.orca-remote\\runtimes\\node-ab\\node.exe C:/Users/u/.orca-remote/orcad-0.2.0+bb01/orcad.js --windows-breakaway-launch --stdout-file C:/Users/u/.orca-remote/orcad-0.2.0+bb01/.orcad-readiness --stderr-file C:/Users/u/.orca-remote/orcad-0.2.0+bb01/orcad.log --stderr-keep-previous --process-file C:/Users/u/.orca-remote/orcad-0.2.0+bb01/.orcad-process.json --env POD_VERSION=0.2.0+bb01 --env POD_USER_DATA=C:/Users/u/.orca --env POD_ORCAD_MANAGED_ACTIVATION_ROOT=C:/Users/u/.orca-remote/.orcad-activation-transaction --orcad-args --json --bind "127.0.0.1" --port "7777""`
     )
   })
 
@@ -132,7 +132,7 @@ describe('Windows orcad commands run node.exe directly', () => {
       SLOT_NODE
     )
     expect(command).toContain(
-      '--env ORCA_ORCAD_MANAGED_ACTIVATION_ROOT=C:/Users/u/.orca-remote/.orcad-activation-transaction --orcad-args'
+      '--env POD_ORCAD_MANAGED_ACTIVATION_ROOT=C:/Users/u/.orca-remote/.orcad-activation-transaction --orcad-args'
     )
     expect(command).not.toMatch(/[%$`']/u)
   })

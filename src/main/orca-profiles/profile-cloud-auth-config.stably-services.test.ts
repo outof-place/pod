@@ -26,7 +26,7 @@ describe('Orca Cloud sign-in and mobile relay without Stably services', () => {
   it('reports unconfigured, which keeps sign-in, orgs, relay and publishing off', () => {
     identity.current = podIdentityWithoutStablyServices()
     // Why env too: a product must not re-enable Stably endpoints through overrides.
-    const env = { ORCA_CLOUD_API_URL: 'https://login.onorca.dev', ORCA_CLOUD_CLIENT_ID: 'x' }
+    const env = { POD_CLOUD_API_URL: 'https://login.onorca.dev', POD_CLOUD_CLIENT_ID: 'x' }
     expect(getOrcaCloudAuthConfig(env, true)).toEqual({
       configured: false,
       setupMessage: 'Orca Cloud is not available in Pod.'
