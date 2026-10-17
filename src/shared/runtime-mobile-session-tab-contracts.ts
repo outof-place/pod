@@ -30,8 +30,13 @@ export type RuntimeMobileSessionTerminalTab = {
   viewMode?: 'terminal' | 'chat'
   launchDraft?: string
   launchDraftCreatedAt?: number
+  /** Fork-only (Pod): set while this local shell's failed exit keeps the pane; Restart clears it. */
+  terminalExit?: RuntimeTerminalExit
   isActive: boolean
 }
+
+/** Fork-only (Pod): a kept pane's last exit, for the "Terminal exited" overlay. */
+export type RuntimeTerminalExit = { exitCode: number; exitedAt: number }
 
 export type RuntimeMobileSessionAgentResume = {
   agent: string

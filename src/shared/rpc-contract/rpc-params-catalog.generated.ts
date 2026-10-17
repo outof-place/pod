@@ -459,6 +459,7 @@ import {
   PluginMarketplaceRefreshParams,
   PluginMarketplaceSourceParams
 } from './pod-plugins-manage-params'
+import { SessionTabsRestartTerminalParams } from './pod-session-tabs-restart-params'
 import {
   PodSettingsSetNetworkProxyParams,
   PodSettingsSetParams,
@@ -1281,6 +1282,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'session.tabs.list': WorktreeTabSelector,
   'session.tabs.listAll': null,
   'session.tabs.move': MoveTab,
+  'session.tabs.restartTerminal': SessionTabsRestartTerminalParams,
   'session.tabs.setTabProps': SetTabProps,
   'session.tabs.subscribe': WorktreeTabSelector,
   'session.tabs.subscribeAll': null,
