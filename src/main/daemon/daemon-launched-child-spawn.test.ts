@@ -9,12 +9,16 @@ vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getVersion: () => '1.0.0' })
 }))
 vi.mock('./daemon-launch-paths', () => ({ daemonLogArgs: () => [] }))
+const CLONE = '/data/daemon-host.noindex/1.0.0/build-x/Pod Runtime'
 // Why: the policy test models a Mac on every host; Linux runners have no /usr/sbin/taskpolicy.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof Fs>()
   return {
     ...actual,
-    existsSync: (path: string) => path === '/usr/sbin/taskpolicy' || actual.existsSync(path)
+    existsSync: (path: string) =>
+      path === '/usr/sbin/taskpolicy' ||
+      path === `${CLONE}/Contents/Resources/bin/pod-agent-launcher` ||
+      actual.existsSync(path)
   }
 })
 
@@ -26,7 +30,8 @@ const options = {
   tokenPath: '/tmp/orca/token',
   pidPath: '/tmp/orca/pid',
   launchNonce: 'scope-owner',
-  macosLoginSessionWatch: false
+  macosLoginSessionWatch: false,
+  macosDisclaimResponsibility: false
 }
 
 afterEach(() => vi.clearAllMocks())
@@ -87,7 +92,7 @@ describe('daemon launch under the app scheduling policy', () => {
   it('runs a relocated daemon host from its own executable, not the bundle Helper', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     Object.defineProperty(process, 'helperExecPath', { value: '/Pod Helper', configurable: true })
-    const clone = '/data/daemon-host.noindex/1.0.0/build-x/Pod Runtime'
+    const clone = CLONE
     spawnDaemonChildProcess(
       {
         ...options,
@@ -102,6 +107,47 @@ describe('daemon launch under the app scheduling policy', () => {
       `${clone}/Contents/MacOS/Pod`,
       `${clone}/Contents/Resources/app.asar.unpacked/out/main/daemon-entry.js`
     ])
+  })
+})
+
+describe('a GUI session daemon responsible for itself (macOS)', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('starts through the clone launcher, the same command line, stdio, cwd and env behind it', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const entry = `${CLONE}/Contents/Resources/app.asar.unpacked/out/main/daemon-entry.js`
+    spawnDaemonChildProcess(
+      {
+        ...options,
+        forkEntryPath: entry,
+        relocatedExecPath: `${CLONE}/Contents/MacOS/Pod`,
+        macosDisclaimResponsibility: true
+      },
+      false
+    )
+    expect(fork).not.toHaveBeenCalled()
+    const spec = spawn.mock.calls[0]?.[0]
+    expect(spec.program).toBe(`${CLONE}/Contents/Resources/bin/pod-agent-launcher`)
+    expect(spec.args.slice(0, 7)).toEqual([
+      '--disclaim-exec',
+      '/usr/sbin/taskpolicy',
+      '-a',
+      `${CLONE}/Contents/MacOS/Pod`,
+      entry,
+      '--socket',
+      '/tmp/orca/daemon.sock'
+    ])
+    expect(spec.args).toEqual(expect.arrayContaining(['--launch-nonce', 'scope-owner']))
+    expect(spec.stdio).toEqual(['ignore', 'ignore', 'pipe', 'ipc'])
+    expect(spec.detached).toBe(true)
+    expect(spec.cwd).toBe('/tmp/orca')
+    expect(spec.env.ELECTRON_RUN_AS_NODE).toBe('1')
+  })
+
+  it('keeps the taskpolicy launch when the launch did not ask to disclaim', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    spawnDaemonChildProcess({ ...options, relocatedExecPath: `${CLONE}/Contents/MacOS/Pod` }, false)
+    expect(spawn.mock.calls[0]?.[0].program).toBe('/usr/sbin/taskpolicy')
   })
 })
 

@@ -65,6 +65,8 @@ export type DaemonLaunchPolicy = {
   macosLoginSessionWatch?: boolean
   /** Pod: start the daemon as a launchd job (macOS GUI session only; SSH/headless serve forks). */
   macosLaunchdJob?: boolean
+  /** Pod: a forked daemon responsible for itself (macOS GUI session only, daemon-responsibility-darwin.ts). */
+  macosDisclaimResponsibility?: boolean
   startupTimeoutMs?: number
 }
 
@@ -73,6 +75,7 @@ export function createOutOfProcessLauncher(
   {
     macosLoginSessionWatch = false,
     macosLaunchdJob = false,
+    macosDisclaimResponsibility = false,
     startupTimeoutMs
   }: DaemonLaunchPolicy = {}
 ): DaemonLauncher {
@@ -170,6 +173,7 @@ export function createOutOfProcessLauncher(
             pidPath,
             launchNonce,
             macosLoginSessionWatch,
+            macosDisclaimResponsibility,
             startupTimeoutMs: startupTimeoutMs ?? darwinDaemonStartupTimeoutMs(recoveryDeadlineMs)
           },
           launchdJobs

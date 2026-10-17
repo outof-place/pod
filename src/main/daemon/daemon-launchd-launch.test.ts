@@ -50,6 +50,7 @@ const options = {
   pidPath: '/data/daemon.pid',
   launchNonce: 'nonce-1',
   macosLoginSessionWatch: false,
+  macosDisclaimResponsibility: false,
   startupTimeoutMs: 1_000
 }
 

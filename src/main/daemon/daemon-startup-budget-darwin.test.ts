@@ -34,7 +34,8 @@ const LAUNCH_OPTIONS: DaemonChildSpawnOptions = {
   tokenPath: '/fake/token',
   pidPath: '/fake/daemon.pid',
   launchNonce: 'nonce-a',
-  macosLoginSessionWatch: false
+  macosLoginSessionWatch: false,
+  macosDisclaimResponsibility: false
 }
 
 function fakeDaemonChild(pid: number): FakeDaemonChild {
