@@ -11,6 +11,7 @@ import { runProcess } from '@orca/process-host'
 import {
   migratePodClaudeSettings,
   removePodClaudeEntries,
+  type PodClaudeCutRefusal,
   type PodClaudeMigrationEntry
 } from './pod-claude-settings-migration'
 
@@ -210,14 +211,13 @@ export class PodClaudeSettingsCut {
     } catch {
       return false
     }
-    const result = removePodClaudeEntries(text, this.options.names())
+    const refusal: PodClaudeCutRefusal = {}
+    const result = removePodClaudeEntries(text, this.options.names(), refusal)
     if (result === null) {
       // Why once, and apart from "none of Pod": a file the cut refuses keeps whatever Pod has in it.
       if (!this.refusalLogged) {
         this.refusalLogged = true
-        this.options.log?.('pod-claude-settings-cut-refused', {
-          reason: 'not a JSONC object, or no cut that keeps the rest as it was'
-        })
+        this.options.log?.('pod-claude-settings-cut-refused', { reason: refusal.reason })
       }
       return false
     }
