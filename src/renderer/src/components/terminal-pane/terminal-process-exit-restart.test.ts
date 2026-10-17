@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
+import {
+  resolvePaneRestartStartup,
+  resolveTerminalProcessExitRestartStartup
+} from './terminal-process-exit-restart'
 
 describe('terminal process exit restart', () => {
   it('retries the original startup after a Git Bash capacity failure', () => {
@@ -35,5 +38,15 @@ describe('terminal process exit restart', () => {
         startup: { command: 'codex' }
       })
     ).toBeNull()
+  })
+
+  // Fork-only (Pod): the desktop's Restart of a failed shell started Codex.
+  it('restarts a failed shell as a plain shell, and only a bare restart as Codex', () => {
+    const codex = { command: 'codex' }
+    expect(resolvePaneRestartStartup(null, () => codex)).toBeNull()
+    expect(resolvePaneRestartStartup({ command: 'zsh -l' }, () => codex)).toEqual({
+      command: 'zsh -l'
+    })
+    expect(resolvePaneRestartStartup(undefined, () => codex)).toBe(codex)
   })
 })
