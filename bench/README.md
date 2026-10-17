@@ -417,7 +417,11 @@ POD_BENCH_POD_APP=<re-id'd copy of Pod.app> node bench/suites/native-idle.mjs [-
 - **Isolation.** Each launch gets:
   - an APFS clone of the re-id'd bundle, with a fresh profile and `HOME`;
   - `open -n -g` with its whole environment given (empty `USER`/`LOGNAME`);
-  - a guard `PATH` whose `claude` and `codex` are stubs and whose `security` is the gate-2 shim.
+  - the guard `PATH` (`lib/guard-path.mjs`, PodNative's `scripts/guard-path.sh` at a pinned
+    revision): a stub for every agent and credential CLI the app's catalog probes, first in every
+    shell of the profile's `HOME`, with the gate-2 `security` shim in front. After the launch,
+    every PATH a stub logged must have had the stubs first, and no `claude` may have run past
+    `--version`, or the launch fails.
 
   A watchdog stops the launch on any real `claude` or `codex` in the run's tree, or on a new
   SecurityAgent. Before the first launch the suite refuses to start if the launchd session sets
@@ -511,6 +515,12 @@ Nothing is deleted while the run goes on (cold starts move the caches aside); re
 `pod-tmp-rm` afterwards. Processes are stopped by pid: the app's own child, then every process whose
 argv names its profile, never a program under `/Applications` or Pod's data dir. Before the first
 CLI call, `status` must report the instance's own runtime id, or the run stops before any change.
+Every launch gets the guard `PATH` (`lib/guard-path.mjs`): a stub for every agent and credential
+CLI in the app's catalog, first in the profile's `HOME` and `ZDOTDIR` shells. Closing the instance
+fails the run when a stub was reached off that PATH, or `claude` ran past `--version`. Cleanup
+signals only the processes the run spawned (pinned by start time), those whose executable lies in
+the profile, and an app copy's own process that names the profile (crashpad); anything else that
+names the profile is reported and left alone.
 Pod's terminals start without the macOS `/usr/bin/login` wrapper (`ORCA_DISABLE_MACOS_LOGIN_SHELL=1`),
 which keeps each shell inside its throwaway `HOME`. Run the apps from copies (`cp -c`) outside
 `/Applications`, so the published bundle stays untouched.

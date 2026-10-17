@@ -31,6 +31,7 @@ import path from 'node:path'
 import { parseArgs, promisify } from 'node:util'
 import { checkAcc, guardInstance, releaseInstance } from '../lib/acc-guard.mjs'
 import { assertHeavyGate } from '../lib/heavy-gate.mjs'
+import { guardVerdict, installedClaudeVersion, prepareGuard } from '../lib/guard-path.mjs'
 import { assertRealHomeUntouched, realHomeState } from '../lib/real-home-guard.mjs'
 import {
   MAX_LOAD,
@@ -151,17 +152,10 @@ function prepare(variant) {
   for (const dir of [profile, home, path.join(profile, 'tmp'), path.join(profile, 'bin'), guard, path.join(work, 'out')]) {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
   }
+  // The gate-2 security shim goes in front of the guard PATH (lib/guard-path.mjs), whose stubs
+  // stand for every agent and credential CLI Pod's catalog probes, first in every shell of HOME.
   writeFileSync(path.join(guard, 'security'), podNativeFile('scripts/claude-tui/security_shim.sh'), { mode: 0o700 })
-  for (const tool of ['claude', 'codex']) {
-    writeFileSync(
-      path.join(guard, tool),
-      `#!/bin/sh\nprintf '%s %s %s\\n' "$(date +%T)" ${tool} "$*" >> '${work}/guard.log'\necho '${tool}: not available in this bench run' >&2\nexit 1\n`,
-      { mode: 0o755 }
-    )
-  }
-  writeFileSync(path.join(work, 'guard.log'), '')
-  // zsh's /etc/zprofile (path_helper) puts the system's dirs first: the guard goes back in front.
-  writeFileSync(path.join(home, '.zshrc'), `export PATH="${guard}:$PATH"\n`)
+  const guardSetup = prepareGuard(work, { ud: profile, homes: [home], fronts: [guard], tree: app, claudeVersion: installedClaudeVersion() })
   writeFileSync(path.join(home, '.hushlogin'), '')
   // A repo for the terminals: a plain one-commit git repo.
   const repo = path.join(work, 'repo')
@@ -180,7 +174,7 @@ function prepare(variant) {
     }
     stubAccState(state)
   }
-  return { work, app, exe: path.join(app, 'Contents/MacOS/PodNative'), profile, home, guard, repo, accHome }
+  return { work, app, exe: path.join(app, 'Contents/MacOS/PodNative'), profile, home, guard, guardSetup, repo, accHome }
 }
 
 // PodNative's mac-e2e claude-acc fixtures (scripts/mac-e2e/state), moved to this run's clock, with
@@ -286,7 +280,8 @@ async function measureLaunch(variant, index) {
   const agentsBefore = securityAgents()
   // PodNative quits (and quits its runtime over the control channel) when its own idle window ends.
   const totalS = warmupS + STATES.length * (settleS + windowS) + 90
-  const guardPath = `${launch.guard}:/usr/bin:/bin:/usr/sbin:/sbin`
+  const guardPath = launch.guardSetup.path
+  const guardEnv = Object.entries(launch.guardSetup.env)
   const nosearch = path.join(launch.profile, 'tmp/no-ogd.sock')
   const env = (flag, pairs) => pairs.flatMap(([key, value]) => [flag, `${key}=${value}`])
   const runtimeEnv = env('--runtime-env', [
@@ -302,7 +297,8 @@ async function measureLaunch(variant, index) {
     ['PATH', guardPath],
     ['POD_SEARCH_SOCKET', nosearch],
     ['USER', ''],
-    ['LOGNAME', '']
+    ['LOGNAME', ''],
+    ...guardEnv
   ])
   const report = path.join(launch.work, 'out/measure.json')
   const args = [
@@ -324,6 +320,7 @@ async function measureLaunch(variant, index) {
       ['POD_SEARCH_SOCKET', nosearch],
       ['USER', ''],
       ['LOGNAME', ''],
+      ...guardEnv,
       ...(variant === 'acc-off' ? [['POD_NATIVE_NO_ACC', '1']] : [])
     ]),
     launch.app,
@@ -475,7 +472,8 @@ async function measureLaunch(variant, index) {
     domainsChanged: DOMAINS.filter((domain) => domainKeys(domain) !== domainsBefore[domain]),
     securityCalls: security.length,
     securityNonFind: security.filter((line) => !/"subcommand": "find-/.test(line)).length,
-    stubCalls: readFileSync(path.join(launch.work, 'guard.log'), 'utf8').split('\n').filter(Boolean),
+    stubCalls: readFileSync(path.join(launch.work, 'guard-agents.log'), 'utf8').split('\n').filter(Boolean),
+    guard: guardVerdict(launch.work, launch.guardSetup.fronts),
     signalled: cleaned.signalled,
     leftovers: cleaned.left,
     argvOnly: cleaned.argvOnly,
@@ -483,6 +481,7 @@ async function measureLaunch(variant, index) {
   }
   checkAcc(`after native-idle launch ${index + 1}`)
   if (checks.securityNonFind > 0) failure ??= `security shim saw ${checks.securityNonFind} non-find calls`
+  if (!checks.guard.ok) failure ??= `guard PATH: ${checks.guard.problems.join('; ')}`
   log(`${SUITE}: launch ${index + 1} done${failure ? `, FAILED: ${failure}` : ''}; checks ${JSON.stringify({ ...checks, measureIdle: undefined }).slice(0, 300)}`)
   return { variant, launch: index, work: launch.work, failure, windows, checks }
 }
