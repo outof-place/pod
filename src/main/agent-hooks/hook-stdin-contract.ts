@@ -1,3 +1,5 @@
+import { buildPosixLegacyHookEnvLines } from '../pod/decouple/legacy-hook-env'
+
 export type PosixHookEmptyPayloadPolicy = 'exit' | 'empty-object'
 
 // Why: a stripped PATH must not stop a hook from consuming stdin, or the agent
@@ -110,6 +112,7 @@ export function buildPosixHookPayloadCapture(
   const emptyPayloadLines =
     emptyPayloadPolicy === 'empty-object' ? ["  payload='{}'"] : ['  exit 0']
   return [
+    ...buildPosixLegacyHookEnvLines(),
     ...stdinReader.prelude,
     `payload=$(${stdinReader.reader})`,
     'if [ -z "$payload" ]; then',

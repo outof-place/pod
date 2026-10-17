@@ -95,12 +95,15 @@ function productUsageDescriptions(extendInfo) {
   )
 }
 
-// claude-acc (orcahost.py) reads this to find the product's names. Only what differs from Orca:
-// the Claude accounts' keychain service, ~/.orca/agent-hooks and the data files stay shared.
+// claude-acc (orcahost.py) reads this to find the product's names: profile, CLI, managed hook
+// scripts and the env prefix terminals see. Claude profiles' Keychain items are named after
+// their folders under userData, so they need no entry of their own.
 function claudeAccHost() {
   return {
     userData: `~/Library/Application Support/${identity.userDataName}`,
-    cli: identity.cliName
+    cli: identity.cliName,
+    ...(identity.homeDirName ? { hooksDir: `~/${identity.homeDirName}/agent-hooks` } : {}),
+    ...(identity.envPrefix ? { envPrefix: identity.envPrefix } : {})
   }
 }
 
@@ -212,7 +215,7 @@ module.exports = {
       { from: 'product/identity.json', to: 'product-identity.json' },
       { from: 'LICENSE', to: 'ORCA-LICENSE.txt' },
       // Rollback of the opt-in terminal handover, runnable with the app's own Node.
-      { from: 'product/scripts/restore-orca-terminals.mjs', to: 'restore-orca-terminals.mjs' },
+      { from: 'product/scripts/restore-legacy-terminals.mjs', to: 'restore-legacy-terminals.mjs' },
       // The one-app control socket admits only PodNative signed by Pod (pod/one-app).
       { from: POD_PEER_IDENTITY_BUILD, to: 'native/pod-peer-identity.node' },
       ...podAccMacExtraResources()

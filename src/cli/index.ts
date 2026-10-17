@@ -25,6 +25,7 @@ import {
   refuseOwnerOnlySshBridgeCommand,
   refuseSshBridgeEnvironmentRouting
 } from './ssh-bridge-command-policy'
+import { adoptLegacyCliEnv } from './pod-legacy-cli-env'
 
 export { COMMAND_SPECS } from './specs'
 export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
@@ -244,5 +245,10 @@ async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
 }
 
 if (require.main === module) {
-  void main()
+  // Fork-only (Pod): in a terminal opened before the decouple update only ORCA_ names are set.
+  if (adoptLegacyCliEnv()) {
+    void main()
+  } else {
+    process.exitCode = 1
+  }
 }

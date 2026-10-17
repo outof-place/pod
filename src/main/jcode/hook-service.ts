@@ -9,6 +9,7 @@ import {
 } from '../agent-hooks/installer-utils'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
+import { buildPosixLegacyHookEnvLines } from '../pod/decouple/legacy-hook-env'
 import {
   readTextFileRemote,
   writeManagedScriptRemote,
@@ -78,6 +79,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 
   return [
     '#!/bin/sh',
+    ...buildPosixLegacyHookEnvLines(),
     // Why: endpoint file holds the live port/token; PTYs that outlive an Orca restart carry stale env, so source it to reach the new server (else PTY env).
     // Why: silence the `.` builtin (2>/dev/null + `|| :`) so a TOCTOU race or CRLF-mangled line can't leak shell parse errors into agent transcripts (fail-open).
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',

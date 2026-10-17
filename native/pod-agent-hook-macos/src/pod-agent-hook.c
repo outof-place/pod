@@ -9,6 +9,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <libproc.h>
+#include <limits.h>
+#include <mach-o/dyld.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <poll.h>
@@ -41,8 +43,56 @@ static void buf_put(buf_t *b, const char *s, size_t n) {
 }
 static void buf_str(buf_t *b, const char *s) { buf_put(b, s, strlen(s)); }
 
+// Fork-only (Pod): an unset name is read in the other spelling too. The decouple renames this
+// file's names to POD_, but a terminal opened before that update keeps only the ORCA_ ones, and a
+// new claude in it runs this client: so the POD_ spelling, else the ORCA_ one (and before the
+// decouple, the reverse). The ORCA_ one counts only in a Pod terminal, whose endpoint lies in the
+// data folder of the Pod that installed this client: an Orca.app terminal's names Orca's server
+// and token. A refused fallback is silent; hooks fail open.
+// TODO(pod): drop the fallback after 2026-12-31, and no earlier than the release after the decouple.
+static int legacy_env_is_pods(void) {
+  static int verdict = -1;
+  if (verdict >= 0) return verdict;
+  verdict = 0;
+  const char *endpoint = getenv("ORCA_AGENT_HOOK_ENDPOINT");  // pod-decouple:keep
+  const char *slash = endpoint ? strrchr(endpoint, '/') : NULL;
+  struct stat st;
+  // The endpoint's folder, resolved, so a symlink can't lead out of it; a symlinked file is refused.
+  if (!slash || slash == endpoint || (size_t)(slash - endpoint) >= PATH_MAX ||
+      (lstat(endpoint, &st) == 0 && S_ISLNK(st.st_mode)))
+    return verdict;
+  char dir[PATH_MAX], real_dir[PATH_MAX], self[PATH_MAX], real_self[PATH_MAX];
+  memcpy(dir, endpoint, (size_t)(slash - endpoint));
+  dir[slash - endpoint] = 0;
+  uint32_t size = sizeof self;
+  if (!realpath(dir, real_dir) || _NSGetExecutablePath(self, &size) != 0 || !realpath(self, real_self))
+    return verdict;
+  // The data folder of the Pod that installed this client, recorded beside it
+  // (pod-agent-hook-native.ts POD_AGENT_HOOK_USER_DATA_SUFFIX).
+  char record[PATH_MAX + 16], data[PATH_MAX], real_data[PATH_MAX];
+  if (snprintf(record, sizeof record, "%s.user-data", real_self) >= (int)sizeof record) return verdict;
+  FILE *f = fopen(record, "r");
+  if (!f) return verdict;
+  int read_ok = fgets(data, sizeof data, f) != NULL;
+  fclose(f);
+  if (!read_ok) return verdict;
+  data[strcspn(data, "\r\n")] = 0;
+  if (!*data || !realpath(data, real_data)) return verdict;
+  size_t n = strlen(real_data);
+  verdict = !strncmp(real_dir, real_data, n) && (real_dir[n] == 0 || real_dir[n] == '/');
+  return verdict;
+}
+
 static const char *env(const char *name) {
   const char *v = getenv(name);
+  static const char current[] = "POD_", legacy[] = "ORCA_";  // pod-decouple:keep
+  const char *from = NULL, *to = NULL;
+  if (!v && !strncmp(name, current, sizeof current - 1) && legacy_env_is_pods()) { from = current; to = legacy; }
+  if (!v && !strncmp(name, legacy, sizeof legacy - 1)) { from = legacy; to = current; }
+  char other[128];
+  if (from && snprintf(other, sizeof other, "%s%s", to, name + strlen(from)) < (int)sizeof other) {
+    v = getenv(other);
+  }
   return v ? v : "";
 }
 

@@ -16,6 +16,8 @@ export type DaemonEndpointIdentity = {
   entryPath?: string
   appVersion?: string
   spawnerExecPath?: string
+  /** Fork-only (Pod): the env name it reads a terminal's handle from (pod/decouple). */
+  terminalHandleEnv?: string
 }
 
 export type HelloResponse = {

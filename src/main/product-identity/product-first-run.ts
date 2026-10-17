@@ -1,8 +1,15 @@
+import { existsSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, Notification, shell } from 'electron'
 import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS } from '../daemon/daemon-protocol-version'
+import { getMainE2EConfig } from '../e2e-config'
 import { setAppBundleId } from '../../shared/app-identity'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import { podMainInstanceBlock } from '../pod/instance/pod-instance'
+import { claudeProfileKeychainServices } from '../claude-accounts/claude-profile-keychain-services'
+import { getKeychainUser } from '../claude-accounts/keychain'
+import { copyClaudeProfileCredentials, listClaudeProfileIds } from './claude-credentials-copy'
 import {
   pendingDeferredImport,
   readMigrationMarker,
@@ -12,12 +19,19 @@ import {
 import { openImportProgressWindow } from './import-progress-window'
 import { offerLegacyDaemonHandover } from './legacy-daemon-handover-prompt'
 import { watchMovedDaemons, type DaemonLoss } from './legacy-daemon-loss-watch'
-import { migrateLegacyProfile, type SafeStorageKeychainPort } from './legacy-profile-migration'
+import { copyLegacyHome } from './legacy-home-copy'
+import {
+  liveSingletonOwner,
+  migrateLegacyProfile,
+  type SafeStorageKeychainPort
+} from './legacy-profile-migration'
 import { createMacSafeStorageKeychain } from './macos-safe-storage-keychain'
 import { getProductIdentity, type ProductIdentity } from './product-identity'
 import { installProductCopyBoundaries } from './product-copy-boundaries'
 
 const PRIVACY_SETTINGS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy'
+// One-time record in userData: the imported Claude profiles' sign-ins copied (or there were none).
+const CLAUDE_CREDENTIALS_COPY_RECORD = 'product-claude-credentials-copy.json'
 
 /** `/Applications/Pod.app/Contents/MacOS/Pod` → `/Applications/Pod.app`. */
 export function appBundlePathFromExecPath(execPath: string): string | null {
@@ -39,34 +53,89 @@ export function applyProductIdentityPreReady(
   // Why pre-ready: IPC handlers register after ready, each through the branded registrar.
   installProductCopyBoundaries()
   // Why before the instance lock: Chromium writes its lock files into userData.
-  return isServeMode || runProductFirstRun(identity)
+  if (isServeMode) {
+    // Fork-only (Pod): one-app Pod's runtime is a serve host, so it copies the home too (the gate
+    // turns other serve hosts away).
+    const legacy = identity.legacyProfile
+    if (legacy) {
+      copyLegacyHomeOnce(identity, join(app.getPath('appData'), legacy.userDataName))
+    }
+    return true
+  }
+  return runProductFirstRun(identity)
 }
 
 /**
- * The synchronous half of the first-launch import (state, keychain). Returns false when startup
- * must stop: the legacy app is still running, so its databases cannot be copied consistently.
- * `scratch` points an E2E run at a disposable legacy profile and keeps it off the login keychain.
+ * Pre-ready product setup: the one-time copy of the legacy home folder. Pod never imports the
+ * legacy profile; only an E2E run does, through `scratch`, which points it at a disposable legacy
+ * profile and keeps the login keychain out of it. Returns false when startup must stop.
  */
 export function runProductFirstRun(
   identity: ProductIdentity,
-  scratch: { legacyUserData: string; keychain: SafeStorageKeychainPort | null } | null = null
+  scratch: {
+    legacyUserData: string
+    keychain: SafeStorageKeychainPort | null
+    importLegacyProfile: boolean
+  } | null = null
 ): boolean {
-  if (!identity.legacyProfile) {
+  const legacy = identity.legacyProfile
+  if (!legacy) {
+    return true
+  }
+  const legacyUserData =
+    scratch?.legacyUserData ?? join(app.getPath('appData'), legacy.userDataName)
+  if (scratch?.importLegacyProfile && !importLegacyProfile(identity, legacyUserData, scratch)) {
+    return false
+  }
+  copyLegacyHomeOnce(identity, legacyUserData)
+  return true
+}
+
+function copyLegacyHomeOnce(identity: ProductIdentity, legacyUserData: string): void {
+  const legacyHomeDirName = identity.legacyProfile?.homeDirName
+  if (!legacyHomeDirName || !identity.homeDirName) {
+    return
+  }
+  // Why only the user's own Pod: a dev, bench or custom-profile build shares the account's home.
+  const block = podMainInstanceBlock()
+  if (block !== null) {
+    console.log(`[product-decouple] home folder left alone: ${block}`)
+    return
+  }
+  try {
+    const result = copyLegacyHome({
+      home: homedir(),
+      legacyHomeDirName,
+      productHomeDirName: identity.homeDirName,
+      productUserData: app.getPath('userData'),
+      legacyAppPid: liveSingletonOwner(legacyUserData)
+    })
+    console.log(`[product-decouple] home folder: ${JSON.stringify(result)}`)
+  } catch (error) {
+    // Why continue: the copy records itself only when it finishes, so the next launch retries.
+    console.error('[product-decouple] home folder copy failed', error)
+  }
+}
+
+/** E2E only: imports the scratch legacy profile into the product's. */
+function importLegacyProfile(
+  identity: ProductIdentity,
+  legacyUserData: string,
+  scratch: { keychain: SafeStorageKeychainPort | null }
+): boolean {
+  const legacyPid = liveSingletonOwner(legacyUserData)
+  if (legacyPid !== null) {
+    console.error(`[product-migration] legacy profile in use by pid ${legacyPid}; not imported`)
     return true
   }
   const started = performance.now()
   const result = migrateLegacyProfile({
-    legacyUserData:
-      scratch?.legacyUserData ?? join(app.getPath('appData'), identity.legacyProfile.userDataName),
+    legacyUserData,
     productUserData: app.getPath('userData'),
-    legacyKeychainName: identity.legacyProfile.keychainName,
+    legacyKeychainName: identity.legacyProfile?.keychainName ?? identity.keychainName,
     productKeychainName: identity.keychainName,
     trustedAppPath: appBundlePathFromExecPath(process.execPath),
-    keychain: scratch
-      ? scratch.keychain
-      : process.platform === 'darwin'
-        ? createMacSafeStorageKeychain()
-        : null,
+    keychain: scratch.keychain,
     attachableDaemonProtocols: PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
     appVersion: app.getVersion()
   })
@@ -74,12 +143,7 @@ export function runProductFirstRun(
     `[product-migration] ${JSON.stringify(result)} in ${Math.round(performance.now() - started)}ms`
   )
   if (result.status === 'blocked') {
-    dialog.showErrorBox(
-      `${identity.displayName} can't import your Orca profile yet`,
-      result.reason === 'legacy-app-running'
-        ? `Orca is running (pid ${result.pid}). Quit Orca, then open ${identity.displayName} again.\n\n${identity.displayName} copies your Orca workspaces and settings on its first launch. Orca itself is left unchanged, and you can open it again right after.`
-        : `Another ${identity.displayName} process (pid ${result.pid}) is importing the Orca profile. Wait for it to finish, then try again.`
-    )
+    console.error(`[product-migration] import blocked: ${result.reason} (pid ${result.pid})`)
     app.exit(0)
     return false
   }
@@ -115,6 +179,7 @@ export async function completeProductImportBeforeWindows(): Promise<void> {
       progressWindow?.close()
     }
   }
+  copyClaudeCredentialsOnce(identity, userData)
   try {
     await offerLegacyDaemonHandover(identity, userData)
   } catch (error) {
@@ -143,6 +208,45 @@ function notifyDaemonLoss(identity: ProductIdentity, loss: DaemonLoss): void {
     title: 'Terminals moved from Orca have closed',
     body: `Their terminal service (pid ${loss.pid}) ${loss.reason ? `stopped on ${loss.reason}` : 'was killed'}, and ${name} did not stop it. New terminals open in ${name}'s own service.`
   }).show()
+}
+
+function copyClaudeCredentialsOnce(identity: ProductIdentity, userData: string): void {
+  const legacy = identity.legacyProfile
+  const recordPath = join(userData, CLAUDE_CREDENTIALS_COPY_RECORD)
+  // Why never under E2E or outside the user's own Pod: the login keychain is the account's, and a
+  // dev profile cloned from the user's lists the same profile ids.
+  if (
+    process.platform !== 'darwin' ||
+    getMainE2EConfig().userDataDir ||
+    !legacy ||
+    existsSync(recordPath) ||
+    podMainInstanceBlock() !== null
+  ) {
+    return
+  }
+  const legacyUserData = join(app.getPath('appData'), legacy.userDataName)
+  try {
+    const profiles = listClaudeProfileIds(userData).map((id) => ({
+      id,
+      legacyServices: claudeProfileKeychainServices(legacyUserData, id).spellings,
+      productService: claudeProfileKeychainServices(userData, id).canonical
+    }))
+    const result = copyClaudeProfileCredentials({
+      profiles,
+      keychainAccount: getKeychainUser(),
+      // Why no trusted app: Claude reads and rewrites the item through /usr/bin/security, as when
+      // it creates the item itself (without -T).
+      trustedAppPath: null,
+      legacyAppPid: liveSingletonOwner(legacyUserData),
+      keychain: createMacSafeStorageKeychain()
+    })
+    console.log(`[product-decouple] Claude sign-ins: ${JSON.stringify(result)}`)
+    if (result.status !== 'deferred') {
+      writeFileSync(recordPath, `${JSON.stringify({ at: new Date().toISOString(), result })}\n`)
+    }
+  } catch (error) {
+    console.error('[product-decouple] Claude sign-in copy failed', error)
+  }
 }
 
 async function showImportNotice(

@@ -3,7 +3,11 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { getProductIdentity } from '../../product-identity/product-identity'
 import { automatedLaunchEnv } from '../acc/acc-lifecycle'
-import { podHookWriteBlock, setPodHookWriteBlockSource } from './pod-hook-write-block'
+import {
+  podHookWriteBlock,
+  setPodHookWriteBlockSource,
+  type PodNonDefaultReason
+} from './pod-hook-write-block'
 
 const E2E_ENV = ['ORCA_E2E_USER_DATA_DIR', 'POD_E2E_USER_DATA_DIR'] as const
 
@@ -32,18 +36,21 @@ export function podDefaultUserDataPath(): string | null {
   return join(app.getPath('appData'), name)
 }
 
+/** Why this main process is not the user's own Pod, or null when it is. Needs userData set. */
+export function podMainInstanceBlock(): PodNonDefaultReason | null {
+  return podHookWriteBlock({
+    packaged: app.isPackaged,
+    userDataPath: app.getPath('userData'),
+    defaultUserDataPath: podDefaultUserDataPath(),
+    argv: process.argv,
+    automated: automatedLaunchEnv(process.env) !== null,
+    e2e: E2E_ENV.some((name) => Boolean(process.env[name])),
+    hookHome: homedir(),
+    accountHome: accountHome()
+  })
+}
+
 /** The hook write check for Electron's main process, read when a hook write is about to happen. */
 export function installPodHookWriteGate(): void {
-  setPodHookWriteBlockSource(() =>
-    podHookWriteBlock({
-      packaged: app.isPackaged,
-      userDataPath: app.getPath('userData'),
-      defaultUserDataPath: podDefaultUserDataPath(),
-      argv: process.argv,
-      automated: automatedLaunchEnv(process.env) !== null,
-      e2e: E2E_ENV.some((name) => Boolean(process.env[name])),
-      hookHome: homedir(),
-      accountHome: accountHome()
-    })
-  )
+  setPodHookWriteBlockSource(podMainInstanceBlock)
 }

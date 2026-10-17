@@ -7,6 +7,7 @@ import {
   CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS,
   CLAUDE_STATUSLINE_PATHNAME
 } from '../../shared/claude-statusline-rate-limits'
+import { buildPosixLegacyHookEnvLines } from '../pod/decouple/legacy-hook-env'
 
 const STATUSLINE_CLEANUP_LABEL = 'orca_statusline_cleanup'
 const STATUSLINE_PROBE_LABEL = 'orca_statusline_probe'
@@ -104,6 +105,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     '  *\'"rate_limits"\'*) ;;',
     '  *) exit 0 ;;',
     'esac',
+    ...buildPosixLegacyHookEnvLines(),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
