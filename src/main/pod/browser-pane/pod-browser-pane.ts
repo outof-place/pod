@@ -14,7 +14,11 @@ import { applyPaneInput, PaneInputState } from './pod-browser-pane-input'
 import { navigatePanePage } from './pod-browser-pane-navigation'
 import { PaneSelectMenus } from './pod-browser-pane-select'
 import { PaneLinks } from './pod-browser-pane-links'
-import { PaneFramePump, type PodBrowserFrames } from './pod-browser-pane-frames'
+import {
+  PaneFramePump,
+  POD_BROWSER_PANE_DEFAULT_SCALE,
+  type PodBrowserFrames
+} from './pod-browser-pane-frames'
 import { followPanePage, panePageState } from './pod-browser-pane-page-events'
 const PANE_FRAME_RATE = 60
 // A page nobody sees and no agent drives. Why 10: a rate change waits for the next tick, so a
@@ -31,6 +35,8 @@ type Page = {
   // An attached pane off screen (browserPane visible false) keeps its token but doesn't paint.
   visible: boolean
   seq: number
+  // The device scale it renders at: Electron fixes an offscreen page's when it opens.
+  scale: number
   input: PaneInputState
   select: PaneSelectMenus
   links: PaneLinks
@@ -44,6 +50,10 @@ export class PodBrowserPaneController {
   private readonly pages = new Map<string, Page>()
   private readonly downloads = new PaneDownloads()
   private readonly frames: PaneFramePump
+  // The scale of the display PodNative last attached or resized a pane on.
+  private reportedScale: number | null = null
+  // The scale newPageScale last gave a window, which its trackPage records.
+  private openingScale: number | null = null
 
   constructor(
     private readonly deps: {
@@ -51,6 +61,8 @@ export class PodBrowserPaneController {
       send: (message: PodBrowserPaneServerMessage) => boolean
       openDevTools: (wc: WebContents) => void
       log: (message: string) => void
+      // The main display's scale: what a page opens at before any pane reported one.
+      mainDisplayScale?: () => number
     }
   ) {
     this.frames = new PaneFramePump(deps.frames, deps.log)
@@ -58,6 +70,20 @@ export class PodBrowserPaneController {
 
   get stats(): PaneFramePump['stats'] {
     return this.frames.stats
+  }
+
+  /**
+   * The device scale a page opening now renders at: that of the display PodNative last showed a
+   * pane on, else the main display's. A page keeps it for life (Electron sets it only at creation);
+   * PodNative draws each frame at the scale it carries, on any display.
+   */
+  newPageScale(): number {
+    const scale =
+      this.reportedScale ?? this.deps.mainDisplayScale?.() ?? POD_BROWSER_PANE_DEFAULT_SCALE
+    this.openingScale = Number.isFinite(scale)
+      ? Math.min(Math.max(scale, 1), 4)
+      : POD_BROWSER_PANE_DEFAULT_SCALE
+    return this.openingScale
   }
 
   /** An offscreen page the backend made: it waits, not painting, until a pane attaches. */
@@ -69,6 +95,9 @@ export class PodBrowserPaneController {
       token: null,
       visible: false,
       seq: 0,
+      // What the backend just gave its window (a pane reporting another scale meanwhile changes
+      // nothing for it).
+      scale: this.openingScale ?? this.newPageScale(),
       input: new PaneInputState(),
       // Why not while an agent drives: its clicks on a select must not open a menu on the screen.
       select: new PaneSelectMenus(wc, (menu) => {
@@ -81,6 +110,7 @@ export class PodBrowserPaneController {
       agentTimer: null,
       favicon: undefined
     }
+    this.openingScale = null
     this.pages.set(pageId, page)
     wc.stopPainting()
     wc.setFrameRate(UNSEEN_FRAME_RATE)
@@ -163,7 +193,14 @@ export class PodBrowserPaneController {
     const { wc } = page
     switch (message.type) {
       case 'browserAttach':
-        this.deps.log(`browser-pane: attach ${message.pageId} ${message.width}x${message.height}`)
+        const scaleNote =
+          message.scale === page.scale
+            ? ''
+            : ` on a ${message.scale}x display; the page renders at ${page.scale}x`
+        this.deps.log(
+          `browser-pane: attach ${message.pageId} ${message.width}x${message.height}${scaleNote}`
+        )
+        this.reportedScale = message.scale
         // A newer attach of the same page replaces the older one.
         page.token = message.token
         page.input.reset()
@@ -186,6 +223,7 @@ export class PodBrowserPaneController {
         }
         return
       case 'browserResize':
+        this.reportedScale = message.scale
         this.resize(page, message.width, message.height)
         return
       case 'browserInput': {
