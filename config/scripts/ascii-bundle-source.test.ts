@@ -1,3 +1,4 @@
+import { parseAst } from 'rolldown/parseAst'
 import { describe, expect, it } from 'vitest'
 import {
   collectAstralIdentifiers,
@@ -56,6 +57,18 @@ describe('non-BMP characters in identifiers', () => {
       ]
     }
     expect(collectAstralIdentifiers(ast, source)).toEqual([{ start: 0, end: 2 }])
+  })
+
+  it("reads Rolldown's own AST offsets as UTF-16 positions in a chunk", () => {
+    // Why non-ASCII text before the identifier: UTF-8 byte offsets would land past it, and the
+    // escape would cut the code apart. The plugin parses with this.parse, Rolldown's parser.
+    const source = `(() => { const note = "${EM_DASH}${GRIN}${E_ACUTE}"; const ${MATH_X} = note.length; return ${MATH_X} * 2 })()`
+    const identifiers = collectAstralIdentifiers(parseAst(source), source)
+    expect(identifiers).toEqual(ranges(source, MATH_X))
+    const { code } = rewriteNonAscii(source, [], identifiers)
+    expect(hasNonAsciiCodeUnits(code)).toBe(false)
+    expect(code).toContain('const \\u{1d465} = note.length')
+    expect(evaluate(code)).toBe(8)
   })
 })
 
