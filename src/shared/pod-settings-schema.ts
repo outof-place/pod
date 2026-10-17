@@ -25,6 +25,13 @@ const UiLanguageSchema = z.union([
 ])
 
 const opacity = z.number().min(0).max(1)
+// The renderer's normalizers clamp what is stored to these (pane-terminal-options.ts,
+// pane-terminal-tui-wheel-reports.ts); a value outside a field's range would not reach a client.
+const scrollSensitivity = z.number().min(0.1).max(10)
+const fastScrollSensitivity = z.number().min(1).max(20)
+const tuiScrollSensitivity = z.number().min(1).max(10)
+// terminal-theme.ts's normalizeColor takes any CSS color; PodNative draws hex and rgb().
+const dividerColor = z.string().min(1).max(64)
 
 const McpLazyStartSchema = z.object({
   enabled: row(z.boolean(), 'Lazy-start heavy MCP servers'),
@@ -151,6 +158,11 @@ export const POD_SETTINGS_FIELDS = {
   ),
   terminalPaddingX: row(z.number().int().min(0).max(64), 'Horizontal padding'),
   terminalPaddingY: row(z.number().int().min(0).max(64), 'Vertical padding'),
+  terminalInactivePaneOpacity: row(opacity, 'Inactive pane opacity'),
+  terminalActivePaneOpacity: row(opacity, 'Active pane opacity'),
+  terminalDividerThicknessPx: row(z.number().int().min(1).max(32), 'Divider thickness'),
+  terminalDividerColorDark: row(dividerColor, 'Divider color'),
+  terminalDividerColorLight: row(dividerColor, 'Divider color with a light theme'),
   terminalMacOptionAsAlt: row(
     z.enum(['auto', 'true', 'false', 'left', 'right']),
     'Option key as Meta',
@@ -159,6 +171,22 @@ export const POD_SETTINGS_FIELDS = {
   terminalJISYenToBackslash: row(z.boolean(), 'JIS ¥ key types a backslash'),
   terminalMouseHideWhileTyping: row(z.boolean(), 'Hide the pointer while typing'),
   terminalFocusFollowsMouse: row(z.boolean(), 'Focus follows the mouse'),
+  terminalScrollSensitivity: row(scrollSensitivity, 'Scroll speed'),
+  terminalFastScrollSensitivity: row(
+    fastScrollSensitivity,
+    'Scroll speed with Option',
+    'Multiplies the scroll speed while Option is held.'
+  ),
+  terminalTuiScrollSensitivity: row(
+    tuiScrollSensitivity,
+    'Wheel steps for full-screen apps',
+    'Scroll reports per wheel notch for programs that take the mouse, such as Claude Code or vim.'
+  ),
+  terminalRightClickToPaste: row(
+    z.boolean(),
+    'Right-click to paste',
+    'Copies a selection, or pastes without one. Control-click opens the menu.'
+  ),
   terminalWordSeparator: row(z.string().max(256), 'Word separators'),
   terminalClipboardOnSelect: row(z.boolean(), 'Copy on select'),
   terminalCopyTrimsGutter: row(z.boolean(), "Copy without agents' left gutter"),
