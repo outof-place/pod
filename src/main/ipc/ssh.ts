@@ -60,6 +60,8 @@ import { installPodSshTargetSettings } from '../pod/ssh/install-pod-ssh-target-s
 import { setPodSshTargetSettingsOps } from '../pod/ssh/pod-ssh-target-settings'
 import { installPodSshRemoteBrowse } from '../pod/ssh/install-pod-ssh-remote-browse'
 import { setPodSshRemoteBrowse } from '../pod/ssh/pod-ssh-remote-browse'
+import { installPodSshPortForwards } from '../pod/ssh/install-pod-ssh-port-forwards'
+import { setPodSshPortForwardOps } from '../pod/ssh/pod-ssh-port-forwards'
 import {
   registerPowerMonitorReconnect,
   unregisterPowerMonitorReconnect
@@ -233,6 +235,8 @@ export function registerSshHandlers(
   installPodSshRemoteBrowse()
   registerSshConnectionHandlers()
   registerSshPortForwardHandlers()
+  // Fork-only (Pod): the same port forwarding for PodNative over runtime RPC.
+  installPodSshPortForwards()
 
   return {
     connectionManager: connectionManager!,
@@ -280,6 +284,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   setSshTargetRegistryHandlers({ connect: null, getState: null })
   setPodSshTargetSettingsOps(null)
   setPodSshRemoteBrowse(null)
+  setPodSshPortForwardOps(null)
   setCurrentGetMainWindow(() => null)
   setCurrentRuntime(undefined)
 }
