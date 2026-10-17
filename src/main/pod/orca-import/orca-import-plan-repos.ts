@@ -10,11 +10,13 @@ import {
 } from '../../../shared/worktree/id'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 
-/** A project's own preferences. Not hook scripts (they run commands), groups or remote hosts. */
+/**
+ * A project's own preferences. Not hook scripts (they run commands), groups, remote hosts or
+ * worktreeBasePath: new worktrees go where Pod puts them (Pod Workspace), not under Orca's folder.
+ */
 const REPO_FIELDS = [
   'badgeColor',
   'worktreeBaseRef',
-  'worktreeBasePath',
   'symlinkPaths',
   'issueSourcePreference',
   'forkSyncMode',
@@ -124,14 +126,44 @@ function pick<T extends object, K extends keyof T>(source: T, keys: readonly K[]
   return picked
 }
 
+// In a project Pod already has, a false here is Pod's own state, not an empty field: a worktree in
+// use in Pod is never archived or pinned because Orca had it so.
+const STATE_FIELDS = new Set<keyof WorktreeMeta>(['isArchived', 'isPinned'])
+
+/** The words a worktree row shows for what the import adds. */
+const FIELD_WORDS: Partial<Record<keyof WorktreeMeta, string>> = {
+  displayName: 'name',
+  comment: 'comment',
+  isArchived: 'archived in Orca',
+  isPinned: 'pinned',
+  baseRef: 'base branch',
+  preserveBranchOnDelete: 'keeps its branch on delete',
+  pushTarget: 'push target',
+  diffComments: 'review notes',
+  manualOrder: 'order',
+  createdAt: 'created date'
+}
+
+export function worktreeChangeWords(fields: Partial<WorktreeMeta>, shows: boolean): string[] {
+  const words = Object.keys(fields)
+    .filter((key): key is keyof WorktreeMeta => key in FIELD_WORDS || key.startsWith('linked'))
+    .map((key) => FIELD_WORDS[key] ?? 'linked items')
+  return [...new Set([...(shows ? ['shown in Pod'] : []), ...words])]
+}
+
 /** Orca's values for the fields Pod leaves empty; a pinned Orca name beats Pod's branch name. */
 function fillWorktreeFields(
   orca: WorktreeMeta,
-  pod: WorktreeMeta | undefined
+  pod: WorktreeMeta | undefined,
+  podHasProject: boolean
 ): Partial<WorktreeMeta> {
   const fields: Partial<WorktreeMeta> = {}
   for (const key of WORKTREE_FIELDS) {
-    if (isEmpty(orca[key]) || (pod && !isEmpty(pod[key]))) {
+    if (
+      isEmpty(orca[key]) ||
+      (pod && !isEmpty(pod[key])) ||
+      (podHasProject && STATE_FIELDS.has(key))
+    ) {
       continue
     }
     Object.assign(fields, { [key]: orca[key] })
@@ -230,7 +262,7 @@ export function planRepos(input: {
     const podMeta = owner.pod
       ? input.podWorktreeMeta[`${owner.pod.id}${WORKTREE_ID_SEPARATOR}${path}`]
       : undefined
-    const fields = fillWorktreeFields(meta, podMeta)
+    const fields = fillWorktreeFields(meta, podMeta, owner.pod !== undefined)
     const shown =
       isMain ||
       (owner.pod?.importedExternalWorktreePaths ?? []).some((shownPath) =>
@@ -242,7 +274,7 @@ export function planRepos(input: {
     }
     const state = podMeta ? 'update' : 'new'
     planned.push({
-      item: { ...base, state, selected: true },
+      item: { ...base, state, selected: true, changes: worktreeChangeWords(fields, !shown) },
       action: {
         kind: 'worktree',
         repoItemId: owner.planned.item.id,
