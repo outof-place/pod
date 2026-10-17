@@ -2,6 +2,7 @@
 // launcher. Such a daemon has no IPC channel, so the launcher reads these files instead of
 // messages. The records have the same shape as the forked daemon's IPC messages.
 import { readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { basename } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import type { DaemonReadyIdentity } from './daemon-ready-identity'
@@ -58,8 +59,9 @@ export function bootoutOwnLaunchdJobAtExit(
   target: { once(event: 'exit', listener: () => void): unknown } = process
 ): void {
   const uid = process.getuid?.()
-  // Why the prefix: only a job Pod made; a launchd-started runtime carries its own label.
-  if (!label?.startsWith('codes.pod.daemon.') || uid === undefined) {
+  // Why both: only the job Pod made for this daemon, whose label names its report file; a
+  // launchd-started runtime carries a label of its own.
+  if (!label?.startsWith('codes.pod.daemon.') || label !== ownLaunchdLabel() || uid === undefined) {
     return
   }
   target.once('exit', () => {
@@ -78,14 +80,26 @@ export function bootoutOwnLaunchdJobAtExit(
   })
 }
 
-/** daemon-entry's launchd start: the report path, the first report, the job env dropped and the
- *  job's bootout at exit. Returns the label; all no-ops unless launchd started this daemon. */
+/** daemon-entry's launchd start: the report path, the first report and the job env dropped.
+ *  Returns the label; all no-ops unless launchd started this daemon. */
 export function startAsLaunchdJob(argv: string[]): string | undefined {
   takeLaunchdReportPath(argv)
   reportToLaunchd({ type: 'started', pid: process.pid })
-  const label = dropLaunchdJobEnv()
-  bootoutOwnLaunchdJobAtExit(label)
-  return label
+  return dropLaunchdJobEnv()
+}
+
+/** The ready report, and from then on the job's bootout at exit. Why not earlier: before ready
+ *  the launcher reads the job's exit code, which a bootout would erase. */
+export function reportLaunchdReady(identity: DaemonReadyIdentity, label: string | undefined): void {
+  reportToLaunchd({ type: 'ready', ...identity })
+  if (ownReportPath) {
+    bootoutOwnLaunchdJobAtExit(label)
+  }
+}
+
+/** The label the launcher gave this launch: its report file is `<label>.report.json`. */
+function ownLaunchdLabel(): string | undefined {
+  return ownReportPath ? basename(ownReportPath).replace(/\.report\.json$/, '') : undefined
 }
 
 /** A no-op unless launchd started this daemon. */
