@@ -2,9 +2,11 @@ import { spawn, spawnSync } from 'node:child_process'
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   readlinkSync,
   realpathSync,
   rmSync,
@@ -442,6 +444,110 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
       expect(other.argv0).toBe('ugrep')
       expect(other.env.POD_CLAUDE_EXECPATH).toBeUndefined()
       expect(other.env.OG_UGREP_FALLBACK).toBeUndefined()
+    })
+  })
+
+  describe('POD_INDEXED_SEARCH', () => {
+    const searchDir = (): string => join(root, 'Resources', 'pod-search')
+    const shim = (): string => join(searchDir(), 'rg-shim')
+    const agentDir = (): string => join(root, 'search-real')
+    const ogctlLog = (): string => join(root, 'ogctl.log')
+    const report =
+      'echo "PATH=$PATH"; echo "OG_REAL_RG=$OG_REAL_RG"; echo "POD_SEARCH_SPAWN=$POD_SEARCH_SPAWN"; ' +
+      'echo "OG_CANARY_RATE=$OG_CANARY_RATE"; echo "OG_CANARY_KILL_FILE=$OG_CANARY_KILL_FILE"'
+
+    beforeAll(() => {
+      mkdirSync(join(searchDir(), 'bin'), { recursive: true })
+      for (const name of ['og', 'ogd', 'rg']) {
+        script(join(searchDir(), 'bin'), name, 'exit 0')
+      }
+      // ogctl stand-in: what it was asked and which environment reached it.
+      script(
+        join(searchDir(), 'bin'),
+        'ogctl',
+        `echo "$*|HOME=$HOME|SPAWN=$POD_SEARCH_SPAWN|SECRET=\${POD_TEST_SECRET-unset}" >> '${ogctlLog()}'`
+      )
+      mkdirSync(shim(), { recursive: true })
+      symlinkSync('../bin/og', join(shim(), 'rg'))
+      script(agentDir(), 'claude', report)
+      script(agentDir(), 'codex', report)
+    })
+
+    function agentEnv(stdout: string): Record<string, string> {
+      return Object.fromEntries(
+        stdout.split('\n').map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)])
+      )
+    }
+
+    function launch(
+      command: string,
+      env: Record<string, string>,
+      cwd: string = process.cwd()
+    ): Record<string, string> {
+      const result = spawnSync(command, [], {
+        encoding: 'utf8',
+        cwd,
+        env: { PATH: [binDir, agentDir(), '/usr/bin', '/bin'].join(':'), HOME: root, ...env }
+      })
+      expect(result.status).toBe(0)
+      return agentEnv(result.stdout.trim())
+    }
+
+    function ogctlCalls(): string[] {
+      return existsSync(ogctlLog()) ? readFileSync(ogctlLog(), 'utf8').trim().split('\n') : []
+    }
+
+    async function settled(): Promise<string[]> {
+      // ogctl runs detached; give it a moment to write.
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      return ogctlCalls()
+    }
+
+    it('leaves the environment alone while the setting is off', async () => {
+      rmSync(ogctlLog(), { force: true })
+      const env = launch('claude', {})
+      expect(env.PATH.split(':')).not.toContain(shim())
+      expect(env.OG_REAL_RG).toBe('')
+      expect(await settled()).toEqual([])
+    })
+
+    it("gives Claude's Bash og as its rg, turns the canary off and indexes the folder", async () => {
+      rmSync(ogctlLog(), { force: true })
+      const env = launch('claude', { POD_INDEXED_SEARCH: '1', POD_TEST_SECRET: 'x', OG_CANARY_RATE: '0.5' })
+      expect(env.PATH.split(':')[0]).toBe(shim())
+      expect(env.OG_REAL_RG).toBe(join(searchDir(), 'bin', 'rg'))
+      expect(env.POD_SEARCH_SPAWN).toBe('1')
+      expect(env.OG_CANARY_RATE).toBe('0')
+      expect(env.OG_CANARY_KILL_FILE).toBe(
+        join(root, 'Library', 'Caches', 'codes.pod.agent-launcher', 'og-canary-off')
+      )
+      // ogctl gets only what the daemon needs: no token of the agent's reaches it.
+      expect(await settled()).toEqual([
+        `ensure --register ${realpathSync(process.cwd())}|HOME=${root}|SPAWN=1|SECRET=unset`
+      ])
+    })
+
+    it('puts rg-shim on PATH once for a claude started under claude', () => {
+      const path = [shim(), binDir, agentDir(), '/usr/bin', '/bin'].join(':')
+      const env = launch('claude', { POD_INDEXED_SEARCH: '1', PATH: path })
+      expect(env.PATH.split(':').filter((dir) => dir === shim())).toHaveLength(1)
+    })
+
+    it('leaves other agents and a Pod without the payload alone', () => {
+      expect(launch('codex', { POD_INDEXED_SEARCH: '1' }).PATH.split(':')).not.toContain(shim())
+      chmodSync(join(searchDir(), 'bin', 'og'), 0o644)
+      try {
+        expect(launch('claude', { POD_INDEXED_SEARCH: '1' }).PATH.split(':')).not.toContain(shim())
+      } finally {
+        chmodSync(join(searchDir(), 'bin', 'og'), 0o755)
+      }
+    })
+
+    it('starts no indexing in the home directory', async () => {
+      rmSync(ogctlLog(), { force: true })
+      const env = launch('claude', { POD_INDEXED_SEARCH: '1' }, root)
+      expect(env.PATH.split(':')[0]).toBe(shim())
+      expect(await settled()).toEqual([])
     })
   })
 })

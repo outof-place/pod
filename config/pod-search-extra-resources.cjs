@@ -3,13 +3,26 @@
 // in the runtime's Contents/Resources/pod-search; signing gives each binary none.plist (the default
 // rule of product/entitlements-policy.cjs). Upstream Orca's config never uses this; the product build
 // does.
-const { existsSync, lstatSync } = require('node:fs')
+const { existsSync, lstatSync, readFileSync } = require('node:fs')
 const { join } = require('node:path')
 
 const PAYLOAD = join(__dirname, '..', 'resources', 'pod-search')
+const PIN = join(__dirname, 'pod-search-payload.json')
 
-/** Throws when the payload is missing, so a Pod release cannot ship without indexed search. */
-function podSearchMacExtraResources({ payloadDir = PAYLOAD } = {}) {
+/** Whether config/pod-search-payload.json names a released payload yet (its sha256). */
+function podSearchPinned(pinPath = PIN) {
+  const { sha256 } = JSON.parse(readFileSync(pinPath, 'utf8'))
+  return typeof sha256 === 'string' && /^[0-9a-f]{64}$/.test(sha256)
+}
+
+/**
+ * Throws when the payload is missing, so a Pod release cannot ship without indexed search once a
+ * payload is pinned. Before the first pin there is nothing to ship: no resources, no error.
+ */
+function podSearchMacExtraResources({ payloadDir = PAYLOAD, pinned = podSearchPinned() } = {}) {
+  if (!pinned && !existsSync(payloadDir)) {
+    return []
+  }
   for (const name of ['bin/og', 'bin/ogd', 'bin/ogctl', 'bin/rg', 'BUILD.json']) {
     if (!existsSync(join(payloadDir, name))) {
       throw new Error(
@@ -28,4 +41,4 @@ function podSearchMacExtraResources({ payloadDir = PAYLOAD } = {}) {
 // It ships as extraResources; without this the asar `files` glob would pack a second copy.
 const podSearchFileExclusions = ['!resources/pod-search/**', '!resources/pod-search.next/**']
 
-module.exports = { podSearchMacExtraResources, podSearchFileExclusions }
+module.exports = { podSearchMacExtraResources, podSearchFileExclusions, podSearchPinned }

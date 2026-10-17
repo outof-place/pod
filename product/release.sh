@@ -159,10 +159,10 @@ if [ -f config/scripts/fetch-claude-acc-payload.mjs ]; then
 fi
 
 # pod-search payload (indexed search), pinned in config/pod-search-payload.json; a no-op when
-# already fetched.
+# already fetched, and while the pin names no released payload yet.
 if [ -f config/scripts/fetch-pod-search-payload.mjs ]; then
   log "fetch the pod-search payload pinned in config/pod-search-payload.json"
-  node config/scripts/fetch-pod-search-payload.mjs
+  node config/scripts/fetch-pod-search-payload.mjs --if-pinned
 fi
 
 log "package, sign and notarize the app (electron-builder staples it)"

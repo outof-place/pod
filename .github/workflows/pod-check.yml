@@ -96,7 +96,7 @@ jobs:
       - name: Fetch the pod-search payload
         run: |
           if [ -f config/scripts/fetch-pod-search-payload.mjs ]; then
-            node config/scripts/fetch-pod-search-payload.mjs
+            node config/scripts/fetch-pod-search-payload.mjs --if-pinned
           fi
       # ORCA_BALANCE_UNIT_SHARDS selects the balanced CI file list, which leaves out the
       # cross-version harness and the live-shell tests.
