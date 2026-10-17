@@ -32,6 +32,9 @@ export const POD_AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY =
 export const POD_SETTINGS_NETWORK_PROXY_RUNTIME_CAPABILITY =
   'pod.settings.network-proxy.v1' as const
 
+/** podImport.orcaDetect, orcaPreview and orcaApply: Import from Orca, for this machine's own clients. */
+export const POD_ORCA_IMPORT_RUNTIME_CAPABILITY = 'pod.orca-import.v1' as const
+
 /**
  * sim.*: iOS simulators for agents (lease, drive, release; the pool snapshot and its stream). A
  * client shows simulator UI, and the CLI calls sim.*, only on a host that lists this. Not listed
@@ -44,5 +47,6 @@ export const POD_RUNTIME_CAPABILITIES = [
   POD_TERMINAL_OPENED_BEFORE_CLAUDE_ACCOUNTS_RUNTIME_CAPABILITY,
   POD_SSH_TARGET_SETTINGS_RUNTIME_CAPABILITY,
   POD_AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY,
-  POD_SETTINGS_NETWORK_PROXY_RUNTIME_CAPABILITY
+  POD_SETTINGS_NETWORK_PROXY_RUNTIME_CAPABILITY,
+  POD_ORCA_IMPORT_RUNTIME_CAPABILITY
 ] as const
