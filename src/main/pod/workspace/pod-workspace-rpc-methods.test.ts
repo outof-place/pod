@@ -20,6 +20,7 @@ function fakeService(enabled: boolean) {
     isEnabled: () => enabled,
     status: vi.fn(),
     validateRoot: vi.fn(),
+    setRoot: vi.fn(async (root: string | null) => ({ root: root ?? '', resolvedRoot: '/r' })),
     excludeBuildFolders: vi.fn(async () => ({
       excluded: 2,
       failed: [],
@@ -51,6 +52,7 @@ describe('podWorkspace.* RPC methods', () => {
       'podWorkspace.enabled',
       'podWorkspace.status',
       'podWorkspace.validateRoot',
+      'podWorkspace.setRoot',
       'podWorkspace.excludeBuildFolders',
       'podWorkspace.openSpotlightSettings',
       'podWorkspace.cloneDestination',
@@ -65,6 +67,14 @@ describe('podWorkspace.* RPC methods', () => {
     expect(call('podWorkspace.enabled')).toEqual({ enabled: false })
     setPodWorkspaceRpcService(fakeService(false))
     expect(() => call('podWorkspace.tidyScan', {})).toThrow(/off in this build/)
+  })
+
+  it('sets the root only on a user action, with null as the default', async () => {
+    const service = fakeService(true)
+    setPodWorkspaceRpcService(service)
+    expect(() => call('podWorkspace.setRoot', { root: '~/code' })).toThrow()
+    await call('podWorkspace.setRoot', { root: null, reason: 'user' })
+    expect(service.setRoot).toHaveBeenCalledWith(null)
   })
 
   it('archives through the runtime removal, with the plan and ticks it was given', async () => {

@@ -1,4 +1,5 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Repo } from '../../../shared/repo-types'
 import { createWorkspaceAdopt } from './workspace-adopt'
 import type { AdoptRelinkStore } from './workspace-adopt-relink'
@@ -12,6 +13,7 @@ import { createNativeProcessCwdReader } from './workspace-process-cwds'
 import { validateWorkspaceRoot, type RootValidationDeps } from './workspace-root-validation'
 import { isLocalGitRepo, resolveWorkspaceRoot, workspaceRootSetting } from './workspace-root-path'
 import type { PodWorkspaceRpcService } from './workspace-rpc-service'
+import { setWorkspaceRoot } from './workspace-root-setting'
 import { openSpotlightSettings } from './workspace-spotlight-settings'
 import type { WorkspaceStatusService } from './workspace-status'
 import { createWorkspaceTidyActions } from './workspace-tidy-actions'
@@ -20,7 +22,14 @@ import type { WorkspaceStrayStore } from './workspace-tidy-strays'
 import { createWorkspaceTrash } from './workspace-trash'
 
 export type WorkspaceRpcServiceDeps = {
-  store: WorkspaceStrayStore & AdoptRelinkStore & { getRepos(): Repo[] }
+  store: WorkspaceStrayStore &
+    AdoptRelinkStore & {
+      getRepos(): Repo[]
+      updateSettings(
+        updates: Partial<GlobalSettings>,
+        options: { notifyListeners: boolean }
+      ): unknown
+    }
   isEnabled: () => boolean
   status: WorkspaceStatusService
   validation: RootValidationDeps
@@ -98,6 +107,13 @@ export function createPodWorkspaceRpcService(deps: WorkspaceRpcServiceDeps): Pod
       return { ...status, excludePlan: plans.issue('status', fingerprints) }
     },
     validateRoot: (value) => validateWorkspaceRoot(value, deps.validation),
+    setRoot: (value) =>
+      setWorkspaceRoot(value, {
+        validation: deps.validation,
+        home: deps.home,
+        getSettings: () => deps.store.getSettings(),
+        updateSettings: (updates, options) => deps.store.updateSettings(updates, options)
+      }),
     excludeBuildFolders: async (planId) => {
       plans.expected(planId, 'status', 'exclude')
       const fresh = await deps.status.getStatus({ refresh: true })
