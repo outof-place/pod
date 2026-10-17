@@ -12,6 +12,7 @@ const CONFIG = {
   podCap: 2,
   idleMs: 30 * 60_000,
   warmMs: 10 * 60_000,
+  claimMs: 180_000,
   maxDevicesPerClass: 4,
   deviceTypes: { iphone: { deviceType: IPHONE, runtime: 'iOS 26.5' } }
 }
@@ -130,6 +131,31 @@ describe('the warm hand-out', () => {
   })
 })
 
+describe('the first lease after a long idle', () => {
+  it("reads claude-acc's capacity in the same call and starts the boot at once", async () => {
+    const free = registryWithOneFreeDevice()
+    const ports = fakePorts({
+      ...free,
+      devices: [{ ...free.devices[0], state: 'shutdown' }],
+      leases: []
+    })
+    const mine = new SimPoolCoordinator(ports.forRuntime(SELF), CONFIG, SELF)
+    await mine.poll()
+    ports.idle(40 * 60_000)
+    ports.reset()
+    const result = await mine.run({
+      kind: 'lease',
+      request: { key: simLeaseKey(W1.id, ROOT), holder: W1, worktreeRoot: ROOT }
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      answer: { kind: 'lease', answer: { status: 'waiting', waitingFor: 'device' } }
+    })
+    expect(result.ok && result.effects.map((effect) => effect.kind)).toContain('boot')
+    expect(ports.calls).toEqual(['capacity', 'read', 'swap'])
+  })
+})
+
 describe('effects reach the adapters', () => {
   it('writes lease files before it starts device work, and feeds each outcome back', async () => {
     const ports = fakePorts({
@@ -157,7 +183,7 @@ describe('effects reach the adapters', () => {
 })
 
 describe('a runtime that adopts the leases of one that crashed', () => {
-  const CRASHED = { pid: 60001, startedAt: 1760500000 }
+  const CRASHED = { pid: 60001, startedAt: 1760500000, profile: 'pod' }
   const PANE = { kind: 'terminal' as const, id: 'terminal:term_7f3a', terminalHandle: 'term_7f3a' }
   const SESSION = {
     kind: 'agentSession' as const,
@@ -214,6 +240,18 @@ describe('a runtime that adopts the leases of one that crashed', () => {
     expect(ports.store.current().leases).toMatchObject([
       { leaseId: 'sl_p001', state: 'active', servedBy: SELF },
       { leaseId: 'sl_s001', state: 'active', servedBy: SELF }
+    ])
+  })
+
+  it('releases closed panes within one poll when it is the same Pod restarted', async () => {
+    const ports = fakePorts(crashedRegistry(), probe)
+    const restarted = { pid: 70300, startedAt: 1760599990, profile: CRASHED.profile }
+    const pod = new SimPoolCoordinator(ports.forRuntime(restarted), CONFIG, restarted)
+    expect(await pod.poll()).toMatchObject({ ok: true })
+    expect(ports.store.current().leases).toEqual([])
+    expect(ports.store.current().tombstones?.map((ended) => ended.ended.reason)).toEqual([
+      'holderExited',
+      'holderExited'
     ])
   })
 

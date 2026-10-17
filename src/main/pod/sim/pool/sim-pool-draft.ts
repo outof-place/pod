@@ -13,6 +13,7 @@ import {
   SimRegistryLease,
   type SimRegistryFile
 } from '../../../../shared/pod-sim/sim-registry'
+import type { SimStalled } from './sim-pool-commands'
 import type { SimPoolConfig } from './sim-pool-config'
 import type {
   SimClockReading,
@@ -21,6 +22,7 @@ import type {
   SimOpRef,
   SimPoolObservation,
   SimProcessId,
+  SimRuntime,
   SimSlimProfile
 } from './sim-pool-ports'
 import {
@@ -34,12 +36,11 @@ export type SimPoolRegistry = SimRegistryFile
 export type SimPoolDevice = SimPoolRegistry['devices'][number]
 export type SimPoolLease = SimPoolRegistry['leases'][number]
 export type SimPoolTombstone = NonNullable<SimPoolRegistry['tombstones']>[number]
+export type SimPoolMakeFailure = NonNullable<SimPoolRegistry['makeFailures']>[number]
 
 /** This runtime's own state, never written to the registry: it dies with the process. */
 export type SimPoolMemory = {
   lastTick: SimClockReading | null
-  // Whether the last step left the pool polling (simPoolPolling): a long gap since is unwatched.
-  polling: boolean
   // Monotonic anchors of every window this runtime judges (sim-pool-windows.ts).
   windows: SimWindowAnchors
   observation: SimPoolObservation | null
@@ -52,7 +53,6 @@ export type SimPoolMemory = {
 
 export const EMPTY_SIM_POOL_MEMORY: SimPoolMemory = {
   lastTick: null,
-  polling: false,
   windows: noAnchors(),
   observation: null,
   brakeHold: null,
@@ -89,7 +89,7 @@ export type SimPoolTrace = Readonly<{
 
 export type SimPoolInputs = Readonly<{
   now: SimClockReading
-  self: SimProcessId
+  self: SimRuntime
   config: SimPoolConfig
   // Waiting calls (`lease --wait`, `wait --mine`) this runtime holds open, by lease id.
   openCalls: ReadonlySet<string>
@@ -102,13 +102,19 @@ export type SimPoolDraft = {
   effects: SimPoolEffect[]
   trace: SimPoolTrace[]
   now: SimClockReading
-  self: SimProcessId
+  self: SimRuntime
   config: SimPoolConfig
   openCalls: Set<string>
   ids: SimIdSource
   // Per waiter, why it left without a device in this step (sim-pool-allocate.ts): `creating`
-  // when one is being made for it, `unmakeable` when the pool neither has nor makes its model.
-  unserved: Map<string, 'slot' | 'brake' | 'device' | 'creating' | 'unmakeable'>
+  // when one is being made for it, `unmakeable` when the pool neither has nor makes its model,
+  // `failing` when making or starting its kind keeps failing (sim-pool-make-failures.ts).
+  unserved: Map<
+    string,
+    'slot' | 'brake' | 'measurement' | 'device' | 'creating' | 'unmakeable' | 'failing'
+  >
+  // What an `unmakeable` or `failing` waiter is told (the answer's `stalled`).
+  stalls: Map<string, SimStalled>
   // Devices whose lease this step ended for the brake: shut down unless a waiter takes them.
   brakeEnded: Set<string>
   // The lease of the call being answered now: it hears its answer, not a notification.
@@ -118,9 +124,10 @@ export type SimPoolDraft = {
 }
 
 /**
- * Copy on write, one level deep: each device and lease is a fresh object, tombstones, nested
- * values (a lease's queue, a device's op) and window anchors are shared with the input and only
- * ever replaced, never edited in place (tests step on a frozen registry to keep it so).
+ * Copy on write, one level deep: each device and lease is a fresh object, tombstones, make
+ * failures, nested values (a lease's queue, a device's op) and window anchors are shared with the
+ * input and only ever replaced, never edited in place (tests step on a frozen registry to keep it
+ * so).
  */
 export function simPoolDraft(
   state: Readonly<{ registry: SimPoolRegistry; memory: SimPoolMemory }>,
@@ -147,6 +154,7 @@ export function simPoolDraft(
     openCalls: new Set(inputs.openCalls),
     ids: inputs.ids,
     unserved: new Map(),
+    stalls: new Map(),
     brakeEnded: new Set(),
     calling: null,
     wakeAt: null
@@ -161,6 +169,7 @@ const LEASE_FIELDS = Object.keys(SimRegistryLease.shape)
 export function registryChanged(before: SimPoolRegistry, after: SimPoolRegistry): boolean {
   return (
     after.tombstones !== before.tombstones ||
+    after.makeFailures !== before.makeFailures ||
     !sameRows(after.devices, before.devices, DEVICE_FIELDS) ||
     !sameRows(after.leases, before.leases, LEASE_FIELDS)
   )
@@ -237,6 +246,13 @@ export function moveLease(d: SimPoolDraft, lease: SimPoolLease, event: SimLeaseE
   d.trace.push({ machine: 'lease', id: lease.leaseId, from, event, to: outcome.to })
 }
 
+/** A kind of device as the pool makes it: model plus iOS runtime. */
+export type SimDeviceKind = Readonly<{ deviceType: string; runtime: string }>
+
+export function makeKindKey(kind: SimDeviceKind): string {
+  return `${kind.deviceType}@${kind.runtime}`
+}
+
 export function deviceState(device: SimPoolDevice): SimDeviceState {
   return device.state ?? 'shutdown'
 }
@@ -247,4 +263,12 @@ export function runtimeKey(ref: SimProcessId): string {
 
 export function sameRuntime(a: SimProcessId, b: SimProcessId): boolean {
   return a.pid === b.pid && a.startedAt === b.startedAt
+}
+
+/** Whether `self` sees what `resolver` resolved a holder in: it is that process, or its profile. */
+export function seesHolderOf(
+  resolver: SimProcessId & { profile?: string },
+  self: SimRuntime
+): boolean {
+  return sameRuntime(resolver, self) || resolver.profile === self.profile
 }

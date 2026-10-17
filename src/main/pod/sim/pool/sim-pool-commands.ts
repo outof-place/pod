@@ -3,12 +3,18 @@
 // commands.
 import type { SimHolder } from '../../../../shared/pod-sim/sim-holder'
 import type {
+  SIM_QUEUE_WAITS,
   SimDeviceClass,
   SimLeaseEndReason
 } from '../../../../shared/pod-sim/sim-pool-snapshot'
 import type { SimRefusalInput } from '../../../../shared/pod-sim/sim-refusals'
 import type { SimPoolDevice, SimPoolLease } from './sim-pool-draft'
-import type { SimOpOutcome, SimOpRef, SimPoolObservation } from './sim-pool-ports'
+import type {
+  SimCapacityReading,
+  SimOpOutcome,
+  SimOpRef,
+  SimPoolObservation
+} from './sim-pool-ports'
 
 /** Who calls: the lease key resolved by resolveSimLeaseKey, and its two halves. */
 export type SimLeaseCaller = Readonly<{ key: string; holder: SimHolder; worktreeRoot: string }>
@@ -24,7 +30,8 @@ export type SimLeaseRequest = SimLeaseCaller &
 
 export type SimPoolCommand =
   | Readonly<{ kind: 'poll'; observation: SimPoolObservation }>
-  | Readonly<{ kind: 'lease'; request: SimLeaseRequest }>
+  // `capacity`: read for this call because the last poll's reading was stale (the coordinator).
+  | Readonly<{ kind: 'lease'; request: SimLeaseRequest; capacity?: SimCapacityReading }>
   | Readonly<{ kind: 'waitMine'; caller: SimLeaseCaller }>
   | Readonly<{ kind: 'release'; caller: SimLeaseCaller }>
   | Readonly<{ kind: 'verb'; caller: SimLeaseCaller; verb: string; access: 'read' | 'input' }>
@@ -42,16 +49,25 @@ export type SimGateRefusal =
   | Exclude<SimRefusalInput, { code: 'build_failed' }>
   | Readonly<{ code: 'build_failed'; buildId: string }>
 
+export type SimWaitReason = (typeof SIM_QUEUE_WAITS)[number]
+
+/**
+ * Why nothing is being made or started for a waiter (the wire's `stalled`): the pool has no
+ * device of the class and model asked for and makes none (stage 7 says how to ask for one it
+ * makes), or making or starting its kind failed `failures` times in a row (sim-pool-make-failures).
+ */
+export type SimStalled =
+  | Readonly<{ reason: 'unmakeable' }>
+  | Readonly<{ reason: 'failing'; failures: number; failure: string; retryAt?: number }>
+
 export type SimLeaseAnswer =
   | Readonly<{ status: 'ready'; lease: SimPoolLease; device: SimPoolDevice }>
   | Readonly<{
       status: 'waiting'
       lease: SimPoolLease
       position: number
-      waitingFor: 'slot' | 'brake' | 'build' | 'device'
-      // The pool has no device of the class and model asked for and makes none: it waits for one
-      // to be added (stage 7 says so, and how to ask for a model the pool makes).
-      unmakeable?: true
+      waitingFor: SimWaitReason
+      stalled?: SimStalled
       // The first SIM_WAITING_LIST_MAX waiters ahead and holders now, then how many more.
       ahead: SimHolder[]
       aheadOmitted: number

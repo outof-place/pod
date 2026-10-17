@@ -86,7 +86,12 @@ export const SimDevice = z.object({
   failure: z.object({ message: z.string().max(1024) }).optional()
 })
 
-export const SIM_QUEUE_WAITS = ['slot', 'brake', 'build', 'device'] as const
+/**
+ * What a waiter waits for: a boot slot, claude-acc's brake to ease, its dev-client build, a device
+ * (being made or started for it), or a fresh memory reading from claude-acc (`measurement`: none
+ * in the last 30 s, or one that knows no brake stage or count, so no boot until there is one).
+ */
+export const SIM_QUEUE_WAITS = ['slot', 'brake', 'build', 'device', 'measurement'] as const
 
 /**
  * Why a lease ended. `released` and `holderExited` end it as `released`; the rest are Pod's

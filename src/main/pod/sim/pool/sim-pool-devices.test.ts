@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { SimHolder } from '../../../../shared/pod-sim/sim-holder'
-import { agent, callerOf, PEER, PoolWorld, ROOT, udid } from './sim-pool.test-support'
+import { agent, callerOf, PEER, PoolWorld, ROOT, SELF, udid } from './sim-pool.test-support'
 
 const A = agent(41001)
 const B = agent(41002)
 const C = agent(41003)
 const D = agent(41004)
 const E = agent(41005)
-const OLD = { pid: 60001, startedAt: 1760500000 }
+const OLD = { pid: 60001, startedAt: 1760500000, profile: 'pn-self' }
 
 function bootKinds(world: PoolWorld): string[] {
   return world.effectKinds().filter((effect) => /^(boot|prepare|reset)/.test(effect))
@@ -123,7 +123,7 @@ describe('a runtime restarts 90 s after a crash', () => {
     world.observed.delete(udid(4))
     world.observed.set(udid(5), { udid: udid(5), name: 'Portivo-Pod-5', state: 'shutdown' })
     world.observed.set(udid(9), { udid: udid(9), name: 'Portivo-Pod-9', state: 'booted' })
-    world.self = { pid: 70110, startedAt: 1760599900 }
+    world.self = SELF
     world.runtimes[`${OLD.pid}:${OLD.startedAt}`] = 'exited'
     world.advance(90_000)
     return world
@@ -139,14 +139,14 @@ describe('a runtime restarts 90 s after a crash', () => {
     expect(world.leaseOf(A)).toMatchObject({ state: 'active', servedBy: world.self })
   })
 
-  it('gives a reservation a fresh 60 s window instead of sending it back', () => {
+  it('gives a reservation a fresh 180 s window instead of sending it back', () => {
     const world = crashedWorld(5)
     world.poll()
     expect(world.leaseOf(B)).toMatchObject({
       state: 'reserved',
-      reservedUntil: world.wall + 60_000
+      reservedUntil: world.wall + 180_000
     })
-    world.advance(59_000)
+    world.advance(179_000)
     world.poll()
     expect(world.leaseOf(B)?.state).toBe('reserved')
   })
@@ -372,14 +372,17 @@ describe('making devices', () => {
     expect(world.lease(A, { wants: se })).toMatchObject({
       status: 'waiting',
       waitingFor: 'device',
-      unmakeable: true
+      stalled: { reason: 'unmakeable' }
     })
     pollFor(world, 60_000, [A])
     expect(world.registry.devices).toEqual([])
     // The model the pool makes is still made for the waiter behind.
     world.lease(B)
     expect(world.effects.map((effect) => effect.kind)).toContain('create')
-    expect(world.lease(A, { wants: se })).toMatchObject({ status: 'waiting', unmakeable: true })
+    expect(world.lease(A, { wants: se })).toMatchObject({
+      status: 'waiting',
+      stalled: { reason: 'unmakeable' }
+    })
   })
 
   it("slims an empty pool's first device as soon as it exists, not at simctl's next list", () => {

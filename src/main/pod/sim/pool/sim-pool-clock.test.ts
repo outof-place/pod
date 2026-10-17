@@ -21,11 +21,27 @@ function queuedWorld(): PoolWorld {
   return world
 }
 
-/** The Mac sleeps: no step runs, and Node's monotonic clock runs on (mach_continuous_time). */
+/**
+ * The Mac sleeps: no step runs, Node's monotonic clock runs on (mach_continuous_time), and the
+ * clock port reports powerMonitor's `suspend` before it and `resume` after it.
+ */
 function sleepFor(world: PoolWorld, ms: number): void {
+  world.suspends += 1
   world.wall += ms
   world.mono += ms
   world.capacity.measuredAt = null
+}
+
+/** App Nap throttles the runtime's timer: polls come 70 s apart, the Mac awake throughout. */
+function throttledPolls(world: PoolWorld, ms: number, simctlAnswers = true): void {
+  for (let passed = 0; passed < ms; passed += 70_000) {
+    world.mono += 70_000
+    world.wall += 70_000
+    world.poll()
+    if (simctlAnswers) {
+      world.settleOps()
+    }
+  }
 }
 
 describe('time no runtime watched', () => {
@@ -35,6 +51,24 @@ describe('time no runtime watched', () => {
     world.poll()
     expect(world.leaseOf(B)?.state).toBe('waiting')
     expect(world.leaseOf(C)?.state).toBe('waiting')
+  })
+
+  it('abandons no waiter when a step lands between suspend and sleep, and the next before resume', () => {
+    const world = queuedWorld()
+    world.suspends += 1
+    world.suspended = true
+    world.advance(3_000)
+    world.poll()
+    world.wall += 8 * HOUR
+    world.mono += 8 * HOUR
+    world.capacity.measuredAt = null
+    world.poll()
+    expect(world.leaseOf(B)?.state).toBe('waiting')
+    expect(world.leaseOf(C)?.state).toBe('waiting')
+    world.suspended = false
+    world.advance(5_000)
+    world.poll()
+    expect(world.leaseOf(B)?.state).toBe('waiting')
   })
 
   it('gives a reservation a fresh window after a sleep', () => {
@@ -50,7 +84,7 @@ describe('time no runtime watched', () => {
     expect(world.leaseOf(C)?.state).toBe('waiting')
     expect(world.leaseOf(B)).toMatchObject({
       state: 'reserved',
-      reservedUntil: world.wall + 60_000
+      reservedUntil: world.wall + 180_000
     })
     world.advance(30_000)
     world.poll()
@@ -71,7 +105,7 @@ describe('time no runtime watched', () => {
     expect(world.leaseOf(A)?.state).toBe('active')
   })
 
-  it('holds a reservation no longer than 60 s when the wall clock steps back an hour', () => {
+  it('holds a reservation no longer than its 180 s when the wall clock steps back an hour', () => {
     const world = queuedWorld()
     world.release(A)
     world.finish(udid(1))
@@ -79,7 +113,7 @@ describe('time no runtime watched', () => {
     world.capacity.measuredAt = null
     world.advance(30_000)
     world.poll()
-    world.advance(61_000)
+    world.advance(181_000)
     world.poll()
     expect(world.leaseOf(C)).toMatchObject({ state: 'reserved', udid: udid(1) })
   })
@@ -96,6 +130,50 @@ describe('time no runtime watched', () => {
     for (const lease of world.registry.leases) {
       expect(world.wall - lease.lastActivity, lease.key).toBeGreaterThanOrEqual(0)
     }
+  })
+})
+
+describe('a throttled timer is not a sleep', () => {
+  it('shuts down a released device once the warm window passes, though polls come 70 s apart', () => {
+    const world = new PoolWorld()
+    world.device(1, { state: 'leased' })
+    world.addLease(A, { state: 'active', udid: udid(1) })
+    world.poll()
+    world.release(A)
+    world.finish(udid(1))
+    throttledPolls(world, 12 * 60_000)
+    expect(world.found(udid(1)).state).toBe('shutdown')
+  })
+
+  it('passes an unclaimed reservation on once its window passes, though polls come 70 s apart', () => {
+    const world = queuedWorld()
+    world.release(A)
+    world.finish(udid(1))
+    expect(world.leaseOf(B)?.state).toBe('reserved')
+    throttledPolls(world, 4 * 60_000)
+    expect(world.leaseOf(C)).toMatchObject({ state: 'reserved', udid: udid(1) })
+  })
+
+  it('fails a hung boot at its deadline, though polls come 70 s apart', () => {
+    const world = queuedWorld()
+    world.device(3)
+    world.addLease(D, { state: 'active', udid: udid(3) })
+    world.runtimes[`${PEER.pid}:${PEER.startedAt}`] = 'live'
+    world.found(udid(3)).op = { kind: 'boot', by: PEER, since: world.wall }
+    world.found(udid(3)).state = 'booting'
+    world.poll()
+    throttledPolls(world, 4 * 60_000, false)
+    expect(world.found(udid(3))).toMatchObject({ failure: { op: 'boot' } })
+  })
+
+  it('abandons a waiter that stopped calling, though polls come 70 s apart', () => {
+    const world = queuedWorld()
+    throttledPolls(world, 20 * 60_000)
+    expect(world.leaseOf(B)).toBeUndefined()
+    expect(world.verb(B)).toMatchObject({
+      allow: false,
+      refusal: { code: 'lease_expired', reason: 'abandoned' }
+    })
   })
 })
 

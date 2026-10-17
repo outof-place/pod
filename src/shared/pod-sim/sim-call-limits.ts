@@ -12,10 +12,11 @@ export const SIM_LEASE_MAX_WAIT_S = 540
 export const SIM_WAITER_ABANDON_S = 2 * SIM_LEASE_MAX_WAIT_S
 
 /**
- * A device reserved for a waiter goes to the next one unless claimed within this; the lapsed
- * waiter rejoins the queue at the back.
+ * A device reserved for a waiter goes to the next one unless claimed within this (the pool's
+ * default; its config may change it); the lapsed waiter rejoins the queue at the back. Longer than
+ * an agent's turn between two calls on a long context; an open `lease --wait` claims at once.
  */
-export const SIM_RESERVATION_CLAIM_S = 60
+export const SIM_RESERVATION_CLAIM_S = 180
 /** A takeover gives the device back after this long without the person's input. */
 export const SIM_TAKEOVER_IDLE_GIVE_BACK_S = 120
 

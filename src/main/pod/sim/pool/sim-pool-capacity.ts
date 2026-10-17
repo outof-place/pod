@@ -2,7 +2,8 @@
 // (every state that counts, plus boot, prepare and reset ops in flight), devices in Pod's set it
 // never adopted, and devices booted outside Pod (claude-acc's reading) must stay within the cap. A
 // reading older than 30 s, or one that does not know a number, opens no slot: claude-acc going
-// quiet is not calm. Booted free devices are still handed out; only boots wait.
+// quiet is not calm, nor is it the brake: the waiter waits for a `measurement`. Booted free devices
+// are still handed out; only boots wait.
 //
 // A device waiting to be slimmed (`preparing`, no prepare running) holds its slot without being
 // booted, and a clone in flight will hold one: the pool makes a device only into a slot nobody
@@ -19,17 +20,22 @@ import { deviceState, type SimPoolDevice, type SimPoolDraft } from './sim-pool-d
 import type { SimCapacityReading } from './sim-pool-ports'
 import { wakeAt } from './sim-pool-windows'
 
-export type SimBootGate = 'open' | 'slot' | 'brake'
+export type SimBootGate = 'open' | 'slot' | 'brake' | 'measurement'
 
 const IN_FLIGHT = new Set(['boot', 'prepare', 'reset'])
 
+/** Whether a reading is recent enough to boot on: claude-acc keeps its stage 30 s. */
+export function capacityIsFresh(reading: SimCapacityReading | undefined, wall: number): boolean {
+  if (!reading || reading.measuredAt === null) {
+    return false
+  }
+  const age = wall - reading.measuredAt
+  return age <= SIM_CAPACITY_FRESH_MS && age >= -SIM_CAPACITY_FUTURE_MS
+}
+
 function freshReading(d: SimPoolDraft): SimCapacityReading | null {
   const reading = d.memory.observation?.capacity
-  if (!reading || reading.measuredAt === null) {
-    return null
-  }
-  const age = d.now.wall - reading.measuredAt
-  return age <= SIM_CAPACITY_FRESH_MS && age >= -SIM_CAPACITY_FUTURE_MS ? reading : null
+  return reading && capacityIsFresh(reading, d.now.wall) ? reading : null
 }
 
 /** claude-acc's brake stage, or null when the reading is stale or does not know it. */
@@ -107,11 +113,11 @@ function gate(d: SimPoolDraft, slots: number): SimBootGate {
     !reading ||
     reading.cap === 'unknown' ||
     reading.outsideBooted === 'unknown' ||
-    reading.brake === 'unknown' ||
-    reading.brake === 'brake' ||
-    reading.brake === 'emergency' ||
-    d.memory.brakeHold
+    reading.brake === 'unknown'
   ) {
+    return 'measurement'
+  }
+  if (reading.brake === 'brake' || reading.brake === 'emergency' || d.memory.brakeHold) {
     return 'brake'
   }
   // claude-acc's 0 is "no cap there"; Pod's own cap is never unlimited.

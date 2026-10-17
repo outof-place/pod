@@ -1,6 +1,6 @@
 // Fork-only (Pod): what time and liveness do to leases. A takeover goes back 120 s after the
-// person's last input; a reservation passes on 60 s after its device was ready unless a call is
-// waiting for it; a waiter that stops calling is abandoned. A holder ends by liveness only when it
+// person's last input; a reservation passes on its claim window (180 s by default) after its
+// device was ready unless a call is waiting for it; a waiter that stops calling is abandoned. A holder ends by liveness only when it
 // reads `exited` (never a person, never during a takeover).
 import {
   SIM_TAKEOVER_IDLE_GIVE_BACK_S,
@@ -39,11 +39,11 @@ function reservedTimer(d: SimPoolDraft, lease: SimPoolLease): void {
     return
   }
   if (lease.reservedUntil === undefined) {
-    lease.reservedUntil = d.now.wall + claimMs()
+    lease.reservedUntil = d.now.wall + claimMs(d)
   }
   if (d.openCalls.has(lease.leaseId)) {
     touchWindow(d, `reserve:${lease.leaseId}`, lease.reservedUntil)
-  } else if (windowDue(d, `reserve:${lease.leaseId}`, lease.reservedUntil, claimMs())) {
+  } else if (windowDue(d, `reserve:${lease.leaseId}`, lease.reservedUntil, claimMs(d))) {
     returnReservation(d, lease, 'back')
   }
 }

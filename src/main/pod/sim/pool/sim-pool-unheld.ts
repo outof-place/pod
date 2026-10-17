@@ -1,12 +1,13 @@
 // Fork-only (Pod): devices whose holder is gone. A leased device whose lease ended is released
 // (its app terminated) for the next waiter, or shut down in the same step when the brake ended
 // the lease and no waiter takes it. A booted device nobody holds stays up for the warm window,
-// then shuts down; under the brake at once; a golden device is never left booted.
+// then shuts down; under the brake at once; a golden device is never left booted. A held device a
+// failed reset left erased is reset again for its lease as soon as it is back up.
 import { leaseOn } from '../leases/sim-lease-records'
 import { canTakeDevice, deviceFits, queueOf, waitingClasses } from '../leases/sim-lease-queue'
 import { isFree } from './sim-pool-allocate'
 import { brakeIsTight } from './sim-pool-capacity'
-import { startOp } from './sim-pool-devices'
+import { startOp, startReset } from './sim-pool-devices'
 import { deviceState, moveDevice, type SimPoolDevice, type SimPoolDraft } from './sim-pool-draft'
 import { trustedListing } from './sim-pool-reconcile'
 import { dropWindow, windowDue } from './sim-pool-windows'
@@ -29,6 +30,10 @@ export function settleHeldDevices(d: SimPoolDraft): void {
     const state = deviceState(device)
     if (state === 'ready' && holding) {
       moveDevice(d, device, 'lease')
+    }
+    if (holding && lease && device.failure?.op === 'reset' && deviceState(device) === 'leased') {
+      // Slim it for the lease's app again and reinstall the app (resetDone), before any verb.
+      startReset(d, device, lease)
     } else if (state === 'leased' && !holding && effects) {
       const shut = !someoneWants(d, device) && (d.brakeEnded.has(device.udid) || brakeIsTight(d))
       if (shut) {

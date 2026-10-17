@@ -37,7 +37,8 @@ import {
 import { leaseFileEffects } from './sim-pool-lease-files'
 import { reconcileDevices } from './sim-pool-reconcile'
 import { settleHeldDevices, shutDownUnheld } from './sim-pool-unheld'
-import { foldWindows, observeClock, simPoolPolling } from './sim-pool-windows'
+import type { SimCapacityReading } from './sim-pool-ports'
+import { foldWindows, observeClock } from './sim-pool-windows'
 
 export type SimPoolState = Readonly<{ registry: SimPoolRegistry; memory: SimPoolMemory }>
 
@@ -54,12 +55,30 @@ export type SimPoolStepResult = Readonly<{
 
 const NONE: SimAnswerLater = () => ({ kind: 'none' })
 
+/** A reading taken for this call stands in for the last poll's (devices and holders unchanged). */
+function readCapacity(d: SimPoolDraft, capacity: SimCapacityReading): void {
+  const last = d.memory.observation
+  d.memory.observation = last
+    ? { ...last, capacity }
+    : {
+        at: d.now,
+        devices: { verdict: 'unknown', why: 'not listed yet' },
+        capacity,
+        liveness: {},
+        runtimes: {},
+        externalUse: []
+      }
+}
+
 function apply(d: SimPoolDraft, command: SimPoolCommand): SimAnswerLater {
   switch (command.kind) {
     case 'poll':
       d.memory.observation = command.observation
       return NONE
     case 'lease':
+      if (command.capacity) {
+        readCapacity(d, command.capacity)
+      }
       return leaseCall(d, command.request)
     case 'waitMine':
       return waitMineCall(d, command.caller)
@@ -144,7 +163,6 @@ export function simPoolStep(
   observeClock(d)
   const answer = apply(d, command)
   settle(d, command.kind === 'poll', state.registry.updatedAt)
-  d.memory.polling = simPoolPolling(d.registry)
   const files = leaseFileEffects(d)
   const changed = registryChanged(state.registry, d.registry)
   if (changed) {

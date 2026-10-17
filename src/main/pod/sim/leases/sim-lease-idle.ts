@@ -9,7 +9,7 @@ import { touchWindow, windowDue, windowSince } from '../pool/sim-pool-windows'
 import { endLease } from './sim-lease-records'
 import { deviceFits, queueOf, waitingClasses } from './sim-lease-queue'
 
-const HELPED_BY_REVOKING = new Set(['slot', 'brake', 'device'])
+const HELPED_BY_REVOKING = new Set(['slot', 'brake', 'measurement', 'device', 'failing'])
 
 function idleLeases(d: SimPoolDraft, watching: boolean): SimPoolLease[] {
   const used = new Set(d.memory.observation?.externalUse ?? [])

@@ -33,11 +33,11 @@ import {
   type SimPoolRegistry,
   type SimPoolTrace
 } from './sim-pool-draft'
-import type { SimCapacityReading, SimObservedDevice, SimProcessId } from './sim-pool-ports'
+import type { SimCapacityReading, SimObservedDevice, SimRuntime } from './sim-pool-ports'
 import { simPoolStep, type SimPoolStepResult } from './sim-pool-step'
 
-export const SELF: SimProcessId = { pid: 70110, startedAt: 1760599900 }
-export const PEER: SimProcessId = { pid: 70220, startedAt: 1760599950 }
+export const SELF: SimRuntime = { pid: 70110, startedAt: 1760599900, profile: 'pn-self' }
+export const PEER: SimRuntime = { pid: 70220, startedAt: 1760599950, profile: 'pn-peer' }
 export const T0 = 1_760_600_000_000
 export const ROOT = '/Users/dev/portivo-wt/maps'
 export const IPHONE = 'iPhone 16 Pro'
@@ -95,6 +95,9 @@ export class PoolWorld {
   memory: SimPoolMemory = structuredClone(EMPTY_SIM_POOL_MEMORY)
   mono = 1_000_000
   wall = T0
+  // powerMonitor's suspends so far, and whether the last one has not resumed yet.
+  suspends = 0
+  suspended = false
   self = SELF
   config: SimPoolConfig
   openCalls = new Set<string>()
@@ -178,24 +181,23 @@ export class PoolWorld {
   }
 
   /**
-   * Time passes with this runtime awake and polling: the polls in between saw nothing a test
-   * cares about, so the core's last tick moves along. A sleep (no step at all) moves the clocks
-   * alone (sim-pool-clock.test.ts).
+   * Time passes with the Mac awake: however long the gap between two steps, no sleep signal came
+   * (a sleep sets `suspends`, sim-pool-clock.test.ts).
    */
   advance(ms: number): void {
     this.mono += ms
     this.wall += ms
-    const last = this.memory.lastTick
-    if (last) {
-      this.memory.lastTick = { mono: last.mono + ms, wall: last.wall + ms }
-    }
+  }
+
+  now() {
+    return { mono: this.mono, wall: this.wall, suspends: this.suspends, suspended: this.suspended }
   }
 
   step(command: SimPoolCommand): SimPoolStepResult {
     // Frozen input: an in-place edit of anything the draft shares with it throws here.
     const state = { registry: structuredClone(this.registry), memory: structuredClone(this.memory) }
     const result = simPoolStep(deepFrozen(state), command, {
-      now: { mono: this.mono, wall: this.wall },
+      now: this.now(),
       self: this.self,
       config: this.config,
       openCalls: this.openCalls,
@@ -219,7 +221,7 @@ export class PoolWorld {
     return this.step({
       kind: 'poll',
       observation: {
-        at: { mono: this.mono, wall: this.wall },
+        at: this.now(),
         devices:
           this.verdict === 'ok'
             ? { verdict: 'ok', devices: [...this.observed.values()] }

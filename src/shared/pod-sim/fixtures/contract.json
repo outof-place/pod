@@ -82,6 +82,7 @@
   ],
   "holderKinds": ["agent", "agentSession", "terminal", "process", "human"],
   "brakes": ["calm", "tight", "brake", "emergency"],
+  "queueWaits": ["slot", "brake", "build", "device", "measurement"],
   "leaseEndReasons": [
     "released",
     "holderExited",
@@ -128,7 +129,7 @@
     "leaseDefaultWaitS": 100,
     "leaseMaxWaitS": 540,
     "waiterAbandonS": 1080,
-    "reservationClaimS": 60,
+    "reservationClaimS": 180,
     "takeoverIdleGiveBackS": 120,
     "waitingListMax": 5,
     "stateDefaultMaxNodes": 60,

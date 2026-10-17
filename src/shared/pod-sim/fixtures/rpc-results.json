@@ -101,6 +101,126 @@
     }
   },
   {
+    "name": "lease: no fresh memory reading from claude-acc yet, so no brake stage to report",
+    "method": "sim.lease",
+    "result": {
+      "status": "waiting",
+      "lease": {
+        "leaseId": "sl_8c1d2e",
+        "key": "agent:claude:61840:1760601200@/Users/dev/portivo-wt/checkout",
+        "state": "waiting",
+        "holder": {
+          "kind": "agent",
+          "id": "agent:claude:61840:1760601200",
+          "agent": "claude",
+          "pid": 61840,
+          "startedAt": 1760601200
+        },
+        "worktreeRoot": "/Users/dev/portivo-wt/checkout",
+        "since": 1760601300000,
+        "lastActivity": 1760601300000,
+        "queue": {
+          "position": 1,
+          "since": 1760601300000,
+          "waitingFor": "measurement"
+        },
+        "wants": {
+          "deviceClass": "iphone"
+        }
+      },
+      "ahead": [],
+      "aheadOmitted": 0,
+      "holders": [],
+      "holdersOmitted": 0,
+      "next": "podx sim wait --mine",
+      "callAgain": true
+    }
+  },
+  {
+    "name": "lease: the pool stopped making this device after failing in a row, with the last failure",
+    "method": "sim.lease",
+    "result": {
+      "status": "waiting",
+      "lease": {
+        "leaseId": "sl_8c1d2f",
+        "key": "agent:claude:61840:1760601200@/Users/dev/portivo-wt/checkout",
+        "state": "waiting",
+        "holder": {
+          "kind": "agent",
+          "id": "agent:claude:61840:1760601200",
+          "agent": "claude",
+          "pid": 61840,
+          "startedAt": 1760601200
+        },
+        "worktreeRoot": "/Users/dev/portivo-wt/checkout",
+        "since": 1760601300000,
+        "lastActivity": 1760601300000,
+        "queue": {
+          "position": 1,
+          "since": 1760601300000,
+          "waitingFor": "device"
+        },
+        "wants": {
+          "deviceClass": "iphone"
+        }
+      },
+      "ahead": [],
+      "aheadOmitted": 0,
+      "holders": [],
+      "holdersOmitted": 0,
+      "stalled": {
+        "reason": "failing",
+        "failures": 3,
+        "failure": "Invalid runtime: com.apple.CoreSimulator.SimRuntime.iOS-26-5",
+        "retryAt": 1760601360000
+      },
+      "brake": "calm",
+      "next": "podx sim wait --mine",
+      "callAgain": true
+    }
+  },
+  {
+    "name": "wait --mine: the pool has no iPad of that model and makes none",
+    "method": "sim.waitLease",
+    "result": {
+      "status": "waiting",
+      "lease": {
+        "leaseId": "sl_8c1d30",
+        "key": "agent:claude:61840:1760601200@/Users/dev/portivo-wt/checkout",
+        "state": "waiting",
+        "holder": {
+          "kind": "agent",
+          "id": "agent:claude:61840:1760601200",
+          "agent": "claude",
+          "pid": 61840,
+          "startedAt": 1760601200
+        },
+        "worktreeRoot": "/Users/dev/portivo-wt/checkout",
+        "since": 1760601300000,
+        "lastActivity": 1760601300000,
+        "queue": {
+          "position": 1,
+          "since": 1760601300000,
+          "waitingFor": "device"
+        },
+        "wants": {
+          "deviceClass": "ipad",
+          "deviceType": "iPad Pro 13-inch (M4)"
+        }
+      },
+      "ahead": [],
+      "aheadOmitted": 0,
+      "holders": [],
+      "holdersOmitted": 0,
+      "stalled": {
+        "reason": "unmakeable"
+      },
+      "brake": "calm",
+      "next": "podx sim release, then podx sim lease --device ipad",
+      "callAgain": true
+    }
+  },
+  {
     "name": "wait --mine: someone still drives it, call again",
     "method": "sim.waitLease",
     "result": {

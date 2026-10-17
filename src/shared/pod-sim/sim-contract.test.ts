@@ -11,7 +11,12 @@ import {
   SIM_LEASE_EVENTS,
   SIM_LEASE_STATES
 } from './sim-lifecycle'
-import { SIM_BRAKES, SIM_LEASE_END_REASONS, SIM_UNAVAILABLE_REASONS } from './sim-pool-snapshot'
+import {
+  SIM_BRAKES,
+  SIM_LEASE_END_REASONS,
+  SIM_QUEUE_WAITS,
+  SIM_UNAVAILABLE_REASONS
+} from './sim-pool-snapshot'
 import { SIM_REFUSAL_CODES } from './sim-refusals'
 import { SIM_APP_CONTENT_NOTICE } from './sim-results'
 
@@ -33,6 +38,7 @@ describe('the vocabulary both sides pin', () => {
       leaseEvents: [...SIM_LEASE_EVENTS],
       holderKinds: [...SIM_HOLDER_KINDS],
       brakes: [...SIM_BRAKES],
+      queueWaits: [...SIM_QUEUE_WAITS],
       leaseEndReasons: [...SIM_LEASE_END_REASONS],
       unavailableReasons: [...SIM_UNAVAILABLE_REASONS],
       refusalCodes: [...SIM_REFUSAL_CODES],

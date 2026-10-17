@@ -1,4 +1,5 @@
 // Fork-only (Pod): the numbers the pool core decides with, and why each is what it is.
+import { SIM_RESERVATION_CLAIM_S } from '../../../../shared/pod-sim/sim-call-limits'
 import type { SimDeviceClass } from '../../../../shared/pod-sim/sim-pool-snapshot'
 import type { SIM_DEVICE_OPS } from '../../../../shared/pod-sim/sim-registry'
 
@@ -13,6 +14,8 @@ export type SimPoolConfig = Readonly<{
   idleMs: number
   // How long a booted device nobody holds stays up for the next lease.
   warmMs: number
+  // How long a device reserved for a waiter between calls waits for it to call again.
+  claimMs: number
   // Pool devices per class, golden ones not counted: the cap plus room for held devices that are
   // down and clones waiting for a slot to be slimmed.
   maxDevicesPerClass: number
@@ -27,6 +30,7 @@ export const SIM_POOL_DEFAULTS = {
   podCap: 2,
   idleMs: 30 * 60_000,
   warmMs: 10 * 60_000,
+  claimMs: SIM_RESERVATION_CLAIM_S * 1000,
   maxDevicesPerClass: 4
 } as const
 
@@ -69,12 +73,22 @@ export const SIM_DEVICE_MAX_FAILURES = 3
 export const SIM_CLOCK_STEP_MS = 5_000
 
 /**
- * While the pool polls (every 5 s, sim-pool-coordinator.ts) a step comes at least this often,
- * unless the Mac slept or the process was stopped: Node's monotonic clock runs on through sleep,
- * so a longer gap is time no rule watched. Twelve poll intervals: above a slow poll (a simctl list
- * timing out, holder lookups on a loaded Mac), below every window but the 60 s reservation.
+ * A gap this long after a step taken while a `suspend` had no `resume` yet is the sleep itself
+ * (the step landed between suspend and sleep, and `resume` has not arrived); a shorter one is the
+ * few seconds macOS takes to sleep. Bounded so a lost `resume` cannot stop every window.
  */
-export const SIM_UNOBSERVED_GAP_MS = 60_000
+export const SIM_SUSPENDED_GAP_MS = 60_000
+
+/**
+ * Making or starting a device of one kind failing this many times in a row (a create, clone,
+ * slim or boot) is the kind, not bad luck: a missing runtime, a full disk, a broken simslim. The
+ * pool then stops making and starting that kind for SIM_MAKE_BACKOFF_MS, doubling with each
+ * failed try after, up to SIM_MAKE_BACKOFF_MAX_MS: a fix (installing the runtime in Xcode) takes
+ * minutes, and a try costs one device's clone or boot.
+ */
+export const SIM_MAKE_FAILURE_LIMIT = 3
+export const SIM_MAKE_BACKOFF_MS = 60_000
+export const SIM_MAKE_BACKOFF_MAX_MS = 30 * 60_000
 
 /** A holder's calls refresh `lastActivity` on disk at most this often; memory has every call. */
 export const SIM_ACTIVITY_WRITE_MS = 15_000

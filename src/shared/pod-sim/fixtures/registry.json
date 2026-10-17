@@ -272,6 +272,69 @@
           }
         ]
       }
+    },
+    {
+      "name": "runtimes named with their profile, and a device kind the pool failed to make three times in a row",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1760600400000,
+        "devices": [
+          {
+            "udid": "8F1C2A3B-4D5E-6F70-8192-A3B4C5D6E7F8",
+            "name": "Portivo-Pod-Golden-iPhone-16-Pro",
+            "role": "golden",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760500000000
+          },
+          {
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "name": "Portivo-Pod-1",
+            "role": "pool",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760590000000,
+            "clonedFrom": "8F1C2A3B-4D5E-6F70-8192-A3B4C5D6E7F8",
+            "affinity": "/Users/dev/portivo-wt/maps"
+          }
+        ],
+        "leases": [
+          {
+            "leaseId": "sl_4f2a9c",
+            "state": "active",
+            "worktreeRoot": "/Users/dev/portivo-wt/maps",
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "since": 1760600200000,
+            "lastActivity": 1760600395000,
+            "key": "terminal:term_7f3a@/Users/dev/portivo-wt/maps",
+            "holder": {
+              "kind": "terminal",
+              "id": "terminal:term_7f3a",
+              "terminalHandle": "term_7f3a"
+            },
+            "servedBy": {
+              "pid": 51200,
+              "startedAt": 1760599000,
+              "profile": "f3a9c2d18e7b4a60"
+            },
+            "resolvedBy": {
+              "pid": 50990,
+              "startedAt": 1760598000,
+              "profile": "f3a9c2d18e7b4a60"
+            }
+          }
+        ],
+        "makeFailures": [
+          {
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "count": 3,
+            "at": 1760601290000,
+            "op": "create",
+            "message": "Invalid runtime: com.apple.CoreSimulator.SimRuntime.iOS-26-5"
+          }
+        ]
+      }
     }
   ],
   "invalid": [
@@ -495,6 +558,78 @@
         ]
       },
       "path": "leases.0.resolvedBy.pid"
+    },
+    {
+      "name": "a failing device kind without its failure",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1760601290000,
+        "devices": [],
+        "leases": [],
+        "makeFailures": [
+          {
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "count": 3,
+            "at": 1760601290000,
+            "op": "create"
+          }
+        ]
+      },
+      "path": "makeFailures.0.message"
+    },
+    {
+      "name": "a runtime whose profile is empty",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1760600400000,
+        "devices": [
+          {
+            "udid": "8F1C2A3B-4D5E-6F70-8192-A3B4C5D6E7F8",
+            "name": "Portivo-Pod-Golden-iPhone-16-Pro",
+            "role": "golden",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760500000000
+          },
+          {
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "name": "Portivo-Pod-1",
+            "role": "pool",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760590000000,
+            "clonedFrom": "8F1C2A3B-4D5E-6F70-8192-A3B4C5D6E7F8",
+            "affinity": "/Users/dev/portivo-wt/maps"
+          }
+        ],
+        "leases": [
+          {
+            "leaseId": "sl_4f2a9c",
+            "state": "active",
+            "worktreeRoot": "/Users/dev/portivo-wt/maps",
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "since": 1760600200000,
+            "lastActivity": 1760600395000,
+            "key": "terminal:term_7f3a@/Users/dev/portivo-wt/maps",
+            "holder": {
+              "kind": "terminal",
+              "id": "terminal:term_7f3a",
+              "terminalHandle": "term_7f3a"
+            },
+            "servedBy": {
+              "pid": 51200,
+              "startedAt": 1760599000,
+              "profile": ""
+            },
+            "resolvedBy": {
+              "pid": 70110,
+              "startedAt": 1760599900
+            }
+          }
+        ]
+      },
+      "path": "leases.0.servedBy.profile"
     }
   ]
 }

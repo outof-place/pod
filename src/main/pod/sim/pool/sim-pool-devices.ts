@@ -13,6 +13,7 @@ import {
   type SimPoolDraft,
   type SimPoolLease
 } from './sim-pool-draft'
+import { clearMakeFailures, noteMakeFailure } from './sim-pool-make-failures'
 import type { SimOpOutcome, SimOpRef, SimSlimProfile } from './sim-pool-ports'
 import { claimMs, dropWindow, forgetWindows, windowDue } from './sim-pool-windows'
 
@@ -120,6 +121,7 @@ export function finishOp(
   delete device.op
   dropWindow(d, `op:${device.udid}`)
   if (!outcome.ok) {
+    noteMakeFailure(d, device, op.kind, outcome.message)
     failDevice(d, device, outcome.message, op.kind)
     return
   }
@@ -135,8 +137,12 @@ export function finishOp(
   if (finish) {
     moveDevice(d, device, finish)
   }
-  if (op.kind === 'boot') {
-    delete device.failure
+  if (op.kind === 'boot' || op.kind === 'reset') {
+    clearMakeFailures(d, device)
+    // An erase a reset left half done stays a failure until a reset completes.
+    if (op.kind === 'reset' || device.failure?.op !== 'reset') {
+      delete device.failure
+    }
   }
   const lease = op.kind === 'reset' ? leaseOn(d, device.udid) : undefined
   if (lease?.app) {
@@ -155,10 +161,12 @@ export function failDevice(
   if (simDeviceTransition(deviceState(device), 'fail').ok) {
     moveDevice(d, device, 'fail')
   }
+  // A device a reset left erased stays one (op `reset`) until a reset completes.
+  const erased = device.failure?.op === 'reset' ? 'reset' : op
   device.failure = {
     at: d.now.wall,
     message: message.slice(0, 1024),
-    ...(op ? { op } : {}),
+    ...(erased ? { op: erased } : {}),
     count: (device.failure?.count ?? 0) + 1
   }
   const reserved = leaseOn(d, device.udid)
@@ -198,7 +206,9 @@ export function expireOps(d: SimPoolDraft): void {
     }
     const deadline = SIM_OP_DEADLINE_MS[op.kind]
     if (windowDue(d, `op:${device.udid}`, `${op.kind}:${op.since}:${op.by.pid}`, deadline)) {
-      failDevice(d, device, `${op.kind} passed its ${deadline / 1000} s deadline`, op.kind)
+      const message = `${op.kind} passed its ${deadline / 1000} s deadline`
+      noteMakeFailure(d, device, op.kind, message)
+      failDevice(d, device, message, op.kind)
     }
   }
 }
@@ -215,7 +225,7 @@ export function adoptOrphans(d: SimPoolDraft): void {
       lease.resolvedBy ??= lease.servedBy
       lease.servedBy = { ...d.self }
       if (lease.reservedUntil !== undefined) {
-        lease.reservedUntil = d.now.wall + claimMs()
+        lease.reservedUntil = d.now.wall + claimMs(d)
       }
       forgetWindows(d, lease.leaseId)
     }

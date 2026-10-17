@@ -81,8 +81,8 @@ export function endLease(
 }
 
 /**
- * Give the reserved device back to the pool. A lapse (unclaimed for 60 s) sends the waiter to the
- * back of the queue; a device that failed or went away under it keeps its place.
+ * Give the reserved device back to the pool. A lapse (unclaimed for its claim window) sends the
+ * waiter to the back of the queue; a device that failed or went away under it keeps its place.
  */
 export function returnReservation(
   d: SimPoolDraft,

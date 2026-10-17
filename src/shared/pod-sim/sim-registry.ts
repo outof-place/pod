@@ -35,10 +35,15 @@ export const SIM_REGISTRY_LOCK_FILE_NAME = 'registry.lock'
 
 const EpochMs = z.number().int().nonnegative()
 
-/** A runtime process: pid plus its start, seconds since the epoch, as liveness checks it. */
+/**
+ * A runtime process: pid plus its start, seconds since the epoch, as liveness checks it, and the
+ * Pod profile (its userData) it runs, which outlives a restart of that Pod: a restarted Pod sees
+ * the panes and agent sessions its previous process saw (the terminal daemon survives).
+ */
 export const SimRuntimeRef = z.looseObject({
   pid: z.number().int().positive(),
-  startedAt: z.number().int().nonnegative()
+  startedAt: z.number().int().nonnegative(),
+  profile: z.string().min(1).max(128).optional()
 })
 
 /** The slow device work a runtime has in flight, outside the lock. */
@@ -94,12 +99,25 @@ export const SimRegistryTombstone = SimRegistryLease.extend({
   ended: SimLeaseEnded
 })
 
+// A kind of device (model plus iOS runtime) the pool failed to make or start `count` times in a
+// row, Mac-wide: past a few it stops making that kind for a while, and its waiters hear the last
+// failure. A device of the kind booting clears it.
+export const SimRegistryMakeFailure = z.looseObject({
+  deviceType: z.string().min(1).max(128),
+  runtime: z.string().min(1).max(64),
+  count: z.number().int().positive(),
+  at: EpochMs,
+  op: z.enum(SIM_DEVICE_OPS),
+  message: z.string().min(1).max(1024)
+})
+
 export const SimRegistryFile = z.looseObject({
   version: z.literal(SIM_REGISTRY_VERSION),
   updatedAt: EpochMs,
   devices: z.array(SimRegistryDevice),
   leases: z.array(SimRegistryLease),
-  tombstones: z.array(SimRegistryTombstone).optional()
+  tombstones: z.array(SimRegistryTombstone).optional(),
+  makeFailures: z.array(SimRegistryMakeFailure).optional()
 })
 export type SimRegistryFile = z.infer<typeof SimRegistryFile>
 

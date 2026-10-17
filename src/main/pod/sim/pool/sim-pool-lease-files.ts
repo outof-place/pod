@@ -14,7 +14,7 @@ const PROVISIONAL_OPS = new Set(['clone', 'create'])
 function fileOf(d: SimPoolDraft, udid: string): SimLeaseFile {
   const lease = leaseOn(d, udid)
   if (!lease) {
-    return { owner: d.self, holder: 'pod:pool' }
+    return { owner: { pid: d.self.pid, startedAt: d.self.startedAt }, holder: 'pod:pool' }
   }
   const { holder } = lease
   const byProcess = holder.kind === 'agent' || holder.kind === 'process'

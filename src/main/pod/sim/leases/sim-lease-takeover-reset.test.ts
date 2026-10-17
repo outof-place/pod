@@ -41,7 +41,7 @@ describe('Filip takes a device over', () => {
     expect(world.effects).toContainEqual({
       kind: 'writeLeaseFile',
       udid: udid(1),
-      file: { owner: SELF, holder: A.id }
+      file: { owner: { pid: SELF.pid, startedAt: SELF.startedAt }, holder: A.id }
     })
   })
 
@@ -62,7 +62,7 @@ describe('Filip takes a device over', () => {
     expect(world.effects).toContainEqual({
       kind: 'writeLeaseFile',
       udid: udid(1),
-      file: { owner: SELF, ...file }
+      file: { owner: { pid: SELF.pid, startedAt: SELF.startedAt }, ...file }
     })
   })
 
@@ -204,6 +204,52 @@ describe('reset', () => {
         problem: 'erase failed: device busy'
       }
     })
+  })
+
+  it('never hands back a device a failed reset left booted until it is slimmed and the app is back', () => {
+    const world = new PoolWorld({ cap: 2 })
+    world.device(1, { state: 'leased' })
+    world.addLease(A, { state: 'active', udid: udid(1), app: MAPS })
+    world.poll()
+    world.reset(A, 'device')
+    // simslim failed after the erase; simctl still lists the device booted.
+    world.finish(udid(1), { ok: false, message: 'simslim apply failed after erase' })
+    expect(world.verb(A)).toMatchObject({
+      allow: false,
+      refusal: { code: 'device_down', problem: 'simslim apply failed after erase' }
+    })
+    const seen: string[] = []
+    const note = (): void => {
+      for (const effect of world.effects) {
+        if (effect.kind === 'reset' && effect.profile?.app.id === MAPS.id) {
+          seen.push('reset for maps')
+        } else if (effect.kind === 'reinstallApp') {
+          seen.push('reinstall')
+        }
+      }
+    }
+    let allowed = false
+    for (let poll = 0; poll < 12 && !allowed; poll += 1) {
+      world.advance(5_000)
+      world.poll()
+      note()
+      for (let round = 0; round < 10; round += 1) {
+        const busy = world.registry.devices.find((device) => device.op)
+        if (!busy) {
+          break
+        }
+        world.finish(busy.udid)
+        note()
+      }
+      const verb = world.verb(A)
+      allowed = verb.allow
+      if (!verb.allow) {
+        expect(['device_down', 'device_busy']).toContain(verb.refusal.code)
+      }
+    }
+    expect(allowed).toBe(true)
+    expect(seen).toEqual(['reset for maps', 'reinstall'])
+    expect(world.leaseOf(A)).toMatchObject({ state: 'active', udid: udid(1) })
   })
 
   it('resets only the app on `reset app`: no erase, no boot', () => {

@@ -3,10 +3,9 @@
 // waiter whose dev client still builds keeps its place and is skipped, never blocking the rest.
 import type { SimHolder } from '../../../../shared/pod-sim/sim-holder'
 import type { SimDeviceClass } from '../../../../shared/pod-sim/sim-pool-snapshot'
+import type { SimWaitReason } from '../pool/sim-pool-commands'
 import type { SimPoolDevice, SimPoolDraft, SimPoolLease } from '../pool/sim-pool-draft'
 import { holderBase } from './sim-lease-records'
-
-export type SimWaitReason = 'slot' | 'brake' | 'build' | 'device'
 
 export function deviceClassOf(deviceType: string): SimDeviceClass {
   return /^ipad/i.test(deviceType) ? 'ipad' : 'iphone'
@@ -86,7 +85,7 @@ export function updateQueue(d: SimPoolDraft): void {
       const unserved = d.unserved.get(lease.leaseId)
       const waitingFor: SimWaitReason = queue.buildId
         ? 'build'
-        : unserved === 'creating' || unserved === 'unmakeable'
+        : unserved === 'creating' || unserved === 'unmakeable' || unserved === 'failing'
           ? 'device'
           : (unserved ?? queue.waitingFor)
       if (queue.position !== index + 1 || queue.waitingFor !== waitingFor || !lease.queue) {

@@ -1,7 +1,12 @@
 // Fork-only (Pod): what a holder is told about its lease, its device and its place. Every refusal
 // is one the contract words (sim-refusals.ts); an ended lease answers why it ended.
 import { SIM_WAITING_LIST_MAX } from '../../../../shared/pod-sim/sim-call-limits'
-import type { SimLeaseCaller, SimGateRefusal, SimLeaseAnswer } from '../pool/sim-pool-commands'
+import type {
+  SimLeaseCaller,
+  SimGateRefusal,
+  SimLeaseAnswer,
+  SimWaitReason
+} from '../pool/sim-pool-commands'
 import {
   deviceState,
   type SimPoolDevice,
@@ -10,7 +15,7 @@ import {
   type SimPoolTombstone
 } from '../pool/sim-pool-draft'
 import { holderBase, tombstone } from './sim-lease-records'
-import { holdersOf, queueOf, wantedClass, type SimWaitReason } from './sim-lease-queue'
+import { holdersOf, queueOf, wantedClass } from './sim-lease-queue'
 
 function busyState(
   device: SimPoolDevice
@@ -41,7 +46,9 @@ export function deviceRefusal(device: SimPoolDevice | undefined): SimGateRefusal
     return { code: 'device_busy', state: busy }
   }
   const state = device ? deviceState(device) : 'lost'
-  if (device && !device.op && (state === 'leased' || state === 'ready')) {
+  // A failed reset left it erased: down until the pool has reset it again (sim-pool-unheld.ts).
+  const erased = device?.failure?.op === 'reset'
+  if (device && !device.op && !erased && (state === 'leased' || state === 'ready')) {
     return null
   }
   return {
@@ -115,12 +122,13 @@ export function leaseAnswer(d: SimPoolDraft, lease: SimPoolLease): SimLeaseAnswe
   const holders = holdersOf(d, deviceClass)
   const waitingFor: SimWaitReason =
     lease.state === 'reserved' ? 'device' : (lease.queue?.waitingFor ?? 'slot')
+  const stalled = d.stalls.get(lease.leaseId)
   return {
     status: 'waiting',
     lease,
     position: queuePosition(d, lease),
     waitingFor,
-    ...(d.unserved.get(lease.leaseId) === 'unmakeable' ? { unmakeable: true as const } : {}),
+    ...(stalled && lease.state === 'waiting' ? { stalled } : {}),
     ahead: ahead.slice(0, SIM_WAITING_LIST_MAX),
     aheadOmitted: Math.max(0, ahead.length - SIM_WAITING_LIST_MAX),
     holders: holders.slice(0, SIM_WAITING_LIST_MAX),

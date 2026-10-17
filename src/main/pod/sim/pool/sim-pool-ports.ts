@@ -12,13 +12,30 @@ import type { SimDeviceOp } from './sim-pool-config'
 export type SimProcessId = Readonly<{ pid: number; startedAt: number }>
 
 /**
- * Milliseconds. `mono` never steps, and on macOS it runs on while the Mac sleeps (Node's
- * performance.now and process.hrtime read mach_continuous_time, libuv src/unix/darwin.c), so a
- * sleep shows only as a long gap between steps: the core counts a gap longer than
- * SIM_UNOBSERVED_GAP_MS while it was polling as time no rule watched. `wall` is the epoch, what
- * the registry stores; it moving apart from `mono` is a clock step.
+ * This runtime: its process, and a stable id of the Pod profile it runs (4b: of its userData
+ * directory), the same after a restart and different for a probe's profile. A restarted Pod sees
+ * the panes and agent sessions its previous process resolved holders in; another profile never.
  */
-export type SimClockReading = Readonly<{ mono: number; wall: number }>
+export type SimRuntime = SimProcessId & Readonly<{ profile: string }>
+
+/**
+ * Milliseconds. `mono` never steps, and on macOS it runs on while the Mac sleeps (Node's
+ * performance.now and process.hrtime read mach_continuous_time, libuv src/unix/darwin.c). `wall`
+ * is the epoch, what the registry stores; it moving apart from `mono` is a clock step.
+ *
+ * Only the sleep signal says time went unwatched: `suspends` counts Electron powerMonitor
+ * `suspend` events since the runtime started, and `suspended` is true from one until the next
+ * `resume`. A long gap between steps without it is awake time (App Nap throttles the nested
+ * `LSUIElement` runtime's timers to a poll a minute or more, and every window must still fall
+ * due). 4b counts `suspend` itself, not only `resume`: it comes before the sleep, so the first
+ * step after waking sees it whichever of the overdue timer and `resume` the loop delivers first.
+ */
+export type SimClockReading = Readonly<{
+  mono: number
+  wall: number
+  suspends: number
+  suspended: boolean
+}>
 export type SimClock = { now(): SimClockReading }
 
 export type SimIdSource = Readonly<{
@@ -92,8 +109,7 @@ export type SimSlimProfile = Readonly<{
 
 /** simctl and the helper behind one interface; each method answers, none throws. */
 export type SimDeviceDriver = {
-  // Answers well within SIM_UNOBSERVED_GAP_MS (`unknown` on a timeout): a poll that takes longer
-  // reads to the core as a sleep.
+  // `unknown` on a timeout, within a few seconds: a poll waits for it.
   observe(): Promise<SimDeviceObservation>
   clone(source: string, name: string): Promise<SimOpOutcome>
   create(name: string, deviceType: string, runtime: string): Promise<SimOpOutcome>
@@ -109,11 +125,17 @@ export type SimDeviceDriver = {
   delete(udid: string): Promise<SimOpOutcome>
 }
 
+/**
+ * Read on every poll, and in a `lease` call when the last reading is older than
+ * SIM_CAPACITY_FRESH_MS (the first lease after an idle spell, when nothing polled), so that call
+ * can boot at once. 4b keeps it cheap: claude-acc's guard status, no device work.
+ */
 export type SimCapacityPort = { read(): Promise<SimCapacityReading> }
 
 export type SimLivenessPort = {
-  // `resolvedHere`: this runtime resolved the holder (the lease's resolvedBy), so its panes and
-  // agent sessions are the ones to look in; any other runtime answers notServedHere for them.
+  // `resolvedHere`: this runtime, or an earlier process of its profile, resolved the holder (the
+  // lease's resolvedBy), so its panes and agent sessions are the ones to look in; any other
+  // runtime answers notServedHere for them.
   holderFacts(holder: SimHolder, resolvedHere: boolean): Promise<SimHolderFacts>
   runtime(ref: SimProcessId): Promise<'live' | 'exited'>
   externalUse(): Promise<readonly string[]>

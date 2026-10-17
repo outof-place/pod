@@ -56,6 +56,8 @@ export type FakePorts = {
   notified: Map<number, string[]>
   forRuntime(self: SimProcessId): SimPoolPorts
   reset(): void
+  // Time passes with no step at all (nothing held or booted, so no poll).
+  idle(ms: number): void
 }
 
 /** What a runtime sees of a holder and of another runtime; every holder lives by default. */
@@ -83,9 +85,14 @@ export function fakePorts(registry: SimRegistryFile, world: FakeWorld = {}): Fak
       calls.length = 0
       store.swaps.length = 0
     },
+    idle: (ms) => {
+      tick += ms
+    },
     forRuntime: (self) => ({
       store,
-      clock: { now: () => ({ mono: 1_000_000 + tick, wall: T0 + tick++ }) },
+      clock: {
+        now: () => ({ mono: 1_000_000 + tick, wall: T0 + tick++, suspends: 0, suspended: false })
+      },
       ids: {
         leaseId: () => `sl_${self.pid.toString(36)}${(ids++).toString(36).padStart(3, '0')}`,
         deviceId: () => udid(7000 + ids++)
@@ -112,14 +119,17 @@ export function fakePorts(registry: SimRegistryFile, world: FakeWorld = {}): Fak
         delete: (id) => done(`delete ${id}`)
       },
       capacity: {
-        read: async () => ({
-          source: 'claudeAcc',
-          cap: 2,
-          outsideBooted: 0,
-          agentsInUse: 0,
-          brake: 'calm',
-          measuredAt: T0 + tick
-        })
+        read: async () => {
+          calls.push('capacity')
+          return {
+            source: 'claudeAcc',
+            cap: 2,
+            outsideBooted: 0,
+            agentsInUse: 0,
+            brake: 'calm',
+            measuredAt: T0 + tick
+          }
+        }
       },
       liveness: {
         holderFacts: async (holder, resolvedHere) =>

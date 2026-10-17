@@ -1,9 +1,8 @@
 // Fork-only (Pod): time as the pool core judges it. Every window (idle, reservation, takeover, a
-// silent waiter, an op's deadline, the warm window, a tombstone's life) is measured on this
-// runtime's monotonic clock from the moment this runtime first saw its start, never from a wall
-// time in the registry: time no runtime observed (a sleep, a crash, a clock step) restarts a
-// window instead of expiring it.
-import { SIM_RESERVATION_CLAIM_S } from '../../../../shared/pod-sim/sim-call-limits'
+// silent waiter, an op's deadline, the warm window, a make backoff, a tombstone's life) is
+// measured on this runtime's monotonic clock from the moment this runtime first saw its start,
+// never from a wall time in the registry: time no runtime observed (a sleep, a crash, a clock
+// step) restarts a window instead of expiring it.
 import { simDeviceCountsTowardCap } from '../../../../shared/pod-sim/sim-lifecycle'
 import type { SimRegistryFile } from '../../../../shared/pod-sim/sim-registry'
 import {
@@ -14,8 +13,9 @@ import {
   setAnchor,
   SIM_ANCHOR_LAYER_MAX
 } from './sim-pool-anchors'
-import { SIM_CLOCK_STEP_MS, SIM_UNOBSERVED_GAP_MS } from './sim-pool-config'
-import type { SimPoolDraft } from './sim-pool-draft'
+import { SIM_CLOCK_STEP_MS, SIM_SUSPENDED_GAP_MS } from './sim-pool-config'
+import { makeKindKey, type SimPoolDraft } from './sim-pool-draft'
+import type { SimClockReading } from './sim-pool-ports'
 
 /**
  * Whether this runtime has watched `key` hold `value` for `ms`; a new value restarts the window.
@@ -41,6 +41,16 @@ export function windowDue(
     wakeAt(d, due)
   }
   return false
+}
+
+/** The wall time `key`'s window falls due, from when this runtime first saw it hold `value`. */
+export function windowDueAt(
+  d: SimPoolDraft,
+  key: string,
+  value: string | number,
+  ms: number
+): number {
+  return d.now.wall + windowSince(d, key, value) + ms - d.now.mono
 }
 
 /** When this runtime first saw `key` hold `value`. */
@@ -81,20 +91,27 @@ export function simPoolPolling(registry: SimRegistryFile): boolean {
   )
 }
 
+/** Whether the Mac slept between two readings, by the clock port's sleep signal alone. */
+function sleptBetween(last: SimClockReading, now: SimClockReading): boolean {
+  return (
+    now.suspends !== last.suspends ||
+    (last.suspended && now.mono - last.mono > SIM_SUSPENDED_GAP_MS)
+  )
+}
+
 /**
- * Time passed that no rule watched restarts every window: a gap between steps longer than
- * SIM_UNOBSERVED_GAP_MS while the pool was polling (the Mac slept: the monotonic clock runs on
- * through sleep, see SimClockReading), or wall and monotonic time moving apart (a wall clock
- * step). Wall times ahead of now (the clock stepped back) are pulled to now, so nothing reads a
- * negative idle time. While nothing is held or booted no timer runs, so a long gap means nothing.
+ * Time passed that no rule watched restarts every window: a sleep (the clock port's signal; the
+ * monotonic clock runs on through it, see SimClockReading), or wall and monotonic time moving
+ * apart (a wall clock step). A long gap without either is awake time, so a throttled timer still
+ * lets every window fall due. Wall times ahead of now (the clock stepped back) are pulled to now,
+ * so nothing reads a negative idle time.
  */
 export function observeClock(d: SimPoolDraft): void {
   const last = d.memory.lastTick
   d.memory.lastTick = d.now
   const stepped =
     last !== null && Math.abs(d.now.wall - last.wall - (d.now.mono - last.mono)) > SIM_CLOCK_STEP_MS
-  const slept = last !== null && d.memory.polling && d.now.mono - last.mono > SIM_UNOBSERVED_GAP_MS
-  const leap = stepped || slept
+  const leap = stepped || (last !== null && sleptBetween(last, d.now))
   if (leap) {
     forEachAnchor(d.memory.windows, (key, anchor) => {
       setAnchor(d.memory.windows, key, { value: anchor.value, mono: d.now.mono })
@@ -108,14 +125,14 @@ export function observeClock(d: SimPoolDraft): void {
     if (lease.takeover && lease.takeover.lastInput > ahead) {
       lease.takeover = { ...lease.takeover, lastInput: d.now.wall }
     }
-    if (lease.reservedUntil !== undefined && (leap || lease.reservedUntil > ahead + claimMs())) {
-      lease.reservedUntil = d.now.wall + claimMs()
+    if (lease.reservedUntil !== undefined && (leap || lease.reservedUntil > ahead + claimMs(d))) {
+      lease.reservedUntil = d.now.wall + claimMs(d)
     }
   }
 }
 
-export function claimMs(): number {
-  return SIM_RESERVATION_CLAIM_S * 1000
+export function claimMs(d: SimPoolDraft): number {
+  return d.config.claimMs
 }
 
 /** A queue stamp after every waiter's, even when the wall clock stepped back. */
@@ -124,7 +141,6 @@ export function queueStamp(d: SimPoolDraft): number {
   return Math.max(d.now.wall, latest + 1)
 }
 
-/** Drop the anchors of leases, devices and tombstones that are gone. */
 /**
  * Folds a grown layer of anchors into a new base, dropping those of ids the registry no longer
  * has (lease ids and udids are never reused, so a stale anchor only costs memory until then).
@@ -142,6 +158,9 @@ export function foldWindows(d: SimPoolDraft): void {
   }
   for (const device of d.registry.devices) {
     ids.add(device.udid)
+  }
+  for (const failing of d.registry.makeFailures ?? []) {
+    ids.add(makeKindKey(failing))
   }
   d.memory.windows = foldAnchors(d.memory.windows, (key) =>
     ids.has(key.slice(key.indexOf(':') + 1))

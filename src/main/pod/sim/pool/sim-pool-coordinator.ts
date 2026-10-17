@@ -7,15 +7,22 @@
 // Cadence: a step asks for the next one at `wakeAt` (a window falling due); calls, releases and op
 // outcomes step at once. Only what has no push is polled: holder liveness and claude-acc's reading
 // every SIM_POOL_POLL_MS while anything is leased or booted, simctl's list and the argv scan every
-// SIM_POOL_LIST_MS. Nothing leased and nothing booted: no timer at all.
+// SIM_POOL_LIST_MS. Nothing leased and nothing booted: no timer at all, so the first `lease` after
+// that reads claude-acc itself and can boot in the same call.
+//
+// 4b feeds the clock port's sleep signal from Electron's powerMonitor `suspend` and `resume`
+// (event names checked against electron.d.ts of the pinned Electron 45; agent-awake-service.ts
+// listens to `resume` already): see SimClockReading.
 import type { SimRegistryFile } from '../../../../shared/pod-sim/sim-registry'
 import { simHolderLiveness } from '../leases/sim-holder-liveness'
 import type { SimPoolAnswer, SimPoolCommand } from './sim-pool-commands'
 import type { SimPoolConfig } from './sim-pool-config'
+import { capacityIsFresh } from './sim-pool-capacity'
 import {
   EMPTY_SIM_POOL_MEMORY,
   runtimeKey,
   sameRuntime,
+  seesHolderOf,
   type SimPoolEffect,
   type SimPoolMemory
 } from './sim-pool-draft'
@@ -31,7 +38,7 @@ import type {
   SimLivenessPort,
   SimOpOutcome,
   SimRegistryStore,
-  SimProcessId,
+  SimRuntime,
   SimWaiterPort
 } from './sim-pool-ports'
 import { simPoolStep } from './sim-pool-step'
@@ -64,10 +71,7 @@ export type SimPoolRun =
     }>
   | Readonly<{ ok: false; reason: 'registryUnreadable' | 'contention'; message: string }>
 
-/**
- * How often to poll for this registry: only while something is held or booted. The core relies on
- * it: a longer gap between its steps while polling is time no rule watched (a sleep).
- */
+/** How often to poll for this registry: only while something is held or booted. */
 export function simPoolPollMs(registry: SimRegistryFile): number | null {
   return simPoolPolling(registry) ? SIM_POOL_POLL_MS : null
 }
@@ -89,13 +93,25 @@ export class SimPoolCoordinator {
   constructor(
     private readonly ports: SimPoolPorts,
     private readonly config: SimPoolConfig,
-    private readonly self: SimProcessId
+    private readonly self: SimRuntime
   ) {}
 
   run(command: SimPoolCommand): Promise<SimPoolRun> {
-    const next = this.queue.then(() => this.step(command))
+    const next = this.queue.then(async () => this.step(await this.withCapacity(command)))
     this.queue = next.catch(() => undefined)
     return next
+  }
+
+  /**
+   * A `lease` after an idle spell (no poll, so claude-acc's last reading is stale) reads it for
+   * the call: one cheap port read instead of `waitingFor: measurement` until the next poll.
+   */
+  private async withCapacity(command: SimPoolCommand): Promise<SimPoolCommand> {
+    const last = this.memory.observation?.capacity
+    if (command.kind !== 'lease' || capacityIsFresh(last, this.ports.clock.now().wall)) {
+      return command
+    }
+    return { ...command, capacity: await this.ports.capacity.read() }
   }
 
   private async step(command: SimPoolCommand): Promise<SimPoolRun> {
@@ -149,11 +165,11 @@ export class SimPoolCoordinator {
     const capacity = await this.ports.capacity.read()
     const liveness: Record<string, ReturnType<typeof simHolderLiveness>> = {}
     for (const lease of read.registry.leases) {
-      // Only the runtime that resolved the holder can see its panes and sessions; serving the
-      // lease (as an adopter does) is not enough.
+      // Only the runtime that resolved the holder, or that Pod restarted, can see its panes and
+      // sessions; serving the lease (as an adopter does) is not enough.
       const facts = await this.ports.liveness.holderFacts(
         lease.holder,
-        sameRuntime(lease.resolvedBy ?? lease.servedBy, this.self)
+        seesHolderOf(lease.resolvedBy ?? lease.servedBy, this.self)
       )
       liveness[lease.leaseId] = simHolderLiveness(lease.holder, facts)
     }

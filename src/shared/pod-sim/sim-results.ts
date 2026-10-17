@@ -101,7 +101,21 @@ export const SimLeaseOutcome = z.discriminatedUnion('status', [
         startedAt: Count
       })
       .optional(),
-    brake: z.enum(SIM_BRAKES),
+    // Why nothing is being made or started for this waiter: the pool has no device of the class
+    // and model asked for and makes none (`unmakeable`), or making or starting one failed
+    // `failures` times in a row (`failing`, with the last failure's text and, while the pool
+    // waits before trying again, when it will).
+    stalled: z
+      .object({
+        reason: z.enum(['unmakeable', 'failing']),
+        failures: Count.optional(),
+        failure: z.string().min(1).max(1024).optional(),
+        retryAt: Count.optional()
+      })
+      .optional(),
+    // claude-acc's stage as last measured; absent when no fresh measurement says (`waitingFor`
+    // is then `measurement`).
+    brake: z.enum(SIM_BRAKES).optional(),
     next: Next,
     callAgain: z.literal(true)
   }),

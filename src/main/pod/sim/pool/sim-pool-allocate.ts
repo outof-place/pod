@@ -3,7 +3,8 @@
 // only through the gate. A call waiting for a reserved device claims it the moment it is ready.
 // When no device of the class is free and a slot nobody holds is, the pool makes one (a clone of
 // the golden device, else a fresh one) for each waiter it would fit, up to its per-class limit; a
-// waiter for a model the pool neither has nor makes gets nothing made and is told so.
+// waiter for a model the pool neither has nor makes gets nothing made and is told so, and so is a
+// waiter for a kind the pool keeps failing to make or start (sim-pool-make-failures.ts).
 import { simDeviceIsFree, type SimDeviceState } from '../../../../shared/pod-sim/sim-lifecycle'
 import type { SimDeviceClass } from '../../../../shared/pod-sim/sim-pool-snapshot'
 import { leaseOn, notifyWaiter } from '../leases/sim-lease-records'
@@ -20,10 +21,12 @@ import {
   deviceState,
   moveDevice,
   moveLease,
+  type SimDeviceKind,
   type SimPoolDevice,
   type SimPoolDraft,
   type SimPoolLease
 } from './sim-pool-draft'
+import { failingStall, makeGate } from './sim-pool-make-failures'
 import { trustedListing } from './sim-pool-reconcile'
 import { claimMs, dropWindow, touchWindow } from './sim-pool-windows'
 
@@ -45,7 +48,7 @@ function reserve(d: SimPoolDraft, lease: SimPoolLease, device: SimPoolDevice): v
   moveLease(d, lease, 'reserve')
   lease.udid = device.udid
   if (deviceState(device) === 'ready') {
-    lease.reservedUntil = d.now.wall + claimMs()
+    lease.reservedUntil = d.now.wall + claimMs(d)
     touchWindow(d, `reserve:${lease.leaseId}`, lease.reservedUntil)
   }
 }
@@ -111,6 +114,15 @@ function poolHasFit(d: SimPoolDraft, waiter: SimPoolLease): boolean {
   return d.registry.devices.some((device) => device.role === 'pool' && deviceFits(device, waiter))
 }
 
+/** The waiter waits for a kind the pool keeps failing to make or start, and hears why. */
+function stallFailing(d: SimPoolDraft, waiter: SimPoolLease, kind: SimDeviceKind): void {
+  d.unserved.set(waiter.leaseId, 'failing')
+  const stall = failingStall(d, kind)
+  if (stall) {
+    d.stalls.set(waiter.leaseId, stall)
+  }
+}
+
 /** Serves the class's waiters from free devices; returns those a new device would serve. */
 function serveClass(
   d: SimPoolDraft,
@@ -125,15 +137,28 @@ function serveClass(
     if (!canTakeDevice(waiter)) {
       continue
     }
-    const pick = bestFor(free, waiter)
+    d.stalls.delete(waiter.leaseId)
+    let pick = bestFor(free, waiter)
+    let failingPick: SimPoolDevice | undefined
+    if (pick && deviceState(pick) !== 'ready' && makeGate(d, pick) === 'failing') {
+      // Its kind keeps failing to start; one of the kind the config names may still be made.
+      failingPick = pick
+      pick = undefined
+    }
     if (!pick) {
-      const makeable = madeFor(d, deviceClass, waiter) !== undefined
-      if (!makeable && !poolHasFit(d, waiter)) {
+      const kind = madeFor(d, deviceClass, waiter)
+      if (!kind && !poolHasFit(d, waiter)) {
         d.unserved.set(waiter.leaseId, 'unmakeable')
+        d.stalls.set(waiter.leaseId, { reason: 'unmakeable' })
+        continue
+      }
+      const failing = kind ? (makeGate(d, kind) === 'failing' ? kind : undefined) : failingPick
+      if (failing) {
+        stallFailing(d, waiter, failing)
         continue
       }
       d.unserved.set(waiter.leaseId, gate === 'open' ? 'device' : gate)
-      if (makeable && gate === 'open') {
+      if (kind && gate === 'open') {
         needy.push(waiter)
       }
     } else if (deviceState(pick) === 'ready') {
@@ -204,15 +229,27 @@ function provision(d: SimPoolDraft, deviceClass: SimDeviceClass, needy: SimPoolL
   }).length
   let count = ofClass.length
   let gate: SimBootGate = provisionGate(d)
-  while (needy.length > making && count < d.config.maxDevicesPerClass && gate === 'open') {
+  let tries = makeGate(d, kind)
+  while (
+    needy.length > making &&
+    count < d.config.maxDevicesPerClass &&
+    gate === 'open' &&
+    tries === 'open'
+  ) {
     makeDevice(d, kind)
     making += 1
     count += 1
     gate = provisionGate(d)
+    tries = makeGate(d, kind)
   }
   needy.forEach((waiter, index) => {
-    const stopped = gate === 'open' ? 'device' : gate
-    d.unserved.set(waiter.leaseId, index < making ? 'creating' : stopped)
+    if (index < making) {
+      d.unserved.set(waiter.leaseId, 'creating')
+    } else if (tries === 'failing') {
+      stallFailing(d, waiter, kind)
+    } else {
+      d.unserved.set(waiter.leaseId, gate === 'open' ? 'device' : gate)
+    }
   })
 }
 

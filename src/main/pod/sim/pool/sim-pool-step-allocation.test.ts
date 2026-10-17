@@ -56,7 +56,7 @@ function busyDay(): SimPoolRegistry {
 }
 
 const inputs = {
-  now: { mono: 5_000_000, wall: T0 },
+  now: { mono: 5_000_000, wall: T0, suspends: 0, suspended: false },
   self: SELF,
   config: {
     namePrefix: 'Portivo-',
@@ -72,7 +72,7 @@ function steadyState(): SimPoolState {
   const poll: SimPoolCommand = {
     kind: 'poll',
     observation: {
-      at: { mono: 4_999_000, wall: T0 - 1_000 },
+      at: { mono: 4_999_000, wall: T0 - 1_000, suspends: 0, suspended: false },
       devices: {
         verdict: 'ok',
         devices: registry.devices.map((device) => ({

@@ -315,10 +315,19 @@ describe('claude-acc going quiet is not calm', () => {
       setup(world)
       world.poll()
       expect(world.lease(A)).toMatchObject({ status: 'ready', device: { udid: udid(1) } })
-      expect(world.lease(B)).toMatchObject({ status: 'waiting', waitingFor: 'brake' })
+      // Not the brake: nobody measured one. B waits for a fresh measurement.
+      expect(world.lease(B)).toMatchObject({ status: 'waiting', waitingFor: 'measurement' })
+      expect(world.leaseOf(B)?.queue?.waitingFor).toBe('measurement')
       expect(world.effectKinds().filter((effect) => effect.startsWith('boot'))).toEqual([])
     })
   }
+
+  it('says brake when claude-acc measured the brake', () => {
+    const world = new PoolWorld({ brake: 'brake' })
+    world.device(1)
+    world.poll()
+    expect(world.lease(A)).toMatchObject({ status: 'waiting', waitingFor: 'brake' })
+  })
 
   it("applies Pod's own cap when claude-acc says 0 (no cap there)", () => {
     const world = new PoolWorld({ cap: 0, config: { podCap: 1 } })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agent, callerOf, IPHONE, PEER, PoolWorld, ROOT, udid } from './sim-pool.test-support'
+import { agent, callerOf, IPHONE, PEER, PoolWorld, ROOT, SELF, udid } from './sim-pool.test-support'
 
 const A = agent(41001)
 const B = agent(41002)
@@ -79,7 +79,7 @@ describe('three requesters on a cap of 2', () => {
 })
 
 describe('a reservation', () => {
-  it('passes to the next waiter after 60 s unclaimed, and the late waiter rejoins at the back', () => {
+  it('passes to the next waiter after 180 s unclaimed, and the late waiter rejoins at the back', () => {
     const world = fullWorld()
     world.lease(C)
     world.lease(D)
@@ -87,7 +87,7 @@ describe('a reservation', () => {
     world.release(A)
     world.finish(udid(1))
     expect(world.leaseOf(C)).toMatchObject({ state: 'reserved', udid: udid(1) })
-    world.advance(59_000)
+    world.advance(179_000)
     world.poll()
     expect(world.leaseOf(C)?.state).toBe('reserved')
     world.advance(2_000)
@@ -101,7 +101,7 @@ describe('a reservation', () => {
     })
   })
 
-  it('counts its 60 s from when the device is ready, not from when it was picked', () => {
+  it('counts its 180 s from when the device is ready, not from when it was picked', () => {
     const world = new PoolWorld({ cap: 1 })
     world.device(1)
     world.device(2)
@@ -110,7 +110,7 @@ describe('a reservation', () => {
     world.lease(B)
     world.advance(50_000)
     world.finish(udid(1))
-    world.advance(55_000)
+    world.advance(175_000)
     world.poll()
     expect(world.leaseOf(A)).toMatchObject({ state: 'reserved', udid: udid(1) })
     world.advance(6_000)
@@ -119,11 +119,27 @@ describe('a reservation', () => {
     expect(world.leaseOf(A)?.state).toBe('waiting')
   })
 
+  it('lasts the claim window the config sets', () => {
+    const world = new PoolWorld({ cap: 1, config: { claimMs: 30_000 } })
+    world.device(1)
+    world.device(2)
+    world.poll()
+    world.lease(A)
+    world.lease(B)
+    world.finish(udid(1))
+    world.advance(29_000)
+    world.poll()
+    expect(world.leaseOf(A)).toMatchObject({ state: 'reserved', reservedUntil: world.wall + 1_000 })
+    world.advance(2_000)
+    world.poll()
+    expect(world.leaseOf(B)).toMatchObject({ state: 'reserved', udid: udid(1) })
+  })
+
   it('keeps the runtime that holds the waiter call as servedBy, whichever runtime grants', () => {
     const world = fullWorld()
     world.self = PEER
     world.lease(C)
-    world.self = { pid: 70110, startedAt: 1760599900 }
+    world.self = SELF
     world.release(A)
     world.finish(udid(1))
     expect(world.leaseOf(C)).toMatchObject({ state: 'reserved', servedBy: PEER })
