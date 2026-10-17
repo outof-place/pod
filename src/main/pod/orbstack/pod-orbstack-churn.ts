@@ -8,6 +8,19 @@ import type { OrbstackToolRunner } from './pod-orbstack-tools'
 
 export const POD_ORBSTACK_CHURN_WARN_AT = 180
 
+/** 2.2.4 frees a deleted machine's address (orbstack#2688); an unknown version may still keep it. */
+export function orbstackKeepsDeletedAddresses(version: string | null): boolean {
+  const parts = /^(\d+)\.(\d+)\.(\d+)/
+    .exec(version ?? '')
+    ?.slice(1)
+    .map(Number)
+  if (!parts) {
+    return true
+  }
+  const [major = 0, minor = 0, patch = 0] = parts
+  return major * 1e6 + minor * 1e3 + patch < 2_002_004
+}
+
 type Saved = { boot: string | null; creates: number; since: number }
 
 /**

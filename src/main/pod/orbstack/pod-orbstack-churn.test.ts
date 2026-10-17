@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   countMachineCreates,
   createPodOrbstackChurn,
+  orbstackKeepsDeletedAddresses,
   POD_ORBSTACK_CHURN_WARN_AT
 } from './pod-orbstack-churn'
 import type { OrbstackToolRunner } from './pod-orbstack-tools'
@@ -74,5 +75,17 @@ describe('Pod machine churn since OrbStack started', () => {
     // No log to read: keep counting rather than reset.
     restart(null)
     expect(churn.snapshot().creates).toBe(1)
+  })
+})
+
+describe('orbstackKeepsDeletedAddresses', () => {
+  it('is true before 2.2.4 and for a version it cannot read', () => {
+    expect(orbstackKeepsDeletedAddresses('2.2.3')).toBe(true)
+    expect(orbstackKeepsDeletedAddresses('1.9.9')).toBe(true)
+    expect(orbstackKeepsDeletedAddresses(null)).toBe(true)
+    expect(orbstackKeepsDeletedAddresses('nightly')).toBe(true)
+    expect(orbstackKeepsDeletedAddresses('2.2.4')).toBe(false)
+    expect(orbstackKeepsDeletedAddresses('2.3.0')).toBe(false)
+    expect(orbstackKeepsDeletedAddresses('3.0.0')).toBe(false)
   })
 })
