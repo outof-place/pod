@@ -6,6 +6,7 @@ import {
 } from '../../search/external-workspace-search-provider'
 import { OgdClient, resolveOgdSocketPath } from './ogd-client'
 import { isPodNativeSearchEnabled } from './pod-native-search-flag'
+import { setPodIndexedSearchEnabled } from './pod-indexed-search-pty-env'
 import { readOgdIndexStatus, type PodSearchIndexStatus } from './pod-search-index-status'
 import { createPodSearchProvider } from './pod-search-provider'
 
@@ -31,6 +32,7 @@ export function installPodNativeSearch(
   let client: OgdClient | null = null
   let clientSocketPath: string | null = null
   const isEnabled = () => isPodNativeSearchEnabled(store.getSettings())
+  setPodIndexedSearchEnabled(isEnabled)
   const currentClient = () => {
     const socketPath = resolveOgdSocketPath()
     if (socketPath !== clientSocketPath) {
