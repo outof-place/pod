@@ -66,6 +66,9 @@ type OrcaTestFixtures = {
   // PATH/token environment. Keep this fixture-owned so tests never mutate the
   // developer's shell or already-running Orca instance.
   launchEnv: NodeJS.ProcessEnv
+  // Fork-only (Pod): writes the isolated HOME before launch, for specs that start from per-user
+  // state an earlier version left (pod-decouple-legacy-home.spec.ts). Never the developer's home.
+  orcaAppSeedHome: ((isolatedHome: string) => void) | null
 }
 
 type OrcaWorkerFixtures = {
@@ -176,6 +179,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       launchEnv,
       orcaAppExtraEnv,
       orcaAppExtraArgs,
+      orcaAppSeedHome,
       registerPostElectronShutdownCleanup
     },
     provideFixture,
@@ -211,6 +215,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       extraEnv: orcaAppExtraEnv,
       userDataDir
     })
+    orcaAppSeedHome?.(homeIsolation.isolatedHome)
     // Why: ORCA_E2E_SLOWMO_MS adds a pause between every Playwright action so a
     // developer running with ORCA_E2E_FORCE_HEADFUL=1 can actually watch what
     // the test does. Defaults to 0 (no slowdown) for normal runs.
@@ -284,6 +289,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   launchEnv: [{}, { option: true }],
   orcaAppExtraEnv: [{}, { option: true }],
   orcaAppExtraArgs: [[], { option: true }],
+  orcaAppSeedHome: [null, { option: true }],
 
   // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
   // until the session is fully ready with a worktree active.
