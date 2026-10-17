@@ -145,7 +145,9 @@ export function createWorkspaceAdoptUndo(deps: WorkspaceAdoptUndoDeps) {
     const save = () => saveAdoptRecord(deps.journal, record)
     const moves = forwardMoves(record)
     const backs = await Promise.all(moves.map(backMoveOf))
-    const worktrees = (await pathExists(record.to)) ? await listWorktreePaths(git, record.to) : []
+    // From the old place on a retry after the folders went back: git still lists every worktree.
+    const listedFrom = (await pathExists(record.to)) ? record.to : record.from
+    const worktrees = await listWorktreePaths(git, listedFrom)
     await stopWatchers(git, worktrees)
     for (const back of backs) {
       if (!back || back === 'untouched') {
@@ -161,14 +163,13 @@ export function createWorkspaceAdoptUndo(deps: WorkspaceAdoptUndoDeps) {
       )
       await save()
     }
-    const linked = worktrees
-      .filter((path) => path !== record.to)
-      .map((path) =>
-        remapPath(
-          path,
-          moves.map(([from, to]) => [to, from] as const)
-        )
+    // The first entry is the main checkout.
+    const linked = worktrees.slice(1).map((path) =>
+      remapPath(
+        path,
+        moves.map(([from, to]) => [to, from] as const)
       )
+    )
     const repair = await git(['worktree', 'repair', ...linked], record.from)
     if (repair.code !== 0) {
       record.repairError = repair.stderr.trim() || 'git worktree repair failed'
