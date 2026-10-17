@@ -35,9 +35,27 @@ export function takeLaunchdReportPath(argv: string[]): void {
   ownReportPath = index !== -1 && argv[index + 1] ? argv[index + 1] : undefined
 }
 
+/** What Electron's node mode drops from its environment at start when its parent process isn't
+ *  signed as the same app (node_main.cc), and a job's parent, launchd, never is. A forked daemon
+ *  keeps them, and every PTY inherits the daemon's environment. */
+const PARENT_CHECKED_ENV = ['NODE_OPTIONS', 'NODE_EXTRA_CA_CERTS', 'NODE_REPL_EXTERNAL_MODULE']
+const KEPT_ENV_PREFIX = 'POD_LAUNCHD_KEPT_'
+
+/** The launcher's side: a copy of each, under a name Electron leaves alone, for the job's env. */
+export function keepParentCheckedEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const kept: NodeJS.ProcessEnv = { ...env }
+  for (const name of PARENT_CHECKED_ENV) {
+    if (env[name] !== undefined) {
+      kept[`${KEPT_ENV_PREFIX}${name}`] = env[name]
+    }
+  }
+  return kept
+}
+
 /** launchd puts its job's label (XPC_SERVICE_NAME) and XPC_FLAGS in the job's environment, which
- *  every PTY would inherit: dropped here, the label returned for the log. A no-op unless launchd
- *  started this daemon. */
+ *  every PTY would inherit: dropped here, the label returned for the log. The variables Electron
+ *  dropped come back from their copies, so the PTYs get what a forked daemon's get. A no-op unless
+ *  launchd started this daemon. */
 export function dropLaunchdJobEnv(env: NodeJS.ProcessEnv = process.env): string | undefined {
   if (!ownReportPath) {
     return undefined
@@ -45,6 +63,13 @@ export function dropLaunchdJobEnv(env: NodeJS.ProcessEnv = process.env): string 
   const label = env.XPC_SERVICE_NAME
   delete env.XPC_SERVICE_NAME
   delete env.XPC_FLAGS
+  for (const name of PARENT_CHECKED_ENV) {
+    const kept = env[`${KEPT_ENV_PREFIX}${name}`]
+    delete env[`${KEPT_ENV_PREFIX}${name}`]
+    if (kept !== undefined) {
+      env[name] = kept
+    }
+  }
   return label
 }
 

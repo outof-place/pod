@@ -12,7 +12,11 @@ import {
   buildDaemonScriptArgs,
   type DaemonChildSpawnOptions
 } from './daemon-launched-child-spawn'
-import { DAEMON_LAUNCHD_REPORT_ARG, readDaemonLaunchdReport } from './daemon-launchd-report'
+import {
+  DAEMON_LAUNCHD_REPORT_ARG,
+  keepParentCheckedEnv,
+  readDaemonLaunchdReport
+} from './daemon-launchd-report'
 import { parseDaemonReadyIdentity, type DaemonReadyIdentity } from './daemon-ready-identity'
 import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
 import {
@@ -149,7 +153,7 @@ export async function launchDaemonViaLaunchd(
   jobs.writePlist(paths, {
     program: launch.program,
     args: launch.args,
-    env: buildDaemonChildEnv(options),
+    env: keepParentCheckedEnv(buildDaemonChildEnv(options)),
     cwd: options.userDataPath,
     exitTimeoutSeconds: DAEMON_EXIT_TIMEOUT_S,
     numberOfFiles: DAEMON_NUMBER_OF_FILES
