@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   rmSync,
   statSync,
@@ -151,11 +152,14 @@ function copySignIns(
   })
 }
 
-/** Every file under `dir` with its bytes and mode, to prove a tree was left exactly as it was. */
+/** Every file under `dir` with its bytes and mode (a link, its target), to prove a tree was left exactly as it was. */
 function snapshot(dir: string): Record<string, string> {
   const out: Record<string, string> = {}
   for (const entry of readdirSync(dir, { recursive: true, withFileTypes: true })) {
-    if (entry.isFile()) {
+    if (entry.isSymbolicLink()) {
+      const path = join(entry.parentPath, entry.name)
+      out[path.slice(dir.length)] = `link ${readlinkSync(path)}`
+    } else if (entry.isFile()) {
       const path = join(entry.parentPath, entry.name)
       const mode = (statSync(path).mode & 0o777).toString(8)
       out[path.slice(dir.length)] = `${mode} ${readFileSync(path, 'base64')}`
@@ -170,6 +174,9 @@ function settingsHookCommands(): string[] {
     group.hooks.map((hook) => hook.command)
   )
 }
+
+// The one file only the product wrote: it moves to the product home, and a link takes its place.
+const MOVED = '/agent-hooks/pod-agent-hook'
 
 describe('pod-decouple migration in an isolated HOME', () => {
   it('copies user state and sign-ins once, and leaves the legacy home and settings.json alone', () => {
@@ -189,15 +196,22 @@ describe('pod-decouple migration in an isolated HOME', () => {
     expect(copyHome(mac.productUserData)).toEqual({
       status: 'copied',
       copied: ['daemon.pid', 'keybindings.json', 'terminal-history'],
+      moved: ['pod-agent-hook'],
       skipped: ['agent-hooks', 'claude-agent-teams-bin']
     })
     expect(readdirSync(join(home, PRODUCT_HOME)).sort()).toEqual([
+      'agent-hooks',
       'bench',
       'daemon.pid',
       'keybindings.json',
       'terminal-history'
     ])
-    expect(snapshot(mac.legacyHome)).toEqual(legacyBefore)
+    const productHook = join(home, PRODUCT_HOME, 'agent-hooks', 'pod-agent-hook')
+    const legacyAfter = { ...legacyBefore, [MOVED]: `link ${productHook}` }
+    expect(snapshot(mac.legacyHome)).toEqual(legacyAfter)
+    expect(snapshot(join(home, PRODUCT_HOME, 'agent-hooks'))).toEqual({
+      '/pod-agent-hook': legacyBefore[MOVED]
+    })
     // Running sessions still find every hook script settings.json names in the legacy home.
     const legacyCommands = settingsHookCommands().filter((command) =>
       command.startsWith(mac.legacyHome)
@@ -219,7 +233,7 @@ describe('pod-decouple migration in an isolated HOME', () => {
       reason: 'no-legacy-sign-ins'
     })
     expect(store.size).toBe(4)
-    expect(snapshot(mac.legacyHome)).toEqual(legacyBefore)
+    expect(snapshot(mac.legacyHome)).toEqual(legacyAfter)
     expect(readFileSync(join(home, '.claude', 'settings.json'))).toEqual(settingsBefore)
   })
 
@@ -230,7 +244,7 @@ describe('pod-decouple migration in an isolated HOME', () => {
       copied: ['daemon.pid', 'keybindings.json', 'terminal-history']
     })
     expect(existsSync(join(home, PRODUCT_HOME, 'keybindings.json'))).toBe(true)
-    expect(existsSync(join(home, PRODUCT_HOME, 'agent-hooks'))).toBe(false)
+    expect(readdirSync(join(home, PRODUCT_HOME, 'agent-hooks'))).toEqual(['pod-agent-hook'])
     expect(existsSync(mac.hookScript)).toBe(true)
     expect(
       JSON.parse(readFileSync(join(mac.productUserData, PRODUCT_HOME_COPY_RECORD), 'utf8'))
@@ -241,20 +255,24 @@ describe('pod-decouple migration in an isolated HOME', () => {
     })
   })
 
-  it('touches nothing while the legacy app runs, and copies no sign-in it may not read', () => {
+  // Why the move still runs: the moved file is the product's own, and the link keeps an older
+  // product build that runs now working.
+  it('copies nothing while the legacy app runs but its own hook, and no sign-in it may not read', () => {
     const mac = seedMac({ productHomeExists: true })
     const running = memoryKeychain({ [mac.legacy.canonical]: TOKEN })
     expect(copyHome(mac.productUserData, 501)).toEqual({
       status: 'deferred',
       reason: 'legacy-app-running',
-      pid: 501
+      pid: 501,
+      moved: ['pod-agent-hook']
     })
     expect(copySignIns(mac, running.keychain, 501)).toEqual({
       status: 'deferred',
       reason: 'legacy-app-running',
       pid: 501
     })
-    expect(readdirSync(join(home, PRODUCT_HOME))).toEqual(['bench'])
+    expect(readdirSync(join(home, PRODUCT_HOME)).sort()).toEqual(['agent-hooks', 'bench'])
+    expect(existsSync(mac.hookScript)).toBe(true)
     expect(existsSync(join(mac.productUserData, PRODUCT_HOME_COPY_RECORD))).toBe(false)
     expect([...running.store.keys()]).toEqual([mac.legacy.canonical])
 
