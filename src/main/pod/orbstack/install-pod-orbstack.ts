@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { spawnProcess } from '@orca/process-host'
 import type { Repo } from '../../../shared/repo-types'
-import { probeClaudeCliVersion } from '../../claude/claude-hook-event-versions'
+import { probeRecentClaudeCliVersion } from '../../claude/claude-hook-event-versions'
 import { resolveClaudeCommand } from '../../codex-cli/command'
 import { getMainHttpClient } from '../../network/http-client'
 import { createClaudeReleaseCache, sandboxClaudePlatform } from './pod-orbstack-claude-release'
@@ -43,6 +43,7 @@ import {
   createOrbstackToolRunner,
   resolveOrbstackE2eAnthropic,
   resolveOrbstackHomeOverride,
+  resolveOrbstackE2eClaudeVersion,
   resolveOrbstackSkipAgentInstall,
   resolveOrbstackTemplatesEnabled,
   resolveOrbstackToolPaths,
@@ -137,7 +138,12 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     readClaudeChoices: () => readMacClaudeChoices(),
     prepareClaudeRelease: resolveOrbstackSkipAgentInstall()
       ? async () => null
-      : async () => releases.prepare(await probeClaudeCliVersion(resolveClaudeCommand()))
+      : async () =>
+          releases.prepare(
+            // Why recent: a launch probes it too, and a create right after one needs no second exec.
+            resolveOrbstackE2eClaudeVersion() ??
+              (await probeRecentClaudeCliVersion(resolveClaudeCommand()))
+          )
   })
   const readers = createStatsReaders({
     spawn: (machine, args) =>

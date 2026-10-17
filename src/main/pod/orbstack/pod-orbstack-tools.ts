@@ -35,6 +35,17 @@ export function resolveOrbstackSkipAgentInstall(env: NodeJS.ProcessEnv = process
   return Boolean(env.ORCA_E2E_USER_DATA_DIR) && env[POD_ORBSTACK_E2E_SKIP_AGENT_INSTALL_ENV] === '1'
 }
 
+// E2E only: the Mac's Claude Code version a sandbox gets. An E2E profile's `claude` is a stub with
+// no version, so without this every create asked the stable channel over the network.
+export const POD_ORBSTACK_E2E_CLAUDE_VERSION_ENV = 'POD_E2E_ORBSTACK_CLAUDE_VERSION'
+
+export function resolveOrbstackE2eClaudeVersion(
+  env: NodeJS.ProcessEnv = process.env
+): string | null {
+  const version = env[POD_ORBSTACK_E2E_CLAUDE_VERSION_ENV]
+  return env.ORCA_E2E_USER_DATA_DIR && version && /^\d+\.\d+\.\d+$/.test(version) ? version : null
+}
+
 /**
  * E2E only: the sandbox's anthropic-api route goes to a stub API (`host:port`, with the stub's CA
  * file) under a fake key, so no run touches the real API or a real credential.

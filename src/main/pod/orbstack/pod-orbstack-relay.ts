@@ -122,8 +122,11 @@ function startRelay(
     markReady = resolve
   })
 
+  const startedAt = performance.now()
   const onFrame = (kind: number, conn: number, payload: Buffer): void => {
     if (kind === RELAY_FRAME.ready) {
+      // A sandbox's first launch waits for this; the time says what pre-starting it would save.
+      deps.log?.(`relay for ${machine} ready in ${Math.round(performance.now() - startedAt)} ms`)
       markReady(true)
       return
     }

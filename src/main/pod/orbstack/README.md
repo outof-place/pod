@@ -58,7 +58,7 @@ This was verified with a real request:
 
 ## How Claude Code gets in
 
-The sandbox runs the Mac's Claude Code version, so its hook events match what Pod expects. If the Mac has no Claude Code, the sandbox gets the stable channel. The sandbox's auto-updater is off.
+The sandbox runs the Mac's Claude Code version, so its hook events match what Pod expects. A create reuses a version probe from the last 5 minutes, as a launch does, instead of running `claude --version` again. If the Mac has no Claude Code, the sandbox gets the stable channel. An E2E profile, whose `claude` is a stub without a version, names one in `POD_E2E_ORBSTACK_CLAUDE_VERSION`, so its creates do not ask the network for the stable channel. The sandbox's auto-updater is off.
 
 Pod never pipes `install.sh` into a shell:
 
@@ -91,7 +91,7 @@ Measured on OrbStack 2.2.3 (Claude Code 2.1.296, load average 8–25, `POD_E2E_O
 | worktree machine create                 | p50 16.9 s (16.5–21.8)                                                     | p50 0.26 s (0.25–0.29)              |
 | first create, template built on the way |                                                                            | 17–22 s (sandbox), 16–19 s (shared) |
 
-- **Agent start** in a sandbox, launch command to the first Claude Code screen in a pty that answers terminal queries: p50 ~200 ms with the relay starting alongside, ~140 ms with it already up; `claude --version` 30–40 ms. The relay is ready 30–40 ms after it starts. A finer relay-wait loop (10 ms steps) did not measurably change this, and nor would a pre-started relay outside the first launch per sandbox, so neither ships.
+- **Agent start** in a sandbox, launch command to the first Claude Code screen in a pty that answers terminal queries: p50 ~200 ms with the relay starting alongside, ~140 ms with it already up; `claude --version` 30–40 ms. The relay is ready 30–40 ms after it starts; Pod logs `relay for <machine> ready in <n> ms` at each start. A finer relay-wait loop (10 ms steps) did not measurably change this, and nor would a pre-started relay outside the first launch per sandbox, so neither ships.
 - **Terminal queries:** `orb` on a terminal sends OSC 11 and a cursor position request and waits **5 s** for each unanswered one before it runs the command. Pod's terminals answer, but a client that renders without answering stalls every `orb -m` pane that long.
 - **From 0.55 s to 0.25 s:** the per-worktree steps run as one `orb run` instead of five (−130 ms), and the release cache trusts a Claude Code binary whose inode, size, mtime and ctime match its last full SHA-256 check instead of hashing 240 MB on every create (−130 ms). What is left is `orb start` (~75 ms), the first exec in a fresh machine (~100 ms), `orb clone` (~33 ms) and two `orb info` calls.
 - **First prompt:** a worktree machine's shell prompt shows ~23 ms after `orb -m` starts, so create to first prompt is ~0.28 s.

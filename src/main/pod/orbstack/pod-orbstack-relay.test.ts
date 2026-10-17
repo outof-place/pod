@@ -187,11 +187,13 @@ describe.skipIf(process.platform === 'win32' || !hasPython())('relay agent over 
     const hostsFile = join(stateDir, 'hosts')
     writeFileSync(hostsFile, '127.0.0.1 localhost\n')
     const caPath = join(stateDir, 'pod-sandbox', 'anthropic-ca.pem')
+    const logs: string[] = []
     const relays = createSandboxRelays({
       stateDir,
       hostsFile,
       caPath,
-      spawnAgent: (_machine, args) => spawnProcess({ program: 'python3', args })
+      spawnAgent: (_machine, args) => spawnProcess({ program: 'python3', args }),
+      log: (message) => logs.push(message)
     })
     cleanups.push(() => {
       relays.stopAll()
@@ -199,14 +201,15 @@ describe.skipIf(process.platform === 'win32' || !hasPython())('relay agent over 
       rmSync(stateDir, { recursive: true, force: true })
     })
     const hook = (route: SandboxHookRoute) => ({ hook: route, anthropic: null })
-    return { relays, route, hook, vmPort, stateDir, seen, hostsFile, caPath }
+    return { relays, route, hook, vmPort, stateDir, seen, hostsFile, caPath, logs }
   }
 
   it('forwards hook posts with the server token swapped in', async () => {
-    const { relays, route, hook, vmPort, stateDir, seen } = await setup()
+    const { relays, route, hook, vmPort, stateDir, seen, logs } = await setup()
     const handle = relays.ensure('pod-x-sbx', hook(route))
     expect(await handle.ready).toBe(true)
     expect(readFileSync(join(stateDir, 'ready'), 'utf8')).toBe(handle.nonce)
+    expect(logs).toContainEqual(expect.stringMatching(/^relay for pod-x-sbx ready in \d+ ms$/))
 
     const replies = await Promise.all([
       post(vmPort, {}),
