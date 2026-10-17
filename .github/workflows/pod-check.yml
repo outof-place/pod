@@ -77,6 +77,9 @@ jobs:
       # Commits land on main after the generated layers, so they must leave every codemod current.
       - name: Generated layers are current
         run: bash scripts/pod-generated.sh --check
+      # Upstream's pr.yml gate: a child process starts only through @orca/process-host.
+      - name: Process-host imports
+        run: node config/scripts/check-process-host-imports.mjs
       - run: pnpm tc
 
   unit:
