@@ -115,17 +115,20 @@ int main(int argc, char **argv) {
       }
     }
   }
-  // Descendants: repeat until no new process joins.
+  // Descendants: repeat until no new process joins. A process picked for its argv that descends
+  // from one picked by root or executable takes its ancestor's reason: it is that tree's own.
   for (int changed = 1; changed;) {
     changed = 0;
     for (int i = 0; i < n; i++) {
-      if (selected[i]) continue;
+      if (selected[i] == 1 || selected[i] == 2) continue;
       pid_t ppid = procs[i].kp_eproc.e_ppid;
       for (int j = 0; j < n; j++) {
         if (selected[j] && procs[j].kp_proc.p_pid == ppid) {
-          selected[i] = selected[j];
-          inherited[i] = 1;
-          changed = 1;
+          if (selected[i] == 0 || selected[j] != 3) {
+            selected[i] = selected[j];
+            inherited[i] = 1;
+            changed = 1;
+          }
           break;
         }
       }
