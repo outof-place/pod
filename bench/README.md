@@ -152,7 +152,10 @@ is recorded, and a sample whose pane was not laid out yet does not count.
 
 Ghostty has no windowless mode. It runs the same workloads in a visible 1100x700 pt window, with
 `latency.mjs --confirm-visible --throughput`, in the visible slot, from an APFS clone in the
-profile (its processes are found and stopped by that executable, never by argv). Orca and Pod run
+profile (its processes are found and stopped by that executable, never by argv), opened with
+`open -n -g` under `env -i` (the profile's `HOME` and `TMPDIR`, a system `PATH`, the session's
+`SSH_AUTH_SOCK`, `USER`, `LOGNAME` and `DISPLAY` empty). The clone keeps Ghostty's bundle id, so
+macOS may still write its preferences to the account's own Ghostty domain. Orca and Pod run
 there too, so the visible numbers compare all four with painting included. Those results go to
 `throughput-visible.json`.
 
