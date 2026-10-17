@@ -3,12 +3,18 @@ import { launchHeadlessAutomationAgent } from './headless-automation-agent-launc
 
 const CHAT_DEFAULT_ON = { experimentalNativeChat: true }
 
-function harness(options: { startupTerminal?: Record<string, unknown> | null } = {}) {
+function harness(
+  options: {
+    startupTerminal?: Record<string, unknown> | null
+    setupTrust?: Record<string, unknown>
+  } = {}
+) {
   const runtime = {
     getClientSettings: () => CHAT_DEFAULT_ON,
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true })),
     createManagedWorktree: vi.fn(async (_args: Record<string, unknown>) => ({
       worktree: { id: 'repo-1::/wt/auto', displayName: 'auto-nightly' },
+      ...(options.setupTrust ? { setupTrust: options.setupTrust } : {}),
       ...(options.startupTerminal === null
         ? { warning: 'Startup terminal failed.' }
         : {
@@ -157,6 +163,19 @@ describe('headless automation agent launch', () => {
       expectedProcess: 'goose',
       prompt: 'fix the flaky test'
     })
+  })
+
+  it('says on the run that its setup was skipped for a base outside the repo’s own branches (Pod)', async () => {
+    const skipped = harness({
+      setupTrust: { status: 'needs-trust', contentHash: 'h', reason: 'automation-foreign-base' }
+    })
+    const run = { workspaceMode: 'new_per_run', workspaceId: null }
+    expect(await launch(skipped, run)).toMatchObject({
+      terminalHandle: 'term_new',
+      setupNotice: 'setup skipped: base is outside your branches'
+    })
+    const untrusted = harness({ setupTrust: { status: 'needs-trust', contentHash: 'h' } })
+    expect(await launch(untrusted, run)).not.toHaveProperty('setupNotice')
   })
 
   it('fails the run with the create warning when no agent terminal started, without a second one', async () => {

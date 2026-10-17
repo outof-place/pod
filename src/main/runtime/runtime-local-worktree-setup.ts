@@ -70,7 +70,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   const setupTrust =
     effectiveDecision === 'skip'
       ? null
-      : await untrustedCreateSetup(args.store, repo, yamlHooks, request.setupTrustHash, () =>
+      : await untrustedCreateSetup(args.store, repo, yamlHooks, request, () =>
           isForeignCreate(
             (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repo.path, ...args.runtimeTarget }),
             request
@@ -105,9 +105,9 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     }
   } else if (setupTrust) {
     warning = warning
-      ? `${warning} Also ${needsTrustWarning(worktreePath)}`
-      : needsTrustWarning(worktreePath)
-    console.warn(`[hooks] ${needsTrustWarning(worktreePath)}`)
+      ? `${warning} Also ${needsTrustWarning(worktreePath, setupTrust)}`
+      : needsTrustWarning(worktreePath, setupTrust)
+    console.warn(`[hooks] ${needsTrustWarning(worktreePath, setupTrust)}`)
   } else if (hooks?.scripts.setup && effectiveDecision !== 'skip') {
     const skipped = `orca.yaml setup hook skipped for ${worktreePath}; pass --setup run to run it.`
     warning = warning ? `${warning} Also ${skipped}` : skipped

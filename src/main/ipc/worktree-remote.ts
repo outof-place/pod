@@ -2165,13 +2165,13 @@ export async function createRemoteWorktree(
       setupTrust =
         args.setupDecision === 'skip'
           ? undefined
-          : ((await untrustedCreateSetup(store, repo, yamlHooks, args.setupTrustHash, () =>
+          : ((await untrustedCreateSetup(store, repo, yamlHooks, args, () =>
               isForeignCreate(repoGitShowExec(store, repo), args)
             )) ?? undefined)
       if (setupTrust) {
         shouldLaunchSetup = false
         defaultTabs = withoutTabCommands(defaultTabs)
-        console.warn(`[hooks] ${needsTrustWarning(created.path)}`)
+        console.warn(`[hooks] ${needsTrustWarning(created.path, setupTrust)}`)
       }
       if (setupScript && shouldLaunchSetup) {
         try {
@@ -2203,7 +2203,7 @@ export async function createRemoteWorktree(
     ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
-    ...(setupTrust ? { setupTrust, warning: needsTrustWarning(created.path) } : {}),
+    ...(setupTrust ? { setupTrust, warning: needsTrustWarning(created.path, setupTrust) } : {}),
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
     ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {}),
     ...(baseFallback ? { baseFallback } : {}),
@@ -2929,13 +2929,13 @@ async function performLocalWorktreeCreate(
     setupTrust =
       args.setupDecision === 'skip'
         ? undefined
-        : ((await untrustedCreateSetup(store, repo, createdYamlHooks, args.setupTrustHash, () =>
+        : ((await untrustedCreateSetup(store, repo, createdYamlHooks, args, () =>
             isForeignCreate(repoGitShowExec(store, repo), args)
           )) ?? undefined)
     if (setupTrust) {
       shouldLaunchSetup = false
       defaultTabs = withoutTabCommands(defaultTabs)
-      console.warn(`[hooks] ${needsTrustWarning(worktreePath)}`)
+      console.warn(`[hooks] ${needsTrustWarning(worktreePath, setupTrust)}`)
     }
     if (setupScript && shouldLaunchSetup) {
       try {
@@ -3006,7 +3006,7 @@ async function performLocalWorktreeCreate(
             stagedStartup.warning
               ? appendWorktreeCreateWarning(includeCopyWarning, stagedStartup.warning)
               : includeCopyWarning,
-            needsTrustWarning(worktreePath)
+            needsTrustWarning(worktreePath, setupTrust)
           )
         }
       : {}),

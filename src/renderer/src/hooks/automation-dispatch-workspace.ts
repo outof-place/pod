@@ -21,6 +21,7 @@ import {
 } from '../../../shared/execution-host'
 import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspace-execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
+import { FOREIGN_BASE_SETUP_SKIPPED } from '../../../shared/automation-setup-trust'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 
 type AutomationDispatchStoreState = ReturnType<typeof useAppStore.getState>
@@ -30,6 +31,7 @@ export type AutomationDispatchWorkspaceContext = {
   workspaceId: string | null
   workspaceDisplayName: string | null
   precheckResult: AutomationPrecheckResult | null
+  setupNotice?: string
 }
 
 export function resolveAutomationDispatchWorkspace(
@@ -219,7 +221,9 @@ export async function prepareAutomationDispatchWorkspace(args: {
               automationRunId: run.id,
               dispatchToken,
               createRequestId: automationWorkspaceCreateRequestId
-            }
+            },
+            // Pod: the hash approved at save, which the host checks against what this run would execute.
+            ...(automation.setupTrustHash ? { setupTrustHash: automation.setupTrustHash } : {})
           }
         )
       : null
@@ -244,6 +248,9 @@ export async function prepareAutomationDispatchWorkspace(args: {
   }
   context.workspaceId = worktree.id
   context.workspaceDisplayName = worktree.displayName
+  if (createResult?.setupTrust?.reason === 'automation-foreign-base') {
+    context.setupNotice = FOREIGN_BASE_SETUP_SKIPPED
+  }
   if (createResult?.setup || createResult?.defaultTabs) {
     void launchWorktreeBackgroundTerminals({
       worktreeId: worktree.id,

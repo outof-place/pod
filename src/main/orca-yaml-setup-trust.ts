@@ -11,6 +11,7 @@ import type { CreateWorktreeResult } from '../shared/worktree/create-types'
 import type { WorktreeDefaultTabsLaunch } from '../shared/worktree/launch-types'
 import { getDefaultTabCommandTrustContent } from './effective-hook-config'
 import { hookRunContent } from '../shared/orca-yaml-run-content'
+import { FOREIGN_BASE_SETUP_SKIPPED } from '../shared/automation-setup-trust'
 
 export type OrcaYamlSetupTrust = { contentHash: string; scriptContent: string }
 
@@ -27,6 +28,13 @@ export function orcaYamlSetupTrust(
     return undefined
   }
   return { contentHash: sha256(scriptContent), scriptContent }
+}
+
+/** What the gate reads of a create: its approved hash, and whether an automation's run made it. */
+export type SetupTrustCreate = {
+  setupTrustHash?: string
+  automationProvenance?: unknown
+  automationProvenanceRequest?: unknown
 }
 
 export type SetupTrustStore = {
@@ -54,21 +62,31 @@ export function archiveRunTrust(
 
 /**
  * Null when the create may run the new worktree's setup. Anything is allowed by the hash approved
- * for this create (`approvedHash`) of everything it would start. Someone else's code (`isForeign`)
+ * for this create (`setupTrustHash`) of everything it would start. Someone else's code (`isForeign`)
  * needs exactly that, the repo's own script included, since in that checkout `make clean` runs the
  * other branch's Makefile. The repo's own code needs trust only for orca.yaml's shared commands:
  * their approved hash, the one recorded for the repo, or repo-wide trust while its id is unique
  * (the clients' rule). Otherwise what still needs trust; a store without UI state trusts nothing
- * but an approved hash.
+ * but an approved hash. An automation's run from someone else's code never runs
+ * setup, whatever hash it carries: no one is there to approve that run.
  */
 export async function untrustedCreateSetup(
   store: SetupTrustStore,
   repo: Repo,
   yamlHooks: OrcaHooks | null,
-  approvedHash: string | undefined,
+  create: SetupTrustCreate,
   isForeign: () => Promise<boolean>
 ): Promise<NonNullable<CreateWorktreeResult['setupTrust']> | null> {
+  const approvedHash = create.setupTrustHash
+  const automation = Boolean(create.automationProvenance ?? create.automationProvenanceRequest)
   const run = setupRunTrust(repo, yamlHooks)
+  if (run && automation && (await isForeign())) {
+    return {
+      status: 'needs-trust',
+      contentHash: run.contentHash,
+      reason: 'automation-foreign-base'
+    }
+  }
   if (!run || run.contentHash === approvedHash) {
     return null
   }
@@ -119,6 +137,12 @@ export function withoutTabCommands(
   return defaultTabs ? { ...defaultTabs, runCommands: false } : undefined
 }
 
-export function needsTrustWarning(worktreePath: string): string {
+export function needsTrustWarning(
+  worktreePath: string,
+  setupTrust?: CreateWorktreeResult['setupTrust']
+): string {
+  if (setupTrust?.reason === 'automation-foreign-base') {
+    return `${FOREIGN_BASE_SETUP_SKIPPED} (${worktreePath}). An automation never runs setup from someone else's code; run it yourself in the worktree.`
+  }
   return `orca.yaml setup skipped for ${worktreePath}: its content isn't trusted yet. Pod asks about it on the next create, or run the setup yourself in the worktree.`
 }

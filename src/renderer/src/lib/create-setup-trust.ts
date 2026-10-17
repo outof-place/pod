@@ -13,6 +13,9 @@ export type CreateSetupTrust = {
   baseRef?: string
   foreign?: boolean
   onTrusted: (contentHash: string) => void
+  /** An automation's base outside the repo's own branches: nothing is asked or kept, as the host
+   *  skips that setup on every run. The question's answer instead. */
+  onForeignBase?: () => 'run' | 'skip'
 }
 
 /** What the question shows and hashes: orca.yaml's setup (with its default tab commands) or

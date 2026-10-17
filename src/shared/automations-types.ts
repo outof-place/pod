@@ -1,6 +1,6 @@
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
-import type { AutomationSetupTrust } from './automation-setup-trust'
+import type { AutomationRunSetupNotice, AutomationSetupTrust } from './automation-setup-trust'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
@@ -171,7 +171,7 @@ export type AutomationRun = {
   occurrenceCount?: number
   /** `scheduledFor` of the most recently folded occurrence; absent until one folds. */
   lastOccurrenceAt?: number
-}
+} & AutomationRunSetupNotice
 
 /** A bounded history response; older hosts may continue returning `runs` only. */
 export type AutomationRunsPage = {
@@ -248,7 +248,7 @@ export type AutomationDispatchResult = {
   precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null
   error?: string | null
-}
+} & AutomationRunSetupNotice
 
 export type ExternalAutomationProvider = 'hermes' | 'openclaw'
 export type ExternalAutomationManagerStatus = 'available' | 'unavailable'

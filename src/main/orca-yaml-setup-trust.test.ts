@@ -4,6 +4,7 @@ import { getDefaultRepoHookSettings } from '../shared/constants'
 import type { OrcaHooks, PersistedTrustedOrcaHooks } from '../shared/orca-yaml-hook-types'
 import type { Repo } from '../shared/repo-types'
 import {
+  needsTrustWarning,
   orcaYamlSetupTrust,
   untrustedCreateSetup,
   untrustedRemovalArchive
@@ -40,26 +41,28 @@ describe('orca.yaml setup trust on the host (Pod)', () => {
   })
 
   it('needs nothing when no shared command would run', async () => {
-    expect(await untrustedCreateSetup(store(), repo, null, undefined, own)).toBeNull()
+    expect(await untrustedCreateSetup(store(), repo, null, {}, own)).toBeNull()
     const localOnly = {
       ...repo,
       hookSettings: { ...getDefaultRepoHookSettings(), commandSourcePolicy: 'local-only' as const }
     }
-    expect(await untrustedCreateSetup(store(), localOnly, yaml, undefined, foreign)).toBeNull()
+    expect(await untrustedCreateSetup(store(), localOnly, yaml, {}, foreign)).toBeNull()
   })
 
   it('takes the approved hash, the recorded one, or repo-wide trust for a unique id', async () => {
-    expect(await untrustedCreateSetup(store(), repo, yaml, hash, own)).toBeNull()
+    expect(
+      await untrustedCreateSetup(store(), repo, yaml, { setupTrustHash: hash }, own)
+    ).toBeNull()
     const recorded = { 'repo-1': { setup: { contentHash: hash, approvedAt: 1 } } }
-    expect(await untrustedCreateSetup(store(recorded), repo, yaml, undefined, own)).toBeNull()
+    expect(await untrustedCreateSetup(store(recorded), repo, yaml, {}, own)).toBeNull()
     const all = { 'repo-1': { all: { approvedAt: 1 } } }
-    expect(await untrustedCreateSetup(store(all), repo, yaml, undefined, own)).toBeNull()
+    expect(await untrustedCreateSetup(store(all), repo, yaml, {}, own)).toBeNull()
     expect(
       await untrustedCreateSetup(
         store(all, [repo, { ...repo, path: '/other' }]),
         repo,
         yaml,
-        undefined,
+        {},
         own
       )
     ).toEqual({
@@ -72,31 +75,58 @@ describe('orca.yaml setup trust on the host (Pod)', () => {
     const recorded = { 'repo-1': { setup: { contentHash: hash, approvedAt: 1 } } }
     const all = { 'repo-1': { all: { approvedAt: 1 } } }
     for (const trusted of [recorded, all]) {
-      expect(await untrustedCreateSetup(store(trusted), repo, yaml, undefined, foreign)).toEqual({
+      expect(await untrustedCreateSetup(store(trusted), repo, yaml, {}, foreign)).toEqual({
         status: 'needs-trust',
         contentHash: hash
       })
     }
-    expect(await untrustedCreateSetup(store(all), repo, yaml, hash, foreign)).toBeNull()
+    expect(
+      await untrustedCreateSetup(store(all), repo, yaml, { setupTrustHash: hash }, foreign)
+    ).toBeNull()
   })
 
   it('asks git whether the create is foreign only when this create’s hash doesn’t settle it', async () => {
     const asked = vi.fn(async () => true)
-    await untrustedCreateSetup(store(), repo, yaml, hash, asked)
-    await untrustedCreateSetup(store(), repo, null, undefined, asked)
+    await untrustedCreateSetup(store(), repo, yaml, { setupTrustHash: hash }, asked)
+    await untrustedCreateSetup(store(), repo, null, {}, asked)
     expect(asked).not.toHaveBeenCalled()
-    await untrustedCreateSetup(store(), repo, yaml, undefined, asked)
+    await untrustedCreateSetup(store(), repo, yaml, {}, asked)
     expect(asked).toHaveBeenCalledOnce()
+  })
+
+  it('never runs an automation’s setup from someone else’s code, even with its hash', async () => {
+    const run = { automationProvenance: { automationId: 'a1' } }
+    const all = { 'repo-1': { all: { approvedAt: 1 } } }
+    const skipped = {
+      status: 'needs-trust' as const,
+      contentHash: hash,
+      reason: 'automation-foreign-base' as const
+    }
+    expect(
+      await untrustedCreateSetup(store(all), repo, yaml, { ...run, setupTrustHash: hash }, foreign)
+    ).toEqual(skipped)
+    // A fork's ref can copy the base's orca.yaml: same hash, still not the repo's own code.
+    const windowed = { automationProvenanceRequest: { automationId: 'a1' }, setupTrustHash: hash }
+    expect(await untrustedCreateSetup(store(), repo, yaml, windowed, foreign)).toEqual(skipped)
+    expect(
+      await untrustedCreateSetup(store(), repo, yaml, { ...run, setupTrustHash: hash }, own)
+    ).toBeNull()
+    expect(await untrustedCreateSetup(store(), repo, null, run, foreign)).toBeNull()
+    expect(needsTrustWarning('/w', skipped)).toMatch(
+      /^setup skipped: base is outside your branches \(\/w\)/
+    )
   })
 
   it('needs trust for other content, and trusts nothing without UI state but the approved hash', async () => {
     const other = { 'repo-1': { setup: { contentHash: 'a'.repeat(64), approvedAt: 1 } } }
-    expect(await untrustedCreateSetup(store(other), repo, yaml, 'b'.repeat(64), own)).toEqual({
+    expect(
+      await untrustedCreateSetup(store(other), repo, yaml, { setupTrustHash: 'b'.repeat(64) }, own)
+    ).toEqual({
       status: 'needs-trust',
       contentHash: hash
     })
     expect(
-      (await untrustedCreateSetup({ getRepos: () => [repo] }, repo, yaml, undefined, own))?.status
+      (await untrustedCreateSetup({ getRepos: () => [repo] }, repo, yaml, {}, own))?.status
     ).toBe('needs-trust')
   })
 
@@ -113,17 +143,21 @@ describe('orca.yaml setup trust on the host (Pod)', () => {
       const content = hookRunContent('setup', scripted(policy).hookSettings, yaml)
       const runHash = createHash('sha256').update(content).digest('hex')
       // The repo's own code: its own script is the user's; orca.yaml's part still needs trust.
-      expect(await untrustedCreateSetup(store(), scripted(policy), yaml, undefined, own)).toEqual(
+      expect(await untrustedCreateSetup(store(), scripted(policy), yaml, {}, own)).toEqual(
         policy === 'local-only' ? null : { status: 'needs-trust', contentHash: hash }
       )
-      expect(
-        await untrustedCreateSetup(store(), scripted(policy), yaml, undefined, foreign)
-      ).toEqual({
+      expect(await untrustedCreateSetup(store(), scripted(policy), yaml, {}, foreign)).toEqual({
         status: 'needs-trust',
         contentHash: runHash
       })
       expect(
-        await untrustedCreateSetup(store(), scripted(policy), yaml, runHash, foreign)
+        await untrustedCreateSetup(
+          store(),
+          scripted(policy),
+          yaml,
+          { setupTrustHash: runHash },
+          foreign
+        )
       ).toBeNull()
     }
   })

@@ -61,7 +61,8 @@ export async function runHeadlessAutomationDispatch(
     workspaceDisplayName: launch.workspaceDisplayName ?? null,
     terminalSessionId: launch.terminalSessionId,
     terminalPaneKey: launch.terminalPaneKey ?? null,
-    terminalPtyId: launch.terminalPtyId ?? null
+    terminalPtyId: launch.terminalPtyId ?? null,
+    ...(launch.setupNotice ? { setupNotice: launch.setupNotice } : {})
   }
   const updated = runs.updateRun({
     runId: run.id,

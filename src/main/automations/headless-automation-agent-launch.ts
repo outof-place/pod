@@ -15,6 +15,7 @@ import type {
 } from '../agent-launch/agent-launch-execution'
 import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
+import { FOREIGN_BASE_SETUP_SKIPPED } from '../../shared/automation-setup-trust'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
@@ -48,6 +49,7 @@ export async function launchHeadlessAutomationAgent(
   const text = automation.prompt?.trim()
   let workspace: { id: string; displayName: string | null } | undefined
   let terminal: LaunchedTerminal | undefined
+  let setupNotice: string | undefined
   const execution: AgentLaunchSurfaceExecution = {
     runtime,
     intent: {
@@ -79,6 +81,10 @@ export async function launchHeadlessAutomationAgent(
         workspace = {
           id: created.worktree.id,
           displayName: created.worktree.displayName ?? null
+        }
+        // Pod: the run goes on without setup, and says why.
+        if (created.setupTrust?.reason === 'automation-foreign-base') {
+          setupNotice = FOREIGN_BASE_SETUP_SKIPPED
         }
         const startup = created.startupTerminal
         if (!startup?.handle) {
@@ -134,7 +140,8 @@ export async function launchHeadlessAutomationAgent(
     terminalHandle: terminal.handle,
     terminalSessionId: terminal.tabId ?? null,
     terminalPaneKey: terminal.paneKey ?? null,
-    terminalPtyId: terminal.ptyId ?? null
+    terminalPtyId: terminal.ptyId ?? null,
+    ...(setupNotice ? { setupNotice } : {})
   }
 }
 

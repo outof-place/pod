@@ -104,6 +104,21 @@ describe('automation setup trust hash persistence (Pod)', () => {
     expect(back.setupTrustHash).toBeNull()
   })
 
+  it('keeps a run’s setup notice through later updates and a reload', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation(BASE)
+    const run = store.createAutomationRun(automation, BASE.dtstart)
+    const setupNotice = 'setup skipped: base is outside your branches'
+    store.updateAutomationRun({ runId: run.id, status: 'dispatched', setupNotice, error: null })
+    const done = store.updateAutomationRun({ runId: run.id, status: 'completed', error: null })
+    expect(done.setupNotice).toBe(setupNotice)
+    store.flush()
+    await closeTestStores()
+    const reloaded = await createStore()
+    expect(reloaded.listAutomationRuns(automation.id)[0].setupNotice).toBe(setupNotice)
+  })
+
   it('keeps the hash an update brings with its new base, and the old one when the base is restated', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())

@@ -121,7 +121,9 @@ export async function saveOrcaAutomation(
       undefined,
       {
         baseRef: draft.baseBranch.trim() || undefined,
-        onTrusted: (hash) => (setupTrustHash = hash)
+        onTrusted: (hash) => (setupTrustHash = hash),
+        // Kept 'run' with no hash: each run says its setup was skipped.
+        onForeignBase: () => 'run'
       }
     )
     if (trustDecision === 'skip') {

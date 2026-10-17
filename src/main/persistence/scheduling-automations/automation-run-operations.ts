@@ -197,6 +197,7 @@ export function updateAutomationRun(
       ? normalizeAutomationPrecheckResult(result.precheckResult)
       : normalizeAutomationPrecheckResult(current.precheckResult),
     usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
+    ...(Object.hasOwn(result, 'setupNotice') ? { setupNotice: result.setupNotice ?? null } : {}),
     error: result.error ?? null,
     startedAt: current.startedAt ?? now,
     dispatchedAt: result.status === 'dispatched' ? now : current.dispatchedAt
