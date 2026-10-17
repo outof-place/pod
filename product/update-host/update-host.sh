@@ -2,13 +2,18 @@
 # Every Pod since rc5 reads POD_UPDATE_FEED: a name we own, so it never changes whatever serves it.
 POD_UPDATE_HOST=https://updates.pod.codes
 POD_UPDATE_FEED=$POD_UPDATE_HOST/appcast.xml
+# Every appcast names its DMG as an asset of a release in POD_RELEASES_REPO, tagged v<version>:
+# public, with nothing in it but signed DMGs, so downloads stay public once outof-place/pod is private.
+POD_RELEASES_REPO=outof-place/pod-releases
+POD_RELEASES_DOWNLOAD=https://github.com/$POD_RELEASES_REPO/releases/download
 # Pods up to rc4 read GitHub's feed. It was last written for POD_BRIDGE_VERSION, the first release
 # that reads POD_UPDATE_FEED, which moves them over.
 POD_GITHUB_FEED=https://github.com/outof-place/pod/releases/download/appcast/appcast.xml
 POD_BRIDGE_VERSION=1.0.0-rc5
 # The host is the Vercel project pod-updates (team outofplace, no Git connection; the files are
-# product/update-host). Its vercel.json redirects each archive to the public Blob store pod-updates,
-# which the CLI reaches over OIDC through the project's development environment.
+# product/update-host). It serves the appcast alone; its vercel.json redirects rehearsal feeds to the
+# public Blob store pod-updates, which the CLI reaches over OIDC through the project's development
+# environment. No DMG lives on the host or in the store.
 POD_UPDATE_SCOPE=outofplace
 POD_UPDATE_ORG_ID=team_45cQ8U5xftW1IIc1RMgl1Jwz
 POD_UPDATE_PROJECT_ID=prj_XExDFZ4AxGIEaMdRasENKtc8ByrN

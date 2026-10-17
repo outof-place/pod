@@ -1,19 +1,20 @@
 #!/bin/bash
 # Writes the Sparkle appcast for one release of the one-app Pod.app: a single item for <archive>,
 # its EdDSA signature and the feed's own (PodNative sets SURequireSignedFeed), with the download URL
-# on Pod's update host (product/update-host: https://updates.pod.codes/<archive name>), where
-# publish-update.sh puts both (RELEASE-RUNBOOK.md).
+# an asset of the tag's release in outof-place/pod-releases (product/update-host/update-host.sh).
+# publish-update.sh uploads the archive there and puts the appcast on https://updates.pod.codes
+# (RELEASE-RUNBOOK.md).
 #
 #   product/scripts/sparkle-appcast.sh <archive> <tag> <out dir>
 #
 #   <archive>  the notarized DMG (Developer ID signed: Sparkle's way back if the EdDSA key is ever
 #              lost) or a zip of the stapled Pod.app (`ditto -c -k --keepParent`)
-#   <tag>      the release tag, e.g. v0.1.0 (checked; the download URL no longer carries it)
+#   <tag>      the release tag, e.g. v0.1.0
 #
 # The private key is read from this Mac's login keychain (`generate_keys --account $SPARKLE_ACCOUNT`,
 # default codes.pod), by generate_appcast and again by sign_update: macOS asks twice. Never from a file.
 # SPARKLE_KEY_ON_STDIN=1 reads a throwaway key from stdin instead (tests and rehearsals only).
-# SPARKLE_DOWNLOAD_URL_PREFIX replaces the release's download URL (a rehearsal's feed on 127.0.0.1).
+# SPARKLE_DOWNLOAD_URL_PREFIX replaces the release's download URL (a rehearsal's own).
 # The archive's app must carry the signing key's public half: generate_appcast only warns.
 # Sparkle's tools come from the release whose framework PodNative pins, checked against its digest.
 set -euo pipefail
@@ -50,9 +51,12 @@ drop_cache() {
   done
 }
 # The work directory is this run's own and regenerable: removed for good through pod-tmp-rm (owner,
-# protected paths and lsof checked) where the Mac has it, never kept in the Trash.
+# protected paths and lsof checked) where the Mac has it, else directly; never kept in the Trash.
 remove=$(command -v pod-tmp-rm || echo "$HOME/.local/bin/pod-tmp-rm")
-trap 'drop_cache; if [ -x "$remove" ]; then "$remove" "$work" > /dev/null || true; fi' EXIT
+remove_work() {
+  if [ -x "$remove" ]; then "$remove" "$work" > /dev/null || true; else rm -rf "${work:?}"; fi
+}
+trap 'drop_cache; remove_work' EXIT
 curl -fsSL -o "$work/sparkle.tar.xz" \
   "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
 [ "$(shasum -a 256 "$work/sparkle.tar.xz" | cut -d' ' -f1)" = "$SPARKLE_SHA256" ] \
@@ -65,7 +69,7 @@ cp -c "$archive" "$work/feed/"
 # A stdin key is read once, into memory, and handed to both tools.
 [ "${SPARKLE_KEY_ON_STDIN:-0}" = 1 ] && key=$(cat)
 run_with_key() { if [ -n "${key:-}" ]; then printf '%s' "$key" | "$@"; else "$@"; fi; }
-prefix=${SPARKLE_DOWNLOAD_URL_PREFIX:-$POD_UPDATE_HOST/}
+prefix=${SPARKLE_DOWNLOAD_URL_PREFIX:-$POD_RELEASES_DOWNLOAD/$tag/}
 run_with_key "$work/tools/bin/generate_appcast" "${KEY[@]}" \
   --download-url-prefix "$prefix" \
   --link https://pod.codes "$work/feed" 2>&1 | tee "$work/generate_appcast.log"

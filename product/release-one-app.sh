@@ -4,7 +4,7 @@
 #   2. the PodNative outer (PodNative's scripts/release-app.sh: Developer ID, notarized);
 #   3. the assembly (product/assemble-one-app.sh: the app, DMG and zip, notarized and stapled);
 #   4. the Sparkle appcast for the DMG (product/scripts/sparkle-appcast.sh);
-#   5. a release directory with SHA256SUMS and artifacts.txt, which the GitHub release and Pod's
+#   5. a release directory with SHA256SUMS and artifacts.txt, which the GitHub releases and Pod's
 #      update host take as it is.
 # It publishes nothing: it ends with the commands that do (see RELEASE-RUNBOOK.md).
 #
@@ -27,9 +27,10 @@
 # Versions: CFBundleShortVersionString is <version> in both apps, and so is one numeric CFBundleVersion
 # from product/scripts/pod-build-number.sh (the number Sparkle compares in the outer).
 # Assets: Pod-<version>.dmg (the download and the Sparkle update), Pod-<version>.zip, appcast.xml,
-# SHA256SUMS. The feed and the DMG live on Pod's update host (product/update-host/update-host.sh):
-# https://updates.pod.codes/appcast.xml names https://updates.pod.codes/Pod-<version>.dmg. Pods up to
-# rc4 read GitHub's `appcast` release instead, written one last time for the bridge release. A real
+# SHA256SUMS. The feed lives on Pod's update host and names the DMG as an asset of the public
+# outof-place/pod-releases (product/update-host/update-host.sh): https://updates.pod.codes/appcast.xml
+# names .../pod-releases/releases/download/v<version>/Pod-<version>.dmg. Pods up to rc4 read
+# GitHub's `appcast` release instead, written one last time for the bridge release. A real
 # release signs with the key in this Mac's login keychain (sparkle-appcast.sh); the outer's public key
 # is PodNative's scripts/sparkle-ed-public-key.txt.
 set -euo pipefail
@@ -52,7 +53,7 @@ while [ $# -gt 0 ]; do
     --feed-url) feed_url=${2:?--feed-url needs a URL}; shift 2 ;;
     --download-url-prefix) url_prefix=${2:?--download-url-prefix needs a URL}; shift 2 ;;
     --out) out=${2:?--out needs a directory}; shift 2 ;;
-    -h | --help) sed -n '2,34p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,35p' "$0"; exit 0 ;;
     -*) die "unknown option $1" ;;
     *) [ -z "$version" ] || die "one version only"; version="${1#v}"; shift ;;
   esac

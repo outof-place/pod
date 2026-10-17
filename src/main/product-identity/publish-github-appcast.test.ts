@@ -16,7 +16,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 const script = join(__dirname, '..', '..', '..', 'product', 'scripts', 'publish-github-appcast.sh')
 // 1.0.0-rc5, product/update-host/update-host.sh's POD_BRIDGE_VERSION.
 const BRIDGE = '1000005'
-const HOST_DMG = 'https://updates.pod.codes/Pod-1.0.0-rc5.dmg'
+const RELEASES = 'https://github.com/outof-place/pod-releases/releases/download'
+const BRIDGE_DMG = `${RELEASES}/v1.0.0-rc5/Pod-1.0.0-rc5.dmg`
 
 // A GitHub release in a directory: assets/<id>/{name,data}, download/<name> as the download URLs
 // serve them. Like GitHub, it refuses a second asset or a rename onto a name that is taken.
@@ -62,7 +63,7 @@ afterEach(() => {
   }
 })
 
-function appcast(build: string, archive = HOST_DMG): string {
+function appcast(build: string, archive = BRIDGE_DMG): string {
   return (
     `<?xml version="1.0" encoding="utf-8"?>\n` +
     `<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0"><channel>\n` +
@@ -217,7 +218,7 @@ describe('publish-github-appcast.sh', () => {
   })
 
   it('writes nothing after the bridge release: a later one stays on the update host', () => {
-    const rc6 = appcast('1000006', 'https://updates.pod.codes/Pod-1.0.0-rc6.dmg')
+    const rc6 = appcast('1000006', `${RELEASES}/v1.0.0-rc6/Pod-1.0.0-rc6.dmg`)
     const run = release({ 'appcast.xml': appcast(BRIDGE) }, rc6)
     const result = publish(run)
     expect(result.status).toBe(1)
@@ -226,13 +227,15 @@ describe('publish-github-appcast.sh', () => {
     expect(assets(run.state)).toEqual({ 'appcast.xml': appcast(BRIDGE) })
   })
 
-  it('refuses a bridge whose archive is on GitHub, which goes private', () => {
-    const github =
-      'https://github.com/outof-place/pod/releases/download/v1.0.0-rc5/Pod-1.0.0-rc5.dmg'
-    const run = release({ 'appcast.xml': appcast('1000004') }, appcast(BRIDGE, github))
+  it.each([
+    ['outof-place/pod, which goes private', 'https://github.com/outof-place/pod/releases/download'],
+    ['the update host, which serves no DMG', 'https://updates.pod.codes']
+  ])('refuses a bridge whose archive is on %s', (_where, prefix) => {
+    const elsewhere = `${prefix}/v1.0.0-rc5/Pod-1.0.0-rc5.dmg`
+    const run = release({ 'appcast.xml': appcast('1000004') }, appcast(BRIDGE, elsewhere))
     const result = publish(run)
     expect(result.status).toBe(1)
-    expect(result.out).toContain('not on https://updates.pod.codes')
+    expect(result.out).toContain('not an asset of outof-place/pod-releases')
     expect(existsSync(join(run.state, 'calls.log'))).toBe(false)
   })
 
