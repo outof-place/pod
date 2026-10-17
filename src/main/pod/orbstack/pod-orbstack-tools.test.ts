@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { resolveOrbstackE2eAnthropic } from './pod-orbstack-tools'
+import { resolveOrbstackE2eAnthropic, resolveOrbstackE2eClaudeVersion } from './pod-orbstack-tools'
 
 describe('resolveOrbstackE2eAnthropic', () => {
   const dir = mkdtempSync(join(tmpdir(), 'pod-orbstack-tools-'))
@@ -41,5 +41,24 @@ describe('resolveOrbstackE2eAnthropic', () => {
     allowed = false
     expect(seam?.credentials.mode()).toBe('off')
     expect(await seam?.credentials.authHeaders({ machine: 'pod-x-sbx' })).toBeNull()
+  })
+})
+
+describe('resolveOrbstackE2eClaudeVersion', () => {
+  const e2e = { ORCA_E2E_USER_DATA_DIR: '/profile', POD_E2E_ORBSTACK_CLAUDE_VERSION: '2.1.292' }
+
+  it('pins the version only in an isolated E2E profile', () => {
+    expect(resolveOrbstackE2eClaudeVersion(e2e)).toBe('2.1.292')
+    expect(
+      resolveOrbstackE2eClaudeVersion({ ...e2e, ORCA_E2E_USER_DATA_DIR: undefined })
+    ).toBeNull()
+  })
+
+  it('takes a plain version and nothing else', () => {
+    for (const version of ['', 'stable', '2.1', '2.1.292 (Claude Code)', '../2.1.292']) {
+      expect(
+        resolveOrbstackE2eClaudeVersion({ ...e2e, POD_E2E_ORBSTACK_CLAUDE_VERSION: version })
+      ).toBeNull()
+    }
   })
 })
