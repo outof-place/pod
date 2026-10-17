@@ -4,8 +4,8 @@
 #
 #   gh workflow run pod-check.yml -R outof-place/pod -f ref=stack/cand-<n>
 #
-# GITHUB_TOKEN reads the repository. POD_PAYLOAD_TOKEN (read access to claude-acc's contents)
-# fetches the claude-acc payload once that repository is private.
+# GITHUB_TOKEN reads the repository. POD_PAYLOAD_TOKEN (read access to claude-acc's and pod-search's
+# contents) fetches the claude-acc and pod-search payloads from those private repositories.
 name: Pod check
 
 on:
@@ -111,6 +111,8 @@ jobs:
             node config/scripts/fetch-claude-acc-payload.mjs
           fi
       - name: Fetch the pod-search payload
+        env:
+          POD_PAYLOAD_TOKEN: ${{ secrets.POD_PAYLOAD_TOKEN }}
         run: |
           if [ -f config/scripts/fetch-pod-search-payload.mjs ]; then
             node config/scripts/fetch-pod-search-payload.mjs --if-pinned

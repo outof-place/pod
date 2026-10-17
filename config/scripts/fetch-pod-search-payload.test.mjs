@@ -96,22 +96,51 @@ describe('pod-search payload', () => {
     const download = async () => new Response(bytes)
     const into = join(temp(), 'resources/pod-search')
     const good = pin({ sha256: sha256File(tar) })
-    const { source } = await fetchPayload({ into, pin: good, download })
+    // token: null keeps a POD_PAYLOAD_TOKEN in the environment out of the test (the public path).
+    const { source } = await fetchPayload({ into, pin: good, download, token: null })
     expect(source).toBe(
-      'https://github.com/outof-place/pod/releases/download/payload-pod-search-test/pod-search-payload-test-arm64.tar.gz'
+      'outof-place/pod payload-pod-search-test/pod-search-payload-test-arm64.tar.gz'
     )
-    expect((await fetchPayload({ into, pin: good, download })).source).toBe('cached')
+    expect((await fetchPayload({ into, pin: good, download, token: null })).source).toBe('cached')
 
     await expect(
-      fetchPayload({ into: join(temp(), 'x'), pin: pin({ sha256: 'b'.repeat(64) }), download })
+      fetchPayload({
+        into: join(temp(), 'x'),
+        pin: pin({ sha256: 'b'.repeat(64) }),
+        download,
+        token: null
+      })
     ).rejects.toThrow(/sha256/)
     await expect(
       fetchPayload({
         into: join(temp(), 'y'),
         pin: pin({ sha256: sha256File(tar), commit: 'c'.repeat(40) }),
-        download
+        download,
+        token: null
       })
     ).rejects.toThrow(/built from/)
+  })
+
+  it('reads a private release through the API with the token', async () => {
+    const tar = tarball(payload())
+    const bytes = readFileSync(tar)
+    const api = 'https://api.github.com/repos/outof-place/pod/releases'
+    const seen = []
+    const download = async (url, init) => {
+      seen.push([url, init?.headers?.Authorization])
+      return url === `${api}/tags/payload-pod-search-test`
+        ? Response.json({
+            assets: [{ name: 'pod-search-payload-test-arm64.tar.gz', url: `${api}/assets/1` }]
+          })
+        : new Response(bytes)
+    }
+    const into = join(temp(), 'resources/pod-search')
+    const pinned = pin({ sha256: sha256File(tar) })
+    await fetchPayload({ into, pin: pinned, download, token: 'tok' })
+    expect(seen).toEqual([
+      [`${api}/tags/payload-pod-search-test`, 'Bearer tok'],
+      [`${api}/assets/1`, 'Bearer tok']
+    ])
   })
 
   it('refuses to download while the pin has no sha256', async () => {

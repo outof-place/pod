@@ -3,7 +3,8 @@
 // Contents/Resources/pod-search (config/pod-search-extra-resources.cjs): og, ogd, ogctl and a plain
 // ripgrep 15.2.0, the PATH shims rg and ugrep (links to og), licences and BUILD.json. The release pin
 // lives in config/pod-search-payload.json: tag, asset and sha256 of the tarball pod-search's
-// scripts/payload.sh built, and the pod-search commit it was built from.
+// scripts/payload.sh built, and the pod-search commit it was built from. The release is on the private
+// pod-search repository, so the download goes through github-release-asset.mjs and POD_PAYLOAD_TOKEN.
 //
 //   node config/scripts/fetch-pod-search-payload.mjs            download the pinned tarball, verify, unpack
 //   node config/scripts/fetch-pod-search-payload.mjs --from X   X = an unpacked payload dir or a tarball
@@ -28,6 +29,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
+import { PAYLOAD_TOKEN_ENV, downloadReleaseAsset } from './github-release-asset.mjs'
 
 const ROOT = join(import.meta.dirname, '..', '..')
 export const PAYLOAD_DIR = join(ROOT, 'resources', 'pod-search')
@@ -107,12 +109,13 @@ function install(dir, into) {
   renameSync(next, into)
 }
 
-/** @param {{ from?: string | null, into?: string, pin?: { repository: string, tag: string, asset: string, sha256: string | null, commit?: string | null }, download?: typeof fetch }} [options] */
+/** @param {{ from?: string | null, into?: string, pin?: { repository: string, tag: string, asset: string, sha256: string | null, commit?: string | null }, download?: typeof fetch, token?: string | null }} [options] */
 export async function fetchPayload({
   from = null,
   into = PAYLOAD_DIR,
   pin = readPin(),
-  download = fetch
+  download = fetch,
+  token = process.env[PAYLOAD_TOKEN_ENV] || null
 } = {}) {
   if (from) {
     if (statSync(from).isDirectory()) {
@@ -137,25 +140,23 @@ export async function fetchPayload({
   if (existsSync(stamp) && JSON.parse(readFileSync(stamp, 'utf8')).sha256 === pin.sha256) {
     return { commit: assertPayload(into), source: 'cached' }
   }
-  const url = `https://github.com/${pin.repository}/releases/download/${pin.tag}/${pin.asset}`
-  const response = await download(url)
-  if (!response.ok) {
-    throw new Error(`GET ${url}: ${response.status}`)
-  }
+  const asset = `${pin.repository} ${pin.tag}/${pin.asset}`
+  // Why the helper: the private pod-search repository answers only to POD_PAYLOAD_TOKEN.
+  const bytes = await downloadReleaseAsset({ ...pin, token, download })
   const work = mkdtempSync(join(tmpdir(), 'pod-search-download-'))
   try {
     const tarball = join(work, pin.asset)
-    writeFileSync(tarball, Buffer.from(await response.arrayBuffer()))
+    writeFileSync(tarball, bytes)
     const actual = sha256File(tarball)
     if (actual !== pin.sha256) {
-      throw new Error(`${url}: sha256 ${actual}, pinned ${pin.sha256}`)
+      throw new Error(`${asset}: sha256 ${actual}, pinned ${pin.sha256}`)
     }
     unpack(tarball, into, pin)
   } finally {
     rmSync(work, { recursive: true, force: true })
   }
   writeFileSync(stamp, `${JSON.stringify({ tag: pin.tag, sha256: pin.sha256 })}\n`)
-  return { commit: assertPayload(into), source: url }
+  return { commit: assertPayload(into), source: asset }
 }
 
 /** Whether the pin names a released payload yet (its sha256). */
@@ -165,7 +166,9 @@ export function isPinned(pin = readPin()) {
 
 if (process.argv[1] && import.meta.filename === process.argv[1]) {
   if (process.argv.includes('--if-pinned') && !isPinned()) {
-    console.log('pod-search payload: config/pod-search-payload.json pins no release yet; nothing to fetch')
+    console.log(
+      'pod-search payload: config/pod-search-payload.json pins no release yet; nothing to fetch'
+    )
     process.exit(0)
   }
   const i = process.argv.indexOf('--from')
