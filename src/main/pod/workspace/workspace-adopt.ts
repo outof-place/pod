@@ -1,13 +1,23 @@
 import { randomUUID } from 'node:crypto'
-import { lstat, mkdir, readlink, realpath, rename, stat, symlink, unlink } from 'node:fs/promises'
+import { lstat, mkdir, realpath, rename, stat, symlink } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type {
   PodAdoptBlocker,
   PodAdoptPlan,
   PodAdoptRecord,
-  PodAdoptUndoPlan
+  PodAdoptRelinkRecord
 } from '../../../shared/pod-workspace-tidy-types'
 import type { Repo } from '../../../shared/repo-types'
+import {
+  claudeProjectKey,
+  createAdoptRelink,
+  remapPath as remap,
+  type AdoptMove,
+  type AdoptRelinkInputs,
+  type AdoptRelinkRuntime,
+  type AdoptRelinkStore
+} from './workspace-adopt-relink'
+import { createWorkspaceAdoptUndo, listWorktreePaths, stopWatchers } from './workspace-adopt-undo'
 import {
   POD_WORKSPACE_LOCAL_OWNER_DIR,
   parseCloneOwnerAndName
@@ -17,8 +27,9 @@ import type { WorkspaceJournal } from './workspace-journal'
 import { fingerprintOf, WorkspacePlanError, type WorkspacePlanStore } from './workspace-plan-store'
 import { findProcessesInside, type ProcessCwdReader } from './workspace-process-cwds'
 import { isPathInsideWorkspaceRoot } from './workspace-root-path'
-import { parseWorktreePorcelainZ } from './workspace-tidy-git'
 import { podWorktreesDirOf as worktreesDirOf } from './workspace-tidy-strays'
+
+export { claudeProjectKey }
 
 export type WorkspaceAdoptDeps = {
   git: WorkspaceGitExec
@@ -26,14 +37,13 @@ export type WorkspaceAdoptDeps = {
   plans: WorkspacePlanStore
   processes: ProcessCwdReader | null
   getRepo: (repoId: string) => Repo | undefined
+  /** Pod's records that name the repo's paths; Move In re-keys them to the new place. */
+  store: AdoptRelinkStore
   root: () => string
   home: string
+  /** The profile's `terminal-history/`, whose folders are keyed by worktree id. */
+  historyRoot: string
   now?: () => number
-}
-
-/** Claude Code keys a project's history by its cwd with every non-alphanumeric as `-`. */
-export function claudeProjectKey(path: string): string {
-  return path.replace(/[^A-Za-z0-9]/g, '-')
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -51,24 +61,32 @@ async function nearestExisting(path: string): Promise<string> {
   return current
 }
 
-async function listWorktreePaths(git: WorkspaceGitExec, repoPath: string): Promise<string[]> {
-  const list = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
-  return list.code === 0 ? parseWorktreePorcelainZ(list.stdout).map((entry) => entry.path) : []
-}
-
-/** A path inside a moved folder, re-rooted at the folder's new place. */
-function remap(path: string, moves: readonly (readonly [string, string])[]): string {
-  for (const [from, to] of moves) {
-    if (path === from || path.startsWith(`${from}/`)) {
-      return to + path.slice(from.length)
+/** The folders a Move In renames, under each spelling Pod or git may know them by. */
+function movesOf(repo: Repo, from: string, to: string, worktreesDir: string | null): AdoptMove[] {
+  const moves: AdoptMove[] = [[from, to]]
+  if (worktreesDir) {
+    moves.push([worktreesDir, worktreesDirOf(to)])
+  }
+  if (repo.path !== from) {
+    moves.push([repo.path, to])
+    if (worktreesDir) {
+      moves.push([worktreesDirOf(repo.path), worktreesDirOf(to)])
     }
   }
-  return path
+  return moves
 }
 
 export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
   const { git } = deps
   const claudeDir = (path: string) => join(deps.home, '.claude', 'projects', claudeProjectKey(path))
+  const relink = createAdoptRelink({
+    git,
+    journal: deps.journal,
+    store: deps.store,
+    getRepo: deps.getRepo,
+    home: deps.home,
+    historyRoot: deps.historyRoot
+  })
 
   const targetFor = async (repo: Repo): Promise<string> => {
     const url = await git(['remote', 'get-url', 'origin'], repo.path)
@@ -82,11 +100,21 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
 
   type Inspected = Omit<PodAdoptPlan, 'planId' | 'expiresAt'>
 
-  const inspect = async (repoId: string): Promise<Inspected> => {
+  const inspect = async (
+    repoId: string,
+    runtime: AdoptRelinkRuntime | null
+  ): Promise<{ inspected: Inspected; inputs: AdoptRelinkInputs | null }> => {
     const repo = deps.getRepo(repoId)
     const blockers: PodAdoptBlocker[] = []
     if (!repo) {
-      return {
+      const relinkPlan = {
+        worktrees: [],
+        claudeProjectDirs: [],
+        historyDirs: 0,
+        configPaths: [],
+        terminalsOpen: []
+      }
+      const inspected: Inspected = {
         repoId,
         from: '',
         to: '',
@@ -94,8 +122,10 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
         processes: [],
         linkedWorktrees: [],
         worktreesDir: null,
-        claudeProjectDir: null
+        claudeProjectDir: null,
+        relink: relinkPlan
       }
+      return { inspected, inputs: null }
     }
     const from = await realpath(repo.path).catch(() => repo.path)
     const to = await targetFor(repo)
@@ -122,8 +152,19 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
     if (processes.length > 0) {
       blockers.push('process-inside')
     }
+    const inputs: AdoptRelinkInputs = {
+      repo,
+      moves: movesOf(repo, from, to, siblings[0] ?? null),
+      checkouts: worktrees,
+      repoPathAfter: to
+    }
+    const relinkPlan = await relink.plan(inputs, runtime)
+    // A live pane would be re-keyed under its running process; Close Terminals first.
+    if (relinkPlan.terminalsOpen.length > 0) {
+      blockers.push('terminals-open')
+    }
     const claude = claudeDir(from)
-    return {
+    const inspected: Inspected = {
       repoId,
       from,
       to,
@@ -131,8 +172,10 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
       processes,
       linkedWorktrees,
       worktreesDir: siblings[0] ?? null,
-      claudeProjectDir: (await pathExists(claude)) ? claude : null
+      claudeProjectDir: (await pathExists(claude)) ? claude : null,
+      relink: relinkPlan
     }
+    return { inspected, inputs }
   }
 
   const fingerprint = (plan: Inspected): string =>
@@ -143,42 +186,45 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
       plan.processes.map((process) => process.pid).sort((a, b) => a - b),
       plan.linkedWorktrees,
       plan.worktreesDir,
-      plan.claudeProjectDir
+      plan.claudeProjectDir,
+      plan.relink
     ])
 
-  const plan = async (repoId: string): Promise<PodAdoptPlan> => {
-    const inspected = await inspect(repoId)
+  const plan = async (
+    repoId: string,
+    runtime: AdoptRelinkRuntime | null = null
+  ): Promise<PodAdoptPlan> => {
+    const { inspected } = await inspect(repoId, runtime)
     const fingerprints = new Map([[`adopt:${repoId}`, fingerprint(inspected)]])
     return { ...deps.plans.issue('adopt', fingerprints, repoId), ...inspected }
   }
 
-  const stopWatchers = (paths: readonly string[]) =>
-    Promise.all(paths.map((path) => git(['fsmonitor--daemon', 'stop'], path)))
-
   /**
-   * Moves the repo, leaves a symlink where it was, and lets git re-point its worktrees.
-   * Processes inside keep running (their cwd moves with the folder) only when the user ticked them.
+   * Moves the repo, leaves a symlink where it was, lets git re-point its worktrees, then carries
+   * Pod's records and Claude's folders to the new path. Processes inside keep running (their cwd
+   * moves with the folder) only when the user ticked them; a live Pod terminal always refuses.
    */
   const apply = async (
     planId: string,
-    acknowledged: readonly 'process-inside'[] = []
+    acknowledged: readonly 'process-inside'[] = [],
+    runtime: AdoptRelinkRuntime | null = null
   ): Promise<PodAdoptRecord> => {
     const repoId = deps.plans.subjectOf(planId, 'adopt')
-    const current = await inspect(repoId)
+    const { inspected: current, inputs } = await inspect(repoId, runtime)
     deps.plans.verify(planId, 'adopt', `adopt:${repoId}`, fingerprint(current))
     const refused = current.blockers.filter(
       (blocker) => !(blocker === 'process-inside' && acknowledged.includes(blocker))
     )
-    if (refused.length > 0) {
+    if (refused.length > 0 || !inputs) {
       throw new WorkspacePlanError(`Not moved: ${refused.join(', ')}`)
     }
     deps.plans.consume(planId)
     const { from, to } = current
-    const moves: [string, string][] = [[from, to]]
+    const moves: AdoptMove[] = [[from, to]]
     if (current.worktreesDir) {
       moves.push([current.worktreesDir, worktreesDirOf(to)])
     }
-    await stopWatchers([from, ...current.linkedWorktrees])
+    await stopWatchers(git, [from, ...current.linkedWorktrees])
     await mkdir(dirname(to), { recursive: true })
     for (const [old, next] of moves) {
       await rename(old, next)
@@ -189,12 +235,13 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
       ['worktree', 'repair', ...current.linkedWorktrees.map((path) => remap(path, moves))],
       to
     )
-    let claudeProjectDirMoved = false
-    if (current.claudeProjectDir && !(await pathExists(claudeDir(to)))) {
-      await rename(current.claudeProjectDir, claudeDir(to))
-      // A running session keeps writing under the old key; the link lands that in the new dir.
-      await symlink(basename(claudeDir(to)), current.claudeProjectDir)
-      claudeProjectDirMoved = true
+    const relinked: PodAdoptRelinkRecord = {
+      repoPath: inputs.repo.path,
+      repoPathAfter: inputs.repo.path,
+      worktreeIds: [],
+      claudeProjectDirs: [],
+      historyDirs: [],
+      configPaths: []
     }
     const record: PodAdoptRecord = {
       id: randomUUID(),
@@ -203,88 +250,29 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
       to,
       movedAt: (deps.now ?? Date.now)(),
       worktreesDirMoved: current.worktreesDir !== null,
-      claudeProjectDirMoved
+      claudeProjectDirMoved: false,
+      relink: relinked
     }
-    await deps.journal.update((data) => void data.adoptions.push(record))
+    try {
+      await relink.apply(inputs, current.relink.configPaths, runtime, relinked)
+    } finally {
+      // Whatever got carried is recorded, so even a move that failed part way can be moved back.
+      record.claudeProjectDirMoved = relinked.claudeProjectDirs.some(
+        ([old]) => old === current.claudeProjectDir
+      )
+      await deps.journal.update((data) => void data.adoptions.push(record))
+    }
     return record
   }
 
-  const recordOf = async (recordId: string): Promise<PodAdoptRecord> => {
-    const record = (await deps.journal.read()).adoptions.find((entry) => entry.id === recordId)
-    if (!record) {
-      throw new WorkspacePlanError('That move was already undone.')
-    }
-    return record
-  }
-
-  const backMoves = (record: PodAdoptRecord): [string, string][] => {
-    const moves: [string, string][] = [[record.to, record.from]]
-    if (record.worktreesDirMoved) {
-      moves.push([worktreesDirOf(record.to), worktreesDirOf(record.from)])
-    }
-    return moves
-  }
-
-  const inspectUndo = async (
-    record: PodAdoptRecord
-  ): Promise<Omit<PodAdoptUndoPlan, 'planId' | 'expiresAt'>> => {
-    const blockers: PodAdoptUndoPlan['blockers'] = []
-    if ((await readlink(record.from).catch(() => null)) !== record.to) {
-      blockers.push('link-changed')
-    }
-    const folders = backMoves(record).map(([moved]) => moved)
-    const inside = deps.processes ? await findProcessesInside(deps.processes, folders) : new Map()
-    const processes = folders.flatMap((folder) => inside.get(folder) ?? [])
-    if (processes.length > 0) {
-      blockers.push('process-inside')
-    }
-    return { record, blockers, processes }
-  }
-
-  const undoFingerprint = (plan: Omit<PodAdoptUndoPlan, 'planId' | 'expiresAt'>): string =>
-    fingerprintOf([plan.record, plan.blockers, plan.processes.map((process) => process.pid)])
-
-  const planUndo = async (recordId: string): Promise<PodAdoptUndoPlan> => {
-    const inspected = await inspectUndo(await recordOf(recordId))
-    const fingerprints = new Map([[`adopt-undo:${recordId}`, undoFingerprint(inspected)]])
-    return { ...deps.plans.issue('adopt-undo', fingerprints, recordId), ...inspected }
-  }
-
-  /** Always refused with a process inside: moving a folder back under a running agent is not undo. */
-  const undo = async (planId: string): Promise<PodAdoptRecord> => {
-    const recordId = deps.plans.subjectOf(planId, 'adopt-undo')
-    const current = await inspectUndo(await recordOf(recordId))
-    deps.plans.verify(planId, 'adopt-undo', `adopt-undo:${recordId}`, undoFingerprint(current))
-    if (current.blockers.length > 0) {
-      throw new WorkspacePlanError(`Not moved back: ${current.blockers.join(', ')}`)
-    }
-    deps.plans.consume(planId)
-    const { record } = current
-    const moves = backMoves(record)
-    const worktrees = await listWorktreePaths(git, record.to)
-    await stopWatchers(worktrees)
-    for (const [moved, original] of moves) {
-      // Only Pod's own link is replaced; anything else at the old path stays.
-      if ((await readlink(original).catch(() => null)) === moved) {
-        await unlink(original)
-        await rename(moved, original)
-      }
-    }
-    const linked = worktrees.filter((path) => path !== record.to)
-    await git(['worktree', 'repair', ...linked.map((path) => remap(path, moves))], record.from)
-    const oldClaude = claudeDir(record.from)
-    if (
-      record.claudeProjectDirMoved &&
-      (await readlink(oldClaude).catch(() => null)) === basename(claudeDir(record.to))
-    ) {
-      await unlink(oldClaude)
-      await rename(claudeDir(record.to), oldClaude)
-    }
-    await deps.journal.update((data) => {
-      data.adoptions = data.adoptions.filter((entry) => entry.id !== recordId)
-    })
-    return record
-  }
+  const { planUndo, undo } = createWorkspaceAdoptUndo({
+    git,
+    journal: deps.journal,
+    plans: deps.plans,
+    processes: deps.processes,
+    relink,
+    claudeDir
+  })
 
   return { plan, apply, planUndo, undo }
 }
