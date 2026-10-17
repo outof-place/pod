@@ -131,9 +131,20 @@ describe('pod-search payload', () => {
     expect(readlinkSync(join(out, 'rg-shim/rg'))).toBe('../bin/og')
   })
 
-  it('makes a release config throw without the payload', () => {
-    expect(() => podSearchMacExtraResources({ payloadDir: join(temp(), 'none') })).toThrow(
-      /fetch-pod-search-payload/
+  it('makes a release config throw without the payload once one is pinned', () => {
+    expect(() =>
+      podSearchMacExtraResources({ payloadDir: join(temp(), 'none'), pinned: true })
+    ).toThrow(/fetch-pod-search-payload/)
+    // Before the first pin there is nothing to ship.
+    expect(podSearchMacExtraResources({ payloadDir: join(temp(), 'none'), pinned: false })).toEqual(
+      []
     )
+  })
+
+  it('refuses a binary that is a link', () => {
+    const dir = payload()
+    rmSync(join(dir, 'bin/og'))
+    symlinkSync('ogd', join(dir, 'bin/og'))
+    expect(() => assertPayload(dir)).toThrow(/bin\/og/)
   })
 })
