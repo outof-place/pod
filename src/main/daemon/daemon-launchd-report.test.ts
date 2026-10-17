@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   bootoutOwnLaunchdJobAtExit,
   dropLaunchdJobEnv,
+  keepParentCheckedEnv,
   reportLaunchdReady,
   readDaemonLaunchdReport,
   reportToLaunchd,
@@ -44,6 +45,31 @@ describe('the launchd report of a daemon', () => {
     takeLaunchdReportPath(['--launchd-report', join(dir, 'report.json')])
     expect(dropLaunchdJobEnv(env)).toBe('codes.pod.daemon.x')
     expect(env).toEqual({ PATH: '/bin' })
+  })
+
+  it('gives the PTYs back the node variables Electron drops under a parent that is not the app', () => {
+    const job = keepParentCheckedEnv({
+      NODE_OPTIONS: '--max-old-space-size=4096',
+      NODE_EXTRA_CA_CERTS: '/etc/ca.pem',
+      PATH: '/bin'
+    })
+    expect(job.POD_LAUNCHD_KEPT_NODE_OPTIONS).toBe('--max-old-space-size=4096')
+    expect(job.POD_LAUNCHD_KEPT_NODE_EXTRA_CA_CERTS).toBe('/etc/ca.pem')
+    expect(job).not.toHaveProperty('POD_LAUNCHD_KEPT_NODE_REPL_EXTERNAL_MODULE')
+    // What the daemon finds at start: Electron dropped the originals, launchd added its own.
+    const env: NodeJS.ProcessEnv = { ...job, XPC_SERVICE_NAME: 'codes.pod.daemon.x' }
+    delete env.NODE_OPTIONS
+    delete env.NODE_EXTRA_CA_CERTS
+    takeLaunchdReportPath(['--socket', '/tmp/s'])
+    dropLaunchdJobEnv(env)
+    expect(env.NODE_OPTIONS).toBeUndefined()
+    takeLaunchdReportPath(['--launchd-report', join(dir, 'report.json')])
+    dropLaunchdJobEnv(env)
+    expect(env).toEqual({
+      NODE_OPTIONS: '--max-old-space-size=4096',
+      NODE_EXTRA_CA_CERTS: '/etc/ca.pem',
+      PATH: '/bin'
+    })
   })
 
   it('never throws where it cannot write', () => {
