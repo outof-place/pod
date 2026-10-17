@@ -9,6 +9,12 @@ import {
 } from './macos-login-session-pty-probe'
 
 export type { LoginPreflightOutcome } from './macos-login-session-pty-probe'
+import {
+  withinSpawnBudget,
+  type LoginProbeSettled,
+  type PreparedLoginShell
+} from './macos-login-spawn-budget'
+export type { LoginProbeSettled, PreparedLoginShell } from './macos-login-spawn-budget'
 
 const MACOS_LOGIN_PATH = '/usr/bin/login'
 const MACOS_BASH_PATH = '/bin/bash'
@@ -155,7 +161,8 @@ function cacheConclusiveLoginPreflightOutcome(outcome: LoginPreflightOutcome): v
 
 function loginPreflightSucceeds(
   username: string,
-  accountHome: string
+  accountHome: string,
+  onProbeSettled?: LoginProbeSettled
 ): Promise<LoginPreflightOutcome> {
   const cached = cachedOutcome()
   if (cached) {
@@ -163,6 +170,7 @@ function loginPreflightSucceeds(
   }
   if (!loginPreflightInFlight) {
     const cacheEpoch = loginPreflightCacheEpoch
+    const probeStartedAtMs = Date.now()
     // Why: simultaneous pane restores share one PAM child instead of multiplying
     // subprocesses at exactly the point terminal startup is already busiest.
     loginPreflightInFlight = runLoginPreflight(username, accountHome).then(async (pipeOutcome) => {
@@ -187,6 +195,10 @@ function loginPreflightSucceeds(
       loginPreflightInFlight = null
       return outcome
     })
+    // Pod: the probe's own verdict and duration, to the caller that started it only.
+    void loginPreflightInFlight.then((outcome) =>
+      onProbeSettled?.(outcome, Date.now() - probeStartedAtMs)
+    )
   }
   return loginPreflightInFlight
 }
@@ -205,7 +217,7 @@ function loginPreflightSucceeds(
  * daemons destroy stderr and never surface the console.warn above (F2).
  */
 export async function prepareMacosTccLoginShell(
-  options: { warmUp?: boolean } = {}
+  options: { warmUp?: boolean; onProbeSettled?: LoginProbeSettled } = {}
 ): Promise<PreparedLoginShell | null> {
   if (process.platform !== 'darwin' || isDisabledByEnv()) {
     return null
@@ -234,27 +246,8 @@ export async function prepareMacosTccLoginShell(
   if (!username || !accountHome) {
     return null
   }
-  const probe = loginPreflightSucceeds(username, accountHome)
-  return options.warmUp ? probe : withinSpawnBudget(probe)
-}
-
-/** Pod: a probe's outcome, or a spawn's wait on it that ran out (`budgetExpired`: no probe said so). */
-export type PreparedLoginShell = LoginPreflightOutcome & { budgetExpired?: true }
-
-/** Pod: a spawn waits on a probe no longer than its own budget, then goes direct; the probe runs on
- *  and caches its verdict. */
-function withinSpawnBudget(probe: Promise<LoginPreflightOutcome>): Promise<PreparedLoginShell> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const budget = new Promise<PreparedLoginShell>((resolve) => {
-    const expired: PreparedLoginShell = {
-      ok: false,
-      conclusive: false,
-      reason: 'timeout',
-      budgetExpired: true
-    }
-    timer = setTimeout(() => resolve(expired), LOGIN_PREFLIGHT_TIMEOUT_MS)
-  })
-  return Promise.race([probe, budget]).finally(() => clearTimeout(timer))
+  const probe = loginPreflightSucceeds(username, accountHome, options.onProbeSettled)
+  return options.warmUp ? probe : withinSpawnBudget(probe, LOGIN_PREFLIGHT_TIMEOUT_MS)
 }
 
 export function resetMacosLoginShellPreflightForTests(): void {

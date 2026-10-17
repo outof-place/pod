@@ -1,6 +1,7 @@
 // Fork-only (Pod): the daemon's login(1) preflight and what it logs. Detached daemons destroy
-// stderr, so each probe that ran is logged with its duration, an accepted one too, and a spawn that
-// stopped waiting on a slow probe is logged apart from any probe's verdict.
+// stderr, so each probe is logged once, by the call that started it, with its own verdict and
+// duration (an accepted one too), and a spawn that stopped waiting on a slow probe is logged apart
+// from any probe's verdict.
 import { prepareMacosTccLoginShell } from '../providers/macos-tcc-login-shell'
 
 export type DaemonLoginPreflightLog = (event: string, details: Record<string, unknown>) => void
@@ -13,13 +14,13 @@ export function createDaemonLoginPreflight(
 ): (warmUp?: boolean) => Promise<void> {
   return async (warmUp = false) => {
     const startedAtMs = Date.now()
-    const outcome = await prepare({ warmUp })
-    const waitedMs = Date.now() - startedAtMs
+    const outcome = await prepare({
+      warmUp,
+      onProbeSettled: ({ ok, conclusive, reason }, durationMs) =>
+        log('macos-login-preflight', { ok, conclusive, reason, durationMs, warmUp })
+    })
     if (outcome?.budgetExpired) {
-      log('macos-login-preflight-wait', { budgetExpired: true, waitedMs })
-    } else if (outcome) {
-      const { ok, conclusive, reason } = outcome
-      log('macos-login-preflight', { ok, conclusive, reason, durationMs: waitedMs, warmUp })
+      log('macos-login-preflight-wait', { budgetExpired: true, waitedMs: Date.now() - startedAtMs })
     }
   }
 }

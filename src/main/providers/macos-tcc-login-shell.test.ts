@@ -353,6 +353,30 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     }
   })
 
+  it('reports a probe once, to the call that started it, with its own duration (Pod)', async () => {
+    setPlatform('darwin')
+    let finishProbe!: (result: typeof ACCEPTED_RESULT) => void
+    runProcessMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishProbe = resolve
+        })
+    )
+    const started = vi.fn()
+    const joined = vi.fn()
+
+    const warmup = prepareMacosTccLoginShell({ warmUp: true, onProbeSettled: started })
+    const spawn = prepareMacosTccLoginShell({ onProbeSettled: joined })
+    finishProbe(ACCEPTED_RESULT)
+    await Promise.all([warmup, spawn])
+    await Promise.resolve()
+
+    expect(started).toHaveBeenCalledOnce()
+    expect(started).toHaveBeenCalledWith(ACCEPTED_OUTCOME, expect.any(Number))
+    expect(joined).not.toHaveBeenCalled()
+    expect(runProcessMock).toHaveBeenCalledOnce()
+  })
+
   it('backs off a warm-up its own 4 s bound killed instead of caching a refusal (Pod)', async () => {
     setPlatform('darwin')
     let now = 1_000
