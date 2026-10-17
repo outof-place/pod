@@ -23,6 +23,8 @@ export async function dispatchWorktreeRemoval(args: {
   hostId: ExecutionHostId | undefined
   force: boolean | undefined
   skipArchive: boolean
+  /** Pod: the archive script's hash approved for this removal (someone else's code). */
+  archiveTrustHash?: string
   get: WorktreeSliceGet
   target: ReturnType<typeof getActiveRuntimeTarget>
   options: RemoveWorktreeOptions | undefined
@@ -50,7 +52,8 @@ export async function dispatchWorktreeRemoval(args: {
 async function requestWorktreeRemoval(
   args: Parameters<typeof dispatchWorktreeRemoval>[0]
 ): Promise<RemoveWorktreeResult> {
-  const { worktreeId, hostId, force, skipArchive, target, options } = args
+  const { worktreeId, hostId, force, skipArchive, archiveTrustHash, target, options } = args
+  const approved = !skipArchive && archiveTrustHash ? { archiveTrustHash } : {}
   const forgetLocalOnly = options?.mode === 'forget-local'
   const snapshotPruneBatch = options?.snapshotPruneBatchId
     ? { snapshotPruneBatchId: options.snapshotPruneBatchId }
@@ -70,6 +73,7 @@ async function requestWorktreeRemoval(
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
       allowFailedArchiveHook: options?.allowFailedArchiveHook === true,
       skipArchive,
+      ...approved,
       ...snapshotPruneBatch
     })
   }
@@ -91,7 +95,8 @@ async function requestWorktreeRemoval(
       // Why only when set, unlike the IPC branch: this crosses a version boundary, and a host
       // that predates the gate drops unknown params silently. Send it when it means something.
       ...(options?.allowFailedArchiveHook === true ? { allowFailedArchiveHook: true } : {}),
-      runHooks: !skipArchive
+      runHooks: !skipArchive,
+      ...approved
     },
     {
       // Why (#19334): the host may run an archive hook before it decides anything, then waits for

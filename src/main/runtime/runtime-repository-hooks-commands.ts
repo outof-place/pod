@@ -1,6 +1,7 @@
 import { getStoredRepoSshConnectionId } from '../repo-execution-host'
 import { readFile } from 'node:fs/promises'
 import type { Repo } from '../../shared/repo-types'
+import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import {
   getEffectiveHooks,
   hasHooksFile,
@@ -10,7 +11,7 @@ import {
 } from '../hooks'
 import { getEffectiveHooksFromConfig, getEffectiveSetupRunPolicy } from '../effective-hook-config'
 import { isOwnBranch, readOrcaYamlAtRef, type GitShowExec } from '../orca-yaml-at-ref'
-import { orcaYamlSetupTrust } from '../orca-yaml-setup-trust'
+import { archiveRunTrust, orcaYamlSetupTrust, setupRunTrust } from '../orca-yaml-setup-trust'
 import { isENOENT } from '../ipc/filesystem-auth'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -21,6 +22,15 @@ type RuntimeRepositoryHooksCommandsDeps = {
   resolveRepo: (selector: string) => Promise<Repo>
   /** Pod: git where the repo lives, to read a ref's orca.yaml; null when the host is unreachable. */
   gitShowExec?: (repo: Repo) => GitShowExec | null
+}
+
+/** Pod: everything a setup or archive run would start (the repo's own scripts included), which a
+ *  client asks about for a checkout of someone else's code, and its hash. */
+function podRunTrust(repo: Repo, yamlHooks: OrcaHooks | null) {
+  return {
+    setupRunTrust: setupRunTrust(repo, yamlHooks),
+    archiveRunTrust: archiveRunTrust(repo, yamlHooks)
+  }
 }
 
 export class RuntimeRepositoryHooksCommands {
@@ -46,6 +56,7 @@ export class RuntimeRepositoryHooksCommands {
         source: read?.hasHooks ? ('orca.yaml' as const) : null,
         ...(read?.status === 'ok' ? {} : { status: 'error' as const }),
         setupTrust: orcaYamlSetupTrust(repo, shared),
+        ...podRunTrust(repo, shared),
         baseOwned
       }
     }
@@ -68,7 +79,8 @@ export class RuntimeRepositoryHooksCommands {
           hooks,
           setupRunPolicy: getEffectiveSetupRunPolicy(repo),
           source: hooks ? ('orca.yaml' as const) : null,
-          setupTrust: orcaYamlSetupTrust(repo, hooks)
+          setupTrust: orcaYamlSetupTrust(repo, hooks),
+          ...podRunTrust(repo, hooks)
         }
       } catch {
         return {
@@ -87,7 +99,8 @@ export class RuntimeRepositoryHooksCommands {
       hooks,
       setupRunPolicy: getEffectiveSetupRunPolicy(repo),
       source: hasFile ? ('orca.yaml' as const) : hooks ? ('legacy' as const) : null,
-      setupTrust: orcaYamlSetupTrust(repo, sharedHooks)
+      setupTrust: orcaYamlSetupTrust(repo, sharedHooks),
+      ...podRunTrust(repo, sharedHooks)
     }
   }
 

@@ -2,6 +2,8 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { checkRuntimeHooks, type HookCheckResult } from '@/runtime/runtime-hooks-client'
+import type { OrcaHooks, RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
+import { hookRunContent } from '../../../shared/orca-yaml-run-content'
 
 /** Pod: a create's setup is asked about on its base's orca.yaml, and the approved hash goes with
  *  the create so the host can check the content it actually runs. `foreign`: the create is linked
@@ -11,6 +13,27 @@ export type CreateSetupTrust = {
   baseRef?: string
   foreign?: boolean
   onTrusted: (contentHash: string) => void
+}
+
+/** What the question shows and hashes: orca.yaml's setup (with its default tab commands) or
+ *  archive script, none when the repo runs its own commands only; for someone else's code
+ *  everything a run would start there, the repo's own script included (`make clean` runs that
+ *  branch's Makefile). Other kinds: `other`. */
+export function hookTrustContent(
+  kind: string,
+  foreign: boolean,
+  localOnly: boolean,
+  hookSettings: RepoHookSettings | undefined,
+  yamlHooks: OrcaHooks | null,
+  other: () => string
+): string {
+  if (kind !== 'setup' && kind !== 'archive') {
+    return other()
+  }
+  if (foreign) {
+    return hookRunContent(kind, hookSettings, yamlHooks)
+  }
+  return localOnly ? '' : hookRunContent(kind, undefined, yamlHooks)
 }
 
 /** A direct launch from a work item: a pull or merge request's head is someone else's code. */
