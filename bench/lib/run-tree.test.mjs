@@ -36,7 +36,7 @@ test(
   "a stranger's process that names the run dir survives the cleanup; the run's own tree does not",
   { skip: !existsSync(PROCSTAT) && 'build the tools first (tools/build.sh)' },
   async () => {
-    const work = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'run-tree-test-')))
+    const work = realpathSync(mkdtempSync('/private/tmp/run-tree-test.'))
     mkdirSync(path.join(work, 'bin'))
     mkdirSync(path.join(work, 'out'))
     writeFileSync(path.join(work, 'out/app.log'), '')
@@ -48,8 +48,8 @@ test(
     )
     execFileSync('xcrun', ['clang', '-O2', '-o', path.join(work, 'bin/app'), path.join(work, 'bin/app.c')])
     const own = spawn(path.join(work, 'bin/app'), [`sleep 30; : ${work}/out/app.log`], { stdio: 'ignore' })
-    // A stranger: a shell whose command line names a log in the run dir, as `tail -f` would.
-    const stranger = spawn('/bin/sh', ['-c', `sleep 30; : ${work}/out/app.log`], { stdio: 'ignore' })
+    // A stranger following a log in the run dir, as someone's `tail -f` would.
+    const stranger = spawn('/usr/bin/tail', ['-f', path.join(work, 'out/app.log')], { stdio: 'ignore' })
     try {
       await sleep(300)
       const before = await runTree(work, { scan: true })
@@ -70,6 +70,12 @@ test(
     } finally {
       for (const child of [own, stranger]) {
         if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+      }
+      // The test's own /private/tmp dir, through the guarded remover where it is installed.
+      const remover = path.join(os.homedir(), '.local/bin/pod-tmp-rm')
+      if (existsSync(remover)) {
+        await sleep(200)
+        execFileSync(remover, [work], { stdio: 'ignore' })
       }
     }
   }
