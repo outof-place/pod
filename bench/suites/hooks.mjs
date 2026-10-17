@@ -13,12 +13,13 @@
 //   node bench/suites/hooks.mjs [--replays 6] [--gap-ms 25]
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { extractAsar } from '../lib/asar.mjs'
+import { assertRealHomeUntouched, realHomeState } from '../lib/real-home-guard.mjs'
 import {
   BENCH_ROOT,
   TOOLS_BIN,
@@ -171,44 +172,21 @@ function installApp(name, appPath) {
 }
 
 // The suite runs each app's own installer, which writes Claude's settings: the account's real
-// files (its home from the user database, not HOME) must come out of the run byte for byte.
-// ~/.claude.json is rewritten by every live Claude session, so it trips only when its new content
-// names this run's dir; a same-content rewrite elsewhere is reported, not tripped on.
-const REAL_HOME = os.userInfo().homedir
-function sha256(file) {
-  return createHash('sha256').update(readFileSync(file)).digest('hex')
-}
-function realHomeState() {
-  const files = [path.join(REAL_HOME, '.claude/settings.json')]
-  for (const dir of ['.orca/agent-hooks', '.pod/agent-hooks']) {
-    const full = path.join(REAL_HOME, dir)
-    if (existsSync(full)) {
-      files.push(...readdirSync(full).map((name) => path.join(full, name)).filter((file) => statSync(file).isFile()))
+// files must come out of the run unchanged (lib/real-home-guard.mjs), or no row is written.
+function checkRealHome(where) {
+  try {
+    const rewritten = assertRealHomeUntouched(realBefore, where, runDir)
+    if (rewritten.length > 0) {
+      log(`hooks: rewritten with the same content ${where} (not by this run, whose writes would differ): ${rewritten.join(', ')}`)
     }
+    return rewritten
+  } catch (error) {
+    throw new Error(`refusing to write rows: ${error.message}`)
   }
-  return Object.fromEntries(files.filter((file) => existsSync(file)).map((file) => [file, { sha256: sha256(file), mtimeMs: statSync(file).mtimeMs }]))
-}
-function assertRealHomeUntouched(before, where) {
-  const after = realHomeState()
-  const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(
-    (file) => before[file]?.sha256 !== after[file]?.sha256
-  )
-  const touched = Object.keys(after).filter((file) => before[file] && after[file].mtimeMs !== before[file].mtimeMs && !changed.includes(file))
-  const claudeJson = path.join(REAL_HOME, '.claude.json')
-  if (existsSync(claudeJson) && readFileSync(claudeJson, 'utf8').includes(runDir)) {
-    changed.push(`${claudeJson} (names ${runDir})`)
-  }
-  if (changed.length > 0) {
-    throw new Error(`refusing to write rows: the account's own Claude files changed ${where}: ${changed.join(', ')}`)
-  }
-  if (touched.length > 0) {
-    log(`hooks: rewritten with the same content ${where} (not by a hook of this run's, which would differ): ${touched.join(', ')}`)
-  }
-  return touched
 }
 const realBefore = realHomeState()
 const apps = [installApp('orca', ORCA_APP), installApp('pod', POD_APP)]
-assertRealHomeUntouched(realBefore, 'during the installs')
+checkRealHome('during the installs')
 const payloads = recordedPayloads()
 // Claude runs a hook only for the events installed; recorded events neither app installs are left out.
 const replayed = payloads.filter((payload) => apps.every((app) => app.events[payload.event]))
@@ -285,7 +263,7 @@ const samples = await collectSamples({
   }
 })
 server.close()
-const sameContentRewrites = assertRealHomeUntouched(realBefore, 'during the run')
+const sameContentRewrites = checkRealHome('during the run')
 
 const accepted = samples.filter((sample) => !sample.warmup)
 // Named after what the installer actually wrote: the exec-form program, or the script a shell form runs.

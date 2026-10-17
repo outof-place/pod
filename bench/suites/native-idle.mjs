@@ -18,23 +18,20 @@
 // or codex, or a new SecurityAgent, stops the launch.
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import {
-  copyFileSync,
-  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   realpathSync,
-  statSync,
   writeFileSync
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { parseArgs, promisify } from 'node:util'
 import { checkAcc, guardInstance, releaseInstance } from '../lib/acc-guard.mjs'
+import { assertRealHomeUntouched, realHomeState } from '../lib/real-home-guard.mjs'
 import {
-  BENCH_ROOT,
   MAX_LOAD,
   TOOLS_BIN,
   loadAverage,
@@ -99,18 +96,29 @@ function podNativeFile(rel) {
   })
 }
 
-// The account's own files a launch must leave alone, compared before and after each launch.
-const WATCHED = [
-  path.join(HOME, '.claude/settings.json'),
-  path.join(HOME, '.orca/agent-hooks'),
-  path.join(HOME, '.pod/agent-hooks')
+const PROTECTED = ['/Applications/', path.join(HOME, 'Library/Application Support/Pod/')]
+// An app LaunchServices starts gets the launchd session's environment beside what `open --env`
+// gives it: none of these may be set there.
+const SESSION_ENV = [
+  'CLAUDE_CONFIG_DIR',
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_BASE_URL',
+  'ORCA_USER_DATA_PATH',
+  'POD_USER_DATA_PATH',
+  'ORCA_E2E_USER_DATA_DIR',
+  'POD_E2E_USER_DATA_DIR',
+  'NODE_OPTIONS',
+  'DYLD_INSERT_LIBRARIES'
 ]
-function watchedState() {
-  return WATCHED.flatMap((file) => {
-    if (!existsSync(file)) return [`${file} absent`]
-    const entries = statSync(file).isDirectory() ? [file, ...readdirSync(file).map((name) => path.join(file, name))] : [file]
-    return entries.map((entry) => `${entry} ${statSync(entry).mtimeMs}`)
-  })
+const sessionEnv = SESSION_ENV.filter((name) => {
+  try {
+    return execFileSync('/bin/launchctl', ['getenv', name], { encoding: 'utf8' }).trim() !== ''
+  } catch {
+    return false
+  }
+})
+if (sessionEnv.length > 0) {
+  throw new Error(`refusing: the launchd session sets ${sessionEnv.join(', ')}, which an app started through LaunchServices would get`)
 }
 const DOMAINS = ['codes.pod.native', 'codes.pod.app', 'codes.pod.native.e2e', 'codes.pod.runtime.e2e']
 function domainKeys(domain) {
@@ -295,7 +303,7 @@ async function rpcWithRetry(launch, method, params, attempts = 20) {
 async function measureLaunch(variant, index) {
   const launch = prepare(variant)
   log(`${SUITE}: launch ${index + 1} (${variant}) in ${launch.work}`)
-  const watchedBefore = watchedState()
+  const realBefore = realHomeState()
   const domainsBefore = Object.fromEntries(DOMAINS.map((domain) => [domain, domainKeys(domain)]))
   const agentsBefore = securityAgents()
   // PodNative quits (and quits its runtime over the control channel) when its own idle window ends.
@@ -477,8 +485,15 @@ async function measureLaunch(variant, index) {
   const security = existsSync(path.join(launch.work, 'security.jsonl'))
     ? readFileSync(path.join(launch.work, 'security.jsonl'), 'utf8').split('\n').filter(Boolean)
     : []
+  let realHome = null
+  try {
+    realHome = { sameContentRewrites: assertRealHomeUntouched(realBefore, 'during the launch', launch.work) }
+  } catch (error) {
+    realHome = { error: error.message }
+    failure ??= error.message
+  }
   const checks = {
-    watchedUnchanged: JSON.stringify(watchedState()) === JSON.stringify(watchedBefore),
+    realHome,
     domainsChanged: DOMAINS.filter((domain) => domainKeys(domain) !== domainsBefore[domain]),
     securityCalls: security.length,
     securityNonFind: security.filter((line) => !/"subcommand": "find-/.test(line)).length,
@@ -487,7 +502,6 @@ async function measureLaunch(variant, index) {
     measureIdle: measure?.idle ?? null
   }
   checkAcc(`after native-idle launch ${index + 1}`)
-  if (!checks.watchedUnchanged) failure ??= 'the account\'s ~/.claude/settings.json or agent hooks changed during the launch'
   if (checks.securityNonFind > 0) failure ??= `security shim saw ${checks.securityNonFind} non-find calls`
   log(`${SUITE}: launch ${index + 1} done${failure ? `, FAILED: ${failure}` : ''}; checks ${JSON.stringify({ ...checks, measureIdle: undefined }).slice(0, 300)}`)
   return { variant, launch: index, work: launch.work, failure, windows, checks }
@@ -497,7 +511,11 @@ async function measureLaunch(variant, index) {
 async function cleanup(launch) {
   let left = []
   for (let attempt = 0; attempt < 50; attempt += 1) {
-    left = (await snapshot(launch, { scan: true })).procs.filter((proc) => proc.pid !== process.pid && ownedBy(launch, proc.pid))
+    // The tree is the launch's by construction (its clone's PodNative, owned roots, argv naming
+    // the run's dir, and their descendants); never a program under /Applications or Pod's data.
+    left = (await snapshot(launch, { scan: true })).procs.filter(
+      (proc) => proc.pid !== process.pid && !PROTECTED.some((prefix) => proc.path.startsWith(prefix))
+    )
     if (left.length === 0) break
     for (const proc of left) {
       try {
@@ -525,11 +543,12 @@ async function cleanup(launch) {
   return left.map((proc) => `${proc.pid} ${proc.path}`)
 }
 
-// A process belongs to the launch when its command line or environment names the run's dir
-// (ps -E only on the launch's own tree).
+// A recorded pid counts as the launch's when its command line names the run's dir (the runtime
+// runs from the clone, the daemon from the profile's daemon-host dir); never its environment,
+// since a stale pid file can name someone else's process.
 function ownedBy(launch, pid) {
   try {
-    const line = execFileSync('/bin/ps', ['-E', '-ww', '-o', 'command=', '-p', String(pid)], { encoding: 'utf8' })
+    const line = execFileSync('/bin/ps', ['-ww', '-o', 'command=', '-p', String(pid)], { encoding: 'utf8' })
     return line.includes(`${launch.work.replace(/^\/private/, '')}/`)
   } catch {
     return false

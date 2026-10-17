@@ -420,9 +420,15 @@ POD_BENCH_POD_APP=<re-id'd copy of Pod.app> node bench/suites/native-idle.mjs [-
   - a guard `PATH` whose `claude` and `codex` are stubs and whose `security` is the gate-2 shim.
 
   A watchdog stops the launch on any real `claude` or `codex` in the run's tree, or on a new
-  SecurityAgent. After each launch the suite checks three things: that `~/.claude/settings.json`
-  and the agent-hook dirs are unchanged, that the shim saw only `find` calls, and that
-  claude-acc's install is unchanged (`lib/acc-guard.mjs`).
+  SecurityAgent. Before the first launch the suite refuses to start if the launchd session sets
+  `CLAUDE_CONFIG_DIR`, `ANTHROPIC_*`, a userData override, `NODE_OPTIONS` or
+  `DYLD_INSERT_LIBRARIES`, which an app started through LaunchServices would get. After each
+  launch it checks three things: that the account's Claude files have the same content
+  (`lib/real-home-guard.mjs`), that the shim saw only `find` calls, and that claude-acc's install
+  is unchanged (`lib/acc-guard.mjs`).
+- **Deep links.** While a launch runs, its clone is registered with LaunchServices (until
+  `lsregister -u` at its cleanup), so a `pod://` link clicked meanwhile could open in it. Don't
+  click Pod links during a run.
 - **Sampling.** `tools/procstat.c` reads every process of the launch at each window's edges:
   PodNative by its executable, the runtime and daemons the profile records, and their
   descendants. `extra.breakdown` splits the numbers by process class. A window counts only when
