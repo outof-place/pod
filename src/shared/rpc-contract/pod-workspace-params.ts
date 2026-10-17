@@ -10,6 +10,11 @@ export const PodWorkspaceStatusParams = z.object({ refresh: z.boolean().optional
 
 export const PodWorkspaceValidateRootParams = z.object({ value: z.string().max(8_192) }).strict()
 
+/** `root`: a folder to manage repositories in; null or blank goes back to the default `~/pod`. */
+export const PodWorkspaceSetRootParams = z
+  .object({ root: z.string().max(8_192).nullable(), reason: UserIntent })
+  .strict()
+
 export const PodWorkspaceExcludeBuildFoldersParams = z
   .object({ planId: PlanId, reason: UserIntent })
   .strict()

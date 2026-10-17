@@ -4,6 +4,7 @@ import type { z } from 'zod'
 import type {
   PodWorkspaceExcludeResult,
   PodWorkspaceRootValidation,
+  PodWorkspaceSetRootResult,
   PodWorkspaceStatusReply
 } from '../../../shared/pod-workspace-types'
 import type {
@@ -30,6 +31,8 @@ export type PodWorkspaceRpcService = {
   isEnabled(): boolean
   status(refresh: boolean): Promise<PodWorkspaceStatusReply>
   validateRoot(value: string): Promise<PodWorkspaceRootValidation>
+  /** Saves the root after the same checks validateRoot runs; nothing moves (Move In is per repo). */
+  setRoot(value: string | null): Promise<PodWorkspaceSetRootResult>
   excludeBuildFolders(planId: string): Promise<PodWorkspaceExcludeResult>
   openSpotlightSettings(): Promise<boolean>
   cloneDestination(url: string): Promise<string | null>

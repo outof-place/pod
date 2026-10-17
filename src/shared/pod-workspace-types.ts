@@ -15,8 +15,12 @@ export const POD_WORKSPACE_RPC = {
   tidyScan: 'podWorkspace.tidyScan',
   tidyApply: 'podWorkspace.tidyApply',
   gitProfile: 'podWorkspace.gitProfile',
-  adopt: 'podWorkspace.adopt'
+  adopt: 'podWorkspace.adopt',
+  setRoot: 'podWorkspace.setRoot'
 } as const
+
+/** `root`: the saved setting (`''` is the default `~/pod`); `resolvedRoot`: the folder it names. */
+export type PodWorkspaceSetRootResult = { root: string; resolvedRoot: string }
 
 export type PodWorkspaceRootIssueCode =
   | 'empty'
@@ -104,6 +108,8 @@ export type PodWorkspaceOutsideRepo = {
 
 export type PodWorkspaceStatus = {
   root: string
+  /** `podWorkspaceRoot` as saved; `''` means the default, `~/pod`. */
+  rootSetting: string
   /** `root` and, when it differs, its real path; repo paths may use either. */
   rootAliases: string[]
   rootExists: boolean

@@ -6,6 +6,7 @@ import {
   PodWorkspaceCloneDestinationParams,
   PodWorkspaceExcludeBuildFoldersParams,
   PodWorkspaceGitProfileParams,
+  PodWorkspaceSetRootParams,
   PodWorkspaceStatusParams,
   PodWorkspaceTidyApplyParams,
   PodWorkspaceTidyScanParams,
@@ -43,6 +44,12 @@ export const POD_WORKSPACE_METHODS = [
     permission: 'host-admin',
     params: PodWorkspaceValidateRootParams,
     handler: (params) => service().validateRoot(params.value)
+  }),
+  defineMethod({
+    name: POD_WORKSPACE_RPC.setRoot,
+    permission: 'host-admin',
+    params: PodWorkspaceSetRootParams,
+    handler: (params) => service().setRoot(params.root)
   }),
   defineMethod({
     name: POD_WORKSPACE_RPC.excludeBuildFolders,

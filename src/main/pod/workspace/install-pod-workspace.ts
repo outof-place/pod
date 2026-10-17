@@ -52,6 +52,7 @@ const ROOT_SETTING_KEYS = new Set<string>(['podWorkspaceRoot', 'experimentalPodW
 type PodWorkspaceStore = WorkspaceStrayStore &
   AdoptRelinkStore & {
     getSettings(): GlobalSettings
+    updateSettings(updates: Partial<GlobalSettings>, options: { notifyListeners: boolean }): unknown
     getRepos(): Repo[]
     onSettingsChanged(listener: (updates: Partial<GlobalSettings>) => void): () => void
   }

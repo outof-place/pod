@@ -12,6 +12,7 @@ import { PodWorkspaceRepoList } from './PodWorkspaceRepoList'
 function status(overrides: Partial<PodWorkspaceStatus> = {}): PodWorkspaceStatus {
   return {
     root: '/Users/me/pod',
+    rootSetting: '',
     rootAliases: ['/Users/me/pod'],
     rootExists: true,
     validation: { root: '/Users/me/pod', issues: [] },

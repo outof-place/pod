@@ -168,6 +168,7 @@ export function createWorkspaceStatusService(deps: WorkspaceStatusDeps) {
     }))
     return {
       root,
+      rootSetting: settings.podWorkspaceRoot?.trim() ?? '',
       rootAliases: workspaceRootAliases(root),
       rootExists,
       validation,
