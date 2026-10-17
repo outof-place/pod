@@ -65,6 +65,7 @@ export function buildManagedWorktreeCreateArgs(
       defaultTarget: 'host'
     }),
     setupDecision: params.setupDecision,
+    ...(params.setupTrustHash ? { setupTrustHash: params.setupTrustHash } : {}),
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,
     ...provenance,
     // Why: a person initiated this create (the phone, CLI text and agent.launch don't surface the

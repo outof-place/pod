@@ -11,7 +11,8 @@ export function createRuntimeNamespaceApi(prefix: string): never {
 
 export function createHooksApi(): NonNullable<Partial<PreloadApi>['hooks']> {
   return {
-    check: async ({ repoId }) => callRuntimeResult('repo.hooksCheck', { repo: repoId }),
+    check: async ({ repoId, ref }) =>
+      callRuntimeResult('repo.hooksCheck', { repo: repoId, ...(ref ? { ref } : {}) }),
     inspectSetupScriptImports: async ({ repoId }) =>
       callRuntimeResult('repo.setupScriptImports', { repo: repoId }),
     createIssueCommandRunner: async () => ({ launched: false }) as never,

@@ -68,6 +68,11 @@ import {
   getEffectiveHooksFromConfig,
   shouldRunSetupForCreate
 } from '../effective-hook-config'
+import {
+  needsTrustWarning,
+  untrustedCreateSetup,
+  withoutTabCommands
+} from '../orca-yaml-setup-trust'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
@@ -2129,6 +2134,7 @@ export async function createRemoteWorktree(
 
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
+  let setupTrust: CreateWorktreeResult['setupTrust']
   if (fsProvider) {
     await timing.time('prepare_setup', async () => {
       const yamlHooks = await readRemoteOrcaYaml(fsProvider, created.path)
@@ -2151,6 +2157,16 @@ export async function createRemoteWorktree(
           // Why: worktree already exists; skip setup rather than fail a successful git create when the branch adds a hook without a renderer decision.
           console.warn(`[hooks] setup hook skipped for ${created.path}:`, error)
         }
+      }
+      // Pod: shared commands run only on content the user trusts.
+      setupTrust =
+        args.setupDecision === 'skip'
+          ? undefined
+          : (untrustedCreateSetup(store, repo, yamlHooks, args.setupTrustHash) ?? undefined)
+      if (setupTrust) {
+        shouldLaunchSetup = false
+        defaultTabs = withoutTabCommands(defaultTabs)
+        console.warn(`[hooks] ${needsTrustWarning(created.path)}`)
       }
       if (setupScript && shouldLaunchSetup) {
         try {
@@ -2182,6 +2198,7 @@ export async function createRemoteWorktree(
     ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
+    ...(setupTrust ? { setupTrust, warning: needsTrustWarning(created.path) } : {}),
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
     ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {}),
     ...(baseFallback ? { baseFallback } : {}),
@@ -2878,6 +2895,7 @@ async function performLocalWorktreeCreate(
   // Why: the worktree's base-branch `orca.yaml` is authoritative; we don't re-gate on content parity with the primary checkout since benign divergence silently disabled setup (#1280).
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
+  let setupTrust: CreateWorktreeResult['setupTrust']
   await timing.time('prepare_setup', async () => {
     const createdYamlHooks = loadHooks(worktreePath)
     const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
@@ -2899,6 +2917,16 @@ async function performLocalWorktreeCreate(
         // Why: target branch may add setup hooks the renderer never collected a decision for; worktree exists, so skip setup rather than fail creation.
         console.warn(`[hooks] setup hook skipped for ${worktreePath}:`, error)
       }
+    }
+    // Pod: shared commands run only on content the user trusts.
+    setupTrust =
+      args.setupDecision === 'skip'
+        ? undefined
+        : (untrustedCreateSetup(store, repo, createdYamlHooks, args.setupTrustHash) ?? undefined)
+    if (setupTrust) {
+      shouldLaunchSetup = false
+      defaultTabs = withoutTabCommands(defaultTabs)
+      console.warn(`[hooks] ${needsTrustWarning(worktreePath)}`)
     }
     if (setupScript && shouldLaunchSetup) {
       try {
@@ -2962,6 +2990,17 @@ async function performLocalWorktreeCreate(
       : includeCopyWarning
         ? { warning: includeCopyWarning }
         : {}),
+    ...(setupTrust
+      ? {
+          setupTrust,
+          warning: appendWorktreeCreateWarning(
+            stagedStartup.warning
+              ? appendWorktreeCreateWarning(includeCopyWarning, stagedStartup.warning)
+              : includeCopyWarning,
+            needsTrustWarning(worktreePath)
+          )
+        }
+      : {}),
     timing: timing.finish()
   }
 }

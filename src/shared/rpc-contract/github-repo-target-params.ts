@@ -5,6 +5,9 @@ export const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
 })
 
+/** Pod: `ref` reads that ref's committed orca.yaml, the base a create from it would run. */
+export const RepoHooksSelector = RepoSelector.extend({ ref: OptionalString })
+
 export const SlugRepo = z.object({
   owner: requiredString('Missing owner'),
   repo: requiredString('Missing repo'),

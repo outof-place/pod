@@ -70,6 +70,7 @@ export const getEffectiveHooksFromConfigMock: ModuleMock = vi.fn()
 export const getDefaultTabsLaunchMock: ModuleMock = vi.fn()
 export const parseOrcaYamlMock: ModuleMock = vi.fn()
 export const shouldRunSetupForCreateMock: ModuleMock = vi.fn()
+export const untrustedCreateSetupMock: ModuleMock = vi.fn()
 export const buildPosixRunnerScriptMock: StringArgMock = vi.fn()
 export const buildWindowsRunnerScriptMock: StringArgMock = vi.fn()
 export const getSetupRunnerEnvVarsMock: Mock<
@@ -229,6 +230,12 @@ export const effectiveHookConfigModuleMock = (actual: Record<string, unknown>) =
   getDefaultTabsLaunch: getDefaultTabsLaunchMock,
   getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
   shouldRunSetupForCreate: shouldRunSetupForCreateMock
+})
+
+// Pod: these flows assume a trusted setup (undefined: nothing needs trust); the gate has its own tests.
+export const orcaYamlSetupTrustModuleMock = (actual: Record<string, unknown>) => ({
+  ...actual,
+  untrustedCreateSetup: untrustedCreateSetupMock
 })
 
 export const setupHookEnvVarsModuleMock = (actual: Record<string, unknown>) => ({

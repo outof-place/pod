@@ -55,7 +55,7 @@ vi.mock('../../../shared/setup-script-imports', () => ({
 }))
 vi.mock('../../effective-hook-config', () => ({
   getEffectiveSetupRunPolicy: () => 'manual',
-  getDefaultTabCommandTrustContent: () => undefined
+  getDefaultTabCommandTrustContent: () => ''
 }))
 import { RuntimeRepositoryHooksCommands } from '../../runtime/runtime-repository-hooks-commands'
 import { RuntimeRepositoryIssueCommand } from '../../runtime/runtime-repository-issue-command'

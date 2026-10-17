@@ -3,6 +3,12 @@ import type { Repo } from '../../shared/repo-types'
 import { getEffectiveHooks, loadHooks, runHook } from '../hooks'
 import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
 import { getDefaultTabsLaunch, shouldRunSetupForCreate } from '../effective-hook-config'
+import {
+  needsTrustWarning,
+  untrustedCreateSetup,
+  withoutTabCommands,
+  type SetupTrustStore
+} from '../orca-yaml-setup-trust'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from './runtime-store-contract'
 
@@ -19,12 +25,14 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   repo: Repo
   worktreePath: string
   settings: ReturnType<RuntimeStore['getSettings']>
+  store: SetupTrustStore
   runtimeTarget: { wslDistro?: string } | undefined
   shouldUseSetupRunner: boolean
   warning?: string
 }): Promise<{
   setup?: CreateWorktreeResult['setup']
   defaultTabs?: CreateWorktreeResult['defaultTabs']
+  setupTrust?: CreateWorktreeResult['setupTrust']
   warning?: string
   effectiveDecision: SetupDecision
   hookFound: boolean
@@ -56,6 +64,15 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
       // branch below logs and returns the warning.
     }
   }
+  // Pod: whatever the decision, shared commands run only on content the user trusts.
+  const setupTrust =
+    effectiveDecision === 'skip'
+      ? null
+      : untrustedCreateSetup(args.store, repo, yamlHooks, request.setupTrustHash)
+  if (setupTrust) {
+    shouldRunSetup = false
+    defaultTabs = withoutTabCommands(defaultTabs)
+  }
   let didStartInProcessSetupHook = false
   if (shouldRunSetup && hooks?.scripts.setup) {
     if (args.shouldUseSetupRunner) {
@@ -79,6 +96,11 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
         }
       })
     }
+  } else if (setupTrust) {
+    warning = warning
+      ? `${warning} Also ${needsTrustWarning(worktreePath)}`
+      : needsTrustWarning(worktreePath)
+    console.warn(`[hooks] ${needsTrustWarning(worktreePath)}`)
   } else if (hooks?.scripts.setup && effectiveDecision !== 'skip') {
     const skipped = `orca.yaml setup hook skipped for ${worktreePath}; pass --setup run to run it.`
     warning = warning ? `${warning} Also ${skipped}` : skipped
@@ -87,10 +109,37 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   return {
     ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
+    ...(setupTrust ? { setupTrust } : {}),
     ...(warning ? { warning } : {}),
     effectiveDecision,
     hookFound: Boolean(hooks?.scripts.setup),
     shouldRunSetup,
     didStartInProcessSetupHook
+  }
+}
+
+/** What a create that awaited its terminals says about its setup. */
+export function runtimeLocalSetupReceipt(args: {
+  effectiveDecision: SetupDecision
+  hookFound: boolean
+  setup: CreateWorktreeResult['setup']
+  shouldRunSetup: boolean
+  started: boolean
+  setupTerminalHandle: string | null | undefined
+}): NonNullable<CreateWorktreeResult['setupReceipt']> {
+  return {
+    requested: args.effectiveDecision,
+    hookFound: args.hookFound,
+    startupPolicy: args.setup?.waitForAgentStartup ? 'wait-for-setup' : 'start-immediately',
+    state: !args.hookFound
+      ? 'not_configured'
+      : args.effectiveDecision === 'skip' || !args.shouldRunSetup
+        ? 'skipped'
+        : // Why: the in-process hook is already executing, so reporting
+          // spawn_failed would strand callers that retry on it.
+          args.started
+          ? 'running'
+          : 'spawn_failed',
+    ...(args.setupTerminalHandle ? { terminalHandle: args.setupTerminalHandle } : {})
   }
 }

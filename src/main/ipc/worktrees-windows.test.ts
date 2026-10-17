@@ -63,6 +63,11 @@ const {
   deleteWorktreeHistoryDirMock: vi.fn()
 }))
 
+vi.mock('../orca-yaml-setup-trust', async (importOriginal) =>
+  (await import('./worktrees-test-module-mocks')).orcaYamlSetupTrustModuleMock(
+    (await importOriginal()) as Record<string, unknown>
+  )
+)
 vi.mock('electron', () => ({
   ipcMain: {
     handle: handleMock,
