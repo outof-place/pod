@@ -152,6 +152,7 @@ export class PodClaudeSettingsCut {
     null
   private retry: ReturnType<typeof setTimeout> | null = null
   private watchFailures = 0
+  private refusalLogged = false
 
   constructor(private readonly options: PodClaudeSettingsCutOptions) {}
 
@@ -203,12 +204,24 @@ export class PodClaudeSettingsCut {
   }
 
   private hasPodEntries(): boolean {
+    let text: string
     try {
-      const text = readFileSync(this.options.settingsPath(), 'utf8')
-      return (removePodClaudeEntries(text, this.options.names())?.removed.length ?? 0) > 0
+      text = readFileSync(this.options.settingsPath(), 'utf8')
     } catch {
       return false
     }
+    const result = removePodClaudeEntries(text, this.options.names())
+    if (result === null) {
+      // Why once, and apart from "none of Pod": a file the cut refuses keeps whatever Pod has in it.
+      if (!this.refusalLogged) {
+        this.refusalLogged = true
+        this.options.log?.('pod-claude-settings-cut-refused', {
+          reason: 'not a JSONC object, or no cut that keeps the rest as it was'
+        })
+      }
+      return false
+    }
+    return result.removed.length > 0
   }
 
   private async checkOnce(): Promise<void> {
