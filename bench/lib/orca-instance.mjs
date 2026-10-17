@@ -32,7 +32,8 @@ import {
   guardExecScript,
   guardVerdict,
   installedClaudeVersion,
-  prepareGuard
+  prepareGuard,
+  runRootOf
 } from './guard-path.mjs'
 
 const HOME = os.homedir()
@@ -606,7 +607,17 @@ async function checkEnv(instance) {
   const options = profileTreeOptions(instance.profile)
   const { procs } = await runTree(instance.profile.ud, { scan: true, roots: options.roots })
   const ours = procs.filter((proc) => proc.via === 'exe' || proc.via === 'root' || (proc.via === 'argv' && options.argvOwned(proc)))
-  return envTreeCheck(instance.profile.ud, ours, { launched: { [instance.pid]: 'app' }, labelOf: (proc) => path.basename(proc.path) })
+  // The app's bundle (its run root: the dir of the run's own clone under /private/tmp; an app
+  // anywhere else can't be proven, and fails), and the profile (the daemon's copy of the runtime).
+  const dirs = [
+    { exeDir: instance.info.realPath, runRoot: runRootOf(instance.info.realPath) },
+    { exeDir: realpathSync(instance.profile.ud), runRoot: realpathSync(path.dirname(PROFILE_BASE)) }
+  ]
+  return envTreeCheck(instance.profile.ud, ours, {
+    launched: { [instance.pid]: 'app' },
+    labelOf: (proc) => path.basename(proc.path),
+    dirs
+  })
 }
 
 /**
