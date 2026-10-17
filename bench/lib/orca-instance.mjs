@@ -23,7 +23,7 @@ import {
   releaseInstance
 } from './acc-guard.mjs'
 import { BENCH_ROOT, TOOLS_BIN, log, sleep } from './bench-session.mjs'
-import { signalRunTreeSync, stopRunTree } from './run-tree.mjs'
+import { rootOfPid, signalRunTreeSync, stopRunTree } from './run-tree.mjs'
 
 const HOME = os.homedir()
 export const ORCA_APP = process.env.POD_BENCH_ORCA_APP ?? '/Applications/Orca.app'
@@ -247,8 +247,9 @@ export function createProfile(settings = {}) {
     'zmodload zsh/datetime\nprecmd() { print -r -- $EPOCHREALTIME >> $POD_BENCH_PROMPT_LOG }\nPS1="%# "\n'
   )
   writeFileSync(path.join(home, '.hushlogin'), '')
-  // roots: the pids this run spawned against the profile; apps: the bundles it ran them from.
-  return { ud, home, zdot, promptLog: path.join(ud, 'prompt.log'), repo: benchRepo(), roots: new Set(), apps: new Set(), signalled: [], argvOnly: [] }
+  // roots: the pids this run spawned against the profile, with their start times; apps: the bundles
+  // it ran them from.
+  return { ud, home, zdot, promptLog: path.join(ud, 'prompt.log'), repo: benchRepo(), roots: new Map(), apps: new Set(), signalled: [], argvOnly: [] }
 }
 
 /** First-prompt times (epoch ms) the hermetic zsh logged, oldest first. */
@@ -299,7 +300,7 @@ export function launchEnv(profile, { visible = false } = {}) {
 function profileTreeOptions(profile) {
   return {
     protectedPrefixes: PROTECTED_PROGRAMS,
-    roots: [...(profile.roots ?? [])],
+    roots: [...(profile.roots?.values() ?? [])],
     argvOwned: (proc) => [...(profile.apps ?? [])].some((app) => proc.path.startsWith(`${app}/`))
   }
 }
@@ -345,7 +346,7 @@ export function spawnInstance(appPath, profile) {
     stdio: 'ignore',
     detached: false
   })
-  profile.roots?.add(child.pid)
+  profile.roots?.set(child.pid, rootOfPid(child.pid))
   profile.apps?.add(info.realPath)
   guard(child.pid, profile)
   return { child, pid: child.pid, profile, info, spawnedAt }
@@ -370,7 +371,7 @@ export async function launchInstance(appPath, profile, { visible = false } = {})
     env,
     timeout: 180_000
   })
-  profile.roots?.add(app.process().pid)
+  profile.roots?.set(app.process().pid, rootOfPid(app.process().pid))
   profile.apps?.add(info.realPath)
   guard(app.process().pid, profile)
   const page = await app.firstWindow({ timeout: 180_000 })

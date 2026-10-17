@@ -153,8 +153,12 @@ int main(int argc, char **argv) {
     proc_pidpath(pid, path, sizeof(path));
     read_argv(pid, args, 512);
     static const char *reasons[] = {"", "root", "exe", "argv"};
-    printf("%s{\"pid\":%d,\"ppid\":%d,\"via\":\"%s\",\"inherited\":%s,\"name\":", first ? "" : ",", pid,
-           procs[i].kp_eproc.e_ppid, reasons[(int)selected[i]], inherited[i] ? "true" : "false");
+    // The start time tells a recorded pid from a later process that got the same pid.
+    unsigned long long start_us = (unsigned long long)procs[i].kp_proc.p_starttime.tv_sec * 1000000ull +
+                                  (unsigned long long)procs[i].kp_proc.p_starttime.tv_usec;
+    printf("%s{\"pid\":%d,\"ppid\":%d,\"startUs\":%llu,\"via\":\"%s\",\"inherited\":%s,\"name\":",
+           first ? "" : ",", pid, procs[i].kp_eproc.e_ppid, start_us, reasons[(int)selected[i]],
+           inherited[i] ? "true" : "false");
     json_string(procs[i].kp_proc.p_comm);
     printf(",\"path\":");
     json_string(path);
