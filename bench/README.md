@@ -154,10 +154,14 @@ Ghostty has no windowless mode. It runs the same workloads in a visible 1100x700
 `latency.mjs --confirm-visible --throughput`, in the visible slot, from an APFS clone in the
 profile (its processes are found and stopped by that executable, never by argv), opened with
 `open -n -g` under `env -i` (the profile's `HOME` and `TMPDIR`, a system `PATH`, the session's
-`SSH_AUTH_SOCK`, `USER`, `LOGNAME` and `DISPLAY` empty). The clone keeps Ghostty's bundle id, so
-macOS may still write its preferences to the account's own Ghostty domain: both results record
-that domain (the plist's sha256 and mtime, `defaults export`'s sha256, the saved state's mtime)
-before the first round and after the last, and name what changed. Orca and Pod run
+`SSH_AUTH_SOCK`, `USER`, `LOGNAME` and `DISPLAY` empty). The clone gets a bundle id of its own,
+`codes.pod.bench.ghostty`, and an ad hoc signature (no hardened runtime): cfprefsd keys a
+preferences domain by bundle id and account, never by `HOME`, so the clone writes to its own
+domain, never the account's Ghostty one. Its config sets `auto-update = off`, so Sparkle neither
+checks nor prompts. Both results record the account's Ghostty domain (the plist's sha256 and
+mtime, `defaults export`'s sha256, the saved state's mtime) before the first round and after the
+last, and name what changed. The clone's own preferences and saved state, if it left any, go to
+the Trash after the last round as a known trace, and the results list them. Orca and Pod run
 there too, so the visible numbers compare all four with painting included. Those results go to
 `throughput-visible.json`.
 

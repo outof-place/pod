@@ -214,9 +214,21 @@ function writeRunner(profile, queue) {
 // with no user config, Orca's default font size (14).
 function cloneGhostty(profile) {
   const clone = path.join(profile.ud, 'Ghostty.app')
+  if (!clone.startsWith('/private/tmp/')) {
+    throw new Error(`refusing to clone and re-sign Ghostty at ${clone}: only inside a run dir under /private/tmp`)
+  }
   execFileSync('/bin/cp', ['-c', '-R', GHOSTTY, clone])
   // A quarantined clone would make `open` show a Gatekeeper dialog: this run's own clone only.
   execFileSync('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', clone])
+  // A bundle id of its own, re-signed ad hoc without the hardened runtime: cfprefsd keys a domain
+  // by bundle id and account, never by HOME, so whatever the clone writes lands in
+  // codes.pod.bench.ghostty, not in the account's Ghostty domain (the lead's MUST, 2026-10-17).
+  execFileSync('/usr/bin/plutil', ['-replace', 'CFBundleIdentifier', '-string', BENCH_GHOSTTY_ID, path.join(clone, 'Contents/Info.plist')])
+  execFileSync('/usr/bin/codesign', ['--force', '--sign', '-', clone], { stdio: ['ignore', 'ignore', 'pipe'] })
+  const signed = execFileSync('/bin/sh', ['-c', 'codesign -dv "$1" 2>&1', 'sh', clone], { encoding: 'utf8' })
+  if (!signed.includes(`\nIdentifier=${BENCH_GHOSTTY_ID}\n`)) {
+    throw new Error(`the clone's signature does not carry ${BENCH_GHOSTTY_ID}`)
+  }
   return clone
 }
 
@@ -230,6 +242,8 @@ async function launchGhostty(profile, clone, command) {
       'window-save-state = never',
       'confirm-close-surface = false',
       'quit-after-last-window-closed = true',
+      // No Sparkle check, download or prompt (ghostty.org/docs/config/reference, auto-update).
+      'auto-update = off',
       `window-position-x = ${frame.x}`,
       `window-position-y = ${frame.y}`,
       'window-width = 130',
@@ -267,25 +281,43 @@ async function launchGhostty(profile, clone, command) {
   throw new Error('Ghostty did not start')
 }
 
-// The clone keeps Ghostty's bundle id, so macOS may write its preferences or saved state to the
-// account's own Ghostty domain: read before the first round and after the last, and shown in both
-// results (the lead's rule, 2026-10-17). Hashes and mtimes only, never the contents.
+// The account's own Ghostty domain, which the re-id'd clone must leave alone: read before the
+// first round and after the last, and shown in both results (the lead's rule, 2026-10-17). Hashes
+// and mtimes only, never the contents.
 const ACCOUNT_HOME = os.userInfo().homedir
 const GHOSTTY_ID = 'com.mitchellh.ghostty'
-function ghosttyAccountState() {
+const BENCH_GHOSTTY_ID = 'codes.pod.bench.ghostty'
+function ghosttyAccountState(id = GHOSTTY_ID) {
   const sha = (data) => createHash('sha256').update(data).digest('hex')
   const file = (target) =>
     existsSync(target) ? { sha256: statSync(target).isFile() ? sha(readFileSync(target)) : null, mtimeMs: statSync(target).mtimeMs } : null
   let defaults = null
   try {
     // Through cfprefsd: it also sees what isn't flushed to the plist yet.
-    defaults = sha(execFileSync('/usr/bin/defaults', ['export', GHOSTTY_ID, '-'], { stdio: ['ignore', 'pipe', 'ignore'] }))
+    defaults = sha(execFileSync('/usr/bin/defaults', ['export', id, '-'], { stdio: ['ignore', 'pipe', 'ignore'] }))
   } catch {}
   return {
-    plist: file(path.join(ACCOUNT_HOME, 'Library/Preferences', `${GHOSTTY_ID}.plist`)),
+    plist: file(path.join(ACCOUNT_HOME, 'Library/Preferences', `${id}.plist`)),
     defaultsExport: defaults,
-    savedState: file(path.join(ACCOUNT_HOME, 'Library/Saved Application State', `${GHOSTTY_ID}.savedState`))
+    savedState: file(path.join(ACCOUNT_HOME, 'Library/Saved Application State', `${id}.savedState`))
   }
+}
+
+// The clone's own traces in the account's Library (its preferences and saved state under
+// codes.pod.bench.ghostty), a known leftover: moved to the Trash after the last round, and listed.
+// `defaultsExport` after that says whether cfprefsd still holds the domain.
+function trashBenchTraces() {
+  const trashed = []
+  for (const trace of [
+    path.join(ACCOUNT_HOME, 'Library/Preferences', `${BENCH_GHOSTTY_ID}.plist`),
+    path.join(ACCOUNT_HOME, 'Library/Saved Application State', `${BENCH_GHOSTTY_ID}.savedState`)
+  ]) {
+    if (existsSync(trace)) {
+      execFileSync('/usr/bin/trash', [trace])
+      trashed.push(trace.replace(ACCOUNT_HOME, '~'))
+    }
+  }
+  return { trashed, afterTrash: ghosttyAccountState(BENCH_GHOSTTY_ID) }
 }
 
 // The clone's processes and their descendants (its shell), by executable (lib/run-tree.mjs).
@@ -346,6 +378,7 @@ const names = options.subjects.split(',')
 const rounds = Number(options.rounds)
 const samples = Object.fromEntries(names.map((name) => [name, []]))
 const ghosttyBefore = names.includes('ghostty') ? ghosttyAccountState() : null
+const benchBefore = ghosttyBefore ? ghosttyAccountState(BENCH_GHOSTTY_ID) : null
 for (let round = 0; round < rounds; round += 1) {
   const order = names.map((_, i) => names[(i + round) % names.length])
   for (const name of order) {
@@ -363,10 +396,13 @@ const ghosttyAfter = ghosttyBefore ? ghosttyAccountState() : null
 const ghosttyAccount = ghosttyBefore && {
   before: ghosttyBefore,
   after: ghosttyAfter,
-  changed: Object.keys(ghosttyBefore).filter((key) => JSON.stringify(ghosttyBefore[key]) !== JSON.stringify(ghosttyAfter[key]))
+  changed: Object.keys(ghosttyBefore).filter((key) => JSON.stringify(ghosttyBefore[key]) !== JSON.stringify(ghosttyAfter[key])),
+  // The clone's own domain: before the first round, and what was trashed after the last.
+  bench: { id: BENCH_GHOSTTY_ID, before: benchBefore, ...trashBenchTraces() }
 }
 if (ghosttyAccount) {
   log(`the account's Ghostty domain: ${ghosttyAccount.changed.length ? `CHANGED (${ghosttyAccount.changed.join(', ')})` : 'unchanged'}`)
+  log(`${BENCH_GHOSTTY_ID}: trashed ${ghosttyAccount.bench.trashed.join(', ') || 'nothing'}`)
 }
 const versions = {
   ghostty: appVersion(GHOSTTY),
