@@ -12,7 +12,7 @@ import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeInheritedTerminalSessionEnv } from '../pty/terminal-session-env'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { applyScrubSafeAgentEnvAliases } from '../../shared/agent-hook-scrub-safe-env'
-import { stripInheritedLegacyEnv } from '../../shared/pod-legacy-env-names'
+import { addLegacyEnvTwins, stripInheritedLegacyEnv } from '../../shared/pod-legacy-env-names'
 import { removeUnspecifiedPaneIdentityEnv } from './local-pty-launch-helpers'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
@@ -68,6 +68,9 @@ export function buildLocalPtySpawnEnvironment(args: {
   }
 
   if (!getOptions().buildSpawnEnv) {
+    // Fork-only (Pod): both spellings for one release (pod-decouple); the app builder's path below
+    // gets them in enforceLocalPtySpawnEnvironmentOverrides.
+    addLegacyEnvTwins(spawnEnv)
     return spawnEnv
   }
   return getOptions().buildSpawnEnv!(id, spawnEnv, {
@@ -94,4 +97,6 @@ export function enforceLocalPtySpawnEnvironmentOverrides(
   if (spawn.env?.TERM) {
     finalEnv.TERM = spawn.env.TERM
   }
+  // Fork-only (Pod): both spellings for one release (pod-decouple), after every delete above.
+  addLegacyEnvTwins(finalEnv)
 }

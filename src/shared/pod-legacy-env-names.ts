@@ -94,3 +94,15 @@ export function stripInheritedLegacyEnv(env: Record<string, string | undefined>)
     delete env[legacy]
   }
 }
+
+/** In place, on a new terminal's final env: the ORCA_ spelling of each renamed name it carries, with
+ *  the same value, for agents and scripts that still read ORCA_ names. One the env sets itself (a
+ *  request's explicit legacy name) keeps its value. */
+export function addLegacyEnvTwins(env: Record<string, string>): void {
+  for (const [current, legacy] of LEGACY_SPELLING) {
+    const value = env[current]
+    if (value !== undefined && env[legacy] === undefined) {
+      env[legacy] = value
+    }
+  }
+}
