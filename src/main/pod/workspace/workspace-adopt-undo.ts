@@ -1,6 +1,6 @@
 // Fork-only (Pod): Move Back, which takes one Move In back from its journal record, as far as that
 // Move In got. The record goes only once every step is back; a failure leaves it for a retry.
-import { readlink, rename, unlink } from 'node:fs/promises'
+import { lstat, readlink, rename, unlink } from 'node:fs/promises'
 import { basename } from 'node:path'
 import type { PodAdoptRecord, PodAdoptUndoPlan } from '../../../shared/pod-workspace-tidy-types'
 import { pathExists, remapPath, saveAdoptRecord, type AdoptMove } from './workspace-adopt-paths'
@@ -35,14 +35,14 @@ export function stopWatchers(git: WorkspaceGitExec, paths: readonly string[]) {
 
 type BackMove = { moved: string; original: string; done: boolean }
 
-/** Move In's own moves (`from` → `to`), for the folders that actually moved. */
+/** Move In's own moves (`from` → `to`), for the folders that moved or were moving. */
 function forwardMoves(record: PodAdoptRecord): AdoptMove[] {
   const moves: AdoptMove[] = []
   // A record from before `repoMoved` existed moved both, as it says.
-  if (record.repoMoved !== false) {
+  if (record.repoMoved !== false || record.renaming === 'repo') {
     moves.push([record.from, record.to])
   }
-  if (record.worktreesDirMoved) {
+  if (record.worktreesDirMoved || record.renaming === 'worktrees') {
     moves.push([worktreesDirOf(record.from), worktreesDirOf(record.to)])
   }
   return moves
@@ -50,15 +50,19 @@ function forwardMoves(record: PodAdoptRecord): AdoptMove[] {
 
 /**
  * How each moved folder can go back: through Pod's link at the old path, or, after a crash
- * between the rename and the link, straight back to a path nothing holds. Null: something else
+ * between the rename and the link, straight back to a path nothing holds. `untouched`: the folder
+ * never left (a crash before its rename), so there is nothing to take back. Null: something else
  * now sits at the old path, so Pod leaves it alone.
  */
-async function backMoveOf([original, moved]: AdoptMove): Promise<BackMove | null> {
+async function backMoveOf([original, moved]: AdoptMove): Promise<BackMove | 'untouched' | null> {
   if ((await readlink(original).catch(() => null)) === moved) {
     return { moved, original, done: false }
   }
   if (!(await pathExists(original)) && (await pathExists(moved))) {
     return { moved, original, done: false }
+  }
+  if ((await lstat(original).catch(() => null))?.isDirectory() && !(await pathExists(moved))) {
+    return 'untouched'
   }
   return null
 }
@@ -141,10 +145,10 @@ export function createWorkspaceAdoptUndo(deps: WorkspaceAdoptUndoDeps) {
     const save = () => saveAdoptRecord(deps.journal, record)
     const moves = forwardMoves(record)
     const backs = await Promise.all(moves.map(backMoveOf))
-    const worktrees = await listWorktreePaths(git, record.to)
+    const worktrees = (await pathExists(record.to)) ? await listWorktreePaths(git, record.to) : []
     await stopWatchers(git, worktrees)
     for (const back of backs) {
-      if (!back) {
+      if (!back || back === 'untouched') {
         continue
       }
       if ((await readlink(back.original).catch(() => null)) === back.moved) {

@@ -267,6 +267,7 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
       worktreesDirMoved: false,
       claudeProjectDirMoved: false,
       progress: 'moving',
+      renaming: 'repo',
       relink: relinked
     }
     const save = () => saveAdoptRecord(deps.journal, record)
@@ -277,12 +278,14 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
     // Orca, shells and scripts that still name the old path keep working through it.
     await symlink(to, from)
     record.repoMoved = true
+    record.renaming = current.worktreesDir ? 'worktrees' : undefined
     await save()
     const moves: AdoptMove[] = [[from, to]]
     if (current.worktreesDir) {
       await rename(current.worktreesDir, worktreesDirOf(to))
       await symlink(worktreesDirOf(to), current.worktreesDir)
       record.worktreesDirMoved = true
+      record.renaming = undefined
       moves.push([current.worktreesDir, worktreesDirOf(to)])
       await save()
     }

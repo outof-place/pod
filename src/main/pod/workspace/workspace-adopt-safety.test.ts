@@ -1,9 +1,11 @@
-import { lstatSync, mkdirSync, rmSync, symlinkSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, lstatSync, mkdirSync, renameSync, rmSync, symlinkSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { PodAdoptRecord } from '../../../shared/pod-workspace-tidy-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { PodOrbstackWorktreeKeys } from '../orbstack/pod-orbstack-worktree-keys'
 import { createWorkspaceAdopt } from './workspace-adopt'
+import { saveAdoptRecord } from './workspace-adopt-paths'
 import type { AdoptRelinkRuntime } from './workspace-adopt-relink'
 import { createAdoptRuntimeHooks } from './workspace-adopt-runtime'
 import { createWorkspaceGitExec } from './workspace-git-exec'
@@ -150,6 +152,59 @@ describe('workspace adopt: what refuses, and Move Back after the fact (real git)
     symlinkSync(`${target}.worktrees`, `${repo}.worktrees`)
     await service.undo((await service.planUndo(record.id, runtime)).planId, runtime)
     expect(lstatSync(repo).isDirectory()).toBe(true)
+  })
+
+  it('takes back a move that crashed in a rename, and skips a folder that never left', async () => {
+    const journal = createWorkspaceJournal(join(fx.root, 'journal.json'))
+    // What the journal holds when a crash cuts the apply short, before the next save.
+    const crashedAt = (state: Partial<PodAdoptRecord>) =>
+      saveAdoptRecord(journal, {
+        id: 'crash',
+        repoId: 'repo-1',
+        from: repo,
+        to: target,
+        movedAt: 1,
+        repoMoved: false,
+        worktreesDirMoved: false,
+        claudeProjectDirMoved: false,
+        progress: 'moving',
+        renaming: 'repo',
+        ...state
+      })
+    const moveBack = async () => {
+      const service = adopt()
+      const plan = await service.planUndo('crash', runtime)
+      expect(plan.blockers).toEqual([])
+      await service.undo(plan.planId, runtime)
+    }
+    const isBack = () => lstatSync(repo).isDirectory() && !existsSync(target)
+    mkdirSync(dirname(target), { recursive: true })
+
+    renameSync(repo, target)
+    symlinkSync(target, repo)
+    await crashedAt({})
+    await moveBack()
+    expect(isBack()).toBe(true)
+
+    renameSync(repo, target)
+    await crashedAt({})
+    await moveBack()
+    expect(isBack()).toBe(true)
+
+    await crashedAt({})
+    await moveBack()
+    expect(isBack()).toBe(true)
+    expect((await journal.read()).adoptions).toEqual([])
+
+    renameSync(repo, target)
+    symlinkSync(target, repo)
+    renameSync(`${repo}.worktrees`, `${target}.worktrees`)
+    symlinkSync(`${target}.worktrees`, `${repo}.worktrees`)
+    await crashedAt({ repoMoved: true, renaming: 'worktrees' })
+    await moveBack()
+    expect(isBack()).toBe(true)
+    expect(lstatSync(`${repo}.worktrees`).isDirectory()).toBe(true)
+    expect(await fx.git(sibling, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('feature\n')
   })
 
   it('takes back a worktree added under the new folder after the move', async () => {

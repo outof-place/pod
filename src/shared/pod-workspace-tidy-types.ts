@@ -94,6 +94,11 @@ export type PodAdoptRecord = {
   progress?: 'moving' | 'moved' | 'relinked'
   /** The repo folder itself moved; false in a record written before its rename landed. */
   repoMoved?: boolean
+  /**
+   * The rename under way when this was written: after a crash in it, Move Back looks for that
+   * folder in both places, and skips it where it never left.
+   */
+  renaming?: 'repo' | 'worktrees'
   /** `git worktree repair` failed after the move: what git said. Move Back still works. */
   repairError?: string
 }
