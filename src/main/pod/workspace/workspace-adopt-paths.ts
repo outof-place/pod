@@ -19,13 +19,14 @@ export function claudeProjectKey(path: string): string {
 /**
  * A path inside a moved folder, re-rooted at the folder's new place. Case-insensitive, as APFS
  * is by default: a path stored as `~/Documents/App` is the same folder as git's `~/Documents/app`.
+ * Compared over the folder's own length, so a case change that alters a string's length never
+ * cuts the rest wrong; NFC and NFD spellings are not folded.
  */
 export function remapPath(path: string, moves: readonly AdoptMove[]): string {
-  const folded = path.toLowerCase()
   for (const [from, to] of moves) {
-    const prefix = from.toLowerCase()
-    if (folded === prefix || folded.startsWith(`${prefix}/`)) {
-      return to + path.slice(from.length)
+    const rest = path.slice(from.length)
+    if (path.slice(0, from.length).toLowerCase() === from.toLowerCase() && /^(\/|$)/.test(rest)) {
+      return to + rest
     }
   }
   return path
