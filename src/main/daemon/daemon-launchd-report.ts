@@ -55,7 +55,7 @@ export function bootoutOwnLaunchdJobAtExit(
     unref(): void
     on(event: 'error', listener: () => void): unknown
   } = spawnProcess,
-  target: Pick<NodeJS.Process, 'once'> = process
+  target: { once(event: 'exit', listener: () => void): unknown } = process
 ): void {
   const uid = process.getuid?.()
   // Why the prefix: only a job Pod made; a launchd-started runtime carries its own label.
