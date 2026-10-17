@@ -2,12 +2,14 @@ import {
   chmodSync,
   cpSync,
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   renameSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
@@ -19,13 +21,29 @@ export const PRODUCT_HOME_COPY_RECORD = 'product-home-copy.json'
 // them from the legacy folder (Claude's settings.json hooks, Agent Teams shims).
 const REGENERATED_ENTRIES = new Set(['agent-hooks', 'claude-agent-teams-bin'])
 
+const HOOK_FOLDER = 'agent-hooks'
+
+/**
+ * Files in the legacy hook folder that only the product writes (the legacy app writes the folder's
+ * other names too, so a pattern could take one of its files). Each is moved to the product's hook
+ * folder and a link to it left in its place for one release: sessions, Claude settings and
+ * ~/.claude.json entries from before the move still run them, now the product's current copy.
+ * TODO(pod): drop the links after 2026-12-31, and no earlier than the release after the decouple.
+ */
+export const PRODUCT_ONLY_HOOK_ENTRIES = [
+  'pod-agent-hook', // pod-agent-hook-native.ts POD_AGENT_HOOK_FILE_NAME
+  'pod-agent-statusline', // pod-statusline-native.ts POD_AGENT_STATUSLINE_FILE_NAME
+  'mcp-lazy', // mcp-lazy-binary.ts MCP_LAZY_FILE_NAME
+  'claude-settings-migration.json' // PodNative's ClaudeHooksMove record
+] as const
+
 export type LegacyHomeCopyResult =
-  | { status: 'copied'; copied: string[]; skipped: string[] }
+  | { status: 'copied'; copied: string[]; skipped: string[]; moved: string[] }
   | {
       status: 'not-needed'
       reason: 'already-recorded' | 'no-legacy-home' | 'legacy-home-is-a-link'
     }
-  | { status: 'deferred'; reason: 'legacy-app-running'; pid: number }
+  | { status: 'deferred'; reason: 'legacy-app-running'; pid: number; moved: string[] }
 
 export type LegacyHomeCopyOptions = {
   home: string
@@ -50,6 +68,49 @@ function keepModes(source: string, copy: string): void {
     }
   }
   chmodSync(copy, stat.mode & 0o7777)
+}
+
+/**
+ * Moves the product-only hook files that are still plain files (a link is an earlier move, and a
+ * file the product folder already has stays where it is). The product's copy appears before the
+ * link replaces the original, so the old path never goes missing for a hook that runs meanwhile.
+ */
+function moveProductOnlyHookEntries(legacyHome: string, productHome: string): string[] {
+  const legacyHooks = join(legacyHome, HOOK_FOLDER)
+  const productHooks = join(productHome, HOOK_FOLDER)
+  const moved: string[] = []
+  for (const name of PRODUCT_ONLY_HOOK_ENTRIES) {
+    const source = join(legacyHooks, name)
+    const target = join(productHooks, name)
+    let stat
+    try {
+      stat = lstatSync(source)
+    } catch {
+      continue
+    }
+    if (!stat.isFile() || existsSync(target)) {
+      continue
+    }
+    // Modes apply only to folders made here, as for the copied entries.
+    mkdirSync(productHome, { recursive: true, mode: lstatSync(legacyHome).mode & 0o777 })
+    mkdirSync(productHooks, { recursive: true, mode: lstatSync(legacyHooks).mode & 0o777 })
+    try {
+      linkSync(source, target)
+    } catch {
+      // Why a copy: a home folder on two volumes can't hard-link; staged like the entry copies.
+      const staging = join(productHooks, `.${name}.pod-copying`)
+      rmSync(staging, { force: true })
+      cpSync(source, staging, { errorOnExist: true, force: false, preserveTimestamps: true })
+      chmodSync(staging, stat.mode & 0o7777)
+      renameSync(staging, target)
+    }
+    const link = join(legacyHooks, `.${name}.pod-link`)
+    rmSync(link, { force: true })
+    symlinkSync(target, link)
+    renameSync(link, source)
+    moved.push(name)
+  }
+  return moved
 }
 
 function readRecord(path: string): unknown {
@@ -90,8 +151,10 @@ export function copyLegacyHome(options: LegacyHomeCopyOptions): LegacyHomeCopyRe
   if (lstatSync(legacyHome).isSymbolicLink()) {
     return record({ status: 'not-needed', reason: 'legacy-home-is-a-link' })
   }
+  // Why before the legacy app check: it never writes these names, so its running doesn't matter.
+  const moved = moveProductOnlyHookEntries(legacyHome, productHome)
   if (options.legacyAppPid !== null) {
-    return { status: 'deferred', reason: 'legacy-app-running', pid: options.legacyAppPid }
+    return { status: 'deferred', reason: 'legacy-app-running', pid: options.legacyAppPid, moved }
   }
   // Mode applies only when the folder is new: a product folder that exists keeps its own.
   mkdirSync(productHome, { recursive: true, mode: lstatSync(legacyHome).mode & 0o777 })
@@ -117,5 +180,5 @@ export function copyLegacyHome(options: LegacyHomeCopyOptions): LegacyHomeCopyRe
     renameSync(staging, target)
     copied.push(entry)
   }
-  return record({ status: 'copied', copied, skipped })
+  return record({ status: 'copied', copied, skipped, moved })
 }
