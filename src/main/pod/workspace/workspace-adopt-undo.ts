@@ -1,13 +1,10 @@
-// Fork-only (Pod): Move Back, which takes one Move In back from its journal record.
+// Fork-only (Pod): Move Back, which takes one Move In back from its journal record, as far as that
+// Move In got. The record goes only once every step is back; a failure leaves it for a retry.
 import { readlink, rename, unlink } from 'node:fs/promises'
 import { basename } from 'node:path'
 import type { PodAdoptRecord, PodAdoptUndoPlan } from '../../../shared/pod-workspace-tidy-types'
-import {
-  remapPath,
-  reverseMoves,
-  type AdoptRelink,
-  type AdoptRelinkRuntime
-} from './workspace-adopt-relink'
+import { pathExists, remapPath, saveAdoptRecord, type AdoptMove } from './workspace-adopt-paths'
+import type { AdoptRelink, AdoptRelinkRuntime } from './workspace-adopt-relink'
 import type { WorkspaceGitExec } from './workspace-git-exec'
 import type { WorkspaceJournal } from './workspace-journal'
 import { fingerprintOf, WorkspacePlanError, type WorkspacePlanStore } from './workspace-plan-store'
@@ -36,6 +33,36 @@ export function stopWatchers(git: WorkspaceGitExec, paths: readonly string[]) {
   return Promise.all(paths.map((path) => git(['fsmonitor--daemon', 'stop'], path)))
 }
 
+type BackMove = { moved: string; original: string; done: boolean }
+
+/** Move In's own moves (`from` → `to`), for the folders that actually moved. */
+function forwardMoves(record: PodAdoptRecord): AdoptMove[] {
+  const moves: AdoptMove[] = []
+  // A record from before `repoMoved` existed moved both, as it says.
+  if (record.repoMoved !== false) {
+    moves.push([record.from, record.to])
+  }
+  if (record.worktreesDirMoved) {
+    moves.push([worktreesDirOf(record.from), worktreesDirOf(record.to)])
+  }
+  return moves
+}
+
+/**
+ * How each moved folder can go back: through Pod's link at the old path, or, after a crash
+ * between the rename and the link, straight back to a path nothing holds. Null: something else
+ * now sits at the old path, so Pod leaves it alone.
+ */
+async function backMoveOf([original, moved]: AdoptMove): Promise<BackMove | null> {
+  if ((await readlink(original).catch(() => null)) === moved) {
+    return { moved, original, done: false }
+  }
+  if (!(await pathExists(original)) && (await pathExists(moved))) {
+    return { moved, original, done: false }
+  }
+  return null
+}
+
 export function createWorkspaceAdoptUndo(deps: WorkspaceAdoptUndoDeps) {
   const { git } = deps
 
@@ -47,26 +74,26 @@ export function createWorkspaceAdoptUndo(deps: WorkspaceAdoptUndoDeps) {
     return record
   }
 
-  const backMoves = (record: PodAdoptRecord): [string, string][] => {
-    const moves: [string, string][] = [[record.to, record.from]]
-    if (record.worktreesDirMoved) {
-      moves.push([worktreesDirOf(record.to), worktreesDirOf(record.from)])
-    }
-    return moves
-  }
-
   const inspectUndo = async (
-    record: PodAdoptRecord
+    record: PodAdoptRecord,
+    runtime: AdoptRelinkRuntime | null
   ): Promise<Omit<PodAdoptUndoPlan, 'planId' | 'expiresAt'>> => {
     const blockers: PodAdoptUndoPlan['blockers'] = []
-    if ((await readlink(record.from).catch(() => null)) !== record.to) {
+    const moves = forwardMoves(record)
+    if ((await Promise.all(moves.map(backMoveOf))).some((back) => back === null)) {
       blockers.push('link-changed')
     }
-    const folders = backMoves(record).map(([moved]) => moved)
+    const folders = moves.map(([, moved]) => moved)
     const inside = deps.processes ? await findProcessesInside(deps.processes, folders) : new Map()
     const processes = folders.flatMap((folder) => inside.get(folder) ?? [])
     if (processes.length > 0) {
       blockers.push('process-inside')
+    }
+    // A pane whose shell left the folder still runs under an id Move Back would re-key.
+    const ids = record.relink ? deps.relink.undoPairs(record.repoId, record.relink, moves) : []
+    const live = runtime ? await runtime.liveTerminalWorktrees(ids.map(([to]) => to)) : []
+    if (live.length > 0) {
+      blockers.push('terminals-open')
     }
     return { record, blockers, processes }
   }
@@ -74,8 +101,11 @@ export function createWorkspaceAdoptUndo(deps: WorkspaceAdoptUndoDeps) {
   const undoFingerprint = (plan: Omit<PodAdoptUndoPlan, 'planId' | 'expiresAt'>): string =>
     fingerprintOf([plan.record, plan.blockers, plan.processes.map((process) => process.pid)])
 
-  const planUndo = async (recordId: string): Promise<PodAdoptUndoPlan> => {
-    const inspected = await inspectUndo(await recordOf(recordId))
+  const planUndo = async (
+    recordId: string,
+    runtime: AdoptRelinkRuntime | null = null
+  ): Promise<PodAdoptUndoPlan> => {
+    const inspected = await inspectUndo(await recordOf(recordId), runtime)
     const fingerprints = new Map([[`adopt-undo:${recordId}`, undoFingerprint(inspected)]])
     return { ...deps.plans.issue('adopt-undo', fingerprints, recordId), ...inspected }
   }
@@ -92,36 +122,60 @@ export function createWorkspaceAdoptUndo(deps: WorkspaceAdoptUndoDeps) {
     }
   }
 
-  /** Always refused with a process inside: moving a folder back under a running agent is not undo. */
+  /**
+   * Always refused with a process or a live Pod terminal inside: moving a folder back under a
+   * running agent is not undo. Folders first, then git's links, then Pod's records, each saved.
+   */
   const undo = async (
     planId: string,
     runtime: AdoptRelinkRuntime | null = null
   ): Promise<PodAdoptRecord> => {
     const recordId = deps.plans.subjectOf(planId, 'adopt-undo')
-    const current = await inspectUndo(await recordOf(recordId))
+    const current = await inspectUndo(await recordOf(recordId), runtime)
     deps.plans.verify(planId, 'adopt-undo', `adopt-undo:${recordId}`, undoFingerprint(current))
     if (current.blockers.length > 0) {
       throw new WorkspacePlanError(`Not moved back: ${current.blockers.join(', ')}`)
     }
     deps.plans.consume(planId)
     const { record } = current
-    const moves = backMoves(record)
-    // Pod's records first, while git's config still sits at the new path.
-    if (record.relink) {
-      await deps.relink.undo(record.repoId, record.relink, reverseMoves(moves), runtime)
-    }
+    const save = () => saveAdoptRecord(deps.journal, record)
+    const moves = forwardMoves(record)
+    const backs = await Promise.all(moves.map(backMoveOf))
     const worktrees = await listWorktreePaths(git, record.to)
     await stopWatchers(git, worktrees)
-    for (const [moved, original] of moves) {
-      // Only Pod's own link is replaced; anything else at the old path stays.
-      if ((await readlink(original).catch(() => null)) === moved) {
-        await unlink(original)
-        await rename(moved, original)
+    for (const back of backs) {
+      if (!back) {
+        continue
       }
+      if ((await readlink(back.original).catch(() => null)) === back.moved) {
+        await unlink(back.original)
+      }
+      await rename(back.moved, back.original)
+      Object.assign(
+        record,
+        back.moved === record.to ? { repoMoved: false } : { worktreesDirMoved: false }
+      )
+      await save()
     }
-    const linked = worktrees.filter((path) => path !== record.to)
-    await git(['worktree', 'repair', ...linked.map((path) => remapPath(path, moves))], record.from)
-    await (record.relink ? deps.relink.undoClaudeDirs(record.relink) : undoLegacyClaudeDir(record))
+    const linked = worktrees
+      .filter((path) => path !== record.to)
+      .map((path) =>
+        remapPath(
+          path,
+          moves.map(([from, to]) => [to, from] as const)
+        )
+      )
+    const repair = await git(['worktree', 'repair', ...linked], record.from)
+    if (repair.code !== 0) {
+      record.repairError = repair.stderr.trim() || 'git worktree repair failed'
+      await save()
+      throw new Error(
+        `Moved back, but git could not repair the worktree links: ${record.repairError}`
+      )
+    }
+    await (record.relink
+      ? deps.relink.undo(record.repoId, record.relink, moves, record.from, runtime, save)
+      : undoLegacyClaudeDir(record))
     await deps.journal.update((data) => {
       data.adoptions = data.adoptions.filter((entry) => entry.id !== recordId)
     })

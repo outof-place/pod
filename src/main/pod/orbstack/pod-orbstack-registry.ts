@@ -134,6 +134,28 @@ export class PodOrbstackRegistry {
     this.save()
   }
 
+  /** Docker pins and sandbox-by-default flags follow a worktree whose id changed (Move In). */
+  rekeyWorktrees(pairs: readonly (readonly [string, string])[]): [string, string][] {
+    const data = this.load()
+    const next = new Map(pairs)
+    const moved = new Map<string, string>()
+    const swap = (ids: string[]) =>
+      ids.map((id) => {
+        const to = next.get(id)
+        if (to === undefined) {
+          return id
+        }
+        moved.set(id, to)
+        return to
+      })
+    data.dockerPins = swap(data.dockerPins)
+    data.sandboxAgents = swap(data.sandboxAgents)
+    if (moved.size > 0) {
+      this.save()
+    }
+    return [...moved]
+  }
+
   sandboxClaudeLogin(): boolean {
     return this.load().sandboxClaudeLogin
   }

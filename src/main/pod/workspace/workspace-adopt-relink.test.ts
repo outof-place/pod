@@ -61,6 +61,7 @@ describe('workspace adopt relink (real git)', () => {
       plans: createWorkspacePlanStore(),
       processes: null,
       getRepo: () => row,
+      allRepos: () => [row],
       store: {
         getAllWorktreeMeta: () => meta,
         migrateWorktreeIdentity: (from, to) => {

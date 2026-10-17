@@ -1,7 +1,8 @@
 // Fork-only (Pod): what follows a repo when Move In renames its folder: Pod's own records (the repo
-// row, worktree ids, shell history, the journal), Claude Code's project folders, and the absolute
-// paths git keeps into it. Planned before the move, applied after it, taken back by Move Back.
-import { lstat, readlink, rename, symlink, unlink } from 'node:fs/promises'
+// row, worktree ids, shell history, OrbStack keys, the journal), Claude Code's project folders,
+// and the absolute paths git keeps into it. Planned before the move, applied after it, taken back
+// by Move Back; each step is recorded as it lands.
+import { readlink, rename, symlink, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type {
   PodAdoptConfigPath,
@@ -9,13 +10,22 @@ import type {
   PodAdoptRelinkRecord
 } from '../../../shared/pod-workspace-tidy-types'
 import type { Repo } from '../../../shared/repo-types'
-import { splitWorktreeIdForFilesystem, WORKTREE_ID_SEPARATOR } from '../../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR } from '../../../shared/worktree/id'
+import type { PodOrbstackWorktreeKeys } from '../orbstack/pod-orbstack-worktree-keys'
 import { hashWorktreeId } from '../../terminal-history-id'
+import { findConfigPaths, rewriteConfigPath } from './workspace-adopt-config'
+import {
+  claudeProjectKey,
+  pathExists,
+  pathOfWorktreeId as pathOf,
+  remapPath,
+  reverseMoves,
+  type AdoptMove
+} from './workspace-adopt-paths'
 import type { WorkspaceGitExec } from './workspace-git-exec'
 import type { WorkspaceJournal } from './workspace-journal'
 
-/** `[from, to]`: a folder Move In renames. */
-export type AdoptMove = readonly [string, string]
+export { claudeProjectKey, remapPath, reverseMoves, type AdoptMove }
 
 type RelinkedRepoFields = Pick<
   Repo,
@@ -26,15 +36,23 @@ type RelinkedRepoFields = Pick<
   | 'customWorktreeVisibilitySources'
 >
 
+type AutomationBinding = {
+  name: string
+  workspaceMode: string
+  workspaceId: string | null
+}
+
 export type AdoptRelinkStore = {
   getAllWorktreeMeta(): Record<string, unknown>
   migrateWorktreeIdentity(oldWorktreeId: string, newWorktreeId: string): void
   updateRepo(id: string, updates: Partial<RelinkedRepoFields>): Repo | null
+  /** Automations, for the ones bound to a worktree that moves; absent where there are none. */
+  listAutomations?(): readonly AutomationBinding[]
 }
 
 /** The runtime's half, bound per call by the RPC handler. */
 export type AdoptRelinkRuntime = {
-  /** The ids among these that have a live Pod terminal. */
+  /** The ids among these that have a live Pod terminal, or that it could not check. */
   liveTerminalWorktrees(worktreeIds: readonly string[]): Promise<string[]>
   notifyWorktreeRenamed(repoId: string, oldWorktreeId: string, newWorktreeId: string): void
   /** Repo rows changed: drop resolved worktrees and file-access roots, tell every client. */
@@ -46,6 +64,8 @@ export type AdoptRelinkDeps = {
   journal: WorkspaceJournal
   store: AdoptRelinkStore
   getRepo: (repoId: string) => Repo | undefined
+  allRepos: () => readonly Repo[]
+  orbstack: () => PodOrbstackWorktreeKeys | null
   home: string
   historyRoot: string
 }
@@ -57,43 +77,6 @@ export type AdoptRelinkInputs = {
   /** Checkout paths as git lists them before the move. */
   checkouts: readonly string[]
   repoPathAfter: string
-}
-
-/** Claude Code keys a project's history by its cwd with every non-alphanumeric as `-`. */
-export function claudeProjectKey(path: string): string {
-  return path.replace(/[^A-Za-z0-9]/g, '-')
-}
-
-/** A path inside a moved folder, re-rooted at the folder's new place. */
-export function remapPath(path: string, moves: readonly AdoptMove[]): string {
-  for (const [from, to] of moves) {
-    if (path === from || path.startsWith(`${from}/`)) {
-      return to + path.slice(from.length)
-    }
-  }
-  return path
-}
-
-export function reverseMoves(moves: readonly AdoptMove[]): AdoptMove[] {
-  return moves.map(([from, to]) => [to, from] as const)
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  return lstat(path).then(
-    () => true,
-    () => false
-  )
-}
-
-const pathOf = (worktreeId: string): string =>
-  splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? worktreeId
-
-/** `git config --list -z`: `key\nvalue` per entry; a key set with no value has no newline. */
-function parseConfigList(stdout: string): [string, string][] {
-  return stdout
-    .split('\0')
-    .filter((entry) => entry.includes('\n'))
-    .map((entry) => [entry.slice(0, entry.indexOf('\n')), entry.slice(entry.indexOf('\n') + 1)])
 }
 
 function repoFields(repo: Repo, moves: readonly AdoptMove[], path: string) {
@@ -121,49 +104,37 @@ export function createAdoptRelink(deps: AdoptRelinkDeps) {
   const claudeDir = (path: string) => join(deps.home, '.claude', 'projects', claudeProjectKey(path))
   const historyDir = (worktreeId: string) => join(deps.historyRoot, hashWorktreeId(worktreeId))
 
+  /** Ids stored for this repo whose folder lies inside one of the moves, re-rooted by them. */
+  const storedPairs = (repoId: string, moves: readonly AdoptMove[]): [string, string][] => {
+    const prefix = `${repoId}${WORKTREE_ID_SEPARATOR}`
+    return Object.keys(deps.store.getAllWorktreeMeta())
+      .filter((id) => id.startsWith(prefix))
+      .map((id): [string, string] => [id, `${prefix}${remapPath(id.slice(prefix.length), moves)}`])
+      .filter(([from, to]) => from !== to)
+  }
+
   /** Every id Pod may hold for this repo's checkouts, git's spelling and the stored ones alike. */
   const worktreeIdPairs = (inputs: AdoptRelinkInputs): [string, string][] => {
     const { repo, moves } = inputs
     const prefix = `${repo.id}${WORKTREE_ID_SEPARATOR}`
-    const main = `${prefix}${repo.path}`
-    const ids = new Set([
-      main,
-      ...inputs.checkouts.map((path) => `${prefix}${path}`),
-      ...Object.keys(deps.store.getAllWorktreeMeta()).filter((id) => id.startsWith(prefix))
+    const pairs = new Map<string, string>([
+      [`${prefix}${repo.path}`, `${prefix}${inputs.repoPathAfter}`]
     ])
-    const pairs: [string, string][] = []
-    for (const id of ids) {
-      const path = pathOf(id)
-      const next =
-        id === main
-          ? `${prefix}${inputs.repoPathAfter}`
-          : id.replace(`${prefix}${path}`, `${prefix}${remapPath(path, moves)}`)
-      if (next !== id) {
-        pairs.push([id, next])
-      }
+    for (const path of inputs.checkouts) {
+      pairs.set(`${prefix}${path}`, `${prefix}${remapPath(path, moves)}`)
     }
-    return pairs
+    for (const [from, to] of storedPairs(repo.id, moves)) {
+      pairs.set(from, to)
+    }
+    return [...pairs].filter(([from, to]) => from !== to)
   }
 
-  const configPaths = async (inputs: AdoptRelinkInputs): Promise<PodAdoptConfigPath[]> => {
-    const { repo, moves } = inputs
-    const [local, global] = await Promise.all([
-      git(['config', '--local', '--list', '-z'], repo.path),
-      git(['config', '--global', '--get-all', 'maintenance.repo'], repo.path)
-    ])
-    const found: PodAdoptConfigPath[] = []
-    for (const [key, value] of local.code === 0 ? parseConfigList(local.stdout) : []) {
-      if (remapPath(value, moves) !== value) {
-        found.push({ scope: 'local', key, from: value, to: remapPath(value, moves) })
-      }
-    }
-    for (const value of global.code === 0 ? global.stdout.split('\n').filter(Boolean) : []) {
-      const next = value === repo.path ? inputs.repoPathAfter : remapPath(value, moves)
-      if (next !== value) {
-        found.push({ scope: 'global', key: 'maintenance.repo', from: value, to: next })
-      }
-    }
-    return found
+  const affectedAutomations = (inputs: AdoptRelinkInputs): string[] => {
+    const moving = new Set(worktreeIdPairs(inputs).map(([from]) => from))
+    return (deps.store.listAutomations?.() ?? [])
+      .filter((entry) => entry.workspaceMode === 'existing' && entry.workspaceId !== null)
+      .filter((entry) => moving.has(entry.workspaceId ?? ''))
+      .map((entry) => entry.name)
   }
 
   const plan = async (
@@ -189,35 +160,22 @@ export function createAdoptRelink(deps: AdoptRelinkDeps) {
           pairs.map(([from]) => from).filter((id) => onDisk.has(pathOf(id)))
         )
       : []
+    const nestedProjects = deps
+      .allRepos()
+      .filter(
+        (other) => other.id !== inputs.repo.id && remapPath(other.path, inputs.moves) !== other.path
+      )
+      .map((other) => other.path)
     return {
       worktrees,
       claudeProjectDirs,
       historyDirs,
-      configPaths: await configPaths(inputs),
-      terminalsOpen: live.map(pathOf)
+      configPaths: await findConfigPaths(git, inputs.repo.path, inputs.repoPathAfter, inputs.moves),
+      terminalsOpen: live.map(pathOf),
+      orbstackMachines: deps.orbstack()?.machinesFor(pairs.map(([from]) => from)) ?? [],
+      nestedProjects
     }
   }
-
-  const rewriteConfig = async (
-    entry: PodAdoptConfigPath,
-    value: string,
-    previous: string,
-    cwd: string
-  ) =>
-    (
-      await git(
-        [
-          'config',
-          `--${entry.scope}`,
-          '--fixed-value',
-          '--replace-all',
-          entry.key,
-          value,
-          previous
-        ],
-        cwd
-      )
-    ).code === 0
 
   const remapJournal = (repoId: string, moves: readonly AdoptMove[]) =>
     deps.journal.update((data) => {
@@ -231,14 +189,15 @@ export function createAdoptRelink(deps: AdoptRelinkDeps) {
     })
 
   /**
-   * After the folders moved. Fills `record` as it goes, so a failure part way still leaves a record
-   * that Move Back takes back step for step.
+   * After the folders moved. Fills `record` step by step and saves it after each, so a failure or
+   * a crash part way leaves a record Move Back takes back as far as it got.
    */
   const apply = async (
     inputs: AdoptRelinkInputs,
     planned: readonly PodAdoptConfigPath[],
     runtime: AdoptRelinkRuntime | null,
-    record: PodAdoptRelinkRecord
+    record: PodAdoptRelinkRecord,
+    save: () => Promise<void>
   ): Promise<void> => {
     const { repo, moves } = inputs
     const pairs = worktreeIdPairs(inputs)
@@ -249,15 +208,17 @@ export function createAdoptRelink(deps: AdoptRelinkDeps) {
         // A session still running under the old key keeps writing into the new folder.
         await symlink(basename(newClaude), oldClaude)
         record.claudeProjectDirs.push([oldClaude, newClaude])
+        await save()
       }
       const [oldHistory, newHistory] = [historyDir(from), historyDir(to)]
       if ((await pathExists(oldHistory)) && !(await pathExists(newHistory))) {
         await rename(oldHistory, newHistory)
         record.historyDirs.push([oldHistory, newHistory])
+        await save()
       }
     }
     for (const entry of planned) {
-      if (await rewriteConfig(entry, entry.to, entry.from, inputs.repoPathAfter)) {
+      if (await rewriteConfigPath(git, entry, entry.to, entry.from, inputs.repoPathAfter)) {
         record.configPaths.push(entry)
       }
     }
@@ -270,49 +231,77 @@ export function createAdoptRelink(deps: AdoptRelinkDeps) {
       record.worktreeIds.push([from, to])
       runtime?.notifyWorktreeRenamed(repo.id, from, to)
     }
+    record.orbstackKeys = deps.orbstack()?.rekey(pairs) ?? []
+    await save()
     await remapJournal(repo.id, moves)
     runtime?.notifyReposChanged()
   }
 
-  /** Before the folders move back; each step only where it still holds what Move In wrote. */
+  /**
+   * The ids Move Back re-keys: the record's, plus any worktree added under the new folders since.
+   * `moves` are Move In's own (`from` → `to`).
+   */
+  const undoPairs = (repoId: string, record: PodAdoptRelinkRecord, moves: readonly AdoptMove[]) => {
+    const pairs = new Map(record.worktreeIds.map(([from, to]): [string, string] => [to, from]))
+    for (const [to, from] of storedPairs(repoId, reverseMoves(moves))) {
+      if (!pairs.has(to)) {
+        pairs.set(to, from)
+      }
+    }
+    return [...pairs]
+  }
+
+  /**
+   * After the folders moved back (`configCwd` is where the repo's config now is). Takes each step
+   * back only where it still holds what Move In wrote, and drops it from the record once done.
+   */
   const undo = async (
     repoId: string,
     record: PodAdoptRelinkRecord,
     moves: readonly AdoptMove[],
-    runtime: AdoptRelinkRuntime | null
+    configCwd: string,
+    runtime: AdoptRelinkRuntime | null,
+    save: () => Promise<void>
   ): Promise<void> => {
     const back = reverseMoves(moves)
     const repo = deps.getRepo(repoId)
     if (repo && repo.path === record.repoPathAfter) {
       deps.store.updateRepo(repoId, repoFields(repo, back, record.repoPath))
     }
-    for (const [from, to] of record.worktreeIds.toReversed()) {
+    const pairs = undoPairs(repoId, record, moves)
+    for (const [to, from] of pairs) {
       deps.store.migrateWorktreeIdentity(to, from)
       runtime?.notifyWorktreeRenamed(repoId, to, from)
     }
+    deps.orbstack()?.rekey(pairs)
+    record.worktreeIds = []
+    record.orbstackKeys = []
+    record.repoPathAfter = record.repoPath
+    await save()
     for (const entry of record.configPaths) {
-      await rewriteConfig(entry, entry.from, entry.to, record.repoPathAfter)
+      await rewriteConfigPath(git, entry, entry.from, entry.to, configCwd)
+      record.configPaths = record.configPaths.filter((other) => other !== entry)
     }
     for (const [oldHistory, newHistory] of record.historyDirs) {
-      if (!(await pathExists(oldHistory))) {
-        await rename(newHistory, oldHistory).catch(() => undefined)
+      if (!(await pathExists(oldHistory)) && (await pathExists(newHistory))) {
+        await rename(newHistory, oldHistory)
       }
+      record.historyDirs = record.historyDirs.filter(([dir]) => dir !== oldHistory)
     }
-    await remapJournal(repoId, back)
-    runtime?.notifyReposChanged()
-  }
-
-  /** After the folders moved back: Claude's folders, only where the old name is still Pod's link. */
-  const undoClaudeDirs = async (record: PodAdoptRelinkRecord): Promise<void> => {
     for (const [oldClaude, newClaude] of record.claudeProjectDirs) {
+      // Only where the old name is still Pod's link.
       if ((await readlink(oldClaude).catch(() => null)) === basename(newClaude)) {
         await unlink(oldClaude)
         await rename(newClaude, oldClaude)
       }
+      record.claudeProjectDirs = record.claudeProjectDirs.filter(([dir]) => dir !== oldClaude)
     }
+    await save()
+    await remapJournal(repoId, back)
+    runtime?.notifyReposChanged()
   }
 
-  return { plan, apply, undo, undoClaudeDirs }
+  return { plan, apply, undo, undoPairs, affectedAutomations }
 }
 
 export type AdoptRelink = ReturnType<typeof createAdoptRelink>

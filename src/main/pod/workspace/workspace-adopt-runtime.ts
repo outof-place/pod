@@ -15,10 +15,17 @@ export function createAdoptRuntimeHooks(runtime: AdoptRuntimeSurface): AdoptReli
     liveTerminalWorktrees: async (worktreeIds) => {
       const live: string[] = []
       for (const worktreeId of worktreeIds) {
-        // A worktree this runtime can't resolve holds none of its terminals.
-        const listed = await runtime.listTerminals(`id:${worktreeId}`).catch(() => null)
-        if (listed?.terminals.some((terminal) => terminal.ptyId !== null)) {
-          live.push(worktreeId)
+        try {
+          const listed = await runtime.listTerminals(`id:${worktreeId}`)
+          if (listed.terminals.some((terminal) => terminal.ptyId !== null)) {
+            live.push(worktreeId)
+          }
+        } catch (error) {
+          // A worktree this runtime can't resolve holds none of its terminals; any other failure
+          // counts as open, since the check exists to keep a running pane from being re-keyed.
+          if (!(error instanceof Error && error.message === 'selector_not_found')) {
+            live.push(worktreeId)
+          }
         }
       }
       return live

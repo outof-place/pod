@@ -87,6 +87,15 @@ export type PodAdoptRecord = {
   claudeProjectDirMoved: boolean
   /** What followed the folders; absent on a record from a Pod that moved the folders alone. */
   relink?: PodAdoptRelinkRecord
+  /**
+   * Written before the first rename and after each step: `moving` (folders on the way),
+   * `moved` (folders and git links done), `relinked` (Pod's records too). Absent on older records.
+   */
+  progress?: 'moving' | 'moved' | 'relinked'
+  /** The repo folder itself moved; false in a record written before its rename landed. */
+  repoMoved?: boolean
+  /** `git worktree repair` failed after the move: what git said. Move Back still works. */
+  repairError?: string
 }
 
 /** A value git keeps as an absolute path into the moved folders, as Move In rewrote it. */
@@ -110,6 +119,8 @@ export type PodAdoptRelinkRecord = {
   /** Per-worktree shell history folders under the profile's `terminal-history/`. */
   historyDirs: [string, string][]
   configPaths: PodAdoptConfigPath[]
+  /** OrbStack docker pins and sandbox-by-default flags re-keyed to the new worktree ids. */
+  orbstackKeys?: [string, string][]
 }
 
 /** What a Move In would carry along, so the plan shows every change before the user applies it. */
@@ -121,6 +132,10 @@ export type PodAdoptRelinkPlan = {
   configPaths: PodAdoptConfigPath[]
   /** Worktrees with a live Pod terminal: Close Terminals first, so no running pane is re-keyed. */
   terminalsOpen: string[]
+  /** OrbStack machines whose mounts name these folders: Pod can't carry them, so it refuses. */
+  orbstackMachines: string[]
+  /** Other Pod projects inside the folders that would move with them unrecorded: refused. */
+  nestedProjects: string[]
 }
 
 export type PodTidyScan = PodWorkspacePlanRef & {
@@ -229,6 +244,10 @@ export type PodAdoptBlocker =
   | 'process-inside'
   | 'files-open'
   | 'terminals-open'
+  | 'orbstack-machines'
+  | 'nested-project'
+  /** The repo holds the workspace root itself (a repo at `~`, say): it can't move into it. */
+  | 'contains-root'
 
 /** Soft: the user may tick these; every other adopt blocker refuses. */
 export type PodAdoptSoftBlocker = 'process-inside' | 'files-open'
@@ -240,8 +259,10 @@ export type PodAdoptOpenFile = { pid: number; name: string; path: string }
 export type PodAdoptWarning =
   /** The Compose project is named after the folder, so it gets a new name and empty volumes. */
   | { kind: 'compose-project'; file: string; from: string; to: string }
-  /** Claude Code asks to trust each moved checkout again: its trust list is keyed by path. */
+  /** Claude Code starts these checkouts afresh: trust, allowed tools and local MCP are by path. */
   | { kind: 'claude-trust'; count: number }
+  /** Automations that run in one of these worktrees name its old id: they need pointing again. */
+  | { kind: 'automations'; names: string[] }
 
 export type PodAdoptPlan = PodWorkspacePlanRef & {
   repoId: string
@@ -257,11 +278,13 @@ export type PodAdoptPlan = PodWorkspacePlanRef & {
   relink: PodAdoptRelinkPlan
   /** Up to 20 of the open files behind `files-open`. */
   openFiles: PodAdoptOpenFile[]
+  /** False where this Pod's process addon can't list open files: nothing was checked. */
+  openFilesChecked: boolean
   warnings: PodAdoptWarning[]
 }
 
 export type PodAdoptUndoPlan = PodWorkspacePlanRef & {
   record: PodAdoptRecord
-  blockers: ('process-inside' | 'link-changed')[]
+  blockers: ('process-inside' | 'link-changed' | 'terminals-open')[]
   processes: PodTidyProcess[]
 }

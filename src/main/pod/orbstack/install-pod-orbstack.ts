@@ -11,6 +11,7 @@ import { isPodOrbstackEnabled } from './pod-orbstack-flag'
 import { createPodOrbstackMachines } from './pod-orbstack-machines'
 import { loadPodOrbstackRecipe } from './pod-orbstack-recipe'
 import { PodOrbstackRegistry } from './pod-orbstack-registry'
+import { setPodOrbstackWorktreeKeys } from './pod-orbstack-worktree-keys'
 import { restartPodOrbstack } from './pod-orbstack-restart'
 import {
   countMachineCreates,
@@ -64,6 +65,14 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   // Late-bound: registry and template saves drop the status cache and reach subscribers.
   let changed = (): void => events.changed()
   const registry = new PodOrbstackRegistry(join(dataDir, 'registry.json'), () => changed())
+  setPodOrbstackWorktreeKeys({
+    machinesFor: (ids) =>
+      registry
+        .machines()
+        .filter((entry) => ids.includes(entry.worktreeId))
+        .map((entry) => entry.name),
+    rekey: (pairs) => registry.rekeyWorktrees(pairs)
+  })
   // Re-resolved per use: OrbStack can be installed or moved while Pod runs.
   const paths = (): OrbstackToolPaths => resolveOrbstackToolPaths()
   const home = resolveOrbstackHomeOverride()

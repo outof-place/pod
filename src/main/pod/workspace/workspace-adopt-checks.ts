@@ -17,22 +17,22 @@ export async function findOpenFilesInside(
   reader: ProcessCwdReader | null,
   folders: readonly string[],
   skipPids: ReadonlySet<number>
-): Promise<{ files: PodAdoptOpenFile[]; pids: number[] }> {
+): Promise<{ files: PodAdoptOpenFile[]; pids: number[]; checked: boolean }> {
   if (!reader?.openPathsUnder) {
-    return { files: [], pids: [] }
+    return { files: [], pids: [], checked: false }
   }
-  const hits = reader
-    .openPathsUnder(folders)
-    .filter((hit) => hit.pid !== process.pid && !skipPids.has(hit.pid))
+  const hits = (await reader.openPathsUnder(folders)).filter(
+    (hit) => hit.pid !== process.pid && !skipPids.has(hit.pid)
+  )
   if (hits.length === 0) {
-    return { files: [], pids: [] }
+    return { files: [], pids: [], checked: true }
   }
   const pids = [...new Set(hits.map((hit) => hit.pid))].sort((a, b) => a - b)
   const names = await reader.readNames(pids)
   const files = hits
     .slice(0, OPEN_FILES_SHOWN)
     .map((hit) => ({ pid: hit.pid, name: names.get(hit.pid) ?? '', path: hit.path }))
-  return { files, pids }
+  return { files, pids, checked: true }
 }
 
 /** Compose names a project after its folder: lowercase, only `[a-z0-9_-]`. */
@@ -46,7 +46,10 @@ async function readText(path: string): Promise<string | null> {
   return readFile(path, 'utf8').catch(() => null)
 }
 
-/** A Compose project keyed by the folder name gets a new name, so its volumes look empty. */
+/**
+ * A Compose project keyed by the folder name gets a new name, so its volumes look empty. Only the
+ * file's `name:` and `.env` are read: a `-p` the user types can't be seen from here.
+ */
 async function composeWarning(from: string, to: string): Promise<PodAdoptWarning | null> {
   const [before, after] = [composeProjectName(from), composeProjectName(to)]
   if (before === after) {
@@ -67,16 +70,20 @@ async function composeWarning(from: string, to: string): Promise<PodAdoptWarning
 export async function adoptWarnings(
   from: string,
   to: string,
-  claudeProjectDirs: readonly (readonly [string, string])[]
+  claudeProjectDirs: readonly (readonly [string, string])[],
+  automations: readonly string[]
 ): Promise<PodAdoptWarning[]> {
   const warnings: PodAdoptWarning[] = []
   const compose = await composeWarning(from, to)
   if (compose) {
     warnings.push(compose)
   }
-  // Claude keys folder trust by path in its own config, which Pod never writes.
+  // Claude keys trust, allowed tools and local MCP by path in its own config, which Pod never writes.
   if (claudeProjectDirs.length > 0) {
     warnings.push({ kind: 'claude-trust', count: claudeProjectDirs.length })
+  }
+  if (automations.length > 0) {
+    warnings.push({ kind: 'automations', names: [...automations] })
   }
   return warnings
 }
