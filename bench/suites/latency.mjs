@@ -449,8 +449,14 @@ try {
 } finally {
   // Also when a round threw: the clone's traces go first, either way.
   if (ghosttyBefore) {
-    // The clone's own domain: before the first round, and what its cleanup did after the last.
-    const bench = { id: BENCH_GHOSTTY_ID, before: benchBefore, ...clearBenchTraces(benchExistedBefore) }
+    // The clone's own domain: before the first round, and what its cleanup did after the last. A
+    // cleanup that throws is recorded, never thrown over a round's own error.
+    let bench
+    try {
+      bench = { id: BENCH_GHOSTTY_ID, before: benchBefore, ...clearBenchTraces(benchExistedBefore) }
+    } catch (error) {
+      bench = { id: BENCH_GHOSTTY_ID, before: benchBefore, existedBefore: benchExistedBefore, deleted: `false (${error.message})`, trashed: [], existsAfterCleanup: null }
+    }
     const ghosttyAfter = ghosttyAccountState()
     // A count that fails is recorded as such, never thrown over a round's own error.
     let userGhosttyAfter
@@ -479,7 +485,9 @@ if (ghosttyAccount) {
   )
   const { bench } = ghosttyAccount
   log(
-    `${BENCH_GHOSTTY_ID}: ${bench.existedBefore ? 'existed before the run, left alone' : `${bench.deleted ? 'deleted' : 'never created'}, trashed ${bench.trashed.join(', ') || 'nothing'}`}; ${bench.existsAfterCleanup ? 'STILL there' : 'gone'}`
+    typeof bench.deleted === 'string'
+      ? `${BENCH_GHOSTTY_ID}: cleanup FAILED, deleted: ${bench.deleted}`
+      : `${BENCH_GHOSTTY_ID}: ${bench.existedBefore ? 'existed before the run, left alone' : `${bench.deleted ? 'deleted' : 'never created'}, trashed ${bench.trashed.join(', ') || 'nothing'}`}; ${bench.existsAfterCleanup ? 'STILL there' : 'gone'}`
   )
 }
 const versions = {
