@@ -49,11 +49,12 @@ export async function isMerged(
  * A squash or rebase merge: the base has the branch's changes but not its commits. A
  * `merge-tree --write-tree` (Git 2.38+) that comes out clean and equal to the base's tree means
  * nothing of the branch is missing there. It touches no worktree; its objects land unreachable in
- * the repo, for gc. Attributes come from the empty tree (`--attr-source`, 2.40+), so no merge
- * driver of the repo's or the user's runs in a background scan, and none can make a branch look
- * merged. A branch with no commits of its own never counts (Orca's single-reflog rule, for a
- * worktree just created); one whose commits net to nothing does, and its commits stay in the
- * archive ref. Older git, a conflict, or a blob a blobless clone lacks all answer false.
+ * the repo, for gc. Attributes come from the empty tree (`--attr-source`, 2.40+) and the user's
+ * attributes file is off, so neither the tree nor the user's config picks a merge driver for a
+ * background scan; the repo's own `info/attributes` still applies, as git has no switch for it.
+ * A branch with no commits of its own never counts (Orca's single-reflog rule, for a worktree
+ * just created); one whose commits net to nothing does, and its commits stay in the archive ref.
+ * Older git, a conflict, or a blob a blobless clone lacks all answer false.
  */
 export async function isMergedByContent(
   git: WorkspaceGitExec,
@@ -76,6 +77,8 @@ export async function isMergedByContent(
   const [merged, baseTree] = await Promise.all([
     git(
       [
+        '-c',
+        'core.attributesFile=/dev/null',
         `--attr-source=${EMPTY_TREE}`,
         'merge-tree',
         '--write-tree',
