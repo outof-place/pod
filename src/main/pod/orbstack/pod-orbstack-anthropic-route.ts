@@ -13,6 +13,7 @@ import type { PodOrbstackRelayRefusal } from '../../../shared/pod-orbstack-types
 import type { RelayConnectionRecord } from './pod-orbstack-relay-connections'
 import { relayLogMethod } from './pod-orbstack-hook-filter'
 import { OPEN_PRIVACY, type SandboxPrivacy } from './pod-orbstack-privacy-env'
+import { carriesSandboxPlaceholder } from './pod-orbstack-sandbox-placeholder'
 import { ANTHROPIC_API_HOST, type SandboxCa } from './pod-orbstack-sandbox-ca'
 
 /** A refusal whose message is safe to show the sandbox: it never carries a credential. */
@@ -202,6 +203,8 @@ export function createAnthropicRoute(args: {
   log?: (message: string) => void
   /** One row per request, for the relay log. */
   onRow?: (row: RelayConnectionRecord) => void
+  /** The sandbox's credential placeholder: a request that needs a credential must carry it. */
+  placeholder?: () => string | null
 }) {
   const upstream = args.upstream ?? ANTHROPIC_UPSTREAM
   const source = args.credentials ?? getPodSandboxAnthropicCredentials
@@ -240,6 +243,14 @@ export function createAnthropicRoute(args: {
     if (!rule) {
       args.log?.(`refused ${req.method} ${path.split('?')[0]}`)
       refuse('path', 403, 'permission_error', 'Pod does not forward this request from a sandbox.')
+      return
+    }
+    if (
+      rule.auth &&
+      args.placeholder &&
+      !carriesSandboxPlaceholder(req.rawHeaders, args.placeholder())
+    ) {
+      refuse('token', 401, 'authentication_error', 'Pod has no credential for this request.')
       return
     }
     let auth: Record<string, string> | null

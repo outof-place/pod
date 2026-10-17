@@ -44,7 +44,8 @@ While a source is on:
 3. The agent's launch sets `NODE_EXTRA_CA_CERTS` to that file. It also sets a placeholder credential: `ANTHROPIC_API_KEY`, or `CLAUDE_CODE_OAUTH_TOKEN` for an OAuth source. The placeholder works against nothing.
 4. On the Mac, TLS ends in Pod's own process: there is no listening port. Any server name other than `api.anthropic.com` fails the handshake.
 5. Pod forwards only the endpoints Claude Code uses: `/v1/messages`, token counting, models, its server-managed settings and policy limits, feature flags, bootstrap config, telemetry, the MCP registry, and the `/api/hello` warm-up. Paths with dot segments, empty segments or escapes are refused, and so is anything else, with a 403.
-6. Pod drops the VM's `Authorization`, `x-api-key`, `Cookie` and proxy headers, adds the credential source's headers, and sends the request to the real `api.anthropic.com:443` with normal certificate verification. Responses stream back unchanged, including SSE.
+6. A request that needs the credential must carry the sandbox's placeholder (as Claude Code sends it: `x-api-key`, or the bearer for an OAuth source); anything else gets a 401 from Pod (relay log: `token`). Why: OrbStack forwards a machine's loopback listeners to the Mac's localhost, isolated machines included (vmgr logs `update forwards` for them), so the 443 listener may be reachable from any local process, and only the sandbox's Claude Code knows its placeholder.
+7. Pod drops the VM's `Authorization`, `x-api-key`, `Cookie` and proxy headers, adds the credential source's headers, and sends the request to the real `api.anthropic.com:443` with normal certificate verification. Responses stream back unchanged, including SSE.
 
 The CA, its leaf and the route die with the sandbox. A relay that starts without the route removes the pin and the CA file, and so does a relay that exits.
 
