@@ -101,6 +101,10 @@ static void json_bytes(const char *s, size_t n) {
 }
 
 static int run_event(int index, const char *payload, size_t length, char **argv) {
+  if (length > 16384) {
+    fprintf(stderr, "hookrun: event %d's payload is %zu bytes, over the 16 KiB a pipe takes at once\n", index, length);
+    return -1;
+  }
   int in[2], out[2], err[2];
   if (pipe(in) || pipe(out) || pipe(err)) return -1;
   posix_spawn_file_actions_t actions;
@@ -130,7 +134,8 @@ static int run_event(int index, const char *payload, size_t length, char **argv)
     return -1;
   }
   watch(kq, pid);
-  // The payload fits the pipe buffer (64 KiB): write it before the command runs, as one write.
+  // The payload goes in before the command runs, as one write: it has to fit the pipe's buffer
+  // (16 KiB until the pipe grows), or the write would wait on a suspended reader for ever.
   if (length > 0 && write(in[1], payload, length) != (ssize_t)length) {
     fprintf(stderr, "hookrun: short payload write for event %d\n", index);
   }

@@ -13,7 +13,7 @@
 //   node bench/suites/hooks.mjs [--replays 6] [--gap-ms 25]
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, statSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -170,7 +170,45 @@ function installApp(name, appPath) {
   return { name, app: describeApp(appPath), chunk: installed.chunk, events, env, dir }
 }
 
+// The suite runs each app's own installer, which writes Claude's settings: the account's real
+// files (its home from the user database, not HOME) must come out of the run byte for byte.
+// ~/.claude.json is rewritten by every live Claude session, so it trips only when its new content
+// names this run's dir; a same-content rewrite elsewhere is reported, not tripped on.
+const REAL_HOME = os.userInfo().homedir
+function sha256(file) {
+  return createHash('sha256').update(readFileSync(file)).digest('hex')
+}
+function realHomeState() {
+  const files = [path.join(REAL_HOME, '.claude/settings.json')]
+  for (const dir of ['.orca/agent-hooks', '.pod/agent-hooks']) {
+    const full = path.join(REAL_HOME, dir)
+    if (existsSync(full)) {
+      files.push(...readdirSync(full).map((name) => path.join(full, name)).filter((file) => statSync(file).isFile()))
+    }
+  }
+  return Object.fromEntries(files.filter((file) => existsSync(file)).map((file) => [file, { sha256: sha256(file), mtimeMs: statSync(file).mtimeMs }]))
+}
+function assertRealHomeUntouched(before, where) {
+  const after = realHomeState()
+  const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(
+    (file) => before[file]?.sha256 !== after[file]?.sha256
+  )
+  const touched = Object.keys(after).filter((file) => before[file] && after[file].mtimeMs !== before[file].mtimeMs && !changed.includes(file))
+  const claudeJson = path.join(REAL_HOME, '.claude.json')
+  if (existsSync(claudeJson) && readFileSync(claudeJson, 'utf8').includes(runDir)) {
+    changed.push(`${claudeJson} (names ${runDir})`)
+  }
+  if (changed.length > 0) {
+    throw new Error(`refusing to write rows: the account's own Claude files changed ${where}: ${changed.join(', ')}`)
+  }
+  if (touched.length > 0) {
+    log(`hooks: rewritten with the same content ${where} (not by a hook of this run's, which would differ): ${touched.join(', ')}`)
+  }
+  return touched
+}
+const realBefore = realHomeState()
 const apps = [installApp('orca', ORCA_APP), installApp('pod', POD_APP)]
+assertRealHomeUntouched(realBefore, 'during the installs')
 const payloads = recordedPayloads()
 // Claude runs a hook only for the events installed; recorded events neither app installs are left out.
 const replayed = payloads.filter((payload) => apps.every((app) => app.events[payload.event]))
@@ -213,6 +251,12 @@ const samples = await collectSamples({
     if (rows.length !== replayed.length || posts.length !== replayed.length || delivered !== replayed.length) {
       throw new Error(`${app.name}: ${rows.length} runs, ${posts.length} posts, ${delivered} delivered for ${replayed.length} events`)
     }
+    // A process that outlives its hook would be counted only in part (outlivedCpuNs is a lower
+    // bound: launchd may reap it first), so the rows assume none does.
+    const outlived = rows.filter((row) => row.outlived > 0)
+    if (outlived.length > 0) {
+      throw new Error(`${app.name}: ${outlived.length} events left processes running after the hook exited`)
+    }
     const failed = rows.filter((row) => row.status !== 0 || row.timedOut || row.stdout !== '{}\n')
     if (failed.length > 0) {
       throw new Error(`${app.name}: ${failed.length} hook runs failed, first ${JSON.stringify(failed[0])}`)
@@ -241,6 +285,7 @@ const samples = await collectSamples({
   }
 })
 server.close()
+const sameContentRewrites = assertRealHomeUntouched(realBefore, 'during the run')
 
 const accepted = samples.filter((sample) => !sample.warmup)
 // Named after what the installer actually wrote: the exec-form program, or the script a shell form runs.
@@ -287,6 +332,7 @@ const metrics = apps.flatMap((app) => {
 
 writeSuiteResult(SUITE, {
   versions: Object.fromEntries(apps.map((app) => [app.name, app.app])),
+  realHomeCheck: { files: Object.keys(realBefore).length, sameContentRewrites },
   config: { replays, gapMs, claudeVersion: version, events: replayed.length, notInstalled: skipped, recordings: RECORDINGS, installers: Object.fromEntries(
       apps.map((app) => {
         const { argv, form } = Object.values(app.events)[0]
@@ -300,6 +346,7 @@ writeSuiteResult(SUITE, {
     `The hooks are what each app's own bundled installer writes for claude ${version}: ${apps
       .map((app) => `${app.name === 'pod' ? 'Pod' : 'Orca'} ${Object.values(app.events)[0].form === 'shell' ? `a shell-form command (Claude runs it through /bin/sh -c) that runs ${hookProgram(app)}` : `an exec-form ${hookProgram(app)} (no shell)`}`)
       .join(', ')}. Claude's own cost of starting the process is not in the rows.`,
+    'Each hook ran with the suite\'s small, fixed environment (system PATH, the endpoint and pane variables). A real Claude hands a hook its whole environment and the project as cwd, and a pane\'s PATH usually puts Homebrew before /usr/bin, which can pick another curl.',
     'Both apps post to the same loopback stub, which reads the body and answers 204 like the runtime\'s hook server; the runtime\'s handling of the post is not in the rows. Every event was checked to arrive once, authenticated, as the raw payload.',
     'processes counts the tree through kqueue from a suspended start (a lower bound: a grandchild can exit unseen); pidSpanMin, the smallest gap between consecutive hook pids, bounds it from above.',
     'blocking is 0 for events a hook is installed async for: Claude Code does not wait for an async command hook (Claude Code hooks docs).'
