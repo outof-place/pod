@@ -109,6 +109,10 @@ export function createAutomation(
       input.workspaceMode,
       input.setupDecision
     ),
+    // Pod: what each run sends as its approved setup hash.
+    ...(input.workspaceMode === 'new_per_run' && input.setupTrustHash
+      ? { setupTrustHash: input.setupTrustHash }
+      : {}),
     reuseSession: input.workspaceMode === 'existing' ? (input.reuseSession ?? false) : false,
     timezone: input.timezone,
     rrule: input.rrule,
@@ -218,6 +222,12 @@ export function updateAutomation(
             )
           : normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, current.setupDecision)
         : undefined,
+    setupTrustHash:
+      workspaceMode === 'new_per_run'
+        ? Object.hasOwn(definedUpdates, 'setupTrustHash')
+          ? (definedUpdates.setupTrustHash ?? null)
+          : (current.setupTrustHash ?? null)
+        : null,
     reuseSession:
       workspaceMode === 'existing'
         ? (updates.reuseSession ?? current.reuseSession ?? false)
