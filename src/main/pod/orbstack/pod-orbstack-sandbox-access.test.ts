@@ -67,6 +67,28 @@ describe('createSandboxAccess', () => {
     expect(again.ORCA_AGENT_HOOK_TOKEN).not.toBe(a.ORCA_AGENT_HOOK_TOKEN)
   })
 
+  it('pre-starts the relay with the launch routes and binds no credential until a launch', () => {
+    const { relays, ensured } = fakeRelays()
+    const launched: string[] = []
+    const access = createSandboxAccess({ relays, readPrivacy: () => OPEN_PRIVACY })
+    setPodSandboxAnthropicCredentials({
+      mode: () => 'oauth',
+      authHeaders: async () => ({}),
+      launched: ({ machine }) => launched.push(machine)
+    })
+    access.prestart('pod-a-sbx', hookServer)
+    expect(ensured).toHaveLength(1)
+    expect(ensured[0]?.routes.hook).toMatchObject({ vmPort: 41234, hookToken: 'server-token' })
+    expect(ensured[0]?.routes.anthropic?.route.caCertPem).toContain('BEGIN CERTIFICATE')
+    expect(launched).toEqual([])
+    // The launch asks for the same routes, so a real SandboxRelays keeps the pre-started relay.
+    access.start('pod-a-sbx', hookServer)
+    expect(ensured[1]?.routes.anthropic?.route.caCertPem).toBe(
+      ensured[0]?.routes.anthropic?.route.caCertPem
+    )
+    expect(launched).toEqual(['pod-a-sbx'])
+  })
+
   it('binds the credential source to each launch and releases it with the sandbox', () => {
     const { relays } = fakeRelays()
     const access = createSandboxAccess({ relays, readPrivacy: () => OPEN_PRIVACY })

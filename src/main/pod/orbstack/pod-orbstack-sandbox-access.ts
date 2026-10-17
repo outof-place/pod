@@ -78,10 +78,41 @@ export function createSandboxAccess(deps: {
     return route
   }
 
+  /** The relay's routes for this sandbox now: the hook route, and the API route unless it is off. */
+  const routesFor = (machine: string, hookServer: { port: number; token: string }) => {
+    const mode = getPodSandboxAnthropicCredentials().mode()
+    if (mode === 'off') {
+      dropRoute(machine)
+    }
+    const anthropic = mode === 'off' ? null : anthropicRoute(machine)
+    return {
+      mode,
+      anthropic,
+      routes: {
+        hook: {
+          vmPort: hookServer.port,
+          hostPort: hookServer.port,
+          hookToken: hookServer.token,
+          authorize: (token: string) => hookTokens.authorizes(machine, token)
+        },
+        anthropic: anthropic ? { route: anthropic } : null
+      }
+    }
+  }
+
   return {
     /** Mints the hook token as the sandbox becomes ready. */
     created(machine: string): void {
       hookTokens.tokenFor(machine)
+    },
+
+    /**
+     * Starts the relay ahead of the sandbox's first launch, which then finds it ready instead of
+     * waiting for it (49-60 ms plus the launch's 0.1 s wait steps, round 3). It binds no credential
+     * and makes no env: the launch does both, and reuses this relay when its routes still match.
+     */
+    prestart(machine: string, hookServer: { port: number; token: string }): void {
+      deps.relays.ensure(machine, routesFor(machine, hookServer).routes)
     },
 
     /**
@@ -94,24 +125,12 @@ export function createSandboxAccess(deps: {
     ): { nonce: string; vmEnv: Record<string, string> } {
       const mac = readPrivacy()
       privacy.set(machine, mac)
-      const mode = getPodSandboxAnthropicCredentials().mode()
-      if (mode === 'off') {
-        dropRoute(machine)
-      }
-      const anthropic = mode === 'off' ? null : anthropicRoute(machine)
+      const { mode, anthropic, routes } = routesFor(machine, hookServer)
       if (anthropic) {
         // Binds the sandbox to the login this launch resolves, as a Mac launch would.
         getPodSandboxAnthropicCredentials().launched?.({ machine })
       }
-      const { nonce } = deps.relays.ensure(machine, {
-        hook: {
-          vmPort: hookServer.port,
-          hostPort: hookServer.port,
-          hookToken: hookServer.token,
-          authorize: (token) => hookTokens.authorizes(machine, token)
-        },
-        anthropic: anthropic ? { route: anthropic } : null
-      })
+      const { nonce } = deps.relays.ensure(machine, routes)
       return {
         nonce,
         vmEnv: {

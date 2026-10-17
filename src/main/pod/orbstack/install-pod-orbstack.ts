@@ -7,6 +7,7 @@ import {
   probeClaudeCliVersion,
   probeRecentClaudeCliVersion
 } from '../../claude/claude-hook-event-versions'
+import { agentHookServer } from '../../agent-hooks/server'
 import { resolveClaudeCommand } from '../../codex-cli/command'
 import { getMainHttpClient } from '../../network/http-client'
 import { createClaudeReleaseCache, sandboxClaudePlatform } from './pod-orbstack-claude-release'
@@ -135,6 +136,19 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
   })
   const templatesAllowed = resolveOrbstackTemplatesEnabled()
   const diskSizes = createPodOrbstackDiskSizes({ run })
+  // The new sandbox's relay, up before its first launch, on the hook server that launch will name.
+  const prestartRelay = (name: string): void => {
+    const env = agentHookServer.buildPtyEnv()
+    const port = Number(env.ORCA_AGENT_HOOK_PORT)
+    if (!Number.isInteger(port) || port <= 0 || !env.ORCA_AGENT_HOOK_TOKEN) {
+      return
+    }
+    try {
+      access.prestart(name, { port, token: env.ORCA_AGENT_HOOK_TOKEN })
+    } catch (error) {
+      log(`could not pre-start the relay for ${name}: ${String(error)}`)
+    }
+  }
   const machines = createPodOrbstackMachines({
     paths,
     run,
@@ -142,7 +156,10 @@ export function installPodOrbstack(store: { getRepos(): Repo[] }): void {
     home,
     loadRecipe: () => loadPodOrbstackRecipe(join(dataDir, 'recipe.json')),
     onRecipeCreate: () => churn.count(),
-    onSandboxCreated: (name) => access.created(name),
+    onSandboxCreated: (name) => {
+      access.created(name)
+      prestartRelay(name)
+    },
     onSandboxRemoved: (name) => access.forget(name),
     ...(templatesAllowed ? { templates } : {}),
     log,
