@@ -80,4 +80,40 @@ describe('automation setup trust hash persistence (Pod)', () => {
     )
     expect(store.updateAutomation(id, { setupTrustHash: null }).setupTrustHash).toBeNull()
   })
+
+  // What `orca automations edit --base-branch` sends: no hash, so none carries over to the new base.
+  it('drops the hash when an update re-points the base, even to a ref with the same orca.yaml', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const { id } = store.createAutomation({ ...BASE, setupTrustHash: HASH })
+    const moved = store.updateAutomation(id, { baseBranch: 'fork/main' })
+    expect(moved.baseBranch).toBe('fork/main')
+    expect(moved.setupTrustHash).toBeNull()
+    expect(store.updateAutomation(id, { baseBranch: 'main' }).setupTrustHash).toBeNull()
+  })
+
+  it('drops the hash on a repo or mode change', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    store.addRepo(makeRepo({ id: 'r2', path: '/tmp/r2' }))
+    const first = store.createAutomation({ ...BASE, setupTrustHash: HASH })
+    expect(store.updateAutomation(first.id, { projectId: 'r2' }).setupTrustHash).toBeNull()
+    const second = store.createAutomation({ ...BASE, setupTrustHash: HASH })
+    store.updateAutomation(second.id, { workspaceMode: 'existing', workspaceId: 'r1::/tmp/r1' })
+    const back = store.updateAutomation(second.id, { workspaceMode: 'new_per_run' })
+    expect(back.setupTrustHash).toBeNull()
+  })
+
+  it('keeps the hash an update brings with its new base, and the old one when the base is restated', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const { id } = store.createAutomation({ ...BASE, setupTrustHash: HASH })
+    expect(
+      store.updateAutomation(id, { baseBranch: 'main', name: 'Same base' }).setupTrustHash
+    ).toBe(HASH)
+    const fresh = 'c'.repeat(64)
+    expect(
+      store.updateAutomation(id, { baseBranch: 'release', setupTrustHash: fresh }).setupTrustHash
+    ).toBe(fresh)
+  })
 })
