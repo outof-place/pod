@@ -37,6 +37,8 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
     baseBranch: automation.baseBranch ?? undefined,
     setupDecision: automation.setupDecision ?? 'skip',
+    // Pod: the hash approved at save, which the host checks against what this run would execute.
+    ...(automation.setupTrustHash ? { setupTrustHash: automation.setupTrustHash } : {}),
     activate: false,
     createdWithAgent: automation.agentId,
     startupAgent: automation.agentId,

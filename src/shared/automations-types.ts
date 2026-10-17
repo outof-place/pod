@@ -1,5 +1,6 @@
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
+import type { AutomationSetupTrust } from './automation-setup-trust'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
@@ -132,7 +133,7 @@ export type Automation = {
   missedRunGraceMinutes: number
   createdAt: number
   updatedAt: number
-}
+} & AutomationSetupTrust
 
 export type AutomationRun = {
   id: string
@@ -202,7 +203,7 @@ export type AutomationCreateInput = {
   dtstart: number
   enabled?: boolean
   missedRunGraceMinutes?: number
-}
+} & AutomationSetupTrust
 
 export type AutomationUpdateInput = Partial<
   Pick<
@@ -219,6 +220,7 @@ export type AutomationUpdateInput = Partial<
     | 'workspaceId'
     | 'baseBranch'
     | 'setupDecision'
+    | 'setupTrustHash'
     | 'reuseSession'
     | 'timezone'
     | 'rrule'

@@ -114,4 +114,22 @@ describe('headless automation workspace create args', () => {
 
     expect(args.startupExtraAgentArgs).toBe('--model gpt-5.5')
   })
+
+  it('sends the setup hash approved at save with each run (Pod)', () => {
+    const run = { id: 'run-1', title: 'Nightly review run', scheduledFor: 0 }
+    const hash = 'c'.repeat(64)
+    expect(
+      buildHeadlessAutomationWorktreeCreateArgs({
+        automation: { ...automation, setupTrustHash: hash },
+        run,
+        repo
+      }).setupTrustHash
+    ).toBe(hash)
+    expect(
+      Object.hasOwn(
+        buildHeadlessAutomationWorktreeCreateArgs({ automation, run, repo }),
+        'setupTrustHash'
+      )
+    ).toBe(false)
+  })
 })

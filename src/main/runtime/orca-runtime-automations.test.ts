@@ -222,6 +222,34 @@ describe('OrcaRuntimeService automation methods', () => {
     )
   })
 
+  it('carries the setup hash approved at save on create and update (Pod)', async () => {
+    const store = makeStore([existingAutomation])
+    const runtime = new OrcaRuntimeService(store as never)
+    const setupTrustHash = 'd'.repeat(64)
+
+    await runtime.createAutomation({
+      name: 'Daily review',
+      prompt: 'Review changes',
+      agentId: 'codex',
+      repo: 'repo-1',
+      workspaceMode: 'new_per_run',
+      setupDecision: 'run',
+      setupTrustHash,
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: 1
+    })
+    expect(store.createAutomation).toHaveBeenCalledWith(
+      expect.objectContaining({ setupDecision: 'run', setupTrustHash }),
+      undefined
+    )
+    await runtime.updateAutomation('auto-1', { setupTrustHash: null })
+    expect(store.updateAutomation).toHaveBeenCalledWith(
+      'auto-1',
+      { setupTrustHash: null },
+      undefined
+    )
+  })
+
   it('passes session reuse updates for existing-workspace automations', async () => {
     const existing = {
       ...existingAutomation,

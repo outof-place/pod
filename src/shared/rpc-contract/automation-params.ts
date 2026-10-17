@@ -185,6 +185,12 @@ export const AutomationRuns = z.object({
 
 // Why strict: null or a non-string must fail rather than fall back to "omitted", which preserves.
 const ExtraAgentArgs = z.string({ message: 'Extra agent arguments must be text.' }).optional()
+// Pod: the base's orca.yaml setup hash approved at save (sha256 hex); null clears it.
+const SetupTrustHash = z
+  .string()
+  .regex(/^[0-9a-f]{64}$/, 'Setup trust hash must be a sha256 hex digest.')
+  .nullable()
+  .optional()
 
 export const AutomationCreate = z.object({
   creationKey: OptionalString,
@@ -200,6 +206,7 @@ export const AutomationCreate = z.object({
   workspaceMode: AutomationWorkspaceMode,
   baseBranch: OptionalPlainString,
   setupDecision: SetupDecision,
+  setupTrustHash: SetupTrustHash,
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule,
@@ -223,6 +230,7 @@ export const AutomationUpdateFields = z.object({
   // Why: update patches distinguish omitted from null so callers can clear a saved base branch.
   baseBranch: OptionalNullablePlainString,
   setupDecision: SetupDecision,
+  setupTrustHash: SetupTrustHash,
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule.optional(),
