@@ -64,7 +64,7 @@ const test = base.extend<{ proxyJumpFixture: NestedRuntimeProxyJumpFixture | nul
   },
   orcaAppExtraEnv: async ({ proxyJumpFixture }, provideFixture) => {
     await provideFixture(
-      proxyJumpFixture ? { ORCA_SYSTEM_SSH_PATH: proxyJumpFixture.wrapperPath } : {}
+      proxyJumpFixture ? { POD_SYSTEM_SSH_PATH: proxyJumpFixture.wrapperPath } : {}
     )
   }
 })

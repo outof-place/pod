@@ -139,7 +139,7 @@ describe('forge provider interface', () => {
   it('detects a GitHub Enterprise Server remote as the GitHub provider, not Gitea', async () => {
     // Regression for #8312: a GHES host is not github.com, so github.com-only
     // slug parsing returns null. Detection must claim it via the enterprise
-    // resolver instead of falling through to Gitea's demand for ORCA_GITEA_TOKEN.
+    // resolver instead of falling through to Gitea's demand for POD_GITEA_TOKEN.
     getProjectSlugMock.mockResolvedValue(null)
     // Why: getRepoSlug resolves hosted identities itself now — a GHES remote
     // comes back host-qualified instead of null + separate enterprise fallback.

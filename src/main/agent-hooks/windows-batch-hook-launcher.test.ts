@@ -24,7 +24,7 @@ describe('batch hook policy setup', () => {
   it.each(['.cmd', '.CMD', '.ps1', '.PS1', '.cmd.ps1'])(
     'preserves policy setup for scripts that require it: %s',
     (extension) => {
-      const path = `C:\\Users\\测试用户\\.orca\\agent-hooks\\hook${extension}`
+      const path = `C:\\Users\\测试用户\\.pod\\agent-hooks\\hook${extension}`
       const commands = [
         wrapWindowsCmdHookCommand(path),
         getWindowsManagedLifecycleHook(path).command
@@ -65,16 +65,16 @@ describe.skipIf(process.platform !== 'win32')('guarded Windows batch hook comman
     async (profile) => {
       const root = mkdtempSync(join(tmpdir(), 'orca-batch-launcher-'))
       const home = join(root, profile)
-      const scriptPath = join(home, '.orca', 'agent-hooks', 'claude-hook.cmd')
-      mkdirSync(join(home, '.orca', 'agent-hooks'), { recursive: true })
+      const scriptPath = join(home, '.pod', 'agent-hooks', 'claude-hook.cmd')
+      mkdirSync(join(home, '.pod', 'agent-hooks'), { recursive: true })
       const env = {
         ...Object.fromEntries(
           Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))
         ),
         ORCA_BACKGROUND_LAUNCH: '1',
-        ORCA_AGENT_HOOK_PORT: '1',
-        ORCA_AGENT_HOOK_TOKEN: 'batch-launcher-test',
-        ORCA_PANE_KEY: 'tab:leaf',
+        POD_AGENT_HOOK_PORT: '1',
+        POD_AGENT_HOOK_TOKEN: 'batch-launcher-test',
+        POD_PANE_KEY: 'tab:leaf',
         PSExecutionPolicyPreference: 'Restricted'
       }
       const input = JSON.stringify({ prompt: '한국어 日本語 😀 & %PATH% !'.repeat(4096) })

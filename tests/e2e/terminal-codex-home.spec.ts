@@ -70,7 +70,7 @@ test.describe('Terminal Codex runtime home', () => {
     const marker = `__ORCA_CODEX_HOME_E2E_${Date.now()}__`
     const command = [
       'node -e',
-      `"console.log('${marker}:' + JSON.stringify({codexHome: process.env.CODEX_HOME || null, orcaCodexHome: process.env.ORCA_CODEX_HOME || null}))"`
+      `"console.log('${marker}:' + JSON.stringify({codexHome: process.env.CODEX_HOME || null, orcaCodexHome: process.env.POD_CODEX_HOME || null}))"`
     ].join(' ')
 
     await execInTerminal(orcaPage, ptyId, command)

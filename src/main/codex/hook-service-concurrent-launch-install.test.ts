@@ -63,8 +63,8 @@ function installedStatus(configPath: string): AgentHookInstallStatus {
 beforeEach(() => {
   tmpHome = mkdtempSync(join(tmpdir(), 'orca-codex-home-'))
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-user-data-'))
-  previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-  process.env.ORCA_USER_DATA_PATH = userDataDir
+  previousUserDataPath = process.env.POD_USER_DATA_PATH
+  process.env.POD_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(tmpHome)
   getPathMock.mockImplementation((name: string) => {
     if (name === 'userData') {
@@ -87,9 +87,9 @@ afterEach(() => {
   rmSync(tmpHome, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.POD_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    process.env.POD_USER_DATA_PATH = previousUserDataPath
   }
   vi.clearAllMocks()
 })

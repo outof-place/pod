@@ -27,7 +27,7 @@ import { getCodexHookTrustMemoPath } from './codex-hook-trust-memo'
 // Why this file: only an answer Codex gave about its version may be saved for that
 // version; a failed ask saved there would cost every home Orca's entry until Codex updates.
 
-const COMMAND = '/home/u/.orca/agent-hooks/codex-hook.sh'
+const COMMAND = '/home/u/.pod/agent-hooks/codex-hook.sh'
 let userData: string
 let codexPath: string
 
@@ -66,7 +66,7 @@ function listHashedHooks(movedHash = 'sha256:stop', listsOrca = true): void {
 
 beforeEach(() => {
   userData = mkdtempSync(join(tmpdir(), 'orca-codex-trust-failure-'))
-  vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+  vi.stubEnv('POD_USER_DATA_PATH', userData)
   codexPath = join(userData, 'codex')
   writeFileSync(codexPath, 'codex 0.150.1')
   mocks.runProcess.mockResolvedValue({ code: 0, stdout: 'codex-cli 0.150.1\n', stderr: '' })

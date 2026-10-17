@@ -328,7 +328,7 @@ describe('OrcaRuntimeService', () => {
         env: expect.objectContaining({
           ORCA_ROOT_PATH: '/tmp/repo',
           ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup-split',
-          ORCA_WORKTREE_ID: result.worktree.id
+          POD_WORKTREE_ID: result.worktree.id
         }),
         worktreeId: result.worktree.id
       })
@@ -356,15 +356,15 @@ describe('OrcaRuntimeService', () => {
       state: 'running',
       terminalHandle: expect.stringMatching(/^term_/)
     })
-    expect(mainEnv.ORCA_TAB_ID).toBeDefined()
-    expect(mainEnv.ORCA_PANE_KEY).toBeDefined()
-    expect(setupEnv.ORCA_TAB_ID).toBe(mainEnv.ORCA_TAB_ID)
-    const mainLeafId = mainEnv.ORCA_PANE_KEY!.slice(`${mainEnv.ORCA_TAB_ID!}:`.length)
+    expect(mainEnv.POD_TAB_ID).toBeDefined()
+    expect(mainEnv.POD_PANE_KEY).toBeDefined()
+    expect(setupEnv.POD_TAB_ID).toBe(mainEnv.POD_TAB_ID)
+    const mainLeafId = mainEnv.POD_PANE_KEY!.slice(`${mainEnv.POD_TAB_ID!}:`.length)
     expect(revealTerminalSession).toHaveBeenLastCalledWith(
       result.worktree.id,
       expect.objectContaining({
         ptyId: 'pty-startup-split-setup',
-        tabId: mainEnv.ORCA_TAB_ID,
+        tabId: mainEnv.POD_TAB_ID,
         activate: false,
         splitFromLeafId: mainLeafId,
         splitDirection: 'vertical'

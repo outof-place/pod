@@ -13,7 +13,7 @@
  *
  * The PTY half is EXACTLY today's `terminal.show` liveness test, `getLiveLeafForHandle` included,
  * so its `rendererGraphEpoch` re-check still runs. That check is the whole point of validating at
- * all — a long-lived shell keeps a stale `ORCA_TERMINAL_HANDLE` across a window reload — and a
+ * all — a long-lived shell keeps a stale `POD_TERMINAL_HANDLE` across a window reload — and a
  * cheaper probe that skipped it (`getPaneKeyForTerminalHandle`, say) would quietly start passing
  * handles that fail today.
  */

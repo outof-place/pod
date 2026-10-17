@@ -51,15 +51,15 @@ it('prepares the execution host OMP config and status extension for a guarded la
       env: { HOME: state.home },
       command: withFreshOmpLaunch('omp', 'posix')
     })
-    expect(readFileSync(environment.ORCA_OMP_FRESH_CONFIG, 'utf8')).toBe('autoResume: false\n')
-    expect(existsSync(environment.ORCA_OMP_STATUS_EXTENSION)).toBe(true)
-    expect(environment.ORCA_OMP_SOURCE_AGENT_DIR).toBe(join(state.home, '.omp', 'agent'))
+    expect(readFileSync(environment.POD_OMP_FRESH_CONFIG, 'utf8')).toBe('autoResume: false\n')
+    expect(existsSync(environment.POD_OMP_STATUS_EXTENSION)).toBe(true)
+    expect(environment.POD_OMP_SOURCE_AGENT_DIR).toBe(join(state.home, '.omp', 'agent'))
     expect(environment.PI_CODING_AGENT_DIR).toBeUndefined()
-    expect(environment.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+    expect(environment.POD_PI_SOURCE_AGENT_DIR).toBeUndefined()
     if (process.platform !== 'win32' && existsSync('/bin/bash')) {
       writeFileSync(
         join(state.home, 'omp'),
-        '#!/bin/sh\nprintf "%s\\n" "$@" "$ORCA_OMP_PREFILL"\nexit 17\n',
+        '#!/bin/sh\nprintf "%s\\n" "$@" "$POD_OMP_PREFILL"\nexit 17\n',
         { mode: 0o755 }
       )
       const result = await runProcess({
@@ -75,15 +75,15 @@ it('prepares the execution host OMP config and status extension for a guarded la
           ...process.env,
           ...environment,
           PATH: state.home + delimiter + process.env.PATH,
-          ORCA_OMP_PREFILL: 'remote draft'
+          POD_OMP_PREFILL: 'remote draft'
         }
       })
       expect(result.code).toBe(17)
       expect(result.stdout.trim().split('\n')).toEqual([
         '--extension',
-        environment.ORCA_OMP_STATUS_EXTENSION,
+        environment.POD_OMP_STATUS_EXTENSION,
         '--config',
-        environment.ORCA_OMP_FRESH_CONFIG,
+        environment.POD_OMP_FRESH_CONFIG,
         'remote draft'
       ])
     }

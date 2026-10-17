@@ -118,7 +118,7 @@ let cached: NativeProcessInfo | null | undefined
 let snapshotClient: NativeProcessSnapshotClient | null = null
 
 /** Escape hatch back to the `ps`/`lsof` paths; the unit-test setup sets it so mocks stay in charge. */
-export const DISABLE_NATIVE_PROCESS_INFO_ENV = 'ORCA_DISABLE_NATIVE_PROCESS_INFO'
+export const DISABLE_NATIVE_PROCESS_INFO_ENV = 'POD_DISABLE_NATIVE_PROCESS_INFO'
 
 /** The macOS process-info addon, or null where it is absent so callers keep forking `ps`/`lsof`. */
 export function getNativeProcessInfo(): NativeProcessInfo | null {

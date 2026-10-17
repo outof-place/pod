@@ -90,7 +90,7 @@ function adoptSafeStorageKey(options: LegacyProfileMigrationOptions): SafeStorag
     return 'already-present'
   }
   // Why reuse the legacy secret instead of re-encrypting: cookies, profile secrets and the shared
-  // ~/.orca token files all stay readable by both apps, which is what keeps a rollback lossless.
+  // ~/.pod token files all stay readable by both apps, which is what keeps a rollback lossless.
   const secret = keychain.readSecret(
     safeStorageService(legacyKeychainName),
     safeStorageAccount(legacyKeychainName)

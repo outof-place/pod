@@ -62,7 +62,7 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
                 <span className="font-mono text-[11px]">
                   {translate(
                     'auto.components.settings.token.source.control.integration.cards.48842720d2',
-                    'ORCA_AZURE_DEVOPS_TOKEN'
+                    'POD_AZURE_DEVOPS_TOKEN'
                   )}
                 </span>
                 {translate(
@@ -72,7 +72,7 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
                 <span className="font-mono text-[11px]">
                   {translate(
                     'auto.components.settings.token.source.control.integration.cards.fbfd237f5e',
-                    'ORCA_AZURE_DEVOPS_ACCESS_TOKEN'
+                    'POD_AZURE_DEVOPS_ACCESS_TOKEN'
                   )}
                 </span>
                 {translate(
@@ -82,7 +82,7 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
                 <span className="font-mono text-[11px]">
                   {translate(
                     'auto.components.settings.token.source.control.integration.cards.186a6689df',
-                    'ORCA_AZURE_DEVOPS_API_BASE_URL'
+                    'POD_AZURE_DEVOPS_API_BASE_URL'
                   )}
                 </span>{' '}
                 {translate(
@@ -186,7 +186,7 @@ export function GiteaIntegrationCard(): React.JSX.Element {
                 <span className="font-mono text-[11px]">
                   {translate(
                     'auto.components.settings.token.source.control.integration.cards.6d5c2a3005',
-                    'ORCA_GITEA_TOKEN'
+                    'POD_GITEA_TOKEN'
                   )}
                 </span>{' '}
                 {translate(
@@ -196,7 +196,7 @@ export function GiteaIntegrationCard(): React.JSX.Element {
                 <span className="font-mono text-[11px]">
                   {translate(
                     'auto.components.settings.token.source.control.integration.cards.709057ad91',
-                    'ORCA_GITEA_API_BASE_URL'
+                    'POD_GITEA_API_BASE_URL'
                   )}
                 </span>{' '}
                 {translate(

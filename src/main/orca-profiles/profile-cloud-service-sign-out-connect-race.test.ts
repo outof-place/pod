@@ -77,8 +77,8 @@ describe('Orca cloud sign-out vs newer connect', () => {
     safeStorageMock.decryptString.mockImplementation((value: Buffer) => value.toString('utf-8'))
     safeStorageMock.encryptString.mockImplementation((value: string) => Buffer.from(value, 'utf-8'))
     safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
-    vi.stubEnv('ORCA_CLOUD_API_URL', 'https://orca-cloud.example')
-    vi.stubEnv('ORCA_CLOUD_CLIENT_ID', 'desktop-client')
+    vi.stubEnv('POD_CLOUD_API_URL', 'https://orca-cloud.example')
+    vi.stubEnv('POD_CLOUD_CLIENT_ID', 'desktop-client')
     beginOrcaCloudPkceFlowMock.mockResolvedValue({
       code: 'auth-code',
       codeVerifier: 'code-verifier',

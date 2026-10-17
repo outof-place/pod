@@ -54,7 +54,7 @@ const test = base.extend({
   launchEnv: [
     {
       PATH: `${fakeGhDir}${path.delimiter}${process.env.PATH ?? ''}`,
-      ORCA_GH_EXEC_TIMEOUT_MS: '1000'
+      POD_GH_EXEC_TIMEOUT_MS: '1000'
     },
     { option: true }
   ]

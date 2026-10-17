@@ -198,7 +198,7 @@ function runDesktopStartupOracle({ image, appImage, platform }) {
     '--entrypoint',
     '/usr/local/bin/run-appimage-desktop-startup-case',
     '-e',
-    'ORCA_STARTUP_DIAGNOSTICS=1',
+    'POD_STARTUP_DIAGNOSTICS=1',
     '-v',
     `${appImage}:/input/orca.AppImage:ro`,
     image,

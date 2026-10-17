@@ -19,7 +19,7 @@ export function promoteAgentTeamsShimPath(
   env: Record<string, string> | undefined,
   requestedPath: string | undefined
 ): void {
-  if (!env?.ORCA_AGENT_TEAMS_TEAM_ID) {
+  if (!env?.POD_AGENT_TEAMS_TEAM_ID) {
     return
   }
   const shimPath = firstPathEntry(requestedPath)

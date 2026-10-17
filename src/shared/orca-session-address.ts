@@ -4,7 +4,7 @@ import { ORCA_SESSION_ADDRESS_PREFIX } from './orca-session-address-prefix'
 
 /**
  * The Orca session id is the id Orca minted for a structured session (its session record id, the
- * value of `ORCA_AGENT_SESSION_ID`), never the provider's own session id. Orchestration stores,
+ * value of `POD_AGENT_SESSION_ID`), never the provider's own session id. Orchestration stores,
  * bare, the one the agent is addressed by: for a `/clear`ed chat, its lineage root's, not the live
  * session's. Mail addresses the session as `orca_session_id:<id>`, beside `run:<id>` and `dispatch:<id>`,
  * and derives that spelling here rather than storing it.

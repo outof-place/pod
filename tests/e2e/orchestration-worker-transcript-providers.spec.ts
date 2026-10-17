@@ -122,19 +122,19 @@ async function sendProviderHook() {
   hookSent = true
   const config = JSON.parse(readFileSync(configPath, 'utf8'))
   const payload = ${providerHookPayload(agent)}
-  await fetch('http://127.0.0.1:' + process.env.ORCA_AGENT_HOOK_PORT + '${hookPath}', {
+  await fetch('http://127.0.0.1:' + process.env.POD_AGENT_HOOK_PORT + '${hookPath}', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Orca-Agent-Hook-Token': process.env.ORCA_AGENT_HOOK_TOKEN
+      'X-Orca-Agent-Hook-Token': process.env.POD_AGENT_HOOK_TOKEN
     },
     body: JSON.stringify({
-      paneKey: process.env.ORCA_PANE_KEY,
-      tabId: process.env.ORCA_TAB_ID,
-      worktreeId: process.env.ORCA_WORKTREE_ID,
-      launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN,
-      env: process.env.ORCA_AGENT_HOOK_ENV,
-      version: process.env.ORCA_AGENT_HOOK_VERSION,
+      paneKey: process.env.POD_PANE_KEY,
+      tabId: process.env.POD_TAB_ID,
+      worktreeId: process.env.POD_WORKTREE_ID,
+      launchToken: process.env.POD_AGENT_LAUNCH_TOKEN,
+      env: process.env.POD_AGENT_HOOK_ENV,
+      version: process.env.POD_AGENT_HOOK_VERSION,
       payload
     })
   })

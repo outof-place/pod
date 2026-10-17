@@ -877,7 +877,7 @@ describe('subscribeViaWatcherProcess', () => {
     const pending = subscribeViaWatcherProcess('/repo', vi.fn(), {})
     const child = currentChild()
     const forkOptions = forkMock.mock.calls.at(-1)?.[2] as { env?: NodeJS.ProcessEnv } | undefined
-    expect(forkOptions?.env?.ORCA_WATCHER_CANARY_DIR).toBeUndefined()
+    expect(forkOptions?.env?.POD_WATCHER_CANARY_DIR).toBeUndefined()
     ackSubscribe(child)
     await expect(pending).resolves.toMatchObject({ unsubscribe: expect.any(Function) })
   })

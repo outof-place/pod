@@ -217,7 +217,7 @@ async function dispatchRemoteCli(
           payload: getRemoteOrchestrationPayload(parsed.flags),
           // Why: the legacy in-process bridge must preserve the same pane
           // authority as the full host CLI passthrough.
-          senderPaneKey: env.ORCA_PANE_KEY || undefined
+          senderPaneKey: env.POD_PANE_KEY || undefined
         },
         compatibilityEnvelope
       )
@@ -230,7 +230,7 @@ async function dispatchRemoteCli(
           terminal: resolveRemoteCliHandle(parsed.flags, env, 'terminal'),
           terminalPaneKey: parsed.flags.has('terminal')
             ? undefined
-            : env.ORCA_PANE_KEY || undefined,
+            : env.POD_PANE_KEY || undefined,
           unread: parsed.flags.has('unread') ? true : parsed.flags.has('peek') ? false : undefined,
           peek: parsed.flags.has('peek') ? true : undefined,
           all: parsed.flags.has('all') ? true : undefined,

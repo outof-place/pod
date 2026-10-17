@@ -300,7 +300,7 @@ async function main() {
     {
       stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
       windowsHide: true,
-      env: { ...process.env, ORCA_USER_DATA_PATH: scratch }
+      env: { ...process.env, POD_USER_DATA_PATH: scratch }
     }
   )
   const daemonPid = child.pid

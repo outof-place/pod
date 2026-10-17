@@ -155,7 +155,7 @@ async function attachViewer(
 
 describe('one query responder among several terminal views', () => {
   beforeEach(() => {
-    vi.stubEnv('ORCA_LOCAL_STREAM_TRANSPORT', '1')
+    vi.stubEnv('POD_LOCAL_STREAM_TRANSPORT', '1')
     _resetTerminalQueryResponderElectionForTest()
   })
   afterEach(() => {

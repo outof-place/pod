@@ -10,7 +10,7 @@
 import { ORCA_SESSION_ADDRESS_PREFIX } from './orca-session-address-prefix'
 import { isStructuredWorkerHandle } from './structured-worker-handle'
 
-export const ORCA_AGENT_SESSION_ID_ENV = 'ORCA_AGENT_SESSION_ID'
+export const ORCA_AGENT_SESSION_ID_ENV = 'POD_AGENT_SESSION_ID'
 
 export function readInjectedAgentSessionId(
   env: Readonly<Record<string, string | undefined>> = process.env
@@ -31,7 +31,7 @@ export function injectedSessionAddress(
   if (!sessionId) {
     return undefined
   }
-  const ownHandle = env.ORCA_TERMINAL_HANDLE
+  const ownHandle = env.POD_TERMINAL_HANDLE
   return isStructuredWorkerHandle(ownHandle)
     ? ownHandle
     : `${ORCA_SESSION_ADDRESS_PREFIX}${sessionId}`

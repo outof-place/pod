@@ -24,7 +24,7 @@ import {
 //   I3 every checkpoint the old build replayed faithfully, the new one does too
 // I1/I3 need a baseline build: ORCA_OLD_SERIALIZE_ADDON=$(node
 // config/scripts/build-serialize-addon-at-ref.mjs --ref origin/main --out-dir <dir>).
-// ORCA_NEW_SERIALIZE_ADDON likewise replaces the installed build under test.
+// POD_NEW_SERIALIZE_ADDON likewise replaces the installed build under test.
 //
 //   SERIALIZE_FUZZ_ITERATIONS=7000  cases per category (default 40)
 //   SERIALIZE_FUZZ_SEED=1234        re-run exactly one seed (all categories)
@@ -246,8 +246,8 @@ describe('serialize grid round-trip fuzz', () => {
     expect(regressed).toEqual([])
   })
 
-  // The pin describes the installed build; an ORCA_NEW_SERIALIZE_ADDON override is judged by I3 instead.
-  it.skipIf(Boolean(process.env.ORCA_NEW_SERIALIZE_ADDON))(
+  // The pin describes the installed build; an POD_NEW_SERIALIZE_ADDON override is judged by I3 instead.
+  it.skipIf(Boolean(process.env.POD_NEW_SERIALIZE_ADDON))(
     'I2 on a fixed seed range: only the pinned pre-existing divergences remain',
     async () => {
       const failing: Record<SerializeFuzzCategory, number[]> = { normal: [], alt: [], conpty: [] }

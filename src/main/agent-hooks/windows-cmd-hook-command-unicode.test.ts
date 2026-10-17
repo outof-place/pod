@@ -39,7 +39,7 @@ function decodeCommand(command: string): string {
 
 describe('Windows Unicode managed hook commands', () => {
   it('keeps the existing ASCII direct path', () => {
-    const scriptPath = 'C:\\Users\\ascii\\.orca\\agent-hooks\\antigravity-pre-tool-use.cmd'
+    const scriptPath = 'C:\\Users\\ascii\\.pod\\agent-hooks\\antigravity-pre-tool-use.cmd'
     expect(wrapWindowsCmdHookCommand(scriptPath)).toBe(scriptPath)
     expect(wrapWindowsDirectCmdHookCommand(scriptPath)).toBe(scriptPath.replaceAll('\\', '/'))
   })
@@ -47,7 +47,7 @@ describe('Windows Unicode managed hook commands', () => {
   it.each(PROFILES.slice(1))(
     'preserves the guarded launcher for %s without policy setup',
     (profile) => {
-      const scriptPath = `C:\\Users\\${profile}\\.orca\\agent-hooks\\antigravity-pre-tool-use.cmd`
+      const scriptPath = `C:\\Users\\${profile}\\.pod\\agent-hooks\\antigravity-pre-tool-use.cmd`
       const decoded = decodeCommand(wrapWindowsCmdHookCommand(scriptPath))
       expect(decoded).toContain(`Test-Path -LiteralPath '${scriptPath}' -PathType Leaf`)
       expect(decoded).toContain('[Console]::In.ReadToEnd() | Out-Null; exit 0')
@@ -71,7 +71,7 @@ describe('Windows Unicode managed hook commands', () => {
     '用户`name',
     '用户\u2019name'
   ])('retains the encoded launcher for %s', (profile) => {
-    const scriptPath = `C:\\Users\\${profile}\\.orca\\agent-hooks\\antigravity-pre-tool-use.cmd`
+    const scriptPath = `C:\\Users\\${profile}\\.pod\\agent-hooks\\antigravity-pre-tool-use.cmd`
     expect(wrapWindowsCmdHookCommand(scriptPath)).toBe(wrapWindowsHookCommand(scriptPath))
     expect(wrapWindowsDirectCmdHookCommand(scriptPath)).toBeNull()
   })
@@ -107,7 +107,7 @@ describe.skipIf(
       service.setWindowsRuntimePathProvider(() => process.execPath)
       const configPath = join(home, '.gemini', 'config', 'hooks.json')
       const legacyCommand = wrapWindowsHookCommand(
-        join(home, '.orca', 'agent-hooks', 'antigravity-pre-tool-use.cmd')
+        join(home, '.pod', 'agent-hooks', 'antigravity-pre-tool-use.cmd')
       )
       writeHooksJson(configPath, {
         'orca-status': {
@@ -143,15 +143,15 @@ describe.skipIf(
             Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))
           ),
           ORCA_BACKGROUND_LAUNCH: '1',
-          ORCA_AGENT_HOOK_PORT: String(address.port),
-          ORCA_AGENT_HOOK_TOKEN: 'unicode-command-test',
-          ORCA_PANE_KEY: 'tab:leaf!bang',
-          ORCA_WORKTREE_ID: 'folder::C:/测试 repo',
-          ORCA_AGENT_HOOK_NODE: process.execPath
+          POD_AGENT_HOOK_PORT: String(address.port),
+          POD_AGENT_HOOK_TOKEN: 'unicode-command-test',
+          POD_PANE_KEY: 'tab:leaf!bang',
+          POD_WORKTREE_ID: 'folder::C:/测试 repo',
+          POD_AGENT_HOOK_NODE: process.execPath
         }
         for (const event of ANTIGRAVITY_EVENTS) {
           const command = installedCommand(configPath, event.eventName)
-          const scriptPath = join(home, '.orca', 'agent-hooks', event.windowsWrapperFileName)
+          const scriptPath = join(home, '.pod', 'agent-hooks', event.windowsWrapperFileName)
           expect(command).toBe(wrapWindowsCmdHookCommand(scriptPath))
           if (!WINDOWS_CMD_SAFE_PATH.test(scriptPath)) {
             expect(decodeCommand(command)).not.toContain('Set-ExecutionPolicy')
@@ -186,12 +186,12 @@ describe.skipIf(
             expect(posts.slice(before)).toHaveLength(1)
             expect(posts[before].get('payload')).toBe(payload)
             expect(posts[before].get('hook_event_name')).toBe(event.eventName)
-            expect(posts[before].get('paneKey')).toBe(env.ORCA_PANE_KEY)
-            expect(posts[before].get('worktreeId')).toBe(env.ORCA_WORKTREE_ID)
+            expect(posts[before].get('paneKey')).toBe(env.POD_PANE_KEY)
+            expect(posts[before].get('worktreeId')).toBe(env.POD_WORKTREE_ID)
           }
         }
         const staleCommand = installedCommand(configPath, 'PreToolUse')
-        const scriptPath = join(home, '.orca', 'agent-hooks', 'antigravity-pre-tool-use.cmd')
+        const scriptPath = join(home, '.pod', 'agent-hooks', 'antigravity-pre-tool-use.cmd')
         rmSync(scriptPath)
         const beforeMissing = posts.length
         const invoke = () =>

@@ -42,23 +42,23 @@ fi
 # ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
 # PATH edits, hooks, and prompt init in Orca startup-command shells.
 __orca_restore_agent_teams_path() {
-  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+  [[ -n "\${POD_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
-    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+    "\${POD_AGENT_TEAMS_SHIM_DIR}"|"\${POD_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
   esac
-  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+  export PATH="\${POD_AGENT_TEAMS_SHIM_DIR}:$PATH"
 }
 __orca_restore_agent_teams_path
 ${ORCA_CLI_POSIX_PATH_RESTORE}
 ${WSL_MANAGED_CLI_PATH_RESTORE}
 # Why: user startup files may set the default OpenCode config after Orca's
 # spawn env; restore the Orca-managed config dir before the first prompt.
-[[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+[[ -n "\${POD_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${POD_OPENCODE_CONFIG_DIR}"
 ${MANAGED_DATA_ACCOUNT_POSIX_RESTORE}
-[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
+[[ -n "\${POD_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${POD_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
 # Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
-[[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+[[ -n "\${POD_CODEX_HOME:-}" ]] && export CODEX_HOME="\${POD_CODEX_HOME}"
 ${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}
 # Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
 # status when the foreground command (e.g. an interrupted Claude/Codex CLI)

@@ -41,7 +41,7 @@ function stringFlag(ctx: HandlerContext, name: string): string | undefined {
 }
 
 function rejectForwardedSkillFilesystem(ctx: HandlerContext, command: string): void {
-  if (!process.env.ORCA_CLI_CWD && !ctx.client.isRemote) {
+  if (!process.env.POD_CLI_CWD && !ctx.client.isRemote) {
     return
   }
   throw new RuntimeClientError(

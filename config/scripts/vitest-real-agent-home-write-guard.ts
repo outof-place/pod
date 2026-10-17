@@ -26,13 +26,13 @@ const AGENT_HOME_ENTRIES = [
 const AGENT_HOME_FILE_PREFIXES = ['.claude.json']
 // Why: an Orca terminal exports these pointing at the live app and agent state; guarded, then unset.
 const INHERITED_STATE_ENV = [
-  'ORCA_USER_DATA_PATH',
+  'POD_USER_DATA_PATH',
   'CODEX_HOME',
-  'ORCA_CODEX_HOME',
+  'POD_CODEX_HOME',
   'CLAUDE_CONFIG_DIR'
 ]
 // Why: an Orca terminal points this at the live app's CLI, which a test's child shell would run.
-const INHERITED_LIVE_CLI_ENV = ['ORCA_CODEX_LAUNCH_PREFLIGHT']
+const INHERITED_LIVE_CLI_ENV = ['POD_CODEX_LAUNCH_PREFLIGHT']
 // Why: opted-in real-agent suites point a real CLI at its own home on purpose; each suite's own switch.
 const REAL_AGENT_SUITE_SWITCHES = [
   'ORCA_REAL_CLAUDE_SUPERVISED_STOP',

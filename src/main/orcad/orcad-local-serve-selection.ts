@@ -3,7 +3,7 @@
  * App-side on purpose: the CLI runs it through `orcad-local-serve-selection-entry.ts`, so the
  * CLI bundle never carries the materializers.
  *
- * orcad by default; `ORCA_SERVE_RUNTIME=electron` opts out. Anything that stops orcad from
+ * orcad by default; `POD_SERVE_RUNTIME=electron` opts out. Anything that stops orcad from
  * serving this machine (no slot for the target, no pinned Node, a native module it cannot load,
  * a host or packaging path it does not cover yet) falls back to Electron with one stderr line
  * saying why. Everything this writes stays inside the desktop's userData (design D7): the slot
@@ -66,7 +66,7 @@ export async function selectServeRuntime(
     return electron(`${SERVE_RUNTIME_ENV}=${requested} is neither orcad nor electron`)
   }
   // Why: orcad has no SSH connection stack yet, so a default serve on it would list no targets
-  // and fail every connect (#25886, #8489). An explicit ORCA_SERVE_RUNTIME=orcad keeps orcad.
+  // and fail every connect (#25886, #8489). An explicit POD_SERVE_RUNTIME=orcad keeps orcad.
   const sshReason = requested ? null : profileSshReason(input)
   if (sshReason) {
     return electron(sshReason)

@@ -48,7 +48,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      'if defined POD_AGENT_HOOK_ENDPOINT if exist "%POD_AGENT_HOOK_ENDPOINT%" call "%POD_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('muse'),
       'exit /b 0',
@@ -63,10 +63,10 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     ...buildPosixHookSpoolLines('muse'),
     // Why: endpoint file holds the live port/token; PTYs that outlive an Orca restart carry stale env, so source it to reach the new server (else PTY env).
     // Why: silence the `.` builtin (2>/dev/null + `|| :`) so a TOCTOU race can't leak shell parse errors into agent transcripts (fail-open).
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    'if [ -n "$POD_AGENT_HOOK_ENDPOINT" ] && [ -r "$POD_AGENT_HOOK_ENDPOINT" ]; then',
+    '  . "$POD_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    'if [ -z "$POD_AGENT_HOOK_PORT" ] || [ -z "$POD_AGENT_HOOK_TOKEN" ] || [ -z "$POD_PANE_KEY" ]; then',
     '  spool_hook_event',
     '  exit 0',
     'fi',
@@ -228,7 +228,7 @@ export class MuseHookService {
   // Install the Muse hook on an SSH execution host, where the shell contract is POSIX.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = getMuseRemoteConfigPath(remoteHome)
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/muse-hook.sh`
+    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.pod/agent-hooks/muse-hook.sh`
     const remoteManagedHooksPath = getMuseRemoteManagedHooksPath(remoteHome)
     try {
       const body = await readTextFileRemote(sftp, remoteConfigPath)

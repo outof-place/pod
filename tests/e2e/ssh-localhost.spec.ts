@@ -25,9 +25,9 @@ type LocalhostSshTarget = {
 
 const RUN_LOCALHOST_SSH = process.env.ORCA_E2E_SSH_LOCALHOST === '1'
 const RUN_REMOTE_HOOKS =
-  process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS === undefined ||
-  (process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '' &&
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '0')
+  process.env.POD_FEATURE_REMOTE_AGENT_HOOKS === undefined ||
+  (process.env.POD_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '' &&
+    process.env.POD_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '0')
 
 function parsePort(value: string | undefined): number {
   const parsed = Number(value ?? '22')
@@ -117,20 +117,20 @@ async function postCodexHook(
     page,
     ptyId,
     [
-      'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+      'if [ -z "$POD_AGENT_HOOK_PORT" ] || [ -z "$POD_AGENT_HOOK_TOKEN" ] || [ -z "$POD_PANE_KEY" ]; then',
       '  echo __ORCA_AGENT_HOOK_ENV_MISSING__',
       'else',
       `  hook_payload=${shellQuote(JSON.stringify(payload))}`,
       '  (',
       '    sleep 0.1',
-      '    if curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
+      '    if curl -sS -X POST "http://127.0.0.1:${POD_AGENT_HOOK_PORT}/hook/codex" \\',
       '      -H "Content-Type: application/x-www-form-urlencoded" \\',
-      '      -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-      '      --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-      '      --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-      '      --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-      '      --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-      '      --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+      '      -H "X-Orca-Agent-Hook-Token: ${POD_AGENT_HOOK_TOKEN}" \\',
+      '      --data-urlencode "paneKey=${POD_PANE_KEY}" \\',
+      '      --data-urlencode "tabId=${POD_TAB_ID}" \\',
+      '      --data-urlencode "worktreeId=${POD_WORKTREE_ID}" \\',
+      '      --data-urlencode "env=${POD_AGENT_HOOK_ENV}" \\',
+      '      --data-urlencode "version=${POD_AGENT_HOOK_VERSION}" \\',
       '      --data-urlencode "payload=${hook_payload}" >/dev/null; then',
       `      ${emitMarkerCommand(hookPostedMarker)}`,
       '    fi',
@@ -148,7 +148,7 @@ test.describe('Localhost SSH', () => {
   )
   test.skip(
     !RUN_REMOTE_HOOKS,
-    'Unset ORCA_FEATURE_REMOTE_AGENT_HOOKS or set it to 1 so remote PTYs keep pane identity and forward hook events.'
+    'Unset POD_FEATURE_REMOTE_AGENT_HOOKS or set it to 1 so remote PTYs keep pane identity and forward hook events.'
   )
   test.skip(process.platform === 'win32', 'Localhost SSH hook E2E uses POSIX hook scripts.')
 
@@ -230,11 +230,11 @@ test.describe('Localhost SSH', () => {
       orcaPage,
       ptyId,
       [
-        `if [ "$ORCA_PANE_KEY" = ${shellQuote(paneKey)} ] && [ -n "$ORCA_AGENT_HOOK_PORT" ] && [ -n "$ORCA_AGENT_HOOK_TOKEN" ] && /bin/sh -c 'test -n "$ORCA_PANE_KEY" && test -n "$ORCA_AGENT_HOOK_PORT" && test -n "$ORCA_AGENT_HOOK_TOKEN"'; then`,
+        `if [ "$POD_PANE_KEY" = ${shellQuote(paneKey)} ] && [ -n "$POD_AGENT_HOOK_PORT" ] && [ -n "$POD_AGENT_HOOK_TOKEN" ] && /bin/sh -c 'test -n "$POD_PANE_KEY" && test -n "$POD_AGENT_HOOK_PORT" && test -n "$POD_AGENT_HOOK_TOKEN"'; then`,
         `  ${emitMarkerCommand(envMarker)}`,
         'else',
-        '  token_state=${ORCA_AGENT_HOOK_TOKEN:+set}',
-        `  printf '%s pane=%s port=%s token=%s endpoint=%s\\n' ${shellQuote(envFailedMarker)} "$ORCA_PANE_KEY" "$ORCA_AGENT_HOOK_PORT" "$token_state" "$ORCA_AGENT_HOOK_ENDPOINT"`,
+        '  token_state=${POD_AGENT_HOOK_TOKEN:+set}',
+        `  printf '%s pane=%s port=%s token=%s endpoint=%s\\n' ${shellQuote(envFailedMarker)} "$POD_PANE_KEY" "$POD_AGENT_HOOK_PORT" "$token_state" "$POD_AGENT_HOOK_ENDPOINT"`,
         'fi'
       ].join('\n')
     )

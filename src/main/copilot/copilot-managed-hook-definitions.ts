@@ -28,9 +28,9 @@ export const COPILOT_EVENTS = [
 
 export function getManagedCommand(scriptPath: string, eventName: string): string {
   if (process.platform !== 'win32') {
-    return wrapPosixHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
+    return wrapPosixHookCommand(scriptPath, { POD_COPILOT_HOOK_EVENT: eventName })
   }
-  return wrapWindowsHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
+  return wrapWindowsHookCommand(scriptPath, { POD_COPILOT_HOOK_EVENT: eventName })
 }
 
 export function getManagedHookDefinition(command: string): HookDefinition {

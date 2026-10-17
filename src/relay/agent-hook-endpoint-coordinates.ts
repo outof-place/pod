@@ -49,15 +49,15 @@ export function buildRelayHookPtyEnv(coordinates: {
     return {}
   }
   const env: Record<string, string> = {
-    ORCA_AGENT_HOOK_PORT: String(coordinates.port),
-    ORCA_AGENT_HOOK_TOKEN: coordinates.token,
-    ORCA_AGENT_HOOK_ENV: coordinates.env,
-    ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION,
-    ORCA_AGENT_HOOK_OPENCODE_TUI: '1',
-    ORCA_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT
+    POD_AGENT_HOOK_PORT: String(coordinates.port),
+    POD_AGENT_HOOK_TOKEN: coordinates.token,
+    POD_AGENT_HOOK_ENV: coordinates.env,
+    POD_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION,
+    POD_AGENT_HOOK_OPENCODE_TUI: '1',
+    POD_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT
   }
   if (coordinates.endpointFileWritten) {
-    env.ORCA_AGENT_HOOK_ENDPOINT = coordinates.endpointFilePath
+    env.POD_AGENT_HOOK_ENDPOINT = coordinates.endpointFilePath
   }
   return env
 }

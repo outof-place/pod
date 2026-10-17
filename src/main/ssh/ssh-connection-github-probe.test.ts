@@ -147,7 +147,7 @@ describe('SshConnection', () => {
   })
 
   it('accepts GitHub restricted-shell SSH probes when OpenSSH config resolution fails', async () => {
-    vi.stubEnv('ORCA_SSH_FORCE_SYSTEM_TRANSPORT', '1')
+    vi.stubEnv('POD_SSH_FORCE_SYSTEM_TRANSPORT', '1')
     vi.mocked(resolveWithSshG).mockRejectedValueOnce(new Error('ssh -G failed'))
     spawnSystemSshCommandMock.mockImplementation(() =>
       createFailingSystemCommandChannel(1, 'Invalid command: echo ORCA-SYSTEM-SSH-OK')

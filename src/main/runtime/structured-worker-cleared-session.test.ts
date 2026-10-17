@@ -489,7 +489,7 @@ describe.each(['live', 'at-rest'] as const)(
 
     it("gives the successor's child the worker's handle", () => {
       const identity = registerWorker()
-      expect(structuredSessionChildIdentityEnv(SUCCESSOR, {}).ORCA_TERMINAL_HANDLE).toBe(
+      expect(structuredSessionChildIdentityEnv(SUCCESSOR, {}).POD_TERMINAL_HANDLE).toBe(
         identity.handle
       )
     })

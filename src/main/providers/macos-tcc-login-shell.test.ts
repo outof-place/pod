@@ -57,8 +57,8 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
 
   beforeEach(() => {
     origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    origDisable = process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
-    delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+    origDisable = process.env.POD_DISABLE_MACOS_LOGIN_SHELL
+    delete process.env.POD_DISABLE_MACOS_LOGIN_SHELL
     existsSyncMock.mockReturnValue(true)
     userInfoMock.mockReturnValue({ username: 'ada', homedir: '/Users/ada' })
     runProcessMock.mockResolvedValue({
@@ -77,9 +77,9 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
       Object.defineProperty(process, 'platform', origPlatform)
     }
     if (origDisable === undefined) {
-      delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+      delete process.env.POD_DISABLE_MACOS_LOGIN_SHELL
     } else {
-      process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = origDisable
+      process.env.POD_DISABLE_MACOS_LOGIN_SHELL = origDisable
     }
     vi.restoreAllMocks()
     vi.clearAllMocks()
@@ -499,7 +499,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
 
   it('falls back to the plain spawn when disabled via env', () => {
     setPlatform('darwin')
-    process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = '1'
+    process.env.POD_DISABLE_MACOS_LOGIN_SHELL = '1'
     expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l'])).toEqual({
       file: '/bin/zsh',
       args: ['-l']
@@ -518,8 +518,8 @@ describe('probeMacosLoginSessionAlive', () => {
 
   beforeEach(() => {
     origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    origDisable = process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
-    delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+    origDisable = process.env.POD_DISABLE_MACOS_LOGIN_SHELL
+    delete process.env.POD_DISABLE_MACOS_LOGIN_SHELL
     existsSyncMock.mockReturnValue(true)
     userInfoMock.mockReturnValue({ username: 'ada', homedir: '/Users/ada' })
     runProcessMock.mockResolvedValue({
@@ -538,9 +538,9 @@ describe('probeMacosLoginSessionAlive', () => {
       Object.defineProperty(process, 'platform', origPlatform)
     }
     if (origDisable === undefined) {
-      delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+      delete process.env.POD_DISABLE_MACOS_LOGIN_SHELL
     } else {
-      process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = origDisable
+      process.env.POD_DISABLE_MACOS_LOGIN_SHELL = origDisable
     }
     vi.restoreAllMocks()
     vi.clearAllMocks()
@@ -666,7 +666,7 @@ describe('probeMacosLoginSessionAlive', () => {
     setPlatform('linux')
     expect(await probeMacosLoginSessionAlive()).toBeNull()
     setPlatform('darwin')
-    process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = '1'
+    process.env.POD_DISABLE_MACOS_LOGIN_SHELL = '1'
     expect(await probeMacosLoginSessionAlive()).toBeNull()
     expect(runProcessMock).not.toHaveBeenCalled()
   })

@@ -13,7 +13,7 @@ import type { OrbstackToolResult, OrbstackToolRunner } from './pod-orbstack-tool
 describe('sandbox hook files', () => {
   it('keeps the generated hook script on 127.0.0.1, where the relay listens', () => {
     expect(buildSandboxHookScript()).toContain(
-      'http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/claude'
+      'http://127.0.0.1:${POD_AGENT_HOOK_PORT}/hook/claude'
     )
   })
 

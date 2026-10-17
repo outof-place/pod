@@ -149,7 +149,7 @@ describe('Orca cloud session store', () => {
 
   it('writes explicit dev plaintext only when the dev escape hatch is enabled', async () => {
     safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
-    vi.stubEnv('ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION', '1')
+    vi.stubEnv('POD_CLOUD_ALLOW_PLAINTEXT_SESSION', '1')
     vi.stubEnv('NODE_ENV', 'development')
     const store = await loadSessionStore()
     const session = makeSession()

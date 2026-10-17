@@ -485,7 +485,7 @@ describe('every launch is a managed one', () => {
       expect(launches.length).toBeGreaterThan(0)
       for (const launch of launches) {
         expect(launch).toContain(
-          "ORCA_ORCAD_MANAGED_ACTIVATION_ROOT='/home/u/.orca-remote/.orcad-activation-transaction'"
+          "POD_ORCAD_MANAGED_ACTIVATION_ROOT='/home/u/.orca-remote/.orcad-activation-transaction'"
         )
       }
     }

@@ -53,8 +53,8 @@ describe('orca cli worktree awareness', () => {
     spawnMock
   })
 
-  it('lists saved environments even when ORCA_ENVIRONMENT is set', async () => {
-    process.env.ORCA_ENVIRONMENT = 'stale-env'
+  it('lists saved environments even when POD_ENVIRONMENT is set', async () => {
+    process.env.POD_ENVIRONMENT = 'stale-env'
     listEnvironmentsMock.mockReturnValue([addEnvironmentFromPairingCodeMock()])
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -66,8 +66,8 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy.mock.calls[0]?.[0]).not.toContain('publicKeyB64')
   })
 
-  it('adds saved environments even when ORCA_ENVIRONMENT is set', async () => {
-    process.env.ORCA_ENVIRONMENT = 'stale-env'
+  it('adds saved environments even when POD_ENVIRONMENT is set', async () => {
+    process.env.POD_ENVIRONMENT = 'stale-env'
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(

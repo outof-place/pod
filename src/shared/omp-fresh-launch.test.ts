@@ -7,7 +7,7 @@ describe('OMP fresh launch intent', () => {
     '%s adds the final overlay',
     (command) => {
       expect(withFreshOmpLaunch(command, 'posix')).toContain(
-        `${command} --config "$ORCA_OMP_FRESH_CONFIG"`
+        `${command} --config "$POD_OMP_FRESH_CONFIG"`
       )
     }
   )
@@ -40,9 +40,9 @@ describe('OMP fresh launch intent', () => {
   })
   it('quotes the host config path for each Windows shell', () => {
     expect(withFreshOmpLaunch('omp', 'powershell')).toContain(
-      'omp --config "$env:ORCA_OMP_FRESH_CONFIG"'
+      'omp --config "$env:POD_OMP_FRESH_CONFIG"'
     )
-    expect(withFreshOmpLaunch('omp', 'cmd')).toContain('omp --config "%ORCA_OMP_FRESH_CONFIG%"')
+    expect(withFreshOmpLaunch('omp', 'cmd')).toContain('omp --config "%POD_OMP_FRESH_CONFIG%"')
   })
   it('keeps fresh intent out of saved resume command and environment', () => {
     const plan = buildAgentStartupPlan({
@@ -51,8 +51,8 @@ describe('OMP fresh launch intent', () => {
       cmdOverrides: {},
       platform: 'linux'
     })
-    expect(plan?.launchCommand).toContain('--config "$ORCA_OMP_FRESH_CONFIG"')
-    expect(JSON.stringify(plan?.launchConfig)).not.toContain('ORCA_OMP_FRESH_CONFIG')
+    expect(plan?.launchCommand).toContain('--config "$POD_OMP_FRESH_CONFIG"')
+    expect(JSON.stringify(plan?.launchConfig)).not.toContain('POD_OMP_FRESH_CONFIG')
     expect(plan?.env).toBeUndefined()
   })
   it('requires host-owned configuration for fresh SSH launches', () => {
@@ -63,6 +63,6 @@ describe('OMP fresh launch intent', () => {
       platform: 'linux',
       isRemote: true
     })
-    expect(plan?.launchCommand).toContain('test -f "$ORCA_OMP_FRESH_CONFIG"')
+    expect(plan?.launchCommand).toContain('test -f "$POD_OMP_FRESH_CONFIG"')
   })
 })

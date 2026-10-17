@@ -6,7 +6,7 @@ import PodxCore
 let STATUS_HANDLERS: [String: Handler] = [
   "status": { inv in
     // Why: an agent session adds orchestration.callerShow and its refusal mapping; Node owns that.
-    if envSet("ORCA_AGENT_SESSION_ID") { throw CliError.needsNode }
+    if envSet("POD_AGENT_SESSION_ID") { throw CliError.needsNode }
     let status = try cliStatus(inv.client)
     let reachable = status["runtime"]["reachable"].truthy
     if !inv.json && !reachable {

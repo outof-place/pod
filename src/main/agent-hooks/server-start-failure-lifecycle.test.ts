@@ -126,10 +126,10 @@ describe('AgentHookServer startup failure lifecycle', () => {
         })
       ])
       expect(server.buildPtyEnv()).toMatchObject({
-        ORCA_AGENT_HOOK_ENV: 'production',
-        ORCA_AGENT_HOOK_PORT: expect.any(String),
-        ORCA_AGENT_HOOK_TOKEN: expect.any(String),
-        ORCA_AGENT_HOOK_ENDPOINT: server.endpointFilePath
+        POD_AGENT_HOOK_ENV: 'production',
+        POD_AGENT_HOOK_PORT: expect.any(String),
+        POD_AGENT_HOOK_TOKEN: expect.any(String),
+        POD_AGENT_HOOK_ENDPOINT: server.endpointFilePath
       })
       server.ingestTerminalStatus(duplicateOsc)
       expect(freshness).toHaveBeenCalledTimes(2)

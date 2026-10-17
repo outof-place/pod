@@ -1,7 +1,7 @@
 /**
  * A structured chat session with NO orchestration identity must refuse, not guess.
  *
- * Non-worker structured sessions get no `ORCA_TERMINAL_HANDLE`, so `orchestration check` fell
+ * Non-worker structured sessions get no `POD_TERMINAL_HANDLE`, so `orchestration check` fell
  * through to the active-terminal guess — and `check` is destructive by default, so it consumed
  * another pane's oldest unread batch and marked it read. The rightful worker never saw that mail.
  *
@@ -21,7 +21,7 @@ vi.mock('./selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 import { ORCHESTRATION_HANDLERS } from './handlers/orchestration'
 
 const originalMarker = process.env[ORCA_STRUCTURED_SESSION_ENV]
-const originalHandle = process.env.ORCA_TERMINAL_HANDLE
+const originalHandle = process.env.POD_TERMINAL_HANDLE
 
 function invoke(command: string, flags = new Map<string, string | boolean>()) {
   return ORCHESTRATION_HANDLERS[command]!({
@@ -36,7 +36,7 @@ describe('a structured chat session with no orchestration identity', () => {
   beforeEach(() => {
     callMock.mockReset()
     getTerminalHandleMock.mockReset()
-    delete process.env.ORCA_TERMINAL_HANDLE
+    delete process.env.POD_TERMINAL_HANDLE
     process.env[ORCA_STRUCTURED_SESSION_ENV] = '1'
     // Exactly ONE terminal pane in the worktree: the single-candidate case, where
     // `requireUnambiguous` still resolves and would hand this session a sibling's handle.
@@ -50,9 +50,9 @@ describe('a structured chat session with no orchestration identity', () => {
       process.env[ORCA_STRUCTURED_SESSION_ENV] = originalMarker
     }
     if (originalHandle === undefined) {
-      delete process.env.ORCA_TERMINAL_HANDLE
+      delete process.env.POD_TERMINAL_HANDLE
     } else {
-      process.env.ORCA_TERMINAL_HANDLE = originalHandle
+      process.env.POD_TERMINAL_HANDLE = originalHandle
     }
   })
 

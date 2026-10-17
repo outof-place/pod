@@ -70,7 +70,7 @@ describe('startup prompt control with status hooks disabled', () => {
         })
       expect((await post('/hook/opencode')).status).toBe(404)
       await server.start({ statusHooksEnabled: true })
-      expect(server.buildPtyEnv()).toHaveProperty('ORCA_AGENT_HOOK_PORT', coords.port)
+      expect(server.buildPtyEnv()).toHaveProperty('POD_AGENT_HOOK_PORT', coords.port)
       expect((await post('/hook/opencode')).status).toBe(204)
       server.setStatusHooksEnabled(false)
       expect(server.buildPtyEnv()).toEqual({})

@@ -78,8 +78,8 @@ export function finalizeLocalPtySpawnEnvironment(args: {
     logHistoryInjection(worktreeId, historyResult)
   } else {
     // Why: injectHistoryEnv is what normally clears it, so when history is off
-    // an inherited ORCA_HISTFILE would still reach the wrapper. Credit: #11146.
-    delete env.ORCA_HISTFILE
+    // an inherited POD_HISTFILE would still reach the wrapper. Credit: #11146.
+    delete env.POD_HISTFILE
     // Same for an exported `fish_history` from the fish pane that launched this
     // Orca: history off means fish's own default, not another worktree's file.
     dropInheritedOrcaFishHistory(env)
@@ -100,9 +100,9 @@ export function finalizeLocalPtySpawnEnvironment(args: {
         command: codexStartupCommand,
         startupCommandDelivery: spawn.startupCommandDelivery
       })
-    // Why delete: ORCA_SHELL_FEATURES is Orca-owned, and only the launch
+    // Why delete: POD_SHELL_FEATURES is Orca-owned, and only the launch
     // config below may name features for this shell.
-    delete env.ORCA_SHELL_FEATURES
+    delete env.POD_SHELL_FEATURES
     delete env[POSIX_SHELL_STARTUP_COMMAND_ENV]
     // Why captured now: the launch env below prefixes XDG_DATA_DIRS.
     const fishLaunch = {

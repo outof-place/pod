@@ -5,7 +5,7 @@ public let CLI_GLOBAL_FLAGS: [String] = ["help", "json", "pairing-code", "enviro
 public let CLI_GLOBAL_VALUE_FLAGS: [String] = ["pairing-code", "environment"]
 public let CLI_BOOLEAN_FLAGS: Set<String> = ["accept-changed-state", "all", "allow-failed-archive-hook", "attachments", "children", "comments", "connect", "current", "current-json", "current-sqlite", "debug", "dry-run", "enter", "focus", "grant-desktop-control", "force", "fresh", "full", "help", "inject", "include-archived", "include-remote", "include-visual-layouts", "index-status", "interrupt", "json", "latest-json", "local", "messages", "me", "mobile", "mobile-pairing", "no-pairing", "screen", "parent-current", "provision", "ready", "recipe-json", "references", "relations", "reinstall", "restore-window", "return-preamble", "run-hooks", "show-profile", "staged", "tab", "tasks", "text-stdin", "unread", "value-stdin", "wait", "yes"]
 
-public let SECRET_KEYS: Set<String> = ["launchToken", "connectionIncarnation", "attachmentId", "compatibilityEvidence", "orchestrationCompatibilityEvidence", "ORCA_AGENT_LAUNCH_TOKEN", "ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION", "ORCA_ORCHESTRATION_COMPATIBILITY_ATTACHMENT"]
+public let SECRET_KEYS: Set<String> = ["launchToken", "connectionIncarnation", "attachmentId", "compatibilityEvidence", "orchestrationCompatibilityEvidence", "POD_AGENT_LAUNCH_TOKEN", "ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION", "ORCA_ORCHESTRATION_COMPATIBILITY_ATTACHMENT"]
 
 public let AUTOMATION_OWNER_CONFLICT_RECOVERY: [(code: String, nextSteps: [String])] = [
     ("automation_owner_changed", ["The automation moved to a different host between the read and the write.", "Run the command again; it captures the current host on each attempt."]),

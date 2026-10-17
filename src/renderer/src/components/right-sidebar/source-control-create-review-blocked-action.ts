@@ -28,10 +28,10 @@ export function resolveHostedReviewAuthInstruction(provider: HostedReviewProvide
     return 'Run glab auth login'
   }
   if (provider === 'azure-devops') {
-    return 'Set ORCA_AZURE_DEVOPS_TOKEN'
+    return 'Set POD_AZURE_DEVOPS_TOKEN'
   }
   if (provider === 'gitea') {
-    return 'Set ORCA_GITEA_TOKEN'
+    return 'Set POD_GITEA_TOKEN'
   }
   if (provider === 'bitbucket') {
     return 'Connect Bitbucket in Settings > Integrations'

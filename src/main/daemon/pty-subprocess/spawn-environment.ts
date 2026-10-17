@@ -32,12 +32,12 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { PtySubprocessOptions } from '../pty-subprocess'
 
 const PANE_IDENTITY_ENV_KEYS = [
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN',
+  'POD_PANE_KEY',
+  'POD_TAB_ID',
+  'POD_WORKTREE_ID',
+  'POD_AGENT_LAUNCH_TOKEN',
   // Not identity but equally per-spawn: an inherited copy names another launch's CLI.
-  'ORCA_WSL_CLI_DIR',
+  'POD_WSL_CLI_DIR',
   'JCODE_RUNTIME_DIR'
 ] as const
 const WINDOWS_PATH_ENV_KEY_RE = /^path$/i
@@ -60,7 +60,7 @@ function deleteRequestedDaemonEnvKeys(
   env: Record<string, string>,
   keys: readonly string[] | undefined
 ): void {
-  const userDataPath = process.env.ORCA_USER_DATA_PATH
+  const userDataPath = process.env.POD_USER_DATA_PATH
   if (userDataPath) {
     for (const key of getLegacyOpenCodeEnvKeysToDelete(env, userDataPath, {})) {
       delete env[key]
@@ -68,21 +68,21 @@ function deleteRequestedDaemonEnvKeys(
   }
   // Why: persistent daemon state can differ from Electron; delete CODEX_HOME only when its Orca overlay owns it.
   const deleteOrcaOwnedCodexHome =
-    keys?.includes('ORCA_CODEX_HOME') === true &&
-    env.ORCA_CODEX_HOME !== undefined &&
-    env.CODEX_HOME === env.ORCA_CODEX_HOME
+    keys?.includes('POD_CODEX_HOME') === true &&
+    env.POD_CODEX_HOME !== undefined &&
+    env.CODEX_HOME === env.POD_CODEX_HOME
   // A merged caller config can supersede the daemon's recorded overlay source.
   if (
-    keys?.includes('ORCA_OPENCODE_CONFIG_DIR') &&
+    keys?.includes('POD_OPENCODE_CONFIG_DIR') &&
     (env.OPENCODE_CONFIG_DIR === undefined ||
-      env.OPENCODE_CONFIG_DIR === env.ORCA_OPENCODE_CONFIG_DIR)
+      env.OPENCODE_CONFIG_DIR === env.POD_OPENCODE_CONFIG_DIR)
   ) {
     restoreOrStripOverlayEnv(
       env,
       {
         primary: 'OPENCODE_CONFIG_DIR',
-        overlay: 'ORCA_OPENCODE_CONFIG_DIR',
-        source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+        overlay: 'POD_OPENCODE_CONFIG_DIR',
+        source: 'POD_OPENCODE_SOURCE_CONFIG_DIR'
       },
       {}
     )
@@ -141,7 +141,7 @@ function promoteAgentTeamsShimPath(
   env: Record<string, string>,
   requestedPath: string | undefined
 ): void {
-  if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
+  if (!env.POD_AGENT_TEAMS_TEAM_ID || !requestedPath) {
     return
   }
   const normalizedRequestedPath =
@@ -163,9 +163,9 @@ function removeInheritedDevAgentHookEndpoint(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined
 ): void {
-  if (explicitEnv?.ORCA_AGENT_HOOK_ENV === 'development' && !explicitEnv.ORCA_AGENT_HOOK_ENDPOINT) {
+  if (explicitEnv?.POD_AGENT_HOOK_ENV === 'development' && !explicitEnv.POD_AGENT_HOOK_ENDPOINT) {
     // Why: strip only stale inherited endpoints; a fresh explicit one is needed by hooks that scrub token-like env vars before exec.
-    delete env.ORCA_AGENT_HOOK_ENDPOINT
+    delete env.POD_AGENT_HOOK_ENDPOINT
   }
 }
 
@@ -180,7 +180,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',
-    TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
+    TERM_PROGRAM_VERSION: process.env.POD_APP_VERSION ?? '0.0.0-dev',
     FORCE_HYPERLINK: '1',
     [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
   } satisfies Record<string, string>
@@ -198,8 +198,8 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   if (opts.env?.HISTFILE === undefined) {
     dropInheritedOrcaHistFile(env)
   }
-  if (opts.env?.ORCA_HISTFILE === undefined) {
-    delete env.ORCA_HISTFILE
+  if (opts.env?.POD_HISTFILE === undefined) {
+    delete env.POD_HISTFILE
   }
   removeInheritedDevAgentHookEndpoint(env, opts.env)
   delete env.ELECTRON_RUN_AS_NODE
@@ -243,11 +243,11 @@ export function finalizeDaemonPtyEnvironment(
   stripPiProcessOwnerEnv(env)
   // A live daemon pins this runtime across app updates; callers cannot name the host executable.
   for (const key of Object.keys(env)) {
-    if (key.toUpperCase() === 'ORCA_AGENT_HOOK_NODE') {
+    if (key.toUpperCase() === 'POD_AGENT_HOOK_NODE') {
       delete env[key]
     }
   }
   if (process.platform === 'win32') {
-    env.ORCA_AGENT_HOOK_NODE = process.execPath
+    env.POD_AGENT_HOOK_NODE = process.execPath
   }
 }

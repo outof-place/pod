@@ -1,6 +1,6 @@
 // Why: subprocess-level test for the CLI keepalive behavior described in
 // design doc §3.4. Spawns the real compiled CLI with no TTY, points it at a
-// real in-process runtime via ORCA_USER_DATA_PATH, and asserts:
+// real in-process runtime via POD_USER_DATA_PATH, and asserts:
 //   - the first keepalive line appears on stderr well under Claude Code's
 //     ~2 min Bash-tool silence budget (we verify with a shortened interval;
 //     production uses 15 s via the same code path)
@@ -39,8 +39,8 @@ async function runBuiltCli(
   const child = spawn(process.execPath, [CLI_PATH, ...args], {
     env: {
       ...process.env,
-      ORCA_USER_DATA_PATH: userDataPath,
-      ORCA_TERMINAL_HANDLE: 'term_cli',
+      POD_USER_DATA_PATH: userDataPath,
+      POD_TERMINAL_HANDLE: 'term_cli',
       ...extraEnv
     },
     stdio: ['ignore', 'pipe', 'pipe']
@@ -83,7 +83,7 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
     await server.start()
 
     try {
-      // Why: use the ORCA_KEEPALIVE_INTERVAL_MS escape hatch to shrink the
+      // Why: use the POD_KEEPALIVE_INTERVAL_MS escape hatch to shrink the
       // test to ~1 s wall time. Production callers never set this; the
       // production default (15 s) is exercised by §3.4's own unit tests
       // and by the fact that this same code path runs with the real
@@ -105,9 +105,9 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
         {
           env: {
             ...process.env,
-            ORCA_USER_DATA_PATH: userDataPath,
-            ORCA_TERMINAL_HANDLE: 'term_nobody',
-            ORCA_KEEPALIVE_INTERVAL_MS: String(keepaliveMs)
+            POD_USER_DATA_PATH: userDataPath,
+            POD_TERMINAL_HANDLE: 'term_nobody',
+            POD_KEEPALIVE_INTERVAL_MS: String(keepaliveMs)
           },
           // Why: explicit pipe for all three fds so we can watch stderr
           // in real time; no TTY attached (Bash-tool parity).

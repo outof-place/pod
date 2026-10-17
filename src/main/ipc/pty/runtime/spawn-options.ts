@@ -86,8 +86,8 @@ export async function buildRuntimePtySpawnOptions(
     getInheritedAgentSessionStampEnvKeysToDelete(ctx.env),
     ctx.skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
     // Why: the daemon owns a persistent inherited environment that may
-    // differ from main. ORCA_CODEX_HOME asks it to compare/delete the pair.
-    ctx.stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
+    // differ from main. POD_CODEX_HOME asks it to compare/delete the pair.
+    ctx.stripInheritedOrcaCodexHome ? ['POD_CODEX_HOME'] : []
   )
   if (ctx.codexResumeHomeSelected) {
     ctx.spawnOptions.envToDelete = removeCodexHomeDeletionRequests(ctx.spawnOptions.envToDelete)

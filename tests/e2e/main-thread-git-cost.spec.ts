@@ -52,7 +52,7 @@ const PHASES: Phase[] = [
 ]
 
 test.use({
-  orcaAppExtraEnv: { ORCA_MAIN_THREAD_DIAGNOSTICS: '1', ORCA_BACKGROUND_LAUNCH: '1' }
+  orcaAppExtraEnv: { POD_MAIN_THREAD_DIAGNOSTICS: '1', ORCA_BACKGROUND_LAUNCH: '1' }
 })
 
 test.describe('main-thread git orchestration cost', () => {

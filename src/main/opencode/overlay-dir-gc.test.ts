@@ -28,8 +28,8 @@ beforeEach(() => {
   vi.stubEnv('XDG_CONFIG_HOME', join(root, 'xdg'))
   for (const key of [
     'OPENCODE_CONFIG_DIR',
-    'ORCA_OPENCODE_CONFIG_DIR',
-    'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+    'POD_OPENCODE_CONFIG_DIR',
+    'POD_OPENCODE_SOURCE_CONFIG_DIR'
   ]) {
     vi.stubEnv(key, '')
   }
@@ -222,6 +222,6 @@ it('retains handed-out and inherited source references through clearPty', async 
   age(directory)
   service.clearPty('pane')
   expect((await service.configDirGc.run(async () => [])).keptReferenced).toBe(1)
-  vi.stubEnv('ORCA_OPENCODE_SOURCE_CONFIG_DIR', source)
+  vi.stubEnv('POD_OPENCODE_SOURCE_CONFIG_DIR', source)
   expect((await new OpenCodeHookService().configDirGc.run(async () => [])).keptReferenced).toBe(1)
 })

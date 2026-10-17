@@ -26,7 +26,7 @@ export function posixStateMutationPidRecord(lock: string, onTaken: string): stri
 /** The holder's own process group, recorded only when it was started as one. */
 export function posixStateMutationGroupRecord(lock: string): string {
   return [
-    'if [ "${ORCA_STATE_MUTATION_GROUP:-}" = 1 ]; then',
+    'if [ "${POD_STATE_MUTATION_GROUP:-}" = 1 ]; then',
     `group=$(${posixProcessGroupCommand('$$')});`,
     `case "$group" in ""|*[!0-9]*) ;; *) echo "$group" > ${lock}/pgid;; esac; fi;`
   ].join(' ')

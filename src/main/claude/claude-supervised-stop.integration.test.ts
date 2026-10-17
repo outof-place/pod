@@ -50,10 +50,10 @@ const OWNER = String.raw`
   const { spawn } = require('node:child_process')
   const spec = JSON.parse(process.env.ORCA_TEST_SPAWN_SPEC)
   const env = { ...spec.env }
-  if (env.ORCA_PROVIDER_SUPERVISOR_SPEC) {
-    const supervisor = JSON.parse(Buffer.from(env.ORCA_PROVIDER_SUPERVISOR_SPEC, 'base64').toString())
+  if (env.POD_PROVIDER_SUPERVISOR_SPEC) {
+    const supervisor = JSON.parse(Buffer.from(env.POD_PROVIDER_SUPERVISOR_SPEC, 'base64').toString())
     supervisor.ownerPid = process.pid
-    env.ORCA_PROVIDER_SUPERVISOR_SPEC = Buffer.from(JSON.stringify(supervisor)).toString('base64')
+    env.POD_PROVIDER_SUPERVISOR_SPEC = Buffer.from(JSON.stringify(supervisor)).toString('base64')
   }
   const child = spawn(spec.program, spec.args, {
     cwd: spec.cwd,

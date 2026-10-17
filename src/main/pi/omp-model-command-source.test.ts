@@ -61,7 +61,7 @@ describe('OMP model command', () => {
   it('does not register for Pi or an inherited child owner', () => {
     expect(createAgentStatusExtensionHarness({ kind: 'pi' }).commands).toEqual({})
     expect(
-      createAgentStatusExtensionHarness({ kind: 'omp', env: { ORCA_PI_STATUS_OWNED: '123' } })
+      createAgentStatusExtensionHarness({ kind: 'omp', env: { POD_PI_STATUS_OWNED: '123' } })
         .commands
     ).toEqual({})
   })

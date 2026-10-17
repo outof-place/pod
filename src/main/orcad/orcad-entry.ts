@@ -64,7 +64,7 @@ function createNodeAppEnvironment(): AppEnvironment {
   return {
     getPath: resolveOrcadPath,
     getAppPath: () => resolveOrcadInstallRoot(),
-    getVersion: () => process.env.ORCA_VERSION ?? '0.0.0-orcad',
+    getVersion: () => process.env.POD_VERSION ?? '0.0.0-orcad',
     // Why still true: consumers read this as "production build, not a dev checkout" —
     // it gates HTTPS-only skill downloads, the real CLI command name, and shell-PATH
     // hydration. Answering false to satisfy a path resolver would relax a security

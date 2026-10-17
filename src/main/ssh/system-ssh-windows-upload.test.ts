@@ -188,7 +188,7 @@ beforeEach(() => {
   clearWindowsRemoteWriteCapabilitiesForTests()
   waitForChannelCloseSpy.mockClear()
   localDir = mkdtempSync(join(tmpdir(), 'orca-win-upload-'))
-  process.env.ORCA_SYSTEM_SFTP_PATH = '/usr/bin/sftp'
+  process.env.POD_SYSTEM_SFTP_PATH = '/usr/bin/sftp'
   runProcessMock.mockReset()
   acceptSftp()
   spawnSystemSshCommandMock.mockReset()
@@ -213,7 +213,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
-  delete process.env.ORCA_SYSTEM_SFTP_PATH
+  delete process.env.POD_SYSTEM_SFTP_PATH
   await rm(localDir, { recursive: true, force: true })
 })
 

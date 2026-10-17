@@ -699,7 +699,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('adopts preallocated ORCA_TERMINAL_HANDLE as a valid runtime handle', async () => {
+  it('adopts preallocated POD_TERMINAL_HANDLE as a valid runtime handle', async () => {
     const runtime = new OrcaRuntimeService(store)
     const handle = runtime.preAllocateHandleForPty('pty-1')
 

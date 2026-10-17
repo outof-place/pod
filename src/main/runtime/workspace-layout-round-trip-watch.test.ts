@@ -38,7 +38,7 @@ describe('the round-trip watch on Store writes', () => {
     expect(shouldWatchLayoutRoundTrip({ NODE_ENV: 'production' })).toBe(false)
     expect(shouldWatchLayoutRoundTrip({ NODE_ENV: 'development' })).toBe(true)
     expect(shouldWatchLayoutRoundTrip({ ORCA_E2E_USER_DATA_DIR: '/e2e' })).toBe(true)
-    expect(shouldWatchLayoutRoundTrip({ ORCA_LAYOUT_ROUND_TRIP_CHECK: '1' })).toBe(true)
+    expect(shouldWatchLayoutRoundTrip({ POD_LAYOUT_ROUND_TRIP_CHECK: '1' })).toBe(true)
   })
 
   it('checks a settled burst once, logs findings by kind, and skips unchanged partitions', () => {

@@ -144,8 +144,8 @@ describe('buildSetupRunnerCommand cmd metacharacter guard', () => {
     )
 
     expect(script).toContain(`$runner = '${runnerScriptPath}'`)
-    expect(script).toContain('$processInfo.EnvironmentVariables["ORCA_SETUP_RUNNER"] = $runner')
-    expect(script).toContain('/d /s /v:on /c ""!ORCA_SETUP_RUNNER!""')
+    expect(script).toContain('$processInfo.EnvironmentVariables["POD_SETUP_RUNNER"] = $runner')
+    expect(script).toContain('/d /s /v:on /c ""!POD_SETUP_RUNNER!""')
     // Why: the whole point of the guard is that the hostile path never reaches cmd as syntax.
     expect(script).not.toContain(`/c ""${runnerScriptPath}""`)
     expect(script).toContain('$processInfo.UseShellExecute = $false')

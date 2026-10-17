@@ -137,7 +137,7 @@ describe('SshRelaySession', () => {
       clientInstanceId: options.clientInstanceId,
       serverBuildId: 'test-relay-build'
     }))
-    delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+    delete process.env.POD_FEATURE_REMOTE_AGENT_HOOKS
     muxRequestMock.mockReset()
     muxRequestMock.mockResolvedValue([])
     mockDeploySuccess()
@@ -227,7 +227,7 @@ describe('SshRelaySession', () => {
   })
 
   it('continues provider registration when the relay managed-hook request fails', async () => {
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    process.env.POD_FEATURE_REMOTE_AGENT_HOOKS = '1'
     muxRequestMock.mockImplementation(async (method: string) => {
       if (method === 'preflight.detectAgents') {
         return { agents: ['codex'] }
@@ -255,7 +255,7 @@ describe('SshRelaySession', () => {
   })
 
   it('suppresses expected managed-hook teardown errors during disconnect', async () => {
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    process.env.POD_FEATURE_REMOTE_AGENT_HOOKS = '1'
     muxRequestMock.mockImplementation(async (method: string) => {
       if (method === 'preflight.detectAgents') {
         return { agents: ['codex'] }
@@ -286,7 +286,7 @@ describe('SshRelaySession', () => {
   })
 
   it('does not run POSIX managed hook installers on Windows remotes', async () => {
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    process.env.POD_FEATURE_REMOTE_AGENT_HOOKS = '1'
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const mockConn = {
       writeFile: vi.fn().mockResolvedValue(undefined)
@@ -319,7 +319,7 @@ describe('SshRelaySession', () => {
   })
 
   it('does not register providers if dispose wins during initial plugin sync', async () => {
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    process.env.POD_FEATURE_REMOTE_AGENT_HOOKS = '1'
     let resolvePluginInstall!: () => void
     muxRequestMock.mockImplementation(async (method: string) => {
       if (method === AGENT_HOOK_INSTALL_PLUGINS_METHOD) {
@@ -419,7 +419,7 @@ describe('SshRelaySession', () => {
       { hostPlatform: getRemoteHostPlatform('win32-x64') }
     )
     const launcherSource = vi.mocked(mockConn.writeFile).mock.calls[0]?.[1] as string
-    expect(launcherSource).toContain('ORCA_RELAY_SOCKET_PATH')
+    expect(launcherSource).toContain('POD_RELAY_SOCKET_PATH')
     expect(launcherSource).not.toContain('cmd.exe')
     expect(launcherSource).not.toContain('%*')
     expect(vi.mocked(execCommand).mock.calls[1]?.[1]).toContain('powershell.exe')

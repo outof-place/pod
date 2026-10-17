@@ -99,7 +99,7 @@ def _jsonable(value: Any, depth: int = 0, budget: Optional[list[int]] = None) ->
 
 def _endpoint_env() -> dict[str, str]:
     env = dict(os.environ)
-    endpoint = env.get("ORCA_AGENT_HOOK_ENDPOINT", "")
+    endpoint = env.get("POD_AGENT_HOOK_ENDPOINT", "")
     if endpoint and os.path.isfile(endpoint):
         try:
             with open(endpoint, "r", encoding="utf-8") as f:
@@ -119,18 +119,18 @@ def _endpoint_env() -> dict[str, str]:
 
 def _post_to_orca(payload: dict[str, Any]) -> None:
     env = _endpoint_env()
-    port = env.get("ORCA_AGENT_HOOK_PORT", "")
-    token = env.get("ORCA_AGENT_HOOK_TOKEN", "")
-    pane_key = env.get("ORCA_PANE_KEY", "")
+    port = env.get("POD_AGENT_HOOK_PORT", "")
+    token = env.get("POD_AGENT_HOOK_TOKEN", "")
+    pane_key = env.get("POD_PANE_KEY", "")
     if not port or not token or not pane_key:
         return
     body = {
         "paneKey": pane_key,
-        "launchToken": env.get("ORCA_AGENT_LAUNCH_TOKEN", ""),
-        "tabId": env.get("ORCA_TAB_ID", ""),
-        "worktreeId": env.get("ORCA_WORKTREE_ID", ""),
-        "env": env.get("ORCA_AGENT_HOOK_ENV", ""),
-        "version": env.get("ORCA_AGENT_HOOK_VERSION", ""),
+        "launchToken": env.get("POD_AGENT_LAUNCH_TOKEN", ""),
+        "tabId": env.get("POD_TAB_ID", ""),
+        "worktreeId": env.get("POD_WORKTREE_ID", ""),
+        "env": env.get("POD_AGENT_HOOK_ENV", ""),
+        "version": env.get("POD_AGENT_HOOK_VERSION", ""),
         "payload": payload,
     }
     data = json.dumps(body, separators=(",", ":")).encode("utf-8")

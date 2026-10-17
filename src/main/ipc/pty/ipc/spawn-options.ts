@@ -36,7 +36,7 @@ export async function buildPtyIpcSpawnOptions(
   const args = ctx.args
   // Why here: every provider (local, daemon, SSH relay, WSL) spawns from this env.
   ctx.spawnEnv = withCodexTerminalServerIsolationEnv(
-    ctx.preAllocatedHandle ? { ...ctx.env, ORCA_TERMINAL_HANDLE: ctx.preAllocatedHandle } : ctx.env,
+    ctx.preAllocatedHandle ? { ...ctx.env, POD_TERMINAL_HANDLE: ctx.preAllocatedHandle } : ctx.env,
     ctx.deps.getSettings?.()
   )
   ctx.combinedEnvToDelete = mergePtyEnvDeletions(
@@ -55,7 +55,7 @@ export async function buildPtyIpcSpawnOptions(
     ctx.skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
     // Why: the persistent daemon compares its own merged CODEX_HOME pair;
     // main cannot safely decide ownership for a process it may not parent.
-    ctx.stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
+    ctx.stripInheritedOrcaCodexHome ? ['POD_CODEX_HOME'] : []
   )
   if (ctx.codexResumeHomeSelected) {
     ctx.combinedEnvToDelete = removeCodexHomeDeletionRequests(ctx.combinedEnvToDelete)

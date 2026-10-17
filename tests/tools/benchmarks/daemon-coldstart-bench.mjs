@@ -172,7 +172,7 @@ function runIteration({ exe, fixtureDir, timeoutMs, lingerMs }) {
     mkdirSync(isolatedHome, { recursive: true })
     const env = {
       ...process.env,
-      ORCA_STARTUP_DIAGNOSTICS: '1',
+      POD_STARTUP_DIAGNOSTICS: '1',
       ORCA_E2E_USER_DATA_DIR: fixtureDir,
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,
@@ -180,7 +180,7 @@ function runIteration({ exe, fixtureDir, timeoutMs, lingerMs }) {
       ORCA_E2E_HEADLESS: '1'
     }
     delete env.CODEX_HOME
-    delete env.ORCA_CODEX_HOME
+    delete env.POD_CODEX_HOME
     const child = spawn(command, commandArgs, {
       env,
       stdio: ['ignore', 'ignore', 'pipe']

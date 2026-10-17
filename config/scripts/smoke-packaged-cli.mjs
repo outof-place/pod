@@ -40,7 +40,7 @@ try {
   await cp(appDir, copiedAppDir, { recursive: true, verbatimSymlinks: true })
   const cliPath = getPackagedCliPath(copiedAppDir)
   const env = { ...process.env, NODE_PATH: '' }
-  delete env.ORCA_CLI_CWD
+  delete env.POD_CLI_CWD
   const run = (args) =>
     execFileAsync(cliPath, args, {
       env,

@@ -51,7 +51,7 @@ export function resolveWslInteropSpawnCwd(): string | undefined {
   // A root is fine here — nothing scans this directory, it is only the value
   // `CreateProcessW` receives for `lpCurrentDirectory`.
   const candidates: (string | undefined)[] = [
-    env.ORCA_USER_DATA_PATH,
+    env.POD_USER_DATA_PATH,
     env.USERPROFILE,
     env.HOMEDRIVE && env.HOMEPATH ? `${env.HOMEDRIVE}${env.HOMEPATH}` : undefined,
     homedir(),

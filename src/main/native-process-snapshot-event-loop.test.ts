@@ -106,7 +106,7 @@ main().catch((error) => { console.error(error); process.exitCode = 1 })`
         env: {
           ...process.env,
           ORCA_BACKGROUND_LAUNCH: '1',
-          ORCA_DISABLE_NATIVE_PROCESS_INFO: '0'
+          POD_DISABLE_NATIVE_PROCESS_INFO: '0'
         }
       })
     )

@@ -51,7 +51,7 @@ let cachedSecret: BitbucketStoredSecret | null = null
 let credentialError: string | null = null
 
 function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+  return join(homedir(), '.pod')
 }
 
 function getMetadataPath(): string {

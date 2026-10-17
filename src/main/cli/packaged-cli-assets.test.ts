@@ -123,7 +123,7 @@ describe('packaged CLI assets', () => {
           ORCA_BACKGROUND_LAUNCH: '1',
           NODE_PATH: '',
           NODE_OPTIONS: '',
-          ORCA_USER_DATA_PATH: join(root, 'user-data'),
+          POD_USER_DATA_PATH: join(root, 'user-data'),
           HOME: join(root, 'home')
         },
         timeoutMs: 10_000
@@ -362,9 +362,9 @@ node -e 'console.log(JSON.stringify({
   argv: process.argv.slice(1),
   runAsNode: process.env.ELECTRON_RUN_AS_NODE,
   nodeOptions: process.env.NODE_OPTIONS ?? null,
-  orcaNodeOptions: process.env.ORCA_NODE_OPTIONS ?? null,
+  orcaNodeOptions: process.env.POD_NODE_OPTIONS ?? null,
   nodeReplExternalModule: process.env.NODE_REPL_EXTERNAL_MODULE ?? null,
-  orcaNodeReplExternalModule: process.env.ORCA_NODE_REPL_EXTERNAL_MODULE ?? null
+  orcaNodeReplExternalModule: process.env.POD_NODE_REPL_EXTERNAL_MODULE ?? null
 }))' -- "$@"
 `,
         { encoding: 'utf8', mode: 0o755 }

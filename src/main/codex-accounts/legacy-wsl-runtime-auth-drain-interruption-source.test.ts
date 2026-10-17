@@ -16,7 +16,7 @@ function fixture(rows: CensusResult[], ownedPid = '100') {
     census.mockReturnValueOnce(row)
   }
   const context = {
-    process: { pid: 300, env: { ORCA_DRAIN_APPLY_PID: ownedPid }, kill },
+    process: { pid: 300, env: { POD_DRAIN_APPLY_PID: ownedPid }, kill },
     require: () => ({ spawnSync: census })
   }
   return {

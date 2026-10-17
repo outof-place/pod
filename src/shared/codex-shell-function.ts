@@ -17,9 +17,9 @@ if [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
-    local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}"
-    if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
-      "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+    local __orca_codex_arg __orca_codex_isolate="\${POD_CODEX_ISOLATE:-1}"
+    if [[ -n "\${POD_CODEX_LAUNCH_PREFLIGHT:-}" && -x "\${POD_CODEX_LAUNCH_PREFLIGHT}" ]]; then
+      "\${POD_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     fi
     for __orca_codex_arg in "$@"; do
       case "$__orca_codex_arg" in ${CODEX_SHARED_SERVER_ARGS.join('|')}|--remote=*) __orca_codex_isolate=0 ;; esac
@@ -42,10 +42,10 @@ export function getFishCodexShellLaunchPreflight(): string {
 set -l __orca_codex_type (type -t codex 2>/dev/null)
 if test "$__orca_codex_type" = file
   function codex
-    if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"
-      command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
+    if test -x "$POD_CODEX_LAUNCH_PREFLIGHT"
+      command "$POD_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
     end
-    if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_SHARED_SERVER_ARG_PATTERN}' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
+    if test "$POD_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_SHARED_SERVER_ARG_PATTERN}' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
       set argv --no-daemon $argv
     end
     command codex $argv
@@ -67,13 +67,13 @@ if ($orcaCodexCommand -and
         }
         $orcaCodexFlags = @()
         # Why try/catch: under the user's $ErrorActionPreference = 'Stop', a failing prep or probe must not abort the launch.
-        if ($env:ORCA_CODEX_LAUNCH_PREFLIGHT) {
+        if ($env:POD_CODEX_LAUNCH_PREFLIGHT) {
             try {
-                & $env:ORCA_CODEX_LAUNCH_PREFLIGHT agent hooks prepare-codex *> $null
+                & $env:POD_CODEX_LAUNCH_PREFLIGHT agent hooks prepare-codex *> $null
             } catch {
             }
         }
-        if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_SHARED_SERVER_ARG_PATTERN}')) {
+        if ($env:POD_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_SHARED_SERVER_ARG_PATTERN}')) {
             try {
                 if ((& $orcaCodexExecutable.Source --help 2>$null) -match '--no-daemon') {
                     $orcaCodexFlags = @('--no-daemon')

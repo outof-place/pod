@@ -311,7 +311,7 @@ describe('registerPtyHandlers', () => {
       cols: 80,
       rows: 24,
       worktreeId: 'wt-1',
-      env: { ORCA_PANE_KEY: ` ${paneKey} ` }
+      env: { POD_PANE_KEY: ` ${paneKey} ` }
     })
     const replacementGen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
       paneKey
@@ -373,7 +373,7 @@ describe('registerPtyHandlers', () => {
         cols: 80,
         rows: 24,
         worktreeId: 'wt-1',
-        env: { ORCA_PANE_KEY: paneKey }
+        env: { POD_PANE_KEY: paneKey }
       })
     }
 
@@ -454,7 +454,7 @@ describe('registerPtyHandlers', () => {
     expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
     expect(sender.once).not.toHaveBeenCalled()
   })
-  it('ignores renderer-provided ORCA_TERMINAL_HANDLE for local PTY spawns', async () => {
+  it('ignores renderer-provided POD_TERMINAL_HANDLE for local PTY spawns', async () => {
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -468,13 +468,13 @@ describe('registerPtyHandlers', () => {
     await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24,
-      env: { ORCA_TERMINAL_HANDLE: 'term_untrusted', ORCA_WSL_CLI_DIR: 'C:\\stale' }
+      env: { POD_TERMINAL_HANDLE: 'term_untrusted', POD_WSL_CLI_DIR: 'C:\\stale' }
     })
 
     const spawnCall = spawnMock.mock.calls.at(-1)!
     const env = spawnCall[2].env as Record<string, string>
-    expect(env.ORCA_TERMINAL_HANDLE).toBe('term_trusted')
-    expect(env.ORCA_WSL_CLI_DIR).toBeUndefined()
+    expect(env.POD_TERMINAL_HANDLE).toBe('term_trusted')
+    expect(env.POD_WSL_CLI_DIR).toBeUndefined()
     expect(runtime.preAllocateHandleForPty).toHaveBeenCalledWith(expect.any(String))
   })
   it('forwards the trusted Orca terminal handle into managed WSL terminals', async () => {
@@ -508,25 +508,25 @@ describe('registerPtyHandlers', () => {
     const spawnCall = spawnMock.mock.calls.at(-1)!
     const env = spawnCall[2].env as Record<string, string>
     expect(spawnCall[0]).toBe('wsl.exe')
-    expect(env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
-    expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
-    expect(env.ORCA_CLI_COMMAND).toBe('orca-ide')
-    expect(env.ORCA_WSL_CLI_DIR).toBe('C:\\orca-user-data\\wsl-managed-cli\\hash')
+    expect(env.POD_TERMINAL_HANDLE).toBe('term_wsl')
+    expect(env.POD_USER_DATA_PATH).toBe('/tmp/orca-user-data')
+    expect(env.POD_CLI_COMMAND).toBe('orca-ide')
+    expect(env.POD_WSL_CLI_DIR).toBe('C:\\orca-user-data\\wsl-managed-cli\\hash')
     expect(env.WSLENV?.split(':')).toEqual(
       expect.arrayContaining([
-        'ORCA_TERMINAL_HANDLE/u',
-        'ORCA_USER_DATA_PATH/p',
-        'ORCA_CLI_COMMAND/u',
-        'ORCA_WSL_CLI_DIR/p',
-        'ORCA_AGENT_HOOK_PORT/u',
-        'ORCA_AGENT_HOOK_TOKEN/u',
+        'POD_TERMINAL_HANDLE/u',
+        'POD_USER_DATA_PATH/p',
+        'POD_CLI_COMMAND/u',
+        'POD_WSL_CLI_DIR/p',
+        'POD_AGENT_HOOK_PORT/u',
+        'POD_AGENT_HOOK_TOKEN/u',
         // Why: bare WSL shells no longer create ~/.omp; only status extension is exported (#10196).
-        'ORCA_OMP_STATUS_EXTENSION/u',
+        'POD_OMP_STATUS_EXTENSION/u',
         'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
       ])
     )
     expect(env.WSLENV?.split(':')).not.toEqual(
-      expect.arrayContaining(['ORCA_OMP_SOURCE_AGENT_DIR/p'])
+      expect.arrayContaining(['POD_OMP_SOURCE_AGENT_DIR/p'])
     )
   })
   it('forces managed WSL env over stale caller values, even when CLI setup fails', async () => {
@@ -551,8 +551,8 @@ describe('registerPtyHandlers', () => {
         rows: 24,
         shellOverride: 'wsl.exe',
         env: {
-          ORCA_USER_DATA_PATH: '/tmp/stale-orca-user-data',
-          ORCA_WSL_CLI_DIR: '/tmp/stale-wsl-cli'
+          POD_USER_DATA_PATH: '/tmp/stale-orca-user-data',
+          POD_WSL_CLI_DIR: '/tmp/stale-wsl-cli'
         }
       })
     } finally {
@@ -564,7 +564,7 @@ describe('registerPtyHandlers', () => {
     const spawnCall = spawnMock.mock.calls.at(-1)!
     const env = spawnCall[2].env as Record<string, string>
     expect(spawnCall[0]).toBe('wsl.exe')
-    expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
-    expect(env.ORCA_WSL_CLI_DIR).toBeUndefined()
+    expect(env.POD_USER_DATA_PATH).toBe('/tmp/orca-user-data')
+    expect(env.POD_WSL_CLI_DIR).toBeUndefined()
   })
 })

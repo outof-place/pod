@@ -54,8 +54,8 @@ describe('OpenCode startup prompt installer', () => {
     writeFileSync(join(foreign, 'untouched.txt'), 'foreign bytes')
     const env: Record<string, string> = {
       OPENCODE_CONFIG_DIR: source,
-      ORCA_OPENCODE_PLUGIN_API: 'v2',
-      ORCA_OPENCODE_STARTUP_PROMPT_NONCE: 'replaced-overlay'
+      POD_OPENCODE_PLUGIN_API: 'v2',
+      POD_OPENCODE_STARTUP_PROMPT_NONCE: 'replaced-overlay'
     }
     const config = captureOpenCodeSourceConfig(env, join(root, 'profile'))
     applyOpenCodeStatusPluginEnv(
@@ -71,7 +71,7 @@ describe('OpenCode startup prompt installer', () => {
     rmSync(env.OPENCODE_CONFIG_DIR, { recursive: true })
     symlinkSync(foreign, env.OPENCODE_CONFIG_DIR, 'junction')
     expect(installOpenCodeStartupPromptForLaunch(env)).toBe(false)
-    expect(env.ORCA_OPENCODE_STARTUP_PROMPT_NONCE).toBeUndefined()
+    expect(env.POD_OPENCODE_STARTUP_PROMPT_NONCE).toBeUndefined()
     expect(readFileSync(join(foreign, 'untouched.txt'), 'utf8')).toBe('foreign bytes')
     expect(existsSync(join(foreign, 'plugins'))).toBe(false)
   })
@@ -84,11 +84,11 @@ describe('OpenCode startup prompt installer', () => {
       writeFileSync(join(source, 'opencode.json'), '{"model":"selected/model"}')
       const env: Record<string, string> = {
         OPENCODE_CONFIG_DIR: source,
-        ORCA_OPENCODE_PLUGIN_API: 'v2',
-        ORCA_OPENCODE_STARTUP_PROMPT_NONCE: 'source-provenance'
+        POD_OPENCODE_PLUGIN_API: 'v2',
+        POD_OPENCODE_STARTUP_PROMPT_NONCE: 'source-provenance'
       }
       expect(installOpenCodeStartupPromptForLaunch(env, false)).toBe(true)
-      expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe(source)
+      expect(env.POD_OPENCODE_SOURCE_CONFIG_DIR).toBe(source)
       const captured = captureOpenCodeSourceConfig(env, join(root, 'profile'))
       expect(captured.directory).toBe(source)
       applyOpenCodeStatusPluginEnv(
@@ -104,7 +104,7 @@ describe('OpenCode startup prompt installer', () => {
       const statusOverlay = env.OPENCODE_CONFIG_DIR
       expect(installOpenCodeStartupPromptForLaunch(env)).toBe(true)
       expect(env.OPENCODE_CONFIG_DIR).toBe(statusOverlay)
-      expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe(source)
+      expect(env.POD_OPENCODE_SOURCE_CONFIG_DIR).toBe(source)
       expect(
         readFileSync(join(statusOverlay, 'plugins', `orca-${agent}-status.js`), 'utf8')
       ).toContain('ORCA_STATUS_AGENT')
@@ -114,11 +114,11 @@ describe('OpenCode startup prompt installer', () => {
       expect(readFileSync(join(statusOverlay, 'plugins', 'user.js'), 'utf8')).toBe('user bytes')
       const nested: Record<string, string> = {
         ...env,
-        ORCA_OPENCODE_STARTUP_PROMPT_NONCE: 'nested-source-provenance'
+        POD_OPENCODE_STARTUP_PROMPT_NONCE: 'nested-source-provenance'
       }
       expect(installOpenCodeStartupPromptForLaunch(nested)).toBe(true)
       expect(nested.OPENCODE_CONFIG_DIR).toBe(statusOverlay)
-      expect(nested.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe(source)
+      expect(nested.POD_OPENCODE_SOURCE_CONFIG_DIR).toBe(source)
       expect(readFileSync(join(source, 'plugins', 'user.js'), 'utf8')).toBe('user bytes')
       expect(existsSync(join(source, 'plugins', `orca-${agent}-status.js`))).toBe(false)
     }
@@ -133,8 +133,8 @@ describe('OpenCode startup prompt installer', () => {
       writeFileSync(join(config, 'plugins', 'user.js'), 'user entry')
       writeFileSync(join(config, 'opencode.json'), '{"model":"selected/model"}')
       const env: Record<string, string> = {
-        ORCA_OPENCODE_PLUGIN_API: 'v2',
-        ORCA_OPENCODE_STARTUP_PROMPT_NONCE: 'sparse-launch',
+        POD_OPENCODE_PLUGIN_API: 'v2',
+        POD_OPENCODE_STARTUP_PROMPT_NONCE: 'sparse-launch',
         ...(selection === 'explicit' ? { XDG_CONFIG_HOME: configHome } : {})
       }
       expect(installOpenCodeStartupPromptForLaunch(env)).toBe(true)
@@ -155,8 +155,8 @@ describe('OpenCode startup prompt installer', () => {
     mkdirSync(join(selected, 'opencode', 'plugins'), { recursive: true })
     writeFileSync(join(selected, 'opencode', 'plugins', 'user.js'), 'resolved entry')
     const env: Record<string, string> = {
-      ORCA_OPENCODE_PLUGIN_API: 'v2',
-      ORCA_OPENCODE_STARTUP_PROMPT_NONCE: 'resolved-launch'
+      POD_OPENCODE_PLUGIN_API: 'v2',
+      POD_OPENCODE_STARTUP_PROMPT_NONCE: 'resolved-launch'
     }
     expect(installOpenCodeStartupPromptForLaunch(env, false, { XDG_CONFIG_HOME: selected })).toBe(
       true
@@ -164,7 +164,7 @@ describe('OpenCode startup prompt installer', () => {
     expect(readFileSync(join(env.OPENCODE_CONFIG_DIR, 'plugins', 'user.js'), 'utf8')).toBe(
       'resolved entry'
     )
-    expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+    expect(env.POD_OPENCODE_CONFIG_DIR).toBeUndefined()
   })
 
   it.each(['inherited', 'explicit'] as const)(
@@ -178,8 +178,8 @@ describe('OpenCode startup prompt installer', () => {
       }
       vi.stubEnv('OPENCODE_CONFIG_DIR', ambient)
       const env: Record<string, string> = {
-        ORCA_OPENCODE_PLUGIN_API: 'v2',
-        ORCA_OPENCODE_STARTUP_PROMPT_NONCE: 'custom-config-launch',
+        POD_OPENCODE_PLUGIN_API: 'v2',
+        POD_OPENCODE_STARTUP_PROMPT_NONCE: 'custom-config-launch',
         ...(selection === 'explicit' ? { OPENCODE_CONFIG_DIR: selected } : {})
       }
       expect(installOpenCodeStartupPromptForLaunch(env)).toBe(true)
@@ -192,8 +192,8 @@ describe('OpenCode startup prompt installer', () => {
   it('keeps a missing user config untouched and installs the launch into an owned overlay', () => {
     const source = join(root, 'missing-user-config')
     const env: Record<string, string> = {
-      ORCA_OPENCODE_PLUGIN_API: 'v2',
-      ORCA_OPENCODE_STARTUP_PROMPT_NONCE: 'private-launch',
+      POD_OPENCODE_PLUGIN_API: 'v2',
+      POD_OPENCODE_STARTUP_PROMPT_NONCE: 'private-launch',
       OPENCODE_CONFIG_DIR: source,
       OPENCODE_CONFIG_CONTENT: '{"model":"opencode/model"}'
     }
@@ -202,7 +202,7 @@ describe('OpenCode startup prompt installer', () => {
     expect(env.OPENCODE_CONFIG_DIR).toContain(
       join(root, 'profile', 'opencode-startup-prompt-overlays')
     )
-    expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe(env.OPENCODE_CONFIG_DIR)
+    expect(env.POD_OPENCODE_CONFIG_DIR).toBe(env.OPENCODE_CONFIG_DIR)
     expect(env.OPENCODE_CONFIG_CONTENT).toBe('{"model":"opencode/model"}')
     expect(
       existsSync(join(env.OPENCODE_CONFIG_DIR, 'plugins', 'orca-opencode-startup-prompt', 'tui.js'))

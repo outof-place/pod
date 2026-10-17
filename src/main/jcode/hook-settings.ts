@@ -49,13 +49,13 @@ export function getJcodeManagedScriptPath(): string {
 }
 
 export function getSharedJcodeScriptPath(scriptFileName: string): string {
-  return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
+  return join(homedir(), '.pod', 'agent-hooks', scriptFileName)
 }
 
 // Why quoted: jcode executes hook commands directly (no shell), but it tokenizes the
 // configured string shell-style first — parse_hook_command in jcode-terminal-launch
 // splits on unquoted whitespace AND consumes every unquoted backslash as an escape, so
-// a bare `C:\Users\me\.orca\agent-hooks\jcode-hook.cmd` reaches exec as
+// a bare `C:\Users\me\.pod\agent-hooks\jcode-hook.cmd` reaches exec as
 // `C:Usersme.orcaagent-hooksjcode-hook.cmd` and no Windows hook ever fires. Single
 // quotes pass the path through verbatim (backslashes are literal inside them); a path
 // that itself contains one falls back to double quotes, where \ and " are the escapes.

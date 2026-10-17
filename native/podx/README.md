@@ -6,7 +6,7 @@ a call no longer boots Electron as Node.
 
 Everything else goes to the Node CLI unchanged: the binary execs `podx-node` (the bash launcher the
 packaging keeps next to it) before it sends any request. That covers unported commands, `--help`,
-flag errors, remote targets (`--host`, `--environment`, `ORCA_PAIRING_CODE`, SSH bridges) and
+flag errors, remote targets (`--host`, `--environment`, `POD_PAIRING_CODE`, SSH bridges) and
 `POD_NATIVE_CLI=0`. Read-only lookups may run before a fallback; a mutation never does.
 
 ## Contract

@@ -83,17 +83,17 @@ beforeEach(() => {
   mkdirSync(home)
   userDataDir = join(root, 'user-data')
   mkdirSync(userDataDir)
-  previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-  process.env.ORCA_USER_DATA_PATH = userDataDir
+  previousUserDataPath = process.env.POD_USER_DATA_PATH
+  process.env.POD_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(home)
 })
 
 afterEach(() => {
   rmSync(root, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.POD_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    process.env.POD_USER_DATA_PATH = previousUserDataPath
   }
   vi.clearAllMocks()
   vi.restoreAllMocks()

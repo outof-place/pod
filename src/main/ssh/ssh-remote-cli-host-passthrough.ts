@@ -84,11 +84,11 @@ export class HostCliUnavailableError extends Error {}
 
 // Only terminal identity may cross hosts; remote paths and Node options cannot.
 const REMOTE_CONTEXT_ENV_VARS = [
-  'ORCA_TERMINAL_HANDLE',
-  'ORCA_WORKTREE_ID',
-  'ORCA_PANE_KEY',
-  'ORCA_AGENT_LAUNCH_TOKEN',
-  'ORCA_WORKSPACE_ID'
+  'POD_TERMINAL_HANDLE',
+  'POD_WORKTREE_ID',
+  'POD_PANE_KEY',
+  'POD_AGENT_LAUNCH_TOKEN',
+  'POD_WORKSPACE_ID'
 ] as const
 
 // Bound output retained for the relay response.
@@ -125,17 +125,17 @@ export function buildHostCliEnv(args: {
   }
   // Why: bind the subprocess to this app instance's runtime metadata (dev and
   // parallel instances use non-default userData dirs).
-  env.ORCA_USER_DATA_PATH = args.userDataPath
+  env.POD_USER_DATA_PATH = args.userDataPath
   // Why: the caller's working directory lives on the remote machine, so the
-  // subprocess cwd cannot be chdir'd there; ORCA_CLI_CWD carries it for
+  // subprocess cwd cannot be chdir'd there; POD_CLI_CWD carries it for
   // cwd-based selectors like `--worktree active`.
-  env.ORCA_CLI_CWD = args.remoteCwd
+  env.POD_CLI_CWD = args.remoteCwd
   // Why: recovery commands run on the SSH execution host through its relay shim.
-  env.ORCA_CLI_COMMAND = 'orca'
+  env.POD_CLI_COMMAND = 'orca'
   // Why: same node-mode hygiene as the shipped CLI launchers — stash and clear
   // NODE_OPTIONS so Electron's node bootstrap does not inherit them.
-  env.ORCA_NODE_OPTIONS = args.hostEnv.NODE_OPTIONS ?? ''
-  env.ORCA_NODE_REPL_EXTERNAL_MODULE = args.hostEnv.NODE_REPL_EXTERNAL_MODULE ?? ''
+  env.POD_NODE_OPTIONS = args.hostEnv.NODE_OPTIONS ?? ''
+  env.POD_NODE_REPL_EXTERNAL_MODULE = args.hostEnv.NODE_REPL_EXTERNAL_MODULE ?? ''
   delete env.NODE_OPTIONS
   delete env.NODE_REPL_EXTERNAL_MODULE
   delete env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]
@@ -148,9 +148,9 @@ export function buildHostCliEnv(args: {
   delete env[ORCA_AGENT_SESSION_ID_ENV]
   delete env[ORCA_STRUCTURED_SESSION_ENV]
   // Why: this machine's paired-server selection would route the remote command with its credentials.
-  delete env.ORCA_PAIRING_CODE
-  delete env.ORCA_REMOTE_PAIRING
-  delete env.ORCA_ENVIRONMENT
+  delete env.POD_PAIRING_CODE
+  delete env.POD_REMOTE_PAIRING
+  delete env.POD_ENVIRONMENT
   env[ORCA_SSH_BRIDGE_CREDENTIAL_ENV] = args.bridgeCredential
   if (args.runtimeAuthority) {
     env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV] = 'ssh'

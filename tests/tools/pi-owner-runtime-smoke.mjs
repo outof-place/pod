@@ -69,7 +69,7 @@ try {
   const results = []
   for (const kind of ['pi', 'omp', 'prime-agent']) {
     const ownerKey =
-      kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
+      kind === 'prime-agent' ? 'POD_PRIME_AGENT_STATUS_OWNED' : 'POD_PI_STATUS_OWNED'
     for (const scenario of ['baseline-dead', 'fixed-dead', 'fixed-live']) {
       let source = getPiAgentStatusExtensionSource(kind)
       if (scenario === 'baseline-dead') {
@@ -91,13 +91,13 @@ try {
         env: {
           ...process.env,
           ORCA_BACKGROUND_LAUNCH: '1',
-          ORCA_PANE_KEY: 'owner-proof',
-          ORCA_AGENT_HOOK_PORT: String(server.address().port),
-          ORCA_AGENT_HOOK_TOKEN: 'isolated-proof-token',
-          ORCA_AGENT_HOOK_ENV: 'proof',
-          ORCA_AGENT_HOOK_ENDPOINT: '',
-          ORCA_PI_STATUS_OWNED: '',
-          ORCA_PRIME_AGENT_STATUS_OWNED: '',
+          POD_PANE_KEY: 'owner-proof',
+          POD_AGENT_HOOK_PORT: String(server.address().port),
+          POD_AGENT_HOOK_TOKEN: 'isolated-proof-token',
+          POD_AGENT_HOOK_ENV: 'proof',
+          POD_AGENT_HOOK_ENDPOINT: '',
+          POD_PI_STATUS_OWNED: '',
+          POD_PRIME_AGENT_STATUS_OWNED: '',
           PRIME_AGENT_INTERNAL_DAEMON_WORKER: kind === 'prime-agent' ? '1' : '',
           [ownerKey]: String(owner)
         },

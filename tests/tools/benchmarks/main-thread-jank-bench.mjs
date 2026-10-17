@@ -4,7 +4,7 @@
  *
  * Reproduces the reporter's setup: a running app with an active git worktree
  * and the Source Control sidebar open, measured at steady state. The app is
- * launched with ORCA_MAIN_THREAD_DIAGNOSTICS=1 so the main process emits one
+ * launched with POD_MAIN_THREAD_DIAGNOSTICS=1 so the main process emits one
  * `[main-thread] {json}` stderr line every 5s containing:
  *   - worst event-loop stall in the window (maxGapMs) and stall counts
  *   - subprocess spawns since the last report, keyed by command
@@ -284,15 +284,15 @@ async function main() {
   mkdirSync(isolatedHome, { recursive: true })
   const env = {
     ...process.env,
-    ORCA_STARTUP_DIAGNOSTICS: '1',
-    ORCA_MAIN_THREAD_DIAGNOSTICS: '1',
+    POD_STARTUP_DIAGNOSTICS: '1',
+    POD_MAIN_THREAD_DIAGNOSTICS: '1',
     ORCA_E2E_USER_DATA_DIR: fixtureDir,
     HOME: isolatedHome,
     USERPROFILE: isolatedHome,
     ORCA_E2E_HOME_DIR: isolatedHome
   }
   delete env.CODEX_HOME
-  delete env.ORCA_CODEX_HOME
+  delete env.POD_CODEX_HOME
   if (args.headless) {
     env.ORCA_E2E_HEADLESS = '1'
     console.warn(

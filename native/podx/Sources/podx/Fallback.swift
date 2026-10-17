@@ -46,15 +46,15 @@ func launcherEnvironment() -> [String] {
       nodeOptions = String(pair.dropFirst("NODE_OPTIONS=".count))
     } else if pair.hasPrefix("NODE_REPL_EXTERNAL_MODULE=") {
       replModule = String(pair.dropFirst("NODE_REPL_EXTERNAL_MODULE=".count))
-    } else if !(pair.hasPrefix("ORCA_NODE_OPTIONS=") || pair.hasPrefix("ORCA_NODE_REPL_EXTERNAL_MODULE=")
-      || pair.hasPrefix("ORCA_USER_DATA_PATH="))
+    } else if !(pair.hasPrefix("POD_NODE_OPTIONS=") || pair.hasPrefix("POD_NODE_REPL_EXTERNAL_MODULE=")
+      || pair.hasPrefix("POD_USER_DATA_PATH="))
     {
       environment.append(pair)
     }
   }
-  environment.append("ORCA_USER_DATA_PATH=" + userDataPath())
-  environment.append("ORCA_NODE_OPTIONS=" + nodeOptions)
-  environment.append("ORCA_NODE_REPL_EXTERNAL_MODULE=" + replModule)
+  environment.append("POD_USER_DATA_PATH=" + userDataPath())
+  environment.append("POD_NODE_OPTIONS=" + nodeOptions)
+  environment.append("POD_NODE_REPL_EXTERNAL_MODULE=" + replModule)
   return environment
 }
 

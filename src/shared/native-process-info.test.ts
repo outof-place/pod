@@ -76,7 +76,7 @@ describe.runIf(process.platform === 'darwin')('trusted native addon selection', 
       writeFileSync(join(scratch, relative), 'fixture')
     }
     Object.defineProperty(process, 'resourcesPath', { configurable: true, value: scratch })
-    vi.stubEnv('ORCA_DISABLE_NATIVE_PROCESS_INFO', '0')
+    vi.stubEnv('POD_DISABLE_NATIVE_PROCESS_INFO', '0')
     hasEnvironment().mockReturnValue(false)
     vi.spyOn(appEnvironment, 'getAppEnvironment').mockReturnValue({
       getAppPath: () => scratch,

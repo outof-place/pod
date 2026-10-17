@@ -29,7 +29,7 @@ export const copyTerminalPaneMenuPaneId = async (
     return
   }
   await runTerminalIdentityCopy({
-    // Why: orchestration targets use ORCA_PANE_KEY, which survives renderer
+    // Why: orchestration targets use POD_PANE_KEY, which survives renderer
     // remounts; the numeric PaneManager id is only a local runtime handle.
     text: makePaneKey(tabId, pane.leafId),
     writeClipboardText: window.api.ui.writeTerminalClipboardText,

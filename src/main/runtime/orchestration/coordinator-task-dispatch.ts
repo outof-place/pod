@@ -121,7 +121,7 @@ export async function dispatchTaskToWorker(params: {
     taskSpec: strippedSpec,
     coordinatorHandle: params.coordinatorHandle,
     workerHandle: targetHandle,
-    devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev'),
+    devMode: process.env.POD_USER_DATA_PATH?.includes('orca-dev'),
     ...(runtime.getTerminalOrchestrationCliCommand
       ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(targetHandle) }
       : {}),

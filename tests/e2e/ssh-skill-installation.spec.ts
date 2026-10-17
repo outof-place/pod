@@ -30,12 +30,12 @@ test.use({
       throw new Error('Skill cloud fixture unavailable')
     }
     await provideEnv({
-      ORCA_ARTIFACTS_API_URL: cloud.origin,
-      ORCA_CLOUD_API_URL: cloud.origin,
-      ORCA_CLOUD_CLIENT_ID: 'skills-e2e-client',
-      ORCA_CLOUD_DEV_AUTH: '1',
-      ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION: '1',
-      ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS: cloud.origin
+      POD_ARTIFACTS_API_URL: cloud.origin,
+      POD_CLOUD_API_URL: cloud.origin,
+      POD_CLOUD_CLIENT_ID: 'skills-e2e-client',
+      POD_CLOUD_DEV_AUTH: '1',
+      POD_CLOUD_ALLOW_PLAINTEXT_SESSION: '1',
+      POD_SKILL_PACKAGE_DOWNLOAD_ORIGINS: cloud.origin
     })
   }
 })

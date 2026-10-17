@@ -34,7 +34,7 @@ const secretKeys = []
     'attachmentId',
     'compatibilityEvidence',
     'orchestrationCompatibilityEvidence',
-    'ORCA_AGENT_LAUNCH_TOKEN',
+    'POD_AGENT_LAUNCH_TOKEN',
     evidence.ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
     evidence.ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV
   ]

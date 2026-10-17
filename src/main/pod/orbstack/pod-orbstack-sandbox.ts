@@ -250,9 +250,9 @@ export async function installSandboxClaude(args: {
 export const SETUP_WORKTREE = `set -eu
 hook="$1" script="$2" trust="$3" managed="$4"; shift 4
 for path in "$@"; do test -d "$path" || { echo "mount $path: not visible in the sandbox" >&2; exit 1; }; done
-mkdir -p "$HOME/.orca/agent-hooks"
-printf '%s' "$script" | base64 -d > "$HOME/.orca/agent-hooks/$hook"
-chmod 755 "$HOME/.orca/agent-hooks/$hook"
+mkdir -p "$HOME/.pod/agent-hooks"
+printf '%s' "$script" | base64 -d > "$HOME/.pod/agent-hooks/$hook"
+chmod 755 "$HOME/.pod/agent-hooks/$hook"
 [ -n "$trust" ] && { [ -e "$HOME/.claude.json" ] || printf '%s' "$trust" | base64 -d > "$HOME/.claude.json"; }
 printf '%s' "$managed" | base64 -d | sudo -n sh -c 'mkdir -p /etc/claude-code && cat > ${MANAGED_SETTINGS_PATH}'
 if [ -e /etc/ssh/sshd_config ] && ! ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1; then sudo -n ssh-keygen -A >/dev/null; fi

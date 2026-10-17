@@ -8,11 +8,11 @@ export function buildSshPtySpawnEnv(args: {
 }): Record<string, string> {
   const merged = { ...args.env }
   // The client CLI path cannot be restored on the execution host.
-  delete merged.ORCA_CLI_BIN_DIR
+  delete merged.POD_CLI_BIN_DIR
   if (args.remoteCliBridgeEnv) {
     const pathDelimiter = args.remoteCliBridgeEnv.pathDelimiter ?? ':'
     if (pathDelimiter === ':') {
-      merged.ORCA_CLI_BIN_DIR = args.remoteCliBridgeEnv.binDir
+      merged.POD_CLI_BIN_DIR = args.remoteCliBridgeEnv.binDir
     }
     const pathKey = merged.PATH !== undefined ? 'PATH' : merged.Path !== undefined ? 'Path' : null
     if (pathKey) {
@@ -23,12 +23,12 @@ export function buildSshPtySpawnEnv(args: {
           ? `${args.remoteCliBridgeEnv.binDir}${pathDelimiter}${pathValue}`
           : args.remoteCliBridgeEnv.binDir
     }
-    merged.ORCA_REMOTE_CLI_BIN_DIR = args.remoteCliBridgeEnv.binDir
-    merged.ORCA_RELAY_DIR = args.remoteCliBridgeEnv.relayDir
-    merged.ORCA_RELAY_NODE_PATH = args.remoteCliBridgeEnv.nodePath
-    merged.ORCA_RELAY_SOCKET_PATH = args.remoteCliBridgeEnv.sockPath
+    merged.POD_REMOTE_CLI_BIN_DIR = args.remoteCliBridgeEnv.binDir
+    merged.POD_RELAY_DIR = args.remoteCliBridgeEnv.relayDir
+    merged.POD_RELAY_NODE_PATH = args.remoteCliBridgeEnv.nodePath
+    merged.POD_RELAY_SOCKET_PATH = args.remoteCliBridgeEnv.sockPath
     if (args.remoteCliBridgeEnv.credentialFile) {
-      merged.ORCA_RELAY_CREDENTIAL_FILE = args.remoteCliBridgeEnv.credentialFile
+      merged.POD_RELAY_CREDENTIAL_FILE = args.remoteCliBridgeEnv.credentialFile
     }
   }
   // Why: match local/daemon precedence—managed defaults cannot restore explicitly removed values.

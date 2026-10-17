@@ -111,7 +111,7 @@ function runRecoveryRequest(payload: string | undefined): ProfileStateRecoveryRe
     }
     const userDataPath = realpathSync(parsed.data.userDataPath)
     app.setPath('userData', userDataPath)
-    process.env.ORCA_USER_DATA_PATH = userDataPath
+    process.env.POD_USER_DATA_PATH = userDataPath
     const maintenance = acquireProfileStateMaintenance(userDataPath)
     try {
       // Force Electron's lock even when ordinary dev or diagnostic launches would bypass it.

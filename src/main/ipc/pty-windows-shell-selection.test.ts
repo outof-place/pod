@@ -435,7 +435,7 @@ describe('registerPtyHandlers', () => {
       const spawnOptions = spawnMock.mock.calls.at(-1)?.[2] as { env: Record<string, string> }
       expect(spawnMock).toHaveBeenCalledWith('wsl.exe', expect.any(Array), expect.any(Object))
       expect(spawnOptions.env.CODEX_HOME).toBeUndefined()
-      expect(spawnOptions.env.ORCA_CODEX_HOME).toBeUndefined()
+      expect(spawnOptions.env.POD_CODEX_HOME).toBeUndefined()
     })
     it('keeps shellOverride priority for one-off tabs', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
@@ -460,7 +460,7 @@ describe('registerPtyHandlers', () => {
       const spawnOptions = spawnMock.mock.calls.at(-1)?.[2] as { env: Record<string, string> }
       expect(spawnMock).toHaveBeenCalledWith('wsl.exe', expect.any(Array), expect.any(Object))
       expect(spawnOptions.env.CODEX_HOME).toBeUndefined()
-      expect(spawnOptions.env.ORCA_CODEX_HOME).toBeUndefined()
+      expect(spawnOptions.env.POD_CODEX_HOME).toBeUndefined()
     })
   })
 })

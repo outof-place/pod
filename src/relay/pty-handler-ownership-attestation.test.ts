@@ -81,7 +81,7 @@ describe('PtyHandler publishes host-attested PTY ownership', () => {
   })
 
   it('attributes a pane spawn to the identity the consumer grant names', async () => {
-    const { id } = await spawnFrom(7, { env: { ORCA_PANE_KEY: PANE_KEY } })
+    const { id } = await spawnFrom(7, { env: { POD_PANE_KEY: PANE_KEY } })
     vi.advanceTimersByTime(45_000)
 
     const entry = (await listProcesses()).find((process) => process.id === id)
@@ -92,7 +92,7 @@ describe('PtyHandler publishes host-attested PTY ownership', () => {
   })
 
   it('omits the attestation entirely when the connection holds no active grant', async () => {
-    const { id } = await spawnFrom(9, { env: { ORCA_PANE_KEY: PANE_KEY } })
+    const { id } = await spawnFrom(9, { env: { POD_PANE_KEY: PANE_KEY } })
 
     const entry = (await listProcesses()).find((process) => process.id === id)
 
@@ -156,7 +156,7 @@ describe('PtyHandler publishes host-attested PTY ownership', () => {
       .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
       .mockResolvedValue({ rows: [], capturedAgeMs })
 
-    const { id } = await spawnFrom(7, { env: { ORCA_PANE_KEY: PANE_KEY } })
+    const { id } = await spawnFrom(7, { env: { POD_PANE_KEY: PANE_KEY } })
     const entry = (await listProcesses()).find((process) => process.id === id)
 
     expect(snapshot).toHaveBeenCalled()
@@ -170,7 +170,7 @@ describe('PtyHandler publishes host-attested PTY ownership', () => {
       .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
       .mockResolvedValue({ rows: [], capturedAgeMs: 6_140 })
 
-    const { id } = await spawnFrom(7, { env: { ORCA_PANE_KEY: PANE_KEY } })
+    const { id } = await spawnFrom(7, { env: { POD_PANE_KEY: PANE_KEY } })
     const entry = (await listProcesses()).find((process) => process.id === id)
 
     expect(snapshot).toHaveBeenCalled()
@@ -191,7 +191,7 @@ describe('PtyHandler authorizes a fenced stop against its own attestation', () =
 
   async function spawnFrom(clientId: number): Promise<{ id: string }> {
     mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
-    return (await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: PANE_KEY } }, {
+    return (await dispatcher.callRequest('pty.spawn', { env: { POD_PANE_KEY: PANE_KEY } }, {
       clientId,
       isStale: () => false
     } as never)) as { id: string }

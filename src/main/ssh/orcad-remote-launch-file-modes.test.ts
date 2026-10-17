@@ -39,7 +39,7 @@ async function launchUnderLoginUmask(): Promise<void> {
     // No runtime marker in the slot, so this legacy path runs the stub entry below.
     nodePath: '/bin/sh',
     fullVersion: '0.2.0+bb01',
-    userDataDir: join(home, '.orca'),
+    userDataDir: join(home, '.pod'),
     bindHost: '127.0.0.1',
     port: 7777,
     activationRoot: join(baseDir, '.orcad-activation-transaction')

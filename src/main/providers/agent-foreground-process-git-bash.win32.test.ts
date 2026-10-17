@@ -79,19 +79,19 @@ async function proveIdlePromptCycle(
 
 describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () => {
   let userData: string
-  const previousUserData = process.env.ORCA_USER_DATA_PATH
+  const previousUserData = process.env.POD_USER_DATA_PATH
 
   beforeAll(() => {
     // The launch plan writes shell-ready wrappers under the user-data root.
     userData = mkdtempSync(join(tmpdir(), 'orca-git-bash-proof-'))
-    process.env.ORCA_USER_DATA_PATH = userData
+    process.env.POD_USER_DATA_PATH = userData
   })
 
   afterAll(() => {
     if (previousUserData === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.POD_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = previousUserData
+      process.env.POD_USER_DATA_PATH = previousUserData
     }
     removeTreeSync(userData)
   })
@@ -99,7 +99,7 @@ describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () =>
   it.each([
     ['login shell', {}],
     // Why: with the Codex preflight set, the exec'd shell runs Orca's --rcfile wrapper.
-    ['rcfile wrapper', { ORCA_CODEX_LAUNCH_PREFLIGHT: 'C:\\orca-missing-preflight.exe' }]
+    ['rcfile wrapper', { POD_CODEX_LAUNCH_PREFLIGHT: 'C:\\orca-missing-preflight.exe' }]
   ])(
     'confirms an idle %s prompt, refutes a running command, and confirms again',
     async (_label, extraEnv) => {

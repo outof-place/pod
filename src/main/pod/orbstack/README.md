@@ -29,7 +29,7 @@ The sandbox token has 32 random bytes and lives only in Pod's memory. It is neve
 
 - Pod mints it when the sandbox is created, or at the first launch after a Pod restart.
 - Deleting the sandbox revokes it, and quitting Pod discards it.
-- The VM gets it as `ORCA_AGENT_HOOK_TOKEN`. The hook server's own token never enters the VM.
+- The VM gets it as `POD_AGENT_HOOK_TOKEN`. The hook server's own token never enters the VM.
 
 The relay process ends when the sandbox is deleted, when Pod quits, or when the VM stops. A Pod crash closes the relay's stdin, which ends it too. The real-OrbStack tests check that no `orb` process for the machine survives a delete.
 
