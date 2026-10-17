@@ -23,12 +23,12 @@ import {
   guardInstance,
   releaseInstance
 } from './acc-guard.mjs'
+import { ONE_APP_RUNTIME, describeApp } from './app-info.mjs'
 import { BENCH_ROOT, TOOLS_BIN, log, sleep } from './bench-session.mjs'
 import { rootOfPid, runTree, signalIfSame, signalRunTreeSync, stopRunTree } from './run-tree.mjs'
 import {
-  ENV_CANARY,
-  callerCanary,
-  envPidCheck,
+  callerEnv,
+  envTreeCheck,
   guardExecScript,
   guardVerdict,
   installedClaudeVersion,
@@ -37,9 +37,6 @@ import {
 
 const HOME = os.homedir()
 export const ORCA_APP = process.env.POD_BENCH_ORCA_APP ?? '/Applications/Orca.app'
-// One-app Pod (1.0 and later) is the native PodNative app with the Electron runtime nested inside;
-// the suites drive the runtime, so a one-app bundle resolves to it.
-const ONE_APP_RUNTIME = 'Contents/Helpers/Pod Runtime.app'
 export const POD_OUTER_APP =
   process.env.POD_BENCH_POD_APP ??
   path.join(HOME, 'Library/Application Support/orca-native/builds/latest/Orca.app')
@@ -62,6 +59,9 @@ const PROTECTED_PROGRAMS = ['/Applications/', path.join(HOME, 'Library/Applicati
 const REPO_ROOT = path.dirname(BENCH_ROOT)
 const run = promisify(execFile)
 
+// The suites import describeApp from here, with the subjects.
+export { describeApp }
+
 /** The benchmark subjects: an app bundle plus the terminal renderer it runs with. */
 export const SUBJECTS = {
   orca: { app: ORCA_APP, nativeTerminal: false, label: 'Orca (xterm.js)' },
@@ -73,105 +73,6 @@ export const SUBJECTS = {
     // Where the native terminal comes from.
     branch: 'feat/native-ghostty-terminal',
     upstream: 'https://github.com/stablyai/orca/pull/26914'
-  }
-}
-
-function plistValue(file, key) {
-  try {
-    return execFileSync('/usr/bin/plutil', ['-extract', key, 'raw', '-o', '-', file], {
-      encoding: 'utf8'
-    }).trim()
-  } catch {
-    return null
-  }
-}
-
-function plist(appPath, key) {
-  return execFileSync(
-    '/usr/bin/plutil',
-    ['-extract', key, 'raw', '-o', '-', `${appPath}/Contents/Info.plist`],
-    { encoding: 'utf8' }
-  ).trim()
-}
-
-// An unpackaged checkout with an electron-vite build: launched as tests/e2e/helpers does, through
-// its package.json, with the checkout's own Electron and its built CLI.
-function describeDevCheckout(dir) {
-  const real = realpathSync(dir)
-  const version = (file) => JSON.parse(readFileSync(path.join(real, file), 'utf8')).version
-  let commit = null
-  try {
-    commit = execFileSync('git', ['-C', real, 'rev-parse', 'HEAD'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore']
-    }).trim()
-  } catch {}
-  return {
-    path: dir,
-    realPath: real,
-    dev: true,
-    bundleId: null,
-    version: version('package.json'),
-    buildId: null,
-    commit,
-    teamId: null,
-    executable: path.join(real, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'),
-    appArgs: [real],
-    electron: version('node_modules/electron/package.json'),
-    cli: process.execPath,
-    cliArgs: [path.join(real, 'out/cli/index.js')]
-  }
-}
-
-/** The one-app bundle around a nested Pod runtime, or null for a standalone app. */
-function oneAppOf(real) {
-  if (!real.endsWith(`/${ONE_APP_RUNTIME}`)) {
-    return null
-  }
-  const outer = real.slice(0, -(ONE_APP_RUNTIME.length + 1))
-  const key = (name) => plistValue(`${outer}/Contents/Info.plist`, name)
-  return {
-    bundleId: key('CFBundleIdentifier'),
-    version: key('CFBundleShortVersionString'),
-    build: key('CFBundleVersion'),
-    podNativeRevision: key('PodNativeRevision')
-  }
-}
-
-export function describeApp(appPath) {
-  if (existsSync(path.join(appPath, 'out/main/index.js'))) {
-    return describeDevCheckout(appPath)
-  }
-  if (existsSync(path.join(appPath, ONE_APP_RUNTIME))) {
-    return describeApp(path.join(appPath, ONE_APP_RUNTIME))
-  }
-  const real = realpathSync(appPath)
-  let build = null
-  try {
-    build = JSON.parse(readFileSync(`${real}/Contents/Resources/orca-local-build.json`, 'utf8'))
-  } catch {}
-  const codesign = execFileSync('/bin/sh', ['-c', 'codesign -dv "$1" 2>&1 || true', 'sh', real], {
-    encoding: 'utf8'
-  })
-  return {
-    path: appPath,
-    realPath: real,
-    bundleId: plist(real, 'CFBundleIdentifier'),
-    version: plist(real, 'CFBundleShortVersionString'),
-    buildId: build?.buildId ?? null,
-    commit: build?.commit ?? null,
-    teamId: codesign.match(/TeamIdentifier=(\S+)/)?.[1] ?? null,
-    executable: `${real}/Contents/MacOS/${plist(real, 'CFBundleExecutable')}`,
-    electron: plistValue(
-      `${real}/Contents/Frameworks/Electron Framework.framework/Resources/Info.plist`,
-      'CFBundleVersion'
-    ),
-    // Pod renames the CLI (product/identity.json cliName); since pod/decouple it ships only podx.
-    cli: ['podx', 'orca']
-      .map((name) => `${real}/Contents/Resources/bin/${name}`)
-      .find((candidate) => existsSync(candidate)),
-    // The suites drive the nested runtime's Electron UI, not PodNative's native UI.
-    oneApp: oneAppOf(real)
   }
 }
 
@@ -288,7 +189,9 @@ export function profileIn(ud) {
 
 /** The prompt-time hook as ZDOTDIR's whole .zshrc, for a zsh the bench starts outside an app (no guard). */
 export function writePromptHook(profile) {
-  if (profile.guard) throw new Error('writePromptHook: the guard owns this ZDOTDIR\'s .zshrc')
+  if (profile.guard) {
+    throw new Error('writePromptHook: the guard owns this ZDOTDIR\'s .zshrc')
+  }
   writeFileSync(path.join(profile.zdot, '.zshrc'), PROMPT_HOOK)
 }
 
@@ -308,7 +211,9 @@ export function promptTimes(profile) {
 // hermetic ZDOTDIR's. No front dir: the panes run the bench's tools by absolute path
 // (terminal-workloads.mjs), and a front dir has to lie inside the run dir (the lead's MUST).
 export function ensureGuard(profile, info) {
-  if (profile.guard) return profile.guard
+  if (profile.guard) {
+    return profile.guard
+  }
   if (existsSync(path.join(profile.zdot, '.zshrc'))) {
     throw new Error(`${profile.zdot}/.zshrc exists: a profile's first launch needs a ZDOTDIR the guard can own`)
   }
@@ -327,7 +232,9 @@ export function ensureGuard(profile, info) {
 
 /** Fails the run when the guard saw a stub reached off its PATH, or claude run past --version. */
 function checkGuard(profile) {
-  if (!profile.guard) return
+  if (!profile.guard) {
+    return
+  }
   const verdict = guardVerdict(profile.ud, profile.guard.fronts)
   if (!verdict.ok) {
     throw new Error(`guard PATH of ${profile.ud}: ${verdict.problems.join('; ')}`)
@@ -339,7 +246,9 @@ function checkGuard(profile) {
 // bench's own. guard_exec adds SHELL, LANG's default and GUARD_POSITIVE_MARK=1, and nothing of
 // this process's environment, which carries the caller's canary.
 export function launchEnv(profile, { visible = false } = {}) {
-  if (!profile.guard) throw new Error('launchEnv: the profile has no guard PATH yet (ensureGuard)')
+  if (!profile.guard) {
+    throw new Error('launchEnv: the profile has no guard PATH yet (ensureGuard)')
+  }
   const presentation = visible
     ? // Only for the visible-window latency run, in a slot the user agreed to.
       { ORCA_E2E_HEADFUL: '1', ORCA_E2E_FOREGROUND: '1' }
@@ -367,7 +276,7 @@ export function launchEnv(profile, { visible = false } = {}) {
 
 // The script a launch runs: guard_exec of the app's executable with launchEnv's words (Playwright
 // adds its own arguments in front of the app's, and the script passes them on). It starts from
-// the caller's env with the canary in it; it never reaches the app.
+// callerEnv() (lib/guard-path.mjs), the canary in it, which never reaches the app.
 function launchScript(profile, info, env) {
   profile.launches += 1
   const script = path.join(profile.ud, `launch-${profile.launches}.sh`)
@@ -375,14 +284,7 @@ function launchScript(profile, info, env) {
     mode: 0o700,
     flag: 'wx'
   })
-  const encoding = process.env.__CF_USER_TEXT_ENCODING ?? ''
-  const callerEnv = {
-    PATH: '/usr/bin:/bin',
-    LANG: 'en_US.UTF-8',
-    ...(/^0x[0-9A-Fa-f]+:0x[0-9A-Fa-f]+:0x[0-9A-Fa-f]+$/.test(encoding) ? { __CF_USER_TEXT_ENCODING: encoding } : {}),
-    [ENV_CANARY]: callerCanary()
-  }
-  return { script, callerEnv }
+  return { script, launcherEnv: callerEnv() }
 }
 
 /**
@@ -447,12 +349,12 @@ export function spawnInstance(appPath, profile) {
   ensureGuard(profile, info)
   const env = launchEnv(profile)
   assertAccOff(env)
-  const { script, callerEnv } = launchScript(profile, info, env)
+  const { script, launcherEnv } = launchScript(profile, info, env)
   const spawnedAt = Date.now()
   const args = [...CHROMIUM_ARGS, ...(info.appArgs ?? []), '-ApplePersistenceIgnoreState', 'YES']
   // The script execs guard_exec, which execs the app: the child's pid is the app's.
   const child = spawn(script, args, {
-    env: callerEnv,
+    env: launcherEnv,
     stdio: 'ignore',
     detached: false
   })
@@ -475,14 +377,14 @@ export async function launchInstance(appPath, profile, { visible = false } = {})
   ensureGuard(profile, info)
   const env = launchEnv(profile, { visible })
   assertAccOff(env)
-  const { script, callerEnv } = launchScript(profile, info, env)
+  const { script, launcherEnv } = launchScript(profile, info, env)
   const spawnedAt = Date.now()
-  // Playwright spawns the script with exactly callerEnv (no merge) and its own arguments first;
+  // Playwright spawns the script with exactly launcherEnv (no merge) and its own arguments first;
   // the script execs guard_exec, which execs the app, so app.process() is the app.
   const app = await playwright._electron.launch({
     executablePath: script,
     args: [...CHROMIUM_ARGS, ...(info.appArgs ?? []), '-ApplePersistenceIgnoreState', 'YES'],
-    env: callerEnv,
+    env: launcherEnv,
     timeout: 180_000
   })
   profile.roots?.set(app.process().pid, rootOfPid(app.process().pid))
@@ -704,17 +606,7 @@ async function checkEnv(instance) {
   const options = profileTreeOptions(instance.profile)
   const { procs } = await runTree(instance.profile.ud, { scan: true, roots: options.roots })
   const ours = procs.filter((proc) => proc.via === 'exe' || proc.via === 'root' || (proc.via === 'argv' && options.argvOwned(proc)))
-  const problems = []
-  const unproven = []
-  const main = envPidCheck(instance.profile.ud, instance.pid, 'app')
-  if (main.status !== 0) problems.push(main.said)
-  for (const proc of ours) {
-    if (proc.pid === instance.pid) continue
-    const check = envPidCheck(instance.profile.ud, proc.pid, path.basename(proc.path))
-    if (check.status === 1) problems.push(check.said)
-    else if (check.status !== 0) unproven.push(`${proc.pid} ${path.basename(proc.path)}`)
-  }
-  return { ok: problems.length === 0, problems, main: main.said, checked: ours.length, unproven }
+  return envTreeCheck(instance.profile.ud, ours, { launched: { [instance.pid]: 'app' }, labelOf: (proc) => path.basename(proc.path) })
 }
 
 /**
@@ -744,8 +636,10 @@ export async function closeInstance(instance) {
   try {
     await killProfileProcesses(instance.profile)
     releaseInstance(instance.pid)
-    if (!env.ok) throw new Error(`env allowlist of ${instance.profile.ud}: ${env.problems.join('; ')}`)
-    log(`${env.main}; ${env.checked} processes of the tree, no canary; no mark (no proof) on ${env.unproven.length}: ${env.unproven.join(', ')}`)
+    if (!env.ok) {
+      throw new Error(`env allowlist of ${instance.profile.ud}: ${env.problems.join('; ')}`)
+    }
+    log(`env allowlist of ${instance.profile.ud}: mark and no canary on ${env.proven.join(', ')}; no canary, no mark (no proof) on ${env.unproven.join(', ') || 'none'}`)
     checkGuard(instance.profile)
     checkAcc(`after closing ${instance.info.realPath}`)
   } finally {

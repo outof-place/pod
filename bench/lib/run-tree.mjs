@@ -22,8 +22,12 @@ function treeArgs(work, { scan = false, roots = [] } = {}) {
     throw new Error(`${roots.length} roots: procstat takes at most ${MAX_ROOTS} per call`)
   }
   const args = ['--exe-prefix', `${work}/`]
-  for (const root of roots) args.push('--root', String(root.pid))
-  if (scan) args.push('--argv', `${work}/`, '--argv', `${work.replace(/^\/private/, '')}/`)
+  for (const root of roots) {
+    args.push('--root', String(root.pid))
+  }
+  if (scan) {
+    args.push('--argv', `${work}/`, '--argv', `${work.replace(/^\/private/, '')}/`)
+  }
   return args
 }
 
@@ -35,13 +39,19 @@ function parseTree(stdout, exclude, roots = []) {
   const byPid = new Map(snap.procs.map((proc) => [proc.pid, proc]))
   const rootOf = (proc) => {
     let at = proc
-    for (let hops = 0; at && at.inherited && hops < 64; hops += 1) at = byPid.get(at.ppid)
+    for (let hops = 0; at && at.inherited && hops < 64; hops += 1) {
+      at = byPid.get(at.ppid)
+    }
     return at
   }
   for (const proc of snap.procs) {
-    if (proc.via !== 'root') continue
+    if (proc.via !== 'root') {
+      continue
+    }
     const root = rootOf(proc)
-    if (!root || recorded.get(root.pid) !== root.startUs) proc.via = 'stale-root'
+    if (!root || recorded.get(root.pid) !== root.startUs) {
+      proc.via = 'stale-root'
+    }
   }
   snap.procs = snap.procs.filter((proc) => proc.path !== PROCSTAT && !exclude(proc))
   return snap
@@ -51,7 +61,9 @@ function parseTree(stdout, exclude, roots = []) {
 export function rootOfPid(pid) {
   const snap = JSON.parse(execFileSync(PROCSTAT, ['--root', String(pid)], { encoding: 'utf8', maxBuffer: 16 << 20 }))
   const proc = snap.procs.find((candidate) => candidate.pid === pid)
-  if (!proc) throw new Error(`pid ${pid} is not running`)
+  if (!proc) {
+    throw new Error(`pid ${pid} is not running`)
+  }
   return { pid, startUs: proc.startUs }
 }
 
@@ -93,7 +105,9 @@ export function startTimes(pids, { procstat = PROCSTAT } = {}) {
   for (let at = 0; at < unique.length; at += MAX_ROOTS) {
     const args = unique.slice(at, at + MAX_ROOTS).flatMap((pid) => ['--root', String(pid)])
     const snap = JSON.parse(execFileSync(procstat, args, { encoding: 'utf8', maxBuffer: 16 << 20 }))
-    for (const proc of snap.procs) times.set(proc.pid, proc.startUs)
+    for (const proc of snap.procs) {
+      times.set(proc.pid, proc.startUs)
+    }
   }
   return times
 }
@@ -129,7 +143,9 @@ function signalAll(targets, signal, signalled, options) {
     throw new UnsignalledError(targets, error)
   }
   for (const proc of targets) {
-    if (now.get(proc.pid) !== proc.startUs) continue
+    if (now.get(proc.pid) !== proc.startUs) {
+      continue
+    }
     try {
       process.kill(proc.pid, signal)
       signalled.push({ pid: proc.pid, path: proc.path, signal })
@@ -160,7 +176,9 @@ export async function stopRunTree(
     const snap = await runTree(work, { scan: true, exclude, roots })
     left = signalTargets(snap.procs, { protectedPrefixes, argvOwned })
     noteArgvOnly(snap.procs, left, argvOnly)
-    if (left.length === 0) break
+    if (left.length === 0) {
+      break
+    }
     signalAll(left, attempt < attempts / 2 ? 'SIGTERM' : 'SIGKILL', signalled)
     await sleep(intervalMs)
   }
