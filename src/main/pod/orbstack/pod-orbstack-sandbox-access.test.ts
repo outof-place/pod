@@ -1,3 +1,5 @@
+import { request } from 'node:https'
+import { createServer, type AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import { setPodSandboxAnthropicCredentials } from './pod-orbstack-anthropic-route'
 import type { SandboxRelayRoutes, SandboxRelays } from './pod-orbstack-relay'
@@ -87,6 +89,52 @@ describe('createSandboxAccess', () => {
       ensured[0]?.routes.anthropic?.route.caCertPem
     )
     expect(launched).toEqual(['pod-a-sbx'])
+  })
+
+  it('refuses API calls on a pre-started route until a launch mints the placeholder', async () => {
+    const { relays, ensured } = fakeRelays()
+    // A dead upstream (the discard port): nothing here may reach a real API.
+    const access = createSandboxAccess({
+      relays,
+      readPrivacy: () => OPEN_PRIVACY,
+      upstream: { host: '127.0.0.1', port: 9 }
+    })
+    setPodSandboxAnthropicCredentials({ mode: () => 'api-key', authHeaders: async () => ({}) })
+    access.prestart('pod-a-sbx', hookServer)
+    const route = ensured[0]?.routes.anthropic?.route
+    expect(route).toBeDefined()
+    const front = createServer((socket) => route?.attach(socket))
+    await new Promise<void>((resolve) => front.listen(0, '127.0.0.1', resolve))
+    const call = (key: string) =>
+      new Promise<number>((resolve, reject) => {
+        const req = request(
+          {
+            host: '127.0.0.1',
+            port: (front.address() as AddressInfo).port,
+            servername: 'api.anthropic.com',
+            ca: route?.caCertPem,
+            method: 'POST',
+            path: '/v1/messages',
+            headers: { 'x-api-key': key, 'content-type': 'application/json' }
+          },
+          (res) => {
+            res.resume()
+            res.on('end', () => resolve(res.statusCode ?? 0))
+          }
+        )
+        req.on('error', reject)
+        req.end('{}')
+      })
+    try {
+      // No launch yet: no placeholder exists, so any key, the placeholder's shape included, is refused.
+      expect(await call('pod-sandbox-no-credential-0123456789abcdef0123456789abcdef')).toBe(401)
+      const key = access.start('pod-a-sbx', hookServer).vmEnv.ANTHROPIC_API_KEY ?? ''
+      // After the launch the minted placeholder passes Pod's check and goes on to the (dead) upstream.
+      expect(await call(key)).not.toBe(401)
+    } finally {
+      front.close()
+      access.forget('pod-a-sbx')
+    }
   })
 
   it('binds the credential source to each launch and releases it with the sandbox', () => {
