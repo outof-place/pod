@@ -78,6 +78,8 @@ export class RepoUpdatePersistenceOperations {
     updates: Partial<
       Pick<
         Repo,
+        // Fork-only (Pod): Pod Workspace's Move In re-points a repo at its new folder.
+        | 'path'
         | 'displayName'
         | 'badgeColor'
         | 'repoIcon'

@@ -1,5 +1,6 @@
 import type { Repo } from '../../../shared/repo-types'
 import { createWorkspaceAdopt } from './workspace-adopt'
+import type { AdoptRelinkStore } from './workspace-adopt-relink'
 import { resolveWorkspaceCloneDestination } from './workspace-clone-parent'
 import { createWorkspaceGitExec } from './workspace-git-exec'
 import { createWorkspaceGitProfile } from './workspace-git-profile'
@@ -17,12 +18,14 @@ import type { WorkspaceStrayStore } from './workspace-tidy-strays'
 import { createWorkspaceTrash } from './workspace-trash'
 
 export type WorkspaceRpcServiceDeps = {
-  store: WorkspaceStrayStore & { getRepos(): Repo[] }
+  store: WorkspaceStrayStore & AdoptRelinkStore & { getRepos(): Repo[] }
   isEnabled: () => boolean
   status: WorkspaceStatusService
   validation: RootValidationDeps
   home: string
   userDataDir: string
+  /** The profile's `terminal-history/`. */
+  historyRoot: string
   /** The system's Trash, for a folder on another volume than the home folder. */
   osTrash: (path: string) => Promise<void>
   onBackgroundDone?: (repoId: string, message: string) => void
@@ -57,8 +60,10 @@ export function createPodWorkspaceRpcService(deps: WorkspaceRpcServiceDeps): Pod
     plans,
     processes,
     getRepo,
+    store: deps.store,
     root: () => resolveWorkspaceRoot(deps.store.getSettings(), deps.home),
-    home: deps.home
+    home: deps.home,
+    historyRoot: deps.historyRoot
   })
   const cloneDeps = {
     isEnabled: deps.isEnabled,
@@ -105,16 +110,16 @@ export function createPodWorkspaceRpcService(deps: WorkspaceRpcServiceDeps): Pod
         : request.action === 'apply'
           ? profile.apply(request.planId, request.optIns)
           : profile.undo(request.planId, request.tuneId),
-    adopt: (request) => {
+    adopt: (request, runtime) => {
       switch (request.action) {
         case 'plan':
-          return adopt.plan(request.repoId)
+          return adopt.plan(request.repoId, runtime)
         case 'apply':
-          return adopt.apply(request.planId, request.acknowledged)
+          return adopt.apply(request.planId, request.acknowledged, runtime)
         case 'plan-undo':
           return adopt.planUndo(request.recordId)
         case 'undo':
-          return adopt.undo(request.planId)
+          return adopt.undo(request.planId, runtime)
       }
     }
   }
