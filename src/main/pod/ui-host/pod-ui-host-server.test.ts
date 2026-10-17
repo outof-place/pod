@@ -198,6 +198,7 @@ describe('PodUiHostServer', () => {
         'browser',
         'browserContextMenu',
         'browserDownloadCancel',
+        'browserFrameSelect',
         'browserOpenLink',
         'browserPasskey',
         'browserTargetUrl',
@@ -211,12 +212,14 @@ describe('PodUiHostServer', () => {
       const { options } = await startServer({ onBrowser })
       const client = await hello(options.socketPath)
       // browserContextMenu: the page's right-clicks come; browserOpenLink: its new-tab links;
-      // browserTargetUrl: its hovered links; browserDownloadCancel: its downloads stop. PodNative
-      // reads the features, the hello is unchanged.
+      // browserTargetUrl: its hovered links; browserDownloadCancel: its downloads stop;
+      // browserFrameSelect: its iframes' selects open. PodNative reads the features, the hello is
+      // unchanged.
       expect(JSON.parse(client.lines[0]).features).toEqual([
         'browser',
         'browserContextMenu',
         'browserDownloadCancel',
+        'browserFrameSelect',
         'browserOpenLink',
         'browserPasskey',
         'browserTargetUrl',

@@ -249,7 +249,11 @@ export class PodBrowserPaneController {
         return
       case 'browserInput': {
         page.links.noteInput(message.event)
-        applyPaneInput(wc, page.input.map(message.event))
+        const { event } = message
+        if (event.kind === 'mouse' && event.action === 'down' && event.button === 'left') {
+          page.select.noteClick(event.x, event.y)
+        }
+        applyPaneInput(wc, page.input.map(event))
         return
       }
       case 'browserNavigate':
