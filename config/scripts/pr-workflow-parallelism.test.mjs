@@ -2,6 +2,7 @@ import { existsSync, globSync, readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
+import { pinnedAction } from './ci-action-pins.mjs'
 import { UNIT_EXCLUDE } from './ci-unit-files.mjs'
 import { MOBILE_WEB_APP_DEPENDENCIES_REQUIRED_ENV } from './mobile-web-app-bundle-dependencies.mjs'
 
@@ -323,7 +324,7 @@ describe('PR workflow parallelism', () => {
     expect(pnpmIndex).toBeLessThan(requestedNodeIndex)
     const packageManagerVersion = /^pnpm@([^+]+)/.exec(packageJson.packageManager)?.[1]
     expect(packageManagerVersion).toBe('12.8.1')
-    expect(steps[pnpmIndex].uses).toBe('pnpm/setup@v2')
+    expect(steps[pnpmIndex].uses).toBe(pinnedAction('pnpm/setup'))
     expect(steps[pnpmIndex].with.version).toBeUndefined()
     expect(steps[pnpmIndex].with.install).toBe(false)
     const saveOutsidePrs =
@@ -340,7 +341,7 @@ describe('PR workflow parallelism', () => {
     expect(restoreIndex).toBeLessThan(
       steps.findIndex((step) => step.name === 'Install dependencies')
     )
-    expect(steps[restoreIndex].uses).toBe('actions/cache/restore@v5')
+    expect(steps[restoreIndex].uses).toBe(pinnedAction('actions/cache', '/restore'))
     expect(steps[restoreIndex].if).toBe(
       "github.event_name == 'pull_request' && inputs.cache-pnpm-store != 'false' && !((runner.os == 'Linux' || runner.os == 'macOS') && (runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml') && (runner.os != 'Windows' || !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) && !((runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml'))"
     )
@@ -466,7 +467,7 @@ describe('PR workflow parallelism', () => {
     expect(restoreOnly.if).toBe(
       "inputs.native-runtime != 'none' && inputs.persist-native-cache == 'false'"
     )
-    expect(restoreOnly.uses).toBe('actions/cache/restore@v5')
+    expect(restoreOnly.uses).toBe(pinnedAction('actions/cache', '/restore'))
     // Native artifacts are ABI-bound: a key missing either dimension serves a build
     // that cannot load, and ensure-native-runtime would recompile it anyway.
     for (const cacheStep of [steps[cacheIndex], restoreOnly]) {
@@ -508,7 +509,7 @@ describe('PR workflow parallelism', () => {
     expect(electronCache.if).toBe(
       "(github.event_name != 'pull_request' || runner.os != 'Linux') && steps.electron-package-cache.outputs.version != ''"
     )
-    expect(electronCache.uses).toBe('actions/cache@v5')
+    expect(electronCache.uses).toBe(pinnedAction('actions/cache'))
     expect(electronCache.with.key).toContain('steps.electron-package-cache.outputs.version')
     expect(dependencyAction.inputs['cache-electron-package'].default).toBe('false')
   })

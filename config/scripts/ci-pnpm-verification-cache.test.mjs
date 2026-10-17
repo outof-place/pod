@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { pinnedAction } from './ci-action-pins.mjs'
 import { classifyPrJobs, PR_CHECK_JOBS } from './pr-code-change-scope.mjs'
 import { runProcessSync } from '@orca/process-host'
 
@@ -143,7 +144,7 @@ describe('pnpm-owned verification record', () => {
     expect(resolve.run).toContain('"$RUNNER_OS" "$RUNNER_ARCH" "$pnpm_version" "$POLICY_HASH"')
     expect(cache.uses).toBe('./.github/actions/restore-pnpm-verification')
     expect(cache.with.enabled).toBe('${{ inputs.cache-pnpm-verification }}')
-    expect(restore.uses).toBe('actions/cache/restore@v5')
+    expect(restore.uses).toBe(pinnedAction('actions/cache', '/restore'))
     expect(restore.with.path).toBe('${{ steps.verification-cache.outputs.path }}')
     expect(restore.with['restore-keys']).toBeUndefined()
     expect(restore['continue-on-error']).toBe(true)
@@ -177,7 +178,7 @@ describe('pnpm-owned verification record', () => {
     context.steps['verification-cache'].outputs.key = 'a-key'
     context.steps['verification-cache'].outputs['cache-hit'] = 'true'
     expect(evaluate(expression, context)).toBe(false)
-    expect(save.uses).toBe('actions/cache/save@v5')
+    expect(save.uses).toBe(pinnedAction('actions/cache', '/save'))
     expect(steps.indexOf(save)).toBeGreaterThan(steps.indexOf(install))
   })
 })

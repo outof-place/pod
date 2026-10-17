@@ -52,7 +52,7 @@ runs:
       id: verification-cache-restore
       if: steps.verification-cache.outputs.key != ''
       continue-on-error: true
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: ${{ steps.verification-cache.outputs.path }}
         key: ${{ steps.verification-cache.outputs.key }}
