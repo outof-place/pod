@@ -90,7 +90,28 @@ function nextRemoval(
 
 /** Why removePodClaudeEntries gave null: the first check that failed. */
 export type PodClaudeCutRefusal = {
-  reason?: 'not a JSONC object' | 'no safe cut' | 'unparsable result' | 'changed meaning'
+  reason?:
+    | 'not a JSONC object'
+    | 'duplicate keys'
+    | 'no safe cut'
+    | 'unparsable result'
+    | 'changed meaning'
+    | 'unexpected error'
+}
+
+/** Whether any object in the tree names a key twice: paths there resolve to the first one only. */
+function hasDuplicateKeys(node: Node): boolean {
+  if (node.type === 'object') {
+    const keys = new Set<string>()
+    for (const property of node.children ?? []) {
+      const key = String(property.children?.[0]?.value)
+      if (keys.has(key)) {
+        return true
+      }
+      keys.add(key)
+    }
+  }
+  return (node.children ?? []).some(hasDuplicateKeys)
 }
 
 /** The text without Pod's entries, and what went; null (the reason in `refusal`) when the text isn't
@@ -100,12 +121,34 @@ export function removePodClaudeEntries(
   names: { hookScript: string; statusLineScript: string },
   refusal: PodClaudeCutRefusal = {}
 ): { text: string; removed: PodClaudeSettingsRemoval[] } | null {
-  const isManaged = createManagedCommandMatcher(names.hookScript)
-  let root = parseObject(text)
+  const root = parseObject(text)
   if (!root) {
     refusal.reason = 'not a JSONC object'
     return null
   }
+  // Why: with a key twice (`"Stop": [], "Stop": [...]`) a removal's path names another node than the
+  // one it came from.
+  if (hasDuplicateKeys(root)) {
+    refusal.reason = 'duplicate keys'
+    return null
+  }
+  try {
+    return cutPodEntries(text, root, names, refusal)
+  } catch {
+    // Why: the main process reads the user's own file here; a pathological one must never throw.
+    refusal.reason = 'unexpected error'
+    return null
+  }
+}
+
+function cutPodEntries(
+  text: string,
+  start: Node,
+  names: { hookScript: string; statusLineScript: string },
+  refusal: PodClaudeCutRefusal
+): { text: string; removed: PodClaudeSettingsRemoval[] } | null {
+  const isManaged = createManagedCommandMatcher(names.hookScript)
+  let root: Node | null = start
   const original: unknown = getNodeValue(root)
   const emptied = new Set<string>()
   const removed: PodClaudeSettingsRemoval[] = []

@@ -289,3 +289,19 @@ describe("a user's own empty entries and Pod's direct command (r-orca on v5)", (
     expect(refusal.reason).toBe('not a JSONC object')
   })
 })
+
+describe('a settings file that names a key twice (r-orca on cfc502ee)', () => {
+  const POD = `{ "hooks": [{ "type": "command", "command": "${CLIENT}", "args": [] }] }`
+
+  it('is refused with its reason and never throws', () => {
+    for (const text of [
+      `{"hooks":{"Stop":[],"Stop":[${POD}]}}`,
+      `{"hooks":{"Stop":[${POD}]},"hooks":{}}`,
+      `{"hooks":{"Stop":[{"hooks":[],"hooks":[{"type":"command","command":"${CLIENT}"}]}]}}`
+    ]) {
+      const refusal: PodClaudeCutRefusal = {}
+      expect(removePodClaudeEntries(text, names, refusal)).toBe(null)
+      expect(refusal.reason).toBe('duplicate keys')
+    }
+  })
+})
