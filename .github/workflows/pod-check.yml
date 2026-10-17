@@ -6,8 +6,10 @@
 #
 #   gh workflow run pod-check.yml -R outof-place/pod -f ref=stack/cand-<n>
 #
-# GITHUB_TOKEN reads the repository. POD_PAYLOAD_TOKEN (read access to claude-acc's contents)
-# fetches the claude-acc payload once that repository is private.
+# GITHUB_TOKEN reads the repository. POD_PAYLOAD_TOKEN (read access to claude-acc's contents) is a
+# repository secret that fetches the claude-acc payload once that repository is private. Every run
+# gets it, so the allowlist below is only this copy's: a branch's own copy of this file, dispatched by
+# someone with write access, could drop it and run that branch's code on the runner with the token.
 name: Pod check
 
 on:
@@ -33,7 +35,7 @@ env:
 jobs:
   check:
     name: Pod check
-    runs-on: [self-hosted, linux, arm64, pod-ci]
+    runs-on: [self-hosted, linux, ARM64, pod-ci]
     timeout-minutes: 150
     steps:
       # Why only these: a branch is checked once it is a candidate.
@@ -48,7 +50,7 @@ jobs:
               exit 1
               ;;
           esac
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
