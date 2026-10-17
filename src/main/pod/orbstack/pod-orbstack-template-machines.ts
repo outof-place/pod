@@ -121,6 +121,7 @@ export async function cloneSandbox(args: {
   name: string
   mounts: readonly string[]
   onStep?: (step: string) => void
+  theme?: string | null
 }): Promise<{ agentVersion: string | null }> {
   const { run, name, mounts, template } = args
   args.onStep?.('Cloning the template')
@@ -128,7 +129,13 @@ export async function cloneSandbox(args: {
   // The template was made isolated; a clone that is not must never run an agent.
   await assertIsolated(run, name, 'The clone')
   args.onStep?.('Setting up the worktree')
-  await provisionSandboxWorktree({ run, name, mounts, agentVersion: template.agentVersion })
+  await provisionSandboxWorktree({
+    run,
+    name,
+    mounts,
+    agentVersion: template.agentVersion,
+    theme: args.theme ?? null
+  })
   return { agentVersion: template.agentVersion }
 }
 
