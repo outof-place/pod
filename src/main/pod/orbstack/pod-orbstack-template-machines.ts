@@ -6,6 +6,7 @@ import type { PodOrbstackMachineKind } from '../../../shared/pod-orbstack-types'
 import { parseOrbctlStatus } from './pod-orbstack-inventory'
 import { POD_ORBSTACK_BUILTIN_RECIPE } from './pod-orbstack-recipe'
 import type { SandboxClaudeRelease } from './pod-orbstack-claude-release'
+import type { SandboxClaudeChoices } from './pod-orbstack-mac-claude-choices'
 import {
   installSandboxClaude,
   provisionSandboxBase,
@@ -121,7 +122,7 @@ export async function cloneSandbox(args: {
   name: string
   mounts: readonly string[]
   onStep?: (step: string) => void
-  theme?: string | null
+  choices?: SandboxClaudeChoices
 }): Promise<{ agentVersion: string | null }> {
   const { run, name, mounts, template } = args
   args.onStep?.('Cloning the template')
@@ -134,7 +135,7 @@ export async function cloneSandbox(args: {
     name,
     mounts,
     agentVersion: template.agentVersion,
-    theme: args.theme ?? null
+    ...(args.choices ? { choices: args.choices } : {})
   })
   return { agentVersion: template.agentVersion }
 }
