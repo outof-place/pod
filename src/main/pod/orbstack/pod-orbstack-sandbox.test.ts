@@ -149,6 +149,17 @@ describe('provisionSandbox', () => {
     expect(SETUP_WORKTREE).toContain('/etc/claude-code/managed-settings.json')
   })
 
+  it('runs the first launch path once, last, read-only and never failing the setup', () => {
+    const lines = SETUP_WORKTREE.trim().split('\n')
+    expect(lines.at(-1)).toBe(
+      '(cd "${1:-$HOME}" && bash -lc \'"$HOME/.local/bin/claude" --version\') </dev/null >/dev/null 2>&1 || true'
+    )
+    // Only --version: nothing in the setup starts Claude Code for real.
+    expect(SETUP_WORKTREE.match(/\/bin\/claude"[^\n]*/g)).toEqual([
+      '/bin/claude" --version\') </dev/null >/dev/null 2>&1 || true'
+    ])
+  })
+
   it('verifies the signature and checksum before installing anything', () => {
     const gpgv = VERIFY_AND_INSTALL_CLAUDE.indexOf('gpgv --status-fd 1')
     const checksum = VERIFY_AND_INSTALL_CLAUDE.indexOf('sha256sum --check')
