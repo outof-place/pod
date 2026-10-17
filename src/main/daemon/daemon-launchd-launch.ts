@@ -4,8 +4,8 @@
 // sits in the runtime's coalition, which loses its leader when the runtime quits; an app started
 // from a terminal could then own it, and its quit or Force Quit ends every session (M10).
 import { readFileSync, unlinkSync } from 'node:fs'
-import { runProcess } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
+import { runLaunchctl } from '../pod/launchd/launchctl-darwin'
 import { daemonAppPolicyLaunch, daemonNodeExecutable } from './daemon-app-scheduling-policy'
 import {
   buildDaemonChildEnv,
@@ -26,8 +26,6 @@ import {
   type DaemonLaunchdJobControl
 } from './daemon-launchd-process'
 
-const LAUNCHCTL_PATH = '/bin/launchctl'
-const LAUNCHCTL_TIMEOUT_MS = 10_000
 const DEFAULT_STARTUP_TIMEOUT_MS = 10_000
 const REPORT_POLL_MS = 25
 const PRINT_POLL_MS = 500
@@ -86,9 +84,6 @@ export type RunLaunchctl = (args: string[]) => Promise<ProcessResult>
 export type DaemonLaunchdOutcome =
   | { kind: 'ready'; child: LaunchdDaemonProcess; identity: DaemonReadyIdentity }
   | { kind: 'endpoint-unavailable'; reason: string }
-
-const runLaunchctl: RunLaunchctl = (args) =>
-  runProcess({ program: LAUNCHCTL_PATH, args, timeoutMs: LAUNCHCTL_TIMEOUT_MS })
 
 function removeQuietly(path: string): void {
   try {

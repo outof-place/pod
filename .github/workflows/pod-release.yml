@@ -59,6 +59,12 @@ jobs:
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
+      # afterPack builds pod-gocache with this Go (native/pod-gocache-macos/scripts/build.sh pins it).
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.2'
+          cache: false
+
       - name: Check tag
         run: |
           set -euo pipefail

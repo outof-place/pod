@@ -5,7 +5,7 @@
 // src/shared/product-helper-names.ts).
 //
 // Pod's own helpers are named Pod from the start; the ones the packaging places and signs by name
-// are listed here too (POD_SIM).
+// are listed here too (POD_SIM; pod-gocache's entry is product/gocache).
 //
 //   node product/helper-names.cjs --check <Product.app>   lists every Orca name a user can see
 const { execFileSync, spawnSync } = require('node:child_process')
@@ -148,48 +148,62 @@ function installPodSimHelper(appPath, repoRoot, arch) {
   chmodSync(target, 0o755)
 }
 
-/** osx-sign's per-file options, with pod-sim's signing identifier added for its file. */
-function podSimSignOptions(appPath, optionsForFile) {
-  const podSim = join(appPath, POD_SIM.path)
+/** osx-sign's per-file options, with `helper`'s signing identifier added for its file. */
+function helperSignOptions(appPath, optionsForFile, helper) {
+  const target = join(appPath, helper.path)
   return (filePath) => {
     const options = optionsForFile(filePath)
-    return filePath === podSim
+    return filePath === target
       ? {
           ...options,
           additionalArguments: [
             ...(options.additionalArguments ?? []),
             '--identifier',
-            POD_SIM.identifier
+            helper.identifier
           ]
         }
       : options
   }
 }
 
-/** After signing: pod-sim is in the app, valid, hardened, and named codes.pod.sim. */
-function assertPodSimSigned(appPath) {
-  const podSim = join(appPath, POD_SIM.path)
-  if (!existsSync(podSim)) {
-    throw new Error(`product: ${POD_SIM.path} is missing from ${basename(appPath)}`)
+/** osx-sign's per-file options, with pod-sim's signing identifier added for its file. */
+function podSimSignOptions(appPath, optionsForFile) {
+  return helperSignOptions(appPath, optionsForFile, POD_SIM)
+}
+
+/** After signing: `helper` is in the app, valid, hardened, and named by its identifier. */
+function assertHelperSigned(appPath, helper) {
+  const path = join(appPath, helper.path)
+  if (!existsSync(path)) {
+    throw new Error(`product: ${helper.path} is missing from ${basename(appPath)}`)
   }
-  execFileSync('codesign', ['--verify', '--strict', podSim], { stdio: 'inherit' })
+  execFileSync('codesign', ['--verify', '--strict', path], { stdio: 'inherit' })
   // codesign -d prints to stderr.
-  const { stderr } = spawnSync('codesign', ['-d', '--verbose=2', podSim], { encoding: 'utf8' })
-  const problems = podSimSignatureProblems(stderr ?? '')
+  const { stderr } = spawnSync('codesign', ['-d', '--verbose=2', path], { encoding: 'utf8' })
+  const problems = helperSignatureProblems(stderr ?? '', helper.identifier)
   if (problems.length > 0) {
-    throw new Error(`product: ${POD_SIM.path}: ${problems.join('; ')}`)
+    throw new Error(`product: ${helper.path}: ${problems.join('; ')}`)
   }
 }
 
-function podSimSignatureProblems(details) {
+/** After signing: pod-sim is in the app, valid, hardened, and named codes.pod.sim. */
+function assertPodSimSigned(appPath) {
+  assertHelperSigned(appPath, POD_SIM)
+}
+
+function helperSignatureProblems(details, identifier) {
   const problems = []
-  if (!details.split('\n').includes(`Identifier=${POD_SIM.identifier}`)) {
-    problems.push(`its identifier is not ${POD_SIM.identifier}`)
+  if (!details.split('\n').includes(`Identifier=${identifier}`)) {
+    problems.push(`its identifier is not ${identifier}`)
   }
   if (!/^CodeDirectory .*flags=0x\w+\([^)]*runtime[^)]*\)/m.test(details)) {
     problems.push('it is not signed with the hardened runtime')
   }
   return problems
+}
+
+function podSimSignatureProblems(details) {
+  return helperSignatureProblems(details, POD_SIM.identifier)
 }
 
 function isSigned(path) {
@@ -267,8 +281,10 @@ if (require.main === module) {
 
 module.exports = {
   POD_SIM,
+  assertHelperSigned,
   assertNoUpstreamNames,
   assertPodSimSigned,
+  helperSignOptions,
   installPodSimHelper,
   podSimBuildEnv,
   podSimSignOptions,

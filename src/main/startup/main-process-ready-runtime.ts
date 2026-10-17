@@ -42,6 +42,7 @@ import { schedulePodHeadlessSpareRendererRelease } from '../pod/headless-host/he
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
 import { startPodAccFromStartup } from '../pod/acc/acc-startup'
+import { installPodGoCache } from '../pod/gocache/install-pod-gocache'
 import { installPodWorkspace } from '../pod/workspace/install-pod-workspace'
 import { installPodUiHost } from '../pod/ui-host/pod-ui-host'
 import { installPodUiHostSleep } from '../pod/ui-host/pod-ui-host-sleep'
@@ -80,6 +81,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   installPodSettings(store, state.agentAwakeService ?? undefined)
   // Fork-only (Pod): "Lazy-start heavy MCP servers"; at startup only wraps what the setting names.
   installMcpLazy(store)
+  // Fork-only (Pod): GOCACHEPROG from the first spawn; the helper installs after the first window.
+  installPodGoCache(store)
   // Fork-only (Pod): keybindings.effective on KeybindingService's file; watches only while a client opts in.
   const podKeybindingsPath = (): string =>
     state.keybindings?.getPath() ?? getUserKeybindingsPath(app.getPath('home'))

@@ -11,6 +11,7 @@ import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
 import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
 import { applyPodIndexedSearchPtyEnv } from '../../../pod/search/pod-indexed-search-pty-env'
+import { applyPodGoCachePtyEnv } from '../../../pod/gocache/pod-gocache-pty-env'
 import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl-managed-cli'
 import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
 import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
@@ -286,6 +287,8 @@ export function buildPtyHostEnv(
   })
   // Pod: indexed search for agents in this terminal (Settings: Indexed search).
   applyPodIndexedSearchPtyEnv(baseEnv)
+  // Pod: go in this terminal uses pod-gocache, for now only with POD_GOCACHE_TERMINAL_ENV=1.
+  applyPodGoCachePtyEnv(baseEnv, { isWsl: opts.isWsl === true })
 
   if (
     opts.routeBrowserOpensToClient === true &&

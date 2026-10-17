@@ -121,6 +121,11 @@ actool_version=$(DEVELOPER_DIR="$icon_developer_dir" xcrun actool --version |
   sed -n '/short-bundle-version/{n;s/.*<string>\([0-9]*\).*/\1/p;}')
 [ "${actool_version:-0}" -ge 26 ] ||
   die "actool ${actool_version:-?} in $icon_developer_dir; the app icon needs Xcode 26+ (set POD_ICON_DEVELOPER_DIR)"
+# afterPack builds pod-gocache with the Go its build.sh pins, --skip-build included.
+command -v go >/dev/null 2>&1 || die "Go is missing: afterPack builds pod-gocache with it (brew install go)"
+go_version=$(native/pod-gocache-macos/scripts/build.sh --check-toolchain) ||
+  die "pod-gocache's pinned Go does not run here (above); afterPack would fail"
+log "pod-gocache: $go_version"
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
 # Upstream's strict release signing for helpers and the bundle (hardened runtime, timestamps).
 export ORCA_MAC_RELEASE=1

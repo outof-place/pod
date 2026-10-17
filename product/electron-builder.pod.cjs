@@ -18,6 +18,7 @@ const { installMcpLazy } = require('./mcp-lazy/install-mcp-lazy.cjs')
 const { installCliLaunchers } = require('./cli-launchers/install-cli-launchers.cjs')
 const { installNativeCli } = require('./native-cli/install-native-cli.cjs')
 const helperNames = require('./helper-names.cjs')
+const podGoCache = require('./gocache/install-pod-gocache.cjs')
 // Built by config/scripts/build-pod-peer-identity-macos.mjs (release.sh).
 const POD_PEER_IDENTITY_BUILD =
   'native/pod-peer-identity-macos/.build/release/pod-peer-identity.node'
@@ -200,17 +201,21 @@ module.exports = {
     installMcpLazy(resourcesDir, Arch[context.arch])
     // The iOS simulator helper, built here so a package never carries a stale or missing one.
     helperNames.installPodSimHelper(join(resourcesDir, '..', '..'), repoRoot, Arch[context.arch])
+    // The Go build cache helper; a build machine without Go fails here, not on a user's Mac.
+    podGoCache.installPodGoCacheHelper(join(resourcesDir, '..', '..'), repoRoot, Arch[context.arch])
     writeFileSync(
       join(resourcesDir, 'product-upstream.json'),
       `${JSON.stringify(readOrcaUpstream())}\n`
     )
     helperNames.assertNoUpstreamNames(join(resourcesDir, '..', '..'))
   },
-  // pod-sim in the signed app, valid, hardened and named codes.pod.sim (skipped when nothing is signed).
-  afterSign: (context) =>
-    helperNames.assertPodSimSigned(
-      join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
-    ),
+  // pod-sim and pod-gocache in the signed app, valid, hardened and under their identifiers
+  // (skipped when nothing is signed).
+  afterSign: (context) => {
+    const app = join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
+    helperNames.assertPodSimSigned(app)
+    podGoCache.assertPodGoCacheSigned(app)
+  },
   mac: {
     ...base.mac,
     signIgnore: [...(base.mac.signIgnore ?? []), ...PRODUCT_SIGN_IGNORE],
