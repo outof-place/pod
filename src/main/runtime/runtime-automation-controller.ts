@@ -17,7 +17,10 @@ import type {
 } from '../../shared/automation-owner-precondition'
 import { runAutomationNowFenced } from '../automations/refused-manual-run'
 import { paginateAutomationRuns } from '../../shared/automation-run-cursor'
-import { hasRuntimeAutomationUpdateValue } from './runtime-automation-update-value'
+import {
+  hasRuntimeAutomationUpdateValue,
+  RUNTIME_AUTOMATION_UPDATE_KEYS
+} from './runtime-automation-update-value'
 import { assertAutomationRunContextMatchesTarget } from './runtime-automation-run-context'
 
 export type RuntimeAutomationCreateInput = Omit<
@@ -134,6 +137,7 @@ export class RuntimeAutomationController {
         workspaceId: target.workspaceId,
         baseBranch: input.baseBranch,
         setupDecision: input.setupDecision,
+        setupTrustHash: input.setupTrustHash,
         reuseSession: input.reuseSession,
         timezone: input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
         rrule: input.rrule,
@@ -235,24 +239,7 @@ export class RuntimeAutomationController {
     updates: RuntimeAutomationUpdateInput,
     patch: AutomationUpdateInput
   ): void {
-    const keys = [
-      'name',
-      'prompt',
-      'precheck',
-      'agentId',
-      'extraAgentArgs',
-      'runContext',
-      'sourceContext',
-      'baseBranch',
-      'setupDecision',
-      'reuseSession',
-      'timezone',
-      'rrule',
-      'dtstart',
-      'enabled',
-      'missedRunGraceMinutes'
-    ] as const
-    for (const key of keys) {
+    for (const key of RUNTIME_AUTOMATION_UPDATE_KEYS) {
       if (hasRuntimeAutomationUpdateValue(updates, key)) {
         Object.assign(patch, { [key]: updates[key] })
       }
