@@ -60,11 +60,20 @@ function createPreservedDaemonHandle(
   return handle
 }
 
-export type DaemonLaunchPolicy = { macosLoginSessionWatch?: boolean; startupTimeoutMs?: number }
+export type DaemonLaunchPolicy = {
+  macosLoginSessionWatch?: boolean
+  /** Pod: start the daemon as a launchd job (macOS GUI session only; SSH/headless serve forks). */
+  macosLaunchdJob?: boolean
+  startupTimeoutMs?: number
+}
 
 export function createOutOfProcessLauncher(
   runtimeDir: string,
-  { macosLoginSessionWatch = false, startupTimeoutMs }: DaemonLaunchPolicy = {}
+  {
+    macosLoginSessionWatch = false,
+    macosLaunchdJob = false,
+    startupTimeoutMs
+  }: DaemonLaunchPolicy = {}
 ): DaemonLauncher {
   return async (socketPath, tokenPath, suppliedPidPath, suppliedLaunchNonce) => {
     const entryPath = getDaemonEntryPath()
@@ -139,7 +148,7 @@ export function createOutOfProcessLauncher(
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
       // Pod: a GUI daemon on macOS starts as a launchd job (daemon-launchd-launch.ts).
       const launchdJobs =
-        macosLoginSessionWatch && isLaunchdDaemonLaunchEnabled()
+        macosLaunchdJob && isLaunchdDaemonLaunchEnabled()
           ? createDarwinDaemonLaunchdJobs()
           : undefined
       if (launchdJobs) {

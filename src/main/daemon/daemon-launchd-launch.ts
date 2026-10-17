@@ -38,6 +38,16 @@ export function isLaunchdDaemonLaunchEnabled(env: NodeJS.ProcessEnv = process.en
   return env.VITEST ? env.POD_DAEMON_LAUNCHD === '1' : env.POD_DAEMON_LAUNCHD !== '0'
 }
 
+/** A GUI session's daemon wants a job: a plain serve forks (SSH must outlive the session), but
+ *  PodNative's headless runtime is a serve of the GUI session. */
+export function isGuiSessionDaemon(
+  isServeMode: boolean,
+  isPodHeadlessUiHost: boolean,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  return platform === 'darwin' && (!isServeMode || isPodHeadlessUiHost)
+}
+
 /** Where one launch's job lives (daemon-host side): its label and files. */
 export type DaemonLaunchdPaths = {
   label: string
