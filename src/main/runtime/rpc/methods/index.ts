@@ -65,6 +65,7 @@ import { POD_WORKSPACE_METHODS } from '../../../pod/workspace/pod-workspace-rpc-
 import { WORKSPACE_LAYOUT_METHODS } from './workspace-layout'
 import { POD_ORBSTACK_METHODS } from '../../../pod/orbstack/pod-orbstack-rpc-methods'
 import { POD_TERMINAL_LANE_METHODS } from './pod-terminal-lane'
+import { POD_SESSION_TAB_RESTART_METHODS } from './pod-session-tabs-restart'
 import { POD_WORKSPACE_ROW_METHODS } from './pod-workspace-rows'
 import { POD_NOTIFICATION_SOURCE_METHODS } from './pod-notification-sources'
 import { POD_SETTINGS_METHODS } from '../../../pod/settings/pod-settings-rpc-methods'
@@ -124,6 +125,8 @@ export const ALL_RPC_METHODS = [
   ...observePodComputerActions(COMPUTER_METHODS),
   ...POD_COMPUTER_ACTIONS_METHODS,
   ...SESSION_TAB_METHODS,
+  // Fork-only (Pod): Restart on a failed local shell's kept pane.
+  ...POD_SESSION_TAB_RESTART_METHODS,
   ...WORKSPACE_LAYOUT_METHODS,
   ...NATIVE_CHAT_METHODS,
   ...FILE_METHODS,

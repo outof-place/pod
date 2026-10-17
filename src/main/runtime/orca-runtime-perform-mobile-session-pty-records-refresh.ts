@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { restartPodExitedTerminal } from '../pod/terminal-exit/pod-terminal-exit-restart'
 import { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from './orca-runtime-build-headless-mobile-session-browser-tabs'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { isAgentLaunchRunningIn } from '../agent-launch/agent-launch-pane-attachment'
@@ -99,6 +100,11 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
       : this.listKnownResolvedWorktreesForExplicitTarget(targetWorktreeId, targetWorktree)
   }
 
+  // Pod: session.tabs.restartTerminal (pod-terminal-exit-restart.ts).
+  restartExitedMobileSessionTerminal(worktreeSelector: string, tabId: string, leafId?: string) {
+    return restartPodExitedTerminal(this, worktreeSelector, tabId, leafId)
+  }
+
   async activateMobileSessionTab(
     worktreeSelector: string,
     tabId: string,
@@ -150,6 +156,8 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&
+        // Pod: a failed shell's kept pane starts again only through session.tabs.restartTerminal.
+        !publicTab.terminalExit &&
         // Why: opening a tab is the documented wake gesture for a slept pane
         // (#11598), so only a background probe may be refused for one.
         (!automatic ||

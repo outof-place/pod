@@ -71,6 +71,13 @@ export const POD_WORKSPACE_ROWS_RUNTIME_CAPABILITY = 'pod.workspace-rows.v1' as 
 export const POD_NOTIFICATION_SOURCES_RUNTIME_CAPABILITY = 'pod.notifications.sources.v1' as const
 
 /**
+ * A failed local shell (exit above 0) keeps its pane with `terminalExit` in session tabs, and
+ * session.tabs.restartTerminal starts a shell in it. Older hosts retire the pane on exit.
+ */
+export const POD_SESSION_TABS_RESTART_TERMINAL_RUNTIME_CAPABILITY =
+  'pod.session-tabs.restart-terminal.v1' as const
+
+/**
  * sim.*: iOS simulators for agents (lease, drive, release; the pool snapshot and its stream). A
  * client shows simulator UI, and the CLI calls sim.*, only on a host that lists this. Not listed
  * below until the sim.* handlers land (stage 7): a runtime never advertises what it cannot serve.
@@ -88,5 +95,6 @@ export const POD_RUNTIME_CAPABILITIES = [
   POD_SETTINGS_NETWORK_PROXY_RUNTIME_CAPABILITY,
   POD_PLUGINS_MANAGE_RUNTIME_CAPABILITY,
   POD_WORKSPACE_ROWS_RUNTIME_CAPABILITY,
-  POD_NOTIFICATION_SOURCES_RUNTIME_CAPABILITY
+  POD_NOTIFICATION_SOURCES_RUNTIME_CAPABILITY,
+  POD_SESSION_TABS_RESTART_TERMINAL_RUNTIME_CAPABILITY
 ] as const
