@@ -284,6 +284,13 @@ export const POD_SETTINGS_FIELDS = {
     'Terminal attention',
     'Keeps a pane highlighted after a terminal bell or a finished agent until you interact with it. Experimental while the signal is tuned.'
   ),
+  // PodNative's resume prompt reads it at launch as the desktop's does; the desktop's switch is the
+  // same key. Off: Pod asks before it resumes any chat.
+  nativeChatResumeWorkOnRestart: row(
+    z.boolean(),
+    'Resume working chats automatically after a restart',
+    'When Pod quits or installs an update, chats that were working are automatically resumed when Pod is reopened.'
+  ),
   // network-proxy.ts's normalizer keeps 4096 characters.
   httpProxyBypassRules: row(
     z.string().max(4096),

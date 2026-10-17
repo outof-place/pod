@@ -95,7 +95,9 @@ const APPLIED_FOR_PODNATIVE = [
   // Advanced: the runtime's proxy applies it
   'httpProxyBypassRules',
   // Experimental: PodNative's pane highlight (pn-acc's PN branch, landed in a pair)
-  'experimentalTerminalAttention'
+  'experimentalTerminalAttention',
+  // Experimental: PodNative's resume-on-restart prompt (pn-acc's PN branch, landed in a pair)
+  'nativeChatResumeWorkOnRestart'
 ]
 
 describe('podSettings pages', () => {
@@ -134,7 +136,11 @@ describe('podSettings pages', () => {
       'openInApplications',
       'experimentalAgentHibernation',
       'agentHibernationIdleMs',
-      'experimentalActivity'
+      'experimentalActivity',
+      // The chat UI and its shell environment stay the desktop's: the variables can hold secrets.
+      'experimentalNativeChat',
+      'nativeChatInheritShellEnvironment',
+      'nativeChatShellEnvironmentVariables'
     ]) {
       expect(Reflect.get(POD_SETTINGS_HIDDEN, key), key).toBe('later')
     }
