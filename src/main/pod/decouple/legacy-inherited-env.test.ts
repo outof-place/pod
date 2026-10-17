@@ -45,7 +45,7 @@ afterEach(() => vi.unstubAllEnvs())
 
 describe.runIf(ENV_DECOUPLED)('a new terminal under an env inherited from a live Pod', () => {
   it.each(['daemon', 'local'] as const)(
-    'gets none of its ORCA_ names on the %s path, except one the request sets',
+    'gets none of its inherited ORCA_ values on the %s path, only twins of its own',
     async (path) => {
       for (const [name, value] of Object.entries(INHERITED)) {
         vi.stubEnv(name, value)
@@ -59,11 +59,13 @@ describe.runIf(ENV_DECOUPLED)('a new terminal under an env inherited from a live
               getOptions: () => ({}),
               plan
             })
-      for (const name of Object.keys(INHERITED)) {
-        expect(env[name]).toBeUndefined()
-      }
+      // The inherited values never reach the pane; the ORCA_ twins carry this request's own.
+      expect(env[legacy('AGENT_HOOK_ENDPOINT')]).toBeUndefined()
+      expect(env[legacy('AGENT_LAUNCH_TOKEN')]).toBeUndefined()
       expect(env[current('AGENT_HOOK_ENDPOINT')]).toBeUndefined()
       expect(env[current('PANE_KEY')]).toBe('tab-1:dev-pane')
+      expect(env[legacy('PANE_KEY')]).toBe('tab-1:dev-pane')
+      expect(env[legacy('AGENT_HOOK_ENV')]).toBe('development')
       expect(env[legacy('TAB_ID')]).toBe('explicit-legacy')
     }
   )
