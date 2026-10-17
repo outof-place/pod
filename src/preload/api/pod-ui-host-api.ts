@@ -1,6 +1,10 @@
 import type { PodUiHostQuitBlockers } from '../../shared/pod-ui-host-quit'
 import type { PodUiHostSurfaceNavigation } from '../../shared/pod-ui-host-surface'
 import type { PodUiHostPaneRestartRequest } from '../../shared/pod-ui-host-pane-restart'
+import type {
+  PodUiHostPaneLayoutReply,
+  PodUiHostPaneLayoutRequest
+} from '../../shared/pod-ui-host-pane-layout'
 
 /** Fork-only (Pod): one-app's quit questions from main (src/shared/pod-ui-host-quit.ts). */
 export type PodUiHostApi = {
@@ -18,4 +22,8 @@ export type PodUiHostApi = {
   onPaneRestart: (restart: (request: PodUiHostPaneRestartRequest) => boolean) => () => void
   /** A failed shell's pane main kept, whose agent must not resume; returns the unsubscribe. */
   onPaneExitRetained: (retained: (pane: PodUiHostPaneRestartRequest) => void) => () => void
+  /** A pane layout PodNative sent for a tab here; returns the unsubscribe. */
+  onPaneLayout: (
+    apply: (request: PodUiHostPaneLayoutRequest) => PodUiHostPaneLayoutReply
+  ) => () => void
 }

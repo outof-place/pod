@@ -78,6 +78,14 @@ export const POD_SESSION_TABS_RESTART_TERMINAL_RUNTIME_CAPABILITY =
   'pod.session-tabs.restart-terminal.v1' as const
 
 /**
+ * session.tabs.updatePaneLayout from this machine's PodNative reaches the one-app window's renderer
+ * (splits, expanded pane), and takes `activeLeafId` on both paths without focusing anything.
+ * Older hosts answer `updated: true` and drop the layout while their window runs.
+ */
+export const POD_SESSION_TABS_PANE_LAYOUT_SYNC_RUNTIME_CAPABILITY =
+  'pod.session-tabs.pane-layout-sync.v1' as const
+
+/**
  * sim.*: iOS simulators for agents (lease, drive, release; the pool snapshot and its stream). A
  * client shows simulator UI, and the CLI calls sim.*, only on a host that lists this. Not listed
  * below until the sim.* handlers land (stage 7): a runtime never advertises what it cannot serve.
@@ -96,5 +104,6 @@ export const POD_RUNTIME_CAPABILITIES = [
   POD_PLUGINS_MANAGE_RUNTIME_CAPABILITY,
   POD_WORKSPACE_ROWS_RUNTIME_CAPABILITY,
   POD_NOTIFICATION_SOURCES_RUNTIME_CAPABILITY,
-  POD_SESSION_TABS_RESTART_TERMINAL_RUNTIME_CAPABILITY
+  POD_SESSION_TABS_RESTART_TERMINAL_RUNTIME_CAPABILITY,
+  POD_SESSION_TABS_PANE_LAYOUT_SYNC_RUNTIME_CAPABILITY
 ] as const

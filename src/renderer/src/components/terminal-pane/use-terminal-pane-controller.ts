@@ -15,6 +15,7 @@ import { useTerminalPaneTitleEffects } from './use-terminal-pane-title-effects'
 import { useTerminalPaneContextActions } from './use-terminal-pane-context-actions'
 import { useTerminalPaneMobileActions } from './use-terminal-pane-mobile-actions'
 import { useTerminalPaneProjection } from './use-terminal-pane-projection'
+import { usePodTerminalPaneLayoutApply } from '../../pod/ui-host/use-pod-ui-host-pane-layout'
 
 export function useTerminalPaneController(props: TerminalPaneProps) {
   const foundation = useTerminalPaneFoundation(props)
@@ -24,6 +25,8 @@ export function useTerminalPaneController(props: TerminalPaneProps) {
   const startup = Object.assign(store, useTerminalPaneStartupActions(store))
   const layout = Object.assign(startup, useTerminalPaneLayoutPersistence(startup))
   const bindings = Object.assign(layout, useTerminalPaneLayoutBindings(layout))
+  // Fork-only (Pod): PodNative's pane layouts for this tab.
+  usePodTerminalPaneLayoutApply(bindings)
   const close = Object.assign(bindings, useTerminalPaneCloseActions(bindings))
   useTerminalPaneLifecycleStage(close)
   const reconciliation = Object.assign(close, useTerminalPaneReconciliation(close))
