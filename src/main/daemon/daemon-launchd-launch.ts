@@ -176,8 +176,10 @@ export async function launchDaemonViaLaunchd(
   let pid: number | null = (await printJob(launchctl, uid, paths.label)).pid
   let printedAt = Date.now()
   const exitedEarly = async (): Promise<DaemonLaunchdOutcome> => {
+    // Why read again: the report can land between the loop's read and the exit seen after it.
+    const report = readDaemonLaunchdReport(paths.reportPath)
     const { lastExitCode } = await printJob(launchctl, uid, paths.label)
-    if (lastExitCode === DAEMON_EXIT_ENDPOINT_OCCUPIED) {
+    if (report?.type === 'endpoint-unavailable' || lastExitCode === DAEMON_EXIT_ENDPOINT_OCCUPIED) {
       // Lost the endpoint race before it could say so in its report.
       await jobs.bootout(paths.label).catch(warnLaunchdFailure('bootout'))
       removeQuietly(paths.reportPath)

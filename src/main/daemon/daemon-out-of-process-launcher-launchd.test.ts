@@ -120,6 +120,9 @@ describe('the launcher of a GUI daemon on macOS', () => {
       join(runtimeDir, 'launchd'),
       harness.jobs
     )
+    expect(harness.sweepDeadDaemonLaunchdJobs.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.launchDaemonChild.mock.invocationCallOrder[0] ?? 0
+    )
     const [options, jobs] = harness.launchDaemonChild.mock.calls[0] ?? []
     expect(jobs).toBe(harness.jobs)
     expect(options).toMatchObject({

@@ -30,7 +30,7 @@ import { publishDaemonPidFile } from './daemon-spawner'
 import { isNativePtyException } from './daemon-native-pty-exception'
 import { startDaemonScopeDeathWatch } from './daemon-scope-death-watch'
 import { isWindowsProcessTableAvailable } from '../windows/windows-process-table'
-import { reportToLaunchd, startAsLaunchdJob } from './daemon-launchd-report'
+import { reportLaunchdReady, reportToLaunchd, startAsLaunchdJob } from './daemon-launchd-report'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -337,7 +337,7 @@ async function main(): Promise<void> {
   if (process.send) {
     process.send({ type: 'ready', ...readyIdentity })
   }
-  reportToLaunchd({ type: 'ready', ...readyIdentity })
+  reportLaunchdReady(readyIdentity, launchdLabel)
   daemonLog.log('ready')
 
   warmWindowsConptyOnce()

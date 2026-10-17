@@ -79,6 +79,7 @@ export class LaunchdDaemonProcess extends EventEmitter {
     return this.exited ? -1 : null
   }
 
+  /** true once launchd is asked, before it delivers (async); false once the daemon is gone. */
   kill(signal: NodeJS.Signals = 'SIGTERM'): boolean {
     if (this.exitCode !== null) {
       return false
@@ -108,7 +109,8 @@ export class LaunchdDaemonProcess extends EventEmitter {
     this.timer?.unref()
   }
 
-  // Why the start time too: a pid launchd reaped may already be another process's.
+  // Why the start time too: a pid launchd reaped may already be another process's. An unreadable
+  // start (null) leaves the pid check alone, the safe side for signals, which go through launchd.
   private isOurs(): boolean {
     return (
       this.isAlive(this.pid) &&

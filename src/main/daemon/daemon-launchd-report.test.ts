@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   bootoutOwnLaunchdJobAtExit,
   dropLaunchdJobEnv,
+  reportLaunchdReady,
   readDaemonLaunchdReport,
   reportToLaunchd,
   takeLaunchdReportPath
@@ -53,8 +54,10 @@ describe('the launchd report of a daemon', () => {
 
 describe("a launchd daemon's own job", () => {
   const fakeSpawn = () => vi.fn(() => ({ unref: vi.fn(), on: vi.fn() }))
+  const ownReport = () => join(dir, 'codes.pod.daemon.abc.n1.report.json')
 
   it('is booted out by a detached launchctl when the daemon exits', () => {
+    takeLaunchdReportPath(['--launchd-report', ownReport()])
     const spawn = fakeSpawn()
     const target = new EventEmitter()
     bootoutOwnLaunchdJobAtExit('codes.pod.daemon.abc.n1', spawn, target)
@@ -68,12 +71,26 @@ describe("a launchd daemon's own job", () => {
     })
   })
 
-  it('is left alone unless Pod made it', () => {
+  it('is left alone unless it is the job this launch was given', () => {
+    takeLaunchdReportPath(['--launchd-report', ownReport()])
     const spawn = fakeSpawn()
     const target = new EventEmitter()
     bootoutOwnLaunchdJobAtExit(undefined, spawn, target)
     bootoutOwnLaunchdJobAtExit('application.codes.pod.app.1234', spawn, target)
+    // A Pod label, but not the one in this daemon's report path.
+    bootoutOwnLaunchdJobAtExit('codes.pod.daemon.abc.other', spawn, target)
+    takeLaunchdReportPath([])
+    bootoutOwnLaunchdJobAtExit('codes.pod.daemon.abc.n1', spawn, target)
     target.emit('exit')
     expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('reports ready before it arms the bootout', () => {
+    takeLaunchdReportPath(['--launchd-report', ownReport()])
+    const once = vi.spyOn(process, 'once').mockImplementation(() => process)
+    reportLaunchdReady({ pid: 7, startedAtMs: 1 }, 'codes.pod.daemon.abc.n1')
+    expect(readDaemonLaunchdReport(ownReport())).toEqual({ type: 'ready', pid: 7, startedAtMs: 1 })
+    expect(once).toHaveBeenCalledWith('exit', expect.any(Function))
+    once.mockRestore()
   })
 })
