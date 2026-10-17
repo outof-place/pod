@@ -216,7 +216,6 @@ export const POD_SETTINGS_HIDDEN = {
   combinedDiffFileTreeVisibleByDefault: 'dropped',
   // xterm.js renderer options and addons; PodNative's terminal draws its own.
   terminalGpuAcceleration: 'dropped',
-  terminalLigatures: 'dropped',
   terminalInlineImages: 'dropped',
   terminalPaneOpacityTransitionMs: 'dropped',
   // Orca's own terminal experiment inside Electron.

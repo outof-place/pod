@@ -164,6 +164,11 @@ export const POD_SETTINGS_FIELDS = {
     z.number().min(MIN_TERMINAL_LINE_HEIGHT).max(MAX_TERMINAL_LINE_HEIGHT),
     'Line height'
   ),
+  terminalLigatures: row(
+    z.enum(['auto', 'on', 'off']),
+    'Ligatures',
+    'Auto draws them for fonts known to have them, such as Fira Code or JetBrains Mono.'
+  ),
   terminalCursorStyle: row(z.enum(['bar', 'block', 'underline']), 'Cursor'),
   terminalCursorBlink: row(z.boolean(), 'Blink'),
   terminalCursorOpacity: row(opacity, 'Cursor opacity'),

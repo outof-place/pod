@@ -69,7 +69,8 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
           'terminalFontSize',
           'terminalFontWeight',
           'terminalFontWeightBold',
-          'terminalLineHeight'
+          'terminalLineHeight',
+          'terminalLigatures'
         ]
       },
       {

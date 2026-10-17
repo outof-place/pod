@@ -31,6 +31,7 @@ const APPLIED_FOR_PODNATIVE = [
   'terminalFontWeight',
   'terminalFontWeightBold',
   'terminalLineHeight',
+  'terminalLigatures',
   'terminalCursorStyle',
   'terminalCursorBlink',
   'terminalCursorOpacity',

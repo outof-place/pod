@@ -315,6 +315,7 @@ describe('PodSettingsService fields that were Electron-only', () => {
       { httpProxyBypassRules: 'x'.repeat(4097) },
       { agentCmdOverrides: { 'not-an-agent': 'x' } },
       { terminalScrollSensitivity: 11 },
+      { terminalLigatures: 'sometimes' },
       // Hidden as `later` until PodNative applies them: not writable meanwhile.
       { terminalShortcutPolicy: 'terminal-first' },
       { openInApplications: [] }
