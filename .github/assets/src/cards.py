@@ -69,7 +69,7 @@ PRIVACY = Card(
     "Pod sends no telemetry and makes no calls to Stably's servers.",
     "1.0",
 )
-LEGEND = "1.0 marks what Pod 1.0 brings, out now as 1.0.0-rc1; Coming, what follows it. Per-worktree setup via orca.yaml is inherited from Orca."
+LEGEND = "1.0 marks what Pod 1.0 brings, out now as 1.0.0-rc3; Coming, what follows it. Per-worktree setup via orca.yaml is inherited from Orca."
 ACC_TITLE = "claude-acc, built in"
 ACC_BODY = "The studio's toolkit for running many Claude Code agents on one Mac, now part of the IDE."
 ACC_TAG = "1.0"
