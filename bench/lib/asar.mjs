@@ -19,6 +19,7 @@ function readHeader(fd) {
 
 /** Writes every file of `asarPath` under `outDir`; returns the number of files written. */
 export function extractAsar(asarPath, outDir) {
+  outDir = path.resolve(outDir)
   const fd = openSync(asarPath, 'r')
   let count = 0
   try {
@@ -34,6 +35,11 @@ export function extractAsar(asarPath, outDir) {
           mkdirSync(target, { recursive: true })
           walk(entry.files, relPath)
         } else if (entry.link) {
+          // Only links that stay inside the output dir: a file written under one must too.
+          const resolved = path.resolve(path.dirname(target), entry.link)
+          if (!resolved.startsWith(outDir + path.sep)) {
+            throw new Error(`asar link escapes the output dir: ${relPath} -> ${entry.link}`)
+          }
           symlinkSync(entry.link, target)
         } else {
           mkdirSync(path.dirname(target), { recursive: true })

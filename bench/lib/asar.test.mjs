@@ -48,3 +48,10 @@ test('an entry that would land outside the output dir stops the extraction', () 
   writeAsar(asar, { '..': { files: { escaped: { offset: '0', size: 1 } } } }, Buffer.from('x'))
   assert.throws(() => extractAsar(asar, path.join(dir, 'out')), /escapes the output dir/)
 })
+
+test('a link whose target leaves the output dir stops the extraction', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'asar-test-'))
+  const asar = path.join(dir, 'app.asar')
+  writeAsar(asar, { out: { files: { up: { link: '../../elsewhere' } } } }, Buffer.alloc(0))
+  assert.throws(() => extractAsar(asar, path.join(dir, 'out')), /link escapes the output dir/)
+})
