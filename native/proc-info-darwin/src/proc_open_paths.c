@@ -138,6 +138,13 @@ static void scan(napi_env env, void *data) {
   free(pids);
 }
 
+static void reject(napi_env env, napi_deferred deferred, const char *text) {
+  napi_value message, error;
+  napi_create_string_utf8(env, text, NAPI_AUTO_LENGTH, &message);
+  napi_create_error(env, NULL, message, &error);
+  napi_reject_deferred(env, deferred, error);
+}
+
 static void settle(napi_env env, napi_status status, void *data) {
   scan_job *job = data;
   napi_value result = NULL;
@@ -154,11 +161,7 @@ static void settle(napi_env env, napi_status status, void *data) {
   if (ok) {
     napi_resolve_deferred(env, job->deferred, result);
   } else {
-    napi_value message, error;
-    napi_create_string_utf8(env, job->error ? job->error : "open-file scan failed", NAPI_AUTO_LENGTH,
-                            &message);
-    napi_create_error(env, NULL, message, &error);
-    napi_reject_deferred(env, job->deferred, error);
+    reject(env, job->deferred, job->error ? job->error : "open-file scan failed");
   }
   napi_delete_async_work(env, job->work);
   free(job->hits);
@@ -209,14 +212,30 @@ napi_value FindOpenPathsUnder(napi_env env, napi_callback_info info) {
     free(job);
     return NULL;
   }
-  napi_value promise, name;
-  if (napi_create_promise(env, &job->deferred, &promise) != napi_ok ||
-      napi_create_string_utf8(env, "findOpenPathsUnder", NAPI_AUTO_LENGTH, &name) != napi_ok ||
-      napi_create_async_work(env, NULL, name, scan, settle, job, &job->work) != napi_ok ||
-      napi_queue_async_work(env, job->work) != napi_ok) {
+  napi_value promise, name, empty;
+  if (napi_create_promise(env, &job->deferred, &promise) != napi_ok) {
     free(job);
     napi_throw_error(env, NULL, "could not queue the open-file scan");
     return NULL;
   }
+  // From here every failure rejects the promise, so the deferred never leaks.
+  if (job->folder_count == 0) {
+    // Nothing is open below no folder: no pass over every process.
+    if (napi_create_array(env, &empty) == napi_ok) {
+      napi_resolve_deferred(env, job->deferred, empty);
+    } else {
+      reject(env, job->deferred, "out of memory");
+    }
+  } else if (napi_create_string_utf8(env, "findOpenPathsUnder", NAPI_AUTO_LENGTH, &name) != napi_ok ||
+             napi_create_async_work(env, NULL, name, scan, settle, job, &job->work) != napi_ok) {
+    reject(env, job->deferred, "could not queue the open-file scan");
+  } else if (napi_queue_async_work(env, job->work) != napi_ok) {
+    napi_delete_async_work(env, job->work);
+    reject(env, job->deferred, "could not queue the open-file scan");
+  } else {
+    // settle frees the job.
+    return promise;
+  }
+  free(job);
   return promise;
 }

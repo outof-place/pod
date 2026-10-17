@@ -311,6 +311,7 @@ describeDarwin('native/proc-info-darwin against ps', () => {
       const mine = (await pending).filter((hit) => hit.pid === process.pid)
       expect(mine.map((hit) => hit.path)).toEqual([join(real, 'open.txt')])
       expect(await addon.findOpenPathsUnder!([join(real, 'none-such')])).toEqual([])
+      expect(await addon.findOpenPathsUnder!([])).toEqual([])
       expect(() => addon.findOpenPathsUnder!(Array.from({ length: 65 }, () => real))).toThrow(
         /up to 64/
       )
