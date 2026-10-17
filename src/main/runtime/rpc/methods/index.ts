@@ -36,6 +36,7 @@ import { JIRA_METHODS } from './jira'
 import { SSH_METHODS } from './ssh'
 import { POD_SSH_TARGET_METHODS } from './pod-ssh-targets'
 import { POD_SSH_CREDENTIAL_METHODS } from './pod-ssh-credentials'
+import { POD_SSH_PORT_FORWARD_METHODS } from './pod-ssh-port-forwards'
 import { POD_SSH_REMOTE_PROJECT_METHODS } from './pod-ssh-remote-projects'
 import { MANAGED_SERVER_METHODS } from './managed-server'
 import { SPEECH_METHODS } from './speech'
@@ -135,6 +136,8 @@ export const ALL_RPC_METHODS = [
   ...POD_SSH_REMOTE_PROJECT_METHODS,
   // Fork-only (Pod): SSH connect prompts (passphrase, password, keyboard-interactive).
   ...POD_SSH_CREDENTIAL_METHODS,
+  // Fork-only (Pod): SSH port forwarding and the ports a host's relay detects.
+  ...POD_SSH_PORT_FORWARD_METHODS,
   ...MANAGED_SERVER_METHODS,
   ...SPEECH_METHODS,
   ...WORKSPACE_PORT_METHODS,

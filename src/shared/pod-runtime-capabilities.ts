@@ -35,6 +35,12 @@ export const POD_SSH_REMOTE_PROJECTS_RUNTIME_CAPABILITY = 'pod.ssh.remote-projec
 export const POD_SSH_CREDENTIAL_PROMPTS_RUNTIME_CAPABILITY =
   'pod.ssh.credential-prompts.v1' as const
 
+/**
+ * ssh.listPortForwards, addPortForward, updatePortForward, removePortForward, listDetectedPorts and
+ * the ssh.ports stream: SSH port forwarding without Pod's window.
+ */
+export const POD_SSH_PORT_FORWARDS_RUNTIME_CAPABILITY = 'pod.ssh.port-forwards.v1' as const
+
 /** aiVault.deleteSession: the AI vault's Delete without Pod's window. */
 export const POD_AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY =
   'pod.ai-vault.delete-session.v1' as const
@@ -59,6 +65,7 @@ export const POD_RUNTIME_CAPABILITIES = [
   POD_SSH_TARGET_SETTINGS_RUNTIME_CAPABILITY,
   POD_SSH_REMOTE_PROJECTS_RUNTIME_CAPABILITY,
   POD_SSH_CREDENTIAL_PROMPTS_RUNTIME_CAPABILITY,
+  POD_SSH_PORT_FORWARDS_RUNTIME_CAPABILITY,
   POD_AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY,
   POD_SETTINGS_NETWORK_PROXY_RUNTIME_CAPABILITY
 ] as const

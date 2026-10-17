@@ -19,6 +19,7 @@ import { isSshRelayOnHostNodeRuntime } from '../ssh/ssh-host-node-runtime-mode'
 import { clearSshHostServerStatus, getSshHostServerStatus } from '../ssh/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
 import { activeSessions } from './ssh-active-relay-sessions'
+import { publishPodSshPortEvent } from '../pod/ssh/pod-ssh-port-forwards'
 import {
   connectionManager,
   currentRuntime,
@@ -120,6 +121,12 @@ export function broadcastPortForwards(
   getMainWindow: () => BrowserWindow | null,
   targetId: string
 ): void {
+  // Fork-only (Pod): PodNative's ssh.ports stream, window or not.
+  publishPodSshPortEvent(() => ({
+    type: 'sshPortForwardsChanged',
+    targetId,
+    forwards: listForwardsEnriched(targetId)
+  }))
   const win = getMainWindow()
   if (!win || win.isDestroyed()) {
     return
@@ -136,6 +143,12 @@ export function broadcastDetectedPorts(
   ports: DetectedPort[],
   options?: Parameters<typeof enrichSshDetectedPorts>[3]
 ): void {
+  // Fork-only (Pod): PodNative's ssh.ports stream, window or not.
+  publishPodSshPortEvent(() => ({
+    type: 'sshDetectedPortsChanged',
+    targetId,
+    ports: enrichDetected(targetId, ports, options)
+  }))
   const win = getMainWindow()
   if (!win || win.isDestroyed()) {
     return
