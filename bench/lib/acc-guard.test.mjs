@@ -73,7 +73,9 @@ test('launches refuse to start unless POD_ACC_LIFECYCLE is exactly off', () => {
 })
 
 test('every app launch env carries POD_ACC_LIFECYCLE=off, headless and visible', () => {
-  const profile = { home: '/h', ud: '/h/ud', zdot: '/h/z', promptLog: '/h/p' }
+  // A launch's words come from its guard (lib/guard-path.mjs), made at its first launch.
+  const guard = { path: '/h/ud/guard-bin:/usr/bin:/bin', env: {}, fronts: [] }
+  const profile = { home: '/h', ud: '/h/ud', zdot: '/h/z', tmp: '/private/tmp/b/t/p', promptLog: '/h/p', guard }
   for (const visible of [false, true]) {
     const env = launchEnv(profile, { visible })
     assert.equal(env.POD_ACC_LIFECYCLE, 'off')

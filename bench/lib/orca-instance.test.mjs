@@ -7,7 +7,19 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileS
 import os from 'node:os'
 import path from 'node:path'
 import { after, test } from 'node:test'
-import { PROFILE_BASE, cli, describeApp, killRoot, launchInstance, removeProfile } from './orca-instance.mjs'
+import { ENV_CANARY, GUARD_PATH_REVISION, callerCanary } from './guard-path.mjs'
+import {
+  PROFILE_BASE,
+  cli,
+  describeApp,
+  ensureGuard,
+  killRoot,
+  launchEnv,
+  launchInstance,
+  profileIn,
+  removeProfile,
+  writePromptHook
+} from './orca-instance.mjs'
 import { rootOfPid } from './run-tree.mjs'
 
 after(() => {
@@ -199,4 +211,46 @@ test('a visible launch of a one-app runtime is refused before anything starts', 
     launchInstance(outer, profile, { visible: true }),
     /refusing a visible launch of a one-app runtime/
   )
+})
+
+const PODNATIVE_REPO = path.join(os.homedir(), 'Documents/orca-native-wt/native-ui/PodNative')
+const haveHelper = (() => {
+  try {
+    execFileSync('git', ['-C', PODNATIVE_REPO, 'cat-file', '-e', `${GUARD_PATH_REVISION}:scripts/guard-path.sh`], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+})()
+
+test(
+  "a launch's words for guard_exec: the guard PATH, a short TMPDIR, never the caller's canary",
+  { skip: !haveHelper && `PodNative ${GUARD_PATH_REVISION} not in ${PODNATIVE_REPO}` },
+  () => {
+    const profile = profileIn(testDir('p'))
+    assert.throws(() => launchEnv(profile), /no guard PATH yet/)
+    // No catalog (no tree): this test reads no app.
+    ensureGuard(profile, { realPath: undefined })
+    const zshrc = readFileSync(path.join(profile.zdot, '.zshrc'), 'utf8')
+    assert.ok(zshrc.startsWith('# guard-path.sh:'), 'the guard wrote ZDOTDIR\'s .zshrc first')
+    assert.ok(zshrc.includes('precmd()'), 'and the prompt-time hook went in after it')
+    assert.throws(() => writePromptHook(profile), /the guard owns/)
+    const canary = callerCanary()
+    const env = launchEnv(profile)
+    assert.ok(!Object.values(env).some((value) => value.includes(canary)), `no ${ENV_CANARY}`)
+    assert.equal(env.HOME, profile.home)
+    assert.ok(env.PATH.split(':').includes(`${profile.ud}/guard-bin`), env.PATH)
+    assert.equal(env.TMPDIR, path.join(path.dirname(PROFILE_BASE), 't', path.basename(profile.ud)))
+    assert.ok(Buffer.byteLength(env.TMPDIR) <= 48, env.TMPDIR)
+    for (const name of ['USER', 'LOGNAME', 'SSH_AUTH_SOCK', 'DISPLAY', 'TERM', 'NODE_OPTIONS', 'TMUX']) {
+      assert.equal(env[name], undefined, name)
+    }
+  }
+)
+
+test('a profile for a zsh outside an app gets the prompt-time hook as its whole .zshrc', () => {
+  const profile = profileIn(testDir('p'))
+  writePromptHook(profile)
+  assert.ok(readFileSync(path.join(profile.zdot, '.zshrc'), 'utf8').startsWith('zmodload zsh/datetime'))
+  assert.throws(() => ensureGuard(profile, { realPath: undefined }), /needs a ZDOTDIR the guard can own/)
 })

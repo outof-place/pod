@@ -12,15 +12,21 @@
 //        [--warmup-s 60] [--settle-s 30] [--window-s 300]
 //
 // Each launch: an APFS clone of the re-id'd one-app bundle (codes.pod.native.e2e /
-// codes.pod.runtime.e2e), a fresh profile and HOME under its own /private/tmp dir, `open -n -g`
-// with the whole environment given, a guard PATH whose claude and codex are stubs and whose
-// security is the gate-2 shim. Every second a watchdog checks the run's processes: a real claude
-// or codex, or a new SecurityAgent, stops the launch.
+// codes.pod.runtime.e2e), a fresh profile and HOME under its own /private/tmp dir, PodNative's
+// app_open (scripts/open-app.sh at the guard's revision: `open -n -g -W` under `env -i` with an
+// allowlist, the launchd session's SSH_AUTH_SOCK, USER, LOGNAME and DISPLAY empty), the same
+// allowlist for the runtime through --runtime-env, a guard PATH whose agents are stubs and whose
+// security is the gate-2 shim. The caller's canary (GUARD_CANARY_TOKEN) must reach no process of
+// the launch, and PodNative and its runtime must show GUARD_POSITIVE_MARK, which app_open adds
+// (guard-path.sh guard_env_pid_check, names only; the stubs' log too). Every second a watchdog
+// checks the run's processes: a real claude or codex, or a new SecurityAgent, stops the launch.
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import {
+  closeSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -31,7 +37,15 @@ import path from 'node:path'
 import { parseArgs, promisify } from 'node:util'
 import { checkAcc, guardInstance, releaseInstance } from '../lib/acc-guard.mjs'
 import { assertHeavyGate } from '../lib/heavy-gate.mjs'
-import { guardVerdict, installedClaudeVersion, prepareGuard } from '../lib/guard-path.mjs'
+import {
+  APP_ENV_BLANK,
+  ENV_CANARY,
+  callerCanary,
+  envPidCheck,
+  guardVerdict,
+  installedClaudeVersion,
+  prepareGuard
+} from '../lib/guard-path.mjs'
 import { assertRealHomeUntouched, realHomeState } from '../lib/real-home-guard.mjs'
 import {
   MAX_LOAD,
@@ -213,9 +227,11 @@ function stubAccState(state) {
 function snapshot(launch, { scan = false } = {}) {
   return runTree(launch.work, { scan, exclude: harness })
 }
-// The harness's own processes that name the run's dir: `open -W` and the stub state's writer.
+// The harness's own processes that name the run's dir: the shell that runs app_open, `open -W`
+// and the stub state's writer.
+const openers = new Set()
 function harness(proc) {
-  return proc.path === '/usr/bin/open' || proc.args.includes('live-writer.py')
+  return openers.has(proc.pid) || proc.path === '/usr/bin/open' || proc.args.includes('live-writer.py')
 }
 
 // What each process is, by its executable: Pod's own (inside the clone) or the terminals' workload.
@@ -283,8 +299,18 @@ async function measureLaunch(variant, index) {
   const guardPath = launch.guardSetup.path
   const guardEnv = Object.entries(launch.guardSetup.env)
   const nosearch = path.join(launch.profile, 'tmp/no-ogd.sock')
+  // The caller's canary, in the env app_open's shell starts with.
+  const canary = callerCanary()
   const env = (flag, pairs) => pairs.flatMap(([key, value]) => [flag, `${key}=${value}`])
+  // PodNative opens its runtime with `open --env` and its own environment, and LaunchServices adds
+  // the session's variables again: the runtime gets app_open's allowlist and blanks explicitly.
+  // Never GUARD_POSITIVE_MARK here: these words are PodNative's argv, which `ps -E` shows too, so
+  // the runtime's mark must come through its environment alone.
   const runtimeEnv = env('--runtime-env', [
+    ...APP_ENV_BLANK.map((name) => [name, '']),
+    ['TMPDIR', path.join(launch.work, 't')],
+    ['SHELL', '/bin/zsh'],
+    ['LANG', 'en_US.UTF-8'],
     ['ORCA_E2E_USER_DATA_DIR', launch.profile],
     ['POD_E2E_USER_DATA_DIR', launch.profile],
     ['ORCA_E2E_HOME_DIR', launch.home],
@@ -296,34 +322,25 @@ async function measureLaunch(variant, index) {
     ['POD_ACC_LIFECYCLE', 'off'],
     ['PATH', guardPath],
     ['POD_SEARCH_SOCKET', nosearch],
-    ['USER', ''],
-    ['LOGNAME', ''],
     ...guardEnv
   ])
   const report = path.join(launch.work, 'out/measure.json')
+  // app_open <bundle> <log> --front <shim dir> --env…: HOME, PATH (the guard PATH, the shim's dir
+  // first), TMPDIR (<run dir>/t), SHELL, LANG and __CF_USER_TEXT_ENCODING, the blanks,
+  // GUARD_POSITIVE_MARK=1, then these --env; stdout and stderr both into the log.
   const args = [
-    'PATH=/usr/bin:/bin',
-    `HOME=${launch.home}`,
-    '/usr/bin/open',
-    '-n',
-    '-g',
-    '-W',
-    '--stdout',
-    path.join(launch.work, 'out/podnative.out'),
-    '--stderr',
+    launch.app,
     path.join(launch.work, 'out/podnative.log'),
+    '--front',
+    launch.guard,
     ...env('--env', [
       ['HOME', launch.home],
       ['PATH', guardPath],
-      ['TMPDIR', `${path.join(launch.profile, 'tmp')}/`],
       ['LANG', 'en_US.UTF-8'],
       ['POD_SEARCH_SOCKET', nosearch],
-      ['USER', ''],
-      ['LOGNAME', ''],
       ...guardEnv,
       ...(variant === 'acc-off' ? [['POD_NATIVE_NO_ACC', '1']] : [])
     ]),
-    launch.app,
     '--args',
     '--background',
     '--measure',
@@ -352,8 +369,53 @@ async function measureLaunch(variant, index) {
     writer = spawn('/usr/bin/python3', ['-I', path.join(state, '..', 'live-writer.py'), state, String(totalS + 60)], { stdio: 'ignore' })
   }
   const launchedAt = Date.now()
-  const opener = spawn('/usr/bin/env', ['-i', ...args], { stdio: 'ignore' })
-  const openerExit = new Promise((resolve) => opener.on('exit', resolve))
+  // The shell that sources open-app.sh starts from a near-empty env with the canary in it; app_open
+  // runs open under its own `env -i`, and the shell waits for open (alive while PodNative is).
+  const encoding = process.env.__CF_USER_TEXT_ENCODING ?? ''
+  // app_open's own refusals land in out/opener.log.
+  const openerLog = openSync(path.join(launch.work, 'out/opener.log'), 'w', 0o600)
+  const opener = spawn(
+    '/usr/bin/env',
+    [
+      '-i',
+      'PATH=/usr/bin:/bin',
+      'LANG=en_US.UTF-8',
+      ...(/^0x[0-9A-Fa-f]+:0x[0-9A-Fa-f]+:0x[0-9A-Fa-f]+$/.test(encoding) ? [`__CF_USER_TEXT_ENCODING=${encoding}`] : []),
+      `${ENV_CANARY}=${canary}`,
+      '/bin/bash',
+      '-c',
+      '. "$1/open-app.sh" || exit 3; shift; app_open "$@" || exit $?; wait "$APP_OPEN_PID"',
+      'open-app',
+      path.join(launch.work, 'guard-lib'),
+      ...args
+    ],
+    { stdio: ['ignore', 'ignore', openerLog] }
+  )
+  closeSync(openerLog)
+  openers.add(opener.pid)
+  let openerStatus = null
+  const openerExit = new Promise((resolve) => opener.on('exit', (code) => resolve((openerStatus = code))))
+  const envChecks = []
+  // PodNative and its runtime must show the mark and no canary; no other process of the launch may
+  // show the canary, and one that shows no mark either (zsh, a platform binary) is listed unproven.
+  const checkEnv = async (when, launched) => {
+    const tree = await snapshot(launch)
+    const problems = []
+    const unproven = []
+    const proven = []
+    for (const proc of tree.procs) {
+      const label = launched[proc.pid] ?? classify(launch, proc)
+      const check = envPidCheck(launch.work, proc.pid, label)
+      if (check.status === 0) proven.push(`${proc.pid} ${label}`)
+      else if (check.status === 1 || launched[proc.pid]) problems.push(check.said)
+      else unproven.push(`${proc.pid} ${label}`)
+    }
+    for (const [pid, label] of Object.entries(launched)) {
+      if (!tree.procs.some((proc) => proc.pid === Number(pid))) problems.push(`${label} ${pid} is not among the launch's processes`)
+    }
+    envChecks.push({ when, ok: problems.length === 0, problems, proven, unproven })
+    if (problems.length > 0) throw new Error(`env allowlist (${when}): ${problems.join('; ')}`)
+  }
   let failure = null
   const stop = async (reason) => {
     failure ??= reason
@@ -387,7 +449,7 @@ async function measureLaunch(variant, index) {
       pn = (await snapshot(launch)).procs.find((proc) => proc.path === launch.exe)?.pid ?? null
       if (!pn) await sleep(250)
     }
-    if (!pn) throw new Error('no PodNative of this launch came up')
+    if (!pn) throw new Error(`no PodNative of this launch came up${openerStatus === null ? '' : ` (app_open's shell exited ${openerStatus}, out/opener.log)`}`)
     // A claude-acc setup.sh anywhere stops the launch (lib/acc-guard.mjs).
     guardInstance(pn, () => process.kill(pn, 'SIGTERM'))
     guarded = pn
@@ -405,6 +467,7 @@ async function measureLaunch(variant, index) {
     } catch (error) {
       if (/beyond loopback/.test(error.message)) throw error
     }
+    await checkEnv('runtime up', { [pn]: 'podnative', [runtimePid]: 'runtime' })
     await rpcWithRetry(launch, 'repo.add', { path: launch.repo })
     log(`${SUITE}: runtime ${runtimePid} up (${status.ms.toFixed(0)} ms), warming up ${warmupS} s`)
     await sleep(warmupS * 1000)
@@ -417,6 +480,8 @@ async function measureLaunch(variant, index) {
         await rpcWithRetry(launch, 'terminal.create', { worktree: `path:${launch.repo}`, focus: false })
         terminals += 1
       }
+      // With the most processes: the 8 terminals' shells too, read before the settle.
+      if (state.id === 'idle8') await checkEnv('8 terminals', { [pn]: 'podnative', [runtimePid]: 'runtime' })
       if (state.sleep) terminals = 0
       if (state.id !== 'idle0') await sleep(settleS * 1000)
       if (failure) break
@@ -453,6 +518,7 @@ async function measureLaunch(variant, index) {
   await openerExit
   clearTimeout(deadline)
   clearInterval(watchdog)
+  openers.delete(opener.pid)
   if (guarded) releaseInstance(guarded)
   writer?.kill('SIGTERM')
   const cleaned = await cleanup(launch)
@@ -474,6 +540,7 @@ async function measureLaunch(variant, index) {
     securityNonFind: security.filter((line) => !/"subcommand": "find-/.test(line)).length,
     stubCalls: readFileSync(path.join(launch.work, 'guard-agents.log'), 'utf8').split('\n').filter(Boolean),
     guard: guardVerdict(launch.work, launch.guardSetup.fronts),
+    env: envChecks,
     signalled: cleaned.signalled,
     leftovers: cleaned.left,
     argvOnly: cleaned.argvOnly,
@@ -482,6 +549,7 @@ async function measureLaunch(variant, index) {
   checkAcc(`after native-idle launch ${index + 1}`)
   if (checks.securityNonFind > 0) failure ??= `security shim saw ${checks.securityNonFind} non-find calls`
   if (!checks.guard.ok) failure ??= `guard PATH: ${checks.guard.problems.join('; ')}`
+  if (envChecks.length < 2 && !failure) failure = `env allowlist checked ${envChecks.length} times, not 2`
   log(`${SUITE}: launch ${index + 1} done${failure ? `, FAILED: ${failure}` : ''}; checks ${JSON.stringify({ ...checks, measureIdle: undefined }).slice(0, 300)}`)
   return { variant, launch: index, work: launch.work, failure, windows, checks }
 }

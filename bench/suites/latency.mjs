@@ -37,7 +37,8 @@ import {
   processSnapshot,
   removeProfile,
   snapshotProcesses,
-  waitForPrompts
+  waitForPrompts,
+  writePromptHook
 } from '../lib/orca-instance.mjs'
 import { summarize } from '../lib/sample-stats.mjs'
 import { ensureLogFile, measureWorkload, workloads } from '../lib/terminal-workloads.mjs'
@@ -229,6 +230,7 @@ async function launchGhostty(profile, command) {
 
 async function ghosttySubject() {
   const profile = createProfile()
+  writePromptHook(profile)
   const env = `/usr/bin/env ZDOTDIR=${profile.zdot} POD_BENCH_PROMPT_LOG=${profile.promptLog}`
   // `clear` first: login(1) may print a "Last login" line above the prompt.
   let pid = await launchGhostty(profile, `/bin/sh -c "clear; exec ${env} /bin/zsh -i"`)
@@ -264,6 +266,7 @@ async function ghosttySubject() {
 // Terminal.app: one new window running the hermetic zsh, closed afterwards.
 async function terminalAppSubject() {
   const profile = createProfile()
+  writePromptHook(profile)
   const command = `exec /usr/bin/env ZDOTDIR=${profile.zdot} POD_BENCH_PROMPT_LOG=${profile.promptLog} /bin/zsh -i`
   const doScript = (text) =>
     run('/usr/bin/osascript', [
