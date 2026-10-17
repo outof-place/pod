@@ -91,10 +91,12 @@ branches are refused. The macOS build runs only with `-f macos=true` (before a r
 checklist's "macOS build" is a local build, never this check. The claude-acc payload comes through
 the `POD_PAYLOAD_TOKEN` secret once claude-acc is private (`config/scripts/github-release-asset.mjs`).
 
-Of upstream's pull-request gates (`.github/workflows/pr.yml`), the Pod check also runs the
-process-host import check (`config/scripts/check-process-host-imports.mjs`). It doesn't run
-`pnpm run audit:anti-slop` for 1.0: `main` has about 200 findings in files of several owners, so
-that gate stays a known difference from upstream.
+Of upstream's pull-request gates (`.github/workflows/pr.yml`), the Pod check runs only the
+process-host import check (`config/scripts/check-process-host-imports.mjs`), next to its own
+generated-layer check, typecheck and unit tests. The other pr.yml gates (the max-lines and other
+ratchets, the `verify:*` and `check:*` scripts, the type-aware code-quality audit) don't run.
+`pnpm run audit:anti-slop` is the one left out on purpose for 1.0: `main` has about 200 findings
+in files of several owners.
 
 ## Generated layers
 
