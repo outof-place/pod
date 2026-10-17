@@ -22,6 +22,8 @@ import {
   isAgentStatusHooksEnabledForAgent
 } from '../agent-hooks/managed-agent-hook-controls'
 import { agentHookServer } from '../agent-hooks/server'
+import { isPodHeadlessUiHost } from '../pod/ui-host/pod-ui-host-launch'
+import { isGuiSessionDaemon } from '../daemon/daemon-launchd-launch'
 import { createLocalTmuxManagedPtyResolver } from '../agent-hooks/local-tmux-managed-pty'
 import {
   indexPersistedPaneKeyPtyIds,
@@ -146,6 +148,8 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
       // serve daemon must survive its spawning session ending (SSH disconnect).
       const daemonOptions = {
         macosLoginSessionWatch: process.platform === 'darwin' && !state.isServeMode,
+        // Pod: a launchd job leads the daemon's coalition (daemon-launchd-launch.ts).
+        macosLaunchdJob: isGuiSessionDaemon(state.isServeMode, isPodHeadlessUiHost()),
         isQuitting: isProcessQuitRequested
       }
       // Fork-only (Pod): a daemon that missed the gate still takes fresh terminals once it starts.

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 import {
   LaunchdDaemonProcess,
+  isGuiSessionDaemon,
   isLaunchdDaemonLaunchEnabled,
   launchDaemonViaLaunchd,
   type DaemonLaunchdJob,
@@ -219,6 +220,13 @@ describe('the launchd launch switch', () => {
   it('is on for macOS unless POD_DAEMON_LAUNCHD=0', () => {
     expect(isLaunchdDaemonLaunchEnabled({})).toBe(mac)
     expect(isLaunchdDaemonLaunchEnabled({ POD_DAEMON_LAUNCHD: '0' })).toBe(false)
+  })
+
+  it("takes a GUI session's daemon, PodNative's headless runtime included, never a plain serve", () => {
+    expect(isGuiSessionDaemon(false, false, 'darwin')).toBe(true)
+    expect(isGuiSessionDaemon(true, true, 'darwin')).toBe(true)
+    expect(isGuiSessionDaemon(true, false, 'darwin')).toBe(false)
+    expect(isGuiSessionDaemon(false, false, 'linux')).toBe(false)
   })
 
   it('is opt-in under vitest', () => {

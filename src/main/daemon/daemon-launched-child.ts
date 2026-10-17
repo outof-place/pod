@@ -60,10 +60,9 @@ export async function launchDaemonChild(
   options: DaemonChildSpawnOptions,
   launchdJobs?: DaemonLaunchdJobs
 ): Promise<LaunchedDaemonChild> {
-  // Pod: a launchd job when asked (macOS), only for a daemon of a GUI login session: a headless or
-  // SSH serve has no gui/<uid> domain and must outlive the session, so it forks. Like the scope
-  // below, any failure but a lost endpoint race falls back to the fork.
-  if (launchdJobs && isLaunchdDaemonLaunchEnabled() && options.macosLoginSessionWatch) {
+  // Pod: a launchd job when the launcher asks (a GUI session's daemon, see macosLaunchdJob). Like
+  // the scope below, any failure but a lost endpoint race falls back to the fork.
+  if (launchdJobs && isLaunchdDaemonLaunchEnabled()) {
     try {
       const outcome = await launchDaemonViaLaunchd(options, launchdJobs)
       if (outcome.kind === 'endpoint-unavailable') {
