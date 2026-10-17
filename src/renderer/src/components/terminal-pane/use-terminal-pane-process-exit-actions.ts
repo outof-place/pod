@@ -6,7 +6,10 @@ import { connectPanePty } from './pty-connection'
 import { bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { releasePaneTransportForRestart } from './pane-restart-transport-handoff'
 import { clearPaneTerminalError } from './terminal-error-accumulation'
-import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
+import {
+  resolvePaneRestartStartup,
+  resolveTerminalProcessExitRestartStartup
+} from './terminal-process-exit-restart'
 import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
@@ -65,8 +68,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       if (!manager || !pane) {
         return
       }
-      const startup =
-        restartStartup ??
+      const startup = resolvePaneRestartStartup(restartStartup, () =>
         buildCodexAccountRestartStartup({
           tabId,
           worktreeId,
@@ -75,6 +77,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
             .getState()
             .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.shellOverride
         })
+      )
       const transport = paneTransportsRef.current.get(paneId)
       const panePtyBinding = panePtyBindingsRef.current.get(paneId)
       const existingPtyId = transport?.getPtyId()
