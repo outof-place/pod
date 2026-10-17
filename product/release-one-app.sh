@@ -27,10 +27,10 @@
 # Versions: CFBundleShortVersionString is <version> in both apps, and so is one numeric CFBundleVersion
 # from product/scripts/pod-build-number.sh (the number Sparkle compares in the outer).
 # Assets: Pod-<version>.dmg (the download and the Sparkle update), Pod-<version>.zip, appcast.xml,
-# SHA256SUMS. The feed lives on Pod's update host and names the DMG as an asset of the public
-# outof-place/pod-releases (product/update-host/update-host.sh): https://updates.pod.codes/appcast.xml
-# names .../pod-releases/releases/download/v<version>/Pod-<version>.dmg. Pods up to rc4 read
-# GitHub's `appcast` release instead, written one last time for the bridge release. A real
+# SHA256SUMS. The feed lives on Pod's update host (product/update-host/update-host.sh) and names the
+# DMG on it too, https://updates.pod.codes/download/v<version>/Pod-<version>.dmg, a 302 to the asset
+# of the public outof-place/pod-releases. Pods up to rc4 read GitHub's `appcast` release instead,
+# written one last time for the bridge release. A real
 # release signs with the key in this Mac's login keychain (sparkle-appcast.sh); the outer's public key
 # is PodNative's scripts/sparkle-ed-public-key.txt.
 set -euo pipefail

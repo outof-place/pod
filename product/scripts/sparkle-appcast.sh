@@ -1,9 +1,9 @@
 #!/bin/bash
 # Writes the Sparkle appcast for one release of the one-app Pod.app: a single item for <archive>,
 # its EdDSA signature and the feed's own (PodNative sets SURequireSignedFeed), with the download URL
-# an asset of the tag's release in outof-place/pod-releases (product/update-host/update-host.sh).
-# publish-update.sh uploads the archive there and puts the appcast on https://updates.pod.codes
-# (RELEASE-RUNBOOK.md).
+# https://updates.pod.codes/download/<tag>/<archive>, which the host redirects to the asset of the
+# tag's release in outof-place/pod-releases (product/update-host/update-host.sh). publish-update.sh
+# uploads the archive there and puts the appcast on https://updates.pod.codes (RELEASE-RUNBOOK.md).
 #
 #   product/scripts/sparkle-appcast.sh <archive> <tag> <out dir>
 #
@@ -69,7 +69,7 @@ cp -c "$archive" "$work/feed/"
 # A stdin key is read once, into memory, and handed to both tools.
 [ "${SPARKLE_KEY_ON_STDIN:-0}" = 1 ] && key=$(cat)
 run_with_key() { if [ -n "${key:-}" ]; then printf '%s' "$key" | "$@"; else "$@"; fi; }
-prefix=${SPARKLE_DOWNLOAD_URL_PREFIX:-$POD_RELEASES_DOWNLOAD/$tag/}
+prefix=${SPARKLE_DOWNLOAD_URL_PREFIX:-$POD_DOWNLOAD/$tag/}
 run_with_key "$work/tools/bin/generate_appcast" "${KEY[@]}" \
   --download-url-prefix "$prefix" \
   --link https://pod.codes "$work/feed" 2>&1 | tee "$work/generate_appcast.log"

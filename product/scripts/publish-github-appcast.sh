@@ -2,8 +2,8 @@
 # Publishes the bridge release on GitHub's feed, the `appcast` release's appcast.xml asset that Pods up
 # to rc4 read (RELEASE-RUNBOOK.md). Every later Pod reads Pod's own host (publish-update.sh), so this
 # runs once, for POD_BRIDGE_VERSION (product/update-host/update-host.sh): its appcast must be the one
-# the host already serves, with the archive on outof-place/pod-releases (public when outof-place/pod
-# is not), and nothing after it is written here.
+# the host already serves, with the archive at https://updates.pod.codes/download/ (a redirect to
+# outof-place/pod-releases, public when outof-place/pod is not), and nothing after it is written here.
 # GitHub refuses a second asset of one name, and `gh release upload --clobber` deletes before it
 # uploads, so a failed upload would leave the feed at 404 until someone noticed. Here:
 #   1. upload it as appcast.xml.new and download it back: it must be byte for byte this file;
@@ -51,8 +51,8 @@ read -r build enclosure <<<"$(item_of "$feed")" || true
 bridge=$("$scripts/pod-build-number.sh" "$POD_BRIDGE_VERSION")
 [ "$build" = "$bridge" ] ||
   die "GitHub's feed was last written for $POD_BRIDGE_VERSION ($bridge), not $build: Pods since then read $POD_UPDATE_FEED"
-[[ "${enclosure:-}" == "$POD_RELEASES_DOWNLOAD/"* ]] ||
-  die "the archive is ${enclosure:-missing}, not an asset of $POD_RELEASES_REPO: outof-place/pod turns private, so nothing an installed Pod downloads may live there"
+[[ "${enclosure:-}" == "$POD_DOWNLOAD/"* ]] ||
+  die "the archive is ${enclosure:-missing}, not on $POD_DOWNLOAD/ (Pod's own name for $POD_RELEASES_REPO): outof-place/pod turns private, and a signed feed must name a URL we can point elsewhere"
 sha() { shasum -a 256 "$1" | cut -d' ' -f1; }
 # The host first: Pods that move over through this feed find the same release there.
 host_feed=$(curl -fsSL --connect-timeout 20 --max-time 60 "${POD_UPDATE_READ_HOST:-$POD_UPDATE_HOST}/appcast.xml" | shasum -a 256 | cut -d' ' -f1) ||

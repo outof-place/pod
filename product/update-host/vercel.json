@@ -1,6 +1,11 @@
 {
   "redirects": [
     {
+      "source": "/download/:tag/:archive",
+      "destination": "https://github.com/outof-place/pod-releases/releases/download/:tag/:archive",
+      "statusCode": 302
+    },
+    {
       "source": "/rehearsal/:path*",
       "destination": "https://6oaqiaz38g6zr40k.public.blob.vercel-storage.com/rehearsal/:path*",
       "permanent": false
@@ -9,11 +14,21 @@
   "headers": [
     {
       "source": "/(.*)",
-      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        }
+      ]
     },
     {
       "source": "/appcast.xml",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     }
   ]
 }

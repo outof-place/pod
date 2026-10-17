@@ -1,6 +1,6 @@
 # Releasing the product (Developer ID, notarization, GitHub Releases)
 
-A release is an arm64 DMG and zip of `<displayName>.app`. Both are signed with a **Developer ID Application** certificate, notarized by Apple and stapled. They are published as a GitHub release in `identity.updateFeed`'s repo, together with `latest-mac.yml`, which the in-app updater reads.
+A release is an arm64 DMG and zip of `<displayName>.app`. Both are signed with a **Developer ID Application** certificate, notarized by Apple and stapled. They are published as a GitHub release in `identity.updateFeed`'s repo, together with `latest-mac.yml`, which the in-app updater reads. The one-app Pod.app (`product/RELEASE-RUNBOOK.md`) ships otherwise: its DMG lives in the public `outof-place/pod-releases`, and its appcast names it on our own name, `https://updates.pod.codes/download/v<version>/Pod-<version>.dmg` (a 302 there), so `outof-place/pod` may go private once every installed Pod runs rc5 or later.
 
 For now, releases are cut **locally** with `product/release.sh` on the Mac that holds the signing key. `.github/workflows/pod-release.yml` is disabled: a one-app release comes from `product/release-one-app.sh` ([RELEASE-RUNBOOK.md](./RELEASE-RUNBOOK.md)).
 
@@ -134,15 +134,15 @@ Publish only the DMG and the zip. A one-app build has no `latest-mac.yml`, becau
 ## Notes
 
 - **Keep release outputs out of the worktree:** electron-builder packs the repository root into app.asar, minus upstream's denylist and `dist/`. Move an older `dist/` outside the checkout before the next release, never beside it. On 2026-10-10 two parked `dist-*` folders grew app.asar from 140 MB to 2.5 GB; the bundle gate now stops that.
-- **Release repo:** `identity.updateFeed` (`outof-place/pod`) must stay public, so electron-updater can read releases without a token.
+- **Release repo:** `identity.updateFeed` (`outof-place/pod`) must stay public while an installed Pod up to rc4 still reads it, so electron-updater and GitHub's appcast work without a token. Once everyone runs rc5 or later it may go private (RELEASE-RUNBOOK.md, "Closing the repo"): DMGs live in `outof-place/pod-releases`.
 - **Updating from a local build:** installed copies update only from builds that satisfy the running app's designated requirement. An Apple Development–signed local build therefore cannot auto-update to a Developer ID release; install the first release DMG by hand.
-- **Homebrew:** for the outof-place/homebrew-tap cask, take `sha256` from `shasum -a 256 dist/Pod-<version>-arm64.dmg`. `auto_updates true` keeps brew from fighting the in-app updater.
+- **Homebrew:** for the outof-place/homebrew-tap cask, take `sha256` from the release directory's `SHA256SUMS` (`Pod-<version>.dmg`), and the URL on our own name, which redirects to `outof-place/pod-releases`. `auto_updates true` keeps brew from fighting the in-app updater.
 
   ```ruby
   cask "pod" do
     version "0.1.0"
-    sha256 "<sha256 of Pod-#{version}-arm64.dmg>"
-    url "https://github.com/outof-place/pod/releases/download/v#{version}/Pod-#{version}-arm64.dmg"
+    sha256 "<sha256 of Pod-#{version}.dmg>"
+    url "https://updates.pod.codes/download/v#{version}/Pod-#{version}.dmg"
     name "Pod"
     desc "Agent IDE by outofplace, built on Orca"
     homepage "https://pod.codes"

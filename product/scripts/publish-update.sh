@@ -1,16 +1,18 @@
 #!/bin/bash
 # Publishes a release for Pod's updater (RELEASE-RUNBOOK.md). Every Pod since rc5 reads the appcast at
-# https://updates.pod.codes/appcast.xml, and every appcast names its DMG as an asset of the tag's
-# release in outof-place/pod-releases (product/update-host/update-host.sh):
+# https://updates.pod.codes/appcast.xml, and every appcast names its DMG at
+# https://updates.pod.codes/download/<tag>/<DMG>, a 302 to the asset of the tag's release in
+# outof-place/pod-releases (product/update-host/update-host.sh). Before any change it checks the DMG
+# against artifacts.txt's sha256, that the domain serves no higher sparkle:version (the same one is a
+# re-run), and which deployment the domain is on (the way back; none while it serves a feed stops).
 #   1. the DMG goes up as that asset, once; a missing release is created with it (a prerelease for
 #      an RC). A published asset is never replaced (an app may be checking those bytes against the
 #      signature it read): a run that finds it there checks its size and digest instead;
-#   2. the appcast's enclosure URL must then deliver the DMG byte for byte (length and sha256),
-#      followed to the end of its redirects as Sparkle does, before anything changes for installed
-#      apps;
-#   3. product/update-host with the appcast becomes a production deployment that is not on the
-#      domain yet (--skip-domain). It must serve the appcast byte for byte;
-#   4. `vercel promote` puts it on the domain, which must then serve the appcast byte for byte. A
+#   2. product/update-host with the appcast becomes a production deployment that is not on the
+#      domain yet (--skip-domain). It must serve the appcast byte for byte, and its download/
+#      redirect must deliver the DMG byte for byte (length and sha256), followed to the end as
+#      Sparkle does, before anything changes for installed apps;
+#   3. `vercel promote` puts it on the domain, which must then serve the appcast byte for byte. A
 #      domain that never does goes back to the deployment it served before.
 #
 #   product/scripts/publish-update.sh <release dir>
@@ -23,19 +25,19 @@
 # `vercel login` with access to the outofplace team. Pods up to rc4 read GitHub's feed:
 # publish-github-appcast.sh, for the bridge release only.
 # An update rehearsal (PodNative's scripts/update-rehearsal.sh, REHEARSAL_PUBLISH_SCRIPT) has a
-# prerelease of its own, rehearsal-<name>. --rehearsal uploads every archive of <dir> there (replacing
+# prerelease of its own, rehearsal-<name>, named download/rehearsal-<name>/ on the host (the domain's
+# deployment must carry the download/ redirect). --rehearsal uploads every archive of <dir> there (replacing
 # one of the same name), checks that each enclosure of <dir>/appcast.xml delivers its archive, then
 # puts the appcast under rehearsal/<name>/ on the host. It touches neither the feed nor a published
 # archive, so agents may run it. --remove-rehearsal deletes the release, its tag and the appcast;
 # --rehearsal-downloads prints the download URL prefix the rehearsal's appcast must use.
-# Tests only: POD_UPDATE_READ_HOST replaces the host it reads back, POD_RELEASES_READ_DOWNLOAD the
-# releases' download URL, POD_PUBLISH_RETRY_SECONDS the 5 s between reads.
+# Tests only: POD_UPDATE_READ_HOST replaces the host it reads back, POD_PUBLISH_RETRY_SECONDS the 5 s
+# between reads.
 set -euo pipefail
 
 . "$(dirname "${BASH_SOURCE[0]}")/../update-host/update-host.sh"
 site_files=$(cd "$(dirname "${BASH_SOURCE[0]}")/../update-host" && pwd)
 read_host=${POD_UPDATE_READ_HOST:-$POD_UPDATE_HOST}
-read_download=${POD_RELEASES_READ_DOWNLOAD:-$POD_RELEASES_DOWNLOAD}
 # Appended to a failure of the real release: nothing an installed Pod reads has changed yet.
 unchanged=""
 
@@ -125,12 +127,31 @@ publish_archive() {
   gh release upload "$tag" "$file" --repo "$POD_RELEASES_REPO" ${flags[@]+"${flags[@]}"} >"$work/gh.log" 2>&1 ||
     die "the upload of $name to $POD_RELEASES_REPO $tag failed ($(tail -n 1 "$work/gh.log"))$unchanged"
 }
-# The URL this run reads for <url> (tests read the releases from a directory).
+# The URL this run reads for <url> on the domain (tests read the domain from a directory).
 read_url() {
   case "$1" in
-    "$POD_RELEASES_DOWNLOAD/"*) echo "$read_download/${1#"$POD_RELEASES_DOWNLOAD/"}" ;;
+    "$POD_UPDATE_HOST/"*) echo "$read_host/${1#"$POD_UPDATE_HOST/"}" ;;
     *) echo "$1" ;;
   esac
+}
+# The highest sparkle:version of the appcast at <file> ("" for none).
+feed_version() {
+  python3 -I -c '
+import sys
+import xml.etree.ElementTree as ET
+ns = {"sparkle": "http://www.andymatuschak.org/xml-namespaces/sparkle"}
+items = ET.parse(sys.argv[1]).getroot().findall("./channel/item")
+versions = [int(v) for v in (i.findtext("sparkle:version", namespaces=ns) for i in items) if v and v.isdigit()]
+print(max(versions) if versions else "")' "$1" 2>/dev/null || true
+}
+# What the domain serves now, in words, for a message.
+domain_serves() {
+  local served
+  rm -f "$work/domain.xml"
+  curl -fsSL --connect-timeout 20 --max-time 120 -o "$work/domain.xml" "$read_host/appcast.xml" 2>/dev/null ||
+    { echo "no appcast"; return 0; }
+  served=$(feed_version "$work/domain.xml")
+  echo "sparkle:version ${served:-unknown} (sha256 $(sha "$work/domain.xml"))"
 }
 # Whether <url>, followed to the end of its redirects as Sparkle does, delivers <file> byte for byte.
 # A minute without a byte is a stall, as for Sparkle (NSURLRequest's 60 s); three tries. The last
@@ -156,7 +177,7 @@ delivers() {
 
 rehearsal_path() {
   local base=$1
-  [[ "$base" =~ ^$POD_UPDATE_HOST/rehearsal/[A-Za-z0-9._-]+/$ ]] ||
+  [[ "$base" =~ ^$POD_UPDATE_HOST/rehearsal/[A-Za-z0-9._-]+/$ ]] && [[ ! "$base" =~ /\.\.?/$ ]] ||
     die "a rehearsal's feed is $POD_UPDATE_HOST/rehearsal/<name>/, not $base"
   echo "${base#"$POD_UPDATE_HOST/"}"
 }
@@ -170,7 +191,7 @@ rehearsal_tag() {
 
 if [ "${1:-}" = --rehearsal-downloads ]; then
   tag=$(rehearsal_tag "${2:?usage: publish-update.sh --rehearsal-downloads <base URL>}")
-  echo "$POD_RELEASES_DOWNLOAD/$tag/"
+  echo "$POD_DOWNLOAD/$tag/"
   exit 0
 fi
 if [ "${1:-}" = --rehearsal ]; then
@@ -189,9 +210,9 @@ for item in ET.parse(sys.argv[1]).getroot().findall("./channel/item"):
 ' "$dir/appcast.xml") || die "cannot read $dir/appcast.xml"
   [ -n "$enclosures" ] || die "$dir/appcast.xml names no archive"
   while IFS= read -r url; do
-    name=${url#"$POD_RELEASES_DOWNLOAD/$tag/"}
+    name=${url#"$POD_DOWNLOAD/$tag/"}
     [ "$name" != "$url" ] && [[ "$name" != */* ]] && [ -f "$dir/$name" ] ||
-      die "the enclosure $url is not an archive of $dir under $POD_RELEASES_DOWNLOAD/$tag/ (--rehearsal-downloads)"
+      die "the enclosure $url is not an archive of $dir under $POD_DOWNLOAD/$tag/ (--rehearsal-downloads)"
   done <<<"$enclosures"
   # 1. The archives, on the rehearsal's own prerelease.
   for file in "$dir"/*; do
@@ -201,7 +222,7 @@ for item in ET.parse(sys.argv[1]).getroot().findall("./channel/item"):
   done
   # 2. Each enclosure delivers its archive, as the run's Sparkle will download it.
   while IFS= read -r url; do
-    name=${url#"$POD_RELEASES_DOWNLOAD/$tag/"}
+    name=${url#"$POD_DOWNLOAD/$tag/"}
     delivers "$(read_url "$url")" "$dir/$name" ||
       die "$url does not deliver $dir/$name byte for byte (3 downloads; last: $(tail -n 1 "$work/delivered.why"))"
   done <<<"$enclosures"
@@ -253,9 +274,9 @@ feed=$release/appcast.xml
 [ -f "$release/artifacts.txt" ] || die "no artifacts.txt in $release: publish what release-one-app.sh made"
 ! head -n 1 "$release/artifacts.txt" | grep -q 'DRY RUN' ||
   die "$release is a dry run: its throwaway key would lock every installed Pod out of the feed"
-# One item whose enclosure is <releases>/v<version>/Pod-<version>.dmg, and the DMG beside it at that
-# length (the length and EdDSA signature the appcast carries are that file's).
-read -r build tag archive length < <(python3 -I - "$feed" "$POD_RELEASES_DOWNLOAD/" <<'PY'
+# One item whose enclosure is <host>/download/v<version>/Pod-<version>.dmg, and the DMG beside it at
+# that length (the length and EdDSA signature the appcast carries are that file's).
+read -r build tag archive length < <(python3 -I - "$feed" "$POD_DOWNLOAD/" <<'PY'
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -272,13 +293,31 @@ if len(items) == 1:
 PY
 ) || true
 [ -n "${archive:-}" ] ||
-  die "$feed is not a one-item appcast whose enclosure is $POD_RELEASES_DOWNLOAD/v<version>/Pod-<version>.dmg"
+  die "$feed is not a one-item appcast whose enclosure is $POD_DOWNLOAD/v<version>/Pod-<version>.dmg"
 version=${tag#v}
-enclosure=$POD_RELEASES_DOWNLOAD/$tag/$archive
+enclosure=$POD_DOWNLOAD/$tag/$archive
 dmg=$release/$archive
 [ -f "$dmg" ] || die "no $archive in $release"
 [ "$(size "$dmg")" = "$length" ] || die "$archive is not the $length bytes the appcast says"
+# The DMG release-one-app.sh made: its line in artifacts.txt is "<name> <size> <sha256>".
+recorded=$(awk -v n="$archive" '$1 == n { print $3; exit }' "$release/artifacts.txt")
+[ -n "$recorded" ] || die "artifacts.txt names no sha256 for $archive"
+[ "$recorded" = "$(sha "$dmg")" ] || die "$archive is not the DMG artifacts.txt records (sha256 $recorded)"
 unchanged="; the feed is unchanged"
+
+# Before any change: no step back for installed Pods, and a way back for the domain.
+domain_feed=0
+if curl -fsSL --connect-timeout 20 --max-time 120 -o "$work/domain.xml" "$read_host/appcast.xml" 2>/dev/null; then
+  domain_feed=1
+  served=$(feed_version "$work/domain.xml")
+  [ -n "$served" ] || die "$POD_UPDATE_FEED serves an appcast with no sparkle:version: check it with curl$unchanged"
+  [ "$build" -ge "$served" ] ||
+    die "sparkle:version $build is below $served, which $POD_UPDATE_FEED serves: installed Pods never take a lower one$unchanged"
+fi
+previous=$(vercel_team inspect "${POD_UPDATE_HOST#https://}" --json 2>/dev/null |
+  python3 -I -c 'import json, sys; print(json.load(sys.stdin)["id"])' 2>/dev/null) || previous=""
+[ -n "$previous" ] || [ "$domain_feed" = 0 ] ||
+  die "vercel inspect names no deployment of ${POD_UPDATE_HOST#https://}, which serves a feed: no deployment to go back to$unchanged"
 
 # 1. The archive.
 prerelease=0
@@ -286,11 +325,7 @@ prerelease=0
 publish_archive "$tag" "$dmg" 0 "Pod $version" \
   "Pod $version: the signed DMG Pod's updater downloads (feed: $POD_UPDATE_FEED)." "$prerelease"
 
-# 2. What Sparkle will download.
-delivers "$(read_url "$enclosure")" "$dmg" ||
-  die "$enclosure does not deliver $archive byte for byte (3 downloads; last: $(tail -n 1 "$work/delivered.why"))$unchanged"
-
-# 3. The deployment, off the domain.
+# 2. The deployment, off the domain: its appcast, and the DMG through its own download/ redirect.
 mkdir "$work/site"
 cp "$site_files/vercel.json" "$site_files/robots.txt" "$work/site/"
 cp "$feed" "$work/site/appcast.xml"
@@ -301,14 +336,16 @@ staged=$(python3 -I -c 'import json, sys; d = json.load(open(sys.argv[1])); prin
   die "vercel deploy named no deployment$unchanged"
 [ "$(served_sha "$staged/appcast.xml")" = "$(sha "$feed")" ] ||
   die "deployment $staged does not serve $feed$unchanged"
+delivers "$staged/download/$tag/$archive" "$dmg" ||
+  die "$enclosure does not deliver $archive byte for byte through $staged (3 downloads; last: $(tail -n 1 "$work/delivered.why"))$unchanged"
 
-# 4. The domain.
-previous=$(vercel_team inspect "${POD_UPDATE_HOST#https://}" --json 2>/dev/null |
-  python3 -I -c 'import json, sys; print(json.load(sys.stdin)["id"])' 2>/dev/null) || previous=""
+# 3. The domain.
 serves_feed() { [ "$(served_sha "$read_host/appcast.xml")" = "$(sha "$feed")" ]; }
 # A deployment already on the domain refuses a promote (409): then the feed only has to be there.
-vercel_team promote "$staged" --yes >"$work/promote.log" 2>&1 || serves_feed ||
-  die "vercel promote $staged failed ($(tail -n 1 "$work/promote.log"))$unchanged"
+if ! vercel_team promote "$staged" --yes >"$work/promote.log" 2>&1; then
+  retry_reads serves_feed ||
+    die "vercel promote $staged failed ($(tail -n 1 "$work/promote.log"))$unchanged: the domain serves $(domain_serves)"
+fi
 if ! retry_reads serves_feed; then
   [ -n "$previous" ] || die "$POD_UPDATE_FEED does not serve $feed, and there was no deployment before: check it with curl"
   vercel_team promote "$previous" --yes >/dev/null 2>&1 &&

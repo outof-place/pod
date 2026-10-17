@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   chmodSync,
   existsSync,
@@ -18,9 +19,13 @@ const product = join(__dirname, '..', '..', '..', 'product')
 const script = join(product, 'scripts', 'publish-update.sh')
 const HOST = 'https://updates.pod.codes'
 const RELEASES = 'https://github.com/outof-place/pod-releases/releases/download'
+// Pod's own name for each DMG, a 302 to RELEASES (product/update-host/vercel.json).
+const DOWNLOAD = `${HOST}/download`
 
 // Vercel in a directory: blob/<pathname> is the store, served/<n>/ what deployment n serves (its
-// files, and rehearsal/ of the store through the redirect), live the deployment on the domain.
+// files, rehearsal/ of the store and download/ of FAKE_GH's releases through the redirects its
+// vercel.json names), live the deployment on the domain. A deploy without --skip-domain goes on the
+// domain at once, as Vercel's does. FAKE_VERCEL_SERVES_OTHER=1 deploys a feed other than the one sent,
 // FAKE_VERCEL_STALE_PROMOTE=<n> promotes deployment n without the domain ever serving it,
 // FAKE_VERCEL_PROMOTE_FAILS=1 refuses every promote, FAKE_VERCEL_PROMOTE_409=1 answers 409 for a
 // deployment the domain then serves.
@@ -62,6 +67,9 @@ print(json.dumps({"blobs": [{"pathname": n, "size": os.path.getsize(os.path.join
     mkdir -p "$s/served/$n"
     cp "$s/deployments/$n/appcast.xml" "$s/deployments/$n/robots.txt" "$s/served/$n/"
     ln -sfn "$s/blob/rehearsal" "$s/served/$n/rehearsal"
+    ! grep -q '"/download/:tag/:archive"' "$s/deployments/$n/vercel.json" || ln -sfn "$FAKE_GH/releases" "$s/served/$n/download"
+    [ "\${FAKE_VERCEL_SERVES_OTHER:-0}" != 1 ] || echo 'another feed' >"$s/served/$n/appcast.xml"
+    [[ " $* " == *" --skip-domain "* ]] || { ln -sfn "$s/served/$n" "$s/live"; echo "dpl_$n" >"$s/live-id"; }
     printf '{"id":"dpl_%s","url":"file://%s/served/%s"}\\n' "$n" "$s" "$n" ;;
   inspect*)
     [ -f "$s/live-id" ] || exit 1
@@ -167,7 +175,7 @@ function appcast(
   tag: string,
   archive: string,
   length: number,
-  prefix = `${RELEASES}/${tag}/`
+  prefix = `${DOWNLOAD}/${tag}/`
 ): string {
   return (
     `<?xml version="1.0" encoding="utf-8"?>\n` +
@@ -207,6 +215,7 @@ function setup(options: { dmg?: string; feed?: string; artifacts?: string } = {}
   writeFileSync(join(vercel, 'deployments', '0', 'robots.txt'), '')
   writeFileSync(join(vercel, 'served', '0', 'appcast.xml'), OLD_FEED)
   symlinkSync(join(vercel, 'blob', 'rehearsal'), join(vercel, 'served', '0', 'rehearsal'))
+  symlinkSync(join(gh, 'releases'), join(vercel, 'served', '0', 'download'))
   symlinkSync(join(vercel, 'served', '0'), join(vercel, 'live'))
   writeFileSync(join(vercel, 'live-id'), 'dpl_0\n')
   writeFileSync(join(vercel, 'next'), '1\n')
@@ -217,9 +226,15 @@ function setup(options: { dmg?: string; feed?: string; artifacts?: string } = {}
   writeFileSync(join(release, 'appcast.xml'), feed)
   writeFileSync(
     join(release, 'artifacts.txt'),
-    options.artifacts ?? 'Pod 1.0.0-rc6 (CFBundleVersion 1000006), tag v1.0.0-rc6 at abc\n'
+    options.artifacts ??
+      `Pod 1.0.0-rc6 (CFBundleVersion 1000006), tag v1.0.0-rc6 at abc\n` +
+        `Pod-1.0.0-rc6.dmg  ${dmg.length}  ${sha256(dmg)}\n`
   )
   return { vercel, gh, shims, release, dmg, feed }
+}
+
+function sha256(data: string): string {
+  return createHash('sha256').update(data).digest('hex')
 }
 
 /** An asset already on release <tag>, as an earlier run left it. */
@@ -247,7 +262,6 @@ function run(
       FAKE_VERCEL: r.vercel,
       FAKE_GH: r.gh,
       POD_UPDATE_READ_HOST: `file://${r.vercel}/live`,
-      POD_RELEASES_READ_DOWNLOAD: `file://${r.gh}/releases`,
       POD_PUBLISH_RETRY_SECONDS: '0',
       ...env
     }
@@ -258,6 +272,11 @@ function run(
 function calls(dir: string): string[] {
   const log = join(dir, 'calls.log')
   return existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : []
+}
+
+/** Whether the run deployed or promoted anything (reading the domain's deployment is no change). */
+function changedVercel(r: Run): boolean {
+  return calls(r.vercel).some((call) => /^(deploy|promote)/.test(call))
 }
 
 function live(r: Run): string {
@@ -274,8 +293,11 @@ describe('publish-update.sh', () => {
     const result = run(r, [r.release])
     expect(result.status, result.out).toBe(0)
     expect(result.out).toContain(`${HOST}/appcast.xml serves`)
-    expect(result.out).toContain(`its archive ${RELEASES}/v1.0.0-rc6/Pod-1.0.0-rc6.dmg`)
-    expect(result.out).toContain(`delivered ${r.dmg.length} bytes`)
+    expect(result.out).toContain(`its archive ${DOWNLOAD}/v1.0.0-rc6/Pod-1.0.0-rc6.dmg`)
+    // Downloaded whole through the new deployment's own redirect, before it is on the domain.
+    expect(result.out).toMatch(
+      /served\/1\/download\/v1\.0\.0-rc6\/Pod-1\.0\.0-rc6\.dmg delivered 18 bytes/
+    )
     expect(live(r)).toBe(r.feed)
     expect(asset(r, 'v1.0.0-rc6', 'Pod-1.0.0-rc6.dmg')).toBe(r.dmg)
     // An RC is a prerelease, as on outof-place/pod.
@@ -289,19 +311,23 @@ describe('publish-update.sh', () => {
       'robots.txt',
       'vercel.json'
     ])
-    // No Blob in a release: the DMG lives on GitHub only.
-    const [deploy, inspect, promote, ...rest] = calls(r.vercel)
+    // No Blob in a release: the DMG lives on GitHub only. The way back is known before the deploy.
+    const [inspect, deploy, promote, ...rest] = calls(r.vercel)
+    expect(inspect).toBe('inspect updates.pod.codes --json --scope outofplace')
     expect(deploy).toMatch(
       /^deploy \S+ --prod --skip-domain --project prj_\w+ --yes --json --scope outofplace$/
     )
-    expect(inspect).toBe('inspect updates.pod.codes --json --scope outofplace')
     expect(promote).toMatch(/^promote file:\/\/\S+\/served\/1 --yes --scope outofplace$/)
     expect(rest).toEqual([])
   })
 
   it('makes a final release no prerelease', () => {
     const dmg = 'the 1.0.0 disk image'
-    const r = setup({ dmg, feed: appcast('1000099', 'v1.0.0', 'Pod-1.0.0.dmg', dmg.length) })
+    const r = setup({
+      dmg,
+      feed: appcast('1000099', 'v1.0.0', 'Pod-1.0.0.dmg', dmg.length),
+      artifacts: `Pod 1.0.0\nPod-1.0.0.dmg  ${dmg.length}  ${sha256(dmg)}\n`
+    })
     rmSync(join(r.release, 'Pod-1.0.0-rc6.dmg'))
     writeFileSync(join(r.release, 'Pod-1.0.0.dmg'), dmg)
     const result = run(r, [r.release])
@@ -339,7 +365,7 @@ describe('publish-update.sh', () => {
     expect(result.status).toBe(1)
     expect(result.out).toContain('a published archive is never replaced')
     expect(asset(r, 'v1.0.0-rc6', 'Pod-1.0.0-rc6.dmg')).toBe(other)
-    expect(calls(r.vercel)).toEqual([])
+    expect(changedVercel(r)).toBe(false)
     expect(live(r)).toBe(OLD_FEED)
   })
 
@@ -358,7 +384,7 @@ describe('publish-update.sh', () => {
     const result = run(r, [r.release], { FAKE_GH_FAIL_UPLOAD: '1' })
     expect(result.status).toBe(1)
     expect(result.out).toContain('the feed is unchanged')
-    expect(calls(r.vercel)).toEqual([])
+    expect(changedVercel(r)).toBe(false)
     expect(live(r)).toBe(OLD_FEED)
   })
 
@@ -367,11 +393,67 @@ describe('publish-update.sh', () => {
     const result = run(r, [r.release], { FAKE_GH_SHORT_UPLOAD: '1' })
     expect(result.status).toBe(1)
     expect(result.out).toContain(
-      `${RELEASES}/v1.0.0-rc6/Pod-1.0.0-rc6.dmg does not deliver Pod-1.0.0-rc6.dmg byte for byte`
+      `${DOWNLOAD}/v1.0.0-rc6/Pod-1.0.0-rc6.dmg does not deliver Pod-1.0.0-rc6.dmg byte for byte`
     )
     expect(result.out).toContain('the feed is unchanged')
-    expect(calls(r.vercel)).toEqual([])
+    expect(calls(r.vercel).some((call) => call.startsWith('promote'))).toBe(false)
     expect(live(r)).toBe(OLD_FEED)
+  })
+
+  it('leaves the feed alone when the new deployment serves another appcast', () => {
+    const r = setup()
+    const result = run(r, [r.release], { FAKE_VERCEL_SERVES_OTHER: '1' })
+    expect(result.status).toBe(1)
+    expect(result.out).toContain('does not serve')
+    expect(result.out).toContain('the feed is unchanged')
+    expect(calls(r.vercel).some((call) => call.startsWith('promote'))).toBe(false)
+    // Off the domain (--skip-domain): the fake would have put a deploy without it on the domain.
+    expect(live(r)).toBe(OLD_FEED)
+  })
+
+  it('refuses a version below the one the domain serves', () => {
+    const r = setup({ feed: appcast('1000004', 'v1.0.0-rc6', 'Pod-1.0.0-rc6.dmg', 18) })
+    const result = run(r, [r.release])
+    expect(result.status).toBe(1)
+    expect(result.out).toContain('sparkle:version 1000004 is below 1000005')
+    expect(calls(r.gh)).toEqual([])
+    expect(changedVercel(r)).toBe(false)
+    expect(live(r)).toBe(OLD_FEED)
+  })
+
+  it('publishes the version the domain already serves again (a re-run)', () => {
+    const r = setup()
+    expect(run(r, [r.release]).status).toBe(0)
+    const again = run(r, [r.release])
+    expect(again.status, again.out).toBe(0)
+    expect(live(r)).toBe(r.feed)
+  })
+
+  it('stops before any change when the domain serves a feed but names no deployment to go back to', () => {
+    const r = setup()
+    rmSync(join(r.vercel, 'live-id'))
+    const result = run(r, [r.release])
+    expect(result.status).toBe(1)
+    expect(result.out).toContain('no deployment to go back to')
+    expect(calls(r.gh)).toEqual([])
+    expect(changedVercel(r)).toBe(false)
+    expect(live(r)).toBe(OLD_FEED)
+  })
+
+  it.each([
+    [
+      'a different sha256',
+      (dmg: string) => `Pod-1.0.0-rc6.dmg  ${dmg.length}  ${sha256('other')}\n`
+    ],
+    ['no line for the DMG', () => 'SHA256SUMS  10  abc\n']
+  ])('refuses a DMG whose artifacts.txt has %s', (_what, line) => {
+    const dmg = 'the rc6 disk image'
+    const r = setup({ artifacts: `Pod 1.0.0-rc6 (CFBundleVersion 1000006)\n${line(dmg)}` })
+    const result = run(r, [r.release])
+    expect(result.status).toBe(1)
+    expect(result.out).toContain('artifacts.txt')
+    expect(calls(r.gh)).toEqual([])
+    expect(calls(r.vercel)).toEqual([])
   })
 
   it('puts the domain back on its previous deployment when it never serves the new feed', () => {
@@ -395,7 +477,7 @@ describe('publish-update.sh', () => {
     const result = run(r, [r.release], { FAKE_VERCEL_PROMOTE_FAILS: '1' })
     expect(result.status).toBe(1)
     expect(result.out).toContain('vercel promote')
-    expect(result.out).toContain('the feed is unchanged')
+    expect(result.out).toContain('the feed is unchanged: the domain serves sparkle:version 1000005')
     expect(live(r)).toBe(OLD_FEED)
   })
 
@@ -411,17 +493,18 @@ describe('publish-update.sh', () => {
   })
 
   it.each([
-    ['the update host, which serves no DMG', `${HOST}/`],
+    ['the update host outside download/', `${HOST}/`],
+    ["GitHub, without Pod's own name", `${RELEASES}/v1.0.0-rc6/`],
     [
       'outof-place/pod, which goes private',
       'https://github.com/outof-place/pod/releases/download/v1.0.0-rc6/'
     ],
-    ['another version tag', `${RELEASES}/v1.0.0-rc5/`]
+    ['another version tag', `${DOWNLOAD}/v1.0.0-rc5/`]
   ])('refuses an appcast whose archive is on %s', (_where, prefix) => {
     const r = setup({ feed: appcast('1000006', 'v1.0.0-rc6', 'Pod-1.0.0-rc6.dmg', 18, prefix) })
     const result = run(r, [r.release])
     expect(result.status).toBe(1)
-    expect(result.out).toContain(`enclosure is ${RELEASES}/v<version>/Pod-<version>.dmg`)
+    expect(result.out).toContain(`enclosure is ${DOWNLOAD}/v<version>/Pod-<version>.dmg`)
     expect(calls(r.vercel)).toEqual([])
     expect(calls(r.gh)).toEqual([])
   })
@@ -455,7 +538,7 @@ describe('publish-update.sh', () => {
 
   describe('a rehearsal', () => {
     const base = `${HOST}/rehearsal/t1/`
-    const downloads = `${RELEASES}/rehearsal-t1/`
+    const downloads = `${DOWNLOAD}/rehearsal-t1/`
 
     function rehearsalFeed(r: Run, prefix = downloads): string {
       const dir = join(r.release, 'feed')
@@ -527,14 +610,17 @@ describe('publish-update.sh', () => {
       expect(existsSync(join(r.vercel, 'blob', 'rehearsal', 't1'))).toBe(false)
     })
 
-    it('goes nowhere but rehearsal/<name>/', () => {
-      const r = setup()
-      const result = run(r, ['--rehearsal', r.release, `${HOST}/`], { CLAUDECODE: '1' })
-      expect(result.status).toBe(1)
-      expect(result.out).toContain('rehearsal/<name>/')
-      expect(calls(r.vercel)).toEqual([])
-      expect(calls(r.gh)).toEqual([])
-    })
+    it.each([`${HOST}/`, `${HOST}/rehearsal/./`, `${HOST}/rehearsal/../`])(
+      'goes nowhere but rehearsal/<name>/: not %s',
+      (base) => {
+        const r = setup()
+        const result = run(r, ['--rehearsal', r.release, base], { CLAUDECODE: '1' })
+        expect(result.status).toBe(1)
+        expect(result.out).toContain('rehearsal/<name>/')
+        expect(calls(r.vercel)).toEqual([])
+        expect(calls(r.gh)).toEqual([])
+      }
+    )
   })
 })
 
@@ -553,8 +639,14 @@ describe('the update host', () => {
     expect(coordinates.POD_UPDATE_FEED).toBe('$POD_UPDATE_HOST/appcast.xml')
   })
 
-  it('serves no DMG: it redirects rehearsal feeds alone, to the Blob store, temporarily', () => {
+  it("names each DMG on Pod's own name, a 302 to outof-place/pod-releases, and keeps none itself", () => {
     expect(config.redirects).toEqual([
+      {
+        source: '/download/:tag/:archive',
+        destination: 'https://github.com/outof-place/pod-releases/releases/download/:tag/:archive',
+        // The signed feed names this URL: where it points can move with a deploy, never a re-sign.
+        statusCode: 302
+      },
       {
         source: '/rehearsal/:path*',
         destination: `${coordinates.POD_UPDATE_BLOB_URL}/rehearsal/:path*`,
