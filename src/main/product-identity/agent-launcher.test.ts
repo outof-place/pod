@@ -171,7 +171,7 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
     script(
       join(root, 'tree'),
       'claude',
-      `echo $$; ps -o pri= -p $$; sh -c "sh -c \\"ps -o pri= -p \\\\$\\\\$\\""; ${join(hooks, 'claude-hook.sh')}; ${client}`
+      `echo $$; ps -o pri= -p $$; sh -c "sh -c \\"ps -o pri= -p \\\\$\\\\$\\""; "${join(hooks, 'claude-hook.sh')}"; "${client}"`
     )
     const tree = run('claude', [], [binDir, join(root, 'tree')])
     const own = run('claude', [], [binDir, join(root, 'tree')], { POD_AGENT_TREE: '0' })
