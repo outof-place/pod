@@ -90,10 +90,12 @@ export type PodUiHostQuitReason = z.infer<typeof Quit>['reason']
 // `browserContextMenu`: a right-click on an attached page comes as browserContextMenu.
 // `browserOpenLink`: a page's new-tab link (⌘-click, middle-click, target=_blank) comes as browserOpenLink.
 // `browserTargetUrl`: the link under an attached page's pointer comes as browserTargetUrl.
+// `browserPasskey`: a security key's accounts come as browserPasskeyAccounts; browserPasskeyChoose answers.
 export const POD_UI_HOST_FEATURES = [
   'browser',
   'browserContextMenu',
   'browserOpenLink',
+  'browserPasskey',
   'browserTargetUrl',
   'headless',
   'surfaceSection'

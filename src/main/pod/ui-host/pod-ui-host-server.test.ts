@@ -198,6 +198,7 @@ describe('PodUiHostServer', () => {
         'browser',
         'browserContextMenu',
         'browserOpenLink',
+        'browserPasskey',
         'browserTargetUrl',
         'headless',
         'surfaceSection'
@@ -214,6 +215,7 @@ describe('PodUiHostServer', () => {
         'browser',
         'browserContextMenu',
         'browserOpenLink',
+        'browserPasskey',
         'browserTargetUrl',
         'surfaceSection'
       ])

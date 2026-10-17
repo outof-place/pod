@@ -15,6 +15,7 @@ import { navigatePanePage } from './pod-browser-pane-navigation'
 import { PaneSelectMenus } from './pod-browser-pane-select'
 import { describePaneContextMenu } from './pod-browser-pane-context-menu'
 import { PaneLinks } from './pod-browser-pane-links'
+import { PanePasskeys, type PanePasskeyAccount } from './pod-browser-pane-passkeys'
 import { PaneFramePump, type PodBrowserFrames } from './pod-browser-pane-frames'
 const PANE_FRAME_RATE = 60
 // A page nobody sees and no agent drives. Why 10: a rate change waits for the next tick, so a
@@ -44,6 +45,7 @@ export class PodBrowserPaneController {
   private readonly pages = new Map<string, Page>()
   private readonly downloads = new PaneDownloads()
   private readonly frames: PaneFramePump
+  private readonly passkeys: PanePasskeys
 
   constructor(
     private readonly deps: {
@@ -54,6 +56,7 @@ export class PodBrowserPaneController {
     }
   ) {
     this.frames = new PaneFramePump(deps.frames, deps.log)
+    this.passkeys = new PanePasskeys(deps.send)
   }
 
   get stats(): PaneFramePump['stats'] {
@@ -131,6 +134,7 @@ export class PodBrowserPaneController {
       if (this.pages.get(pageId) === page) {
         this.pages.delete(pageId)
       }
+      this.passkeys.cancelPage(pageId)
     })
   }
 
@@ -177,6 +181,21 @@ export class PodBrowserPaneController {
       this.userDriven(page) &&
       page.links.open(url, activate)
     )
+  }
+
+  /** A security key's accounts for one of these pages: PodNative's pick, while the user drives it. */
+  pickPasskey(
+    webContentsId: number,
+    relyingPartyId: string,
+    accounts: readonly PanePasskeyAccount[]
+  ): Promise<string | null> | null {
+    for (const [pageId, page] of this.pages) {
+      if (!page.wc.isDestroyed() && page.wc.id === webContentsId) {
+        // Why not while an agent drives: nobody at the screen asked for it.
+        return this.userDriven(page) ? this.passkeys.request(pageId, relyingPartyId, accounts) : null
+      }
+    }
+    return null
   }
 
   handle(message: PodBrowserPaneClientMessage): void {
@@ -240,6 +259,9 @@ export class PodBrowserPaneController {
       case 'browserPopupChoose':
         page.select.choose(message.menuId, message.index)
         return
+      case 'browserPasskeyChoose':
+        this.passkeys.choose(message.pageId, message.requestId, message.credentialId)
+        return
       case 'browserFind':
         wc.findInPage(message.text, { forward: message.forward, findNext: message.findNext })
         return
@@ -261,6 +283,7 @@ export class PodBrowserPaneController {
     for (const page of this.pages.values()) {
       this.detach(page)
     }
+    this.passkeys.cancelAll()
     this.frames.disconnect()
   }
 

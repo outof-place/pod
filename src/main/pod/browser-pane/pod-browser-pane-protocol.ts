@@ -3,6 +3,7 @@
 // browser_frames.c), and these lines carry everything else. PodNative mirrors them in
 // PodRuntime/BrowserPaneProtocol.swift (outof-place/pod-native).
 import { z } from 'zod'
+import { PANE_PASSKEY_MAX_CREDENTIAL_ID } from './pod-browser-pane-passkeys'
 
 const PageId = z.string().min(1).max(200)
 const Size = z.number().int().min(1).max(8192)
@@ -150,6 +151,16 @@ const PopupChoose = z
   })
   .strict()
 
+// Feature browserPasskey: the account picked for a browserPasskeyAccounts request (null: none).
+const PasskeyChoose = z
+  .object({
+    type: z.literal('browserPasskeyChoose'),
+    pageId: PageId,
+    requestId: z.uuid(),
+    credentialId: z.string().min(1).max(PANE_PASSKEY_MAX_CREDENTIAL_ID).nullable()
+  })
+  .strict()
+
 /** Every browser verb, for the socket's discriminated union of client messages. */
 export const POD_BROWSER_PANE_CLIENT_MESSAGES = [
   Rendezvous,
@@ -163,7 +174,8 @@ export const POD_BROWSER_PANE_CLIENT_MESSAGES = [
   FindStop,
   Focus,
   DevTools,
-  PopupChoose
+  PopupChoose,
+  PasskeyChoose
 ] as const
 
 export type PodBrowserPaneClientMessage =
@@ -179,6 +191,7 @@ export type PodBrowserPaneClientMessage =
   | z.infer<typeof Focus>
   | z.infer<typeof DevTools>
   | z.infer<typeof PopupChoose>
+  | z.infer<typeof PasskeyChoose>
 
 export type PodBrowserPaneServerMessage =
   | {
@@ -240,6 +253,17 @@ export type PodBrowserPaneServerMessage =
   // Feature browserOpenLink: the page opened a link in a new tab (⌘-click, middle-click,
   // target=_blank, window.open); `target` is where, from the click that did it. http(s) only.
   | { type: 'browserOpenLink'; pageId: string; url: string; target: PodBrowserLinkTarget }
+  // Feature browserPasskey: a security key holds several accounts for the page's site; PodNative
+  // answers with browserPasskeyChoose. The labels are the site's text.
+  | {
+      type: 'browserPasskeyAccounts'
+      pageId: string
+      requestId: string
+      relyingPartyId: string
+      accounts: { credentialId: string; displayName?: string; name?: string }[]
+    }
+  // Feature browserPasskey: the request ended without PodNative's answer (timeout, page gone).
+  | { type: 'browserPasskeyClosed'; pageId: string; requestId: string }
 
 /** ⌘-click: the default browser; ⌘⇧-click and target=_blank: a tab shown; middle-click: one behind. */
 export type PodBrowserLinkTarget = 'defaultBrowser' | 'foregroundTab' | 'backgroundTab'

@@ -409,6 +409,41 @@ describe('PodBrowserPaneController', () => {
     expect(sent).toHaveLength(2)
   })
 
+  it("asks PodNative for a key's account only for an attached page the user drives", async () => {
+    const { panes, wc, sent } = setup()
+    const accounts = [{ credentialId: 'credential-1' }, { credentialId: 'credential-2' }]
+    expect(panes.pickPasskey(wc.id, 'example.com', accounts)).toBeNull()
+    panes.handle(attach)
+    expect(panes.pickPasskey(99, 'example.com', accounts)).toBeNull()
+    const pick = panes.pickPasskey(wc.id, 'example.com', accounts)
+    const request = sent.findLast((message) => message.type === 'browserPasskeyAccounts')
+    expect(request).toMatchObject({ pageId: 'page-1', relyingPartyId: 'example.com', accounts })
+    panes.handle({
+      type: 'browserPasskeyChoose',
+      pageId: 'page-1',
+      requestId: request?.type === 'browserPasskeyAccounts' ? request.requestId : '',
+      credentialId: 'credential-2'
+    })
+    await expect(pick).resolves.toBe('credential-2')
+
+    panes.noteAgentCommand(wc.id)
+    expect(panes.pickPasskey(wc.id, 'example.com', accounts)).toBeNull()
+  })
+
+  it("ends a page's open key request when the page goes and when PodNative does", async () => {
+    const { panes, wc, sent } = setup()
+    const accounts = [{ credentialId: 'credential-1' }]
+    panes.handle(attach)
+    const reset = panes.pickPasskey(wc.id, 'example.com', accounts)
+    panes.reset()
+    await expect(reset).resolves.toBeNull()
+    panes.handle(attach)
+    const destroyed = panes.pickPasskey(wc.id, 'example.com', accounts)
+    wc.emit('destroyed')
+    await expect(destroyed).resolves.toBeNull()
+    expect(sent.filter((message) => message.type === 'browserPasskeyClosed')).toHaveLength(2)
+  })
+
   it('ticks a page nobody sees at 10 fps, and at 60 while it shows or an agent drives it', () => {
     vi.useFakeTimers()
     const { panes, wc } = setup()
