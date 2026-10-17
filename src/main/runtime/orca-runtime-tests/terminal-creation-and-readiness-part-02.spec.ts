@@ -436,9 +436,9 @@ describe('OrcaRuntimeService', () => {
     expect(spawnCall?.command).toBe("codex '--dangerously-bypass-approvals-and-sandbox'")
     expect(spawnCall?.env).toMatchObject({
       CODEX_PROFILE: 'captured',
-      ORCA_WORKTREE_ID: TEST_WORKTREE_ID
+      POD_WORKTREE_ID: TEST_WORKTREE_ID
     })
-    expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
+    expect(spawnCall?.env?.POD_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
     // The spawn builder pre-trusts the workspace for the declared launch agent.
     expect(spawnCall?.launchAgent).toBe('codex')
   })

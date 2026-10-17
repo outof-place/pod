@@ -30,8 +30,8 @@ function makeHome(): string {
   tempDirs.push(dir)
   process.env.HOME = dir
   process.env.SHELL = '/bin/zsh'
-  delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
-  delete process.env.ORCA_PI_SOURCE_AGENT_DIR
+  delete process.env.POD_OPENCODE_SOURCE_CONFIG_DIR
+  delete process.env.POD_PI_SOURCE_AGENT_DIR
   return dir
 }
 
@@ -53,7 +53,7 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
 
   it('prefers the original OpenCode config root over inherited PTY overlays', async () => {
     process.env.OPENCODE_CONFIG_DIR = '/tmp/orca-opencode-overlay'
-    process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = '/Users/tester/company/opencode'
+    process.env.POD_OPENCODE_SOURCE_CONFIG_DIR = '/Users/tester/company/opencode'
 
     const result = await prepareLocalCommitMessageAgentEnv('opencode', undefined)
 
@@ -82,7 +82,7 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
 
   it('prefers the original Pi agent root over inherited PTY overlays', async () => {
     process.env.PI_CODING_AGENT_DIR = '/tmp/orca-pi-overlay'
-    process.env.ORCA_PI_SOURCE_AGENT_DIR = '/Users/tester/.pi/agent'
+    process.env.POD_PI_SOURCE_AGENT_DIR = '/Users/tester/.pi/agent'
 
     const result = await prepareLocalCommitMessageAgentEnv('pi', undefined)
 
@@ -130,7 +130,7 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
   // real ~/.codex while the UI shows the managed account selected.
   it('fails commit generation instead of building a system-account env when the managed home is unreadable', async () => {
     process.env.CODEX_HOME = '/home/me/.config/codex'
-    delete process.env.ORCA_CODEX_HOME
+    delete process.env.POD_CODEX_HOME
 
     const result = await prepareLocalCommitMessageAgentEnv('codex', {
       prepareForCodexLaunch: () => {
@@ -147,7 +147,7 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
 
   it('strips a nested-Orca CODEX_HOME override when the launch resolves to the real home', async () => {
     process.env.CODEX_HOME = '/managed/runtime/home'
-    process.env.ORCA_CODEX_HOME = '/managed/runtime/home'
+    process.env.POD_CODEX_HOME = '/managed/runtime/home'
 
     const result = await prepareLocalCommitMessageAgentEnv('codex', {
       prepareForCodexLaunch: () => null
@@ -157,12 +157,12 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     const env = (result as { ok: true; env?: NodeJS.ProcessEnv }).env
     expect(env).toBeDefined()
     expect(env?.CODEX_HOME).toBeUndefined()
-    expect(env?.ORCA_CODEX_HOME).toBeUndefined()
+    expect(env?.POD_CODEX_HOME).toBeUndefined()
   })
 
   it('preserves a user-owned CODEX_HOME when the launch resolves to the real home', async () => {
     process.env.CODEX_HOME = '/home/me/.config/codex'
-    delete process.env.ORCA_CODEX_HOME
+    delete process.env.POD_CODEX_HOME
 
     const result = await prepareLocalCommitMessageAgentEnv('codex', {
       prepareForCodexLaunch: () => null
@@ -288,7 +288,7 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     it("prefers the login shell's config dir over Orca's inherited one", async () => {
       makeHome()
       process.env.OPENCODE_CONFIG_DIR = '/old/opencode'
-      delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+      delete process.env.POD_OPENCODE_SOURCE_CONFIG_DIR
 
       const result = await prepareLocalCommitMessageAgentEnv('opencode', {
         resolveBaseEnvironment: async () => ({ ...shellBase, OPENCODE_CONFIG_DIR: '/new/opencode' })

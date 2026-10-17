@@ -6,8 +6,8 @@ import {
 
 describe('orchestration recovery command identity', () => {
   it.each([
-    ['configured dev', { ORCA_CLI_COMMAND: 'orca-dev' }, 'darwin', 'orca-dev'],
-    ['configured WSL', { ORCA_CLI_COMMAND: 'orca-ide' }, 'linux', 'orca-ide'],
+    ['configured dev', { POD_CLI_COMMAND: 'orca-dev' }, 'darwin', 'orca-dev'],
+    ['configured WSL', { POD_CLI_COMMAND: 'orca-ide' }, 'linux', 'orca-ide'],
     ['dev checkout', { ORCA_DEV_REPO_ROOT: '/repo' }, 'darwin', 'orca-dev'],
     ['packaged Linux', {}, 'linux', 'orca-ide'],
     ['local macOS', {}, 'darwin', 'orca'],

@@ -572,7 +572,7 @@ async function main() {
         report.cleanupErrors.push(error instanceof Error ? error.message : String(error))
       }
       report.appLogsTail = launched.logs.slice(-80)
-      // Main-process phase attribution (requires ORCA_PTY_SPAWN_TIMING=1 in the
+      // Main-process phase attribution (requires POD_PTY_SPAWN_TIMING=1 in the
       // benchmark's environment; launchDevApp inherits it into the app).
       report.ptySpawnTimings = launched.logs
         .filter((entry) => entry.line.includes('[pty-spawn-timing]'))

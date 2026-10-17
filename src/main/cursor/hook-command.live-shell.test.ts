@@ -60,7 +60,7 @@ describe.skipIf(process.platform === 'win32')('local Cursor hooks through login 
       throw new Error('Cursor preToolUse hook was not installed')
     }
     command = registered
-    scriptPath = join(home, '.orca', 'agent-hooks', 'cursor-hook.sh')
+    scriptPath = join(home, '.pod', 'agent-hooks', 'cursor-hook.sh')
   })
 
   afterEach(() => {
@@ -71,10 +71,10 @@ describe.skipIf(process.platform === 'win32')('local Cursor hooks through login 
   function environment(): NodeJS.ProcessEnv {
     return {
       ...process.env,
-      ORCA_AGENT_HOOK_ENDPOINT: '',
-      ORCA_AGENT_HOOK_PORT: '',
-      ORCA_AGENT_HOOK_TOKEN: '',
-      ORCA_PANE_KEY: '',
+      POD_AGENT_HOOK_ENDPOINT: '',
+      POD_AGENT_HOOK_PORT: '',
+      POD_AGENT_HOOK_TOKEN: '',
+      POD_PANE_KEY: '',
       ORCA_TEST_EXPAND: 'expanded',
       ORCA_TEST_LITERAL: hostileLiteral,
       HOME: fixture,
@@ -87,7 +87,7 @@ describe.skipIf(process.platform === 'win32')('local Cursor hooks through login 
     it('preserves the assigned response, inherited environment and UTF-8 stdin at a literal path', async () => {
       writeFileSync(
         scriptPath,
-        '#!/bin/sh\nprintf "%s\\n" "$ORCA_CURSOR_HOOK_RESPONSE" "$ORCA_TEST_LITERAL"\ncommand -p cat\n'
+        '#!/bin/sh\nprintf "%s\\n" "$POD_CURSOR_HOOK_RESPONSE" "$ORCA_TEST_LITERAL"\ncommand -p cat\n'
       )
       const result = await runProcess({
         program: shell.path,

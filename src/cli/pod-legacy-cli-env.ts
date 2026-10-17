@@ -34,7 +34,7 @@ export function adoptLegacyCliEnv(
   env: NodeJS.ProcessEnv = process.env,
   writeError: (line: string) => void = (line) => process.stderr.write(line)
 ): boolean {
-  const legacyName = renamedLegacyEnvName('ORCA_USER_DATA_PATH')
+  const legacyName = renamedLegacyEnvName('POD_USER_DATA_PATH')
   const named = legacyName === null ? undefined : env[legacyName]
   if (named === undefined) {
     return true
@@ -43,7 +43,7 @@ export function adoptLegacyCliEnv(
     adoptLegacyEnvNames(env)
     return true
   }
-  if (env.ORCA_USER_DATA_PATH) {
+  if (env.POD_USER_DATA_PATH) {
     return true
   }
   const cliName = getProductIdentity()?.cliName ?? 'podx'

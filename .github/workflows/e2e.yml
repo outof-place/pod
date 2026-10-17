@@ -222,7 +222,7 @@ jobs:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
           ORCA_E2E_WEB_CLIENT: '1'
-          ORCA_RELAY_PATH: ${{ github.workspace }}/out/relay
+          POD_RELAY_PATH: ${{ github.workspace }}/out/relay
         run: |
           mkdir -p ci-shards
           pnpm exec playwright test --config tests/playwright.config.ts --project=electron-headless --list --reporter=json > ci-shards/discovery.json
@@ -234,7 +234,7 @@ jobs:
       - name: Run E2E tests (${{ matrix.shard_name }})
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ci-shards/results.json
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --test-list=ci-shards/selected.txt --reporter=list,json
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 POD_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --test-list=ci-shards/selected.txt --reporter=list,json
 
       - name: Summarize E2E failures
         if: always()
@@ -371,7 +371,7 @@ jobs:
             echo "Changed specs are all owned by dedicated lanes."
             exit 0
           fi
-          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
+          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 POD_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
           # Second clause: a spec that reads ORCA_E2E_SSH_DOCKER test.skip()s itself without it, so
           # naming only one trigger silently skipped every other Docker-SSH spec in this lane.
           # The first clause stays because that spec needs Docker without referencing the variable.
@@ -630,7 +630,7 @@ jobs:
           ORCA_E2E_SSH_DOCKER: '1'
           ORCA_E2E_ORCAD_CONVERT_HOST: docker
           ORCA_E2E_FORWARD_APP_LOGS: '1'
-          ORCA_RELAY_PATH: ${{ github.workspace }}/out/relay
+          POD_RELAY_PATH: ${{ github.workspace }}/out/relay
         run: |
           export ORCA_E2E_ORCAD_CONVERT_TEMPLATE="$RUNNER_TEMP/orcad-convert-template"
           xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-orcad-auto-convert.spec.ts tests/e2e/ssh-orcad-idle-exit.spec.ts tests/e2e/ssh-orcad-browser-capabilities.spec.ts tests/e2e/ssh-orcad-browser-service-status.spec.ts tests/e2e/ssh-orcad-browser-routing.spec.ts tests/e2e/ssh-orcad-editor-ownership.spec.ts tests/e2e/ssh-orcad-markdown-conversion.spec.ts tests/e2e/ssh-orcad-markdown-link-refresh.spec.ts tests/e2e/ssh-orcad-markdown-live-documents.spec.ts tests/e2e/ssh-orcad-open-in-owner.spec.ts tests/e2e/ssh-orcad-editor-watch-recovery.spec.ts tests/e2e/ssh-orcad-explorer-watch-recovery.spec.ts tests/e2e/ssh-orcad-explorer-selected-host.spec.ts tests/e2e/ssh-orcad-browser-drop-owner.spec.ts tests/e2e/ssh-orcad-terminal-root-owner.spec.ts --project=electron-headless --workers=1
@@ -750,7 +750,7 @@ jobs:
         env:
           SKIP_BUILD: '1'
           ORCA_E2E_SSH_LOCALHOST: '1'
-          ORCA_FEATURE_REMOTE_AGENT_HOOKS: '1'
+          POD_FEATURE_REMOTE_AGENT_HOOKS: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
         run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-localhost.spec.ts --project=electron-headless --workers=1
       - uses: actions/upload-artifact@v7

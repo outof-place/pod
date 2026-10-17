@@ -96,7 +96,7 @@ describe('SkillCloudService bearer links', () => {
   })
 
   it('uses the development auth token without opening a profile session', async () => {
-    vi.stubEnv('ORCA_CLOUD_AUTH_TOKEN', 'desktop-e2e-token')
+    vi.stubEnv('POD_CLOUD_AUTH_TOKEN', 'desktop-e2e-token')
     const requests: RequestInit[] = []
     vi.stubGlobal(
       'fetch',
@@ -115,7 +115,7 @@ describe('SkillCloudService bearer links', () => {
 
   it('rejects the development auth token in packaged builds', async () => {
     packaged.value = true
-    vi.stubEnv('ORCA_CLOUD_AUTH_TOKEN', 'desktop-e2e-token')
+    vi.stubEnv('POD_CLOUD_AUTH_TOKEN', 'desktop-e2e-token')
 
     await expect(
       new SkillCloudService(userDataPath()).listOwnedShares({ apiUrl: 'https://share.onorca.dev' })
@@ -125,7 +125,7 @@ describe('SkillCloudService bearer links', () => {
 
 describe('SkillCloudService publication retries', () => {
   it('reuses a reserved upload after its create response is lost', async () => {
-    vi.stubEnv('ORCA_CLOUD_AUTH_TOKEN', 'desktop-e2e-token')
+    vi.stubEnv('POD_CLOUD_AUTH_TOKEN', 'desktop-e2e-token')
     const root = userDataPath()
     const archivePath = join(root, 'package.tar.gz')
     const archive = Buffer.from('skill archive')
@@ -178,7 +178,7 @@ describe('SkillCloudService publication retries', () => {
   })
 
   it('finds the finalized version when retrying after its response is lost', async () => {
-    vi.stubEnv('ORCA_CLOUD_AUTH_TOKEN', 'desktop-e2e-token')
+    vi.stubEnv('POD_CLOUD_AUTH_TOKEN', 'desktop-e2e-token')
     const root = userDataPath()
     const archivePath = join(root, 'package.tar.gz')
     const archive = Buffer.from('skill archive')

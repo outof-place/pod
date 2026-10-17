@@ -16,21 +16,21 @@ if (!existsSync(cliEntry)) {
   process.exit(1)
 }
 
-process.env.ORCA_USER_DATA_PATH = process.env.ORCA_DEV_USER_DATA_PATH ?? getDefaultDevUserDataPath()
+process.env.POD_USER_DATA_PATH = process.env.ORCA_DEV_USER_DATA_PATH ?? getDefaultDevUserDataPath()
 // Why: custom dev profiles do not necessarily contain "orca-dev" in their path; carry explicit provenance into the CLI.
 process.env.ORCA_DEV_CLI_INVOCATION = '1'
 
 const electronExecutable = getElectronExecutable()
-if (!process.env.ORCA_APP_EXECUTABLE && isRunnableFile(electronExecutable)) {
-  process.env.ORCA_APP_EXECUTABLE = electronExecutable
-  process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT = '1'
+if (!process.env.POD_APP_EXECUTABLE && isRunnableFile(electronExecutable)) {
+  process.env.POD_APP_EXECUTABLE = electronExecutable
+  process.env.POD_APP_EXECUTABLE_NEEDS_APP_ROOT = '1'
 }
 
 // Why: headless `orca-dev serve` skips the Electron dev runner that normally installs terminal CLI shims.
 prepareDevCliTerminalWrappers({
   repoRoot,
-  userDataPath: process.env.ORCA_USER_DATA_PATH,
-  electronExecutable: process.env.ORCA_APP_EXECUTABLE ?? electronExecutable
+  userDataPath: process.env.POD_USER_DATA_PATH,
+  electronExecutable: process.env.POD_APP_EXECUTABLE ?? electronExecutable
 })
 
 const result = spawnSync(process.execPath, [cliEntry, ...process.argv.slice(2)], {

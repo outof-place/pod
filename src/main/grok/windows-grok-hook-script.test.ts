@@ -62,11 +62,11 @@ describe('buildWindowsGrokHookScript', () => {
   it('re-checks the envelope after appending the trailing-backslash sentinel', () => {
     const lines = buildWindowsGrokHookScript().split('\r\n')
     const appended = lines.indexOf(
-      'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."'
+      'if "%POD_GROK_HOME:~-1%"=="\\" set "POD_GROK_HOME=%POD_GROK_HOME%."'
     )
 
     expect(appended).toBeGreaterThan(-1)
-    expect(lines[appended + 1]).toBe('if not "%ORCA_GROK_HOME:~4096,1%"=="" set "ORCA_GROK_HOME="')
+    expect(lines[appended + 1]).toBe('if not "%POD_GROK_HOME:~4096,1%"=="" set "POD_GROK_HOME="')
   })
 })
 
@@ -125,12 +125,12 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
         const address = server.address()
         const env: NodeJS.ProcessEnv = {
           ...process.env,
-          ORCA_AGENT_HOOK_PORT: String(typeof address === 'object' && address ? address.port : 0),
-          ORCA_AGENT_HOOK_TOKEN: 'test-token',
-          ORCA_PANE_KEY: PANE_KEY,
-          ORCA_WORKTREE_ID: WORKTREE_ID
+          POD_AGENT_HOOK_PORT: String(typeof address === 'object' && address ? address.port : 0),
+          POD_AGENT_HOOK_TOKEN: 'test-token',
+          POD_PANE_KEY: PANE_KEY,
+          POD_WORKTREE_ID: WORKTREE_ID
         }
-        delete env.ORCA_AGENT_HOOK_ENDPOINT
+        delete env.POD_AGENT_HOOK_ENDPOINT
         delete env.GROK_HOME
         if (grokHome !== undefined) {
           env.GROK_HOME = grokHome

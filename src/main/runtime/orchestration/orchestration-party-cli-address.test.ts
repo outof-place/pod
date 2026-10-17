@@ -21,11 +21,11 @@ afterEach(() => {
 describe("the CLI's own address", () => {
   it("is a chat's session address, even beside a pane handle it inherited", () => {
     const hostAddress = resolveOrcaSessionParty(CHAT, null).address
-    expect(injectedSessionAddress({ ORCA_AGENT_SESSION_ID: CHAT })).toBe(hostAddress)
+    expect(injectedSessionAddress({ POD_AGENT_SESSION_ID: CHAT })).toBe(hostAddress)
     expect(
       injectedSessionAddress({
-        ORCA_AGENT_SESSION_ID: CHAT,
-        ORCA_TERMINAL_HANDLE: 'term_inherited'
+        POD_AGENT_SESSION_ID: CHAT,
+        POD_TERMINAL_HANDLE: 'term_inherited'
       })
     ).toBe(hostAddress)
   })
@@ -44,7 +44,7 @@ describe("the CLI's own address", () => {
     const hostAddress = resolveOrcaSessionParty(WORKER, null).address
     expect(hostAddress).toBe(handle)
     expect(
-      injectedSessionAddress({ ORCA_AGENT_SESSION_ID: WORKER, ORCA_TERMINAL_HANDLE: handle })
+      injectedSessionAddress({ POD_AGENT_SESSION_ID: WORKER, POD_TERMINAL_HANDLE: handle })
     ).toBe(hostAddress)
   })
 })

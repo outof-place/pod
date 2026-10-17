@@ -46,8 +46,8 @@ function serveEnv(userData: string): NodeJS.ProcessEnv {
       Object.entries(process.env).filter(([key]) => !key.startsWith('VITEST') && key !== 'NODE_ENV')
     ),
     ORCA_BACKGROUND_LAUNCH: '1',
-    ORCA_DISABLE_MACOS_LOGIN_SHELL: '1',
-    ORCA_USER_DATA: userData
+    POD_DISABLE_MACOS_LOGIN_SHELL: '1',
+    POD_USER_DATA: userData
   }
 }
 

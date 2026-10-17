@@ -14,7 +14,7 @@ const POSIX_QUERY_VARIABLE = '__orca_hermes_startup_query'
 const POWERSHELL_QUERY_VARIABLE = 'orcaHermesStartupQuery'
 const POWERSHELL_NATIVE_QUERY_VARIABLE = 'orcaHermesNativeQuery'
 
-export const ORCA_HERMES_STARTUP_QUERY_ENV = 'ORCA_HERMES_STARTUP_QUERY'
+export const ORCA_HERMES_STARTUP_QUERY_ENV = 'POD_HERMES_STARTUP_QUERY'
 
 function encodePosixEvalScript(command: string): string {
   return Array.from(

@@ -40,7 +40,7 @@ function expectAliasedOmpNameSurvives(shell: string, enableAliases: string): voi
       env: {
         ...process.env,
         PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-        ORCA_OMP_STATUS_EXTENSION: extension
+        POD_OMP_STATUS_EXTENSION: extension
       }
     }
   )

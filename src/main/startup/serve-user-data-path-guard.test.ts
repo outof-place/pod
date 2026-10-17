@@ -3,11 +3,11 @@ import { checkServeUserDataPath } from './serve-user-data-path-guard'
 
 describe('checkServeUserDataPath', () => {
   it('refuses a serve that landed on a profile other than the one the CLI chose', () => {
-    const env: NodeJS.ProcessEnv = { ORCA_SERVE_USER_DATA_PATH: '/isolated/profile' }
+    const env: NodeJS.ProcessEnv = { POD_SERVE_USER_DATA_PATH: '/isolated/profile' }
     expect(
       checkServeUserDataPath({ isServeMode: true, userDataPath: '/default/orca', env })
     ).toContain('/isolated/profile')
-    expect(env.ORCA_SERVE_USER_DATA_PATH).toBeUndefined()
+    expect(env.POD_SERVE_USER_DATA_PATH).toBeUndefined()
   })
 
   it('allows the chosen profile, including another spelling of it', () => {
@@ -15,14 +15,14 @@ describe('checkServeUserDataPath', () => {
       checkServeUserDataPath({
         isServeMode: true,
         userDataPath: '/isolated/profile',
-        env: { ORCA_SERVE_USER_DATA_PATH: '/isolated/./profile/' }
+        env: { POD_SERVE_USER_DATA_PATH: '/isolated/./profile/' }
       })
     ).toBeNull()
     expect(
       checkServeUserDataPath({
         isServeMode: true,
         userDataPath: 'C:\\Users\\Me\\Orca',
-        env: { ORCA_SERVE_USER_DATA_PATH: 'c:\\users\\me\\orca' },
+        env: { POD_SERVE_USER_DATA_PATH: 'c:\\users\\me\\orca' },
         platform: 'win32'
       })
     ).toBeNull()
@@ -30,9 +30,9 @@ describe('checkServeUserDataPath', () => {
 
   it('leaves launches without a CLI choice, or outside serve, alone', () => {
     expect(checkServeUserDataPath({ isServeMode: true, userDataPath: '/a', env: {} })).toBeNull()
-    const env: NodeJS.ProcessEnv = { ORCA_SERVE_USER_DATA_PATH: '/b' }
+    const env: NodeJS.ProcessEnv = { POD_SERVE_USER_DATA_PATH: '/b' }
     expect(checkServeUserDataPath({ isServeMode: false, userDataPath: '/a', env })).toBeNull()
-    expect(env.ORCA_SERVE_USER_DATA_PATH).toBeUndefined()
+    expect(env.POD_SERVE_USER_DATA_PATH).toBeUndefined()
   })
 })
 
@@ -41,20 +41,20 @@ describe('configureOrcaUserDataPathEnv on a serve launch', () => {
     vi.doMock('electron', () => ({ app: { getPath: () => '/default/orca' } }))
     const { configureOrcaUserDataPathEnv } = await import('./configure-process')
     const argv = process.argv
-    const previous = process.env.ORCA_USER_DATA_PATH
+    const previous = process.env.POD_USER_DATA_PATH
     process.argv = [...argv, '--serve']
-    process.env.ORCA_SERVE_USER_DATA_PATH = '/isolated/profile'
-    process.env.ORCA_USER_DATA_PATH = '/isolated/profile'
+    process.env.POD_SERVE_USER_DATA_PATH = '/isolated/profile'
+    process.env.POD_USER_DATA_PATH = '/isolated/profile'
     try {
       expect(() => configureOrcaUserDataPathEnv()).toThrow('/isolated/profile')
-      expect(process.env.ORCA_USER_DATA_PATH).toBe('/isolated/profile')
+      expect(process.env.POD_USER_DATA_PATH).toBe('/isolated/profile')
     } finally {
       process.argv = argv
-      delete process.env.ORCA_SERVE_USER_DATA_PATH
+      delete process.env.POD_SERVE_USER_DATA_PATH
       if (previous === undefined) {
-        delete process.env.ORCA_USER_DATA_PATH
+        delete process.env.POD_USER_DATA_PATH
       } else {
-        process.env.ORCA_USER_DATA_PATH = previous
+        process.env.POD_USER_DATA_PATH = previous
       }
       vi.doUnmock('electron')
     }

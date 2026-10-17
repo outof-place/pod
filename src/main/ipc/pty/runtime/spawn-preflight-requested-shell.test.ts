@@ -112,7 +112,7 @@ describe('runtime pty spawn preflight: Claude account routing in a WSL pane', ()
     expect(ctx.codexSelectionTarget).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
     expect(args.env).toEqual({
       KEEP: '1',
-      ORCA_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca'
+      POD_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca'
     })
     expect(runSetup).not.toHaveBeenCalled()
   })

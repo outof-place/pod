@@ -57,9 +57,9 @@ describe.skipIf(process.platform === 'win32')('zsh wrapper dir written by mixed 
           PATH: '/usr/bin:/bin',
           HOME: home,
           ZDOTDIR: zshDir,
-          ORCA_ORIG_ZDOTDIR: home,
-          ORCA_SHELL_FEATURES: 'history',
-          ORCA_HISTFILE: join(home, 'scoped_history')
+          POD_ORIG_ZDOTDIR: home,
+          POD_SHELL_FEATURES: 'history',
+          POD_HISTFILE: join(home, 'scoped_history')
         },
         report: [
           'ORCA_TEST_USER_ZPROFILE',

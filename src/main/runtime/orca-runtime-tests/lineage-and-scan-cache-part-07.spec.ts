@@ -51,7 +51,7 @@ function makeGraph(terminals: readonly RestartTerminal[]) {
 /**
  * Restart shape: the renderer graph (tab ids, leaf ids, pty ids) is persisted and comes back
  * identical, but every terminal handle is minted per process. The daemon keeps the WORKER's
- * ORCA_TERMINAL_HANDLE alive so its dispatch still resolves; the coordinator's handle in
+ * POD_TERMINAL_HANDLE alive so its dispatch still resolves; the coordinator's handle in
  * `runs.coordinator_handle` is only ever rebound by a later orchestration command.
  */
 /** Attention is projected from liveness facts, not lineage; exact equality is on the rest. */
@@ -135,7 +135,7 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
       })
 
       // Restart: a fresh runtime, same persisted graph, and the daemon-retained worker handles
-      // (ORCA_TERMINAL_HANDLE) re-adopted for the still-live worker PTYs. The coordinator did not
+      // (POD_TERMINAL_HANDLE) re-adopted for the still-live worker PTYs. The coordinator did not
       // run an orchestration command yet, so its handle is fresh and the Run still names the old one.
       const after = new OrcaRuntimeService(store)
       after.registerPreAllocatedHandleForPty('pty-worker', beforeHandles.worker)

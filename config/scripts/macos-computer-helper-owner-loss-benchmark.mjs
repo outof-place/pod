@@ -100,7 +100,7 @@ function startSidecar() {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
       ORCA_COMPUTER_SIDECAR: '1',
-      ORCA_COMPUTER_MACOS_HELPER_APP_PATH: helperAppPath
+      POD_COMPUTER_MACOS_HELPER_APP_PATH: helperAppPath
     }
   })
   child.on('error', (error) => errors.push(error.stack ?? error.message))

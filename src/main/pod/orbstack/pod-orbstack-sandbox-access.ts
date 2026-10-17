@@ -116,7 +116,7 @@ export function createSandboxAccess(deps: {
         vmEnv: {
           // A sandboxed agent sends nothing the Mac agent would not.
           ...mac.env,
-          ORCA_AGENT_HOOK_TOKEN: hookTokens.tokenFor(machine),
+          POD_AGENT_HOOK_TOKEN: hookTokens.tokenFor(machine),
           ...(anthropic
             ? {
                 NODE_EXTRA_CA_CERTS: SANDBOX_CA_PATH,

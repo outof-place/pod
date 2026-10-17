@@ -66,7 +66,7 @@ export function getDshManagedHooksPath(): string {
 export function getDshRemoteManagedHooksPath(remoteHome: string): string {
   return pathPosix.join(
     remoteHome.replace(/\/$/, ''),
-    '.orca',
+    '.pod',
     'agent-hooks',
     DSH_MANAGED_HOOKS_FILE_NAME
   )

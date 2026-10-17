@@ -32,10 +32,10 @@ type RecordedPost = {
 }
 
 const ENV_KEYS = [
-  'ORCA_PANE_KEY',
-  'ORCA_AGENT_HOOK_PORT',
-  'ORCA_AGENT_HOOK_TOKEN',
-  'ORCA_AGENT_HOOK_ENDPOINT'
+  'POD_PANE_KEY',
+  'POD_AGENT_HOOK_PORT',
+  'POD_AGENT_HOOK_TOKEN',
+  'POD_AGENT_HOOK_ENDPOINT'
 ] as const
 
 describe('OpenCode plugin fail-open ownership', () => {
@@ -51,10 +51,10 @@ describe('OpenCode plugin fail-open ownership', () => {
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
-    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
-    process.env.ORCA_AGENT_HOOK_PORT = '45678'
-    process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
-    delete process.env.ORCA_AGENT_HOOK_ENDPOINT
+    process.env.POD_PANE_KEY = 'tab-1:leaf-1'
+    process.env.POD_AGENT_HOOK_PORT = '45678'
+    process.env.POD_AGENT_HOOK_TOKEN = 'test-token'
+    delete process.env.POD_AGENT_HOOK_ENDPOINT
     savedFetch = globalThis.fetch
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       posts.push(readPayload(init))

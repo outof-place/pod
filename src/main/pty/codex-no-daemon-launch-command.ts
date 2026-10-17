@@ -60,7 +60,7 @@ export function planCodexNoDaemonLaunch(launch: LocalCodexLaunch): Promise<strin
     delete env[key]
   }
   if (
-    env.ORCA_CODEX_ISOLATE === '0' ||
+    env.POD_CODEX_ISOLATE === '0' ||
     args.some((arg) => SHARED_SERVER_ARGS.has(arg) || arg.startsWith('--remote='))
   ) {
     return null

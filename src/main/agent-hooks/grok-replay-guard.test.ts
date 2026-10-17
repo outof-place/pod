@@ -72,10 +72,10 @@ function runPosixHook(
         PATH: `${dir}:${process.env.PATH ?? ''}`,
         CURL_LOG: curlLog,
         GROK_HOOK_EVENT: grokHookEvent,
-        ORCA_AGENT_HOOK_ENDPOINT: '',
-        ORCA_AGENT_HOOK_PORT: '1234',
-        ORCA_AGENT_HOOK_TOKEN: 'token',
-        ORCA_PANE_KEY: 'tab:leaf'
+        POD_AGENT_HOOK_ENDPOINT: '',
+        POD_AGENT_HOOK_PORT: '1234',
+        POD_AGENT_HOOK_TOKEN: 'token',
+        POD_PANE_KEY: 'tab:leaf'
       }
     })
 

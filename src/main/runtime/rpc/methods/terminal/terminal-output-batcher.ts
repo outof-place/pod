@@ -10,7 +10,7 @@ const TERMINAL_OUTPUT_FLUSH_MS = 5
 // Why: a keystroke echo after a quiet spell goes out at once instead of waiting out the coalescing timer;
 // output that keeps arriving still batches. Pod: local-stream viewers only, where the extra frame per
 // burst is nearly free; WebSocket and mobile keep one frame per burst. Kill switch:
-// ORCA_TERMINAL_OUTPUT_LEADING_EDGE=0.
+// POD_TERMINAL_OUTPUT_LEADING_EDGE=0.
 export const TERMINAL_OUTPUT_LEADING_EDGE_MAX_BYTES = 4 * 1024
 // Pod: after a local-stream viewer types, its batches use a 1 ms timer for 8 ms, so the echo does not wait out a
 // burst; frames are nearly free on the local socket. Kill switch: POD_TERMINAL_INPUT_FLUSH=0.
@@ -35,7 +35,7 @@ export function createTerminalOutputBatcher(
   let pendingSourceRanges: TerminalOutputSourceRange[] = []
   let timer: ReturnType<typeof setTimeout> | null = null
   const leadingEdge =
-    options.leadingEdge === true && process.env.ORCA_TERMINAL_OUTPUT_LEADING_EDGE !== '0'
+    options.leadingEdge === true && process.env.POD_TERMINAL_OUTPUT_LEADING_EDGE !== '0'
   let lastEnqueueAt = Number.NEGATIVE_INFINITY
   const fastAfterInput =
     options.fastAfterInput === true && process.env.POD_TERMINAL_INPUT_FLUSH !== '0'

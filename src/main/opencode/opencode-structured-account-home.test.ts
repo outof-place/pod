@@ -100,10 +100,10 @@ describe('structured OpenCode account binding', () => {
       {
         managedAccounts: accounts,
         baseEnvironment: {
-          ORCA_DATA_ACCOUNT_PROVIDER: 'opencode',
-          ORCA_DATA_ACCOUNT_DATA_HOME: '/old/data',
-          ORCA_DATA_ACCOUNT_STATE_HOME: '/old/state',
-          ORCA_DATA_ACCOUNT_ORIGINAL_ENV: JSON.stringify({
+          POD_DATA_ACCOUNT_PROVIDER: 'opencode',
+          POD_DATA_ACCOUNT_DATA_HOME: '/old/data',
+          POD_DATA_ACCOUNT_STATE_HOME: '/old/state',
+          POD_DATA_ACCOUNT_ORIGINAL_ENV: JSON.stringify({
             XDG_DATA_HOME: '/original/data',
             XDG_STATE_HOME: null,
             OPENCODE_DB: 'original.db',

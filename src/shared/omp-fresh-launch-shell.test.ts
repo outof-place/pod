@@ -43,7 +43,7 @@ it.each(shells)(
       program: shell,
       args: ['-c', define + plan!.launchCommand],
       cwd: root,
-      env: { ...process.env, ORCA_OMP_FRESH_CONFIG: config, CAPTURE: capture }
+      env: { ...process.env, POD_OMP_FRESH_CONFIG: config, CAPTURE: capture }
     })
     expect(result.code).toBe(17)
     expect(await readFile(capture, 'utf8')).toBe(`--config\n${config}\ntask with spaces\n`)
@@ -53,13 +53,13 @@ it.each(shells)(
       program: shell,
       args: ['-c', define + plan!.launchCommand],
       cwd: root,
-      env: { ...process.env, ORCA_OMP_FRESH_CONFIG: config, CAPTURE: capture }
+      env: { ...process.env, POD_OMP_FRESH_CONFIG: config, CAPTURE: capture }
     })
     expect(missing.code).not.toBe(0)
     expect(missing.stderr).toContain('fresh OMP settings are unavailable')
     await expect(readFile(capture)).rejects.toMatchObject({ code: 'ENOENT' })
     const unsetEnv: NodeJS.ProcessEnv = { ...process.env, CAPTURE: capture }
-    delete unsetEnv.ORCA_OMP_FRESH_CONFIG
+    delete unsetEnv.POD_OMP_FRESH_CONFIG
     const unset = await runProcess({
       program: shell,
       args: ['-c', (shell === 'fish' ? '' : 'set -u; ') + define + plan!.launchCommand],

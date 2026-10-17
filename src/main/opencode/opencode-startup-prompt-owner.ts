@@ -72,7 +72,7 @@ export function bindOpenCodeStartupPromptOwner(options: {
   const { env, result, runtime, provider } = options
   const nonce = env?.[OPENCODE_STARTUP_PROMPT_NONCE_ENV]
   const digest = env?.[OPENCODE_STARTUP_PROMPT_SHA256_ENV]
-  const launchToken = env?.ORCA_AGENT_LAUNCH_TOKEN
+  const launchToken = env?.POD_AGENT_LAUNCH_TOKEN
   const incarnation = result.incarnationId
   if (
     options.connectionId ||

@@ -202,7 +202,7 @@ for (const agent of ['codex', 'cursor'] as const) {
 
     const session = createRestartSession(testInfo, {
       ORCA_BACKGROUND_LAUNCH: '1',
-      ORCA_DISABLE_CODEX_TRUST_RPC: '1'
+      POD_DISABLE_CODEX_TRUST_RPC: '1'
     })
     const seedPath = path.join(session.userDataDir, 'orca-data.json')
     const seed = JSON.parse(readFileSync(seedPath, 'utf8'))
@@ -223,7 +223,7 @@ for (const agent of ['codex', 'cursor'] as const) {
       expect(
         await page.evaluate(() => window.__store?.getState().settings?.agentStatusHooksEnabled)
       ).toBe(false)
-      expect(await firstApp.evaluate(() => process.env.ORCA_DISABLE_CODEX_TRUST_RPC)).toBe('1')
+      expect(await firstApp.evaluate(() => process.env.POD_DISABLE_CODEX_TRUST_RPC)).toBe('1')
       const worktreeId = await attachRepoAndOpenTerminal(page, repoPath)
       await waitForSessionReady(page)
       // Why: the session writer persists only once hydrationSucceeded flips (not

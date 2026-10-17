@@ -25,7 +25,7 @@ import {
 import { publishLegacyWorkerReveal } from '../orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('recovers exported ORCA_TERMINAL_HANDLE from discovered live PTY sessions', async () => {
+  it('recovers exported POD_TERMINAL_HANDLE from discovered live PTY sessions', async () => {
     const runtime = new OrcaRuntimeService(store)
     const writes: string[] = []
     runtime.setPtyController({

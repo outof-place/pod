@@ -5,7 +5,7 @@ import { withoutStablyServiceSections } from './product-settings-sections'
 import { _resetProductUiIdentityForTests, areStablyServicesAvailable } from './product-ui-identity'
 
 const UPSTREAM_LINKS = {
-  docs: 'https://www.onorca.dev/docs',
+  docs: 'https://pod.codes/docs',
   changelog: 'https://onorca.dev/changelog',
   github: 'https://github.com/stablyai/orca',
   discord: 'https://discord.gg/fzjDKHxv8Q',

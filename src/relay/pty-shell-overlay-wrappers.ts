@@ -22,7 +22,7 @@ const SHELL_READY_MARKER_ESCAPED = '\\033]777;orca-shell-ready\\007'
 
 // Why the relay no longer needs its own ZDOTDIR shape: it used to republish the
 // inherited value as ORCA_USER_ZDOTDIR so the later wrapper files could prefer
-// it over the spawn-time ORCA_ORIG_ZDOTDIR. There are no later wrapper files
+// it over the spawn-time POD_ORIG_ZDOTDIR. There are no later wrapper files
 // now, and ZDOTDIR itself carries the answer, so the relay and desktop bodies
 // are one template again.
 function getRelayZshWrapperSpec(): ZshStartupHookSpec {
@@ -71,9 +71,9 @@ fi
 # continuation. Modern readline defaults this on; force it for the rest.
 [[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
 # Why: remote startup files can re-export user defaults after relay spawn.
-[[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
-[[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
+[[ -n "\${POD_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${POD_OPENCODE_CONFIG_DIR}"
+[[ -n "\${POD_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${POD_MIMOCODE_HOME}"
+[[ -n "\${POD_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${POD_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${POD_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${ORCA_CLI_POSIX_PATH_RESTORE}
 ${getPosixOmpShellWrapper()}
 ${getPosixCodexShellLaunchPreflight()}${BASH_HISTFILE_RESTORE_BLOCK}

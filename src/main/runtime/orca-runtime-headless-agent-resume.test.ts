@@ -183,8 +183,8 @@ describe('headless terminal-agent resume', () => {
     expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeUndefined()
   })
 
-  it('keeps the shell-only behavior behind ORCA_HEADLESS_AGENT_RESUME=0', async () => {
-    vi.stubEnv('ORCA_HEADLESS_AGENT_RESUME', '0')
+  it('keeps the shell-only behavior behind POD_HEADLESS_AGENT_RESUME=0', async () => {
+    vi.stubEnv('POD_HEADLESS_AGENT_RESUME', '0')
     try {
       const { runtime, spawn } = makeRuntime({ rows: [claudeRow()] })
       await openPane(runtime)

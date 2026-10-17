@@ -37,7 +37,7 @@ test('a managed terminal path link cannot switch to a desktop workspace at the s
   execFileSync('git', ['init', '-q', intermediate])
   writeFileSync(path.join(intermediate, 'INTERMEDIATE_OWNER.txt'), 'INTERMEDIATE\n')
   const host = startOrcadConvertHost('docker', testInfo)
-  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
+  const session = createRestartSession(testInfo, { POD_ORCAD_TEMPLATE_PATH: TEMPLATE! })
   let app: ElectronApplication | null = null
   try {
     if (!host.exec) {

@@ -75,7 +75,7 @@ export type PrebuiltSlotOutcome =
  * `orcad.js` itself, so this stays correct wherever the install directory ends up.
  */
 export function resolveOrcadPrebuildsDir(entryScript = process.argv[1]): string | null {
-  const override = process.env.ORCA_ORCAD_PREBUILDS_DIR
+  const override = process.env.POD_ORCAD_PREBUILDS_DIR
   if (override) {
     return override
   }

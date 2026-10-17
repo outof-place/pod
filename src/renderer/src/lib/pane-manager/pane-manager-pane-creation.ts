@@ -73,7 +73,7 @@ export function publishManagedPaneCreated(
   spawnHints?: Parameters<NonNullable<PaneManagerOptions['onPaneCreated']>>[1]
 ): void {
   // Why: onPaneCreated wires PTY/status identity synchronously. After this
-  // point, replacing the leaf id would fork ORCA_PANE_KEY from layout state.
+  // point, replacing the leaf id would fork POD_PANE_KEY from layout state.
   host.identities.markPublished(pane.id)
   void host.options.onPaneCreated?.(toPublicPane(pane), spawnHints)
 }

@@ -147,7 +147,7 @@ function runCli(cliArgs, options = {}) {
     encoding: 'utf8',
     env: {
       ...process.env,
-      ORCA_USER_DATA_PATH:
+      POD_USER_DATA_PATH:
         process.env.ORCA_COMPUTER_SMOKE_USER_DATA_PATH ?? defaultDevUserDataPath()
     }
   })

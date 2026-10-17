@@ -104,10 +104,10 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
     try {
       const result = await invoke(installedCommand(home, 'PreToolUse'), payload, {
         ...process.env,
-        ORCA_AGENT_HOOK_ENDPOINT: '',
-        ORCA_AGENT_HOOK_PORT: String(address.port),
-        ORCA_AGENT_HOOK_TOKEN: 'test-only-token',
-        ORCA_PANE_KEY: 'test-pane'
+        POD_AGENT_HOOK_ENDPOINT: '',
+        POD_AGENT_HOOK_PORT: String(address.port),
+        POD_AGENT_HOOK_TOKEN: 'test-only-token',
+        POD_PANE_KEY: 'test-pane'
       })
       expect(result.code).toBe(0)
       expect(result.stdout).toBe('{"decision":"ask"}')
@@ -124,10 +124,10 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
     home = mkdtempSync(join(tmpdir(), 'orca-agy-empty-hook-'))
     const result = await invoke(installedCommand(home, 'PreInvocation'), '', {
       ...process.env,
-      ORCA_AGENT_HOOK_ENDPOINT: '',
-      ORCA_AGENT_HOOK_PORT: '',
-      ORCA_AGENT_HOOK_TOKEN: '',
-      ORCA_PANE_KEY: ''
+      POD_AGENT_HOOK_ENDPOINT: '',
+      POD_AGENT_HOOK_PORT: '',
+      POD_AGENT_HOOK_TOKEN: '',
+      POD_PANE_KEY: ''
     })
     expect(result.code).toBe(0)
     expect(result.stdout).toBe('{}')

@@ -271,7 +271,7 @@ describe('orchestration session callers at the dispatch entry', () => {
         ok: false,
         error: {
           code: CODES.providerId,
-          message: `${PROVIDER_ID_X} is the provider's own session id, which changes on /clear. This session's Orca session ID is orca_session_id:${SESSION_X}; set ORCA_AGENT_SESSION_ID=${SESSION_X} instead. No effects were applied.`,
+          message: `${PROVIDER_ID_X} is the provider's own session id, which changes on /clear. This session's Orca session ID is orca_session_id:${SESSION_X}; set POD_AGENT_SESSION_ID=${SESSION_X} instead. No effects were applied.`,
           data: { orcaSessionId: SESSION_X, effectsApplied: false }
         }
       })

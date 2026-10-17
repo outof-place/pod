@@ -3,10 +3,10 @@
 
 export function resolveDiagnosticBuildTokenEndpoint(): string | null {
   const endpoint =
-    typeof ORCA_DIAGNOSTICS_TOKEN_URL !== 'undefined'
-      ? ORCA_DIAGNOSTICS_TOKEN_URL
-      : ((globalThis as { ORCA_DIAGNOSTICS_TOKEN_URL?: string | null })
-          .ORCA_DIAGNOSTICS_TOKEN_URL ?? null)
+    typeof POD_DIAGNOSTICS_TOKEN_URL !== 'undefined'
+      ? POD_DIAGNOSTICS_TOKEN_URL
+      : ((globalThis as { POD_DIAGNOSTICS_TOKEN_URL?: string | null })
+          .POD_DIAGNOSTICS_TOKEN_URL ?? null)
   return typeof endpoint === 'string' && endpoint.length > 0 ? endpoint : null
 }
 
@@ -26,7 +26,7 @@ export function resolveDiagnosticTokenEndpoint(): string | null {
   if (resolveDiagnosticBuildIdentity()) {
     return buildEndpoint
   }
-  const fromEnv = process.env.ORCA_DIAGNOSTICS_TOKEN_URL
+  const fromEnv = process.env.POD_DIAGNOSTICS_TOKEN_URL
   if (fromEnv && fromEnv.length > 0) {
     return fromEnv
   }

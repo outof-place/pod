@@ -32,8 +32,8 @@ function normalizeConfigPath(path: string): string {
 
 export const OPENCODE_CONFIG_DIR_ENV_KEYS = [
   'OPENCODE_CONFIG_DIR',
-  'ORCA_OPENCODE_CONFIG_DIR',
-  'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+  'POD_OPENCODE_CONFIG_DIR',
+  'POD_OPENCODE_SOURCE_CONFIG_DIR'
 ] as const
 
 /** Carries retired inherited paths through providers that merge their environment later. */

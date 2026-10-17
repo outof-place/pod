@@ -3,7 +3,7 @@ import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 
-// Why: every Orca build on a machine (stable, RC, dev) shares ~/.orca/agent-hooks, so an older
+// Why: every Orca build on a machine (stable, RC, dev) shares ~/.pod/agent-hooks, so an older
 // build's refresh would replace a newer build's script. A per-directory ledger records which
 // generation wrote each script; bytes it does not know came from a pre-ledger build (generation 0).
 // Bump on any change to a managed script's bytes; managed-hook-script-refresh.test.ts pins it.

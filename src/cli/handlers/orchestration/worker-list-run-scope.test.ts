@@ -7,7 +7,7 @@ type Call = { name: string; params: Record<string, unknown> }
  *  `run`) is proven in `rpc/methods/orchestration/worker/worker-list-run-scope-rpc.test.ts`; this
  *  half proves the handler asks exactly those two questions and reports what it decided. */
 describe('orchestration worker-list Run scope (CLI handler)', () => {
-  const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
+  const originalTerminalHandle = process.env.POD_TERMINAL_HANDLE
   let calls: Call[]
   let logged: string[]
   let boundRun: string | null
@@ -39,9 +39,9 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     if (originalTerminalHandle === undefined) {
-      delete process.env.ORCA_TERMINAL_HANDLE
+      delete process.env.POD_TERMINAL_HANDLE
     } else {
-      process.env.ORCA_TERMINAL_HANDLE = originalTerminalHandle
+      process.env.POD_TERMINAL_HANDLE = originalTerminalHandle
     }
   })
 
@@ -57,7 +57,7 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
   }
 
   it('defaults an unscoped list to the Run bound to the calling terminal', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+    process.env.POD_TERMINAL_HANDLE = 'term_coord'
     boundRun = 'run_bound'
 
     const { listCall, receipt } = await list()
@@ -68,7 +68,7 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
   })
 
   it('keeps --run as the override and never asks for the binding', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+    process.env.POD_TERMINAL_HANDLE = 'term_coord'
     boundRun = 'run_bound'
 
     const { listCall, receipt } = await list(new Map([['run', 'run_other']]))
@@ -79,7 +79,7 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
   })
 
   it('still lists every Run when the caller has no bound Run', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_unbound_shell'
+    process.env.POD_TERMINAL_HANDLE = 'term_unbound_shell'
     boundRun = null
 
     const { listCall, receipt } = await list()
@@ -89,7 +89,7 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
   })
 
   it('names the scope in the human-readable receipt', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+    process.env.POD_TERMINAL_HANDLE = 'term_coord'
     boundRun = 'run_bound'
 
     await list(new Map(), false)

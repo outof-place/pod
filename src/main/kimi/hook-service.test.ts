@@ -16,7 +16,7 @@ import { KIMI_HOOK_EVENTS } from './kimi-hook-config-toml'
 
 // Why: getSharedManagedScriptPath() writes the managed script under
 // homedir()/.orca, and getKimiHome() honors KIMI_CODE_HOME. Point both at a
-// temp dir so the local install/remove cycle never touches the real ~/.orca or
+// temp dir so the local install/remove cycle never touches the real ~/.pod or
 // ~/.kimi-code. os.homedir() resolves HOME on POSIX and USERPROFILE on Windows.
 let home: string
 let originalHome: string | undefined
@@ -53,7 +53,7 @@ afterEach(() => {
 })
 
 const configPath = (): string => join(home, '.kimi-code', 'config.toml')
-const scriptPath = (): string => join(home, '.orca', 'agent-hooks', 'kimi-hook.sh')
+const scriptPath = (): string => join(home, '.pod', 'agent-hooks', 'kimi-hook.sh')
 const supportsPosixFileModes = process.platform !== 'win32'
 
 describe('KimiHookService', () => {

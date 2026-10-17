@@ -57,12 +57,12 @@ try {
   await once(server, 'listening')
   Object.assign(process.env, {
     ORCA_BACKGROUND_LAUNCH: '1',
-    ORCA_PANE_KEY: 'completion-proof',
-    ORCA_TAB_ID: 'proof-tab',
-    ORCA_AGENT_HOOK_PORT: String(server.address().port),
-    ORCA_AGENT_HOOK_TOKEN: 'isolated-proof-token',
-    ORCA_AGENT_HOOK_ENDPOINT: '',
-    ORCA_PI_STATUS_OWNED: '',
+    POD_PANE_KEY: 'completion-proof',
+    POD_TAB_ID: 'proof-tab',
+    POD_AGENT_HOOK_PORT: String(server.address().port),
+    POD_AGENT_HOOK_TOKEN: 'isolated-proof-token',
+    POD_AGENT_HOOK_ENDPOINT: '',
+    POD_PI_STATUS_OWNED: '',
     WSL_DISTRO_NAME: ''
   })
   const handlers = new Map()

@@ -265,7 +265,7 @@ describe('Claude Agent SDK contract pins', () => {
       env: {
         ...scenarioEnv(scenario),
         CLAUDE_CONFIG_DIR: '/pinned/claude-config',
-        ORCA_AGENT_SESSION_SPAWN_TOKEN: 'spawn-token-1',
+        POD_AGENT_SESSION_SPAWN_TOKEN: 'spawn-token-1',
         NODE_OPTIONS: '--max-old-space-size=64'
       },
       spawnClaudeCodeProcess: recordingSpawner(spawns)
@@ -275,7 +275,7 @@ describe('Claude Agent SDK contract pins', () => {
     // Supplied values arrive verbatim: the config-dir pin and spawn token are
     // observable at this boundary, so Orca's auth scrubbing stays assertable.
     expect(env.CLAUDE_CONFIG_DIR).toBe('/pinned/claude-config')
-    expect(env.ORCA_AGENT_SESSION_SPAWN_TOKEN).toBe('spawn-token-1')
+    expect(env.POD_AGENT_SESSION_SPAWN_TOKEN).toBe('spawn-token-1')
     // Ambient process.env is NOT merged in when env is supplied.
     expect(env.ANTHROPIC_API_KEY).toBeUndefined()
     // The SDK's two documented mutations, pinned so a change is noticed.

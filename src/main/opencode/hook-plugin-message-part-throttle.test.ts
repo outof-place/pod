@@ -34,7 +34,7 @@ type RecordedPost = {
 
 type PluginEventHandler = (input: { event: unknown }) => Promise<void>
 
-const ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_AGENT_HOOK_PORT', 'ORCA_AGENT_HOOK_TOKEN'] as const
+const ENV_KEYS = ['POD_PANE_KEY', 'POD_AGENT_HOOK_PORT', 'POD_AGENT_HOOK_TOKEN'] as const
 
 describe('OpenCode plugin MessagePart throttling', () => {
   let tempDir: string
@@ -49,9 +49,9 @@ describe('OpenCode plugin MessagePart throttling', () => {
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
-    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
-    process.env.ORCA_AGENT_HOOK_PORT = '45678'
-    process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
+    process.env.POD_PANE_KEY = 'tab-1:leaf-1'
+    process.env.POD_AGENT_HOOK_PORT = '45678'
+    process.env.POD_AGENT_HOOK_TOKEN = 'test-token'
     savedFetch = globalThis.fetch
     globalThis.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       posts.push({ url: String(url), body: JSON.parse(String(init?.body)) })

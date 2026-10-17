@@ -21,7 +21,7 @@ rem Windows 11; both disappear when the wrapper pins its own state.
 setlocal DisableDelayedExpansion
 set "orca_real=%ORCA_REAL___ORCA_UPPER_COMMAND__%"
 set "orca_wrapper_dir=%~dp0"
-set "orca_legacy_wrapper_dir=%ORCA_ATTRIBUTION_SHIM_DIR%"
+set "orca_legacy_wrapper_dir=%POD_ATTRIBUTION_SHIM_DIR%"
 set "orca_clean_path="
 rem Why: holds a single separator so the trailing-separator tests below need neither a literal
 rem backslash before a quote (which breaks cmd parsing) nor a sentinel character (which would
@@ -48,12 +48,12 @@ for %%P in ("%PATH:;=" "%") do (
 )
 :orca_path_walked
 set "PATH=%orca_clean_path%"
-set "ORCA_ENABLE_GIT_ATTRIBUTION="
-set "ORCA_GIT_COMMIT_TRAILER="
-set "ORCA_GH_PR_FOOTER="
-set "ORCA_GH_ISSUE_FOOTER="
-set "ORCA_ATTRIBUTION_SHIM_DIR="
-set "ORCA_ATTRIBUTION_BYPASS="
+set "POD_ENABLE_GIT_ATTRIBUTION="
+set "POD_GIT_COMMIT_TRAILER="
+set "POD_GH_PR_FOOTER="
+set "POD_GH_ISSUE_FOOTER="
+set "POD_ATTRIBUTION_SHIM_DIR="
+set "POD_ATTRIBUTION_BYPASS="
 set "ORCA_REAL_GIT="
 set "ORCA_REAL_GH="
 if defined orca_real for %%G in ("%orca_real%") do if /I "%%~dpG"=="%~dp0" set "orca_real="
@@ -84,7 +84,7 @@ exit /b %ERRORLEVEL%
 :orca_normalize_legacy_dir
 rem Why the rooted test first: full-path expansion resolves a relative value against the current
 rem directory, so a
-rem relative ORCA_ATTRIBUTION_SHIM_DIR would let the cwd decide which PATH entry counts as the
+rem relative POD_ATTRIBUTION_SHIM_DIR would let the cwd decide which PATH entry counts as the
 rem legacy directory and get a legitimate one skipped. Leaving the normalized value unset makes
 rem the reject subroutine below a no-op, which is the safe outcome.
 set "orca_probe=%orca_legacy_wrapper_dir%"
@@ -157,7 +157,7 @@ const POWERSHELL_PASSTHROUGH_WRAPPER = String.raw`$ErrorActionPreference = 'Stop
 $commandName = '__ORCA_COMMAND__'
 $realCommand = [Environment]::GetEnvironmentVariable('ORCA_REAL___ORCA_UPPER_COMMAND__')
 $wrapperDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$legacyWrapperDir = $env:ORCA_ATTRIBUTION_SHIM_DIR
+$legacyWrapperDir = $env:POD_ATTRIBUTION_SHIM_DIR
 # Why both separators: the rooted-path test below accepts forward slashes, so a directory
 # spelled with a trailing / would miss this lexical exclusion and the wrapper could recurse.
 $wrapperDirs = @($wrapperDir, $legacyWrapperDir) | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\', '/') }
@@ -168,7 +168,7 @@ $env:PATH = (($env:PATH -split ';') | Where-Object {
     [string]::Equals($_, $pathEntry.TrimEnd('\', '/'), [StringComparison]::OrdinalIgnoreCase)
   })
 }) -join ';'
-'ORCA_ENABLE_GIT_ATTRIBUTION', 'ORCA_GIT_COMMIT_TRAILER', 'ORCA_GH_PR_FOOTER', 'ORCA_GH_ISSUE_FOOTER', 'ORCA_ATTRIBUTION_SHIM_DIR', 'ORCA_REAL_GIT', 'ORCA_REAL_GH', 'ORCA_ATTRIBUTION_BYPASS' | ForEach-Object { Remove-Item "Env:$_" -ErrorAction SilentlyContinue }
+'POD_ENABLE_GIT_ATTRIBUTION', 'POD_GIT_COMMIT_TRAILER', 'POD_GH_PR_FOOTER', 'POD_GH_ISSUE_FOOTER', 'POD_ATTRIBUTION_SHIM_DIR', 'ORCA_REAL_GIT', 'ORCA_REAL_GH', 'POD_ATTRIBUTION_BYPASS' | ForEach-Object { Remove-Item "Env:$_" -ErrorAction SilentlyContinue }
 # Why: a captured value may be relative, and Test-Path plus invocation resolve it against the cwd.
 if ($realCommand -and $realCommand -notmatch '^([A-Za-z]:[\\/]|\\\\)') { $realCommand = $null }
 if ($realCommand) {

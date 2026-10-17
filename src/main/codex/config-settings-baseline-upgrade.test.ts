@@ -22,8 +22,8 @@ let previousUserDataPath: string | undefined
 beforeEach(() => {
   tmpHome = mkdtempSync(join(tmpdir(), 'orca-codex-settings-upgrade-home-'))
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-settings-upgrade-data-'))
-  previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-  process.env.ORCA_USER_DATA_PATH = userDataDir
+  previousUserDataPath = process.env.POD_USER_DATA_PATH
+  process.env.POD_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(tmpHome)
   if (homedir() !== tmpHome) {
     throw new Error('node:os homedir mock is not active; refusing to touch the real ~/.codex')
@@ -34,9 +34,9 @@ afterEach(() => {
   rmSync(tmpHome, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.POD_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    process.env.POD_USER_DATA_PATH = previousUserDataPath
   }
   vi.clearAllMocks()
 })

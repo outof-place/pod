@@ -195,7 +195,7 @@ try {
 
   // Each case is (label, argv, env). The runtime-dependent ones point at an
   // empty user-data dir so both arms get the same deterministic answer.
-  const isolated = { ORCA_USER_DATA_PATH: userDataPath }
+  const isolated = { POD_USER_DATA_PATH: userDataPath }
   /** @type {Array<[string, string[], Record<string, string>]>} */
   const cases = [
     ['orca --help', ['--help'], {}],

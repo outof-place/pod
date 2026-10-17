@@ -105,7 +105,7 @@ test('recovers startup exec through a headed paired desktop owner @headful', asy
       ledgerPath,
       'paired-client',
       '/bin/zsh',
-      { ORCA_ORIG_ZDOTDIR: homePath, ORCA_ZSHENV_SOURCE_DIR: homePath }
+      { POD_ORIG_ZDOTDIR: homePath, ORCA_ZSHENV_SOURCE_DIR: homePath }
     )
     terminal = created.terminal
     await releaseExecBarrier(startedPath, releasePath, ledgerPath)
@@ -161,7 +161,7 @@ test('recovers the same startup exec through an isolated headless orca serve', a
       ledgerPath,
       'paired-client',
       '/bin/zsh',
-      { ORCA_ORIG_ZDOTDIR: homePath, ORCA_ZSHENV_SOURCE_DIR: homePath }
+      { POD_ORIG_ZDOTDIR: homePath, ORCA_ZSHENV_SOURCE_DIR: homePath }
     )
     terminal = created.terminal
     await releaseExecBarrier(startedPath, releasePath, ledgerPath)

@@ -147,11 +147,11 @@ function createWorkerClient(): UsageScanWorkerClient {
  */
 async function withCorpusEnv<T>(fn: () => Promise<T>): Promise<T> {
   const previous = {
-    ORCA_USER_DATA_PATH: process.env.ORCA_USER_DATA_PATH,
+    POD_USER_DATA_PATH: process.env.POD_USER_DATA_PATH,
     HOME: process.env.HOME,
     USERPROFILE: process.env.USERPROFILE
   }
-  process.env.ORCA_USER_DATA_PATH = corpusRoot
+  process.env.POD_USER_DATA_PATH = corpusRoot
   process.env.HOME = corpusRoot
   process.env.USERPROFILE = corpusRoot
   try {

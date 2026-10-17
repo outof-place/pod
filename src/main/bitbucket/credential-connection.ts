@@ -92,7 +92,7 @@ export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
       account: null,
       authMode: env.accessToken ? 'token' : 'basic',
       email: env.email,
-      baseUrl: envValue('ORCA_BITBUCKET_API_BASE_URL')
+      baseUrl: envValue('POD_BITBUCKET_API_BASE_URL')
     }
   }
   if (hasStoredBitbucketCredential()) {

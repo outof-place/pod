@@ -1,5 +1,5 @@
 // Builds pod-agent-launcher into Contents/Resources/bin and links each agent command to it there.
-// Pod's shell wrappers keep that directory first on every terminal's PATH (ORCA_CLI_BIN_DIR), so the
+// Pod's shell wrappers keep that directory first on every terminal's PATH (POD_CLI_BIN_DIR), so the
 // links shadow the user's own installs only inside Pod terminals. electron-builder signs the binary.
 const { execFileSync } = require('node:child_process')
 const { chmodSync, rmSync, symlinkSync } = require('node:fs')

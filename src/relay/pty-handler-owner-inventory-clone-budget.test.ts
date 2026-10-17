@@ -139,7 +139,7 @@ describe('relay owner inventory clone budget', () => {
     async (includeForegroundProcessEvidence) => {
       const spawned = await request('pty.spawn', {
         cwd: process.cwd(),
-        env: { ORCA_PANE_KEY: 'clock-pane' },
+        env: { POD_PANE_KEY: 'clock-pane' },
         agentSessionEnsure: {
           claim: {
             digestVersion: 1,
@@ -277,7 +277,7 @@ describe('relay owner inventory clone budget', () => {
         }
         const spawned = await request('pty.spawn', {
           cwd: process.cwd(),
-          env: { ORCA_PANE_KEY: `pane${index}` },
+          env: { POD_PANE_KEY: `pane${index}` },
           ...(index < ownedCount ? { agentSessionEnsure: { claim, surface } } : {})
         })
         const identity = inventoryRows([spawned.result])[0]

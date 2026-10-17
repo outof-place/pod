@@ -38,7 +38,7 @@ export function createEncryptedApiKeyFileStore({
   }
 
   function getOrcaDir(): string {
-    return join(homedir(), '.orca')
+    return join(homedir(), '.pod')
   }
 
   function getApiKeyPath(): string {

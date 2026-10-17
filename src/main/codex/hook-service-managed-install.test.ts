@@ -221,7 +221,7 @@ describe('CodexHookService', () => {
         for (const eventName of localManagedCodexEvents()) {
           const command = hooksConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
           expect(command).toBe(
-            getManagedCommand(join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd'))
+            getManagedCommand(join(homedir(), '.pod', 'agent-hooks', 'codex-hook.cmd'))
           )
         }
       } finally {
@@ -252,7 +252,7 @@ describe('CodexHookService', () => {
         for (const eventName of localManagedCodexEvents()) {
           const command = hooksConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
           expect(command).toBe(
-            getManagedCommand(join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd'))
+            getManagedCommand(join(homedir(), '.pod', 'agent-hooks', 'codex-hook.cmd'))
           )
         }
       } finally {
@@ -278,13 +278,13 @@ describe('CodexHookService', () => {
       // Why: the temp home is normally cmd-safe; guard so a runner whose tmpdir
       // holds an exotic character still asserts the correct (fallback) branch.
       const command = hooksConfig.hooks.Stop?.[0]?.hooks?.[0]?.command ?? ''
-      const cmdSafe = /^[A-Za-z0-9_.:\\~-]+$/.test(join(homes.tmpHome, '.orca', 'agent-hooks'))
+      const cmdSafe = /^[A-Za-z0-9_.:\\~-]+$/.test(join(homes.tmpHome, '.pod', 'agent-hooks'))
       if (cmdSafe) {
         expect(command).not.toMatch(/powershell/i)
         expect(command).toMatch(/\/agent-hooks\/codex-hook\.cmd$/)
       } else {
         expect(command).toBe(
-          getManagedCommand(join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd'))
+          getManagedCommand(join(homedir(), '.pod', 'agent-hooks', 'codex-hook.cmd'))
         )
       }
     }
@@ -297,7 +297,7 @@ describe('CodexHookService', () => {
     'posts hook payloads via the curl-based managed script preserving UTF-8 and spaced metadata',
     async () => {
       await new CodexHookService().install()
-      const scriptPath = join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd')
+      const scriptPath = join(homedir(), '.pod', 'agent-hooks', 'codex-hook.cmd')
       expect(existsSync(scriptPath)).toBe(true)
 
       // Why: resolve when the listener has fully read the hook POST. spawnSync
@@ -330,7 +330,7 @@ describe('CodexHookService', () => {
           hook_event_name: 'UserPromptSubmit'
         })
         // Why: this suite may run inside an Orca-launched terminal whose env
-        // already carries ORCA_AGENT_HOOK_ENDPOINT/PORT/TOKEN. The managed
+        // already carries POD_AGENT_HOOK_ENDPOINT/PORT/TOKEN. The managed
         // script sources that endpoint file, so leave it out or the hook posts
         // to the live Orca instead of this test's listener.
         const cleanEnv = { ...process.env }
@@ -342,12 +342,12 @@ describe('CodexHookService', () => {
         const child = spawn('cmd.exe', ['/d', '/c', scriptPath], {
           env: {
             ...cleanEnv,
-            ORCA_AGENT_HOOK_PORT: String(port),
-            ORCA_AGENT_HOOK_TOKEN: 'tok123',
-            ORCA_PANE_KEY: '42:leaf-abc',
-            ORCA_TAB_ID: '42',
-            ORCA_WORKTREE_ID: 'C:\\work trees\\my repo & co',
-            ORCA_AGENT_HOOK_VERSION: '1'
+            POD_AGENT_HOOK_PORT: String(port),
+            POD_AGENT_HOOK_TOKEN: 'tok123',
+            POD_PANE_KEY: '42:leaf-abc',
+            POD_TAB_ID: '42',
+            POD_WORKTREE_ID: 'C:\\work trees\\my repo & co',
+            POD_AGENT_HOOK_VERSION: '1'
           }
         })
         child.stdin.end(payload)
@@ -382,7 +382,7 @@ describe('CodexHookService', () => {
         }
         throw new Error(`unexpected app.getPath(${name})`)
       })
-      process.env.ORCA_USER_DATA_PATH = devUserDataDir
+      process.env.POD_USER_DATA_PATH = devUserDataDir
       expect((await new CodexHookService().install()).state).toBe('installed')
 
       getPathMock.mockImplementation((name: string) => {
@@ -391,7 +391,7 @@ describe('CodexHookService', () => {
         }
         throw new Error(`unexpected app.getPath(${name})`)
       })
-      process.env.ORCA_USER_DATA_PATH = prodUserDataDir
+      process.env.POD_USER_DATA_PATH = prodUserDataDir
       expect((await new CodexHookService().install()).state).toBe('installed')
 
       const devHooksPath = join(devUserDataDir, 'codex-runtime-home', 'home', 'hooks.json')
@@ -426,7 +426,7 @@ describe('CodexHookService', () => {
       ).toBe(true)
       expect(readFileSync(systemHooksPath, 'utf-8')).toBe(existingSystemHooks)
     } finally {
-      process.env.ORCA_USER_DATA_PATH = homes.userDataDir
+      process.env.POD_USER_DATA_PATH = homes.userDataDir
       removeTreeSync(devUserDataDir)
       removeTreeSync(prodUserDataDir)
     }

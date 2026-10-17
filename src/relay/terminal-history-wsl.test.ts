@@ -48,7 +48,7 @@ describe('relay WSL shell history', () => {
     expect(env.HISTFILE).toBe(
       `/mnt/c/Users/relay/.orca-remote/terminal-history/${hashWorktreeId(worktreeId)}-bash_history`
     )
-    expect(env.ORCA_HISTFILE).toBe(env.HISTFILE)
+    expect(env.POD_HISTFILE).toBe(env.HISTFILE)
   })
 
   it('leaves a host shell on the untranslated host path', async () => {

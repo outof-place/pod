@@ -13,27 +13,27 @@ function isScrubbedName(name: string): boolean {
 describe('applyScrubSafeAgentEnvAliases', () => {
   it('mirrors pane identity onto names a credential scrub keeps', () => {
     const env: Record<string, string> = {
-      ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111',
-      ORCA_AGENT_LAUNCH_TOKEN: 'launch-abc'
+      POD_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111',
+      POD_AGENT_LAUNCH_TOKEN: 'launch-abc'
     }
     applyScrubSafeAgentEnvAliases(env)
-    expect(env[ORCA_SCRUB_SAFE_PANE_ENV]).toBe(env.ORCA_PANE_KEY)
-    expect(env[ORCA_SCRUB_SAFE_LAUNCH_ENV]).toBe(env.ORCA_AGENT_LAUNCH_TOKEN)
+    expect(env[ORCA_SCRUB_SAFE_PANE_ENV]).toBe(env.POD_PANE_KEY)
+    expect(env[ORCA_SCRUB_SAFE_LAUNCH_ENV]).toBe(env.POD_AGENT_LAUNCH_TOKEN)
   })
 
   it('picks alias names the scrub does not take', () => {
     // The whole point: if an alias were itself scrubbed it would carry nothing.
     expect(isScrubbedName(ORCA_SCRUB_SAFE_PANE_ENV)).toBe(false)
     expect(isScrubbedName(ORCA_SCRUB_SAFE_LAUNCH_ENV)).toBe(false)
-    expect(isScrubbedName('ORCA_PANE_KEY')).toBe(true)
-    expect(isScrubbedName('ORCA_AGENT_LAUNCH_TOKEN')).toBe(true)
+    expect(isScrubbedName('POD_PANE_KEY')).toBe(true)
+    expect(isScrubbedName('POD_AGENT_LAUNCH_TOKEN')).toBe(true)
   })
 
   it('leaves the canonical names untouched', () => {
-    const env: Record<string, string> = { ORCA_PANE_KEY: 'pane', ORCA_AGENT_LAUNCH_TOKEN: 'tok' }
+    const env: Record<string, string> = { POD_PANE_KEY: 'pane', POD_AGENT_LAUNCH_TOKEN: 'tok' }
     applyScrubSafeAgentEnvAliases(env)
-    expect(env.ORCA_PANE_KEY).toBe('pane')
-    expect(env.ORCA_AGENT_LAUNCH_TOKEN).toBe('tok')
+    expect(env.POD_PANE_KEY).toBe('pane')
+    expect(env.POD_AGENT_LAUNCH_TOKEN).toBe('tok')
   })
 
   it('drops a stale alias when its source is gone', () => {
@@ -50,7 +50,7 @@ describe('applyScrubSafeAgentEnvAliases', () => {
 
   it('treats an empty source as absent', () => {
     const env: Record<string, string> = {
-      ORCA_PANE_KEY: '',
+      POD_PANE_KEY: '',
       [ORCA_SCRUB_SAFE_PANE_ENV]: 'stale'
     }
     applyScrubSafeAgentEnvAliases(env)

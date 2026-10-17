@@ -23,7 +23,7 @@ export function resolveArtifactCloudApiUrl(
   if (!areStablyServicesEnabled()) {
     throw new StablyServiceDisabledError('Sharing')
   }
-  const candidate = override?.trim() || env.ORCA_ARTIFACTS_API_URL?.trim()
+  const candidate = override?.trim() || env.POD_ARTIFACTS_API_URL?.trim()
   const url = new URL(candidate || PRODUCTION_ARTIFACTS_API_URL)
   const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
   const firstParty = url.hostname === 'onorca.dev' || url.hostname.endsWith('.onorca.dev')

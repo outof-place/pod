@@ -1,7 +1,7 @@
 // Why: jcode runs one server/client daemon per runtime dir (the daemon lock,
 // socket, and debug socket all live there). Orca stamps a per-pane runtime dir
 // so every Orca-launched jcode pane gets its own daemon, and jcode's lifecycle
-// hooks (which fire inside the daemon) inherit that pane's ORCA_PANE_KEY
+// hooks (which fire inside the daemon) inherit that pane's POD_PANE_KEY
 // instead of the first pane's. Without this, a second jcode pane connects the
 // first pane's daemon and its status is attributed to the wrong tab.
 import { createHash } from 'node:crypto'

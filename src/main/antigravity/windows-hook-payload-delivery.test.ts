@@ -182,8 +182,8 @@ describe('Antigravity Windows hook post command', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const script = getManagedScript('local', 'C:\\Orca!100%\\Orca.exe')
     expect(script).not.toMatch(/powershell|curl|payload@-/i)
-    expect(script).toContain('ORCA_AGENT_HOOK_NODE=C:\\Orca!100%%\\Orca.exe')
-    expect(script).toContain('"%ORCA_AGENT_HOOK_NODE%" "%~dp0antigravity-hook-post.cjs"')
+    expect(script).toContain('POD_AGENT_HOOK_NODE=C:\\Orca!100%%\\Orca.exe')
+    expect(script).toContain('"%POD_AGENT_HOOK_NODE%" "%~dp0antigravity-hook-post.cjs"')
     expect(script).toContain('ELECTRON_RUN_AS_NODE=1')
     expect(script).toContain('setlocal DisableDelayedExpansion')
     vi.restoreAllMocks()
@@ -212,7 +212,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     homedirMock.mockReturnValue(home)
     expect(new AntigravityHookService().install().state).toBe('installed')
 
-    const hooksDir = join(home, '.orca', 'agent-hooks')
+    const hooksDir = join(home, '.pod', 'agent-hooks')
     const coreScript = readFileSync(join(hooksDir, 'antigravity-hook.cmd'), 'utf8')
     expect(coreScript).not.toMatch(/powershell/i)
 
@@ -221,10 +221,10 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     const env = hookEnvironment({
       USERPROFILE: home,
       HOME: home,
-      ORCA_AGENT_HOOK_PORT: String(listener.port),
-      ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
-      ORCA_PANE_KEY: PANE_KEY,
-      ORCA_WORKTREE_ID: WORKTREE_ID
+      POD_AGENT_HOOK_PORT: String(listener.port),
+      POD_AGENT_HOOK_TOKEN: HOOK_TOKEN,
+      POD_PANE_KEY: PANE_KEY,
+      POD_WORKTREE_ID: WORKTREE_ID
     })
 
     for (const delayedExpansion of DELAYED_EXPANSION_STATES) {
@@ -273,11 +273,11 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
       const listener = await startHookListener()
       server = listener.server
       const result = await runWrapper(
-        join(home, '.orca', 'agent-hooks', 'antigravity-pre-invocation.cmd'),
+        join(home, '.pod', 'agent-hooks', 'antigravity-pre-invocation.cmd'),
         hookEnvironment({
-          ORCA_AGENT_HOOK_PORT: String(listener.port),
-          ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
-          ORCA_PANE_KEY: PANE_KEY
+          POD_AGENT_HOOK_PORT: String(listener.port),
+          POD_AGENT_HOOK_TOKEN: HOOK_TOKEN,
+          POD_PANE_KEY: PANE_KEY
         }),
         input,
         'on',
@@ -303,13 +303,13 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     const listener = await startHookListener()
     server = listener.server
     const result = await runWrapper(
-      join(home, '.orca', 'agent-hooks', 'antigravity-pre-invocation.cmd'),
+      join(home, '.pod', 'agent-hooks', 'antigravity-pre-invocation.cmd'),
       hookEnvironment({
         USERPROFILE: home,
         HOME: home,
-        ORCA_AGENT_HOOK_PORT: String(listener.port),
-        ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
-        ORCA_PANE_KEY: PANE_KEY
+        POD_AGENT_HOOK_PORT: String(listener.port),
+        POD_AGENT_HOOK_TOKEN: HOOK_TOKEN,
+        POD_PANE_KEY: PANE_KEY
       }),
       ''
     )
@@ -327,12 +327,12 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     home = mkdtempSync(join(tmpdir(), 'orca-antigravity-fallback-'))
     homedirMock.mockReturnValue(home)
     expect(new AntigravityHookService().install().state).toBe('installed')
-    const hooksDir = join(home, '.orca', 'agent-hooks')
+    const hooksDir = join(home, '.pod', 'agent-hooks')
     rmSync(join(hooksDir, 'antigravity-hook.cmd'))
     return hooksDir
   }
 
-  it.each(['ORCA_AGENT_HOOK_PORT', 'ORCA_AGENT_HOOK_TOKEN', 'ORCA_PANE_KEY'])(
+  it.each(['POD_AGENT_HOOK_PORT', 'POD_AGENT_HOOK_TOKEN', 'POD_PANE_KEY'])(
     'answers every missing-core event with abandoned stdin and no %s',
     async (missingKey) => {
       const hooksDir = await installWithoutCore()
@@ -341,9 +341,9 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
       const env = hookEnvironment({
         USERPROFILE: home,
         HOME: home,
-        ORCA_AGENT_HOOK_PORT: String(listener.port),
-        ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
-        ORCA_PANE_KEY: PANE_KEY,
+        POD_AGENT_HOOK_PORT: String(listener.port),
+        POD_AGENT_HOOK_TOKEN: HOOK_TOKEN,
+        POD_PANE_KEY: PANE_KEY,
         [missingKey]: ''
       })
       for (const event of ANTIGRAVITY_EVENTS) {
@@ -365,9 +365,9 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     const env = hookEnvironment({
       USERPROFILE: home,
       HOME: home,
-      ORCA_AGENT_HOOK_PORT: String(listener.port),
-      ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
-      ORCA_PANE_KEY: PANE_KEY
+      POD_AGENT_HOOK_PORT: String(listener.port),
+      POD_AGENT_HOOK_TOKEN: HOOK_TOKEN,
+      POD_PANE_KEY: PANE_KEY
     })
     for (const event of ANTIGRAVITY_EVENTS) {
       const result = await runWrapper(
@@ -396,7 +396,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     // Why (#11549): outside an Orca pane the caller may abandon stdin rather than close it,
     // so the guard must exit before the read — otherwise the console lingers indefinitely.
     const result = await runWrapper(
-      join(home, '.orca', 'agent-hooks', 'antigravity-pre-tool-use.cmd'),
+      join(home, '.pod', 'agent-hooks', 'antigravity-pre-tool-use.cmd'),
       hookEnvironment({ USERPROFILE: home, HOME: home }),
       null
     )

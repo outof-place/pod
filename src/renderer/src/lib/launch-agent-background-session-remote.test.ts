@@ -146,9 +146,9 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: expect.stringContaining('ORCA_HERMES_STARTUP_QUERY'),
+        command: expect.stringContaining('POD_HERMES_STARTUP_QUERY'),
         connectionId: 'ssh-1',
-        env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'remote automation prompt' })
+        env: expect.objectContaining({ POD_HERMES_STARTUP_QUERY: 'remote automation prompt' })
       })
     )
   })

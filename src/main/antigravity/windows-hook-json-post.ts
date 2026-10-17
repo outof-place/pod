@@ -9,8 +9,8 @@ export const WINDOWS_ANTIGRAVITY_JSON_POST_SCRIPT = String.raw`
 const http = require('node:http');
 const { StringDecoder } = require('node:string_decoder');
 const env = process.env;
-const port = Number(env.ORCA_AGENT_HOOK_PORT);
-if (!Number.isInteger(port) || port < 1 || port > 65535 || !env.ORCA_AGENT_HOOK_TOKEN || !env.ORCA_PANE_KEY) process.exit(0);
+const port = Number(env.POD_AGENT_HOOK_PORT);
+if (!Number.isInteger(port) || port < 1 || port > 65535 || !env.POD_AGENT_HOOK_TOKEN || !env.POD_PANE_KEY) process.exit(0);
 const decoder = new StringDecoder('utf8');
 let payload = '';
 let finished = false;
@@ -33,10 +33,10 @@ function finish() {
   payload += decoder.end();
   const form = new URLSearchParams();
   for (const [name, variable] of [
-    ['paneKey', 'ORCA_PANE_KEY'], ['tabId', 'ORCA_TAB_ID'],
-    ['launchToken', 'ORCA_AGENT_LAUNCH_TOKEN'], ['worktreeId', 'ORCA_WORKTREE_ID'],
-    ['env', 'ORCA_AGENT_HOOK_ENV'], ['version', 'ORCA_AGENT_HOOK_VERSION'],
-    ['hook_event_name', 'ORCA_ANTIGRAVITY_EVENT']
+    ['paneKey', 'POD_PANE_KEY'], ['tabId', 'POD_TAB_ID'],
+    ['launchToken', 'POD_AGENT_LAUNCH_TOKEN'], ['worktreeId', 'POD_WORKTREE_ID'],
+    ['env', 'POD_AGENT_HOOK_ENV'], ['version', 'POD_AGENT_HOOK_VERSION'],
+    ['hook_event_name', 'POD_ANTIGRAVITY_EVENT']
   ]) form.set(name, env[variable] || '');
   form.set('payload', payload.trim() ? payload : '{}');
   const body = form.toString();
@@ -48,7 +48,7 @@ function finish() {
     request = http.request({ hostname: '127.0.0.1', port, path: '/hook/antigravity', method: 'POST', headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Content-Length': Buffer.byteLength(body),
-      'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+      'X-Orca-Agent-Hook-Token': env.POD_AGENT_HOOK_TOKEN
     } }, response => { response.resume(); response.on('end', () => { clearTimeout(postTimer); exit(); }); });
     request.on('error', () => { clearTimeout(postTimer); exit(); });
     request.end(body);

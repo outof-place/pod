@@ -57,8 +57,8 @@ export function setupCodexHookHomes(
   beforeEach(() => {
     homes.tmpHome = mkdtempSync(join(tmpdir(), 'orca-codex-home-'))
     homes.userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-user-data-'))
-    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-    process.env.ORCA_USER_DATA_PATH = homes.userDataDir
+    previousUserDataPath = process.env.POD_USER_DATA_PATH
+    process.env.POD_USER_DATA_PATH = homes.userDataDir
     homedirMock.mockReturnValue(homes.tmpHome)
     stubCodexTrustSessionsForTests()
     getPathMock.mockImplementation((name: string) => {
@@ -74,9 +74,9 @@ export function setupCodexHookHomes(
     rmSync(homes.tmpHome, { recursive: true, force: true })
     rmSync(homes.userDataDir, { recursive: true, force: true })
     if (previousUserDataPath === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.POD_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+      process.env.POD_USER_DATA_PATH = previousUserDataPath
     }
     vi.clearAllMocks()
   })

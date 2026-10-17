@@ -190,9 +190,9 @@ export async function resolveOrcadBrowserProvider(
   }
 
   // Why the env var is read before the driver: with it set, a missing driver is a driver
-  // problem, not an unconfigured host. Telling someone to set ORCA_BROWSER_EXECUTABLE when
+  // problem, not an unconfigured host. Telling someone to set POD_BROWSER_EXECUTABLE when
   // they already did is the misdirection this ordering exists to prevent.
-  const chromiumExecutable = environment.ORCA_BROWSER_EXECUTABLE?.trim()
+  const chromiumExecutable = environment.POD_BROWSER_EXECUTABLE?.trim()
   if (!chromiumExecutable) {
     return declined(electronFailure ?? { reason: 'unconfigured' })
   }

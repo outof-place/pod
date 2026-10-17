@@ -124,7 +124,7 @@ export const SimLease = z.looseObject({
   holder: SimHolder,
   // A realpath, half of the key.
   worktreeRoot: SimAbsolutePath,
-  // The runtime's id for the worktree at worktreeRoot (never the caller's ORCA_WORKTREE_ID).
+  // The runtime's id for the worktree at worktreeRoot (never the caller's POD_WORKTREE_ID).
   worktreeId: z.string().min(1).max(4096).optional(),
   udid: SimUdid.optional(),
   app: SimAppRef.optional(),

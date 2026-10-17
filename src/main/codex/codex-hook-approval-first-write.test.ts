@@ -14,7 +14,7 @@ import {
 let home: string
 const tomlPath = (): string => join(home, 'config.toml')
 const hooksPath = (): string => join(home, 'hooks.json')
-const COMMAND = '/u/.orca/agent-hooks/codex-hook.sh'
+const COMMAND = '/u/.pod/agent-hooks/codex-hook.sh'
 
 function approval(eventLabel: 'stop' | 'session_start', trustedHash: string): CodexTrustEntry {
   return {

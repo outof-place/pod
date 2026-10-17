@@ -13,10 +13,10 @@ export function withOmpDraftCleanup(command: string, shell: AgentStartupShell): 
   if (shell !== 'posix') {
     // cmd otherwise binds the cleanup to the guard's else branch.
     const launch = shell === 'cmd' ? `( ${command} )` : command
-    return `${launch}${commandSeparator(shell)}${clearEnvCommand('ORCA_OMP_PREFILL', shell)}`
+    return `${launch}${commandSeparator(shell)}${clearEnvCommand('POD_OMP_PREFILL', shell)}`
   }
-  const fish = `function ${FUNCTION_NAME}; ${command}; set -l __orca_status $status; set -e -g ORCA_OMP_PREFILL; return $__orca_status; end`
-  const posix = `${FUNCTION_NAME}() { ${command}; set -- "$?"; unset ORCA_OMP_PREFILL; return "$1"; }`
+  const fish = `function ${FUNCTION_NAME}; ${command}; set -l __orca_status $status; set -e -g POD_OMP_PREFILL; return $__orca_status; end`
+  const posix = `${FUNCTION_NAME}() { ${command}; set -- "$?"; unset POD_OMP_PREFILL; return "$1"; }`
   // Fish supports builtin --query; other shells reject it without parsing the wrong definition.
   return `eval 'builtin --query set' 2>/dev/null && eval ${quoteStartupArg(fish, 'posix')} || eval ${quoteStartupArg(posix, 'posix')}; ${FUNCTION_NAME}`
 }

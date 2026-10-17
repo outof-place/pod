@@ -16,8 +16,8 @@ export type DaemonHelloRequest = {
   requestBinaryStream?: boolean
 }
 
-// Kill switch: ORCA_DAEMON_BINARY_STREAM=0 keeps every stream socket on NDJSON.
-const REQUEST_BINARY_STREAM_BY_DEFAULT = process.env.ORCA_DAEMON_BINARY_STREAM !== '0'
+// Kill switch: POD_DAEMON_BINARY_STREAM=0 keeps every stream socket on NDJSON.
+const REQUEST_BINARY_STREAM_BY_DEFAULT = process.env.POD_DAEMON_BINARY_STREAM !== '0'
 
 export type DaemonHelloOutcome = {
   identity: DaemonEndpointIdentity | null

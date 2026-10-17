@@ -26,7 +26,7 @@ const schedulerWithOneSlot = (now: () => number = () => 0): GitAdmissionSchedule
   })
 
 afterEach(() => {
-  delete process.env.ORCA_GIT_ADMISSION_DISABLED
+  delete process.env.POD_GIT_ADMISSION_DISABLED
   _resetGitAdmissionForTests()
 })
 
@@ -483,14 +483,14 @@ describe('GitAdmissionScheduler', () => {
   it('captures killswitch state in each release closure', async () => {
     const scheduler = schedulerWithOneSlot()
     _resetGitAdmissionForTests(scheduler)
-    process.env.ORCA_GIT_ADMISSION_DISABLED = '1'
+    process.env.POD_GIT_ADMISSION_DISABLED = '1'
     const bypass = await acquireGitAdmission(local())
-    delete process.env.ORCA_GIT_ADMISSION_DISABLED
+    delete process.env.POD_GIT_ADMISSION_DISABLED
     bypass.release()
     expect(_gitAdmissionSnapshotForTests().budgets.general).toBeUndefined()
 
     const admitted = await acquireGitAdmission(local())
-    process.env.ORCA_GIT_ADMISSION_DISABLED = '1'
+    process.env.POD_GIT_ADMISSION_DISABLED = '1'
     admitted.release()
     expect(_gitAdmissionSnapshotForTests().budgets.general).toEqual({
       baseUsed: 0,

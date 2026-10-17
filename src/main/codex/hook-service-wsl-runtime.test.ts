@@ -35,7 +35,7 @@ beforeEach(() => {
   // Why: the trust-grant ledger lives in Orca's userData, which otherwise resolves to the live one.
   const userData = mkdtempSync(join(tmpdir(), 'orca-codex-wsl-hooks-userdata-'))
   tempRoots.push(userData)
-  vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+  vi.stubEnv('POD_USER_DATA_PATH', userData)
 })
 
 afterEach(() => {
@@ -53,8 +53,8 @@ function createTestPlan(): CodexWslRuntimeHookInstallPlan {
   return {
     configPath: join(root, 'hooks.json'),
     tomlPath: join(root, 'config.toml'),
-    scriptPath: join(root, '.orca', 'agent-hooks', 'codex-hook.sh'),
-    commandScriptPath: `${linuxHome}/.orca/agent-hooks/codex-hook.sh`,
+    scriptPath: join(root, '.pod', 'agent-hooks', 'codex-hook.sh'),
+    commandScriptPath: `${linuxHome}/.pod/agent-hooks/codex-hook.sh`,
     trustConfigPath: `${linuxHome}/hooks.json`,
     wslDistro: 'Ubuntu',
     linuxRuntimeHome: linuxHome
@@ -182,9 +182,9 @@ describe('Codex WSL runtime hook install', () => {
     ).toEqual({
       configPath: pathWin32.join(runtimeHome, 'hooks.json'),
       tomlPath: pathWin32.join(runtimeHome, 'config.toml'),
-      scriptPath: pathWin32.join(runtimeHome, '.orca', 'agent-hooks', 'codex-hook.sh'),
+      scriptPath: pathWin32.join(runtimeHome, '.pod', 'agent-hooks', 'codex-hook.sh'),
       commandScriptPath:
-        '/home/alice/.local/share/orca/codex-runtime-home/home/.orca/agent-hooks/codex-hook.sh',
+        '/home/alice/.local/share/orca/codex-runtime-home/home/.pod/agent-hooks/codex-hook.sh',
       trustConfigPath: '/home/alice/.local/share/orca/codex-runtime-home/home/hooks.json',
       wslDistro: 'Ubuntu',
       linuxRuntimeHome: '/home/alice/.local/share/orca/codex-runtime-home/home'
@@ -203,9 +203,9 @@ describe('Codex WSL runtime hook install', () => {
     ).toEqual({
       configPath: pathWin32.join(runtimeHome, 'hooks.json'),
       tomlPath: pathWin32.join(runtimeHome, 'config.toml'),
-      scriptPath: pathWin32.join(runtimeHome, '.orca', 'agent-hooks', 'codex-hook.sh'),
+      scriptPath: pathWin32.join(runtimeHome, '.pod', 'agent-hooks', 'codex-hook.sh'),
       commandScriptPath:
-        '/mnt/d/wsl-home/.local/share/orca/codex-runtime-home/home/.orca/agent-hooks/codex-hook.sh',
+        '/mnt/d/wsl-home/.local/share/orca/codex-runtime-home/home/.pod/agent-hooks/codex-hook.sh',
       trustConfigPath: '/mnt/d/wsl-home/.local/share/orca/codex-runtime-home/home/hooks.json',
       wslDistro: 'Ubuntu',
       linuxRuntimeHome: '/mnt/d/wsl-home/.local/share/orca/codex-runtime-home/home'
@@ -227,7 +227,7 @@ describe('Codex WSL runtime hook install', () => {
       }
     )
 
-    expect(plan?.commandScriptPath).toBe(`${canonicalHome}/.orca/agent-hooks/codex-hook.sh`)
+    expect(plan?.commandScriptPath).toBe(`${canonicalHome}/.pod/agent-hooks/codex-hook.sh`)
     expect(plan?.trustConfigPath).toBe(`${canonicalHome}/hooks.json`)
     expect(plan?.configPath).toBe(pathWin32.join(runtimeHome, 'hooks.json'))
   })
@@ -239,7 +239,7 @@ describe('Codex WSL runtime hook install', () => {
 
     const oldPlan = {
       ...plan,
-      commandScriptPath: '/old/home/.orca/agent-hooks/codex-hook.sh',
+      commandScriptPath: '/old/home/.pod/agent-hooks/codex-hook.sh',
       trustConfigPath: '/old/home/hooks.json'
     }
     expect((await _internals.installManagedHooksIntoWslRuntime(oldPlan)).state).toBe('installed')
@@ -248,7 +248,7 @@ describe('Codex WSL runtime hook install', () => {
 
     const newPlan = {
       ...plan,
-      commandScriptPath: '/new/home/.orca/agent-hooks/codex-hook.sh',
+      commandScriptPath: '/new/home/.pod/agent-hooks/codex-hook.sh',
       trustConfigPath: '/new/home/hooks.json'
     }
     expect((await _internals.installManagedHooksIntoWslRuntime(newPlan)).state).toBe('installed')
@@ -366,8 +366,8 @@ describe('Codex WSL runtime hook install', () => {
   it('generates a POSIX hook that bridges WSL loopback failures through Windows curl', async () => {
     const script = _internals.getManagedScript('posix')
     expect(script).toContain('load_hook_endpoint()')
-    expect(script).toContain('unset ORCA_AGENT_HOOK_TRANSPORT')
-    expect(script).toContain('"set ORCA_AGENT_HOOK_TOKEN="*)')
+    expect(script).toContain('unset POD_AGENT_HOOK_TRANSPORT')
+    expect(script).toContain('"set POD_AGENT_HOOK_TOKEN="*)')
     expect(script).toContain('post_codex_hook()')
     expect(script).toContain('is_wsl_runtime()')
     expect(script).toContain('WSL_DISTRO_NAME')
@@ -393,11 +393,11 @@ describe('Codex WSL runtime hook install', () => {
       writeFileSync(
         endpointPath,
         [
-          'set ORCA_AGENT_HOOK_PORT=43210',
-          'set ORCA_AGENT_HOOK_TOKEN=fresh-token',
-          'set ORCA_AGENT_HOOK_ENV=development',
-          'set ORCA_AGENT_HOOK_VERSION=1',
-          'set ORCA_AGENT_HOOK_TRANSPORT=raw-json-v1',
+          'set POD_AGENT_HOOK_PORT=43210',
+          'set POD_AGENT_HOOK_TOKEN=fresh-token',
+          'set POD_AGENT_HOOK_ENV=development',
+          'set POD_AGENT_HOOK_VERSION=1',
+          'set POD_AGENT_HOOK_TRANSPORT=raw-json-v1',
           ''
         ].join('\r\n'),
         'utf-8'
@@ -417,10 +417,10 @@ describe('Codex WSL runtime hook install', () => {
         env: {
           ...process.env,
           PATH: `${binDir}:${process.env.PATH ?? ''}`,
-          ORCA_AGENT_HOOK_ENDPOINT: endpointPath,
-          ORCA_AGENT_HOOK_PORT: '1',
-          ORCA_AGENT_HOOK_TOKEN: 'stale-token',
-          ORCA_PANE_KEY: 'pane-1',
+          POD_AGENT_HOOK_ENDPOINT: endpointPath,
+          POD_AGENT_HOOK_PORT: '1',
+          POD_AGENT_HOOK_TOKEN: 'stale-token',
+          POD_PANE_KEY: 'pane-1',
           ORCA_TEST_CAPTURE: capturePath
         }
       })
@@ -460,10 +460,10 @@ describe('Codex WSL runtime hook install', () => {
           ...process.env,
           PATH: `${binDir}:${process.env.PATH ?? ''}`,
           WSL_DISTRO_NAME: 'Ubuntu',
-          ORCA_AGENT_HOOK_ENDPOINT: '',
-          ORCA_AGENT_HOOK_PORT: '43210',
-          ORCA_AGENT_HOOK_TOKEN: 'token',
-          ORCA_PANE_KEY: 'pane-1',
+          POD_AGENT_HOOK_ENDPOINT: '',
+          POD_AGENT_HOOK_PORT: '43210',
+          POD_AGENT_HOOK_TOKEN: 'token',
+          POD_PANE_KEY: 'pane-1',
           ORCA_TEST_CAPTURE: capturePath
         }
       })
@@ -489,7 +489,7 @@ describe('Codex WSL runtime hook install', () => {
                 {
                   type: 'command',
                   command:
-                    "if [ -x '/old/.orca/agent-hooks/codex-hook.sh' ]; then /bin/sh '/old/.orca/agent-hooks/codex-hook.sh'; fi"
+                    "if [ -x '/old/.pod/agent-hooks/codex-hook.sh' ]; then /bin/sh '/old/.pod/agent-hooks/codex-hook.sh'; fi"
                 }
               ]
             }
@@ -546,8 +546,8 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
   beforeEach(() => {
     userDataDir = mkdtempSync(join(tmpdir(), 'orca-wsl-grant-userdata-'))
     tempRoots.push(userDataDir)
-    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-    process.env.ORCA_USER_DATA_PATH = userDataDir
+    previousUserDataPath = process.env.POD_USER_DATA_PATH
+    process.env.POD_USER_DATA_PATH = userDataDir
     trustGrantInternals.resetDiagnostics()
     codexAppServerCapabilityCache.clear()
   })
@@ -557,9 +557,9 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     trustGrantInternals.resetDiagnostics()
     codexAppServerCapabilityCache.clear()
     if (previousUserDataPath === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.POD_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+      process.env.POD_USER_DATA_PATH = previousUserDataPath
     }
   })
 
@@ -671,7 +671,7 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
 
     const oldPlan = {
       ...basePlan,
-      commandScriptPath: '/old/home/.orca/agent-hooks/codex-hook.sh',
+      commandScriptPath: '/old/home/.pod/agent-hooks/codex-hook.sh',
       trustConfigPath: '/old/home/hooks.json',
       linuxRuntimeHome: '/old/home'
     }
@@ -683,7 +683,7 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
 
     const newPlan = {
       ...basePlan,
-      commandScriptPath: '/new/home/.orca/agent-hooks/codex-hook.sh',
+      commandScriptPath: '/new/home/.pod/agent-hooks/codex-hook.sh',
       trustConfigPath: '/new/home/hooks.json',
       linuxRuntimeHome: '/new/home'
     }

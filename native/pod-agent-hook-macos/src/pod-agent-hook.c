@@ -96,17 +96,17 @@ static const char *env(const char *name) {
   return v ? v : "";
 }
 
-// The endpoint file's KEY=value lines override the environment, as `. "$ORCA_AGENT_HOOK_ENDPOINT"` does.
+// The endpoint file's KEY=value lines override the environment, as `. "$POD_AGENT_HOOK_ENDPOINT"` does.
 static char ep_port[64], ep_token[512], ep_env[128], ep_version[64], ep_transport[64];
 static const char *port, *token, *hook_env, *version, *transport;
 
 static void read_endpoint_file(void) {
-  port = env("ORCA_AGENT_HOOK_PORT"); token = env("ORCA_AGENT_HOOK_TOKEN");
-  hook_env = env("ORCA_AGENT_HOOK_ENV"); version = env("ORCA_AGENT_HOOK_VERSION");
-  transport = env("ORCA_AGENT_HOOK_TRANSPORT");
-  const char *path = env("ORCA_AGENT_HOOK_ENDPOINT");
+  port = env("POD_AGENT_HOOK_PORT"); token = env("POD_AGENT_HOOK_TOKEN");
+  hook_env = env("POD_AGENT_HOOK_ENV"); version = env("POD_AGENT_HOOK_VERSION");
+  transport = env("POD_AGENT_HOOK_TRANSPORT");
+  const char *path = env("POD_AGENT_HOOK_ENDPOINT");
   if (!*path || access(path, R_OK) != 0) return;
-  transport = "";  // unset ORCA_AGENT_HOOK_TRANSPORT
+  transport = "";  // unset POD_AGENT_HOOK_TRANSPORT
   FILE *f = fopen(path, "r");
   if (!f) return;
   char line[1024];
@@ -117,11 +117,11 @@ static void read_endpoint_file(void) {
     *eq = 0;
     const char *key = line, *value = eq + 1;
     struct { const char *key; char *dst; size_t size; const char **ptr; } slots[] = {
-      {"ORCA_AGENT_HOOK_PORT", ep_port, sizeof ep_port, &port},
-      {"ORCA_AGENT_HOOK_TOKEN", ep_token, sizeof ep_token, &token},
-      {"ORCA_AGENT_HOOK_ENV", ep_env, sizeof ep_env, &hook_env},
-      {"ORCA_AGENT_HOOK_VERSION", ep_version, sizeof ep_version, &version},
-      {"ORCA_AGENT_HOOK_TRANSPORT", ep_transport, sizeof ep_transport, &transport},
+      {"POD_AGENT_HOOK_PORT", ep_port, sizeof ep_port, &port},
+      {"POD_AGENT_HOOK_TOKEN", ep_token, sizeof ep_token, &token},
+      {"POD_AGENT_HOOK_ENV", ep_env, sizeof ep_env, &hook_env},
+      {"POD_AGENT_HOOK_VERSION", ep_version, sizeof ep_version, &version},
+      {"POD_AGENT_HOOK_TRANSPORT", ep_transport, sizeof ep_transport, &transport},
     };
     for (size_t i = 0; i < sizeof slots / sizeof slots[0]; i++) {
       if (strcmp(key, slots[i].key) == 0 && strlen(value) < slots[i].size) {
@@ -148,7 +148,7 @@ static pid_t agent_pid(void) {
 // `{"pid":N,"platform":"darwin","startTime":"<TZ=UTC0 LC_ALL=C ps -o lstart=>"}`, or "".
 static void agent_process(char *out, size_t size) {
   out[0] = 0;
-  if (!*env("ORCA_PANE_KEY")) return;
+  if (!*env("POD_PANE_KEY")) return;
   pid_t pid = agent_pid();
   struct kinfo_proc kp;
   size_t len = sizeof kp;
@@ -257,7 +257,7 @@ static void spool(const buf_t *payload, const char *process) {
   if (strstr(payload->data, "\"PreToolUse\"") || strstr(payload->data, "\"PostToolUse\"") ||
       strstr(payload->data, "\"PostToolUseFailure\""))
     return;
-  const char *endpoint = env("ORCA_AGENT_HOOK_ENDPOINT"), *pane = env("ORCA_PANE_KEY");
+  const char *endpoint = env("POD_AGENT_HOOK_ENDPOINT"), *pane = env("POD_PANE_KEY");
   if (!*endpoint || !*pane || access(endpoint, R_OK) != 0) return;
   char dir[4096];
   const char *slash = strrchr(endpoint, '/');
@@ -287,11 +287,11 @@ static void spool(const buf_t *payload, const char *process) {
   buf_t line = {0};
   char num[32];
   buf_str(&line, "\n{\"paneKey\":\""); json_escape(&line, pane);
-  buf_str(&line, "\",\"tabId\":\""); json_escape(&line, env("ORCA_TAB_ID"));
-  buf_str(&line, "\",\"worktreeId\":\""); json_escape(&line, env("ORCA_WORKTREE_ID"));
-  buf_str(&line, "\",\"env\":\""); json_escape(&line, env("ORCA_AGENT_HOOK_ENV"));
-  buf_str(&line, "\",\"version\":\""); json_escape(&line, env("ORCA_AGENT_HOOK_VERSION"));
-  buf_str(&line, "\",\"launchToken\":\""); json_escape(&line, env("ORCA_AGENT_LAUNCH_TOKEN"));
+  buf_str(&line, "\",\"tabId\":\""); json_escape(&line, env("POD_TAB_ID"));
+  buf_str(&line, "\",\"worktreeId\":\""); json_escape(&line, env("POD_WORKTREE_ID"));
+  buf_str(&line, "\",\"env\":\""); json_escape(&line, env("POD_AGENT_HOOK_ENV"));
+  buf_str(&line, "\",\"version\":\""); json_escape(&line, env("POD_AGENT_HOOK_VERSION"));
+  buf_str(&line, "\",\"launchToken\":\""); json_escape(&line, env("POD_AGENT_LAUNCH_TOKEN"));
   buf_str(&line, "\",\"source\":\"claude\",\"receivedAt\":");
   snprintf(num, sizeof num, "%ld", (long)time(NULL) * 1000L);
   buf_str(&line, num);
@@ -352,7 +352,7 @@ static int statusline_main(void) {
   if (!payload.len || *env("CLAUDE_JOB_DIR")) return 0;
   if (!memmem(payload.data, payload.len, "\"rate_limits\"", 13)) return 0;
   read_endpoint_file();
-  const char *pane = env("ORCA_PANE_KEY");
+  const char *pane = env("POD_PANE_KEY");
   if (!*port || !*token || !*pane) return 0;
 
   // The stable leaf UUID; a numeric (pre-migration, tab-local) leaf id gets its safe tab id first.
@@ -437,12 +437,12 @@ int main(int argc, char **argv) {
   char process[256];
   agent_process(process, sizeof process);
   read_endpoint_file();
-  const char *pane = env("ORCA_PANE_KEY");
+  const char *pane = env("POD_PANE_KEY");
   if (!*port || !*token || !*pane) { spool(&payload, process); return 0; }
   buf_t headers = {0}, body = {0};
   if (!strcmp(transport, "raw-json-v1")) {
     buf_t meta = {0};
-    const char *fields[] = {pane, env("ORCA_TAB_ID"), env("ORCA_AGENT_LAUNCH_TOKEN"), env("ORCA_WORKTREE_ID"), hook_env, version};
+    const char *fields[] = {pane, env("POD_TAB_ID"), env("POD_AGENT_LAUNCH_TOKEN"), env("POD_WORKTREE_ID"), hook_env, version};
     for (int i = 0; i < 6; i++) { if (i) buf_put(&meta, "\037", 1); buf_str(&meta, fields[i]); }
     buf_str(&headers, "Content-Type: application/json\r\nX-Orca-Agent-Hook-Token: ");
     buf_str(&headers, token);
@@ -457,8 +457,8 @@ int main(int argc, char **argv) {
     buf_str(&headers, token);
     buf_str(&headers, "\r\n");
     struct { const char *key; const char *value; } form[] = {
-      {"paneKey", pane}, {"tabId", env("ORCA_TAB_ID")}, {"launchToken", env("ORCA_AGENT_LAUNCH_TOKEN")},
-      {"worktreeId", env("ORCA_WORKTREE_ID")}, {"env", hook_env}, {"version", version}, {"agentProcess", process},
+      {"paneKey", pane}, {"tabId", env("POD_TAB_ID")}, {"launchToken", env("POD_AGENT_LAUNCH_TOKEN")},
+      {"worktreeId", env("POD_WORKTREE_ID")}, {"env", hook_env}, {"version", version}, {"agentProcess", process},
     };
     for (size_t i = 0; i < sizeof form / sizeof form[0]; i++) {
       if (i) buf_str(&body, "&");

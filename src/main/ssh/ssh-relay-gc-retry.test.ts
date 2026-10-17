@@ -82,7 +82,7 @@ describe('relay GC deploy retry', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // The host-npm path is opt-in; these cases cover it.
-    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
+    vi.stubEnv('POD_SSH_REMOTE_RUNTIME', 'legacy')
   })
 
   it('recomputes install state when GC wins before a healthy relay launch', async () => {

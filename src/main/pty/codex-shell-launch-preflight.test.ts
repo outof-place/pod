@@ -25,7 +25,7 @@ const roots: string[] = []
 const zshAvailable = existsSync('/bin/zsh')
 const bashAvailable = existsSync('/bin/bash')
 // Why the shared lookup: it also finds a Homebrew fish that is off PATH, and it
-// carries the ORCA_REQUIRE_FISH contract asserted below.
+// carries the POD_REQUIRE_FISH contract asserted below.
 const fishLookup = resolveFishBinary()
 const fishAvailable = fishLookup.available
 const pwshAvailable =
@@ -130,8 +130,8 @@ function runAliasLaunch(
         ...process.env,
         PATH: `${bin}:${process.env.PATH ?? ''}`,
         CODEX_HOME: home,
-        ORCA_CODEX_HOME: home,
-        ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test')
+        POD_CODEX_HOME: home,
+        POD_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test')
       }
     }
   ).trim()
@@ -177,7 +177,7 @@ function expectNamedAliasSurvives(shell: string, enableAliases: string): void {
       env: {
         ...process.env,
         PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-        ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test')
+        POD_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test')
       }
     }
   )
@@ -273,7 +273,7 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
           ],
           {
             encoding: 'utf-8',
-            env: { ...process.env, PATH: root, ORCA_CODEX_LAUNCH_PREFLIGHT: 'orca-test' }
+            env: { ...process.env, PATH: root, POD_CODEX_LAUNCH_PREFLIGHT: 'orca-test' }
           }
         )
 
@@ -289,7 +289,7 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
         '--no-config',
         '-c',
         [
-          'set -gx ORCA_CODEX_LAUNCH_PREFLIGHT missing-preflight',
+          'set -gx POD_CODEX_LAUNCH_PREFLIGHT missing-preflight',
           'function codex; echo custom-codex; end',
           getFishCodexShellLaunchPreflight(),
           'codex'
@@ -317,7 +317,7 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
     const result = spawnSync(
       join(bin, 'fish'),
       ['--no-config', '-l', '-C', getFishCodexShellLaunchPreflight(), '-c', FISH_STATE_PROBE],
-      { encoding: 'utf-8', env: { PATH: bin, ORCA_CODEX_LAUNCH_PREFLIGHT: preflight } }
+      { encoding: 'utf-8', env: { PATH: bin, POD_CODEX_LAUNCH_PREFLIGHT: preflight } }
     )
 
     expect(result.stderr).not.toContain('Missing argument')
@@ -332,7 +332,7 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
     const output = execFileSync(
       join(bin, 'fish'),
       ['--no-config', '-l', '-C', getFishCodexShellLaunchPreflight(), '-c', 'codex hi'],
-      { encoding: 'utf-8', env: { PATH: bin, ORCA_CODEX_LAUNCH_PREFLIGHT: preflight } }
+      { encoding: 'utf-8', env: { PATH: bin, POD_CODEX_LAUNCH_PREFLIGHT: preflight } }
     )
 
     expect(output.trim()).toBe('real codex hi')
@@ -353,7 +353,7 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
         '-c',
         FISH_STATE_PROBE
       ],
-      { encoding: 'utf-8', env: { PATH: bin, ORCA_CODEX_LAUNCH_PREFLIGHT: preflight } }
+      { encoding: 'utf-8', env: { PATH: bin, POD_CODEX_LAUNCH_PREFLIGHT: preflight } }
     )
 
     expect(result.stderr).not.toContain('Missing argument')
@@ -401,7 +401,7 @@ describe('PowerShell Codex shell launch preflight', () => {
         env: {
           ...process.env,
           PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-          ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, `orca-test${executableSuffix}`)
+          POD_CODEX_LAUNCH_PREFLIGHT: join(bin, `orca-test${executableSuffix}`)
         }
       }
     )
@@ -524,7 +524,7 @@ describe.skipIf(process.platform === 'win32')('Codex preflight paths containing 
         env: {
           ...process.env,
           PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-          ORCA_CODEX_LAUNCH_PREFLIGHT: preflightPath
+          POD_CODEX_LAUNCH_PREFLIGHT: preflightPath
         }
       }
     )
@@ -544,7 +544,7 @@ describe.skipIf(process.platform === 'win32')('Codex preflight paths containing 
       env: {
         ...process.env,
         PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-        ORCA_CODEX_LAUNCH_PREFLIGHT: preflightPath
+        POD_CODEX_LAUNCH_PREFLIGHT: preflightPath
       }
     })
 
@@ -569,7 +569,7 @@ describe.skipIf(process.platform === 'win32')('Codex preflight paths containing 
           env: {
             ...process.env,
             PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-            ORCA_CODEX_LAUNCH_PREFLIGHT: preflightPath
+            POD_CODEX_LAUNCH_PREFLIGHT: preflightPath
           }
         }
       )

@@ -74,8 +74,8 @@ function systemSftpCandidates(sshPath: string | null, platform: NodeJS.Platform)
 
 /** Locate the sftp client paired with the system ssh binary. Returns null when there is none. */
 export function findSystemSftp(): string | null {
-  if (process.env.ORCA_SYSTEM_SFTP_PATH) {
-    return process.env.ORCA_SYSTEM_SFTP_PATH
+  if (process.env.POD_SYSTEM_SFTP_PATH) {
+    return process.env.POD_SYSTEM_SFTP_PATH
   }
   const sshPath = findSystemSsh()
   for (const candidate of systemSftpCandidates(sshPath, process.platform)) {

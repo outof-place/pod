@@ -85,7 +85,7 @@ test.afterEach(() => {
 
 test.use({
   orcaAppExtraEnv: {
-    ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_DIR
+    POD_ORCAD_TEMPLATE_PATH: TEMPLATE_DIR
   }
 })
 
@@ -225,7 +225,7 @@ test('a relay-era profile converts its SSH host on the first connect after upgra
   test.setTimeout(20 * 60_000)
   const host = startHost(testInfo)
   const session = createRestartSession(testInfo, {
-    ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE!
+    POD_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE!
   })
   let app: ElectronApplication | null = null
   try {
@@ -399,7 +399,7 @@ test('a managed host updates to the bundled orcad on the first connect after an 
   cpSync(TEMPLATE_SOURCE!, TEMPLATE_DIR, { recursive: true })
   const host = startHost(testInfo)
   const session = createRestartSession(testInfo, {
-    ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_DIR
+    POD_ORCAD_TEMPLATE_PATH: TEMPLATE_DIR
   })
   let app: ElectronApplication | null = null
   try {
@@ -481,7 +481,7 @@ test('reconnect restores the managed host name after its conversion catalog fail
   const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-catalog-retry-'))
   const templateDir = path.join(scratch, 'template')
   const host = startOrcadConvertHost('docker', testInfo)
-  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: templateDir })
+  const session = createRestartSession(testInfo, { POD_ORCAD_TEMPLATE_PATH: templateDir })
   let app: Awaited<ReturnType<typeof session.launch>>['app'] | null = null
   try {
     const first = await session.launch()

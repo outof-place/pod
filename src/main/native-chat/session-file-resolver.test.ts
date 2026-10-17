@@ -189,7 +189,7 @@ describe('resolveSessionFilePath', () => {
     }
   })
 
-  it('resolves a rollout from the orca-managed Codex home (ORCA_USER_DATA_PATH)', async () => {
+  it('resolves a rollout from the orca-managed Codex home (POD_USER_DATA_PATH)', async () => {
     // Orca launches Codex with its own managed CODEX_HOME, so rollout files land
     // under <userData>/codex-runtime-home/home/sessions, NOT ~/.codex/sessions.
     const root = await makeRoot('orca-native-chat-resolve-managed-')
@@ -199,16 +199,16 @@ describe('resolveSessionFilePath', () => {
     const target = join(dayDir, 'rollout-2026-06-19T04-20-39-019edf9c-managed.jsonl')
     await writeFile(target, '{}\n')
 
-    const previous = process.env.ORCA_USER_DATA_PATH
-    process.env.ORCA_USER_DATA_PATH = root
+    const previous = process.env.POD_USER_DATA_PATH
+    process.env.POD_USER_DATA_PATH = root
     try {
       const resolved = await resolveSessionFilePath('codex', '019edf9c-managed')
       expect(resolved).toBe(target)
     } finally {
       if (previous === undefined) {
-        delete process.env.ORCA_USER_DATA_PATH
+        delete process.env.POD_USER_DATA_PATH
       } else {
-        process.env.ORCA_USER_DATA_PATH = previous
+        process.env.POD_USER_DATA_PATH = previous
       }
     }
   })
@@ -224,16 +224,16 @@ describe('resolveSessionFilePath', () => {
     await writeFile(target, '{}\n')
 
     const previousCodex = process.env.CODEX_HOME
-    const previousUserData = process.env.ORCA_USER_DATA_PATH
+    const previousUserData = process.env.POD_USER_DATA_PATH
     process.env.CODEX_HOME = codexHome
     // Point the managed home at an empty dir so the fallback is exercised.
-    process.env.ORCA_USER_DATA_PATH = managedRoot
+    process.env.POD_USER_DATA_PATH = managedRoot
     try {
       const resolved = await resolveSessionFilePath('codex', 'xyz-session')
       expect(resolved).toBe(target)
     } finally {
       restoreEnv('CODEX_HOME', previousCodex)
-      restoreEnv('ORCA_USER_DATA_PATH', previousUserData)
+      restoreEnv('POD_USER_DATA_PATH', previousUserData)
     }
   })
 

@@ -51,7 +51,7 @@ export function launchDevApp({ cdpPort, userDataDir }) {
   const env = { ...process.env }
   delete env.ELECTRON_RUN_AS_NODE
   delete env.CODEX_HOME
-  delete env.ORCA_CODEX_HOME
+  delete env.POD_CODEX_HOME
   const isolatedHome = path.join(userDataDir, 'home')
   mkdirSync(isolatedHome, { recursive: true })
   Object.assign(env, {
@@ -64,7 +64,7 @@ export function launchDevApp({ cdpPort, userDataDir }) {
     HOME: isolatedHome,
     USERPROFILE: isolatedHome,
     ORCA_SKIP_DEV_WEB_PREPARE: '1',
-    ORCA_STARTUP_DIAGNOSTICS: '1',
+    POD_STARTUP_DIAGNOSTICS: '1',
     REMOTE_DEBUGGING_PORT: String(cdpPort),
     VITE_EXPOSE_STORE: 'true'
   })

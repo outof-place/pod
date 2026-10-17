@@ -31,7 +31,7 @@ export async function runSkillCloudOperation<T>(input: {
       throw new Error('The signed-in Orca account changed during the skill request.')
     }
   }
-  const override = input.options.authToken?.trim() || process.env.ORCA_CLOUD_AUTH_TOKEN?.trim()
+  const override = input.options.authToken?.trim() || process.env.POD_CLOUD_AUTH_TOKEN?.trim()
   if (override) {
     if (!allowsArtifactCloudAuthOverride()) {
       throw new Error('Skill authentication overrides are available only in development builds.')

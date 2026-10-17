@@ -20,8 +20,8 @@ export function registerCodexAccountsTestHomes(): void {
     vi.clearAllMocks()
     testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-accounts-'))
     testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-home-'))
-    testState.previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-    process.env.ORCA_USER_DATA_PATH = testState.userDataDir
+    testState.previousUserDataPath = process.env.POD_USER_DATA_PATH
+    process.env.POD_USER_DATA_PATH = testState.userDataDir
     mkdirSync(join(testState.fakeHomeDir, '.codex'), { recursive: true })
   })
 
@@ -29,9 +29,9 @@ export function registerCodexAccountsTestHomes(): void {
     rmSync(testState.userDataDir, { recursive: true, force: true })
     rmSync(testState.fakeHomeDir, { recursive: true, force: true })
     if (testState.previousUserDataPath === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.POD_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = testState.previousUserDataPath
+      process.env.POD_USER_DATA_PATH = testState.previousUserDataPath
     }
   })
 }

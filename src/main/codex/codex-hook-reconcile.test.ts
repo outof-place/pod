@@ -109,7 +109,7 @@ function writeHooks(hooks: Hooks): void {
 }
 
 function olderBuildStop(): Hooks[string][number] {
-  const script = join(home, '.orca', 'agent-hooks', 'codex-hook.sh')
+  const script = join(home, '.pod', 'agent-hooks', 'codex-hook.sh')
   return {
     hooks: [
       buildCodexManagedHook(
@@ -152,7 +152,7 @@ beforeEach(() => {
   userData = join(root, 'user-data')
   mkdirSync(home)
   mkdirSync(userData)
-  vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+  vi.stubEnv('POD_USER_DATA_PATH', userData)
   vi.stubEnv('CODEX_HOME', '')
   mocks.homedir.mockReturnValue(home)
   mocks.codexPath = join(userData, 'codex')

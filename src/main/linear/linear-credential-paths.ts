@@ -5,7 +5,7 @@ import { join } from 'node:path'
 export const LEGACY_WORKSPACE_ID = 'legacy'
 
 function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+  return join(homedir(), '.pod')
 }
 
 function getLegacyTokenPath(): string {

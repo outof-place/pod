@@ -82,7 +82,7 @@ describe.skipIf(process.platform === 'win32')('remote pinned-Node runtime store'
   it('splits the runtime exit status from the loader output it reported', () => {
     expect(
       parseRemoteRuntimeExitReport(
-        'ORCA_NODE_RUNTIME_SELFTEST_FAILED\nORCA_RUNTIME_EXIT=126\nsh: node: Permission denied\n'
+        'ORCA_NODE_RUNTIME_SELFTEST_FAILED\nPOD_RUNTIME_EXIT=126\nsh: node: Permission denied\n'
       )
     ).toEqual({ exitStatus: 126, output: 'sh: node: Permission denied' })
     expect(parseRemoteRuntimeExitReport('no report')).toEqual({

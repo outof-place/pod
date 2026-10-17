@@ -45,19 +45,19 @@ export class ClaudeAgentTeamsService {
       TMUX_PANE: leaderPane,
       TERM: 'screen-256color',
       COLORTERM: args.baseEnv.COLORTERM || 'truecolor',
-      ORCA_AGENT_TEAMS_TEAM_ID: teamId,
-      ORCA_AGENT_TEAMS_TOKEN: token,
+      POD_AGENT_TEAMS_TEAM_ID: teamId,
+      POD_AGENT_TEAMS_TOKEN: token,
       ORCA_AGENT_TEAMS_LEADER_PANE: leaderPane,
-      ORCA_AGENT_TEAMS_SHIM_DIR: args.shimDir
+      POD_AGENT_TEAMS_SHIM_DIR: args.shimDir
     }
     if (args.shimBin) {
-      env.ORCA_AGENT_TEAMS_SHIM_BIN = args.shimBin
+      env.POD_AGENT_TEAMS_SHIM_BIN = args.shimBin
     }
-    if (args.baseEnv.ORCA_PAIRING_CODE) {
-      env.ORCA_PAIRING_CODE = args.baseEnv.ORCA_PAIRING_CODE
+    if (args.baseEnv.POD_PAIRING_CODE) {
+      env.POD_PAIRING_CODE = args.baseEnv.POD_PAIRING_CODE
     }
-    if (args.baseEnv.ORCA_ENVIRONMENT) {
-      env.ORCA_ENVIRONMENT = args.baseEnv.ORCA_ENVIRONMENT
+    if (args.baseEnv.POD_ENVIRONMENT) {
+      env.POD_ENVIRONMENT = args.baseEnv.POD_ENVIRONMENT
     }
 
     const leader: TeamPane = { fakePaneId: leaderPane, handle: args.leaderHandle, index: 0 }

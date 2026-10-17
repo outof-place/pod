@@ -63,7 +63,7 @@ describe('installMainThreadHangWatchdog', () => {
       'BUILDKITE',
       'JENKINS_URL',
       'TEAMCITY_VERSION',
-      'ORCA_DIAGNOSTICS_DISABLED'
+      'POD_DIAGNOSTICS_DISABLED'
     ]) {
       vi.stubEnv(name, '')
     }
@@ -74,9 +74,9 @@ describe('installMainThreadHangWatchdog', () => {
     appMock.on.mockReset()
     appMock.off.mockReset()
     appMock.isPackaged = true
-    delete process.env.ORCA_HANG_WATCHDOG_FORCE
-    delete process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS
-    delete process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS
+    delete process.env.POD_HANG_WATCHDOG_FORCE
+    delete process.env.POD_HANG_WATCHDOG_TIMEOUT_MS
+    delete process.env.POD_HANG_WATCHDOG_CHECK_INTERVAL_MS
   })
 
   afterEach(() => {
@@ -87,9 +87,9 @@ describe('installMainThreadHangWatchdog', () => {
     }
     vi.unstubAllEnvs()
     vi.useRealTimers()
-    delete process.env.ORCA_HANG_WATCHDOG_FORCE
-    delete process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS
-    delete process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS
+    delete process.env.POD_HANG_WATCHDOG_FORCE
+    delete process.env.POD_HANG_WATCHDOG_TIMEOUT_MS
+    delete process.env.POD_HANG_WATCHDOG_CHECK_INTERVAL_MS
   })
 
   it.each(['win32', 'linux'] as const)('creates no worker or timers on %s', (platform) => {
@@ -97,9 +97,9 @@ describe('installMainThreadHangWatchdog', () => {
       for (const forced of [false, true]) {
         appMock.isPackaged = isPackaged
         if (forced) {
-          process.env.ORCA_HANG_WATCHDOG_FORCE = '1'
+          process.env.POD_HANG_WATCHDOG_FORCE = '1'
         } else {
-          delete process.env.ORCA_HANG_WATCHDOG_FORCE
+          delete process.env.POD_HANG_WATCHDOG_FORCE
         }
         expect(
           withPlatform(platform, () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
@@ -116,8 +116,8 @@ describe('installMainThreadHangWatchdog', () => {
     expect(
       withPlatform(platform, () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     ).toBeNull()
-    process.env.ORCA_HANG_WATCHDOG_FORCE = '1'
-    vi.stubEnv('ORCA_DIAGNOSTICS_DISABLED', '1')
+    process.env.POD_HANG_WATCHDOG_FORCE = '1'
+    vi.stubEnv('POD_DIAGNOSTICS_DISABLED', '1')
     expect(
       withPlatform(platform, () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     ).toBeNull()
@@ -130,13 +130,13 @@ describe('installMainThreadHangWatchdog', () => {
     expect(
       withPlatform('darwin', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     ).toBeNull()
-    process.env.ORCA_HANG_WATCHDOG_FORCE = '1'
+    process.env.POD_HANG_WATCHDOG_FORCE = '1'
     const worker = fakeWorker()
     workerState.instance = worker
     expect(
       withPlatform('darwin', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     ).not.toBeNull()
-    delete process.env.ORCA_HANG_WATCHDOG_FORCE
+    delete process.env.POD_HANG_WATCHDOG_FORCE
   })
 
   it('starts a worker with pid, marker, and timing config', () => {
@@ -195,8 +195,8 @@ describe('installMainThreadHangWatchdog', () => {
   })
 
   it('passes test timing overrides to the worker', () => {
-    process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS = '900'
-    process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS = '100'
+    process.env.POD_HANG_WATCHDOG_TIMEOUT_MS = '900'
+    process.env.POD_HANG_WATCHDOG_CHECK_INTERVAL_MS = '100'
     workerState.instance = fakeWorker()
     withPlatform('darwin', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     const options = workerState.calls[0][1] as {

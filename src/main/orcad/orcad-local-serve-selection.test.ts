@@ -206,7 +206,7 @@ describe('orca serve runtime selection', () => {
     [
       'an unknown runtime name',
       { env: { [SERVE_RUNTIME_ENV]: 'bun' } },
-      'ORCA_SERVE_RUNTIME=bun is neither orcad nor electron'
+      'POD_SERVE_RUNTIME=bun is neither orcad nor electron'
     ],
     ['an unsupported host', { hostTarget: () => 'linux-riscv64-glibc' }, 'no orcad build exists'],
     ['an install without the template', { templateDirs: [] }, 'carries no orcad template'],

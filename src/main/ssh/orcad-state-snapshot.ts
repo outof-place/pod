@@ -120,8 +120,8 @@ export function serializedStateMutationCommand(
     // Outermost: a superseded fence holder never takes the mutation lock or touches state.
     ...(owned ? [posixOrcadFenceGuard(owned)] : []),
     // Its own process group, so the lock can name every process the mutation started.
-    'orca_state_group() { if command -v setsid >/dev/null 2>&1; then ORCA_STATE_MUTATION_GROUP=1 setsid "$@";',
-    `elif command -v perl >/dev/null 2>&1; then ORCA_STATE_MUTATION_GROUP=1 perl -e ${shellEscape('setpgrp(0, 0); exec { $ARGV[0] } @ARGV or exit 127')} "$@";`,
+    'orca_state_group() { if command -v setsid >/dev/null 2>&1; then POD_STATE_MUTATION_GROUP=1 setsid "$@";',
+    `elif command -v perl >/dev/null 2>&1; then POD_STATE_MUTATION_GROUP=1 perl -e ${shellEscape('setpgrp(0, 0); exec { $ARGV[0] } @ARGV or exit 127')} "$@";`,
     'else "$@"; fi; };',
     // Why timeout inside the group: KILL then reaches tar and rm, not only the shell.
     `if command -v timeout >/dev/null 2>&1; then orca_state_group timeout -s KILL ${ORCAD_STATE_MUTATION_DEADLINE_SECONDS} ${run}; else orca_state_group ${run}; fi;`,
