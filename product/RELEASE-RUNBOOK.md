@@ -8,6 +8,8 @@ What the release owner does by hand. Everything else is `product/release-one-app
 | ------- | -------------------------- | --------------------------------------- | ------------ | ------------------- |
 | RC 1    | `1.0.0-rc1`                | `1000001`                               | `v1.0.0-rc1` | `Pod-1.0.0-rc1.dmg` |
 | RC 2    | `1.0.0-rc2`                | `1000002`                               | `v1.0.0-rc2` | `Pod-1.0.0-rc2.dmg` |
+| RC 3    | `1.0.0-rc3`                | `1000003`                               | `v1.0.0-rc3` | `Pod-1.0.0-rc3.dmg` |
+| RC 4    | `1.0.0-rc4`                | `1000004`                               | `v1.0.0-rc4` | `Pod-1.0.0-rc4.dmg` |
 | 1.0     | `1.0.0`                    | `1000099`                               | `v1.0.0`     | `Pod-1.0.0.dmg`     |
 
 Tags are `v<version>`, created by `gh release create --target <the commit>`. `release-one-app.sh` refuses a tag that already exists, in this clone or on GitHub. Orca's tags were deleted from GitHub on 2026-10-13, but a clone that fetched upstream still has Orca's `v1.0.1` to `v1.4.224`, and the guard then refuses Pod 1.0.1 and later. In the release clone, delete those local tags and stop them coming back: remove the upstream remote, or `git config remote.upstream.tagOpt --no-tags`.
