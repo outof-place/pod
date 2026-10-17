@@ -56,6 +56,11 @@ describe('launchd jobs of a profile', () => {
     const prefix = daemonLaunchdLabelPrefix(userData)
     expect(prefix).toMatch(/^codes\.pod\.daemon\.[0-9a-f]{12}\.$/)
     expect(daemonLaunchdLabelPrefix(join(dir, 'other'))).not.toBe(prefix)
+    // The same literal as PodNative's scripts/launchd-bootout-selftest.sh (its run-procs.sh boots
+    // out a profile's jobs by this prefix): a change on either side shows in one of the two.
+    expect(daemonLaunchdLabelPrefix('/private/tmp/pod-launchd-prefix-vector')).toBe(
+      'codes.pod.daemon.e59b58775407.'
+    )
     const paths = createDarwinDaemonLaunchdJobs(jobsDir, vi.fn(), () => logs).paths({
       userDataPath: userData,
       launchNonce: 'nonce-1'
