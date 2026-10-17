@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/pod-workspace-types'
 import type {
   PodAdoptPlan,
+  PodGitProfileVerify,
   PodAdoptRecord,
   PodAdoptUndoPlan,
   PodTidyResult,
@@ -39,7 +40,7 @@ export type PodWorkspaceRpcService = {
   ): Promise<PodTidyResult>
   gitProfile(
     request: PodWorkspaceGitProfileRequest
-  ): Promise<PodWorkspaceGitProfile | PodTuneResult>
+  ): Promise<PodWorkspaceGitProfile | PodTuneResult | PodGitProfileVerify>
   adopt(
     request: PodWorkspaceAdoptRequest
   ): Promise<PodAdoptPlan | PodAdoptRecord | PodAdoptUndoPlan>

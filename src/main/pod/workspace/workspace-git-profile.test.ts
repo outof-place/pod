@@ -31,7 +31,8 @@ describe('workspace git profile (real git)', () => {
       home: fx.home,
       journal: createWorkspaceJournal(join(fx.root, 'journal.json')),
       plans: createWorkspacePlanStore(),
-      getRepo: (id) => (id === 'repo-1' ? fx.repoRecord(repo) : undefined)
+      getRepo: (id) => (id === 'repo-1' ? fx.repoRecord(repo) : undefined),
+      isLaunchdJobLoaded: async () => true
     })
 
   const actions = (plan: PodWorkspaceGitProfile) =>
@@ -50,13 +51,15 @@ describe('workspace git profile (real git)', () => {
       'index.version': 'orca:skip',
       'checkout.thresholdForParallelism': 'pod:set',
       'maintenance.strategy': 'pod:set',
+      'fetch.prune': 'pod:set',
       'feature.manyFiles': 'pod:opt-in'
     })
     expect(Object.fromEntries(before.optIns.map((optIn) => [optIn.id, optIn.available]))).toEqual({
       reftable: true,
       'many-files': true,
       bitmaps: true,
-      backfill: false
+      backfill: false,
+      'relative-worktrees': true
     })
 
     const applied = await service.apply(before.planId)

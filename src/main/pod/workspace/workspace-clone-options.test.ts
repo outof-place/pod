@@ -5,7 +5,8 @@ const facts = (version: [number, number, number] | null) => async () => ({
   version,
   geometric: true,
   backfill: true,
-  refsMigrate: true
+  refsMigrate: true,
+  relativeWorktrees: true
 })
 
 describe('createPodCloneOptions', () => {

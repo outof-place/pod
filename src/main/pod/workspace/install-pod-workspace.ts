@@ -102,6 +102,13 @@ export function installPodWorkspace(store: PodWorkspaceStore, runtime: PodWorksp
     home,
     userDataDir: app.getPath('userData'),
     osTrash: (path) => shell.trashItem(path),
+    // Read-only: `print` never loads or unloads a job.
+    isLaunchdJobLoaded: async (label) =>
+      (
+        await run('launchctl', ['print', `gui/${process.getuid?.() ?? 0}/${label}`], {
+          timeoutMs: 5_000
+        })
+      ).code === 0,
     onBackgroundDone: (repoId, message) => console.info(`[pod-workspace] ${repoId}: ${message}`)
   })
   setPodWorkspaceRpcService(service)
