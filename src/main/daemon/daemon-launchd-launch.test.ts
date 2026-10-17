@@ -227,11 +227,25 @@ describe('a daemon launchd starts', () => {
 describe('the launchd launch switch', () => {
   const mac = process.platform === 'darwin'
 
-  it('is opt-in with POD_DAEMON_LAUNCHD=1 on macOS, under vitest too', () => {
-    expect(isLaunchdDaemonLaunchEnabled({})).toBe(false)
+  it('is on by default on macOS, off with POD_DAEMON_LAUNCHD=0', () => {
+    expect(isLaunchdDaemonLaunchEnabled({})).toBe(mac)
     expect(isLaunchdDaemonLaunchEnabled({ POD_DAEMON_LAUNCHD: '0' })).toBe(false)
     expect(isLaunchdDaemonLaunchEnabled({ POD_DAEMON_LAUNCHD: '1' })).toBe(mac)
+  })
+
+  it('stays off under vitest and in an E2E profile unless POD_DAEMON_LAUNCHD=1 asks', () => {
+    expect(isLaunchdDaemonLaunchEnabled({ VITEST: 'true' })).toBe(false)
+    expect(
+      isLaunchdDaemonLaunchEnabled({ ORCA_E2E_USER_DATA_DIR: '/private/tmp/run/profile' })
+    ).toBe(false)
     expect(isLaunchdDaemonLaunchEnabled({ VITEST: 'true', POD_DAEMON_LAUNCHD: '1' })).toBe(mac)
+    expect(
+      isLaunchdDaemonLaunchEnabled({
+        ORCA_E2E_USER_DATA_DIR: '/private/tmp/run/profile',
+        POD_DAEMON_LAUNCHD: '1'
+      })
+    ).toBe(mac)
+    expect(isLaunchdDaemonLaunchEnabled({ VITEST: 'true', POD_DAEMON_LAUNCHD: '0' })).toBe(false)
   })
 
   it("takes a GUI session's daemon, PodNative's headless runtime included, never a plain serve", () => {

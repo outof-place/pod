@@ -1,8 +1,9 @@
-// Fork-only (Pod): the macOS daemon as a launchd job in the user's GUI domain
-// (POD_DAEMON_LAUNCHD=1). A job leads its own coalition for its whole life, and launchservicesd
-// gives an app exec'd into a coalition with a live leader no coalition of its own. A forked daemon
-// sits in the runtime's coalition, which loses its leader when the runtime quits; an app started
-// from a terminal could then own it, and its quit or Force Quit ends every session (M10).
+// Fork-only (Pod): the macOS daemon as a launchd job in the user's GUI domain (the default from
+// rc5; POD_DAEMON_LAUNCHD=0 forks). A job leads its own coalition for its whole life, and
+// launchservicesd gives an app exec'd into a coalition with a live leader no coalition of its own.
+// A forked daemon sits in the runtime's coalition, which loses its leader when the runtime quits;
+// an app started from a terminal could then own it, and its quit or Force Quit ends every session
+// (M10).
 import { readFileSync, unlinkSync } from 'node:fs'
 import { runProcess } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
@@ -40,9 +41,17 @@ const DAEMON_EXIT_TIMEOUT_S = 7
 const DAEMON_NUMBER_OF_FILES = 10_240
 
 export function isLaunchdDaemonLaunchEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  // Why opt-in (POD_DAEMON_LAUNCHD=1) for now: on by default only once a package's TCC check shows
-  // the job's shells keep Pod's grants (r-orca). Off under vitest too: no real jobs from unit tests.
-  return process.platform === 'darwin' && env.POD_DAEMON_LAUNCHD === '1'
+  if (process.platform !== 'darwin' || env.POD_DAEMON_LAUNCHD === '0') {
+    return false
+  }
+  if (env.POD_DAEMON_LAUNCHD === '1') {
+    return true
+  }
+  // Why on by default (Filip, 2026-10-17, from rc5): the TCC checks found the job's shells
+  // attributed to Pod Runtime, as a forked daemon's are today, so the job changes no grant.
+  // Why off under vitest and in E2E profiles unless asked for: a unit test or an agent's isolated
+  // run must never load a job into the user's GUI domain on its own (the lead's rule).
+  return !env.VITEST && !env.ORCA_E2E_USER_DATA_DIR
 }
 
 /** A GUI session's daemon wants a job: a plain serve forks (SSH must outlive the session), but
