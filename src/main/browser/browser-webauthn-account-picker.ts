@@ -6,6 +6,7 @@ import type {
   BrowserWebAuthnAccountResponse
 } from '../../shared/browser-webauthn-account'
 import { browserManager } from './browser-manager'
+import { pickPodPanePasskey } from '../pod/browser-pane/pod-browser-pane-hooks'
 
 export const BROWSER_WEBAUTHN_ACCOUNT_PICKER_TIMEOUT_MS = 60_000
 
@@ -51,7 +52,11 @@ export function requestBrowserWebAuthnAccount(
   }
   const context = browserManager.getRendererContextForGuest(guest.id)
   if (!context || context.renderer.isDestroyed()) {
-    return Promise.resolve(null)
+    // Fork-only (Pod): one-app's native panes pick for the pages no renderer hosts.
+    return (
+      pickPodPanePasskey(guest.id, details.relyingPartyId, details.accounts) ??
+      Promise.resolve(null)
+    )
   }
 
   const requestId = randomUUID()

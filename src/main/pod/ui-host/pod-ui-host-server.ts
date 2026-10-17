@@ -238,7 +238,13 @@ export class PodUiHostServer {
         pid: this.options.pid,
         features: [
           ...(this.options.onBrowser
-            ? ['browser', 'browserContextMenu', 'browserOpenLink', 'browserTargetUrl']
+            ? [
+                'browser',
+                'browserContextMenu',
+                'browserOpenLink',
+                'browserPasskey',
+                'browserTargetUrl'
+              ]
             : []),
           ...(this.options.headless ? ['headless'] : []),
           'surfaceSection'
