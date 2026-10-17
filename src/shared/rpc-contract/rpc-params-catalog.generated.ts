@@ -458,6 +458,14 @@ import {
   SshCredentialPromptsUnsubscribeParams,
   SshSubmitCredentialParams
 } from './pod-ssh-credential-params'
+import {
+  SshAddPortForwardParams,
+  SshListDetectedPortsParams,
+  SshListPortForwardsParams,
+  SshPortsUnsubscribeParams,
+  SshRemovePortForwardParams,
+  SshUpdatePortForwardParams
+} from './pod-ssh-port-forward-params'
 import { RepoAddRemoteParams, SshBrowseDirParams } from './pod-ssh-remote-project-params'
 import {
   SshAddTargetParams,
@@ -1281,6 +1289,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'speech.models.delete': SpeechModelAction,
   'speech.models.download': SpeechModelAction,
   'speech.models.list': null,
+  'ssh.addPortForward': SshAddPortForwardParams,
   'ssh.addTarget': SshAddTargetParams,
   'ssh.browseDir': SshBrowseDirParams,
   'ssh.connect': SshTarget,
@@ -1289,12 +1298,18 @@ export const RPC_PARAMS_BY_METHOD = {
   'ssh.disconnect': SshTarget,
   'ssh.getState': SshTarget,
   'ssh.importConfig': SshImportConfigParams,
+  'ssh.listDetectedPorts': SshListDetectedPortsParams,
+  'ssh.listPortForwards': SshListPortForwardsParams,
   'ssh.listRemovedTargetLabels': null,
   'ssh.listTargetConfigs': null,
   'ssh.listTargetSummaries': null,
   'ssh.listTargets': null,
+  'ssh.ports.subscribe': null,
+  'ssh.ports.unsubscribe': SshPortsUnsubscribeParams,
+  'ssh.removePortForward': SshRemovePortForwardParams,
   'ssh.removeTarget': SshTarget,
   'ssh.submitCredential': SshSubmitCredentialParams,
+  'ssh.updatePortForward': SshUpdatePortForwardParams,
   'ssh.updateTarget': SshUpdateTargetParams,
   'stats.summary': null,
   'status.get': null,
