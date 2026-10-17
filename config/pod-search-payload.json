@@ -1,0 +1,8 @@
+{
+  "//": "The pod-search payload Pod ships in its runtime's Contents/Resources/pod-search: og, ogd, ogctl and a plain ripgrep 15.2.0, arm64 (scripts/payload.sh in outof-place/pod-search, built from `commit`). The tarball is an asset of a release on this repository. Bump tag, asset, sha256 and commit together; config/scripts/fetch-pod-search-payload.mjs refuses a download that does not match, and refuses to download at all while sha256 is null.",
+  "repository": "outof-place/pod",
+  "tag": "payload-pod-search-PENDING",
+  "asset": "pod-search-payload-PENDING-arm64.tar.gz",
+  "sha256": null,
+  "commit": null
+}
