@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { sleep } from './bench-session.mjs'
-import { PROCSTAT, rootOfPid, runTree, signalIfSame, signalTargets, startTimes, stopRunTree } from './run-tree.mjs'
+import { PROCSTAT, UnsignalledError, rootOfPid, runTree, signalIfSame, signalTargets, startTimes, stopRunTree } from './run-tree.mjs'
 
 const alive = (pid) => {
   try {
@@ -104,4 +104,15 @@ test('a signal goes only to a target that still has its start time', { skip: !ex
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
   }
+})
+
+test('when procstat fails, nothing is signalled and the error names every target left running', () => {
+  const targets = [
+    { pid: process.pid, path: '/the/run/app', startUs: 1 },
+    { pid: 1, path: '/sbin/launchd', startUs: 1 }
+  ]
+  assert.throws(
+    () => signalIfSame(targets, 'SIGTERM', { procstat: '/nonexistent/procstat' }),
+    (error) => error instanceof UnsignalledError && /left running: .*\/the\/run\/app.*\/sbin\/launchd/.test(error.message)
+  )
 })

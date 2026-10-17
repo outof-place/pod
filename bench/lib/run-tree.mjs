@@ -87,28 +87,47 @@ export function signalTargets(
 }
 
 /** The start time each of these pids has right now (absent: not running). */
-export function startTimes(pids) {
+export function startTimes(pids, { procstat = PROCSTAT } = {}) {
   const times = new Map()
   const unique = [...new Set(pids)]
   for (let at = 0; at < unique.length; at += MAX_ROOTS) {
     const args = unique.slice(at, at + MAX_ROOTS).flatMap((pid) => ['--root', String(pid)])
-    const snap = JSON.parse(execFileSync(PROCSTAT, args, { encoding: 'utf8', maxBuffer: 16 << 20 }))
+    const snap = JSON.parse(execFileSync(procstat, args, { encoding: 'utf8', maxBuffer: 16 << 20 }))
     for (const proc of snap.procs) times.set(proc.pid, proc.startUs)
   }
   return times
 }
 
 /** Signals each target still running as the same process (pid and start time); returns what it sent. */
-export function signalIfSame(targets, signal) {
+export function signalIfSame(targets, signal, options) {
   const signalled = []
-  signalAll(targets, signal, signalled)
+  signalAll(targets, signal, signalled, options)
   return signalled
 }
 
-function signalAll(targets, signal, signalled) {
+/** A cleanup that could not check or signal its targets: the run fails with the pids it left. */
+export class UnsignalledError extends Error {
+  constructor(targets, cause) {
+    super(
+      `could not signal the run's processes (${cause.message.split('\n')[0]}); left running: ${targets.map((proc) => `${proc.pid} ${proc.path}`).join(', ')}`
+    )
+    this.targets = targets
+  }
+}
+
+function signalAll(targets, signal, signalled, options) {
   // Read again right before the signal: a target that exited and whose pid went to a new process
-  // in between keeps its pid but not its start time.
-  const now = startTimes(targets.map((proc) => proc.pid))
+  // in between keeps its pid but not its start time. Without that read nothing is signalled, and
+  // the run fails naming every target, never a silent no-op.
+  let now
+  try {
+    now = startTimes(
+      targets.map((proc) => proc.pid),
+      options
+    )
+  } catch (error) {
+    throw new UnsignalledError(targets, error)
+  }
   for (const proc of targets) {
     if (now.get(proc.pid) !== proc.startUs) continue
     try {
