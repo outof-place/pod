@@ -19,6 +19,7 @@ const knownHostsCacheByExecutionContext = new Map<
 >()
 const knownHostsInFlightByExecutionContext: CoalescedProbes<readonly string[]> = new Map()
 const unauthenticatedHostExpiries = new Map<string, number>()
+const failedKnownHostsProbeExpiries = new Map<string, number>()
 
 function knownHostsExecutionKey(
   connectionId?: string | null,
@@ -49,6 +50,7 @@ export function _resetKnownHostsCache(): void {
   knownHostsCacheByExecutionContext.clear()
   knownHostsInFlightByExecutionContext.clear()
   unauthenticatedHostExpiries.clear()
+  failedKnownHostsProbeExpiries.clear()
 }
 
 /** @internal - exposed for tests only */
@@ -68,6 +70,29 @@ function trimKnownHostsCache(): void {
       break
     }
     knownHostsCacheByExecutionContext.delete(oldest.value)
+  }
+}
+
+function isKnownHostsProbeRecentlyFailed(key: string): boolean {
+  const expiresAt = failedKnownHostsProbeExpiries.get(key)
+  if (expiresAt === undefined) {
+    return false
+  }
+  if (expiresAt > Date.now()) {
+    return true
+  }
+  failedKnownHostsProbeExpiries.delete(key)
+  return false
+}
+
+function rememberKnownHostsProbeFailed(key: string): void {
+  failedKnownHostsProbeExpiries.set(key, Date.now() + NEGATIVE_ENTRY_TTL_MS)
+  while (failedKnownHostsProbeExpiries.size > KNOWN_HOSTS_CACHE_MAX_ENTRIES) {
+    const oldestKey = failedKnownHostsProbeExpiries.keys().next().value
+    if (oldestKey === undefined) {
+      return
+    }
+    failedKnownHostsProbeExpiries.delete(oldestKey)
   }
 }
 
@@ -136,6 +161,8 @@ export function rememberGlabKnownHosts(
   localGitOptions: LocalGitExecOptions = {}
 ): void {
   const { key, cacheKey } = knownHostsCacheContext(connectionId, localGitOptions)
+  // Why: an auth refresh with no new host must still re-probe on the next lookup.
+  failedKnownHostsProbeExpiries.delete(key)
   const cached = knownHostsCacheByExecutionContext.get(cacheKey)?.hosts ?? DEFAULT_GITLAB_HOSTS
   const seen = new Set(cached.map(normalizeGitLabHost))
   const additions: string[] = []
@@ -170,6 +197,10 @@ export async function getGlabKnownHosts(
       knownHostsCacheByExecutionContext.set(cacheKey, entry)
     }
     return cached
+  }
+  // Why: callers ask before reading any remote, so a failing glab would spawn per lookup.
+  if (isKnownHostsProbeRecentlyFailed(key)) {
+    return [...DEFAULT_GITLAB_HOSTS]
   }
   // Why: only join a probe still young enough to answer, so a wedged one cannot
   // pin every later retry for the life of the process (P1-D).
@@ -211,7 +242,14 @@ async function probeGlabKnownHosts(
   } catch {
     // Keep failures uncached so auth or tunnel recovery is discovered later.
     const cached = knownHostsCacheByExecutionContext.get(cacheKey)
-    return cached?.key === key ? cached.hosts : [...DEFAULT_GITLAB_HOSTS]
+    if (cached?.key === key) {
+      return cached.hosts
+    }
+    // Why: the memo only spaces re-probes; a reconnect or WSL distro has its own key.
+    if (ownsKey() && knownHostsExecutionKey(connectionId, localGitOptions) === key) {
+      rememberKnownHostsProbeFailed(key)
+    }
+    return [...DEFAULT_GITLAB_HOSTS]
   }
 }
 
