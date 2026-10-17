@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"CommAnd\"    :\"00\"}\n{\"CommAnd\":\"00\"}")

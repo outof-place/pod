@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"\u05cdҍҭ\u0094\u05cd\u0094\u05ed\u05cdҍҭ\u05cdҭ\u008dҍҭ®\"")

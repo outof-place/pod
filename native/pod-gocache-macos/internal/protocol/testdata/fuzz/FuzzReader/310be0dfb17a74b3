@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"ID\":0,\"Command\":\"\",\"ActionID\":\"\",\"OutputID\":\"\"\n{\"ID\":0,\"Command\":\"\",\"ActionID\":\"\"\n{\"ID\":0,\"Command\":\"\",\"ActionID\":\"\"")

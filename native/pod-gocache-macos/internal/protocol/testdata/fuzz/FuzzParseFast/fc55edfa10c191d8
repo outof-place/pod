@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"ID\":0,\"Command\":\"è\xa8\xa8\xa8\"}")

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"\uf1a0熿\uf1a0熆\"")
