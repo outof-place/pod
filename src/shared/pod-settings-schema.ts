@@ -252,6 +252,16 @@ export const POD_SETTINGS_FIELDS = {
     'Shift flips where a link opens',
     'Off: Shift-click always opens the system browser.'
   ),
+  terminalLinkClickBehavior: row(
+    z.enum(['actions', 'open', 'none']),
+    'Plain click on a link',
+    'Actions shows where it can open; none leaves the click to the terminal. Command-click always opens it.'
+  ),
+  terminalUrlMiddleClickBehavior: row(
+    z.enum(['open', 'actions', 'none']),
+    'Middle click on a URL',
+    'None pastes the selection, as anywhere else in the terminal.'
+  ),
   // network-proxy.ts's normalizer keeps 4096 characters.
   httpProxyBypassRules: row(
     z.string().max(4096),
