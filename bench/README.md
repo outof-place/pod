@@ -44,10 +44,10 @@ Playwright).
 | Pod (native Ghostty terminal) | The assembled Pod `main`, built and Developer ID signed by `product/release.sh` (bundle `codes.pod.app`, CLI `podx`), with `experimentalNativeTerminal` on. `run-final.sh --pod` names the build explicitly |
 | Pod (xterm.js)                | The same Pod build with the setting off: it separates the native terminal's effect from the rest of the build                                                                                               |
 | Ghostty                       | Ghostty 1.3.1 (latest release), visible-window suites only                                                                                                                                                  |
-| Terminal.app                  | The macOS 27 Terminal, visible-window suites only                                                                                                                                                           |
 
 VS Code, Cursor, Zed, Warp and iTerm2 are not installed on the benchmark Mac, so they are not
-compared. Neither are Conductor and Claude Squad.
+compared. Neither are Conductor and Claude Squad. Terminal.app is not either: driving it takes
+AppleScript against the user's own running Terminal, by name, which a run never does.
 
 ## Isolation: how Orca and Pod are launched
 
@@ -150,15 +150,15 @@ Per workload:
 The pane is at the instance's default window size (1728x1083 pt). The grid it got (`cols`x`rows`)
 is recorded, and a sample whose pane was not laid out yet does not count.
 
-Ghostty and Terminal.app have no windowless mode. They run the same workloads in visible
-1100x700 pt windows, with `latency.mjs --confirm-visible --throughput`, in the visible slot. Orca
-and Pod run there too, so the visible numbers compare all five apps with painting included. Those
-results go to `throughput-visible.json`.
+Ghostty has no windowless mode. It runs the same workloads in a visible 1100x700 pt window, with
+`latency.mjs --confirm-visible --throughput`, in the visible slot, from an APFS clone in the
+profile (its processes are found and stopped by that executable, never by argv). Orca and Pod run
+there too, so the visible numbers compare all four with painting included. Those results go to
+`throughput-visible.json`.
 
 How the command gets into each terminal:
 
 - Orca and Pod: `orca terminal send`;
-- Terminal.app: AppleScript `do script`;
 - Ghostty: a queue file that a loop in its window runs, because Ghostty cannot be typed into from
   outside.
 
@@ -473,8 +473,9 @@ Mac:
 
 ## Reproduce
 
-The final run is one command. It takes about 90 minutes on a quiet Mac, plus the search builds of
-step 1, and its last 20 minutes take the desktop and keyboard focus:
+The final run is one command. It takes about 70 minutes on a quiet Mac, plus the search builds of
+step 1. With `--visible` it adds about 20 minutes that take the desktop and keyboard focus; that
+part is a step of its own in the user's GO, never the default:
 
 ```sh
 bench/run-final.sh --pod /path/to/Pod.app --pod-commit <main SHA> \
@@ -494,11 +495,11 @@ The steps, in order:
 1. `suites/preflight.mjs`: every subject launches and gives one synced terminal workload.
 1. polling (also with 80 extra ptys), git-status, search, ogd, startup, panes, throughput and browser.
 1. `claude-acc.mjs --fresh`.
-1. The virtual display check, only with `--vdisplay`.
-1. `latency.mjs --confirm-visible --throughput`.
+1. Only with `--visible`: the virtual display check (also only with `--vdisplay`), then
+   `latency.mjs --confirm-visible --throughput`.
 1. `summarize.mjs` and the Markdown tables.
 
-`--no-visible` stops before the desktop is needed.
+Without `--visible` the run never needs the desktop.
 
 ### One-app Pod (1.0 and later)
 
@@ -516,7 +517,7 @@ reads the runtime makes for every user) and browser (the runtime started on its 
 mode with a hidden window, not the headless mode Pod 1.0 starts it in; the rows say so). It lists
 startup, panes, throughput, the visible run, git-status and search under `coming`: native UI rows
 pending a PodNative driver, git-status pending a suite that replays the status strategy Pod 1.0
-runs, and search because without og it is plain ripgrep, not Pod code. It implies `--no-visible`
+runs, and search because without og it is plain ripgrep, not Pod code. It refuses `--visible`
 and skips claude-acc. A visible launch of a one-app runtime is refused: in the
 foreground the runtime opens its outer PodNative through LaunchServices, outside the bench's env.
 

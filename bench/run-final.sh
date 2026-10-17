@@ -1,24 +1,25 @@
 #!/bin/bash
 # The whole benchmark in one go, for the final quiet window: pin and build the search inputs, every
-# headless suite, the claude-acc re-measurements, then the visible-window latency and throughput
-# run (it takes the desktop and keyboard focus for about 20 minutes), summary.json and the tables.
+# headless suite, the claude-acc re-measurements, summary.json and the tables. Only with --visible
+# also the visible-window latency and throughput run, which puts windows on the user's screen and
+# takes keyboard focus for about 20 minutes: a step of its own in the user's GO, never by default.
 #
 #   bench/run-final.sh --pod /path/to/Pod.app [--pod-commit SHA] [--orca /Applications/Orca.app]
 #                      [--og-sha SHA] [--og-features pcre2] [--search-client-sha SHA]
-#                      [--pod-profile pod|orca] [--no-visible] [--vdisplay] [--runtime-only]
+#                      [--pod-profile pod|orca] [--visible [--vdisplay]] [--runtime-only]
 #
 # --pod-commit is the main commit the Pod build came from (read from the bundle when it records
 # one); every Pod row and the stack check use it. --pod-profile is the POD_BUILD_PROFILE it was
 # built with: pod (slim, the default) or orca (every upstream feature). --og-sha is the pod-search commit confirmed as
 # bench-ready: its ogd must advertise search.full_lines and search.max_filesize, checked before
 # anything is measured. Without it the og and ogd rows are listed as "coming", with no numbers.
-# --vdisplay adds a virtual display for 20 s, which moves the user's display layout, so it is off
-# unless asked for. --runtime-only (one-app Pod 1.0: PodNative with the Electron runtime inside)
+# --vdisplay (with --visible only) adds a virtual display for 20 s, which moves the user's display
+# layout, so it is off unless asked for. --runtime-only (one-app Pod 1.0: PodNative with the Electron runtime inside)
 # keeps the rows that do not depend on the runtime's Electron UI, which Pod 1.0 does not show:
 # polling (process reads the runtime makes) and browser (the runtime started on its own, in
 # classic mode; labelled so). Startup, panes, throughput, the visible run, git-status (it replays
 # a strategy, not Pod's own) and search (without og it is plain ripgrep, not Pod code) are listed
-# as coming. It implies --no-visible and skips claude-acc.
+# as coming. It refuses --visible and skips claude-acc.
 #
 # Profiles, workspaces and the copies a run makes live under one /private/tmp dir (printed at the
 # start); nothing is deleted while the run goes on. Remove that dir afterwards with pod-tmp-rm.
@@ -33,7 +34,7 @@ pod_profile="pod"
 og_sha=""
 og_features="pcre2"
 client_sha=""
-visible=1
+visible=0
 vdisplay=0
 runtime_only=0
 while [ $# -gt 0 ]; do
@@ -45,13 +46,17 @@ while [ $# -gt 0 ]; do
     --og-sha) og_sha="${2:?}"; shift 2 ;;
     --og-features) og_features="$2"; shift 2 ;;
     --search-client-sha) client_sha="${2:?}"; shift 2 ;;
+    --visible) visible=1; shift ;;
+    # The default since 2026-10-17; still taken.
     --no-visible) visible=0; shift ;;
     --vdisplay) vdisplay=1; shift ;;
-    --runtime-only) runtime_only=1; visible=0; shift ;;
-    -h | --help) sed -n '2,29p' "$0"; exit 0 ;;
+    --runtime-only) runtime_only=1; shift ;;
+    -h | --help) sed -n '2,27p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+[ "$runtime_only" = 0 ] || [ "$visible" = 0 ] || { echo "--runtime-only takes no --visible" >&2; exit 2; }
+[ "$visible" = 1 ] || [ "$vdisplay" = 0 ] || { echo "--vdisplay needs --visible" >&2; exit 2; }
 # Never benchmark a stale build by accident: the Pod app is always named explicitly.
 [ -n "$pod" ] && [ -d "$pod/Contents" ] || { echo "pass --pod <Pod.app> (the build under test)" >&2; exit 2; }
 [ -d "$orca/Contents" ] || { echo "no Orca at $orca" >&2; exit 2; }
@@ -131,7 +136,7 @@ node -e '
     startup: { suite: "startup", subject: "Pod startup", reason: "native UI rows pending a PodNative driver" },
     panes: { suite: "panes", subject: "Pod terminal panes", reason: "native UI rows pending a PodNative driver" },
     throughput: { suite: "throughput", subject: "Pod terminal throughput", reason: "native UI rows pending a PodNative driver" },
-    latency: { suite: "latency", subject: "keystroke latency and visible throughput, with Ghostty and Terminal.app", reason: "native UI rows pending a PodNative driver; the visible run needs the desktop and keyboard focus" },
+    latency: { suite: "latency", subject: "keystroke latency and visible throughput, with Ghostty", reason: "native UI rows pending a PodNative driver; the visible run needs the desktop and keyboard focus" },
     "git-status": { suite: "git-status", subject: "Source Control status poll", reason: "pending a suite that replays the status strategy Pod 1.0 runs" },
     search: { suite: "search", subject: "code search (ripgrep baseline)", reason: "without og it is plain ripgrep from PATH, not Pod code" }
   }
@@ -206,6 +211,7 @@ if [ "$visible" = 1 ]; then
     ' "$run_dir/vdisplay.raw" "$run_dir/vdisplay-preflight.raw" "$POD_BENCH_OUT/vdisplay.json"
   fi
   echo "==> visible windows: latency and throughput (takes the desktop)"
+  node "$here/lib/heavy-gate.mjs" || exit $?
   node "$here/suites/latency.mjs" --confirm-visible --throughput
   acc_check
   node "$here/summarize.mjs" "$POD_BENCH_OUT"
