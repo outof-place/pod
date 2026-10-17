@@ -6,7 +6,7 @@ import { setMacTrayYield } from '../../tray/system-tray'
 import { syncMacMenuBarIcon } from '../../startup/main-window-actions'
 import { mainProcessState as state } from '../../startup/main-process-state'
 import { getPodDistroConfig } from '../pod-distro-config'
-import { isPodHeadlessUiHost } from '../ui-host/pod-ui-host-launch'
+import { isPodHeadlessUiHost, isPodUiHostLaunch } from '../ui-host/pod-ui-host-launch'
 import { accountHome } from '../instance/pod-instance'
 import { startPodAccSupervisor } from './acc-supervisor'
 
@@ -40,6 +40,8 @@ export function startPodAccFromStartup(): void {
     platform: process.platform,
     env: process.env,
     run: (spec) => runProcess(spec, 'tail'),
+    // Why: the probe spawned pgrep every 30 s for a tray syncMacMenuBarIcon never shows here.
+    hasTray: !state.isServeMode && !isPodUiHostLaunch(),
     setTrayYield: (helperRunning) => setMacTrayYield(helperRunning),
     syncTray: () => {
       if (state.store) {

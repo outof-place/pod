@@ -27,6 +27,8 @@ export type PodAccSupervisorOptions = {
   platform: NodeJS.Platform
   env: NodeJS.ProcessEnv
   run: (spec: ProcessSpec) => Promise<ProcessResult>
+  /** False where Pod has no tray (one-app runtime): nothing to yield, so the helper is never probed. */
+  hasTray: boolean
   /** Tells the tray whether the claude-acc menu helper is up, and re-applies the tray. */
   setTrayYield: (helperRunning: () => boolean) => void
   syncTray: () => void
@@ -89,6 +91,9 @@ export function startPodAccSupervisor(options: PodAccSupervisorOptions): {
     }
     return outcome
   })
+  if (!options.hasTray) {
+    return { lifecycle, stop: () => {} }
+  }
   let helperRunning = false
   let stopped = false
   options.setTrayYield(() => helperRunning)
