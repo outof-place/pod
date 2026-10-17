@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 
-export type WorkspaceTool = 'tmutil' | 'mdfind' | 'mdutil' | 'defaults' | 'pnpm'
+export type WorkspaceTool = 'tmutil' | 'mdfind' | 'mdutil' | 'defaults' | 'launchctl' | 'pnpm'
 
 export type WorkspaceToolResult = {
   code: number | null
@@ -22,7 +22,8 @@ const SYSTEM_TOOL_PATHS: Record<Exclude<WorkspaceTool, 'pnpm'>, string> = {
   tmutil: '/usr/bin/tmutil',
   mdfind: '/usr/bin/mdfind',
   mdutil: '/usr/bin/mdutil',
-  defaults: '/usr/bin/defaults'
+  defaults: '/usr/bin/defaults',
+  launchctl: '/bin/launchctl'
 }
 
 // Lets E2E runs stub tmutil/mdfind; ignored outside an isolated E2E profile.

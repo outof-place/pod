@@ -6,6 +6,7 @@ import {
   planPodGitProfile
 } from '../../../shared/pod-workspace-git-profile'
 import type {
+  PodGitProfileVerify,
   PodProfileOptInId,
   PodTuneRecord,
   PodWorkspaceGitProfile
@@ -20,11 +21,14 @@ import {
 import { applyOrcaTuning, planOrcaTuning, revertOrcaTuning } from './workspace-git-profile-orca'
 import {
   createBackfillEstimator,
+  disableRelativeWorktrees,
+  enableRelativeWorktrees,
   isKeyOptIn,
   migrateRefFormat,
   planOptIns,
   startBackfill
 } from './workspace-git-profile-optins'
+import { timeGitStatus, verifyGitProfile } from './workspace-git-profile-verify'
 import { createPodKeyWriter } from './workspace-git-profile-pod-keys'
 import type { WorkspaceGitExec } from './workspace-git-exec'
 import type { WorkspaceJournal } from './workspace-journal'
@@ -39,6 +43,8 @@ export type WorkspaceGitProfileDeps = {
   now?: () => number
   /** Where a finished background job (backfill) reports. */
   onBackgroundDone?: (repoId: string, message: string) => void
+  /** `launchctl print gui/<uid>/<label>` succeeds: the job is loaded for this user. */
+  isLaunchdJobLoaded: (label: string) => Promise<boolean>
 }
 
 export type PodTuneResult = {
@@ -78,7 +84,8 @@ export function createWorkspaceGitProfile(deps: WorkspaceGitProfileDeps) {
     if (!facts) {
       throw new WorkspacePlanError('Not a git repository.')
     }
-    const podRows = planPodGitProfile(facts, currentFromEntries(entries))
+    const current = currentFromEntries(entries)
+    const podRows = planPodGitProfile(facts, current)
     // Why 10k: there the watcher took status from 808 to 135 M instructions; below, a few ms.
     const large = (facts.trackedFiles ?? 0) >= POD_GIT_PROFILE_LARGE_REPO_FILES
     const orca = await planOrcaTuning(repo, large, join(facts.gitDir, 'index'))
@@ -86,7 +93,8 @@ export function createWorkspaceGitProfile(deps: WorkspaceGitProfileDeps) {
     const fsmonitor =
       large || orca.rows.some((row) => row.key === 'core.fsmonitor' && row.action === 'keep')
     const rows = [...orca.rows, ...podRows]
-    const optIns = planOptIns(host, facts, podRows, estimate(facts, repo.path))
+    const relative = current['worktree.userelativepaths']
+    const optIns = planOptIns(host, facts, podRows, estimate(facts, repo.path), relative)
     const tunes = (await journal.read()).tunes.filter((tune) => tune.repoId === repo.id)
     const maintenanceRegistered = await keys.isRegistered(repo.path)
     return {
@@ -153,7 +161,8 @@ export function createWorkspaceGitProfile(deps: WorkspaceGitProfileDeps) {
       orcaKeys: [],
       podKeys: [],
       registeredMaintenance: false,
-      optIns: []
+      optIns: [],
+      statusMsBefore: await timeGitStatus(git, repo.path)
     }
     try {
       tune.orcaKeys = await applyOrcaTuning(repo, current.fsmonitor)
@@ -173,6 +182,10 @@ export function createWorkspaceGitProfile(deps: WorkspaceGitProfileDeps) {
       }
       if (optIns.includes('reftable')) {
         await migrateRefFormat(git, repo.path, 'reftable')
+      }
+      if (optIns.includes('relative-worktrees')) {
+        tune.relativeWorktreesBefore = await enableRelativeWorktrees(git, keys.set, repo.path)
+        tune.podKeys.push('worktree.useRelativePaths')
       }
       tune.optIns = [...optIns]
     } finally {
@@ -211,6 +224,10 @@ export function createWorkspaceGitProfile(deps: WorkspaceGitProfileDeps) {
       await keys.unregisterMaintenance(repo.path)
       removed.push('maintenance')
     }
+    if (tune.relativeWorktreesBefore) {
+      await disableRelativeWorktrees(git, repo.path, tune.relativeWorktreesBefore)
+      removed.push('relative-worktrees')
+    }
     let note = ''
     if (tune.optIns.includes('reftable')) {
       const facts = await readRepoProfileFacts(git, repo.path, await hostFacts())
@@ -227,7 +244,22 @@ export function createWorkspaceGitProfile(deps: WorkspaceGitProfileDeps) {
     return { ok: true, message: `Undid ${removed.length} settings.${note}`, removed }
   }
 
-  return { plan, apply, undo }
+  const verify = async (repoId: string): Promise<PodGitProfileVerify> => {
+    const repo = localRepo(repoId)
+    const { profile } = await inspect(repo)
+    const result = await verifyGitProfile(
+      { git, isRegistered: keys.isRegistered, isLaunchdJobLoaded: deps.isLaunchdJobLoaded },
+      repo.path,
+      profile.rows
+    )
+    return {
+      repoPath: repo.path,
+      ...result,
+      statusMsBefore: profile.tunes.at(-1)?.statusMsBefore ?? null
+    }
+  }
+
+  return { plan, apply, undo, verify }
 }
 
 export type WorkspaceGitProfileService = ReturnType<typeof createWorkspaceGitProfile>

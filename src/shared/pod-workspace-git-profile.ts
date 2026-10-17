@@ -22,8 +22,10 @@ export type PodGitProfileKey =
   | 'maintenance.strategy'
   | 'maintenance.prefetch.enabled'
   | 'maintenance.geometric-repack.schedule'
+  | 'fetch.prune'
   | 'feature.manyFiles'
   | 'repack.writeBitmaps'
+  | 'worktree.useRelativePaths'
 
 export const POD_OPT_IN_KEYS: Readonly<Record<'many-files' | 'bitmaps', PodGitProfileKey>> = {
   'many-files': 'feature.manyFiles',
@@ -101,7 +103,9 @@ function wantedKeys(facts: PodGitProfileFacts): Wanted[] {
       value: 'hourly',
       reason: facts.geometricMaintenance && churn ? 'pack-churn' : null,
       skip: facts.geometricMaintenance ? 'few-packs' : 'no-geometric-maintenance'
-    }
+    },
+    // Why: every fetch drops refs the remote deleted, so tidy sees a merged branch's upstream gone.
+    { key: 'fetch.prune', value: 'true', reason: 'tidy-signal', skip: '' }
   ]
 }
 
