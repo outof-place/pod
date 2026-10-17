@@ -172,6 +172,16 @@ describe('repo.removeSparsePreset (Pod)', () => {
     expect(response.ok).toBe(false)
     expect(rows.removeSparsePreset).not.toHaveBeenCalled()
   })
+
+  it('refuses a preset id longer than 256 characters', async () => {
+    const rows = setup({ hostSettingOverrides: {} })
+    const response = await rows.call('repo.removeSparsePreset', {
+      repo: 'id:repo-1',
+      presetId: 'p'.repeat(257)
+    })
+    expect(response.ok).toBe(false)
+    expect(rows.removeSparsePreset).not.toHaveBeenCalled()
+  })
 })
 
 describe('repo.update worktreeBaseRef: null (Pod)', () => {
