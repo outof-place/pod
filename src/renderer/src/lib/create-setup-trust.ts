@@ -13,6 +13,15 @@ export type CreateSetupTrust = {
   onTrusted: (contentHash: string) => void
 }
 
+/** A direct launch from a work item: a pull or merge request's head is someone else's code. */
+export function workItemCreateSetupTrust(
+  itemType: string,
+  baseRef: string | undefined,
+  onTrusted: (contentHash: string) => void
+): CreateSetupTrust {
+  return { baseRef, foreign: itemType === 'pr' || itemType === 'mr', onTrusted }
+}
+
 /** The hooks a create runs, its base's: the root's when the host can't read the base (an older
  *  host, a ref only the create resolves), as the host still checks what it runs. */
 export async function readCreateSetupHooks(
