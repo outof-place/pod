@@ -197,6 +197,7 @@ describe('PodUiHostServer', () => {
       expect(JSON.parse(client.lines[0]).features).toEqual([
         'browser',
         'browserContextMenu',
+        'browserDownloadCancel',
         'browserOpenLink',
         'browserPasskey',
         'browserTargetUrl',
@@ -210,10 +211,12 @@ describe('PodUiHostServer', () => {
       const { options } = await startServer({ onBrowser })
       const client = await hello(options.socketPath)
       // browserContextMenu: the page's right-clicks come; browserOpenLink: its new-tab links;
-      // browserTargetUrl: its hovered links. PodNative reads the features, the hello is unchanged.
+      // browserTargetUrl: its hovered links; browserDownloadCancel: its downloads stop. PodNative
+      // reads the features, the hello is unchanged.
       expect(JSON.parse(client.lines[0]).features).toEqual([
         'browser',
         'browserContextMenu',
+        'browserDownloadCancel',
         'browserOpenLink',
         'browserPasskey',
         'browserTargetUrl',
@@ -226,8 +229,11 @@ describe('PodUiHostServer', () => {
         action: 'load',
         url: 'https://example.com'
       })
-      await vi.waitFor(() => expect(onBrowser).toHaveBeenCalledTimes(2))
+      const cancel = { type: 'browserDownloadCancel', pageId: 'page-1', downloadId: 'd1' }
+      send(client, cancel)
+      await vi.waitFor(() => expect(onBrowser).toHaveBeenCalledTimes(3))
       expect(onBrowser.mock.calls[0][0]).toEqual(attach)
+      expect(onBrowser.mock.calls[2][0]).toEqual(cancel)
     })
 
     it('takes browserPane only from a version 3 PodNative', async () => {
@@ -268,6 +274,14 @@ describe('PodUiHostServer', () => {
         }
       ],
       ['a size over the limit', { ...attach, width: 9000 }],
+      [
+        'a download cancel without an id',
+        { type: 'browserDownloadCancel', pageId: 'page-1', downloadId: '' }
+      ],
+      [
+        'a download cancel with an extra field',
+        { type: 'browserDownloadCancel', pageId: 'page-1', downloadId: 'd1', path: '/' }
+      ],
       ['a load without a URL', { type: 'browserNavigate', pageId: 'page-1', action: 'load' }],
       [
         'a back with a URL',

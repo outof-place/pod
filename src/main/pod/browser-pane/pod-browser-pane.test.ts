@@ -484,6 +484,30 @@ describe('PodBrowserPaneController', () => {
     expect(sent).toEqual([expect.objectContaining({ type: 'browserDownload', downloadId: 'd1' })])
   })
 
+  it("cancels its pages' downloads through the browser manager, and logs a miss", () => {
+    const cancelDownload = vi.fn((pageId: string) => pageId === 'page-1')
+    const log = vi.fn()
+    const panes = new PodBrowserPaneController({
+      frames: fakeFrames(),
+      send: () => true,
+      openDevTools: vi.fn(),
+      log,
+      cancelDownload
+    })
+    const win = new FakeWindow(new FakeWebContents())
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fakes implement every member the controller calls.
+    panes.trackPage('page-1', win as unknown as Electron.BrowserWindow)
+    panes.handle({ type: 'browserDownloadCancel', pageId: 'page-1', downloadId: 'd1' })
+    expect(cancelDownload).toHaveBeenCalledWith('page-1', 'd1')
+    expect(log).not.toHaveBeenCalled()
+    // A page this controller never tracked reaches nothing.
+    panes.handle({ type: 'browserDownloadCancel', pageId: 'other', downloadId: 'd2' })
+    expect(cancelDownload).toHaveBeenCalledTimes(1)
+    cancelDownload.mockReturnValue(false)
+    panes.handle({ type: 'browserDownloadCancel', pageId: 'page-1', downloadId: 'gone' })
+    expect(log).toHaveBeenCalledWith('browser-pane: no download gone of page-1 to cancel')
+  })
+
   it("shows an agent's command as driving for three seconds", () => {
     vi.useFakeTimers()
     const { panes, wc, sent } = setup()

@@ -65,6 +65,8 @@ export class PodBrowserPaneController {
       log: (message: string) => void
       // The main display's scale: what a page opens at before any pane reported one.
       mainDisplayScale?: () => number
+      // The browser manager's cancel for a download of a page no renderer hosts.
+      cancelDownload?: (pageId: string, downloadId: string) => boolean
     }
   ) {
     this.frames = new PaneFramePump(deps.frames, deps.log)
@@ -258,6 +260,11 @@ export class PodBrowserPaneController {
         return
       case 'browserPasskeyChoose':
         this.passkeys.choose(message.pageId, message.requestId, message.credentialId)
+        return
+      case 'browserDownloadCancel':
+        if (!this.deps.cancelDownload?.(message.pageId, message.downloadId)) {
+          this.deps.log(`browser-pane: no download ${message.downloadId} of ${message.pageId} to cancel`)
+        }
         return
       case 'browserFind':
         wc.findInPage(message.text, { forward: message.forward, findNext: message.findNext })

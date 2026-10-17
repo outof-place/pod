@@ -170,6 +170,24 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     }
   }
 
+  /**
+   * Fork-only (Pod): one-app's native panes cancel a download of a page no renderer hosts, which
+   * `cancelDownload` (the renderer owner's) refuses. Only that page's, and only while no renderer
+   * took the page over.
+   */
+  cancelPodPaneDownload(args: { downloadId: string; browserPageId: string }): boolean {
+    const download = this.downloadsById.get(args.downloadId)
+    if (
+      !download ||
+      download.browserTabId !== args.browserPageId ||
+      this.resolveRendererForBrowserTab(args.browserPageId)
+    ) {
+      return false
+    }
+    this.cancelDownloadInternal(args.downloadId, 'Canceled.')
+    return true
+  }
+
   protected cancelDownloadInternal(downloadId: string, reason: string): void {
     const download = this.downloadsById.get(downloadId)
     if (!download) {

@@ -161,6 +161,15 @@ const PasskeyChoose = z
   })
   .strict()
 
+// Feature browserDownloadCancel: stop one of the page's downloads (PodNative's list's cancel).
+const DownloadCancel = z
+  .object({
+    type: z.literal('browserDownloadCancel'),
+    pageId: PageId,
+    downloadId: z.string().min(1).max(200)
+  })
+  .strict()
+
 /** Every browser verb, for the socket's discriminated union of client messages. */
 export const POD_BROWSER_PANE_CLIENT_MESSAGES = [
   Rendezvous,
@@ -175,7 +184,8 @@ export const POD_BROWSER_PANE_CLIENT_MESSAGES = [
   Focus,
   DevTools,
   PopupChoose,
-  PasskeyChoose
+  PasskeyChoose,
+  DownloadCancel
 ] as const
 
 export type PodBrowserPaneClientMessage =
@@ -192,6 +202,7 @@ export type PodBrowserPaneClientMessage =
   | z.infer<typeof DevTools>
   | z.infer<typeof PopupChoose>
   | z.infer<typeof PasskeyChoose>
+  | z.infer<typeof DownloadCancel>
 
 export type PodBrowserPaneServerMessage =
   | {
