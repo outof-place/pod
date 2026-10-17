@@ -28,7 +28,7 @@ const noProcess = vi.hoisted(() =>
     throw new Error('the migration test runs no process')
   })
 )
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: noProcess,
   runProcessSync: noProcess
 }))
