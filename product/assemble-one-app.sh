@@ -92,6 +92,14 @@ check_input() {
 }
 check_input "$runtime" "$app_id"
 check_input "$native" "$NATIVE_APP_ID"
+# A PodNative with measurement seams is signed for local test packages, never notarized.
+seams_status=0
+measure_seams="$(product/scripts/measure-seams-gate.sh "$native")" || seams_status=$?
+case "$seams_status" in
+  0) measure_seams="" ;;
+  1) log "$measure_seams: signed for local tests only, the assembly stops before notarization" ;;
+  *) die "the measurement seams gate failed on $native" ;;
+esac
 # One CFBundleVersion in both halves; a release version's is numeric (pod-build-number.sh), as
 # Apple's format wants. LaunchServices registers the nested app too, and Sparkle compares the outer.
 bundle_version="$(plist_value "$native" CFBundleVersion)"
@@ -164,6 +172,7 @@ codesign --force --options runtime --timestamp ${native_entitlements[@]+"${nativ
   --sign "$sign_identity" "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
 
+[ -z "$measure_seams" ] || die "refusing to notarize a $measure_seams; the signed app stays at $app"
 log "notarize and staple the app"
 ditto -c -k --keepParent "$app" "$scratch/notarize.zip"
 xcrun notarytool submit "$scratch/notarize.zip" "${notary_args[@]}" --wait
