@@ -10,10 +10,7 @@ import type {
 import type { Repo } from '../../../shared/repo-types'
 import { WORKTREE_ID_SEPARATOR } from '../../../shared/worktree/id'
 import type { WorkspaceCleanupGitRoute } from '../../ipc/workspace-cleanup-git-route'
-import {
-  createWorkspaceCleanupBaseRefResolver,
-  isWorkspaceCleanupBranchMerged
-} from '../../ipc/workspace-cleanup-merged'
+import { createWorkspaceCleanupBaseRefResolver } from '../../ipc/workspace-cleanup-merged'
 import type { WorkspaceGitExec } from './workspace-git-exec'
 import type { WorkspaceJournal } from './workspace-journal'
 import { fingerprintOf, type WorkspacePlanStore } from './workspace-plan-store'
@@ -29,6 +26,7 @@ import {
   type BranchTracking,
   type PorcelainWorktree
 } from './workspace-tidy-git'
+import { isMerged, isMergedByContent } from './workspace-tidy-merged'
 import { scanStrayFolders, type WorkspaceStrayStore } from './workspace-tidy-strays'
 
 export const TIDY_STALE_MS = 30 * 24 * 60 * 60 * 1000
@@ -48,40 +46,6 @@ export type WorkspaceTidyScanDeps = {
 }
 
 type ScannedWorktree = Omit<PodTidyWorktree, 'processes' | 'fingerprint'> & { statusText: string }
-
-/**
- * Orca's merged rule (#27020: ancestry, and a branch with a single reflog entry never counts),
- * plus Pod's: a branch restored from a Pod archive has one entry too, yet carried work.
- */
-async function isMerged(
-  git: WorkspaceGitExec,
-  entry: PorcelainWorktree,
-  isMain: boolean,
-  base: string | null
-): Promise<boolean> {
-  if (!entry.branch || !base) {
-    return false
-  }
-  const checkout = {
-    path: entry.path,
-    branch: entry.branch,
-    isMainWorktree: isMain,
-    prunable: false
-  }
-  if (await isWorkspaceCleanupBranchMerged(checkout, base, LOCAL_ROUTE)) {
-    return true
-  }
-  const short = entry.branch.replace(/^refs\/heads\//, '')
-  if (isMain || base === short || base.endsWith(`/${short}`)) {
-    return false
-  }
-  const reflog = await git(['reflog', 'show', '-n', '2', '--format=%gs', entry.branch], entry.path)
-  const lines = reflog.stdout.split('\n').filter(Boolean)
-  if (lines.length !== 1 || !lines[0].includes('refs/pod/archive/')) {
-    return false
-  }
-  return (await git(['merge-base', '--is-ancestor', 'HEAD', base], entry.path)).code === 0
-}
 
 async function scanWorktree(
   git: WorkspaceGitExec,
@@ -130,6 +94,8 @@ async function scanWorktree(
     }
     if (await isMerged(git, entry, isMain, base)) {
       reasons.push('merged')
+    } else if (await isMergedByContent(git, entry, isMain, base)) {
+      reasons.push('squash-merged')
     }
     if (branch?.gone) {
       reasons.push('upstream-gone')
@@ -141,11 +107,13 @@ async function scanWorktree(
       reasons.push('idle-watcher')
     }
   }
-  // Unpushed: ahead of a live upstream, or no upstream and not already in the base.
+  // Unpushed: ahead of a live upstream, or no upstream and not already in the base (by commits
+  // or, after a squash merge, by content).
+  const inBase = reasons.includes('merged') || reasons.includes('squash-merged')
   const unpushed =
     branch && !branch.gone && branch.upstream
       ? (branch.ahead ?? 0) > 0
-      : !reasons.includes('merged') && !isMain && entry.branch !== null
+      : !inBase && !isMain && entry.branch !== null
   if (unpushed && !entry.prunable) {
     blockers.push('unpushed')
   }
