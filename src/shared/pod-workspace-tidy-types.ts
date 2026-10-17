@@ -6,7 +6,14 @@ import type { PodGitProfileRow } from './pod-workspace-git-profile'
 export type PodWorkspacePlanRef = { planId: string; expiresAt: number }
 
 /** Why a worktree is probably safe to tidy. */
-export type PodTidyReason = 'merged' | 'upstream-gone' | 'stale' | 'prunable' | 'idle-watcher'
+export type PodTidyReason =
+  | 'merged'
+  /** The base has the branch's changes but not its commits: a squash or rebase merge. */
+  | 'squash-merged'
+  | 'upstream-gone'
+  | 'stale'
+  | 'prunable'
+  | 'idle-watcher'
 
 /** Always refused. */
 export type PodTidyHardBlocker = 'main-worktree' | 'locked' | 'git-error'
