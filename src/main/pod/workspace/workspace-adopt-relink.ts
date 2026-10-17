@@ -203,32 +203,37 @@ export function createAdoptRelink(deps: AdoptRelinkDeps) {
     const pairs = worktreeIdPairs(inputs)
     for (const [from, to] of pairs) {
       const [oldClaude, newClaude] = [claudeDir(pathOf(from)), claudeDir(pathOf(to))]
+      // Each entry is saved before its rename; undo skips a folder that never left.
       if ((await pathExists(oldClaude)) && !(await pathExists(newClaude))) {
+        record.claudeProjectDirs.push([oldClaude, newClaude])
+        await save()
         await rename(oldClaude, newClaude)
         // A session still running under the old key keeps writing into the new folder.
         await symlink(basename(newClaude), oldClaude)
-        record.claudeProjectDirs.push([oldClaude, newClaude])
-        await save()
       }
       const [oldHistory, newHistory] = [historyDir(from), historyDir(to)]
       if ((await pathExists(oldHistory)) && !(await pathExists(newHistory))) {
-        await rename(oldHistory, newHistory)
         record.historyDirs.push([oldHistory, newHistory])
         await save()
+        await rename(oldHistory, newHistory)
       }
     }
     for (const entry of planned) {
       if (await rewriteConfigPath(git, entry, entry.to, entry.from, inputs.repoPathAfter)) {
         record.configPaths.push(entry)
+        await save()
       }
     }
+    // Saved first: undo puts the row back only while it still names this path.
+    record.repoPathAfter = inputs.repoPathAfter
+    await save()
     if (!deps.store.updateRepo(repo.id, repoFields(repo, moves, inputs.repoPathAfter))) {
       throw new Error('the project is no longer in Pod')
     }
-    record.repoPathAfter = inputs.repoPathAfter
     for (const [from, to] of pairs) {
       deps.store.migrateWorktreeIdentity(from, to)
       record.worktreeIds.push([from, to])
+      await save()
       runtime?.notifyWorktreeRenamed(repo.id, from, to)
     }
     record.orbstackKeys = deps.orbstack()?.rekey(pairs) ?? []
@@ -289,9 +294,11 @@ export function createAdoptRelink(deps: AdoptRelinkDeps) {
       record.historyDirs = record.historyDirs.filter(([dir]) => dir !== oldHistory)
     }
     for (const [oldClaude, newClaude] of record.claudeProjectDirs) {
-      // Only where the old name is still Pod's link.
-      if ((await readlink(oldClaude).catch(() => null)) === basename(newClaude)) {
-        await unlink(oldClaude)
+      // Only where the old name is still Pod's link, or nothing (a crash before the link).
+      const link = await readlink(oldClaude).catch(() => null)
+      const unlinked = link === null && !(await pathExists(oldClaude))
+      if (link === basename(newClaude) || (unlinked && (await pathExists(newClaude)))) {
+        await (link === null ? Promise.resolve() : unlink(oldClaude))
         await rename(newClaude, oldClaude)
       }
       record.claudeProjectDirs = record.claudeProjectDirs.filter(([dir]) => dir !== oldClaude)
