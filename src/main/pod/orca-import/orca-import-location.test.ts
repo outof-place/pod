@@ -80,6 +80,12 @@ describe('resolveOrcaImportLocation', () => {
     for (const env of [
       { [ORCA_IMPORT_SOURCE_DIR_ENV]: '/Users/someone/Library/Application Support/orca' },
       { [ORCA_IMPORT_SOURCE_DIR_ENV]: '/Users/someone/Documents/copy-of-orca' },
+      // APFS ignores case, so another spelling is the same folder.
+      { [ORCA_IMPORT_SOURCE_DIR_ENV]: '/users/SOMEONE/library/application support/ORCA' },
+      {
+        [ORCA_IMPORT_SOURCE_DIR_ENV]: '/private/tmp/run/orca',
+        [ORCA_IMPORT_SOURCE_HOME_ENV]: '/USERS/someone/.orca'
+      },
       {
         [ORCA_IMPORT_SOURCE_DIR_ENV]: '/private/tmp/run/orca',
         [ORCA_IMPORT_SOURCE_HOME_ENV]: '/Users/someone/.orca'
@@ -113,7 +119,7 @@ describe('resolveOrcaImportLocation', () => {
         ...base,
         instanceBlock: 'e2e',
         podUserData: '/private/tmp/run/Pod',
-        env: { [ORCA_IMPORT_SOURCE_DIR_ENV]: '/private/tmp/run/Pod' }
+        env: { [ORCA_IMPORT_SOURCE_DIR_ENV]: '/private/tmp/run/pod' }
       })
     ).toEqual({ kind: 'refused', reason: 'source-is-this-pod' })
   })

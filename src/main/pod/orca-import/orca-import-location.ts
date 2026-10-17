@@ -50,12 +50,16 @@ export function orcaImportInstanceBlock(
   return hookWriteBlock()
 }
 
+// Why lowercase: APFS and NTFS ignore case and realpath keeps the input's, so /users/x and
+// /Users/x name one folder. Over-refusing on a case-sensitive volume is the safe side of a fence.
 function canonical(path: string): string {
+  let real: string
   try {
-    return realpathSync(path)
+    real = realpathSync(path)
   } catch {
-    return resolve(path)
+    real = resolve(path)
   }
+  return real.toLowerCase()
 }
 
 function isInside(path: string, root: string): boolean {
