@@ -12,6 +12,7 @@ import {
   PodWorkspaceUserIntentParams,
   PodWorkspaceValidateRootParams
 } from '../../../shared/rpc-contract/pod-workspace-params'
+import { createAdoptRuntimeHooks } from './workspace-adopt-runtime'
 import { getPodWorkspaceRpcService, type PodWorkspaceRpcService } from './workspace-rpc-service'
 
 function service(): PodWorkspaceRpcService {
@@ -92,6 +93,6 @@ export const POD_WORKSPACE_METHODS = [
     name: POD_WORKSPACE_RPC.adopt,
     permission: 'host-admin',
     params: PodWorkspaceAdoptParams,
-    handler: (params) => service().adopt(params)
+    handler: (params, { runtime }) => service().adopt(params, createAdoptRuntimeHooks(runtime))
   })
 ]
