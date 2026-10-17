@@ -22,6 +22,8 @@ import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directo
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeStore } from './runtime-store-contract'
+import { gitExecFileAsync } from '../git/runner'
+import { foreignOriginMeta } from '../orca-yaml-at-ref'
 import { attributedSparsePresetId } from '../ipc/sparse-preset-attribution'
 import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
 
@@ -75,6 +77,11 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
     displayNameKind,
     { requestedName: effectiveRequestedName, sanitizedName: effectiveSanitizedName }
   )
+  // Pod: kept so its removal asks about the archive script every time.
+  const foreignOrigin = await foreignOriginMeta(
+    (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repo.path, ...localWorktreeGitOptions }),
+    request
+  )
   const meta = timing.timeSync('persist_metadata', () =>
     store.setWorktreeMeta(worktreeId, {
       instanceId: randomUUID(),
@@ -122,6 +129,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
         ? { linkedAzureDevOpsPR: request.linkedAzureDevOpsPR }
         : {}),
       ...(request.linkedGiteaPR !== undefined ? { linkedGiteaPR: request.linkedGiteaPR } : {}),
+      ...foreignOrigin,
       ...(request.linkedWorkItem !== undefined ? { linkedWorkItem: request.linkedWorkItem } : {}),
       ...(request.linkedItems !== undefined ? { linkedItems: request.linkedItems } : {}),
       ...(request.linkedTaskSourceContext !== undefined

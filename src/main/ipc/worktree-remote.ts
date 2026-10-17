@@ -73,7 +73,7 @@ import {
   untrustedCreateSetup,
   withoutTabCommands
 } from '../orca-yaml-setup-trust'
-import { isForeignCreate, repoGitShowExec } from '../orca-yaml-at-ref'
+import { foreignOriginMeta, isForeignCreate, repoGitShowExec } from '../orca-yaml-at-ref'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
@@ -2113,6 +2113,8 @@ export async function createRemoteWorktree(
       ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
       : {}),
     ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
+    // Pod: its removal asks about the archive script every time.
+    ...(await foreignOriginMeta(repoGitShowExec(store, repo), args)),
     ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
     ...(args.linkedItems !== undefined ? { linkedItems: args.linkedItems } : {}),
     ...(args.linkedTaskSourceContext !== undefined
@@ -2821,6 +2823,8 @@ async function performLocalWorktreeCreate(
       ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
       : {}),
     ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
+    // Pod: its removal asks about the archive script every time.
+    ...(await foreignOriginMeta(repoGitShowExec(store, repo), args)),
     ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
     ...(args.linkedItems !== undefined ? { linkedItems: args.linkedItems } : {}),
     ...(args.linkedTaskSourceContext !== undefined
