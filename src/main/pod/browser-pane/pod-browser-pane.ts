@@ -104,10 +104,14 @@ export class PodBrowserPaneController {
       // nothing for it).
       scale: this.openingScale ?? this.newPageScale(),
       input: new PaneInputState(),
-      // Why not while an agent drives: its clicks on a select must not open a menu on the screen.
-      select: new PaneSelectMenus(wc, (menu) => {
-        if (this.userDriven(page)) {
-          this.deps.send({ type: 'browserPopupMenu', pageId, ...menu })
+      select: new PaneSelectMenus(wc, {
+        pageId,
+        viewSize: () => win.getContentSize(),
+        // Why not while an agent drives: its clicks on a select must not open a menu on the screen.
+        onMenu: (menu) => {
+          if (this.userDriven(page)) {
+            this.deps.send(menu)
+          }
         }
       }),
       links: new PaneLinks(pageId, (message) => this.deps.send(message)),
@@ -249,7 +253,11 @@ export class PodBrowserPaneController {
         return
       case 'browserInput': {
         page.links.noteInput(message.event)
-        applyPaneInput(wc, page.input.map(message.event))
+        const { event } = message
+        if (event.kind === 'mouse' && event.action === 'down' && event.button === 'left') {
+          page.select.noteClick(event.x, event.y)
+        }
+        applyPaneInput(wc, page.input.map(event))
         return
       }
       case 'browserNavigate':

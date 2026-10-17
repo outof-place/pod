@@ -440,7 +440,7 @@ describe('PodBrowserPaneController', () => {
     expect(sent).toContainEqual({
       type: 'browserPopupMenu',
       pageId: 'page-1',
-      menuId: 1,
+      menuId: 2,
       x: 1,
       y: 2,
       width: 3,
@@ -456,6 +456,35 @@ describe('PodBrowserPaneController', () => {
     expect(wc.executeJavaScriptInIsolatedWorld).toHaveBeenLastCalledWith(1987, [
       { code: 'globalThis.__podSelectChoose?.(1, 0)' }
     ])
+  })
+
+  it("shows an iframe's select menu only after the user's own click", () => {
+    const { panes, wc, sent } = setup()
+    panes.handle(attach)
+    const frame = Object.assign(new EventEmitter(), {
+      parent: {},
+      detached: false,
+      isDestroyed: () => false,
+      executeJavaScript: vi.fn(async (_code: string) => {})
+    })
+    wc.emit('frame-created', {}, { frame })
+    frame.emit('dom-ready')
+    const doc = /const doc = "([0-9a-f]{16})"/.exec(String(frame.executeJavaScript.mock.calls[0]?.[0]))?.[1]
+    const message = `\u0000pod-select-frame ${JSON.stringify({ doc, menuId: 1, clientX: 5, clientY: 6, x: 0, y: 0, width: 50, height: 20, items: [] })}`
+    sent.length = 0
+    wc.emit('console-message', { message, frame })
+    expect(sent).toEqual([])
+    const down = (button: 'left' | 'right') => ({
+      type: 'browserInput' as const,
+      pageId: 'page-1',
+      event: { kind: 'mouse' as const, action: 'down' as const, x: 5, y: 6, button, clickCount: 1, modifiers: [] }
+    })
+    panes.handle(down('right'))
+    wc.emit('console-message', { message, frame })
+    expect(sent).toEqual([])
+    panes.handle(down('left'))
+    wc.emit('console-message', { message, frame })
+    expect(sent).toEqual([expect.objectContaining({ type: 'browserPopupMenu', x: 0, y: 0, width: 50 })])
   })
 
   it("lists its pages' downloads, and repeats them to a PodNative that connects", () => {

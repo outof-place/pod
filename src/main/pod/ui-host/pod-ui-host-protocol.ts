@@ -89,6 +89,7 @@ export type PodUiHostQuitReason = z.infer<typeof Quit>['reason']
 // `surfaceSection`: openSurface takes a section; an older runtime refuses the unknown keys.
 // `browserContextMenu`: a right-click on an attached page comes as browserContextMenu.
 // `browserDownloadCancel`: browserDownloadCancel stops one of a page's downloads.
+// `browserFrameSelect`: a <select> in an iframe comes as browserPopupMenu too, not only the page's own.
 // `browserOpenLink`: a page's new-tab link (⌘-click, middle-click, target=_blank) comes as browserOpenLink.
 // `browserTargetUrl`: the link under an attached page's pointer comes as browserTargetUrl.
 // `browserPasskey`: a security key's accounts come as browserPasskeyAccounts; browserPasskeyChoose answers.
@@ -96,6 +97,7 @@ export const POD_UI_HOST_FEATURES = [
   'browser',
   'browserContextMenu',
   'browserDownloadCancel',
+  'browserFrameSelect',
   'browserOpenLink',
   'browserPasskey',
   'browserTargetUrl',
