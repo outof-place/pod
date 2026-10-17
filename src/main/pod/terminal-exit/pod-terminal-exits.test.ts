@@ -3,6 +3,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-ses
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
 import {
   getPodTerminalExit,
+  listPodTerminalExits,
   podRetainsFailedLocalExit,
   recordPodTerminalExit,
   resetPodTerminalExitsForTests,
@@ -224,6 +225,35 @@ describe('restartPodExitedTerminal (Pod)', () => {
       expect(create).not.toHaveBeenCalled()
     })
 
+    it('names the exited PTY, so the window drops a binding its mount would reattach to', async () => {
+      recordPodTerminalExit(surface, exit)
+      const restart = vi.fn(async () => true)
+      setPodRendererPaneRestart(restart)
+      const { value } = host({
+        getAvailableAuthoritativeWindow: () => ({ window: 1 }),
+        getMobileSessionTabsForWorktree: () => leafTab(true)
+      })
+      const kept = value.mobileSessionTabsByWorktree.get('wt')
+      const withDeadPty: PodTerminalRestartHost = {
+        ...value,
+        mobileSessionTabsByWorktree: new Map([
+          [
+            'wt',
+            {
+              ...kept!,
+              tabs: kept!.tabs.map((tab) => ({ ...tab, ptyId: 'pty-dead' }))
+            }
+          ]
+        ])
+      }
+
+      await restartPodExitedTerminal(withDeadPty, 'id:wt', 'tab', 'left')
+      expect(restart).toHaveBeenCalledWith(
+        { window: 1 },
+        { worktreeId: 'wt', tabId: 'tab', leafId: 'left', deadPtyId: 'pty-dead' }
+      )
+    })
+
     it('keeps the exit when the renderer refuses the restart', async () => {
       recordPodTerminalExit(surface, exit)
       setPodRendererPaneRestart(async () => false)
@@ -234,5 +264,16 @@ describe('restartPodExitedTerminal (Pod)', () => {
       )
       expect(getPodTerminalExit('wt', 'tab', 'left')).toEqual(exit)
     })
+  })
+})
+
+describe('listPodTerminalExits (Pod)', () => {
+  it('lists every kept pane, for a window that subscribed late', () => {
+    recordPodTerminalExit(surface, exit)
+    recordPodTerminalExit({ worktreeId: 'wt2', parentTabId: 'tab2', leafId: 'right' }, exit)
+    expect(listPodTerminalExits()).toEqual([
+      { worktreeId: 'wt', tabId: 'tab', leafId: 'left' },
+      { worktreeId: 'wt2', tabId: 'tab2', leafId: 'right' }
+    ])
   })
 })

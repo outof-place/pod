@@ -85,7 +85,13 @@ export async function restartPodExitedTerminal(
     const window = host.getAvailableAuthoritativeWindow()
     if (window && rendererPaneRestart) {
       // Why the renderer: with a window it owns the pane, and only its own spawn drops the overlay.
-      const pane = { worktreeId, tabId: tab.parentTabId, leafId: tab.leafId }
+      const deadPtyId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
+      const pane = {
+        worktreeId,
+        tabId: tab.parentTabId,
+        leafId: tab.leafId,
+        ...(deadPtyId ? { deadPtyId } : {})
+      }
       if (!(await rendererPaneRestart(window, pane))) {
         throw new Error('terminal_restart_failed')
       }

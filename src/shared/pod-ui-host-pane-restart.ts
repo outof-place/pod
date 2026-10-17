@@ -9,14 +9,18 @@ export const POD_UI_HOST_PANE_RESTART_IPC = {
   /** renderer → main, (requestId, accepted: boolean) */
   restarted: 'pod:uiHostPaneRestart:restarted',
   /** main → renderer, (PodUiHostPaneRestartRequest): a failed shell's pane was kept */
-  retained: 'pod:uiHostPaneRestart:retained'
+  retained: 'pod:uiHostPaneRestart:retained',
+  /** renderer → main (invoke): the panes kept so far, for a renderer that subscribed after */
+  listRetained: 'pod:uiHostPaneRestart:listRetained'
 } as const
 
 export const PodUiHostPaneRestartRequest = z
   .object({
     worktreeId: z.string().min(1),
     tabId: z.string().min(1),
-    leafId: z.string().min(1)
+    leafId: z.string().min(1),
+    /** The exited PTY the window may still have bound to the pane, so its mount spawns instead. */
+    deadPtyId: z.string().min(1).optional()
   })
   .strict()
 export type PodUiHostPaneRestartRequest = z.infer<typeof PodUiHostPaneRestartRequest>

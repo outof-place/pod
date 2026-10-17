@@ -22,6 +22,8 @@ export type PodUiHostApi = {
   onPaneRestart: (restart: (request: PodUiHostPaneRestartRequest) => boolean) => () => void
   /** A failed shell's pane main kept, whose agent must not resume; returns the unsubscribe. */
   onPaneExitRetained: (retained: (pane: PodUiHostPaneRestartRequest) => void) => () => void
+  /** The failed shells' panes main kept before this window subscribed. */
+  listRetainedPaneExits: () => Promise<PodUiHostPaneRestartRequest[]>
   /** A pane layout PodNative sent for a tab here; returns the unsubscribe. */
   onPaneLayout: (
     apply: (request: PodUiHostPaneLayoutRequest) => PodUiHostPaneLayoutReply
