@@ -65,14 +65,6 @@ def build_acc() -> None:
         _write(f"acc-features-narrow-{t.name}.svg", acc_grid(t, narrow=True))
 
 
-def build_window() -> None:
-    from window import window
-
-    for t in THEMES:
-        _write(f"window-{t.name}.svg", window(t))
-        _write(f"window-narrow-{t.name}.svg", window(t, narrow=True))
-
-
 def build_arch() -> None:
     from arch import DIAGRAMS, render
 
@@ -85,7 +77,6 @@ def build_arch() -> None:
 TARGETS = {
     "hero": build_hero,
     "buttons": build_buttons,
-    "window": build_window,
     "why": build_why,
     "acc": build_acc,
     "arch": build_arch,
