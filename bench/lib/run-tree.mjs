@@ -14,17 +14,40 @@ import { TOOLS_BIN, sleep } from './bench-session.mjs'
 const run = promisify(execFile)
 export const PROCSTAT = path.join(TOOLS_BIN, 'procstat')
 
+// A root is { pid, startUs }: the pid a run spawned and the start time it had then.
 function treeArgs(work, { scan = false, roots = [] } = {}) {
   const args = ['--exe-prefix', `${work}/`]
-  for (const pid of roots) args.push('--root', String(pid))
+  for (const root of roots) args.push('--root', String(root.pid))
   if (scan) args.push('--argv', `${work}/`, '--argv', `${work.replace(/^\/private/, '')}/`)
   return args
 }
 
-function parseTree(stdout, exclude) {
+function parseTree(stdout, exclude, roots = []) {
   const snap = JSON.parse(stdout)
+  // A root whose pid now belongs to a later process (other start time) is not the run's, and
+  // neither is anything below it: those are marked via "stale-root" and never signalled.
+  const recorded = new Map(roots.map((root) => [root.pid, root.startUs]))
+  const byPid = new Map(snap.procs.map((proc) => [proc.pid, proc]))
+  const rootOf = (proc) => {
+    let at = proc
+    for (let hops = 0; at && at.inherited && hops < 64; hops += 1) at = byPid.get(at.ppid)
+    return at
+  }
+  for (const proc of snap.procs) {
+    if (proc.via !== 'root') continue
+    const root = rootOf(proc)
+    if (!root || recorded.get(root.pid) !== root.startUs) proc.via = 'stale-root'
+  }
   snap.procs = snap.procs.filter((proc) => proc.path !== PROCSTAT && !exclude(proc))
   return snap
+}
+
+/** The record of a pid this run just spawned (for `roots`): its pid and start time. */
+export function rootOfPid(pid) {
+  const snap = JSON.parse(execFileSync(PROCSTAT, ['--root', String(pid)], { encoding: 'utf8', maxBuffer: 16 << 20 }))
+  const proc = snap.procs.find((candidate) => candidate.pid === pid)
+  if (!proc) throw new Error(`pid ${pid} is not running`)
+  return { pid, startUs: proc.startUs }
 }
 
 /**
@@ -34,11 +57,15 @@ function parseTree(stdout, exclude) {
  */
 export async function runTree(work, { exclude = () => false, ...options } = {}) {
   const { stdout } = await run(PROCSTAT, treeArgs(work, options), { maxBuffer: 16 << 20 })
-  return parseTree(stdout, exclude)
+  return parseTree(stdout, exclude, options.roots)
 }
 
 export function runTreeSync(work, { exclude = () => false, ...options } = {}) {
-  return parseTree(execFileSync(PROCSTAT, treeArgs(work, options), { encoding: 'utf8', maxBuffer: 16 << 20 }), exclude)
+  return parseTree(
+    execFileSync(PROCSTAT, treeArgs(work, options), { encoding: 'utf8', maxBuffer: 16 << 20 }),
+    exclude,
+    options.roots
+  )
 }
 
 /** The processes a cleanup may signal: the run's own tree, never the caller, never a protected program. */

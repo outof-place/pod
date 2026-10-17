@@ -8,6 +8,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { after, test } from 'node:test'
 import { PROFILE_BASE, cli, describeApp, launchInstance, removeProfile } from './orca-instance.mjs'
+import { rootOfPid } from './run-tree.mjs'
 
 after(() => {
   const remover = path.join(os.homedir(), '.local/bin/pod-tmp-rm')
@@ -88,7 +89,20 @@ test("a profile's cleanup stops its own processes and leaves a stranger that nam
     spawn('/bin/sh', ['-c', 'sleep 30; true', `${ud}/marker`], { stdio: 'ignore' }),
     spawn('/bin/sh', ['-c', 'sleep 30; true', `${short}/marker`], { stdio: 'ignore' })
   ]
-  const profile = { ud, roots: new Set([own.pid]), apps: new Set([app]), signalled: [], argvOnly: [] }
+  // A recorded root whose pid a later process took (another start time) is not the run's.
+  const reused = spawn('/bin/sh', ['-c', 'sleep 30; true'], { stdio: 'ignore' })
+  await new Promise((resolve) => setTimeout(resolve, 100))
+  const stale = { ...rootOfPid(reused.pid), startUs: rootOfPid(reused.pid).startUs - 1 }
+  const profile = {
+    ud,
+    roots: new Map([
+      [own.pid, rootOfPid(own.pid)],
+      [reused.pid, stale]
+    ]),
+    apps: new Set([app]),
+    signalled: [],
+    argvOnly: []
+  }
   try {
     await new Promise((resolve) => setTimeout(resolve, 300))
     await removeProfile(profile)
@@ -100,9 +114,11 @@ test("a profile's cleanup stops its own processes and leaves a stranger that nam
       assert.ok(profile.argvOnly.some((entry) => entry.pid === stranger.pid), 'but it is reported')
       process.kill(stranger.pid, 0)
     }
+    assert.ok(!signalled.has(reused.pid), 'a pid whose start time is not the recorded one')
+    process.kill(reused.pid, 0)
     assert.ok(!signalled.has(process.pid), 'never this process')
   } finally {
-    for (const child of [own, crashpad, ...strangers]) {
+    for (const child of [own, crashpad, reused, ...strangers]) {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
     }
   }
