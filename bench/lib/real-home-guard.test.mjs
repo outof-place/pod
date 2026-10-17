@@ -16,3 +16,13 @@ test('a content change throws, a same-content rewrite is only reported', () => {
   const touched = { ...before, [file]: { ...before[file], mtimeMs: before[file].mtimeMs - 1 } }
   assert.deepEqual(assertRealHomeUntouched(touched, 'in a test', '/private/tmp/no-such-run-dir.x'), [file])
 })
+
+test('strictMtime trips on a same-content rewrite', () => {
+  const before = realHomeState()
+  const [file] = Object.keys(before)
+  const touched = { ...before, [file]: { ...before[file], mtimeMs: before[file].mtimeMs - 1 } }
+  assert.throws(
+    () => assertRealHomeUntouched(touched, 'in a test', '/private/tmp/no-such-run-dir.x', { strictMtime: true }),
+    /changed in a test/
+  )
+})
