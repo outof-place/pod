@@ -4,6 +4,7 @@ import type { UserConfig } from 'electron-vite'
 import type { Plugin } from 'vite'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
+import { createAsciiBundleSourcePlugin } from './ascii-bundle-source'
 import {
   podFeatureDefines,
   podRendererFontSwaps,
@@ -157,6 +158,15 @@ export function withPodBuildProfile(
         target.plugins = [createPodStubModulesPlugin(stubs), ...(target.plugins ?? [])]
       }
     }
+  }
+  // Why first in main's output plugins: the bootstrap banner edits chunk code after it without the map.
+  const mainRollup = config.main?.build?.rollupOptions
+  if (mainRollup && process.env.POD_ASCII_BUNDLE_SOURCE !== '0') {
+    const plugins = mainRollup.plugins
+    mainRollup.plugins = [
+      createAsciiBundleSourcePlugin(),
+      ...(Array.isArray(plugins) ? plugins : [plugins])
+    ]
   }
   if (config.renderer && fontSwaps.length > 0) {
     config.renderer.plugins = [
