@@ -35,6 +35,7 @@ import {
 } from './sim-pool-draft'
 import type { SimCapacityReading, SimObservedDevice, SimRuntime } from './sim-pool-ports'
 import { simPoolStep, type SimPoolStepResult } from './sim-pool-step'
+import { deepFrozen, onlyContractFields } from './sim-pool-step-guards.test-support'
 
 export const SELF: SimRuntime = { pid: 70110, startedAt: 1760599900, profile: 'pn-self' }
 export const PEER: SimRuntime = { pid: 70220, startedAt: 1760599950, profile: 'pn-peer' }
@@ -70,26 +71,6 @@ export type DeviceSpec = {
   name?: string
 }
 
-function deepFrozen<T>(value: T): T {
-  if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) {
-    Object.freeze(value)
-    for (const child of Object.values(value)) {
-      deepFrozen(child)
-    }
-  }
-  return value
-}
-
-/** Change detection compares only the contract's fields, so the core may write no other. */
-function onlyContractFields(rows: readonly object[], shape: object, what: string): void {
-  for (const row of rows) {
-    const stray = Object.keys(row).find((field) => !(field in shape))
-    if (stray) {
-      throw new Error(`the core wrote ${what}.${stray}, a field the contract does not name`)
-    }
-  }
-}
-
 export class PoolWorld {
   registry: SimPoolRegistry = { version: 1, updatedAt: 0, devices: [], leases: [] }
   memory: SimPoolMemory = structuredClone(EMPTY_SIM_POOL_MEMORY)
@@ -104,6 +85,8 @@ export class PoolWorld {
   // simctl's list of Pod's device set; `foreign` are devices in it the registry does not list.
   observed = new Map<string, SimObservedDevice>()
   verdict: 'ok' | 'unknown' = 'ok'
+  // UDIDs with a directory in Pod's set as the adapter saw them; null: it did not look.
+  onDisk: Set<string> | null = null
   capacity: { -readonly [Key in keyof SimCapacityReading]?: SimCapacityReading[Key] } & {
     -readonly [Key in Exclude<keyof SimCapacityReading, 'measuredAt'>]: SimCapacityReading[Key]
   }
@@ -224,7 +207,11 @@ export class PoolWorld {
         at: this.now(),
         devices:
           this.verdict === 'ok'
-            ? { verdict: 'ok', devices: [...this.observed.values()] }
+            ? {
+                verdict: 'ok',
+                devices: [...this.observed.values()],
+                ...(this.onDisk ? { onDisk: [...this.onDisk].sort() } : {})
+              }
             : { verdict: 'unknown', why: 'simctl timed out' },
         capacity: { ...this.capacity, measuredAt: this.capacity.measuredAt ?? this.wall },
         liveness: { ...this.liveness },

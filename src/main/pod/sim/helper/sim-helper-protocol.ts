@@ -106,7 +106,8 @@ export const SimHelperReport = z.object({
     hid: CapabilityReport,
     ax: CapabilityReport
   }),
-  // POD_SIM_DEVICE_SET: a device set other than the default (probes only; the pool uses the default).
+  // POD_SIM_DEVICE_SET: the device set the helper works in; the pool's own set (~/.pod/sim) once
+  // stage 7 starts the helper with it, the default set until then.
   deviceSet: z.string().optional(),
   device: z
     .object({

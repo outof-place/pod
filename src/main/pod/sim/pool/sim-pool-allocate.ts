@@ -27,16 +27,17 @@ import {
   type SimPoolLease
 } from './sim-pool-draft'
 import { failingStall, makeGate } from './sim-pool-make-failures'
-import { trustedListing } from './sim-pool-reconcile'
+import { hopeless, trustedListing } from './sim-pool-reconcile'
 import { claimMs, dropWindow, touchWindow } from './sim-pool-windows'
 
 function hasState(device: SimPoolDevice): device is SimPoolDevice & { state: SimDeviceState } {
   return device.state !== undefined
 }
 
+/** Free for a lease: no op, no holder, and not a device the pool is only waiting to delete. */
 export function isFree(d: SimPoolDraft, device: SimPoolDevice): boolean {
   const stated = hasState(device) ? device : { ...device, state: deviceState(device) }
-  return !device.op && simDeviceIsFree(stated, d.registry.leases)
+  return !device.op && !hopeless(device) && simDeviceIsFree(stated, d.registry.leases)
 }
 
 function rank(device: SimPoolDevice, lease: SimPoolLease): number {
@@ -178,8 +179,13 @@ function serveClass(
   return needy
 }
 
+/** The first free number, past every name the registry or Pod's set on disk holds. */
 function nextName(d: SimPoolDraft): string {
   const taken = new Set(d.registry.devices.map((device) => device.name))
+  const seen = d.memory.observation?.devices
+  for (const device of seen?.verdict === 'ok' ? seen.devices : []) {
+    taken.add(device.name)
+  }
   let n = 1
   while (taken.has(`${d.config.namePrefix}Pod-${n}`)) {
     n += 1

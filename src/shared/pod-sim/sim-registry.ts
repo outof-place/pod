@@ -28,8 +28,13 @@ import { SIM_DEVICE_STATES, SIM_LEASE_FINAL_STATES } from './sim-lifecycle'
 import { SIM_POD_DEVICE_NAME_PATTERN, SimLease, SimLeaseEnded, SimUdid } from './sim-pool-snapshot'
 
 export const SIM_REGISTRY_VERSION = 1
-/** Under the account's home, never under a Pod profile. */
-export const SIM_REGISTRY_DIRECTORY = ['Library', 'Application Support', 'codes.pod.sim'] as const
+/**
+ * Pod's simulator home, under the account's home and never under a Pod profile: Pod's own device
+ * set (SIM_POD_DEVICE_SET_DIRECTORY inside it) and the registry beside it. POD_SIM_HOME moves it.
+ */
+export const SIM_POD_HOME_DIRECTORY = ['.pod', 'sim'] as const
+/** Shaped like the default set's path, so claude-acc's guard finds its devices the same way. */
+export const SIM_POD_DEVICE_SET_DIRECTORY = ['CoreSimulator', 'Devices'] as const
 export const SIM_REGISTRY_FILE_NAME = 'registry.json'
 export const SIM_REGISTRY_LOCK_FILE_NAME = 'registry.lock'
 
@@ -125,10 +130,16 @@ export type SimRegistryRead =
   | { ok: true; registry: SimRegistryFile }
   | { ok: false; reason: 'registryUnreadable'; message: string }
 
-const DISPLAY_PATH = `~/${SIM_REGISTRY_DIRECTORY.join('/')}/${SIM_REGISTRY_FILE_NAME}`
+const DISPLAY_PATH = `~/${SIM_POD_HOME_DIRECTORY.join('/')}/${SIM_REGISTRY_FILE_NAME}`
 
-/** The registry's text as this runtime may use it; null text is a file not there yet. */
-export function readSimRegistry(text: string | null): SimRegistryRead {
+/**
+ * The registry's text as this runtime may use it; null text is a file not there yet. `where` names
+ * the file in a refusal (the store passes its real path, which POD_SIM_HOME can move).
+ */
+export function readSimRegistry(
+  text: string | null,
+  where: string = DISPLAY_PATH
+): SimRegistryRead {
   if (text === null) {
     return {
       ok: true,
@@ -140,20 +151,20 @@ export function readSimRegistry(text: string | null): SimRegistryRead {
     json = JSON.parse(text)
   } catch {
     return unreadable(
-      `${DISPLAY_PATH} is not JSON; Pod leaves it alone (move it aside to start a new pool).`
+      `${where} is not JSON; Pod leaves it alone (move it aside to start a new pool).`
     )
   }
   const version = z.looseObject({ version: z.number() }).safeParse(json)
   if (version.success && version.data.version > SIM_REGISTRY_VERSION) {
     return unreadable(
-      `${DISPLAY_PATH} is from a newer Pod (version ${version.data.version}); update this Pod to share its simulators.`
+      `${where} is from a newer Pod (version ${version.data.version}); update this Pod to share its simulators.`
     )
   }
   const parsed = SimRegistryFile.safeParse(json)
   if (!parsed.success) {
-    const where = parsed.error.issues[0]?.path.join('.') || 'the top level'
+    const at = parsed.error.issues[0]?.path.join('.') || 'the top level'
     return unreadable(
-      `${DISPLAY_PATH} is damaged at ${where}; Pod leaves it alone (move it aside to start a new pool).`
+      `${where} is damaged at ${at}; Pod leaves it alone (move it aside to start a new pool).`
     )
   }
   return { ok: true, registry: parsed.data }

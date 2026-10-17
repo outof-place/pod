@@ -101,6 +101,50 @@
     }
   },
   {
+    "name": "lease: waiting for a slot that booted devices the registry forgot still hold",
+    "method": "sim.lease",
+    "result": {
+      "status": "waiting",
+      "lease": {
+        "leaseId": "sl_f7a8b9",
+        "key": "agent:claude:61210:1760601100@/Users/dev/portivo-wt/maps",
+        "state": "waiting",
+        "holder": {
+          "kind": "agent",
+          "id": "agent:claude:61210:1760601100",
+          "agent": "claude",
+          "pid": 61210,
+          "startedAt": 1760601100
+        },
+        "worktreeRoot": "/Users/dev/portivo-wt/maps",
+        "since": 1760600390000,
+        "lastActivity": 1760600390000,
+        "queue": {
+          "position": 1,
+          "since": 1760600390000,
+          "waitingFor": "slot"
+        }
+      },
+      "ahead": [],
+      "aheadOmitted": 0,
+      "holders": [],
+      "holdersOmitted": 0,
+      "unlisted": [
+        {
+          "udid": "0A0A0A0A-0000-4000-8000-00000000000A",
+          "name": "Portivo-Pod-1"
+        },
+        {
+          "udid": "0B0B0B0B-0000-4000-8000-00000000000B",
+          "name": "Portivo-Pod-2"
+        }
+      ],
+      "brake": "calm",
+      "next": "podx sim wait --mine",
+      "callAgain": true
+    }
+  },
+  {
     "name": "lease: no fresh memory reading from claude-acc yet, so no brake stage to report",
     "method": "sim.lease",
     "result": {

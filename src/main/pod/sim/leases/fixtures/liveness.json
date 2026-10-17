@@ -222,6 +222,21 @@
     "liveness": "live"
   },
   {
+    "name": "an agent session the loaded status store has no row for: no row is not an end",
+    "holder": {
+      "kind": "agentSession",
+      "id": "session:8c1f4d2e",
+      "sessionId": "8c1f4d2e",
+      "agent": "codex"
+    },
+    "facts": {
+      "process": "unknown",
+      "session": "unseen",
+      "terminal": "notServedHere"
+    },
+    "liveness": "unverifiable"
+  },
+  {
     "name": "an agent session the status store saw end",
     "holder": {
       "kind": "agentSession",

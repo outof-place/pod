@@ -13,6 +13,13 @@
 // 4b feeds the clock port's sleep signal from Electron's powerMonitor `suspend` and `resume`
 // (event names checked against electron.d.ts of the pinned Electron 45; agent-awake-service.ts
 // listens to `resume` already): see SimClockReading.
+//
+// What the world does slowly or wrongly stays out of the queue: claude-acc's reading for a `lease`
+// is taken before the call joins it (one read shared by every call that needs one, and an unknown
+// answer kept a few seconds), so a slow guard never holds another holder's tap. A device op whose
+// result cannot be written is written again (finishOp ignores a result its op no longer matches),
+// and one that failed across a sleep runs once more awake: its tool's timer ran on through the
+// sleep (Node's clock does), so the failure says nothing about the device.
 import type { SimRegistryFile } from '../../../../shared/pod-sim/sim-registry'
 import { simHolderLiveness } from '../leases/sim-holder-liveness'
 import type { SimPoolAnswer, SimPoolCommand } from './sim-pool-commands'
@@ -29,6 +36,7 @@ import {
 import type {
   SimAppPort,
   SimCapacityPort,
+  SimCapacityReading,
   SimClock,
   SimClockReading,
   SimDeviceDriver,
@@ -49,6 +57,12 @@ export const SIM_POOL_POLL_MS = 5_000
 /** simctl list and a process scan cost tens of ms of CPU: twice a minute, not every poll. */
 export const SIM_POOL_LIST_MS = 30_000
 const SWAP_ATTEMPTS = 8
+/** An unknown or failed reading is not asked again sooner: claude-acc's CLI may take 4 s. */
+export const SIM_CAPACITY_RETRY_MS = 5_000
+/** Waits before writing a device op's result again; past the last, the op's deadline decides. */
+const RESULT_RETRY_MS: readonly number[] = [500, 2_000, 8_000, 30_000]
+
+export type SimPoolCoordinatorOptions = Readonly<{ resultRetryMs?: readonly number[] }>
 
 export type SimPoolPorts = Readonly<{
   store: SimRegistryStore
@@ -69,7 +83,11 @@ export type SimPoolRun =
       effects: readonly SimPoolEffect[]
       wakeAt: number | null
     }>
-  | Readonly<{ ok: false; reason: 'registryUnreadable' | 'contention'; message: string }>
+  | Readonly<{
+      ok: false
+      reason: 'registryUnreadable' | 'notMacOS' | 'contention'
+      message: string
+    }>
 
 /** How often to poll for this registry: only while something is held or booted. */
 export function simPoolPollMs(registry: SimRegistryFile): number | null {
@@ -89,15 +107,22 @@ export class SimPoolCoordinator {
     devices: SimDeviceObservation
     externalUse: readonly string[]
   } | null = null
+  private capacityAsk: { reading: Promise<SimCapacityReading>; settledAt: number | null } | null =
+    null
+  private readonly resultRetryMs: readonly number[]
 
   constructor(
     private readonly ports: SimPoolPorts,
     private readonly config: SimPoolConfig,
-    private readonly self: SimRuntime
-  ) {}
+    private readonly self: SimRuntime,
+    options: SimPoolCoordinatorOptions = {}
+  ) {
+    this.resultRetryMs = options.resultRetryMs ?? RESULT_RETRY_MS
+  }
 
-  run(command: SimPoolCommand): Promise<SimPoolRun> {
-    const next = this.queue.then(async () => this.step(await this.withCapacity(command)))
+  async run(command: SimPoolCommand): Promise<SimPoolRun> {
+    const ready = await this.withCapacity(command)
+    const next = this.queue.then(() => this.step(ready))
     this.queue = next.catch(() => undefined)
     return next
   }
@@ -107,18 +132,35 @@ export class SimPoolCoordinator {
    * the call: one cheap port read instead of `waitingFor: measurement` until the next poll.
    */
   private async withCapacity(command: SimPoolCommand): Promise<SimPoolCommand> {
-    const last = this.memory.observation?.capacity
-    if (command.kind !== 'lease' || capacityIsFresh(last, this.ports.clock.now().wall)) {
+    const now = this.ports.clock.now()
+    if (command.kind !== 'lease' || capacityIsFresh(this.memory.observation?.capacity, now.wall)) {
       return command
     }
-    return { ...command, capacity: await this.ports.capacity.read() }
+    const asked = this.capacityAsk
+    const recent =
+      asked && (asked.settledAt === null || now.mono - asked.settledAt < SIM_CAPACITY_RETRY_MS)
+    return { ...command, capacity: await (recent ? asked.reading : this.askCapacity()) }
+  }
+
+  private askCapacity(): Promise<SimCapacityReading> {
+    const ask: { reading: Promise<SimCapacityReading>; settledAt: number | null } = {
+      reading: this.ports.capacity.read(),
+      settledAt: null
+    }
+    this.capacityAsk = ask
+    void ask.reading
+      .finally(() => {
+        ask.settledAt = this.ports.clock.now().mono
+      })
+      .catch(() => undefined)
+    return ask.reading
   }
 
   private async step(command: SimPoolCommand): Promise<SimPoolRun> {
     for (let attempt = 0; attempt < SWAP_ATTEMPTS; attempt += 1) {
       const read = await this.ports.store.read()
       if (!read.ok) {
-        return { ok: false, reason: 'registryUnreadable', message: read.message }
+        return { ok: false, reason: read.reason, message: read.message }
       }
       const result = simPoolStep({ registry: read.registry, memory: this.memory }, command, {
         now: this.ports.clock.now(),
@@ -133,7 +175,7 @@ export class SimPoolCoordinator {
           continue
         }
         if (!swap.ok) {
-          return { ok: false, reason: 'registryUnreadable', message: swap.message }
+          return { ok: false, reason: swap.reason, message: swap.message }
         }
       }
       this.memory = result.memory
@@ -152,7 +194,7 @@ export class SimPoolCoordinator {
   async poll(options: { relist?: boolean } = {}): Promise<SimPoolRun> {
     const read = await this.ports.store.read()
     if (!read.ok) {
-      return { ok: false, reason: 'registryUnreadable', message: read.message }
+      return { ok: false, reason: read.reason, message: read.message }
     }
     const at = this.ports.clock.now()
     if (options.relist || !this.listing || at.mono - this.listing.at.mono >= SIM_POOL_LIST_MS) {
@@ -225,14 +267,38 @@ export class SimPoolCoordinator {
   }
 
   private async runOp(effect: Extract<SimPoolEffect, { op: unknown }>): Promise<void> {
-    const outcome = await this.perform(effect).catch((error: unknown): SimOpOutcome => ({
+    const outcome = await this.performAwake(effect)
+    const finished = { kind: 'opFinished', udid: effect.udid, op: effect.op, outcome } as const
+    for (const wait of [0, ...this.resultRetryMs]) {
+      if (wait > 0) {
+        await new Promise((resolve) => setTimeout(resolve, wait))
+      }
+      const result = await this.run(finished)
+      if (result.ok) {
+        await this.dispatch(result.effects)
+        return
+      }
+    }
+  }
+
+  /** The op, and once more if it failed while the Mac slept through part of it. */
+  private async performAwake(
+    effect: Extract<SimPoolEffect, { op: unknown }>
+  ): Promise<SimOpOutcome> {
+    const before = this.ports.clock.now().suspends
+    const outcome = await this.performSafely(effect)
+    const after = this.ports.clock.now()
+    if (outcome.ok || (after.suspends === before && !after.suspended)) {
+      return outcome
+    }
+    return this.performSafely(effect)
+  }
+
+  private performSafely(effect: Extract<SimPoolEffect, { op: unknown }>): Promise<SimOpOutcome> {
+    return this.perform(effect).catch((error: unknown): SimOpOutcome => ({
       ok: false,
       message: String(error)
     }))
-    const result = await this.run({ kind: 'opFinished', udid: effect.udid, op: effect.op, outcome })
-    if (result.ok) {
-      await this.dispatch(result.effects)
-    }
   }
 
   private perform(effect: Extract<SimPoolEffect, { op: unknown }>): Promise<SimOpOutcome> {

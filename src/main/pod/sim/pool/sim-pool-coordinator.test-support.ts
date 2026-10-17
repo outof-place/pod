@@ -13,6 +13,7 @@ class FakeStore {
   swaps: string[] = []
   private revision = 1
   private damaged: string | null = null
+  private failing = 0
 
   constructor(
     private registry: SimRegistryFile,
@@ -31,6 +32,11 @@ class FakeStore {
   async swap(token: string, next: SimRegistryFile): Promise<SimRegistrySwap> {
     await Promise.resolve()
     this.calls.push('swap')
+    if (this.failing > 0) {
+      this.failing -= 1
+      this.swaps.push('failed')
+      return { ok: false, reason: 'registryUnreadable', message: 'disk full' }
+    }
     if (token !== String(this.revision)) {
       this.swaps.push('conflict')
       return { ok: false, reason: 'conflict' }
@@ -47,6 +53,11 @@ class FakeStore {
 
   damage(message: string): void {
     this.damaged = message
+  }
+
+  /** The next `count` swaps fail as a write that could not happen (a full disk). */
+  failSwaps(count: number): void {
+    this.failing = count
   }
 }
 

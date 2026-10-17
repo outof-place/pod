@@ -12,7 +12,7 @@ const Facts = z
       z.object({ found: z.literal(true), startedAt: z.number().int() }).strict(),
       z.object({ found: z.literal(false) }).strict()
     ]),
-    session: z.enum(['notServedHere', 'storeWarming', 'present', 'ended']),
+    session: z.enum(['notServedHere', 'storeWarming', 'unseen', 'present', 'ended']),
     terminal: z.enum(['notServedHere', 'storeWarming', 'open', 'closed'])
   })
   .strict()

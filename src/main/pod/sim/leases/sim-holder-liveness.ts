@@ -11,8 +11,9 @@ export const SIM_HOLDER_START_TOLERANCE_S = 2
 export type SimHolderFacts = Readonly<{
   // The process at the holder's pid: its start in epoch seconds, or none (a zombie is none).
   process: { found: true; startedAt: number } | { found: false } | 'unknown'
-  // This runtime's agent-status store for the holder's session, and its panes for the handle.
-  session: 'notServedHere' | 'storeWarming' | 'present' | 'ended'
+  // This runtime's agent-status store for the holder's session (`unseen`: no row, which is no
+  // evidence of an end), and its panes for the handle.
+  session: 'notServedHere' | 'storeWarming' | 'unseen' | 'present' | 'ended'
   terminal: 'notServedHere' | 'storeWarming' | 'open' | 'closed'
 }>
 

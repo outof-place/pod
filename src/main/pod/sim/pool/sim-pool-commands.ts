@@ -73,6 +73,8 @@ export type SimLeaseAnswer =
       aheadOmitted: number
       holders: SimHolder[]
       holdersOmitted: number
+      // Booted devices in Pod's set the registry does not list, holding slots (sim-pool-reconcile).
+      unlisted?: readonly Readonly<{ udid: string; name: string }>[]
     }>
   | Readonly<{ status: 'heldByHuman'; lease: SimPoolLease }>
   | Readonly<{ status: 'refused'; refusal: SimGateRefusal }>

@@ -163,7 +163,7 @@ export function simPoolStep(
   observeClock(d)
   const answer = apply(d, command)
   settle(d, command.kind === 'poll', state.registry.updatedAt)
-  const files = leaseFileEffects(d)
+  const files = leaseFileEffects(d, state.registry.devices)
   const changed = registryChanged(state.registry, d.registry)
   if (changed) {
     d.registry.updatedAt = Math.max(d.now.wall, state.registry.updatedAt + 1)

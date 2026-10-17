@@ -49,7 +49,12 @@ export type SimPoolMemory = {
   brakeEndsSeen: string[]
   // What this runtime last wrote to each device's claude-acc lease file.
   leaseFiles: Record<string, string>
+  // Booted devices of Pod's set the registry does not list, by UDID: when this runtime first saw
+  // each, or last asked it to shut down (monotonic; sim-pool-reconcile.ts). Replaced, never edited.
+  strays: Readonly<Record<string, number>>
 }
+
+export const SIM_NO_STRAYS: Readonly<Record<string, number>> = Object.freeze({})
 
 export const EMPTY_SIM_POOL_MEMORY: SimPoolMemory = {
   lastTick: null,
@@ -57,7 +62,8 @@ export const EMPTY_SIM_POOL_MEMORY: SimPoolMemory = {
   observation: null,
   brakeHold: null,
   brakeEndsSeen: [],
-  leaseFiles: {}
+  leaseFiles: {},
+  strays: SIM_NO_STRAYS
 }
 
 type OpEffect<Kind extends SimOpRef['kind'], Extra = object> = Readonly<

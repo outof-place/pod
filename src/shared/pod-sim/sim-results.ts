@@ -93,6 +93,12 @@ export const SimLeaseOutcome = z.discriminatedUnion('status', [
     aheadOmitted: Count,
     holders: z.array(SimHolder).max(SIM_WAITING_LIST_MAX),
     holdersOmitted: Count,
+    // Booted devices in Pod's set that the registry does not list: they hold slots nobody can use
+    // until Pod shuts them down (one more look at the set, then a few seconds).
+    unlisted: z
+      .array(z.object({ udid: SimUdid, name: z.string().min(1).max(128) }))
+      .max(SIM_WAITING_LIST_MAX)
+      .optional(),
     build: z
       .object({
         buildId: SimBuildId,

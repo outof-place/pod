@@ -14,6 +14,7 @@ import {
   type SimPoolLease,
   type SimPoolTombstone
 } from '../pool/sim-pool-draft'
+import { unlistedBooted } from '../pool/sim-pool-reconcile'
 import { holderBase, tombstone } from './sim-lease-records'
 import { holdersOf, queueOf, wantedClass } from './sim-lease-queue'
 
@@ -123,6 +124,9 @@ export function leaseAnswer(d: SimPoolDraft, lease: SimPoolLease): SimLeaseAnswe
   const waitingFor: SimWaitReason =
     lease.state === 'reserved' ? 'device' : (lease.queue?.waitingFor ?? 'slot')
   const stalled = d.stalls.get(lease.leaseId)
+  const unlisted = unlistedBooted(d)
+    .slice(0, SIM_WAITING_LIST_MAX)
+    .map((device) => ({ udid: device.udid, name: device.name }))
   return {
     status: 'waiting',
     lease,
@@ -132,6 +136,7 @@ export function leaseAnswer(d: SimPoolDraft, lease: SimPoolLease): SimLeaseAnswe
     ahead: ahead.slice(0, SIM_WAITING_LIST_MAX),
     aheadOmitted: Math.max(0, ahead.length - SIM_WAITING_LIST_MAX),
     holders: holders.slice(0, SIM_WAITING_LIST_MAX),
-    holdersOmitted: Math.max(0, holders.length - SIM_WAITING_LIST_MAX)
+    holdersOmitted: Math.max(0, holders.length - SIM_WAITING_LIST_MAX),
+    ...(unlisted.length > 0 ? { unlisted } : {})
   }
 }

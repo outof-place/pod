@@ -8,7 +8,15 @@ import type { SimRegistryFile } from '../../../../shared/pod-sim/sim-registry'
 import type { SimHolderFacts } from '../leases/sim-holder-liveness'
 import type { SimDeviceOp } from './sim-pool-config'
 
-/** A process (a runtime, or an agent holding a device): pid plus its start, epoch seconds. */
+/**
+ * A process (a runtime, or an agent holding a device): pid plus its start. `startedAt` is the
+ * kernel's start of that pid in epoch seconds, read by every side the same way, through
+ * SimProcessFacts.startOf (`ps` under TZ=UTC0, read as UTC): the runtime naming itself
+ * (simRuntimeOf), stage 7 resolving an agent holder, and every liveness check of either. Never a
+ * process's own idea of its start (performance.timeOrigin drifts seconds from the kernel's on a
+ * slow start) and never a local-time reading (zones and DST move it by hours). claude-acc's lease
+ * file keeps its own local-time `owner.start` (its contract), written from this value.
+ */
 export type SimProcessId = Readonly<{ pid: number; startedAt: number }>
 
 /**
@@ -45,19 +53,32 @@ export type SimIdSource = Readonly<{
   deviceId(): string
 }>
 
-/** One device simctl lists in Pod's device set. */
+/**
+ * One device simctl lists in Pod's device set. `deviceType` and `runtime` (simctl's identifiers)
+ * let the core enter a device the registry forgot, to delete it (sim-pool-reconcile.ts).
+ */
 export type SimObservedDevice = Readonly<{
   udid: string
   name: string
   state: 'booted' | 'shutdown' | 'transitioning'
+  deviceType?: string
+  runtime?: string
 }>
 
 /**
- * Pod's device set as simctl lists it. `unknown`: simctl timed out or failed; the core then
- * changes no device (no lost, recover, boot or shut down) until a list it can trust.
+ * Pod's device set as simctl lists it. `unknown`: simctl timed out or failed, or the set could not
+ * be read; the core then changes no device (no lost, recover, boot or shut down) until a list it
+ * can trust. `onDisk`: the UDIDs with a directory in the set when the list was taken (absent when
+ * the adapter did not look). A device the list misses but the disk still has is not gone (a
+ * partial list), and an empty list is believed only when the disk is empty too (an empty list
+ * alone, while the registry has booted devices, is lost contact).
  */
 export type SimDeviceObservation =
-  | Readonly<{ verdict: 'ok'; devices: readonly SimObservedDevice[] }>
+  | Readonly<{
+      verdict: 'ok'
+      devices: readonly SimObservedDevice[]
+      onDisk?: readonly string[]
+    }>
   | Readonly<{ verdict: 'unknown'; why: string }>
 
 /**
@@ -117,7 +138,8 @@ export type SimDeviceDriver = {
   prepare(udid: string, profile: SimSlimProfile): Promise<SimOpOutcome>
   boot(udid: string): Promise<SimOpOutcome>
   shutDown(udid: string): Promise<SimOpOutcome>
-  // Terminate the holder's app; the device stays booted.
+  // Terminate every user app running on the device (not only the holder's: whatever the holder
+  // started is the holder's); the device stays booted.
   release(udid: string): Promise<SimOpOutcome>
   // Keep the UDID: shut down, erase, re-apply the slim profile and defaults, boot. The app comes
   // back through SimAppPort.reinstall once the core has seen the reset done.
@@ -141,18 +163,26 @@ export type SimLivenessPort = {
   externalUse(): Promise<readonly string[]>
 }
 
+/** `notMacOS`: the pool runs only on macOS, and the store touches nothing elsewhere. */
+export type SimRegistryRefusal = Readonly<{
+  ok: false
+  reason: 'registryUnreadable' | 'notMacOS'
+  message: string
+}>
+
 export type SimRegistryStoreRead =
   | Readonly<{ ok: true; registry: SimRegistryFile; token: string }>
-  | Readonly<{ ok: false; reason: 'registryUnreadable'; message: string }>
+  | SimRegistryRefusal
 
 export type SimRegistrySwap =
   | Readonly<{ ok: true; token: string }>
   | Readonly<{ ok: false; reason: 'conflict' }>
-  | Readonly<{ ok: false; reason: 'registryUnreadable'; message: string }>
+  | SimRegistryRefusal
 
 /**
  * The Mac-wide registry. `swap` writes only when the file is still the one `token` named (under
- * the flock, temp file plus rename), else answers `conflict` and writes nothing.
+ * the flock, temp file plus rename), else answers `conflict` and writes nothing; a lock held past
+ * the store's wait is a `conflict` too (slow, not broken), so the caller re-reads and retries.
  */
 export type SimRegistryStore = {
   read(): Promise<SimRegistryStoreRead>
