@@ -31,7 +31,8 @@ export function installPodBrowserPanes(options: {
     log: options.log,
     mainDisplayScale: () => screen.getPrimaryDisplay().scaleFactor,
     cancelDownload: (browserPageId, downloadId) =>
-      browserManager.cancelPodPaneDownload({ browserPageId, downloadId })
+      browserManager.cancelPodPaneDownload({ browserPageId, downloadId }),
+    defaultZoomLevel: () => state.store?.getUI().browserDefaultZoomLevel
   })
   options.runtime.setOffscreenBrowserBackend(
     new OffscreenBrowserBackend(browserManager, {

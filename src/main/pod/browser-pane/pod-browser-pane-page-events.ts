@@ -4,6 +4,7 @@ import type { WebContents } from 'electron'
 import type { PodBrowserPaneServerMessage } from './pod-browser-pane-protocol'
 import { describePaneContextMenu } from './pod-browser-pane-context-menu'
 import type { PaneLinks } from './pod-browser-pane-links'
+import { browserPageZoomLevelToPercent } from '../../../shared/browser-page-zoom'
 import {
   encodePodUiHostServerMessage,
   POD_UI_HOST_MAX_LINE_BYTES
@@ -89,7 +90,8 @@ export function panePageState(pageId: string, page: PanePage): PodBrowserPaneSer
     canGoBack: wc.navigationHistory.canGoBack(),
     canGoForward: wc.navigationHistory.canGoForward(),
     agentDriving: Date.now() < page.agentDrivingUntil,
-    ...(page.favicon ? { faviconUrl: page.favicon } : {})
+    ...(page.favicon ? { faviconUrl: page.favicon } : {}),
+    zoomPercent: browserPageZoomLevelToPercent(wc.getZoomLevel())
   }
   const fits =
     url.length <= LONG_PAGE_URL_LENGTH ||
