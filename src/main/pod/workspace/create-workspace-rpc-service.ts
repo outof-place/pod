@@ -1,6 +1,8 @@
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import { createWorkspaceAdopt } from './workspace-adopt'
 import type { AdoptRelinkStore } from './workspace-adopt-relink'
+import { getPodOrbstackWorktreeKeys } from '../orbstack/pod-orbstack-worktree-keys'
 import { resolveWorkspaceCloneDestination } from './workspace-clone-parent'
 import { createWorkspaceGitExec } from './workspace-git-exec'
 import { createWorkspaceGitProfile } from './workspace-git-profile'
@@ -62,7 +64,13 @@ export function createPodWorkspaceRpcService(deps: WorkspaceRpcServiceDeps): Pod
     plans,
     processes,
     getRepo,
+    // Folder projects too: one nested inside a moving folder would move unrecorded.
+    allRepos: () =>
+      deps.store
+        .getRepos()
+        .filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID),
     store: deps.store,
+    orbstack: getPodOrbstackWorktreeKeys,
     root: () => resolveWorkspaceRoot(deps.store.getSettings(), deps.home),
     home: deps.home,
     historyRoot: deps.historyRoot
@@ -121,7 +129,7 @@ export function createPodWorkspaceRpcService(deps: WorkspaceRpcServiceDeps): Pod
         case 'apply':
           return adopt.apply(request.planId, request.acknowledged, runtime)
         case 'plan-undo':
-          return adopt.planUndo(request.recordId)
+          return adopt.planUndo(request.recordId, runtime)
         case 'undo':
           return adopt.undo(request.planId, runtime)
       }

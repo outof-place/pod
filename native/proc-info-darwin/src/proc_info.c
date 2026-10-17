@@ -3,6 +3,7 @@
 #include <node_api.h>
 #include "proc_tty_names.h"
 #include "proc_api_arguments.h"
+// Fork-only (Pod): Pod Workspace's open-file check (proc_open_paths.c).
 #include "proc_open_paths.h"
 
 #include <errno.h>
@@ -510,6 +511,7 @@ NAPI_MODULE_INIT(/* napi_env env, napi_value exports */) {
       {"listTerminalProcesses", NULL, ListTerminalProcesses, NULL, NULL, NULL, napi_enumerable,
        NULL},
       {"readProcessCwd", NULL, ReadProcessCwd, NULL, NULL, NULL, napi_enumerable, NULL},
+      // Fork-only (Pod): Pod Workspace's open-file check.
       {"findOpenPathsUnder", NULL, FindOpenPathsUnder, NULL, NULL, NULL, napi_enumerable, NULL},
   };
   if (napi_define_properties(env, exports, sizeof(properties) / sizeof(properties[0]),

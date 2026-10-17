@@ -41,6 +41,7 @@ describe('workspace adopt (real git)', () => {
       plans,
       processes,
       getRepo: () => row,
+      allRepos: () => [row],
       store: {
         getAllWorktreeMeta: () => ({}),
         migrateWorktreeIdentity: () => undefined,

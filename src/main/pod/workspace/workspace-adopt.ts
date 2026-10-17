@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { lstat, mkdir, realpath, rename, stat, symlink } from 'node:fs/promises'
+import { mkdir, realpath, rename, stat, symlink } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type {
   PodAdoptBlocker,
@@ -9,16 +9,23 @@ import type {
   PodAdoptSoftBlocker
 } from '../../../shared/pod-workspace-tidy-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { PodOrbstackWorktreeKeys } from '../orbstack/pod-orbstack-worktree-keys'
+import { adoptWarnings, findOpenFilesInside } from './workspace-adopt-checks'
 import {
   claudeProjectKey,
-  createAdoptRelink,
+  movesOf,
+  nearestExisting,
+  pathExists,
   remapPath as remap,
-  type AdoptMove,
+  saveAdoptRecord,
+  type AdoptMove
+} from './workspace-adopt-paths'
+import {
+  createAdoptRelink,
   type AdoptRelinkInputs,
   type AdoptRelinkRuntime,
   type AdoptRelinkStore
 } from './workspace-adopt-relink'
-import { adoptWarnings, findOpenFilesInside } from './workspace-adopt-checks'
 import { createWorkspaceAdoptUndo, listWorktreePaths, stopWatchers } from './workspace-adopt-undo'
 import {
   POD_WORKSPACE_LOCAL_OWNER_DIR,
@@ -28,7 +35,7 @@ import type { WorkspaceGitExec } from './workspace-git-exec'
 import type { WorkspaceJournal } from './workspace-journal'
 import { fingerprintOf, WorkspacePlanError, type WorkspacePlanStore } from './workspace-plan-store'
 import { findProcessesInside, type ProcessCwdReader } from './workspace-process-cwds'
-import { isPathInsideWorkspaceRoot } from './workspace-root-path'
+import { isPathInsideRoot, isPathInsideWorkspaceRoot } from './workspace-root-path'
 import { podWorktreesDirOf as worktreesDirOf } from './workspace-tidy-strays'
 
 export { claudeProjectKey }
@@ -43,8 +50,11 @@ export type WorkspaceAdoptDeps = {
   plans: WorkspacePlanStore
   processes: ProcessCwdReader | null
   getRepo: (repoId: string) => Repo | undefined
+  /** Every project Pod knows, for the ones nested inside a folder that would move. */
+  allRepos: () => readonly Repo[]
   /** Pod's records that name the repo's paths; Move In re-keys them to the new place. */
   store: AdoptRelinkStore
+  orbstack?: () => PodOrbstackWorktreeKeys | null
   root: () => string
   home: string
   /** The profile's `terminal-history/`, whose folders are keyed by worktree id. */
@@ -52,34 +62,14 @@ export type WorkspaceAdoptDeps = {
   now?: () => number
 }
 
-async function pathExists(path: string): Promise<boolean> {
-  return lstat(path).then(
-    () => true,
-    () => false
-  )
-}
-
-async function nearestExisting(path: string): Promise<string> {
-  let current = path
-  while (!(await pathExists(current)) && dirname(current) !== current) {
-    current = dirname(current)
-  }
-  return current
-}
-
-/** The folders a Move In renames, under each spelling Pod or git may know them by. */
-function movesOf(repo: Repo, from: string, to: string, worktreesDir: string | null): AdoptMove[] {
-  const moves: AdoptMove[] = [[from, to]]
-  if (worktreesDir) {
-    moves.push([worktreesDir, worktreesDirOf(to)])
-  }
-  if (repo.path !== from) {
-    moves.push([repo.path, to])
-    if (worktreesDir) {
-      moves.push([worktreesDirOf(repo.path), worktreesDirOf(to)])
-    }
-  }
-  return moves
+const NO_RELINK = {
+  worktrees: [],
+  claudeProjectDirs: [],
+  historyDirs: 0,
+  configPaths: [],
+  terminalsOpen: [],
+  orbstackMachines: [],
+  nestedProjects: []
 }
 
 export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
@@ -90,6 +80,8 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
     journal: deps.journal,
     store: deps.store,
     getRepo: deps.getRepo,
+    allRepos: deps.allRepos,
+    orbstack: deps.orbstack ?? (() => null),
     home: deps.home,
     historyRoot: deps.historyRoot
   })
@@ -113,13 +105,6 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
     const repo = deps.getRepo(repoId)
     const blockers: PodAdoptBlocker[] = []
     if (!repo) {
-      const relinkPlan = {
-        worktrees: [],
-        claudeProjectDirs: [],
-        historyDirs: 0,
-        configPaths: [],
-        terminalsOpen: []
-      }
       const inspected: Inspected = {
         repoId,
         from: '',
@@ -129,8 +114,9 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
         linkedWorktrees: [],
         worktreesDir: null,
         claudeProjectDir: null,
-        relink: relinkPlan,
+        relink: NO_RELINK,
         openFiles: [],
+        openFilesChecked: false,
         warnings: []
       }
       return { inspected, inputs: null }
@@ -139,6 +125,9 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
     const to = await targetFor(repo)
     if (isPathInsideWorkspaceRoot(from, deps.root())) {
       blockers.push('already-inside')
+    } else if (isPathInsideRoot(deps.root(), from)) {
+      // A repo at `~` holds `~/pod`: moving it inside itself is EINVAL halfway through.
+      blockers.push('contains-root')
     }
     const siblings = (await pathExists(worktreesDirOf(from))) ? [worktreesDirOf(from)] : []
     if ((await pathExists(to)) || (siblings.length > 0 && (await pathExists(worktreesDirOf(to))))) {
@@ -176,6 +165,12 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
     if (relinkPlan.terminalsOpen.length > 0) {
       blockers.push('terminals-open')
     }
+    if (relinkPlan.orbstackMachines.length > 0) {
+      blockers.push('orbstack-machines')
+    }
+    if (relinkPlan.nestedProjects.length > 0) {
+      blockers.push('nested-project')
+    }
     const claude = claudeDir(from)
     const inspected: Inspected = {
       repoId,
@@ -188,7 +183,13 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
       claudeProjectDir: (await pathExists(claude)) ? claude : null,
       relink: relinkPlan,
       openFiles: open.files,
-      warnings: await adoptWarnings(from, to, relinkPlan.claudeProjectDirs)
+      openFilesChecked: open.checked,
+      warnings: await adoptWarnings(
+        from,
+        to,
+        relinkPlan.claudeProjectDirs,
+        relink.affectedAutomations(inputs)
+      )
     }
     return { inspected, inputs }
   }
@@ -215,10 +216,19 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
     return { ...deps.plans.issue('adopt', fingerprints, repoId), ...inspected }
   }
 
+  const refusal = (refused: readonly PodAdoptBlocker[], current: Inspected): string => {
+    const files = refused.includes('files-open')
+      ? ` (${current.openFiles.map((file) => `${file.name || file.pid}: ${file.path}`).join(', ')})`
+      : ''
+    return `Not moved: ${refused.join(', ')}${files}`
+  }
+
   /**
    * Moves the repo, leaves a symlink where it was, lets git re-point its worktrees, then carries
-   * Pod's records and Claude's folders to the new path. Processes inside keep running (their cwd
-   * moves with the folder) only when the user ticked them; a live Pod terminal always refuses.
+   * Pod's records and Claude's folders to the new path. The record is written before the first
+   * rename and after every step, so Move Back works from wherever a failure or a crash stopped it.
+   * Processes inside keep running (their cwd moves with the folder) only when the user ticked
+   * them; a live Pod terminal always refuses.
    */
   const apply = async (
     planId: string,
@@ -232,32 +242,18 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
       (blocker) => !(isSoftBlocker(blocker) && acknowledged.includes(blocker))
     )
     if (refused.length > 0 || !inputs) {
-      throw new WorkspacePlanError(`Not moved: ${refused.join(', ')}`)
+      throw new WorkspacePlanError(refusal(refused, current))
     }
     deps.plans.consume(planId)
     const { from, to } = current
-    const moves: AdoptMove[] = [[from, to]]
-    if (current.worktreesDir) {
-      moves.push([current.worktreesDir, worktreesDirOf(to)])
-    }
-    await stopWatchers(git, [from, ...current.linkedWorktrees])
-    await mkdir(dirname(to), { recursive: true })
-    for (const [old, next] of moves) {
-      await rename(old, next)
-      // Orca, shells and scripts that still name the old path keep working through it.
-      await symlink(next, old)
-    }
-    await git(
-      ['worktree', 'repair', ...current.linkedWorktrees.map((path) => remap(path, moves))],
-      to
-    )
     const relinked: PodAdoptRelinkRecord = {
       repoPath: inputs.repo.path,
       repoPathAfter: inputs.repo.path,
       worktreeIds: [],
       claudeProjectDirs: [],
       historyDirs: [],
-      configPaths: []
+      configPaths: [],
+      orbstackKeys: []
     }
     const record: PodAdoptRecord = {
       id: randomUUID(),
@@ -265,19 +261,47 @@ export function createWorkspaceAdopt(deps: WorkspaceAdoptDeps) {
       from,
       to,
       movedAt: (deps.now ?? Date.now)(),
-      worktreesDirMoved: current.worktreesDir !== null,
+      repoMoved: false,
+      worktreesDirMoved: false,
       claudeProjectDirMoved: false,
+      progress: 'moving',
       relink: relinked
     }
-    try {
-      await relink.apply(inputs, current.relink.configPaths, runtime, relinked)
-    } finally {
-      // Whatever got carried is recorded, so even a move that failed part way can be moved back.
+    const save = () => saveAdoptRecord(deps.journal, record)
+    await save()
+    await stopWatchers(git, [from, ...current.linkedWorktrees])
+    await mkdir(dirname(to), { recursive: true })
+    await rename(from, to)
+    // Orca, shells and scripts that still name the old path keep working through it.
+    await symlink(to, from)
+    record.repoMoved = true
+    await save()
+    const moves: AdoptMove[] = [[from, to]]
+    if (current.worktreesDir) {
+      await rename(current.worktreesDir, worktreesDirOf(to))
+      await symlink(worktreesDirOf(to), current.worktreesDir)
+      record.worktreesDirMoved = true
+      moves.push([current.worktreesDir, worktreesDirOf(to)])
+      await save()
+    }
+    const linked = current.linkedWorktrees.map((path) => remap(path, moves))
+    const repair = await git(['worktree', 'repair', ...linked], to)
+    if (repair.code !== 0) {
+      // The old paths still resolve through the links; stop here, so Move Back has little to undo.
+      record.repairError = repair.stderr.trim() || 'git worktree repair failed'
+      await save()
+      throw new Error(`Moved, but git could not repair the worktree links: ${record.repairError}`)
+    }
+    record.progress = 'moved'
+    await save()
+    await relink.apply(inputs, current.relink.configPaths, runtime, relinked, async () => {
       record.claudeProjectDirMoved = relinked.claudeProjectDirs.some(
         ([old]) => old === current.claudeProjectDir
       )
-      await deps.journal.update((data) => void data.adoptions.push(record))
-    }
+      await save()
+    })
+    record.progress = 'relinked'
+    await save()
     return record
   }
 

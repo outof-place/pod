@@ -46,10 +46,11 @@ export type NativeProcessInfoAddon = {
   listTerminalProcesses(tty: string): NativeTerminalProcessRow[] | null
   readProcessCwd(pid: number): string | null
   /**
-   * Files any process holds open below these folders (at most 64), one pass in C. Absent from an
-   * addon built before it; another user's processes are skipped, so the list is a lower bound.
+   * Files any process holds open below these folders (at most 64): one pass in C on a worker
+   * thread, so the caller's event loop never waits on it. Absent from an addon built before it;
+   * another user's processes are skipped, so the list is a lower bound.
    */
-  findOpenPathsUnder?(folders: readonly string[]): NativeOpenPath[]
+  findOpenPathsUnder?(folders: readonly string[]): Promise<NativeOpenPath[]>
 }
 
 export type NativeOpenPath = { pid: number; path: string }

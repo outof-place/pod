@@ -19,7 +19,7 @@ describe('workspace adopt plan checks (real git)', () => {
     listPids: () => [],
     readCwd: () => null,
     readNames: async (pids) => new Map(pids.map((pid) => [pid, `proc-${pid}`])),
-    openPathsUnder: (folders) =>
+    openPathsUnder: async (folders) =>
       open.filter((hit) => folders.some((folder) => hit.path.startsWith(`${folder}/`)))
   }
 
@@ -41,6 +41,7 @@ describe('workspace adopt plan checks (real git)', () => {
       plans: createWorkspacePlanStore(),
       processes,
       getRepo: () => row,
+      allRepos: () => [row],
       store: {
         getAllWorktreeMeta: () => ({}),
         migrateWorktreeIdentity: () => undefined,
@@ -74,13 +75,13 @@ describe('workspace adopt plan checks (real git)', () => {
   it('warns that a Compose project named after the folder gets a new name', async () => {
     writeFileSync(join(repo, 'compose.yaml'), 'services:\n  db:\n    image: postgres\n')
     const to = join(fx.root, 'pod', 'acme', 'webapp')
-    expect(await adoptWarnings(repo, to, [])).toEqual([
+    expect(await adoptWarnings(repo, to, [], [])).toEqual([
       { kind: 'compose-project', file: 'compose.yaml', from: 'app', to: 'webapp' }
     ])
     writeFileSync(join(repo, '.env'), 'COMPOSE_PROJECT_NAME=app\n')
-    expect(await adoptWarnings(repo, to, [])).toEqual([])
+    expect(await adoptWarnings(repo, to, [], [])).toEqual([])
     // Same folder name: nothing to warn about.
-    expect(await adoptWarnings(repo, join(fx.root, 'pod', 'acme', 'app'), [])).toEqual([])
+    expect(await adoptWarnings(repo, join(fx.root, 'pod', 'acme', 'app'), [], [])).toEqual([])
   })
 
   it('warns that Claude Code asks for trust again where it has a project folder', async () => {

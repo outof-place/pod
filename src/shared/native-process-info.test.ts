@@ -298,7 +298,7 @@ describeDarwin('native/proc-info-darwin against ps', () => {
     )
   )
 
-  it('finds files held open below a folder in one pass, and only below it', () => {
+  it('finds files held open below a folder in one pass off the main thread, and only below it', async () => {
     const folder = join(scratch, 'held')
     mkdirSync(folder)
     writeFileSync(join(folder, 'open.txt'), 'x')
@@ -306,12 +306,15 @@ describeDarwin('native/proc-info-darwin against ps', () => {
     const fds = [openSync(join(folder, 'open.txt'), 'r'), openSync(`${folder}-sibling.txt`, 'r')]
     try {
       const real = realpathSync(folder)
-      const mine = addon.findOpenPathsUnder!([`${real}/`]).filter((hit) => hit.pid === process.pid)
+      const pending = addon.findOpenPathsUnder!([`${real}/`])
+      expect(pending).toBeInstanceOf(Promise)
+      const mine = (await pending).filter((hit) => hit.pid === process.pid)
       expect(mine.map((hit) => hit.path)).toEqual([join(real, 'open.txt')])
-      expect(addon.findOpenPathsUnder!([join(real, 'none-such')])).toEqual([])
+      expect(await addon.findOpenPathsUnder!([join(real, 'none-such')])).toEqual([])
       expect(() => addon.findOpenPathsUnder!(Array.from({ length: 65 }, () => real))).toThrow(
         /up to 64/
       )
+      expect(() => addon.findOpenPathsUnder!([`/${'x'.repeat(1100)}`])).toThrow(/MAXPATHLEN/)
     } finally {
       fds.forEach((fd) => closeSync(fd))
     }

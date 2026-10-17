@@ -7,8 +7,8 @@ export type ProcessCwdReader = {
   readCwd(pid: number): string | null
   /** Names for the few pids that matched; empty when the kernel withholds them. */
   readNames(pids: readonly number[]): Promise<Map<number, string>>
-  /** Files held open below these folders; absent where the addon predates it. Plan reads only. */
-  openPathsUnder?(folders: readonly string[]): NativeOpenPath[]
+  /** Files held open below these folders, off the main thread; absent where the addon predates it. */
+  openPathsUnder?(folders: readonly string[]): Promise<NativeOpenPath[]>
 }
 
 export function createNativeProcessCwdReader(): ProcessCwdReader | null {
