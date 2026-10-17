@@ -1,8 +1,9 @@
 // Fork-only (Pod): who gets which device. Each class's head waiter gets a free device of its kind,
 // a booted one first (no slot needed) and its own worktree's among equals; a shut-down one boots
 // only through the gate. A call waiting for a reserved device claims it the moment it is ready.
-// When no device of the class is free and a slot is, the pool makes one (a clone of the golden
-// device, else a fresh one), up to its per-class limit.
+// When no device of the class is free and a slot nobody holds is, the pool makes one (a clone of
+// the golden device, else a fresh one) for each waiter it would fit, up to its per-class limit; a
+// waiter for a model the pool neither has nor makes gets nothing made and is told so.
 import { simDeviceIsFree, type SimDeviceState } from '../../../../shared/pod-sim/sim-lifecycle'
 import type { SimDeviceClass } from '../../../../shared/pod-sim/sim-pool-snapshot'
 import { leaseOn, notifyWaiter } from '../leases/sim-lease-records'
@@ -13,8 +14,8 @@ import {
   queueOf,
   waitingClasses
 } from '../leases/sim-lease-queue'
-import { bootGate } from './sim-pool-capacity'
-import { startOp, startProvision } from './sim-pool-devices'
+import { bootGate, provisionGate, slimGate, type SimBootGate } from './sim-pool-capacity'
+import { slimProfileOf, startOp, startPrepare, startProvision } from './sim-pool-devices'
 import {
   deviceState,
   moveDevice,
@@ -98,22 +99,43 @@ function bestFor(free: readonly SimPoolDevice[], waiter: SimPoolLease): SimPoolD
   return best
 }
 
-function serveClass(d: SimPoolDraft, deviceClass: SimDeviceClass, effects: boolean): number {
-  let noFree = 0
+/** What the pool makes for a waiter of this class, if that would fit what it asked for. */
+function madeFor(d: SimPoolDraft, deviceClass: SimDeviceClass, waiter: SimPoolLease) {
+  const kind = d.config.deviceTypes[deviceClass]
+  const model = waiter.wants?.deviceType
+  return kind && (!model || model === kind.deviceType) ? kind : undefined
+}
+
+/** Whether the pool has a device the waiter could ever take (held, down or still being made). */
+function poolHasFit(d: SimPoolDraft, waiter: SimPoolLease): boolean {
+  return d.registry.devices.some((device) => device.role === 'pool' && deviceFits(device, waiter))
+}
+
+/** Serves the class's waiters from free devices; returns those a new device would serve. */
+function serveClass(
+  d: SimPoolDraft,
+  deviceClass: SimDeviceClass,
+  effects: boolean
+): SimPoolLease[] {
+  const needy: SimPoolLease[] = []
   const free = d.registry.devices.filter((device) => isFree(d, device))
   // Only a boot started here takes a slot, so the gate is read again only after one.
   let gate = bootGate(d)
-  // A class the pool has no device of and cannot make waits for a device, whatever the cap.
-  const makeable = d.config.deviceTypes[deviceClass] !== undefined || hasClass(d, deviceClass)
   for (const waiter of queueOf(d, deviceClass)) {
     if (!canTakeDevice(waiter)) {
       continue
     }
     const pick = bestFor(free, waiter)
     if (!pick) {
-      // A new device is made only when a slot could slim and boot it now.
-      noFree += gate === 'open' ? 1 : 0
-      d.unserved.set(waiter.leaseId, gate === 'open' || !makeable ? 'device' : gate)
+      const makeable = madeFor(d, deviceClass, waiter) !== undefined
+      if (!makeable && !poolHasFit(d, waiter)) {
+        d.unserved.set(waiter.leaseId, 'unmakeable')
+        continue
+      }
+      d.unserved.set(waiter.leaseId, gate === 'open' ? 'device' : gate)
+      if (makeable && gate === 'open') {
+        needy.push(waiter)
+      }
     } else if (deviceState(pick) === 'ready') {
       reserve(d, waiter, pick)
       free.splice(free.indexOf(pick), 1)
@@ -128,13 +150,7 @@ function serveClass(d: SimPoolDraft, deviceClass: SimDeviceClass, effects: boole
       d.unserved.set(waiter.leaseId, gate)
     }
   }
-  return noFree
-}
-
-function hasClass(d: SimPoolDraft, deviceClass: SimDeviceClass): boolean {
-  return d.registry.devices.some(
-    (device) => device.role === 'pool' && deviceClassOf(device.deviceType) === deviceClass
-  )
+  return needy
 }
 
 function nextName(d: SimPoolDraft): string {
@@ -146,18 +162,7 @@ function nextName(d: SimPoolDraft): string {
   return `${d.config.namePrefix}Pod-${n}`
 }
 
-function provision(d: SimPoolDraft, deviceClass: SimDeviceClass, noFree: number): void {
-  const kind = d.config.deviceTypes[deviceClass]
-  const ofClass = d.registry.devices.filter(
-    (device) => device.role === 'pool' && deviceClassOf(device.deviceType) === deviceClass
-  )
-  const making = ofClass.filter((device) => {
-    const state = deviceState(device)
-    return state === 'cloning' || state === 'preparing' || state === 'absent'
-  }).length
-  if (!kind || noFree <= making || ofClass.length >= d.config.maxDevicesPerClass) {
-    return
-  }
+function makeDevice(d: SimPoolDraft, kind: { deviceType: string; runtime: string }): void {
   const golden = d.registry.devices.find(
     (device) =>
       device.role === 'golden' &&
@@ -178,18 +183,54 @@ function provision(d: SimPoolDraft, deviceClass: SimDeviceClass, noFree: number)
   }
   d.registry.devices.push(device)
   startProvision(d, device, golden)
-  for (const waiter of queueOf(d, deviceClass)) {
-    if (d.unserved.get(waiter.leaseId) === 'device') {
-      d.unserved.set(waiter.leaseId, 'creating')
-    }
-  }
 }
 
-/** Slim a cloned or created device once its slot fits (it already counts toward the cap). */
+/**
+ * One new device per waiter no free device serves, counting those already being made, while a
+ * slot nobody holds is open (a clone in flight holds the one it will need) and the class is under
+ * its limit. Waiters past what is being made wait for what stopped it.
+ */
+function provision(d: SimPoolDraft, deviceClass: SimDeviceClass, needy: SimPoolLease[]): void {
+  const kind = d.config.deviceTypes[deviceClass]
+  if (!kind || needy.length === 0) {
+    return
+  }
+  const ofClass = d.registry.devices.filter(
+    (device) => device.role === 'pool' && deviceClassOf(device.deviceType) === deviceClass
+  )
+  let making = ofClass.filter((device) => {
+    const state = deviceState(device)
+    return state === 'cloning' || state === 'preparing' || state === 'absent'
+  }).length
+  let count = ofClass.length
+  let gate: SimBootGate = provisionGate(d)
+  while (needy.length > making && count < d.config.maxDevicesPerClass && gate === 'open') {
+    makeDevice(d, kind)
+    making += 1
+    count += 1
+    gate = provisionGate(d)
+  }
+  needy.forEach((waiter, index) => {
+    const stopped = gate === 'open' ? 'device' : gate
+    d.unserved.set(waiter.leaseId, index < making ? 'creating' : stopped)
+  })
+}
+
+/** The waiter a new device is likely for: the first of its class it fits. */
+function likelyTaker(d: SimPoolDraft, device: SimPoolDevice): SimPoolLease | undefined {
+  if (device.role !== 'pool') {
+    return undefined
+  }
+  return queueOf(d, deviceClassOf(device.deviceType)).find(
+    (waiter) => canTakeDevice(waiter) && deviceFits(device, waiter)
+  )
+}
+
+/** Slim a cloned or created device once what is booted leaves it room (its slot is held). */
 function prepareDevices(d: SimPoolDraft): void {
   for (const device of d.registry.devices) {
-    if (!device.op && deviceState(device) === 'preparing' && bootGate(d, 0) === 'open') {
-      startOp(d, device, 'prepare')
+    if (!device.op && deviceState(device) === 'preparing' && slimGate(d) === 'open') {
+      startPrepare(d, device, slimProfileOf(likelyTaker(d, device)))
     }
   }
 }
@@ -200,16 +241,16 @@ export function allocate(d: SimPoolDraft): void {
   if (effects) {
     bootHeldDevices(d)
   }
-  const noFree = new Map<SimDeviceClass, number>()
+  const needy = new Map<SimDeviceClass, SimPoolLease[]>()
   for (const deviceClass of waitingClasses(d)) {
-    noFree.set(deviceClass, serveClass(d, deviceClass, effects))
+    needy.set(deviceClass, serveClass(d, deviceClass, effects))
   }
   claimOpenCalls(d)
   if (!effects) {
     return
   }
   prepareDevices(d)
-  for (const [deviceClass, count] of noFree) {
-    provision(d, deviceClass, count)
+  for (const [deviceClass, waiters] of needy) {
+    provision(d, deviceClass, waiters)
   }
 }

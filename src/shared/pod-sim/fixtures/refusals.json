@@ -97,6 +97,18 @@
   },
   {
     "input": {
+      "code": "lease_expired",
+      "reason": "worktreeRemoved"
+    },
+    "refusal": {
+      "code": "lease_expired",
+      "message": "Your simulator lease ended: its worktree was removed. Run: podx sim lease",
+      "next": "podx sim lease",
+      "waitable": false
+    }
+  },
+  {
+    "input": {
       "code": "held_by_human"
     },
     "refusal": {

@@ -1,10 +1,12 @@
 // Test support: in-memory adapters behind the pool's ports, shared by two runtimes on one "Mac".
 // The store's read and swap yield to the event loop, so two runtimes stepping at once interleave
 // as they would on one flocked file.
+import type { SimHolder } from '../../../../shared/pod-sim/sim-holder'
 import { simDeviceCountsTowardCap } from '../../../../shared/pod-sim/sim-lifecycle'
 import type { SimRegistryFile } from '../../../../shared/pod-sim/sim-registry'
+import type { SimHolderFacts } from '../leases/sim-holder-liveness'
 import type { SimPoolPorts } from './sim-pool-coordinator'
-import type { SimRegistryRead, SimRegistrySwap, SimRuntimeRef } from './sim-pool-ports'
+import type { SimRegistryStoreRead, SimRegistrySwap, SimProcessId } from './sim-pool-ports'
 import { T0, udid } from './sim-pool.test-support'
 
 class FakeStore {
@@ -17,7 +19,7 @@ class FakeStore {
     private readonly calls: string[]
   ) {}
 
-  async read(): Promise<SimRegistryRead> {
+  async read(): Promise<SimRegistryStoreRead> {
     await Promise.resolve()
     this.calls.push('read')
     if (this.damaged) {
@@ -52,11 +54,17 @@ export type FakePorts = {
   store: FakeStore
   calls: string[]
   notified: Map<number, string[]>
-  forRuntime(self: SimRuntimeRef): SimPoolPorts
+  forRuntime(self: SimProcessId): SimPoolPorts
   reset(): void
 }
 
-export function fakePorts(registry: SimRegistryFile): FakePorts {
+/** What a runtime sees of a holder and of another runtime; every holder lives by default. */
+export type FakeWorld = Readonly<{
+  holderFacts?: (self: SimProcessId, holder: SimHolder, resolvedHere: boolean) => SimHolderFacts
+  runtime?: (ref: SimProcessId) => 'live' | 'exited'
+}>
+
+export function fakePorts(registry: SimRegistryFile, world: FakeWorld = {}): FakePorts {
   const calls: string[] = []
   const store = new FakeStore(registry, calls)
   const notified = new Map<number, string[]>()
@@ -108,17 +116,19 @@ export function fakePorts(registry: SimRegistryFile): FakePorts {
           source: 'claudeAcc',
           cap: 2,
           outsideBooted: 0,
+          agentsInUse: 0,
           brake: 'calm',
           measuredAt: T0 + tick
         })
       },
       liveness: {
-        holderFacts: async (holder) => ({
-          process: { found: true, startedAt: holder.startedAt ?? 0 },
-          session: 'present',
-          terminal: 'open'
-        }),
-        runtime: async () => 'live',
+        holderFacts: async (holder, resolvedHere) =>
+          world.holderFacts?.(self, holder, resolvedHere) ?? {
+            process: { found: true, startedAt: holder.startedAt ?? 0 },
+            session: 'present',
+            terminal: 'open'
+          },
+        runtime: async (ref) => world.runtime?.(ref) ?? 'live',
         externalUse: async () => []
       },
       leaseFiles: {
@@ -137,6 +147,9 @@ export function fakePorts(registry: SimRegistryFile): FakePorts {
       apps: {
         reset: async (id) => {
           calls.push(`resetApp ${id}`)
+        },
+        reinstall: async (id) => {
+          calls.push(`reinstallApp ${id}`)
         }
       }
     })

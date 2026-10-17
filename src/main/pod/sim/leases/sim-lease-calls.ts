@@ -2,7 +2,7 @@
 // get one lease, one id, one place) and joins a new lease at the back; a call is activity and
 // makes the runtime it reached the lease's server. Each handler edits the draft and returns a
 // function that answers once the step has settled (a free device may be claimed meanwhile).
-import type { SimCaller, SimLeaseRequest, SimPoolAnswer } from '../pool/sim-pool-commands'
+import type { SimLeaseCaller, SimLeaseRequest, SimPoolAnswer } from '../pool/sim-pool-commands'
 import { startReset } from '../pool/sim-pool-devices'
 import {
   deviceState,
@@ -16,8 +16,10 @@ import { endLease, liveLease, tombstone, touchActivity } from './sim-lease-recor
 
 export type SimAnswerLater = () => SimPoolAnswer
 
+/** The holder's call reached this runtime: it serves the lease and resolved the holder. */
 function serveHere(d: SimPoolDraft, lease: SimPoolLease): void {
   lease.servedBy = { ...d.self }
+  lease.resolvedBy = { ...d.self }
   touchActivity(d, lease)
   d.calling = lease.leaseId
   d.openCalls.add(lease.leaseId)
@@ -58,7 +60,7 @@ export function leaseCall(d: SimPoolDraft, request: SimLeaseRequest): SimAnswerL
 }
 
 /** `wait --mine`: never starts a lease. */
-export function waitMineCall(d: SimPoolDraft, caller: SimCaller): SimAnswerLater {
+export function waitMineCall(d: SimPoolDraft, caller: SimLeaseCaller): SimAnswerLater {
   const lease = liveLease(d, caller.key)
   if (!lease) {
     return () => ({
@@ -71,7 +73,7 @@ export function waitMineCall(d: SimPoolDraft, caller: SimCaller): SimAnswerLater
 }
 
 /** Never refuses: a lease already gone answers `released: false` and why it ended. */
-export function releaseCall(d: SimPoolDraft, caller: SimCaller): SimAnswerLater {
+export function releaseCall(d: SimPoolDraft, caller: SimLeaseCaller): SimAnswerLater {
   const lease = liveLease(d, caller.key)
   if (lease) {
     endLease(d, lease, 'release', 'released')
@@ -96,7 +98,7 @@ export function releaseCall(d: SimPoolDraft, caller: SimCaller): SimAnswerLater 
  */
 export function verbCall(
   d: SimPoolDraft,
-  caller: SimCaller,
+  caller: SimLeaseCaller,
   verb: string,
   access: 'read' | 'input'
 ): SimAnswerLater {
@@ -139,7 +141,7 @@ function verbAnswer(d: SimPoolDraft, lease: SimPoolLease, access: 'read' | 'inpu
  */
 export function resetCall(
   d: SimPoolDraft,
-  caller: SimCaller,
+  caller: SimLeaseCaller,
   scope: 'app' | 'device'
 ): SimAnswerLater {
   const lease = liveLease(d, caller.key)
@@ -159,7 +161,7 @@ export function resetCall(
       if (deviceState(device) === 'ready') {
         moveDevice(d, device, 'lease')
       }
-      startReset(d, device, lease.leaseId)
+      startReset(d, device, lease)
     }
   }
   return () => ({ kind: 'verb', answer })

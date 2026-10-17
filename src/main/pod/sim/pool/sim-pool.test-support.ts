@@ -14,7 +14,7 @@ import {
   SimRegistryLease
 } from '../../../../shared/pod-sim/sim-registry'
 import type {
-  SimCaller,
+  SimLeaseCaller,
   SimLeaseAnswer,
   SimPoolAnswer,
   SimLeaseRequest,
@@ -33,11 +33,11 @@ import {
   type SimPoolRegistry,
   type SimPoolTrace
 } from './sim-pool-draft'
-import type { SimCapacityReading, SimObservedDevice, SimRuntimeRef } from './sim-pool-ports'
+import type { SimCapacityReading, SimObservedDevice, SimProcessId } from './sim-pool-ports'
 import { simPoolStep, type SimPoolStepResult } from './sim-pool-step'
 
-export const SELF: SimRuntimeRef = { pid: 70110, startedAt: 1760599900 }
-export const PEER: SimRuntimeRef = { pid: 70220, startedAt: 1760599950 }
+export const SELF: SimProcessId = { pid: 70110, startedAt: 1760599900 }
+export const PEER: SimProcessId = { pid: 70220, startedAt: 1760599950 }
 export const T0 = 1_760_600_000_000
 export const ROOT = '/Users/dev/portivo-wt/maps'
 export const IPHONE = 'iPhone 16 Pro'
@@ -58,7 +58,7 @@ export function agent(pid: number, name?: string): SimHolder {
   }
 }
 
-export function callerOf(holder: SimHolder, worktreeRoot = ROOT): SimCaller {
+export function callerOf(holder: SimHolder, worktreeRoot = ROOT): SimLeaseCaller {
   return { key: simLeaseKey(holder.id, worktreeRoot), holder, worktreeRoot }
 }
 
@@ -131,6 +131,7 @@ export class PoolWorld {
       source: 'claudeAcc',
       cap: options.cap ?? 2,
       outsideBooted: options.outside ?? 0,
+      agentsInUse: 'unknown',
       brake: options.brake ?? 'calm'
     }
   }
@@ -176,9 +177,18 @@ export class PoolWorld {
     return lease
   }
 
+  /**
+   * Time passes with this runtime awake and polling: the polls in between saw nothing a test
+   * cares about, so the core's last tick moves along. A sleep (no step at all) moves the clocks
+   * alone (sim-pool-clock.test.ts).
+   */
   advance(ms: number): void {
     this.mono += ms
     this.wall += ms
+    const last = this.memory.lastTick
+    if (last) {
+      this.memory.lastTick = { mono: last.mono + ms, wall: last.wall + ms }
+    }
   }
 
   step(command: SimPoolCommand): SimPoolStepResult {

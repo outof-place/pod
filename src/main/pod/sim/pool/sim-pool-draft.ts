@@ -17,9 +17,11 @@ import type { SimPoolConfig } from './sim-pool-config'
 import type {
   SimClockReading,
   SimIdSource,
+  SimLeaseFile,
   SimOpRef,
   SimPoolObservation,
-  SimRuntimeRef
+  SimProcessId,
+  SimSlimProfile
 } from './sim-pool-ports'
 import {
   draftAnchors,
@@ -36,6 +38,8 @@ export type SimPoolTombstone = NonNullable<SimPoolRegistry['tombstones']>[number
 /** This runtime's own state, never written to the registry: it dies with the process. */
 export type SimPoolMemory = {
   lastTick: SimClockReading | null
+  // Whether the last step left the pool polling (simPoolPolling): a long gap since is unwatched.
+  polling: boolean
   // Monotonic anchors of every window this runtime judges (sim-pool-windows.ts).
   windows: SimWindowAnchors
   observation: SimPoolObservation | null
@@ -48,6 +52,7 @@ export type SimPoolMemory = {
 
 export const EMPTY_SIM_POOL_MEMORY: SimPoolMemory = {
   lastTick: null,
+  polling: false,
   windows: noAnchors(),
   observation: null,
   brakeHold: null,
@@ -60,17 +65,18 @@ type OpEffect<Kind extends SimOpRef['kind'], Extra = object> = Readonly<
 >
 
 export type SimPoolEffect =
-  | Readonly<{ kind: 'writeLeaseFile'; udid: string; owner: SimRuntimeRef; holder: string }>
+  | Readonly<{ kind: 'writeLeaseFile'; udid: string; file: SimLeaseFile }>
   | Readonly<{ kind: 'removeLeaseFile'; udid: string }>
   | OpEffect<'clone', { source: string; name: string }>
   | OpEffect<'create', { name: string; deviceType: string; runtime: string }>
-  | OpEffect<'prepare'>
+  | OpEffect<'prepare', { profile: SimSlimProfile }>
   | OpEffect<'boot'>
   | OpEffect<'shutDown'>
   | OpEffect<'release'>
-  | OpEffect<'reset', { leaseId: string }>
+  | OpEffect<'reset', { leaseId: string; profile: SimSlimProfile }>
   | OpEffect<'delete'>
   | Readonly<{ kind: 'resetApp'; udid: string; leaseId: string }>
+  | Readonly<{ kind: 'reinstallApp'; udid: string; leaseId: string }>
   | Readonly<{ kind: 'notifyWaiter'; leaseId: string }>
 
 export type SimPoolTrace = Readonly<{
@@ -83,7 +89,7 @@ export type SimPoolTrace = Readonly<{
 
 export type SimPoolInputs = Readonly<{
   now: SimClockReading
-  self: SimRuntimeRef
+  self: SimProcessId
   config: SimPoolConfig
   // Waiting calls (`lease --wait`, `wait --mine`) this runtime holds open, by lease id.
   openCalls: ReadonlySet<string>
@@ -96,12 +102,13 @@ export type SimPoolDraft = {
   effects: SimPoolEffect[]
   trace: SimPoolTrace[]
   now: SimClockReading
-  self: SimRuntimeRef
+  self: SimProcessId
   config: SimPoolConfig
   openCalls: Set<string>
   ids: SimIdSource
-  // Per class, why a waiter left without a device in this step (sim-pool-allocate.ts).
-  unserved: Map<string, 'slot' | 'brake' | 'device' | 'creating'>
+  // Per waiter, why it left without a device in this step (sim-pool-allocate.ts): `creating`
+  // when one is being made for it, `unmakeable` when the pool neither has nor makes its model.
+  unserved: Map<string, 'slot' | 'brake' | 'device' | 'creating' | 'unmakeable'>
   // Devices whose lease this step ended for the brake: shut down unless a waiter takes them.
   brakeEnded: Set<string>
   // The lease of the call being answered now: it hears its answer, not a notification.
@@ -234,10 +241,10 @@ export function deviceState(device: SimPoolDevice): SimDeviceState {
   return device.state ?? 'shutdown'
 }
 
-export function runtimeKey(ref: SimRuntimeRef): string {
+export function runtimeKey(ref: SimProcessId): string {
   return `${ref.pid}:${ref.startedAt}`
 }
 
-export function sameRuntime(a: SimRuntimeRef, b: SimRuntimeRef): boolean {
+export function sameRuntime(a: SimProcessId, b: SimProcessId): boolean {
   return a.pid === b.pid && a.startedAt === b.startedAt
 }

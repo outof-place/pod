@@ -3,6 +3,11 @@
 // never adopted, and devices booted outside Pod (claude-acc's reading) must stay within the cap. A
 // reading older than 30 s, or one that does not know a number, opens no slot: claude-acc going
 // quiet is not calm. Booted free devices are still handed out; only boots wait.
+//
+// A device waiting to be slimmed (`preparing`, no prepare running) holds its slot without being
+// booted, and a clone in flight will hold one: the pool makes a device only into a slot nobody
+// holds, and a waiting slim boots as soon as what is really booted leaves room for it, so devices
+// made before the brake rose (or an outside boot took a slot) are slimmed once it falls.
 import { simDeviceCountsTowardCap } from '../../../../shared/pod-sim/sim-lifecycle'
 import type { SimBrake } from '../../../../shared/pod-sim/sim-pool-snapshot'
 import {
@@ -10,7 +15,7 @@ import {
   SIM_CAPACITY_FRESH_MS,
   SIM_CAPACITY_FUTURE_MS
 } from './sim-pool-config'
-import { deviceState, type SimPoolDraft } from './sim-pool-draft'
+import { deviceState, type SimPoolDevice, type SimPoolDraft } from './sim-pool-draft'
 import type { SimCapacityReading } from './sim-pool-ports'
 import { wakeAt } from './sim-pool-windows'
 
@@ -68,8 +73,35 @@ function listed(d: SimPoolDraft, udid: string): boolean {
   return false
 }
 
-/** May `slots` more devices boot? A device already counted (preparing) asks for 0. */
-export function bootGate(d: SimPoolDraft, slots = 1): SimBootGate {
+function countDevices(d: SimPoolDraft, which: (device: SimPoolDevice) => boolean): number {
+  let count = 0
+  for (const device of d.registry.devices) {
+    count += which(device) ? 1 : 0
+  }
+  return count
+}
+
+function awaitingSlim(device: SimPoolDevice): boolean {
+  return deviceState(device) === 'preparing' && device.op?.kind !== 'prepare'
+}
+
+/** May one more device boot? */
+export function bootGate(d: SimPoolDraft): SimBootGate {
+  return gate(d, 1)
+}
+
+/** May the pool make one more device? Clones in flight hold the slots they will need. */
+export function provisionGate(d: SimPoolDraft): SimBootGate {
+  return gate(d, 1 + countDevices(d, (device) => deviceState(device) === 'cloning'))
+}
+
+/** May a device waiting to be slimmed boot for it? Only booted devices must leave it room. */
+export function slimGate(d: SimPoolDraft): SimBootGate {
+  return gate(d, 1 - countDevices(d, awaitingSlim))
+}
+
+/** Whether `slots` more than usedSlots fit under the cap (fewer when some counted are not booted). */
+function gate(d: SimPoolDraft, slots: number): SimBootGate {
   const reading = freshReading(d)
   if (
     !reading ||

@@ -11,7 +11,7 @@ import { simPoolStep, type SimPoolState } from './sim-pool-step'
 import { agent, IPHONE, ROOT, SELF, T0, udid } from './sim-pool.test-support'
 
 const STEP_BUDGET_MS = 1
-// Measured 48 to 81 KB on 2026-10-17 (Node 26, M-series); the old JSON-clone step took ~600 KB.
+// Measured 58 to 92 KB on 2026-10-17 (Node 26, M-series); the old JSON-clone step took ~600 KB.
 const ALLOCATION_BUDGET_BYTES = 128 * 1024
 
 function busyDay(): SimPoolRegistry {
@@ -85,6 +85,7 @@ function steadyState(): SimPoolState {
         source: 'claudeAcc',
         cap: 8,
         outsideBooted: 0,
+        agentsInUse: 'unknown',
         brake: 'calm',
         measuredAt: T0 - 1_000
       },
@@ -101,13 +102,44 @@ function steadyState(): SimPoolState {
   return { registry: first.registry, memory: first.memory }
 }
 
-/** Bytes allocated so far: V8's exact counter where Node has it (26), else live heap growth. */
-function allocatedSoFar(): number {
-  const stats: object = v8.getHeapStatistics()
-  if ('total_allocated_bytes' in stats && typeof stats.total_allocated_bytes === 'number') {
-    return stats.total_allocated_bytes
+/** V8's own count of every byte allocated so far, where the runtime has it (Node 26). */
+function allocationCounter(): (() => number) | null {
+  const read = (): unknown => {
+    const stats: object = v8.getHeapStatistics()
+    return 'total_allocated_bytes' in stats ? stats.total_allocated_bytes : undefined
   }
-  return process.memoryUsage().heapUsed
+  return typeof read() === 'number' ? () => Number(read()) : null
+}
+
+/**
+ * Bytes one step allocates, over 50 steps. Node 26 counts them; Node 24 (CI) and Electron 45 do
+ * not, so there it is the heap's growth plus what every collection in between freed
+ * (v8.GCProfiler reports the heap before and after each), which read 10 to 20% under Node 26's
+ * count. Reading the heap right after a forced GC (--expose-gc) is no substitute: a full GC drops
+ * compiled code and feedback, so the next step allocates them again and read twice its size.
+ */
+function bytesPerStep(state: SimPoolState, command: SimPoolCommand): number {
+  const runs = 50
+  const counter = allocationCounter()
+  if (counter) {
+    const before = counter()
+    for (let run = 0; run < runs; run += 1) {
+      simPoolStep(state, command, inputs)
+    }
+    return (counter() - before) / runs
+  }
+  const profiler = new v8.GCProfiler()
+  profiler.start()
+  const before = v8.getHeapStatistics().used_heap_size
+  for (let run = 0; run < runs; run += 1) {
+    simPoolStep(state, command, inputs)
+  }
+  const after = v8.getHeapStatistics().used_heap_size
+  let freed = 0
+  for (const gc of profiler.stop().statistics) {
+    freed += gc.beforeGC.heapStatistics.usedHeapSize - gc.afterGC.heapStatistics.usedHeapSize
+  }
+  return (after - before + freed) / runs
 }
 
 function measure(
@@ -124,12 +156,7 @@ function measure(
     times.push(performance.now() - start)
   }
   times.sort((a, b) => a - b)
-  const before = allocatedSoFar()
-  const kept: unknown[] = []
-  for (let run = 0; run < 50; run += 1) {
-    kept.push(simPoolStep(state, command, inputs))
-  }
-  return { p50: times[250], p95: times[475], bytes: (allocatedSoFar() - before) / kept.length }
+  return { p50: times[250], p95: times[475], bytes: bytesPerStep(state, command) }
 }
 
 describe('one decision step over 35 holders and 10 devices', () => {

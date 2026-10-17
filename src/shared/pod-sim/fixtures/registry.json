@@ -221,6 +221,57 @@
           }
         ]
       }
+    },
+    {
+      "name": "a lease adopted after its runtime crashed: served by the adopter, resolved by the runtime that sees its holder",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1760600400000,
+        "devices": [
+          {
+            "udid": "8F1C2A3B-4D5E-6F70-8192-A3B4C5D6E7F8",
+            "name": "Portivo-Pod-Golden-iPhone-16-Pro",
+            "role": "golden",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760500000000
+          },
+          {
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "name": "Portivo-Pod-1",
+            "role": "pool",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760590000000,
+            "clonedFrom": "8F1C2A3B-4D5E-6F70-8192-A3B4C5D6E7F8",
+            "affinity": "/Users/dev/portivo-wt/maps"
+          }
+        ],
+        "leases": [
+          {
+            "leaseId": "sl_4f2a9c",
+            "state": "active",
+            "worktreeRoot": "/Users/dev/portivo-wt/maps",
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "since": 1760600200000,
+            "lastActivity": 1760600395000,
+            "key": "terminal:term_7f3a@/Users/dev/portivo-wt/maps",
+            "holder": {
+              "kind": "terminal",
+              "id": "terminal:term_7f3a",
+              "terminalHandle": "term_7f3a"
+            },
+            "servedBy": {
+              "pid": 70220,
+              "startedAt": 1760599950
+            },
+            "resolvedBy": {
+              "pid": 70110,
+              "startedAt": 1760599900
+            }
+          }
+        ]
+      }
     }
   ],
   "invalid": [
@@ -390,6 +441,60 @@
           }
         ]
       }
+    },
+    {
+      "name": "a lease whose holder's resolver is no process",
+      "registry": {
+        "version": 1,
+        "updatedAt": 1760600400000,
+        "devices": [
+          {
+            "udid": "8F1C2A3B-4D5E-6F70-8192-A3B4C5D6E7F8",
+            "name": "Portivo-Pod-Golden-iPhone-16-Pro",
+            "role": "golden",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760500000000
+          },
+          {
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "name": "Portivo-Pod-1",
+            "role": "pool",
+            "deviceType": "iPhone 16 Pro",
+            "runtime": "iOS 26.5",
+            "createdAt": 1760590000000,
+            "clonedFrom": "8F1C2A3B-4D5E-6F70-8192-A3B4C5D6E7F8",
+            "affinity": "/Users/dev/portivo-wt/maps"
+          }
+        ],
+        "leases": [
+          {
+            "leaseId": "sl_4f2a9c",
+            "key": "agent:claude:41233:1760600000@/Users/dev/portivo-wt/maps",
+            "state": "active",
+            "holder": {
+              "kind": "agent",
+              "id": "agent:claude:41233:1760600000",
+              "agent": "claude",
+              "pid": 41233,
+              "startedAt": 1760600000
+            },
+            "worktreeRoot": "/Users/dev/portivo-wt/maps",
+            "udid": "1A2B3C4D-5E6F-7081-92A3-B4C5D6E7F809",
+            "since": 1760600200000,
+            "lastActivity": 1760600395000,
+            "servedBy": {
+              "pid": 70110,
+              "startedAt": 1760599900
+            },
+            "resolvedBy": {
+              "pid": 0,
+              "startedAt": 1760599900
+            }
+          }
+        ]
+      },
+      "path": "leases.0.resolvedBy.pid"
     }
   ]
 }

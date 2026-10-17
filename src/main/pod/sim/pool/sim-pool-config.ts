@@ -68,6 +68,14 @@ export const SIM_DEVICE_MAX_FAILURES = 3
 /** Wall and monotonic clocks disagreeing by more than this between ticks is a clock step. */
 export const SIM_CLOCK_STEP_MS = 5_000
 
+/**
+ * While the pool polls (every 5 s, sim-pool-coordinator.ts) a step comes at least this often,
+ * unless the Mac slept or the process was stopped: Node's monotonic clock runs on through sleep,
+ * so a longer gap is time no rule watched. Twelve poll intervals: above a slow poll (a simctl list
+ * timing out, holder lookups on a loaded Mac), below every window but the 60 s reservation.
+ */
+export const SIM_UNOBSERVED_GAP_MS = 60_000
+
 /** A holder's calls refresh `lastActivity` on disk at most this often; memory has every call. */
 export const SIM_ACTIVITY_WRITE_MS = 15_000
 

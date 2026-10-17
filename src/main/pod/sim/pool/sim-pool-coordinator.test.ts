@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { simLeaseKey } from '../../../../shared/pod-sim/sim-holder'
+import { simLeaseKey, type SimHolder } from '../../../../shared/pod-sim/sim-holder'
 import type { SimRegistryFile } from '../../../../shared/pod-sim/sim-registry'
 import { SimPoolCoordinator } from './sim-pool-coordinator'
 import { fakePorts, type FakePorts } from './sim-pool-coordinator.test-support'
@@ -71,6 +71,21 @@ describe('two runtimes sharing one registry', () => {
     expect(ports.store.swaps).toEqual(['ok', 'conflict', 'ok'])
   })
 
+  it('gives the device to the same waiter when the other runtime writes first', async () => {
+    const { mine, peer, ports } = twoRuntimes()
+    peer.openCalls.add('sl_w001')
+    const [b, a] = await Promise.all([peer.poll(), mine.poll()])
+    expect(ports.store.swaps.slice(0, 2)).toEqual(['ok', 'conflict'])
+    const named = ports.store.current().leases.filter((lease) => lease.udid === udid(1))
+    expect(named).toHaveLength(1)
+    expect(named[0]).toMatchObject({ leaseId: 'sl_w001', state: 'active', servedBy: PEER })
+    // The loser recomputed on the winner's file: it starts no device work and wakes nobody.
+    expect(a.ok && a.effects.filter((effect) => effect.kind !== 'writeLeaseFile')).toEqual([])
+    expect(b.ok && b.effects.filter((effect) => effect.kind === 'notifyWaiter')).toEqual([
+      { kind: 'notifyWaiter', leaseId: 'sl_w001' }
+    ])
+  })
+
   it('discards the loser effects and answers the waiter the other runtime holds', async () => {
     const { mine, peer, ports } = twoRuntimes()
     peer.openCalls.add('sl_w001')
@@ -138,5 +153,82 @@ describe('effects reach the adapters', () => {
     ])
     expect(ports.store.current().devices[0]).toMatchObject({ state: 'ready' })
     expect(ports.store.current().devices[0].op).toBeUndefined()
+  })
+})
+
+describe('a runtime that adopts the leases of one that crashed', () => {
+  const CRASHED = { pid: 60001, startedAt: 1760500000 }
+  const PANE = { kind: 'terminal' as const, id: 'terminal:term_7f3a', terminalHandle: 'term_7f3a' }
+  const SESSION = {
+    kind: 'agentSession' as const,
+    id: 'session:5d1c9a2e',
+    sessionId: '5d1c9a2e',
+    agent: 'claude'
+  }
+
+  function active(holder: SimHolder, leaseId: string, device: number) {
+    return {
+      leaseId,
+      key: simLeaseKey(holder.id, ROOT),
+      state: 'active' as const,
+      holder,
+      worktreeRoot: ROOT,
+      since: T0 - 600_000,
+      lastActivity: T0 - 60_000,
+      udid: udid(device),
+      wants: { deviceClass: 'iphone' as const },
+      servedBy: CRASHED
+    }
+  }
+
+  function crashedRegistry(): SimRegistryFile {
+    const device = registryWithOneFreeDevice().devices[0]
+    return {
+      version: 1,
+      updatedAt: T0 - 60_000,
+      devices: [1, 2].map((n) => ({
+        ...device,
+        udid: udid(n),
+        name: `Portivo-Pod-${n}`,
+        state: 'leased' as const
+      })),
+      leases: [active(PANE, 'sl_p001', 1), active(SESSION, 'sl_s001', 2)]
+    }
+  }
+
+  // This runtime's own panes and sessions: none of the crashed runtime's.
+  const probe = {
+    holderFacts: (_self: unknown, _holder: SimHolder, resolvedHere: boolean) =>
+      resolvedHere
+        ? ({ process: { found: false }, session: 'ended', terminal: 'closed' } as const)
+        : ({ process: 'unknown', session: 'notServedHere', terminal: 'notServedHere' } as const),
+    runtime: (ref: { pid: number }) => (ref.pid === CRASHED.pid ? 'exited' : 'live')
+  } as const
+
+  it('keeps them through its liveness polls: it cannot see the panes and sessions they live in', async () => {
+    const ports = fakePorts(crashedRegistry(), probe)
+    const mine = new SimPoolCoordinator(ports.forRuntime(SELF), CONFIG, SELF)
+    for (let poll = 0; poll < 3; poll += 1) {
+      expect(await mine.poll()).toMatchObject({ ok: true })
+    }
+    expect(ports.store.current().leases).toMatchObject([
+      { leaseId: 'sl_p001', state: 'active', servedBy: SELF },
+      { leaseId: 'sl_s001', state: 'active', servedBy: SELF }
+    ])
+  })
+
+  it('still releases a holder it resolved itself once its pane closes', async () => {
+    const ports = fakePorts({ ...crashedRegistry(), leases: [] }, probe)
+    const mine = new SimPoolCoordinator(ports.forRuntime(SELF), CONFIG, SELF)
+    await mine.poll()
+    await mine.run({
+      kind: 'lease',
+      request: { key: simLeaseKey(PANE.id, ROOT), holder: PANE, worktreeRoot: ROOT }
+    })
+    await mine.poll()
+    expect(ports.store.current().leases).toEqual([])
+    expect(ports.store.current().tombstones).toMatchObject([
+      { key: simLeaseKey(PANE.id, ROOT), ended: { reason: 'holderExited' } }
+    ])
   })
 })

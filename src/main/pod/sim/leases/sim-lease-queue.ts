@@ -86,7 +86,7 @@ export function updateQueue(d: SimPoolDraft): void {
       const unserved = d.unserved.get(lease.leaseId)
       const waitingFor: SimWaitReason = queue.buildId
         ? 'build'
-        : unserved === 'creating'
+        : unserved === 'creating' || unserved === 'unmakeable'
           ? 'device'
           : (unserved ?? queue.waitingFor)
       if (queue.position !== index + 1 || queue.waitingFor !== waitingFor || !lease.queue) {

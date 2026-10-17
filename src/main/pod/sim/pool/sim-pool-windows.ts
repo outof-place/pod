@@ -4,6 +4,8 @@
 // time in the registry: time no runtime observed (a sleep, a crash, a clock step) restarts a
 // window instead of expiring it.
 import { SIM_RESERVATION_CLAIM_S } from '../../../../shared/pod-sim/sim-call-limits'
+import { simDeviceCountsTowardCap } from '../../../../shared/pod-sim/sim-lifecycle'
+import type { SimRegistryFile } from '../../../../shared/pod-sim/sim-registry'
 import {
   dropAnchor,
   foldAnchors,
@@ -12,7 +14,7 @@ import {
   setAnchor,
   SIM_ANCHOR_LAYER_MAX
 } from './sim-pool-anchors'
-import { SIM_CLOCK_STEP_MS } from './sim-pool-config'
+import { SIM_CLOCK_STEP_MS, SIM_UNOBSERVED_GAP_MS } from './sim-pool-config'
 import type { SimPoolDraft } from './sim-pool-draft'
 
 /**
@@ -69,18 +71,30 @@ export function forgetWindows(d: SimPoolDraft, id: string): void {
   })
 }
 
+/** Whether the pool polls for this registry: something held, booted or in flight. */
+export function simPoolPolling(registry: SimRegistryFile): boolean {
+  return (
+    registry.leases.length > 0 ||
+    registry.devices.some(
+      (device) => device.op !== undefined || simDeviceCountsTowardCap(device.state ?? 'shutdown')
+    )
+  )
+}
+
 /**
- * Wall and monotonic time moving apart between two steps means time passed that no rule watched:
- * a sleep (the monotonic clock stops in sleep, see SimClock) or a wall clock step. Every window
- * then restarts. Wall times ahead of now (the clock stepped back) are pulled to now, so nothing
- * reads a negative idle time. Steps may be minutes apart (they come on events and `wakeAt`), so a
- * long gap alone means nothing.
+ * Time passed that no rule watched restarts every window: a gap between steps longer than
+ * SIM_UNOBSERVED_GAP_MS while the pool was polling (the Mac slept: the monotonic clock runs on
+ * through sleep, see SimClockReading), or wall and monotonic time moving apart (a wall clock
+ * step). Wall times ahead of now (the clock stepped back) are pulled to now, so nothing reads a
+ * negative idle time. While nothing is held or booted no timer runs, so a long gap means nothing.
  */
 export function observeClock(d: SimPoolDraft): void {
   const last = d.memory.lastTick
   d.memory.lastTick = d.now
-  const leap =
+  const stepped =
     last !== null && Math.abs(d.now.wall - last.wall - (d.now.mono - last.mono)) > SIM_CLOCK_STEP_MS
+  const slept = last !== null && d.memory.polling && d.now.mono - last.mono > SIM_UNOBSERVED_GAP_MS
+  const leap = stepped || slept
   if (leap) {
     forEachAnchor(d.memory.windows, (key, anchor) => {
       setAnchor(d.memory.windows, key, { value: anchor.value, mono: d.now.mono })

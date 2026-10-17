@@ -1,7 +1,7 @@
 // Fork-only (Pod): what a holder is told about its lease, its device and its place. Every refusal
 // is one the contract words (sim-refusals.ts); an ended lease answers why it ended.
 import { SIM_WAITING_LIST_MAX } from '../../../../shared/pod-sim/sim-call-limits'
-import type { SimCaller, SimGateRefusal, SimLeaseAnswer } from '../pool/sim-pool-commands'
+import type { SimLeaseCaller, SimGateRefusal, SimLeaseAnswer } from '../pool/sim-pool-commands'
 import {
   deviceState,
   type SimPoolDevice,
@@ -53,7 +53,11 @@ export function deviceRefusal(device: SimPoolDevice | undefined): SimGateRefusal
 }
 
 /** What a call from a key with no live lease hears: why its last lease ended, else not_leased. */
-export function endedRefusal(d: SimPoolDraft, caller: SimCaller, verb: string): SimGateRefusal {
+export function endedRefusal(
+  d: SimPoolDraft,
+  caller: SimLeaseCaller,
+  verb: string
+): SimGateRefusal {
   const ended: SimPoolTombstone | undefined = tombstone(d, caller.key)
   const reason = ended?.ended.reason
   if (reason === 'buildFailed' && ended?.ended.buildId) {
@@ -63,7 +67,8 @@ export function endedRefusal(d: SimPoolDraft, caller: SimCaller, verb: string): 
     reason === 'idleForWaiter' ||
     reason === 'memoryBrake' ||
     reason === 'abandoned' ||
-    reason === 'deviceLost'
+    reason === 'deviceLost' ||
+    reason === 'worktreeRemoved'
   ) {
     return { code: 'lease_expired', reason }
   }
@@ -115,6 +120,7 @@ export function leaseAnswer(d: SimPoolDraft, lease: SimPoolLease): SimLeaseAnswe
     lease,
     position: queuePosition(d, lease),
     waitingFor,
+    ...(d.unserved.get(lease.leaseId) === 'unmakeable' ? { unmakeable: true as const } : {}),
     ahead: ahead.slice(0, SIM_WAITING_LIST_MAX),
     aheadOmitted: Math.max(0, ahead.length - SIM_WAITING_LIST_MAX),
     holders: holders.slice(0, SIM_WAITING_LIST_MAX),

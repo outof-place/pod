@@ -78,8 +78,14 @@ export const SimRegistryDevice = z.looseObject({
     .optional()
 })
 
-// Live leases, restored after a runtime restart, each with the runtime that serves it.
-export const SimRegistryLease = SimLease.extend({ servedBy: SimRuntimeRef })
+// Live leases, restored after a runtime restart, each with the runtime that serves it (answers
+// its calls) and the runtime that resolved its holder: only that one can see the holder's panes
+// and agent sessions, so only it may read them as gone. Adopting a crashed runtime's lease moves
+// `servedBy`, never `resolvedBy`; a lease without it was resolved by its `servedBy`.
+export const SimRegistryLease = SimLease.extend({
+  servedBy: SimRuntimeRef,
+  resolvedBy: SimRuntimeRef.optional()
+})
 
 // An ended lease, kept 24 hours or until its key leases again, so the holder's late call (from
 // either runtime, after a restart too) hears why it ended.

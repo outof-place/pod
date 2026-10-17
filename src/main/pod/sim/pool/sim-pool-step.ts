@@ -37,7 +37,7 @@ import {
 import { leaseFileEffects } from './sim-pool-lease-files'
 import { reconcileDevices } from './sim-pool-reconcile'
 import { settleHeldDevices, shutDownUnheld } from './sim-pool-unheld'
-import { foldWindows, observeClock } from './sim-pool-windows'
+import { foldWindows, observeClock, simPoolPolling } from './sim-pool-windows'
 
 export type SimPoolState = Readonly<{ registry: SimPoolRegistry; memory: SimPoolMemory }>
 
@@ -144,6 +144,7 @@ export function simPoolStep(
   observeClock(d)
   const answer = apply(d, command)
   settle(d, command.kind === 'poll', state.registry.updatedAt)
+  d.memory.polling = simPoolPolling(d.registry)
   const files = leaseFileEffects(d)
   const changed = registryChanged(state.registry, d.registry)
   if (changed) {

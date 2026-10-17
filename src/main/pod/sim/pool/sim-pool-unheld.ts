@@ -9,7 +9,7 @@ import { brakeIsTight } from './sim-pool-capacity'
 import { startOp } from './sim-pool-devices'
 import { deviceState, moveDevice, type SimPoolDevice, type SimPoolDraft } from './sim-pool-draft'
 import { trustedListing } from './sim-pool-reconcile'
-import { windowDue } from './sim-pool-windows'
+import { dropWindow, windowDue } from './sim-pool-windows'
 
 function someoneWants(d: SimPoolDraft, device: SimPoolDevice): boolean {
   return waitingClasses(d).some((deviceClass) =>
@@ -42,18 +42,20 @@ export function settleHeldDevices(d: SimPoolDraft): void {
 }
 
 export function shutDownUnheld(d: SimPoolDraft): void {
-  if (trustedListing(d) === null) {
-    return
-  }
+  const effects = trustedListing(d) !== null
   const tight = brakeIsTight(d)
   for (const device of d.registry.devices) {
+    const warm = `warm:${device.udid}`
     if (deviceState(device) !== 'ready' || !isFree(d, device)) {
-      if (device.role === 'golden' && deviceState(device) === 'ready' && !device.op) {
+      // Held, busy or down: its next free period gets a whole warm window of its own.
+      dropWindow(d, warm)
+      if (effects && device.role === 'golden' && deviceState(device) === 'ready' && !device.op) {
         startOp(d, device, 'shutDown')
       }
       continue
     }
-    if (tight || windowDue(d, `warm:${device.udid}`, 'ready', d.config.warmMs)) {
+    const cooled = windowDue(d, warm, 'ready', d.config.warmMs)
+    if (effects && (tight || cooled)) {
       startOp(d, device, 'shutDown')
     }
   }

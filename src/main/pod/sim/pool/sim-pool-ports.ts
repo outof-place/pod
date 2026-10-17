@@ -8,12 +8,15 @@ import type { SimRegistryFile } from '../../../../shared/pod-sim/sim-registry'
 import type { SimHolderFacts } from '../leases/sim-holder-liveness'
 import type { SimDeviceOp } from './sim-pool-config'
 
-export type SimRuntimeRef = Readonly<{ pid: number; startedAt: number }>
+/** A process (a runtime, or an agent holding a device): pid plus its start, epoch seconds. */
+export type SimProcessId = Readonly<{ pid: number; startedAt: number }>
 
 /**
- * Milliseconds. `mono` never steps and stops while the Mac sleeps (mach_absolute_time or
- * CLOCK_UPTIME_RAW, as Node's performance.now is on macOS), so a sleep shows as wall time moving
- * without it; `wall` is the epoch, what the registry stores.
+ * Milliseconds. `mono` never steps, and on macOS it runs on while the Mac sleeps (Node's
+ * performance.now and process.hrtime read mach_continuous_time, libuv src/unix/darwin.c), so a
+ * sleep shows only as a long gap between steps: the core counts a gap longer than
+ * SIM_UNOBSERVED_GAP_MS while it was polling as time no rule watched. `wall` is the epoch, what
+ * the registry stores; it moving apart from `mono` is a clock step.
  */
 export type SimClockReading = Readonly<{ mono: number; wall: number }>
 export type SimClock = { now(): SimClockReading }
@@ -42,13 +45,16 @@ export type SimDeviceObservation =
 
 /**
  * claude-acc's view. `cap` 0 is "no cap there" (Pod's own applies); `outsideBooted` counts devices
- * booted outside Pod's set (Filip's, portivo-mobile's). The adapter maps claude-acc's `normal` to
- * `calm`; a missing value is `unknown`. Without claude-acc the adapter reports Pod's cap and calm.
+ * booted outside Pod's set (Filip's, portivo-mobile's). `agentsInUse` is claude-acc's own count of
+ * pool devices in use (its `agents_in_use`), for status only: the cap never reads it, since it may
+ * include Pod's devices. The adapter maps claude-acc's `normal` to `calm`; a missing value is
+ * `unknown`. Without claude-acc the adapter reports Pod's cap and calm.
  */
 export type SimCapacityReading = Readonly<{
   source: 'claudeAcc' | 'pod'
   cap: number | 'unknown'
   outsideBooted: number | 'unknown'
+  agentsInUse: number | 'unknown'
   brake: SimBrake | 'unknown'
   measuredAt: number | null
 }>
@@ -70,36 +76,50 @@ export type SimPoolObservation = Readonly<{
 export type SimOpRef = Readonly<{
   kind: SimDeviceOp
   since: number
-  by: SimRuntimeRef
+  by: SimProcessId
 }>
 
 export type SimOpOutcome = Readonly<{ ok: true; udid?: string } | { ok: false; message: string }>
 
+/**
+ * Which slim profile `prepare` and `reset` apply: the app a lease runs, in its worktree (stage 5b
+ * derives each app's profile from its build), or null for the pool's default profile.
+ */
+export type SimSlimProfile = Readonly<{
+  app: Readonly<{ id: string; bundleId: string }>
+  worktreeRoot: string
+}> | null
+
 /** simctl and the helper behind one interface; each method answers, none throws. */
 export type SimDeviceDriver = {
+  // Answers well within SIM_UNOBSERVED_GAP_MS (`unknown` on a timeout): a poll that takes longer
+  // reads to the core as a sleep.
   observe(): Promise<SimDeviceObservation>
   clone(source: string, name: string): Promise<SimOpOutcome>
   create(name: string, deviceType: string, runtime: string): Promise<SimOpOutcome>
   // Boot, apply and verify the slim profile and the project's defaults, shut down.
-  prepare(udid: string): Promise<SimOpOutcome>
+  prepare(udid: string, profile: SimSlimProfile): Promise<SimOpOutcome>
   boot(udid: string): Promise<SimOpOutcome>
   shutDown(udid: string): Promise<SimOpOutcome>
   // Terminate the holder's app; the device stays booted.
   release(udid: string): Promise<SimOpOutcome>
-  // Keep the UDID: shut down, erase, re-apply slim and defaults, boot.
-  reset(udid: string): Promise<SimOpOutcome>
+  // Keep the UDID: shut down, erase, re-apply the slim profile and defaults, boot. The app comes
+  // back through SimAppPort.reinstall once the core has seen the reset done.
+  reset(udid: string, profile: SimSlimProfile): Promise<SimOpOutcome>
   delete(udid: string): Promise<SimOpOutcome>
 }
 
 export type SimCapacityPort = { read(): Promise<SimCapacityReading> }
 
 export type SimLivenessPort = {
-  holderFacts(holder: SimHolder, servedHere: boolean): Promise<SimHolderFacts>
-  runtime(ref: SimRuntimeRef): Promise<'live' | 'exited'>
+  // `resolvedHere`: this runtime resolved the holder (the lease's resolvedBy), so its panes and
+  // agent sessions are the ones to look in; any other runtime answers notServedHere for them.
+  holderFacts(holder: SimHolder, resolvedHere: boolean): Promise<SimHolderFacts>
+  runtime(ref: SimProcessId): Promise<'live' | 'exited'>
   externalUse(): Promise<readonly string[]>
 }
 
-export type SimRegistryRead =
+export type SimRegistryStoreRead =
   | Readonly<{ ok: true; registry: SimRegistryFile; token: string }>
   | Readonly<{ ok: false; reason: 'registryUnreadable'; message: string }>
 
@@ -113,18 +133,34 @@ export type SimRegistrySwap =
  * the flock, temp file plus rename), else answers `conflict` and writes nothing.
  */
 export type SimRegistryStore = {
-  read(): Promise<SimRegistryRead>
+  read(): Promise<SimRegistryStoreRead>
   swap(token: string, next: SimRegistryFile): Promise<SimRegistrySwap>
 }
 
-/** claude-acc's lease file per device (`<simulator_leases>/<UDID>.json`, owner pid and start). */
+/**
+ * What claude-acc's lease file for a device says (`<simulator_leases>/<UDID>.json`): `owner` is
+ * the process its guard checks (the adapter writes `startedAt` as `ps -o lstart`), `session` its
+ * `owner.session` (the holder's agent session) and `app` its `lease_app` (the lease's app id).
+ */
+export type SimLeaseFile = Readonly<{
+  owner: SimProcessId
+  holder: string
+  session?: string
+  app?: string
+}>
+
 export type SimLeaseFilePort = {
-  write(udid: string, owner: SimRuntimeRef, holder: string): Promise<void>
+  write(udid: string, file: SimLeaseFile): Promise<void>
   remove(udid: string): Promise<void>
 }
 
 /** The RPC layer: re-answer this lease's open `lease --wait` or `wait --mine`. */
 export type SimWaiterPort = { notify(leaseId: string): void }
 
-/** Stage 5's app module: uninstall and reinstall the lease's dev client (`reset app`). */
-export type SimAppPort = { reset(udid: string, leaseId: string): Promise<void> }
+/** Stage 5's app module, for the lease's dev client. */
+export type SimAppPort = {
+  // `reset app`: uninstall and reinstall it.
+  reset(udid: string, leaseId: string): Promise<void>
+  // `reset device` erased it: install it again.
+  reinstall(udid: string, leaseId: string): Promise<void>
+}

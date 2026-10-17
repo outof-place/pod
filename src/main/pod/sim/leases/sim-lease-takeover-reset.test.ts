@@ -4,6 +4,7 @@ import { agent, callerOf, PoolWorld, ROOT, SELF, udid } from '../pool/sim-pool.t
 const A = agent(41001)
 const B = agent(41002)
 const C = agent(41003)
+const MAPS = { id: 'maps', bundleId: 'space.portivo.maps' }
 
 /** A holds P1, booted; P2 is a spare shut-down device. */
 function heldWorld(): PoolWorld {
@@ -40,8 +41,28 @@ describe('Filip takes a device over', () => {
     expect(world.effects).toContainEqual({
       kind: 'writeLeaseFile',
       udid: udid(1),
-      owner: SELF,
-      holder: A.id
+      file: { owner: SELF, holder: A.id }
+    })
+  })
+
+  it("fills claude-acc's lease file with the holder's session and the lease's app", () => {
+    const world = new PoolWorld()
+    world.device(1, { state: 'ready' })
+    world.poll()
+    const holder = { ...agent(41007), sessionId: '5d1c9a2e' }
+    world.lease(holder, { app: MAPS })
+    const owner = { pid: holder.pid, startedAt: holder.startedAt }
+    const file = { holder: holder.id, session: '5d1c9a2e', app: 'maps' }
+    expect(world.effects).toContainEqual({
+      kind: 'writeLeaseFile',
+      udid: udid(1),
+      file: { owner, ...file }
+    })
+    world.takeover(world.leaseOf(holder)?.leaseId ?? '')
+    expect(world.effects).toContainEqual({
+      kind: 'writeLeaseFile',
+      udid: udid(1),
+      file: { owner: SELF, ...file }
     })
   })
 
@@ -148,6 +169,27 @@ describe('reset', () => {
     expect(world.verb(A)).toMatchObject({ allow: true, udid: udid(1) })
   })
 
+  it("re-slims for the lease's app and reinstalls the app once the erase is done", () => {
+    const world = new PoolWorld({ cap: 2 })
+    world.device(1, { state: 'leased' })
+    world.addLease(A, { state: 'active', udid: udid(1), app: MAPS })
+    world.poll()
+    world.reset(A, 'device')
+    expect(world.effects).toContainEqual(
+      expect.objectContaining({
+        kind: 'reset',
+        udid: udid(1),
+        profile: { app: MAPS, worktreeRoot: ROOT }
+      })
+    )
+    world.finish(udid(1))
+    expect(world.effects).toContainEqual({
+      kind: 'reinstallApp',
+      udid: udid(1),
+      leaseId: leaseIdOf(world, A)
+    })
+  })
+
   it('answers device_down, not lease_expired, when the erase fails', () => {
     const world = heldWorld()
     world.reset(A, 'device')
@@ -206,9 +248,9 @@ describe('a removed worktree', () => {
     expect(world.effectKinds()).toEqual(
       expect.arrayContaining([`release ${udid(1)}`, `release ${udid(2)}`])
     )
-    expect(world.verb(A, 'read', gone)).toMatchObject({
+    expect(world.verb(A, 'read', gone)).toEqual({
       allow: false,
-      refusal: { code: 'not_leased' }
+      refusal: { code: 'lease_expired', reason: 'worktreeRemoved' }
     })
     expect(callerOf(A, gone).key).toContain(gone)
   })

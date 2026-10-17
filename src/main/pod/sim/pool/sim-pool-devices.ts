@@ -10,9 +10,10 @@ import {
   moveDevice,
   runtimeKey,
   type SimPoolDevice,
-  type SimPoolDraft
+  type SimPoolDraft,
+  type SimPoolLease
 } from './sim-pool-draft'
-import type { SimOpOutcome, SimOpRef } from './sim-pool-ports'
+import type { SimOpOutcome, SimOpRef, SimSlimProfile } from './sim-pool-ports'
 import { claimMs, dropWindow, forgetWindows, windowDue } from './sim-pool-windows'
 
 const STARTS: Partial<Record<SimDeviceOp, SimDeviceEvent>> = {
@@ -46,15 +47,38 @@ function beginOp(d: SimPoolDraft, device: SimPoolDevice, kind: SimDeviceOp): Sim
 export function startOp(
   d: SimPoolDraft,
   device: SimPoolDevice,
-  kind: 'prepare' | 'boot' | 'shutDown' | 'release' | 'delete'
+  kind: 'boot' | 'shutDown' | 'release' | 'delete'
 ): void {
   const op = beginOp(d, device, kind)
   d.effects.push({ kind, udid: device.udid, op })
 }
 
-export function startReset(d: SimPoolDraft, device: SimPoolDevice, leaseId: string): void {
+/** The slim profile for a lease's app, or the pool's default when it names none. */
+export function slimProfileOf(lease: SimPoolLease | undefined): SimSlimProfile {
+  const app = lease?.app
+  return app && lease
+    ? { app: { id: app.id, bundleId: app.bundleId }, worktreeRoot: lease.worktreeRoot }
+    : null
+}
+
+export function startPrepare(
+  d: SimPoolDraft,
+  device: SimPoolDevice,
+  profile: SimSlimProfile
+): void {
+  const op = beginOp(d, device, 'prepare')
+  d.effects.push({ kind: 'prepare', udid: device.udid, op, profile })
+}
+
+export function startReset(d: SimPoolDraft, device: SimPoolDevice, lease: SimPoolLease): void {
   const op = beginOp(d, device, 'reset')
-  d.effects.push({ kind: 'reset', udid: device.udid, op, leaseId })
+  d.effects.push({
+    kind: 'reset',
+    udid: device.udid,
+    op,
+    leaseId: lease.leaseId,
+    profile: slimProfileOf(lease)
+  })
 }
 
 /** A new device's entry (provisional UDID) and op come first, so a crash mid-clone is visible. */
@@ -113,6 +137,11 @@ export function finishOp(
   }
   if (op.kind === 'boot') {
     delete device.failure
+  }
+  const lease = op.kind === 'reset' ? leaseOn(d, device.udid) : undefined
+  if (lease?.app) {
+    // The erase took the dev client with it.
+    d.effects.push({ kind: 'reinstallApp', udid: device.udid, leaseId: lease.leaseId })
   }
 }
 
@@ -174,11 +203,16 @@ export function expireOps(d: SimPoolDraft): void {
   }
 }
 
-/** A lease served by an exited runtime is this runtime's now; its windows start afresh. */
+/**
+ * A lease served by an exited runtime is this runtime's to serve now; its windows start afresh.
+ * Who resolved its holder does not change: only that runtime can see the holder's panes and
+ * sessions, so this one never reads them as gone (sim-pool-coordinator.ts).
+ */
 export function adoptOrphans(d: SimPoolDraft): void {
   const runtimes = d.memory.observation?.runtimes ?? {}
   for (const lease of d.registry.leases) {
     if (runtimes[runtimeKey(lease.servedBy)] === 'exited') {
+      lease.resolvedBy ??= lease.servedBy
       lease.servedBy = { ...d.self }
       if (lease.reservedUntil !== undefined) {
         lease.reservedUntil = d.now.wall + claimMs()

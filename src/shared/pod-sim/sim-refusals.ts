@@ -57,7 +57,7 @@ export const SimRefusalInput = z.discriminatedUnion('code', [
   }),
   input('lease_waiting', { position: z.number().int().positive() }),
   input('lease_expired', {
-    reason: z.enum(['idleForWaiter', 'memoryBrake', 'abandoned', 'deviceLost'])
+    reason: z.enum(['idleForWaiter', 'memoryBrake', 'abandoned', 'deviceLost', 'worktreeRemoved'])
   }),
   input('held_by_human', {}),
   input('held_by_other', { device: Text, holder: SimHolder, worktreeRoot: Root }),
@@ -135,7 +135,8 @@ const EXPIRED: Record<Extract<SimRefusalInput, { code: 'lease_expired' }>['reaso
   idleForWaiter: 'it sat idle while another agent waited',
   memoryBrake: 'the Mac ran short of memory',
   abandoned: `it stayed queued ${SIM_WAITER_ABANDON_S / 60} minutes with no lease or wait --mine call, so its place went to the next agent`,
-  deviceLost: 'its simulator went away and could not be brought back'
+  deviceLost: 'its simulator went away and could not be brought back',
+  worktreeRemoved: 'its worktree was removed'
 }
 
 function element(query: z.infer<typeof Query>): string {

@@ -84,7 +84,8 @@ export function takeoverDeviceCall(
     worktreeRoot,
     since: d.now.wall,
     lastActivity: d.now.wall,
-    servedBy: { ...d.self }
+    servedBy: { ...d.self },
+    resolvedBy: { ...d.self }
   }
   d.registry.leases.push(lease)
   moveLease(d, lease, 'reserve')

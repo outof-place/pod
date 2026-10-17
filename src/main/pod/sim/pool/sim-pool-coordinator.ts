@@ -8,7 +8,6 @@
 // outcomes step at once. Only what has no push is polled: holder liveness and claude-acc's reading
 // every SIM_POOL_POLL_MS while anything is leased or booted, simctl's list and the argv scan every
 // SIM_POOL_LIST_MS. Nothing leased and nothing booted: no timer at all.
-import { simDeviceCountsTowardCap } from '../../../../shared/pod-sim/sim-lifecycle'
 import type { SimRegistryFile } from '../../../../shared/pod-sim/sim-registry'
 import { simHolderLiveness } from '../leases/sim-holder-liveness'
 import type { SimPoolAnswer, SimPoolCommand } from './sim-pool-commands'
@@ -32,10 +31,11 @@ import type {
   SimLivenessPort,
   SimOpOutcome,
   SimRegistryStore,
-  SimRuntimeRef,
+  SimProcessId,
   SimWaiterPort
 } from './sim-pool-ports'
 import { simPoolStep } from './sim-pool-step'
+import { simPoolPolling } from './sim-pool-windows'
 
 /** Liveness of a holder has no push (4b may add kqueue NOTE_EXIT); claude-acc measures every 2 s. */
 export const SIM_POOL_POLL_MS = 5_000
@@ -64,14 +64,12 @@ export type SimPoolRun =
     }>
   | Readonly<{ ok: false; reason: 'registryUnreadable' | 'contention'; message: string }>
 
-/** How often to poll for this registry: only while something is held or booted. */
+/**
+ * How often to poll for this registry: only while something is held or booted. The core relies on
+ * it: a longer gap between its steps while polling is time no rule watched (a sleep).
+ */
 export function simPoolPollMs(registry: SimRegistryFile): number | null {
-  const busy =
-    registry.leases.length > 0 ||
-    registry.devices.some(
-      (device) => device.op || simDeviceCountsTowardCap(device.state ?? 'shutdown')
-    )
-  return busy ? SIM_POOL_POLL_MS : null
+  return simPoolPolling(registry) ? SIM_POOL_POLL_MS : null
 }
 
 export class SimPoolCoordinator {
@@ -91,7 +89,7 @@ export class SimPoolCoordinator {
   constructor(
     private readonly ports: SimPoolPorts,
     private readonly config: SimPoolConfig,
-    private readonly self: SimRuntimeRef
+    private readonly self: SimProcessId
   ) {}
 
   run(command: SimPoolCommand): Promise<SimPoolRun> {
@@ -151,9 +149,11 @@ export class SimPoolCoordinator {
     const capacity = await this.ports.capacity.read()
     const liveness: Record<string, ReturnType<typeof simHolderLiveness>> = {}
     for (const lease of read.registry.leases) {
+      // Only the runtime that resolved the holder can see its panes and sessions; serving the
+      // lease (as an adopter does) is not enough.
       const facts = await this.ports.liveness.holderFacts(
         lease.holder,
-        sameRuntime(lease.servedBy, this.self)
+        sameRuntime(lease.resolvedBy ?? lease.servedBy, this.self)
       )
       liveness[lease.leaseId] = simHolderLiveness(lease.holder, facts)
     }
@@ -178,7 +178,7 @@ export class SimPoolCoordinator {
   async dispatch(effects: readonly SimPoolEffect[]): Promise<void> {
     for (const effect of effects) {
       if (effect.kind === 'writeLeaseFile') {
-        await this.ports.leaseFiles.write(effect.udid, effect.owner, effect.holder)
+        await this.ports.leaseFiles.write(effect.udid, effect.file)
       } else if (effect.kind === 'removeLeaseFile') {
         await this.ports.leaseFiles.remove(effect.udid)
       }
@@ -188,6 +188,8 @@ export class SimPoolCoordinator {
         this.ports.waiters.notify(effect.leaseId)
       } else if (effect.kind === 'resetApp') {
         this.track(this.ports.apps.reset(effect.udid, effect.leaseId))
+      } else if (effect.kind === 'reinstallApp') {
+        this.track(this.ports.apps.reinstall(effect.udid, effect.leaseId))
       } else if (effect.kind !== 'writeLeaseFile' && effect.kind !== 'removeLeaseFile') {
         this.track(this.runOp(effect))
       }
@@ -225,7 +227,7 @@ export class SimPoolCoordinator {
       case 'create':
         return driver.create(effect.name, effect.deviceType, effect.runtime)
       case 'prepare':
-        return driver.prepare(effect.udid)
+        return driver.prepare(effect.udid, effect.profile)
       case 'boot':
         return driver.boot(effect.udid)
       case 'shutDown':
@@ -233,7 +235,7 @@ export class SimPoolCoordinator {
       case 'release':
         return driver.release(effect.udid)
       case 'reset':
-        return driver.reset(effect.udid)
+        return driver.reset(effect.udid, effect.profile)
       case 'delete':
         return driver.delete(effect.udid)
     }

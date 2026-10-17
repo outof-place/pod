@@ -21,9 +21,10 @@ function queuedWorld(): PoolWorld {
   return world
 }
 
+/** The Mac sleeps: no step runs, and Node's monotonic clock runs on (mach_continuous_time). */
 function sleepFor(world: PoolWorld, ms: number): void {
   world.wall += ms
-  world.mono += 1
+  world.mono += ms
   world.capacity.measuredAt = null
 }
 
@@ -45,6 +46,8 @@ describe('time no runtime watched', () => {
     world.poll()
     sleepFor(world, 8 * HOUR)
     world.poll()
+    expect(world.last?.trace.filter((move) => move.machine === 'lease')).toEqual([])
+    expect(world.leaseOf(C)?.state).toBe('waiting')
     expect(world.leaseOf(B)).toMatchObject({
       state: 'reserved',
       reservedUntil: world.wall + 60_000
@@ -52,6 +55,20 @@ describe('time no runtime watched', () => {
     world.advance(30_000)
     world.poll()
     expect(world.leaseOf(B)?.state).toBe('reserved')
+  })
+
+  it('fails no device whose boot slept with the Mac, and revokes no idle lease on waking', () => {
+    const world = queuedWorld()
+    world.device(3)
+    world.addLease(D, { state: 'active', udid: udid(3) })
+    world.runtimes[`${PEER.pid}:${PEER.startedAt}`] = 'live'
+    world.found(udid(3)).op = { kind: 'boot', by: PEER, since: world.wall }
+    world.found(udid(3)).state = 'booting'
+    world.poll()
+    sleepFor(world, 8 * HOUR)
+    world.poll()
+    expect(world.found(udid(3))).toMatchObject({ state: 'booting', op: { kind: 'boot' } })
+    expect(world.leaseOf(A)?.state).toBe('active')
   })
 
   it('holds a reservation no longer than 60 s when the wall clock steps back an hour', () => {

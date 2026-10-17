@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { agent, callerOf, PEER, PoolWorld, udid } from './sim-pool.test-support'
+import type { SimHolder } from '../../../../shared/pod-sim/sim-holder'
+import { agent, callerOf, PEER, PoolWorld, ROOT, udid } from './sim-pool.test-support'
 
 const A = agent(41001)
 const B = agent(41002)
@@ -10,6 +11,18 @@ const OLD = { pid: 60001, startedAt: 1760500000 }
 
 function bootKinds(world: PoolWorld): string[] {
   return world.effectKinds().filter((effect) => /^(boot|prepare|reset)/.test(effect))
+}
+
+/** Polls every 5 s for `ms`, `callers` calling all along and simctl answering every op at once. */
+function pollFor(world: PoolWorld, ms: number, callers: readonly SimHolder[] = []): void {
+  for (let passed = 0; passed < ms; passed += 5_000) {
+    world.advance(5_000)
+    for (const holder of callers) {
+      world.waitMine(holder)
+    }
+    world.poll()
+    world.settleOps()
+  }
 }
 
 describe('the cap counts everything that may be booted', () => {
@@ -48,6 +61,19 @@ describe('the cap counts everything that may be booted', () => {
     world.lease(A)
     expect(bootKinds(world)).toEqual([`boot ${udid(1)}`])
     expect(world.lease(B)).toMatchObject({ status: 'waiting', waitingFor: 'slot' })
+  })
+
+  it("counts a peer's boot op written before its device moved to booting", () => {
+    const world = new PoolWorld({ cap: 2 })
+    world.device(1, { state: 'leased' })
+    world.addLease(A, { state: 'active', udid: udid(1) })
+    world.device(2)
+    world.device(3)
+    world.found(udid(3)).op = { kind: 'boot', by: PEER, since: world.wall }
+    world.runtimes[`${PEER.pid}:${PEER.startedAt}`] = 'live'
+    world.poll()
+    expect(world.lease(B)).toMatchObject({ status: 'waiting', waitingFor: 'slot' })
+    expect(bootKinds(world)).toEqual([])
   })
 
   it('fails a device whose op passed its deadline, though its runtime lives, and frees the slot', () => {
@@ -184,16 +210,17 @@ describe('losing contact with CoreSimulator is not losing devices', () => {
     world.verdict = 'unknown'
     world.advance(30_000)
     world.poll()
+    expect(world.effects, 'the timed-out poll').toEqual([])
     const listed = new Map(world.observed)
     world.verdict = 'ok'
     world.observed.clear()
     world.advance(5_000)
     world.poll()
-    const quiet = world.effects.filter((effect) => effect.kind !== 'writeLeaseFile')
+    expect(world.effects, 'the empty-list poll').toEqual([])
     world.observed = listed
     world.advance(5_000)
     world.poll()
-    expect(quiet).toEqual([])
+    expect(world.effects, 'the devices-back poll').toEqual([])
     expect(
       JSON.stringify(world.registry.leases.filter((lease) => lease.key !== callerOf(C).key))
     ).toBe(leases)
@@ -226,6 +253,30 @@ describe('devices nobody holds', () => {
     expect(world.last?.wakeAt).toBe(world.mono)
     world.poll()
     expect(world.effectKinds()).toEqual([`shutDown ${udid(1)}`])
+  })
+
+  it('keeps a device warm for the whole window after a later release, not only the first', () => {
+    const world = new PoolWorld()
+    world.device(1, { state: 'leased' })
+    world.addLease(A, { state: 'active', udid: udid(1) })
+    world.poll()
+    world.release(A)
+    world.finish(udid(1))
+    pollFor(world, 5 * 60_000)
+    expect(world.lease(B)).toMatchObject({ status: 'ready', device: { udid: udid(1) } })
+    pollFor(world, 20 * 60_000, [B])
+    world.release(B)
+    world.finish(udid(1))
+    expect(world.effectKinds()).not.toContain(`shutDown ${udid(1)}`)
+    pollFor(world, 9 * 60_000)
+    expect(world.lease(C)).toMatchObject({ status: 'ready', device: { udid: udid(1) } })
+    expect(bootKinds(world)).toEqual([])
+    world.release(C)
+    world.finish(udid(1))
+    pollFor(world, 9 * 60_000)
+    expect(world.found(udid(1)).state).toBe('ready')
+    pollFor(world, 60_000)
+    expect(world.found(udid(1)).state).toBe('shutdown')
   })
 
   it('boots a golden device only to prepare it, and never hands it out', () => {
@@ -280,15 +331,73 @@ describe('making devices', () => {
     expect(world.effects.filter((effect) => effect.kind === 'create')).toEqual([])
   })
 
+  for (const trouble of ['brake', 'stale'] as const) {
+    it(`serves every waiter once calm returns, though the ${trouble === 'brake' ? 'brake rose' : 'reading went stale'} as the clones finished`, () => {
+      const world = new PoolWorld({ cap: 2 })
+      world.device(7, { role: 'golden' })
+      world.poll()
+      for (const holder of [A, B, C]) {
+        world.lease(holder)
+        world.advance(1_000)
+      }
+      const cloning = world.registry.devices.filter((device) => device.op?.kind === 'clone')
+      if (trouble === 'brake') {
+        world.capacity.brake = 'brake'
+      } else {
+        world.capacity.measuredAt = world.wall - 45_000
+      }
+      world.poll()
+      for (const device of cloning) {
+        world.finish(device.udid)
+      }
+      expect(bootKinds(world)).toEqual([])
+      world.capacity.brake = 'calm'
+      delete world.capacity.measuredAt
+      pollFor(world, 3 * 60_000, [A, B, C])
+      expect(world.lease(A)).toMatchObject({ status: 'ready' })
+      expect(world.lease(B)).toMatchObject({ status: 'ready' })
+      expect(world.lease(C)).toMatchObject({ status: 'waiting', waitingFor: 'slot' })
+      world.release(A)
+      world.settleOps()
+      expect(world.lease(C)).toMatchObject({ status: 'ready' })
+      // Clones go only into slots that are really open: two for a cap of two.
+      expect(cloning).toHaveLength(2)
+    })
+  }
+
+  it('makes nothing for a model the pool does not make, and tells its waiter so', () => {
+    const world = new PoolWorld({ cap: 2 })
+    world.poll()
+    const se = { deviceClass: 'iphone', deviceType: 'iPhone SE (3rd generation)' } as const
+    expect(world.lease(A, { wants: se })).toMatchObject({
+      status: 'waiting',
+      waitingFor: 'device',
+      unmakeable: true
+    })
+    pollFor(world, 60_000, [A])
+    expect(world.registry.devices).toEqual([])
+    // The model the pool makes is still made for the waiter behind.
+    world.lease(B)
+    expect(world.effects.map((effect) => effect.kind)).toContain('create')
+    expect(world.lease(A, { wants: se })).toMatchObject({ status: 'waiting', unmakeable: true })
+  })
+
   it("slims an empty pool's first device as soon as it exists, not at simctl's next list", () => {
     const world = new PoolWorld()
     world.poll()
     world.advance(1_000)
-    world.lease(A)
+    world.lease(A, { app: { id: 'maps', bundleId: 'space.portivo.maps' } })
     const create = world.effects.find((effect) => effect.kind === 'create')
     world.finish(create && 'udid' in create ? create.udid : '')
     const made = world.named('Portivo-Pod-1')
     expect(bootKinds(world)).toEqual([`prepare ${made?.udid}`])
+    // Slimmed for the app of the waiter it is made for.
+    expect(world.effects).toContainEqual(
+      expect.objectContaining({
+        kind: 'prepare',
+        profile: { app: { id: 'maps', bundleId: 'space.portivo.maps' }, worktreeRoot: ROOT }
+      })
+    )
     world.finish(made?.udid ?? '')
     expect(bootKinds(world)).toEqual([`boot ${made?.udid}`])
   })
