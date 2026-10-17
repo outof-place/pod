@@ -172,8 +172,6 @@ let treeRootEnv = "POD_AGENT_TREE_ROOT"
 // <sys/resource.h> (PRIVATE): PRIO_DARWIN_ROLE, and PRIO_DARWIN_ROLE_UI = TASK_DEFAULT_APPLICATION.
 let prioDarwinRole: Int32 = 6
 let prioDarwinRoleUI: Int32 = 2
-// The watcher's word that it follows the agent, on this descriptor.
-let readyFd: Int32 = 3
 let forkNote = UInt32(truncatingIfNeeded: NOTE_FORK)
 let exitNote = UInt32(truncatingIfNeeded: NOTE_EXIT)
 
@@ -196,8 +194,8 @@ func treeAlreadyWatched() -> Bool {
   return false
 }
 
-/// `path args...` with /dev/null for 0-2, `ready` as fd 3 and no other descriptor, from /.
-func spawnHelper(_ path: String, _ args: [String], ready: Int32, newSession: Bool) -> pid_t? {
+/// `path args...` with /dev/null for 0-2 and no other descriptor, from /.
+func spawnHelper(_ path: String, _ args: [String], newSession: Bool) -> pid_t? {
   var attributes: posix_spawnattr_t?
   var actions: posix_spawn_file_actions_t?
   guard posix_spawnattr_init(&attributes) == 0 else { return nil }
@@ -208,7 +206,6 @@ func spawnHelper(_ path: String, _ args: [String], ready: Int32, newSession: Boo
   if newSession { flags |= Int32(POSIX_SPAWN_SETSID) }
   posix_spawnattr_setflags(&attributes, Int16(flags))
   for fd: Int32 in 0...2 { posix_spawn_file_actions_addopen(&actions, fd, "/dev/null", O_RDWR, 0) }
-  posix_spawn_file_actions_adddup2(&actions, ready, readyFd)
   posix_spawn_file_actions_addchdir_np(&actions, "/")
   let argv: [UnsafeMutablePointer<CChar>?] = ([path] + args).map { strdup($0) } + [nil]
   defer { argv.forEach { free($0) } }
@@ -216,26 +213,20 @@ func spawnHelper(_ path: String, _ args: [String], ready: Int32, newSession: Boo
   return posix_spawn(&pid, path, &actions, &attributes, argv, environ) == 0 ? pid : nil
 }
 
-/// Starts this pid's watcher and returns once it follows the pid, so nothing the agent starts is
-/// missed; after 250 ms without word the agent starts anyway. The middle process starts the
-/// watcher and exits, so the watcher is launchd's child, not the agent's.
+/// Starts this pid's watcher without waiting for it to follow the pid (waiting cost every start
+/// ~4-9 ms): a child born before the follow is taken by the sweep right after it, so it runs only
+/// its first ms at the default role. The middle process starts the watcher and exits, so the
+/// watcher is launchd's child, not the agent's.
 func startTreeWatcher() {
   guard env(turboEnv) != "0", env(treeEnv) != "0", !treeAlreadyWatched(),
-    let selfPath = executablePath()
+    let selfPath = executablePath(),
+    let middle = spawnHelper(selfPath, ["--tree-detach", String(getpid())], newSession: false)
   else { return }
-  var fds: [Int32] = [-1, -1]
-  guard pipe(&fds) == 0 else { return }
-  defer { close(fds[0]) }
-  let middle = spawnHelper(selfPath, ["--tree-detach", String(getpid())], ready: fds[1], newSession: false)
-  close(fds[1])
-  guard let middle else { return }
-  var status: Int32 = 0
-  while waitpid(middle, &status, 0) < 0 && errno == EINTR {}
-  var poller = pollfd(fd: fds[0], events: Int16(POLLIN), revents: 0)
-  var byte: UInt8 = 0
-  if poll(&poller, 1, 250) > 0, read(fds[0], &byte, 1) == 1, byte == UInt8(ascii: "1") {
-    setenv(treeRootEnv, String(getpid()), 1)
-  }
+  var status: Int32 = -1
+  var reaped: pid_t
+  repeat { reaped = waitpid(middle, &status, 0) } while reaped < 0 && errno == EINTR
+  // The middle exits 0 once the watcher's spawn worked; a reap that failed counts as no watcher.
+  if reaped == middle && status == 0 { setenv(treeRootEnv, String(getpid()), 1) }
 }
 
 let execNote = UInt32(truncatingIfNeeded: NOTE_EXEC)
@@ -378,11 +369,7 @@ struct Tree {
 func watchTree(_ root: pid_t) -> Never {
   _ = applyAppRole()
   var tree = Tree(queue: kqueue())
-  let ok = tree.queue >= 0 && tree.follow(root, depth: 0)
-  var word = UInt8(ascii: ok ? "1" : "0")
-  _ = write(readyFd, &word, 1)
-  close(readyFd)
-  guard ok else { exit(0) }
+  guard tree.queue >= 0, tree.follow(root, depth: 0) else { exit(0) }
   tree.sweep(root)
   var events = Array(
     repeating: kevent(ident: 0, filter: 0, flags: 0, fflags: 0, data: 0, udata: nil), count: 64)
@@ -414,9 +401,9 @@ if invokedAs == launcherName {
     printPolicy()
     exit(0)
   case "--tree-detach" where arguments.count == 3:
-    if let root = pid_t(arguments[2]), let selfPath = executablePath() {
-      _ = spawnHelper(selfPath, ["--tree-watch", String(root)], ready: readyFd, newSession: true)
-    }
+    guard let root = pid_t(arguments[2]), let selfPath = executablePath(),
+      spawnHelper(selfPath, ["--tree-watch", String(root)], newSession: true) != nil
+    else { exit(1) }
     exit(0)
   case "--tree-watch" where arguments.count == 3:
     guard let root = pid_t(arguments[2]), root > 1 else { exit(64) }
