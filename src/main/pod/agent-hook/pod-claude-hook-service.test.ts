@@ -172,18 +172,21 @@ describe("Pod's Claude hooks with each launch", () => {
       .map(([event]) => event)
       .sort()
     expect(asyncEvents).toEqual([
+      'PostCompact',
       'PostToolUse',
       'PostToolUseFailure',
       'PreToolUse',
       'Stop',
+      'StopFailure',
       'SubagentStart',
       'SubagentStop',
+      'TeammateIdle',
       'UserPromptSubmit'
     ])
     for (const event of asyncEvents) {
       expect(http.hooks?.[event]).toEqual(command.hooks?.[event])
     }
-    expect(http.hooks?.PostCompact?.[0]?.hooks?.[0]).toEqual({
+    expect(http.hooks?.PermissionRequest?.[0]?.hooks?.[0]).toEqual({
       type: 'http',
       url: '@@POD_RELAY_URL@@',
       timeout: 10,
@@ -228,7 +231,7 @@ describe("Pod's Claude hooks with each launch", () => {
     })
     vi.stubEnv('POD_CLAUDE_HTTP_HOOKS', '1')
     service.install({ claudeVersion: '2.1.296' })
-    expect(readJson(template('http')).hooks?.PostCompact?.[0]?.hooks?.[0]?.type).toBe('http')
+    expect(readJson(template('http')).hooks?.PermissionRequest?.[0]?.hooks?.[0]?.type).toBe('http')
     expect(existsSync(template('http-statusline'))).toBe(true)
     // An A/B arm's runtime gone: the next start takes its http files back.
     vi.stubEnv('POD_CLAUDE_HTTP_HOOKS', '')
