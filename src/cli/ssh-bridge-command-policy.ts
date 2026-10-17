@@ -17,6 +17,10 @@ const OWNER_MACHINE_COMMANDS: readonly (readonly string[])[] = [
   ['vm']
 ]
 
+// Why: the CLI runs on the Orca host here, so a file it writes would land on the host, not where the caller is.
+const SCREENSHOT_FILE_COMMANDS: readonly string[] = ['screenshot', 'full-screenshot']
+const SCREENSHOT_FILE_FLAGS: readonly string[] = ['path', 'save']
+
 function isSshBridgeInvocation(env: NodeJS.ProcessEnv = process.env): boolean {
   return readSshBridgeCredential(env) !== null
 }
@@ -36,6 +40,16 @@ export function refuseOwnerOnlySshBridgeCommand(
       'forbidden',
       `orca ${command} acts on the Orca host machine itself and cannot run from an SSH host. Run it on the Orca host.`
     )
+  }
+  if (commandPath.length === 1 && SCREENSHOT_FILE_COMMANDS.includes(commandPath[0])) {
+    for (const flag of SCREENSHOT_FILE_FLAGS) {
+      if (flags.has(flag)) {
+        throw new RuntimeClientError(
+          'forbidden',
+          `--${flag} would write the image on the Orca host, not on this machine. Omit it and decode result.data (base64) from the --json reply.`
+        )
+      }
+    }
   }
   for (const flag of ['environment', 'pairing-code']) {
     if (flags.has(flag)) {

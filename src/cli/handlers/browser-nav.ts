@@ -9,6 +9,11 @@ import type {
   BrowserSnapshotResult,
   BrowserWaitResult
 } from '../../shared/runtime-types'
+import {
+  formatSavedScreenshot,
+  saveBrowserScreenshot,
+  saveBrowserScreenshotToTemp
+} from '../browser-screenshot-file'
 import type { CommandHandler } from '../dispatch'
 import { formatScreenshot, formatSnapshot, printResult } from '../format'
 import {
@@ -16,7 +21,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
-import { RuntimeClientError } from '../runtime-client'
+import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 import { getBrowserCommandTarget } from '../selectors'
 
 // Why: selector/text/url waits can legitimately take longer than a normal RPC
@@ -25,20 +30,66 @@ import { getBrowserCommandTarget } from '../selectors'
 // generic client timeout path.
 const DEFAULT_BROWSER_WAIT_RPC_TIMEOUT_MS = 60_000
 
+type ScreenshotDestination = { kind: 'inline' } | { kind: 'temp' } | { kind: 'path'; path: string }
+
+// Checked before capturing so a conflicting pair costs no capture.
+function getScreenshotDestination(flags: Map<string, string | boolean>): ScreenshotDestination {
+  const path = getOptionalStringFlag(flags, 'path')
+  const save = flags.has('save')
+  if (path && save) {
+    throw new RuntimeClientError('invalid_argument', 'Use --path or --save, not both.')
+  }
+  if (path) {
+    return { kind: 'path', path }
+  }
+  return save ? { kind: 'temp' } : { kind: 'inline' }
+}
+
+function printScreenshot(
+  result: RuntimeRpcSuccess<BrowserScreenshotResult>,
+  destination: ScreenshotDestination,
+  label: string,
+  cwd: string,
+  json: boolean,
+  formatInline: (result: BrowserScreenshotResult) => string
+): void {
+  // Why: --save is an ergonomics path; if the temp dir is unusable the image stays inline.
+  const saved =
+    destination.kind === 'path'
+      ? saveBrowserScreenshot(result, destination.path, cwd)
+      : destination.kind === 'temp'
+        ? saveBrowserScreenshotToTemp(result)
+        : null
+  if (saved) {
+    printResult(saved, json, (v) => formatSavedScreenshot(label, v))
+    return
+  }
+  printResult(result, json, formatInline)
+}
+
 export const BROWSER_NAV_HANDLERS: Record<string, CommandHandler> = {
   snapshot: async ({ flags, client, cwd, json }) => {
+    const depth = getOptionalPositiveIntegerFlag(flags, 'depth')
+    const selector = getOptionalStringFlag(flags, 'selector')
     const target = await getBrowserCommandTarget(flags, cwd, client)
-    const result = await client.call<BrowserSnapshotResult>('browser.snapshot', target)
+    const result = await client.call<BrowserSnapshotResult>('browser.snapshot', {
+      ...(flags.has('interactive') ? { interactive: true } : {}),
+      ...(flags.has('compact') ? { compact: true } : {}),
+      ...(depth !== undefined ? { depth } : {}),
+      ...(selector ? { selector } : {}),
+      ...target
+    })
     printResult(result, json, formatSnapshot)
   },
   screenshot: async ({ flags, client, cwd, json }) => {
     const format = getOptionalStringFlag(flags, 'format')
+    const destination = getScreenshotDestination(flags)
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserScreenshotResult>('browser.screenshot', {
       format: format === 'jpeg' ? 'jpeg' : undefined,
       ...target
     })
-    printResult(result, json, formatScreenshot)
+    printScreenshot(result, destination, 'Screenshot', cwd, json, formatScreenshot)
   },
   goto: async ({ flags, client, cwd, json }) => {
     const url = getRequiredStringFlag(flags, 'url')
@@ -125,11 +176,19 @@ export const BROWSER_NAV_HANDLERS: Record<string, CommandHandler> = {
   },
   'full-screenshot': async ({ flags, client, cwd, json }) => {
     const format = getOptionalStringFlag(flags, 'format') === 'jpeg' ? 'jpeg' : 'png'
+    const destination = getScreenshotDestination(flags)
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserScreenshotResult>('browser.fullScreenshot', {
       format,
       ...target
     })
-    printResult(result, json, (v) => `Full-page screenshot captured (${v.format})`)
+    printScreenshot(
+      result,
+      destination,
+      'Full-page screenshot',
+      cwd,
+      json,
+      (v) => `Full-page screenshot captured (${v.format})`
+    )
   }
 }

@@ -31,6 +31,26 @@ describe('owner-only commands over the SSH bridge', () => {
     }
   )
 
+  it.each([
+    ['screenshot', 'path'],
+    ['full-screenshot', 'path'],
+    ['screenshot', 'save'],
+    ['full-screenshot', 'save']
+  ])('refuses %s --%s, which would write a file on the host', (command, flag) => {
+    expect(() =>
+      refuseOwnerOnlySshBridgeCommand([command], new Map([[flag, true]]), BRIDGED)
+    ).toThrow(/decode result\.data/)
+  })
+
+  it('leaves --path alone on other commands and outside the bridge', () => {
+    expect(() =>
+      refuseOwnerOnlySshBridgeCommand(['file', 'open'], new Map([['path', 'a.txt']]), BRIDGED)
+    ).not.toThrow()
+    expect(() =>
+      refuseOwnerOnlySshBridgeCommand(['screenshot'], new Map([['path', 'a.png']]), {})
+    ).not.toThrow()
+  })
+
   it('refuses --host runtime:<id> routing', () => {
     expect(() => refuseSshBridgeEnvironmentRouting('env-1', BRIDGED)).toThrow(/paired servers/)
   })

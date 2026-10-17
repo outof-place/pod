@@ -19,6 +19,11 @@ import {
   type ExternalChromiumPageRecord as PageRecord
 } from './external-chromium-tab-projection'
 import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
+import {
+  agentBrowserSnapshotArgs,
+  browserSnapshotOptions
+} from '../browser/agent-browser-snapshot-args'
+import type { BrowserSnapshotOptions } from '../../shared/runtime-types'
 const AgentBrowserSnapshot = z.object({
   refs: z
     .record(z.string(), z.object({ name: z.string().optional(), role: z.string().optional() }))
@@ -137,7 +142,7 @@ export class ExternalChromiumBrowserProcess {
     const page = await this.tabs.resolveTargetPage(host, params)
     await this.session.selectPage(page.agentPageId)
     if (method === 'browserSnapshot') {
-      return this.snapshot(page)
+      return this.snapshot(page, browserSnapshotOptions(params))
     }
     if (method === 'browserScreenshot') {
       return this.session.screenshot(params, false)
@@ -183,8 +188,10 @@ export class ExternalChromiumBrowserProcess {
     return normalizeExternalChromiumCommandResult(method, params, result)
   }
 
-  private async snapshot(page: PageRecord): Promise<unknown> {
-    const data = AgentBrowserSnapshot.parse(await this.session.run(['snapshot']))
+  private async snapshot(page: PageRecord, options: BrowserSnapshotOptions): Promise<unknown> {
+    const data = AgentBrowserSnapshot.parse(
+      await this.session.run(agentBrowserSnapshotArgs(options))
+    )
     return externalChromiumSnapshotResult(page, data, await this.tabs.describePage(page))
   }
 }

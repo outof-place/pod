@@ -357,7 +357,8 @@ describe('captureFullPageScreenshot', () => {
     expect(webContents.debugger.sendCommand).toHaveBeenNthCalledWith(2, 'Page.captureScreenshot', {
       format: 'png',
       captureBeyondViewport: true,
-      clip: { x: 0, y: 0, width: 641, height: 1281, scale: 1 }
+      clip: { x: 0, y: 0, width: 641, height: 1281, scale: 1 },
+      optimizeForSpeed: true
     })
   })
 
@@ -382,7 +383,8 @@ describe('captureFullPageScreenshot', () => {
     expect(webContents.debugger.sendCommand).toHaveBeenNthCalledWith(2, 'Page.captureScreenshot', {
       format: 'jpeg',
       captureBeyondViewport: true,
-      clip: { x: 0, y: 0, width: 800, height: 1600, scale: 1 }
+      clip: { x: 0, y: 0, width: 800, height: 1600, scale: 1 },
+      optimizeForSpeed: true
     })
   })
 })

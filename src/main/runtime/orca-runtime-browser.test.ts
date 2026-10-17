@@ -476,7 +476,10 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     })
     expect(waitForTabRegistrationMock).toHaveBeenCalledWith('page-target')
     expect(waitForWorktreeTabRegistrationMock).not.toHaveBeenCalled()
-    expect(snapshot).toHaveBeenCalledWith('wt-1', 'page-target')
+    expect(snapshot).toHaveBeenCalledWith('wt-1', 'page-target', {
+      interactive: false,
+      compact: false
+    })
   })
 
   it('wakes the requested page before showing page-scoped tab metadata', async () => {

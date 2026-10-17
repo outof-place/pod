@@ -9,6 +9,18 @@ import type { BROWSER_UNAVAILABLE_ERROR_CODE } from './runtime-session-contracts
 
 export type BrowserSnapshotRef = { ref: string; role: string; name: string }
 
+/** What a snapshot leaves out. An older runtime ignores these and returns the whole tree. */
+export type BrowserSnapshotOptions = {
+  /** Only elements an agent can act on (buttons, links, inputs). */
+  interactive?: boolean
+  /** No empty structural elements. */
+  compact?: boolean
+  /** Levels of the tree below the root, from 1. */
+  depth?: number
+  /** Only the subtree under this CSS selector. */
+  selector?: string
+}
+
 export type BrowserSnapshotResult = {
   browserPageId: string
   snapshot: string

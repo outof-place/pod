@@ -23,6 +23,9 @@ export function buildCases({ worktree }) {
   // Browser commands, text and JSON.
   const browser = [
     ['snapshot'],
+    ['snapshot', '--interactive', '--compact'],
+    ['snapshot', '--depth', '3', '--selector', 'main form'],
+    ['snapshot', '--interactive', '--page', 'page-1'],
     ['screenshot'],
     ['screenshot', '--format', 'jpeg'],
     ['goto', '--url', 'https://example.test/next'],
@@ -134,6 +137,59 @@ export function buildCases({ worktree }) {
       })
     }
   })
+  // `files` are read (and removed) relative to the case cwd after each run, then compared.
+  add('screenshot --path', ['screenshot', '--path', 'parity-shot.png'], {
+    files: ['parity-shot.png']
+  })
+  add('screenshot --path --json', ['screenshot', '--path', 'parity-shot.png', '--json'], {
+    files: ['parity-shot.png']
+  })
+  add(
+    'screenshot jpeg nested --path --json',
+    [
+      'screenshot',
+      '--format',
+      'jpeg',
+      '--path',
+      'x/../parity-shot.jpg',
+      '--page',
+      'page-1',
+      '--json'
+    ],
+    { files: ['parity-shot.jpg'] }
+  )
+  add('screenshot --save', ['screenshot', '--save'])
+  add('screenshot --save --json', ['screenshot', '--save', '--json'])
+  add('screenshot jpeg --save --json', ['screenshot', '--format', 'jpeg', '--save', '--json'])
+  add(
+    'screenshot --save with --path falls back',
+    ['screenshot', '--save', '--path', 'parity-shot.png'],
+    {
+      files: ['parity-shot.png']
+    }
+  )
+  add(
+    'screenshot --save with an unusable temp dir keeps it inline',
+    ['screenshot', '--save', '--json'],
+    {
+      env: { ORCA_COMPUTER_SCREENSHOT_TMPDIR: '/dev/null/shots' }
+    }
+  )
+  // The SSH bridge runs Node on the Orca host: podx must hand over so the refusal comes out the same.
+  add(
+    'screenshot --path over the SSH bridge falls back',
+    ['screenshot', '--path', 'parity-shot.png'],
+    {
+      env: { ORCA_SSH_BRIDGE_CREDENTIAL: 'sshb_parity' },
+      files: ['parity-shot.png']
+    }
+  )
+  add('screenshot --save over the SSH bridge falls back', ['screenshot', '--save'], {
+    env: { ORCA_SSH_BRIDGE_CREDENTIAL: 'sshb_parity' }
+  })
+  add('screenshot unwritable path falls back', ['screenshot', '--path', 'no-such-dir/shot.png'])
+  add('snapshot depth zero falls back', ['snapshot', '--depth', '0'])
+  add('snapshot empty selector', ['snapshot', '--selector', ''])
   add('tab list empty', ['tab', 'list'], {
     responses: { 'browser.tabList': ok({ tabs: [] }) }
   })

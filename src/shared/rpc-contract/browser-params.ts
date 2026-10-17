@@ -17,6 +17,21 @@ export const Goto = BrowserTarget.extend({
   url: requiredString('Missing required --url')
 })
 
+// Why: agent-browser's -d rejects 0 and fractions, so they are dropped here, not forwarded.
+const OptionalSnapshotDepth = z
+  .unknown()
+  .transform((value) => (Number.isInteger(value) && Number(value) > 0 ? Number(value) : undefined))
+  .pipe(z.union([z.number(), z.undefined()]))
+  .optional()
+
+// Why optional: a runtime without them drops the keys and answers with the whole tree.
+export const Snapshot = BrowserTarget.extend({
+  interactive: OptionalBoolean,
+  compact: OptionalBoolean,
+  depth: OptionalSnapshotDepth,
+  selector: OptionalString
+})
+
 export const Fill = BrowserTarget.extend({
   element: requiredString('Missing required --element'),
   value: requiredStringAllowingEmpty('Missing required --value')

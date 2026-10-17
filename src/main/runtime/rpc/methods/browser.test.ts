@@ -101,6 +101,51 @@ describe('browser RPC methods', () => {
     expect(browserProfileCreate).not.toHaveBeenCalled()
   })
 
+  // Why: zod drops unknown keys, so an option missing from the schema never reaches the page.
+  it('passes snapshot options through to the runtime', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher calls only getRuntimeId and browserSnapshot on this stub.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      browserSnapshot: vi.fn().mockResolvedValue({ snapshot: '' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('browser.snapshot', {
+        page: 'page-1',
+        interactive: true,
+        compact: true,
+        depth: 2,
+        selector: '#app'
+      })
+    )
+
+    expect(runtime.browserSnapshot).toHaveBeenCalledWith({
+      page: 'page-1',
+      interactive: true,
+      compact: true,
+      depth: 2,
+      selector: '#app'
+    })
+  })
+
+  // Why: the CLI sends integers from 1, but any RPC caller can send 0 or a fraction, which agent-browser rejects.
+  it.each([[0], [2.5], [-1]])(
+    'drops a snapshot depth of %s instead of forwarding it',
+    async (depth) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher calls only getRuntimeId and browserSnapshot on this stub.
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        browserSnapshot: vi.fn().mockResolvedValue({ snapshot: '' })
+      } as unknown as OrcaRuntimeService
+      const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
+
+      await dispatcher.dispatch(makeRequest('browser.snapshot', { page: 'page-1', depth }))
+
+      expect(vi.mocked(runtime.browserSnapshot).mock.calls[0][0].depth).toBeUndefined()
+    }
+  )
+
   it('routes core browser automation commands to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

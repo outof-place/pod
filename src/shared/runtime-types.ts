@@ -64,6 +64,7 @@ export type {
   BrowserScrollResult,
   BrowserSelectAllResult,
   BrowserSelectResult,
+  BrowserSnapshotOptions,
   BrowserSnapshotRef,
   BrowserSnapshotResult,
   BrowserTabCreateResult,

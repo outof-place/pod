@@ -212,7 +212,8 @@ export async function captureFullPageScreenshot(
     const frame = await captureUntilDrawn(webContents, {
       format,
       captureBeyondViewport: true,
-      clip
+      clip,
+      optimizeForSpeed: true
     })
     if (!frame) {
       throw new Error(SCREENSHOT_TIMEOUT_MESSAGE)
@@ -252,6 +253,9 @@ export async function captureScreenshot(
   }
   if (params?.fromSurface != null) {
     screenshotParams.fromSurface = params.fromSurface
+  }
+  if (params?.optimizeForSpeed != null) {
+    screenshotParams.optimizeForSpeed = params.optimizeForSpeed
   }
 
   const release = holdPaint()

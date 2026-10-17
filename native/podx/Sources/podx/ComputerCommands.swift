@@ -230,20 +230,31 @@ func prepareComputerJson(_ response: JSONObject) -> JSONObject {
     case .object(var screenshot)? = result["screenshot"],
     case .string(let data)? = screenshot["data"], !data.raw.isEmpty
   else { return response }
-  guard let dir = computerScreenshotTempDir() else { return response }
-  cleanupComputerScreenshots(dir)
-  let ext = screenshot["format"].isString("png") ? "png" : "img"
   let id = response["id"]?.stringValue?.string ?? ""
-  let path = dir + "/" + safeCliFileStem(id) + "-screenshot." + ext
-  guard writeFileExclusive(path, decodeBase64Lenient(data.raw), mode: 0o600) else { return response }
+  guard let saved = saveAgentScreenshotTempFile(requestId: id, base64: data.raw, format: screenshot["format"])
+  else { return response }
   screenshot.entries.removeAll { $0.key.equals("data") }
-  screenshot.set("path", .str(path))
+  screenshot.set("path", .str(saved.path))
   screenshot.set("dataOmitted", .bool(true))
-  screenshot.set("expiresAt", .str(isoTimestamp(epochMs() + COMPUTER_SCREENSHOT_TTL_MS)))
+  screenshot.set("expiresAt", .str(saved.expiresAt))
   result.set("screenshot", .object(screenshot))
   var out = response
   out.set("result", .object(result))
   return out
+}
+
+/// saveAgentScreenshotTempFile: the capture in the CLI-owned temp dir under a name unique to the
+/// request, owner-only. Nil when the dir or file cannot be used (callers keep the base64 inline).
+func saveAgentScreenshotTempFile(
+  requestId: String, base64: [UInt8], format: JSONValue?
+) -> (path: String, expiresAt: String, bytes: Int)? {
+  guard let dir = computerScreenshotTempDir() else { return nil }
+  cleanupComputerScreenshots(dir)
+  let ext = format.isString("png") ? "png" : format.isString("jpeg") ? "jpg" : "img"
+  let path = dir + "/" + safeCliFileStem(requestId) + "-screenshot." + ext
+  let image = decodeBase64Lenient(base64)
+  guard writeFileExclusive(path, image, mode: 0o600) else { return nil }
+  return (path, isoTimestamp(epochMs() + COMPUTER_SCREENSHOT_TTL_MS), image.count)
 }
 
 func computerScreenshotTempDir() -> String? {
@@ -295,7 +306,8 @@ func cleanupComputerScreenshots(_ dir: String) {
           String(decoding: UnsafeBufferPointer(start: UnsafeRawPointer($0).assumingMemoryBound(to: UInt8.self), count: Int(entry.pointee.d_namlen)), as: UTF8.self)
         }
       }
-      guard name.hasSuffix("-screenshot.png") || name.hasSuffix("-screenshot.img") else { continue }
+      guard name.hasSuffix("-screenshot.png") || name.hasSuffix("-screenshot.jpg") || name.hasSuffix("-screenshot.img")
+      else { continue }
       let path = dir + "/" + name
       var fileStat = stat()
       if stat(path, &fileStat) == 0 {

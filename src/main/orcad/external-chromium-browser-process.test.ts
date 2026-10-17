@@ -1,21 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { start, stop, initialize, clear } = vi.hoisted(() => ({
-  start: vi.fn(),
-  stop: vi.fn(),
-  initialize: vi.fn(),
-  clear: vi.fn()
-}))
+const { start, stop, initialize, clear, run, selectPage, resolveTargetPage, describePage } =
+  vi.hoisted(() => ({
+    start: vi.fn(),
+    stop: vi.fn(),
+    initialize: vi.fn(),
+    clear: vi.fn(),
+    run: vi.fn(),
+    selectPage: vi.fn(),
+    resolveTargetPage: vi.fn(),
+    describePage: vi.fn()
+  }))
 vi.mock('./external-chromium-browser-session', () => ({
   ExternalChromiumBrowserSession: class {
     start = start
     stop = stop
+    run = run
+    selectPage = selectPage
   }
 }))
 vi.mock('./external-chromium-tab-registry', () => ({
   ExternalChromiumTabRegistry: class {
     initialize = initialize
     clear = clear
+    resolveTargetPage = resolveTargetPage
+    describePage = describePage
   }
 }))
 
@@ -42,5 +51,48 @@ describe('external Chromium startup cancellation', () => {
     await browser.stop()
     expect(stop).toHaveBeenCalledWith()
     expect(clear).toHaveBeenCalledOnce()
+  })
+})
+
+describe('external Chromium snapshot options', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('narrows the snapshot the way the agent asked', async () => {
+    resolveTargetPage.mockResolvedValue({ publicPageId: 'page-1', agentPageId: 't1' })
+    describePage.mockResolvedValue({ url: 'https://example.test/', title: 'Example' })
+    run.mockResolvedValue({ snapshot: '- button "Go" [ref=e1]', refs: {} })
+    const browser = new ExternalChromiumBrowserProcess(
+      '/opt/orca/agent-browser',
+      { executablePath: '/opt/orca/chromium', provider: 'chromium' },
+      '/state'
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the commands proxy only reads the host it is handed through to mocked collaborators.
+    const commands = browser.createCommands({} as Parameters<typeof browser.createCommands>[0])
+
+    await commands.browserSnapshot({
+      page: 'page-1',
+      interactive: true,
+      depth: 2,
+      selector: '#app'
+    })
+
+    expect(run).toHaveBeenCalledWith(['snapshot', '-i', '-d', '2', '-s', '#app'])
+  })
+
+  it('sends no -d for a depth agent-browser would reject', async () => {
+    resolveTargetPage.mockResolvedValue({ publicPageId: 'page-1', agentPageId: 't1' })
+    describePage.mockResolvedValue({ url: 'https://example.test/', title: 'Example' })
+    run.mockResolvedValue({ snapshot: '- button "Go" [ref=e1]', refs: {} })
+    const browser = new ExternalChromiumBrowserProcess(
+      '/opt/orca/agent-browser',
+      { executablePath: '/opt/orca/chromium', provider: 'chromium' },
+      '/state'
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the commands proxy only reads the host it is handed through to mocked collaborators.
+    const commands = browser.createCommands({} as Parameters<typeof browser.createCommands>[0])
+
+    await commands.browserSnapshot({ page: 'page-1', depth: 0 })
+
+    expect(run).toHaveBeenCalledWith(['snapshot'])
   })
 })

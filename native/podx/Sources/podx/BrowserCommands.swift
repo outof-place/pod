@@ -9,8 +9,16 @@ let DEFAULT_BROWSER_WAIT_RPC_TIMEOUT_MS = 60_000
 
 let BROWSER_HANDLERS: [String: Handler] = [
   "snapshot": { inv in
+    let depth = try inv.optPositiveInt("depth")
+    let selector = try inv.optString("selector")
     try inv.checkBrowserTargetFlags()
-    let r = try inv.call("browser.snapshot", try inv.browserCommandTarget())
+    let options: [(String, JSONValue?)] = [
+      ("interactive", inv.flags.has("interactive") ? .bool(true) : nil),
+      ("compact", inv.flags.has("compact") ? .bool(true) : nil),
+      ("depth", depth.json),
+      ("selector", selector.json),
+    ]
+    let r = try inv.call("browser.snapshot", options + (try inv.browserCommandTarget()))
     inv.printResult(r) { v in
       "page: \(v["browserPageId"].templateString)\n\(v["title"].templateString) — \(v["url"].templateString)\n"
         + (v["snapshot"].templateString)
@@ -18,10 +26,26 @@ let BROWSER_HANDLERS: [String: Handler] = [
   },
   "screenshot": { inv in
     let format = try inv.optString("format")
+    let path = try inv.optString("path")
+    let save = inv.flags.has("save")
+    // --path with --save is Node's invalid_argument.
+    if path != nil && save { throw CliError.needsNode }
     try inv.checkBrowserTargetFlags()
-    let r = try inv.call("browser.screenshot", [("format", format == "jpeg" ? .str("jpeg") : nil)] + (try inv.browserCommandTarget()))
-    inv.printResult(r) { v in
-      "Screenshot captured (\(v["format"].templateString), \(base64PayloadByteCount(v["data"])))"
+    let params = [("format", format == "jpeg" ? JSONValue.str("jpeg") : nil)] + (try inv.browserCommandTarget())
+    if path == nil && !save {
+      let r = try inv.call("browser.screenshot", params)
+      inv.printScreenshotInline(r, label: "Screenshot")
+      return
+    }
+    // Read-only so a failed write can still hand over to Node, which words the error.
+    let r = try inv.call("browser.screenshot", params, readOnly: true)
+    if let path {
+      guard let saved = saveBrowserScreenshot(r, path: path, cwd: inv.cwd) else { throw CliError.needsNode }
+      inv.printSavedScreenshot(saved, label: "Screenshot")
+    } else if let saved = saveBrowserScreenshotToTemp(r) {
+      inv.printSavedScreenshot(saved, label: "Screenshot")
+    } else {
+      inv.printScreenshotInline(r, label: "Screenshot")
     }
   },
   "goto": { inv in
@@ -194,6 +218,54 @@ extension Invocation {
       out.log(bytes: value!.stringify(indent: nil))
     }
   }
+}
+
+extension Invocation {
+  func printScreenshotInline(_ response: JSONObject, label: String) {
+    printResult(response) { v in
+      "\(label) captured (\(v["format"].templateString), \(base64PayloadByteCount(v["data"])))"
+    }
+  }
+
+  func printSavedScreenshot(_ saved: JSONObject, label: String) {
+    printResult(saved) { v in
+      "\(label) saved to \(v["path"].templateString) (\(v["format"].templateString), \(v["bytes"].templateString) bytes)"
+    }
+  }
+}
+
+/// saveBrowserScreenshotToTemp: saveBrowserScreenshot into the CLI's screenshot temp dir under a
+/// unique name, with its expiry. Nil keeps the base64 inline.
+func saveBrowserScreenshotToTemp(_ response: JSONObject) -> JSONObject? {
+  guard case .object(let result)? = response["result"], case .string(let data)? = result["data"],
+    let saved = saveAgentScreenshotTempFile(
+      requestId: response["id"]?.stringValue?.string ?? "", base64: data.raw, format: result["format"])
+  else { return nil }
+  var out = response
+  out.set(
+    "result",
+    .object(
+      paramsObject([
+        ("format", result["format"]), ("path", .str(saved.path)), ("bytes", .int(saved.bytes)),
+        ("expiresAt", .str(saved.expiresAt)),
+      ])))
+  return out
+}
+
+/// saveBrowserScreenshot: the decoded image written to path (resolved against cwd), and the reply
+/// with format, path and byte count in place of the base64. Nil (Node's turn) when the reply holds
+/// no image or the write fails.
+func saveBrowserScreenshot(_ response: JSONObject, path: String, cwd: String) -> JSONObject? {
+  guard case .object(let result)? = response["result"], case .string(let data)? = result["data"]
+  else { return nil }
+  let absolute = resolvePosixPath(path, cwd: cwd)
+  let image = decodeBase64Lenient(data.raw)
+  guard writeFileExclusive(absolute, image, mode: 0o600) else { return nil }
+  var saved = response
+  saved.set(
+    "result",
+    .object(paramsObject([("format", result["format"]), ("path", .str(absolute)), ("bytes", .int(image.count))])))
+  return saved
 }
 
 /// formatBase64PayloadByteCount: Buffer.byteLength(base64, 'base64').

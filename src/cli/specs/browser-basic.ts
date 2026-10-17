@@ -24,14 +24,15 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['snapshot'],
     summary: 'Capture an accessibility snapshot of the active browser tab',
-    usage: 'orca snapshot [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree']
+    usage:
+      'orca snapshot [--interactive] [--compact] [--depth <n>] [--selector <css>] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'interactive', 'compact', 'depth', 'selector']
   },
   {
     path: ['screenshot'],
     summary: 'Capture a viewport screenshot of the active browser tab',
-    usage: 'orca screenshot [--format <png|jpeg>] [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'format', 'worktree']
+    usage: 'orca screenshot [--format <png|jpeg>] [--path <file> | --save] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'format', 'path', 'save', 'worktree']
   },
   {
     path: ['click'],
@@ -149,8 +150,9 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['full-screenshot'],
     summary: 'Capture a full-page screenshot (beyond viewport)',
-    usage: 'orca full-screenshot [--format <png|jpeg>] [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'format', 'worktree']
+    usage:
+      'orca full-screenshot [--format <png|jpeg>] [--path <file> | --save] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'format', 'path', 'save', 'worktree']
   },
   {
     path: ['hover'],

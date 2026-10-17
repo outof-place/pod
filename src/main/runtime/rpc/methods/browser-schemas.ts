@@ -32,6 +32,7 @@ export {
   Screenshot,
   Scroll,
   Select,
+  Snapshot,
   SelectorPath,
   SetCredentials,
   SetDevice,

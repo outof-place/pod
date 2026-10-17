@@ -45,7 +45,7 @@ describe('OrcaRuntimeService', () => {
       const result = await runtime.browserSnapshot({ page: 'page-1' })
 
       expect(result.browserPageId).toBe('page-1')
-      expect(snapshotMock).toHaveBeenCalledWith(undefined, 'page-1')
+      expect(snapshotMock).toHaveBeenCalledWith(undefined, 'page-1', {})
       expect(listWorktrees).not.toHaveBeenCalled()
     })
 
@@ -71,7 +71,7 @@ describe('OrcaRuntimeService', () => {
         page: 'page-1'
       })
 
-      expect(snapshotMock).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'page-1')
+      expect(snapshotMock).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'page-1', {})
     })
 
     it('routes tab switch and capture start by explicit page id', async () => {

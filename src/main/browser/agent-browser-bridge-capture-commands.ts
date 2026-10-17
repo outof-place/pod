@@ -1,10 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs'
 import type { BrowserScreenshotResult, BrowserEvalResult } from '../../shared/runtime-types'
 import { BrowserError } from './cdp-bridge'
-import { captureFullPageScreenshot } from './cdp-screenshot'
+import { captureFullPageScreenshot, captureScreenshot } from './cdp-screenshot'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { AgentBrowserBridgeUtilityCommands } from './agent-browser-bridge-utility-commands'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
+import { notePodAgentBrowserCommand } from '../pod/browser-pane/pod-browser-pane-hooks'
 
 export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBridgeUtilityCommands {
   async screenshot(
@@ -12,13 +12,40 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserScreenshotResult> {
-    // Why: agent-browser writes the screenshot to a temp file and returns its path; read it and return base64.
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return this.readScreenshotFromResult(
-        await this.execAgentBrowser(sessionName, ['screenshot']),
-        format
-      )
-    })
+    // Why direct: a capture is one CDP call on this page's own webContents; a helper process per shot only adds its start-up.
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        const wc = this.requireTargetWebContents(target)
+        const imageFormat = format === 'jpeg' ? 'jpeg' : 'png'
+        notePodAgentBrowserCommand(target.webContentsId)
+        let releaseDebugger = (): void => {}
+        try {
+          releaseDebugger = acquireElectronDebugger(wc).release
+          // Why: Chromium's fast PNG encoder (its screencast's) saves ~25 ms a capture for ~40% more bytes.
+          const { data } = await captureScreenshot(
+            wc,
+            { format: imageFormat, optimizeForSpeed: true },
+            () => this.browserManager.holdPaintForCapture(target.webContentsId)
+          )
+          return { data, format: imageFormat }
+        } catch (error) {
+          if (!this.getWebContents(target.webContentsId)) {
+            throw this.createPageUnavailableError(
+              `${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`
+            )
+          }
+          throw new BrowserError(
+            'browser_error',
+            error instanceof Error ? error.message : String(error)
+          )
+        } finally {
+          releaseDebugger()
+        }
+      },
+      { ensureSession: false }
+    )
   }
 
   async fullPageScreenshot(
@@ -36,18 +63,6 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
         throw new BrowserError('browser_error', (error as Error).message)
       }
     })
-  }
-
-  private readScreenshotFromResult(raw: unknown, format?: string): BrowserScreenshotResult {
-    const parsed = raw as { path?: string } | undefined
-    if (!parsed?.path) {
-      throw new BrowserError('browser_error', 'Screenshot returned no file path')
-    }
-    if (!existsSync(parsed.path)) {
-      throw new BrowserError('browser_error', `Screenshot file not found: ${parsed.path}`)
-    }
-    const data = readFileSync(parsed.path).toString('base64')
-    return { data, format: format === 'jpeg' ? 'jpeg' : 'png' } as BrowserScreenshotResult
   }
 
   async evaluate(

@@ -153,7 +153,8 @@ describe('AgentBrowserBridge', () => {
     expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(2, 'Page.captureScreenshot', {
       format: 'png',
       captureBeyondViewport: true,
-      clip: { x: 0, y: 0, width: 601, height: 901, scale: 1 }
+      clip: { x: 0, y: 0, width: 601, height: 901, scale: 1 },
+      optimizeForSpeed: true
     })
     expect(holdPaintForCapture).toHaveBeenCalledWith(100)
     expect(release).toHaveBeenCalledTimes(1)
@@ -161,5 +162,29 @@ describe('AgentBrowserBridge', () => {
       (call[1] as string[]).includes('screenshot')
     )
     expect(screenshotCall).toBeUndefined()
+  })
+
+  it('captures a viewport screenshot in the runtime: no helper, the format asked for, one paint hold', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockImplementation((method: string) =>
+      Promise.resolve(method === 'Page.captureScreenshot' ? { data: 'viewport-jpeg' } : {})
+    )
+    webContentsFromIdMock.mockReturnValue(wc)
+    const release = vi.fn()
+    const holdPaintForCapture = vi.fn(() => release)
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(undefined, undefined, { holdPaintForCapture })
+    )
+    b.setActiveTab(100)
+
+    await expect(b.screenshot('jpeg')).resolves.toEqual({ data: 'viewport-jpeg', format: 'jpeg' })
+
+    expect(wc.debugger.sendCommand).toHaveBeenCalledWith('Page.captureScreenshot', {
+      format: 'jpeg',
+      optimizeForSpeed: true
+    })
+    expect(holdPaintForCapture).toHaveBeenCalledWith(100)
+    expect(release).toHaveBeenCalledTimes(1)
+    expect(execFileMock).not.toHaveBeenCalled()
   })
 })

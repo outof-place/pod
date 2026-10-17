@@ -103,6 +103,41 @@ describe('AgentBrowserBridge', () => {
     expect(args[args.indexOf('--session') + 1]).toBe('orca-tab-tab-1')
   })
 
+  // Why: a heavy page's full tree is the slow part of a snapshot; these are how an agent asks for less.
+  it('narrows a snapshot to what the agent asked for', async () => {
+    succeedWith({ snapshot: '...' })
+    await bridge.snapshot(undefined, undefined, {
+      interactive: true,
+      compact: true,
+      depth: 3,
+      selector: 'main form'
+    })
+
+    const args: string[] =
+      execFileMock.mock.calls.find((call) => call[1]?.includes('snapshot'))?.[1] ?? []
+    expect(args.slice(args.indexOf('snapshot'), -1)).toEqual([
+      'snapshot',
+      '-i',
+      '-c',
+      '-d',
+      '3',
+      '-s',
+      'main form'
+    ])
+  })
+
+  it.each([[0], [2.5], [-1]])(
+    'sends no -d for a depth of %s, which agent-browser rejects',
+    async (depth) => {
+      succeedWith({ snapshot: '...' })
+      await bridge.snapshot(undefined, undefined, { depth })
+
+      const args: string[] =
+        execFileMock.mock.calls.find((call) => call[1]?.includes('snapshot'))?.[1] ?? []
+      expect(args).not.toContain('-d')
+    }
+  )
+
   // ── Embedded CDP ownership ──
 
   it('passes --cdp on every helper command family so a restarted daemon cannot launch Chrome', async () => {

@@ -66,6 +66,44 @@ describe('orca cli browser page targeting', () => {
     expect(callMock).toHaveBeenCalledWith('browser.snapshot', { page: 'page-1' })
   })
 
+  it('sends the snapshot narrowing flags as RPC options', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_snapshot', {
+        browserPageId: 'page-1',
+        snapshot: 'tree',
+        refs: [],
+        url: 'https://example.com',
+        title: 'Example'
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'snapshot',
+        '--interactive',
+        '--compact',
+        '--depth',
+        '4',
+        '--selector',
+        'main',
+        '--page',
+        'page-1',
+        '--json'
+      ],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('browser.snapshot', {
+      interactive: true,
+      compact: true,
+      depth: 4,
+      selector: 'main',
+      page: 'page-1'
+    })
+  })
+
   it('resolves current worktree only when --page is combined with --worktree current', async () => {
     queueFixtures(
       callMock,

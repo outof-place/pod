@@ -1,4 +1,5 @@
 import type {
+  BrowserSnapshotOptions,
   BrowserSnapshotResult,
   BrowserClickResult,
   BrowserGotoResult,
@@ -15,14 +16,19 @@ import {
   waitForAbortedNavigationReplacement
 } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeQueue } from './agent-browser-bridge-queue'
+import { agentBrowserSnapshotArgs } from './agent-browser-snapshot-args'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
-  async snapshot(worktreeId?: string, browserPageId?: string): Promise<BrowserSnapshotResult> {
+  async snapshot(
+    worktreeId?: string,
+    browserPageId?: string,
+    options?: BrowserSnapshotOptions
+  ): Promise<BrowserSnapshotResult> {
     // Why: snapshot creates fresh refs so it must bypass the stale-ref guard
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
-      const result = (await this.execAgentBrowser(sessionName, [
-        'snapshot'
-      ])) as BrowserSnapshotResult
+      const args = agentBrowserSnapshotArgs(options)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's snapshot reply, as before; the flags only narrow its tree.
+      const result = (await this.execAgentBrowser(sessionName, args)) as BrowserSnapshotResult
       return {
         ...result,
         browserPageId: target.browserPageId

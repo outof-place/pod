@@ -2,8 +2,23 @@
 const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
 
+// Why: an agent saves the image and opens it with its image tool instead of reading base64.
+const SCREENSHOT_PATH_HELP =
+  '--path <file>          Save the image there (relative to cwd) and print the path, not base64'
+const SCREENSHOT_SAVE_HELP =
+  '--save                 Save to a private temp file with a unique name and print the path'
+
 /** Per-command flag help, kept out of the shared help chain it would crowd. */
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  snapshot: {
+    interactive: '--interactive          Only interactive elements (buttons, links, inputs)',
+    compact:
+      '--compact              Drop empty structural elements (about 2x slower on a heavy page)',
+    depth: '--depth <n>            Limit the tree depth',
+    selector: '--selector <css>       Snapshot only the subtree under this CSS selector'
+  },
+  screenshot: { path: SCREENSHOT_PATH_HELP, save: SCREENSHOT_SAVE_HELP },
+  'full-screenshot': { path: SCREENSHOT_PATH_HELP, save: SCREENSHOT_SAVE_HELP },
   'worktree create': {
     pr: '--pr <number>          Linked GitHub pull request number',
     'gitlab-issue': '--gitlab-issue <number|url> Linked GitLab issue in the source project',

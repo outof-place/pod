@@ -11,6 +11,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -87,6 +88,23 @@ function listShots(shotsDir) {
   }
 }
 
+// Files a case wrote under its cwd (by name and content), removed so the next run starts clean.
+function takeFiles(cwd, names) {
+  return names
+    .map((name) => {
+      const file = path.join(cwd, name)
+      try {
+        const mode = (statSync(file).mode & 0o777).toString(8)
+        return `${name}:${mode}:${readFileSync(file).toString('base64')}`
+      } catch {
+        return `${name}:missing`
+      } finally {
+        rmSync(file, { force: true })
+      }
+    })
+    .join(',')
+}
+
 function sortKeys(value) {
   if (Array.isArray(value)) {
     return value.map(sortKeys)
@@ -136,9 +154,13 @@ async function runOne(kind, testCase) {
     ...testCase.env
   }
   const [bin, args] = kind === 'node' ? [node, [cli, ...testCase.argv]] : [podx, testCase.argv]
+  const cwd = testCase.cwd ?? nested
+  for (const name of testCase.files ?? []) {
+    rmSync(path.join(cwd, name), { force: true })
+  }
   const started = process.hrtime.bigint()
   const r = spawnSync(bin, args, {
-    cwd: testCase.cwd ?? nested,
+    cwd,
     env,
     encoding: 'buffer',
     input: testCase.stdin ?? ''
@@ -156,11 +178,13 @@ async function runOne(kind, testCase) {
     requests,
     fellBack: readFileSync(fallbackLog, 'utf8').length > 0,
     shots: listShots(path.join(dir, `shots-${kind}`)),
+    files: takeFiles(cwd, testCase.files ?? []),
     ms
   }
 }
 
 const READ_ONLY = new Set([
+  'browser.screenshot',
   'worktree.list',
   'worktree.show',
   'terminal.list',
@@ -188,6 +212,9 @@ for (const testCase of cases) {
   }
   if (a.shots !== b.shots) {
     diffs.push(['screenshot files', a.shots.slice(0, 200), b.shots.slice(0, 200)])
+  }
+  if (a.files !== b.files) {
+    diffs.push(['written files', a.files.slice(0, 200), b.files.slice(0, 200)])
   }
   if (a.status !== b.status) {
     diffs.push(['exit', String(a.status), String(b.status)])
