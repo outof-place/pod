@@ -14,9 +14,9 @@
 //
 //   node bench/suites/latency.mjs [--confirm-visible] [--throughput] [--rounds 5] [--keys 40]
 //        [--subjects orca,pod-native,pod-xterm,ghostty] [--display ID]
-import { execFile, execFileSync } from 'node:child_process'
+import { execFile, execFileSync, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { parseArgs, promisify } from 'node:util'
@@ -213,7 +213,8 @@ function writeRunner(profile, queue) {
 // are found and stopped by executable, never by argv), opened as a separate instance (open -n)
 // with no user config, Orca's default font size (14).
 function cloneGhostty(profile) {
-  const clone = path.join(profile.ud, 'Ghostty.app')
+  // Resolved first: a POD_BENCH_PROFILE_BASE with `..` or a link must not pass the check.
+  const clone = path.join(realpathSync(profile.ud), 'Ghostty.app')
   if (!clone.startsWith('/private/tmp/')) {
     throw new Error(`refusing to clone and re-sign Ghostty at ${clone}: only inside a run dir under /private/tmp`)
   }
@@ -225,7 +226,8 @@ function cloneGhostty(profile) {
   // codes.pod.bench.ghostty, not in the account's Ghostty domain (the lead's MUST, 2026-10-17).
   execFileSync('/usr/bin/plutil', ['-replace', 'CFBundleIdentifier', '-string', BENCH_GHOSTTY_ID, path.join(clone, 'Contents/Info.plist')])
   execFileSync('/usr/bin/codesign', ['--force', '--sign', '-', clone], { stdio: ['ignore', 'ignore', 'pipe'] })
-  const signed = execFileSync('/bin/sh', ['-c', 'codesign -dv "$1" 2>&1', 'sh', clone], { encoding: 'utf8' })
+  // codesign -dv reports on stderr.
+  const signed = spawnSync('/usr/bin/codesign', ['-dv', clone], { encoding: 'utf8' }).stderr ?? ''
   if (!signed.includes(`\nIdentifier=${BENCH_GHOSTTY_ID}\n`)) {
     throw new Error(`the clone's signature does not carry ${BENCH_GHOSTTY_ID}`)
   }
@@ -289,8 +291,23 @@ const GHOSTTY_ID = 'com.mitchellh.ghostty'
 const BENCH_GHOSTTY_ID = 'codes.pod.bench.ghostty'
 function ghosttyAccountState(id = GHOSTTY_ID) {
   const sha = (data) => createHash('sha256').update(data).digest('hex')
-  const file = (target) =>
-    existsSync(target) ? { sha256: statSync(target).isFile() ? sha(readFileSync(target)) : null, mtimeMs: statSync(target).mtimeMs } : null
+  // A file by its bytes; a dir (the saved state) by the listing of its entries' names, sizes and
+  // mtimes, every level down.
+  const listing = (dir) =>
+    readdirSync(dir, { recursive: true })
+      .sort()
+      .map((name) => {
+        const entry = statSync(path.join(dir, name))
+        return `${name}\t${entry.size}\t${entry.mtimeMs}`
+      })
+      .join('\n')
+  const file = (target) => {
+    if (!existsSync(target)) {
+      return null
+    }
+    const entry = statSync(target)
+    return { sha256: sha(entry.isFile() ? readFileSync(target) : listing(target)), mtimeMs: entry.mtimeMs }
+  }
   let defaults = null
   try {
     // Through cfprefsd: it also sees what isn't flushed to the plist yet.
@@ -301,6 +318,11 @@ function ghosttyAccountState(id = GHOSTTY_ID) {
     defaultsExport: defaults,
     savedState: file(path.join(ACCOUNT_HOME, 'Library/Saved Application State', `${id}.savedState`))
   }
+}
+
+// How many processes run from the account's own Ghostty (lib/run-tree.mjs, by executable).
+async function userGhosttyProcesses() {
+  return (await runTree(GHOSTTY)).procs.length
 }
 
 // Whether cfprefsd knows the clone's domain: `defaults read` fails for one that doesn't exist.
@@ -386,11 +408,12 @@ async function ghosttySubject() {
     try {
       await stopGhostty(clone)
     } finally {
-      await removeProfile(profile)
-      // The clone registered with LaunchServices when it opened: out again, as orca-instance does.
+      // The clone registered with LaunchServices when it opened: out again, as orca-instance does,
+      // while its path is certain to be there.
       try {
         execFileSync(LSREGISTER, ['-u', clone])
       } catch {}
+      await removeProfile(profile)
     }
   }
 }
@@ -406,29 +429,44 @@ const samples = Object.fromEntries(names.map((name) => [name, []]))
 const ghosttyBefore = names.includes('ghostty') ? ghosttyAccountState() : null
 const benchBefore = ghosttyBefore ? ghosttyAccountState(BENCH_GHOSTTY_ID) : null
 const benchExistedBefore = ghosttyBefore ? benchDomainExists() : null
-for (let round = 0; round < rounds; round += 1) {
-  const order = names.map((_, i) => names[(i + round) % names.length])
-  for (const name of order) {
-    const [sample] = await collectSamples({
-      label: `visible ${name} round ${round + 1}`,
-      count: 1,
-      measure: () => measure(name)
-    })
-    samples[name].push({ ...sample, index: round })
+// The account's own Ghostty running meanwhile can change its domain without the bench: counted at
+// both ends, by executable.
+const userGhosttyBefore = ghosttyBefore ? await userGhosttyProcesses() : null
+let ghosttyAccount = null
+try {
+  for (let round = 0; round < rounds; round += 1) {
+    const order = names.map((_, i) => names[(i + round) % names.length])
+    for (const name of order) {
+      const [sample] = await collectSamples({
+        label: `visible ${name} round ${round + 1}`,
+        count: 1,
+        measure: () => measure(name)
+      })
+      samples[name].push({ ...sample, index: round })
+    }
+  }
+} finally {
+  // Also when a round threw: the clone's traces go either way.
+  if (ghosttyBefore) {
+    const ghosttyAfter = ghosttyAccountState()
+    // The account's own Ghostty domain before and after: `changed` names what differs.
+    ghosttyAccount = {
+      before: ghosttyBefore,
+      after: ghosttyAfter,
+      changed: Object.keys(ghosttyBefore).filter((key) => JSON.stringify(ghosttyBefore[key]) !== JSON.stringify(ghosttyAfter[key])),
+      // Processes of /Applications/Ghostty.app (the account's own) at the first round and the last:
+      // with any, a change may be theirs, not the bench's.
+      userGhosttyProcesses: { before: userGhosttyBefore, after: await userGhosttyProcesses() },
+      // The clone's own domain: before the first round, and what its cleanup did after the last.
+      bench: { id: BENCH_GHOSTTY_ID, before: benchBefore, ...clearBenchTraces(benchExistedBefore) }
+    }
   }
 }
-
-const ghosttyAfter = ghosttyBefore ? ghosttyAccountState() : null
-// The account's own Ghostty domain before and after: `changed` names what differs.
-const ghosttyAccount = ghosttyBefore && {
-  before: ghosttyBefore,
-  after: ghosttyAfter,
-  changed: Object.keys(ghosttyBefore).filter((key) => JSON.stringify(ghosttyBefore[key]) !== JSON.stringify(ghosttyAfter[key])),
-  // The clone's own domain: before the first round, and what its cleanup did after the last.
-  bench: { id: BENCH_GHOSTTY_ID, before: benchBefore, ...clearBenchTraces(benchExistedBefore) }
-}
 if (ghosttyAccount) {
-  log(`the account's Ghostty domain: ${ghosttyAccount.changed.length ? `CHANGED (${ghosttyAccount.changed.join(', ')})` : 'unchanged'}`)
+  const users = ghosttyAccount.userGhosttyProcesses
+  log(
+    `the account's Ghostty domain: ${ghosttyAccount.changed.length ? `CHANGED (${ghosttyAccount.changed.join(', ')})` : 'unchanged'}; its own Ghostty ran ${users.before}/${users.after} processes at the first/last round`
+  )
   const { bench } = ghosttyAccount
   log(
     `${BENCH_GHOSTTY_ID}: ${bench.existedBefore ? 'existed before the run, left alone' : `${bench.deleted ? 'deleted' : 'never created'}, trashed ${bench.trashed.join(', ') || 'nothing'}`}; ${bench.existsAfterCleanup ? 'STILL there' : 'gone'}`
