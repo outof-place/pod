@@ -12,7 +12,8 @@ import {
   envPidCheck,
   guardExecScript,
   guardVerdict,
-  prepareGuard
+  prepareGuard,
+  runRootOf
 } from './guard-path.mjs'
 
 const PODNATIVE_REPO = path.join(os.homedir(), 'Documents/orca-native-wt/native-ui/PodNative')
@@ -88,28 +89,32 @@ test('claude past --version makes the run fail', needsHelper, () => {
   }
 })
 
-test("a stub call with the caller's canary fails the run, and one without the mark proves nothing", needsHelper, () => {
+test("a stub call without the mark or with the caller's canary fails the run; no stub call proves nothing", needsHelper, () => {
   const { run, guard } = guardedRun()
+  const marked = guardedRun()
   try {
+    assert.match(guardVerdict(run).problems.join(' '), /no stub ran/)
+    // From a process outside the guarded environment: no mark.
     stub(guard, 'codex', ['--version'], { PATH: guard.path })
-    assert.match(guardVerdict(run).problems.join(' '), new RegExp(`no stub call shows ${POSITIVE_MARK}`))
-    stub(guard, 'codex', ['--version'], { PATH: guard.path, [POSITIVE_MARK]: '1', [ENV_CANARY]: 'x' })
-    assert.match(guardVerdict(run).problems.join(' '), /the caller's canary reached a stub/)
+    assert.match(guardVerdict(run).problems.join(' '), new RegExp(`no ${POSITIVE_MARK}.*without the marker: codex x1`))
+    stub(marked.guard, 'codex', ['--version'], { PATH: marked.guard.path, [POSITIVE_MARK]: '1', [ENV_CANARY]: 'x' })
+    assert.match(guardVerdict(marked.run).problems.join(' '), /carried the canary/)
   } finally {
     removeRun(run)
+    removeRun(marked.run)
   }
 })
 
 test('a verdict the helper could not give fails the run, and is never read as "no claude ran"', () => {
-  // No guard-lib in this run dir: sourcing guard-path.sh fails (status 3) for every check.
+  // No guard-lib in this run dir: sourcing guard-path.sh fails (status 9) for every check.
   const run = realpathSync(mkdtempSync('/private/tmp/guard-path-test.'))
   try {
     const { ok, problems } = guardVerdict(run)
     assert.equal(ok, false)
     assert.equal(problems.length, 3, problems.join('; '))
-    assert.match(problems[0], /guard_bin_first failed \(status 3\)/)
-    assert.match(problems[1], /guard_path_abort failed \(status 3\)/)
-    assert.match(problems[2], /guard_env_names_check failed \(status 3\)/)
+    assert.match(problems[0], /guard_bin_first failed \(status 9\)/)
+    assert.match(problems[1], /guard_path_abort failed \(status 9\)/)
+    assert.match(problems[2], /guard_env_names_check failed \(status 9\)/)
   } finally {
     removeRun(run)
   }
@@ -152,31 +157,36 @@ test(
 )
 
 test(
-  "envPidCheck: the mark and no canary on a guard_exec'd process; the canary or no mark fails",
+  "envPidCheck: the mark and no canary on a guard_exec'd process of the run's own dirs; the canary, no mark or no run root fails",
   needsHelper,
   async () => {
     const { run, guard } = guardedRun(['home'])
     const children = []
     try {
       const canary = callerCanary()
+      // A sleeper of the run's own (an executable inside the run dir), never a platform binary:
+      // `ps -E` shows no environment of /bin/sleep.
+      const bin = path.join(run, 'bin')
+      mkdirSync(bin)
+      writeFileSync(path.join(run, 'sleeper.c'), '#include <unistd.h>\nint main(void) { sleep(30); return 0; }\n')
+      execFileSync('xcrun', ['clang', '-O2', '-o', path.join(bin, 'sleeper'), path.join(run, 'sleeper.c')])
+      const sleeper = path.join(bin, 'sleeper')
       const script = path.join(run, 'launch.sh')
-      writeFileSync(
-        script,
-        guardExecScript(run, { words: { HOME: path.join(run, 'home'), PATH: guard.path }, exe: process.execPath }),
-        { mode: 0o700 }
-      )
-      // node, not /bin/sleep: `ps -E` shows no environment of a platform binary.
-      const idle = ['-e', 'setTimeout(() => {}, 30000)']
-      const guarded = spawn(script, idle, { env: { PATH: '/usr/bin:/bin', [ENV_CANARY]: canary }, stdio: 'ignore' })
-      const leaky = spawn(process.execPath, idle, { env: { [POSITIVE_MARK]: '1', [ENV_CANARY]: canary }, stdio: 'ignore' })
-      const unmarked = spawn(process.execPath, idle, { env: {}, stdio: 'ignore' })
+      writeFileSync(script, guardExecScript(run, { words: { HOME: path.join(run, 'home'), PATH: guard.path }, exe: sleeper }), { mode: 0o700 })
+      const guarded = spawn(script, [], { env: { PATH: '/usr/bin:/bin', [ENV_CANARY]: canary }, stdio: 'ignore' })
+      const leaky = spawn(sleeper, [], { env: { [POSITIVE_MARK]: '1', [ENV_CANARY]: canary }, stdio: 'ignore' })
+      const unmarked = spawn(sleeper, [], { env: {}, stdio: 'ignore' })
       children.push(guarded, leaky, unmarked)
       await new Promise((resolve) => setTimeout(resolve, 1_000))
-      assert.equal(envPidCheck(run, guarded.pid, 'guarded').status, 0)
-      const caught = envPidCheck(run, leaky.pid, 'leaky')
+      const check = (child, extra = {}) => envPidCheck(run, child.pid, { exeDir: bin, label: 'sleeper', runRoot: run, ...extra })
+      assert.equal(check(guarded).status, 0, check(guarded).said)
+      const caught = check(leaky)
       assert.equal(caught.status, 1)
       assert.ok(!caught.said.includes(canary), 'never a value')
-      assert.equal(envPidCheck(run, unmarked.pid, 'unmarked').status, 2)
+      assert.equal(check(unmarked).status, 2)
+      // Not the helper shell's descendant: without a run root nothing is read.
+      assert.equal(check(guarded, { runRoot: undefined }).status, 2)
+      assert.equal(check(guarded, { exeDir: '/usr/bin' }).status, 2)
     } finally {
       for (const child of children) {
         child.kill('SIGKILL')
@@ -185,3 +195,10 @@ test(
     }
   }
 )
+
+test('runRootOf: the first dir under /private/tmp, nothing elsewhere', () => {
+  assert.equal(runRootOf('/private/tmp/b4-rc3.x/Pod.app/Contents/Helpers/Pod Runtime.app'), '/private/tmp/b4-rc3.x')
+  assert.equal(runRootOf('/private/tmp/pbn.x'), '/private/tmp/pbn.x')
+  assert.equal(runRootOf('/Applications/Orca.app'), null)
+  assert.equal(runRootOf('/private/tmp'), null)
+})

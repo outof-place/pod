@@ -444,10 +444,11 @@ POD_BENCH_POD_APP=<re-id'd copy of Pod.app> node bench/suites/native-idle.mjs [-
     `--version`, or the launch fails;
   - the canary: the shell that runs `app_open` has `GUARD_CANARY_TOKEN` set. Once the runtime is up
     and again with 8 terminals, PodNative and its runtime must show `GUARD_POSITIVE_MARK` and no
-    canary (`guard_env_pid_check`, names only, never a value), and no other process of the launch
-    may show the canary; the stubs' log of their environment's names must show the mark and never
-    the canary. A process that shows neither (zsh and other platform binaries, whose environment
-    `ps -E` doesn't show) is listed as unproven in the result.
+    canary (`guard_env_pid_check`, names only, never a value; it reads a process only when its
+    executable lies in the launch's dir, the run root it is given), and no other process of the
+    launch may show the canary; every stub call must show the mark and none the canary, and some
+    stub must have run. A process that shows neither (zsh and other platform binaries, whose
+    environment `ps -E` doesn't show) is listed as unproven in the result.
 
   A watchdog stops the launch on any real `claude` or `codex` in the run's tree, or on a new
   SecurityAgent. Before the first launch the suite refuses to start if the launchd session sets
@@ -549,10 +550,12 @@ the guard `PATH`, a `TMPDIR` of at most 48 bytes in the run dir, `SHELL=/bin/zsh
 `GUARD_POSITIVE_MARK=1`, then the bench's own variables), nothing of the caller's environment. The
 bench sets `GUARD_CANARY_TOKEN` in its own environment first. While the instance runs, its main
 process must show the mark and no canary (`guard_env_pid_check`, names only), and no other process
-of its tree may show the canary. A bench started from inside a Pod terminal refuses
-(`pod-terminal-guard.sh`). Closing the instance fails the run when a stub was reached off that
-PATH, `claude` ran past `--version`, or a stub call carried the canary or no stub call showed the
-mark. The `guard_exec` step (a bash and a Python check) runs between the spawn and the app's exec,
+of its tree may show the canary. The helper reads a process only from the run's own dirs: the
+app's bundle in the run's own clone under `/private/tmp` (so an app run straight from
+`/Applications` fails the check) and the profile. A bench started from inside a Pod terminal
+refuses (`pod-terminal-guard.sh`). Closing the instance fails the run when a stub was reached off
+that PATH, `claude` ran past `--version`, a stub call carried the canary or lacked the mark, or no
+stub ran. The `guard_exec` step (a bash and a Python check) runs between the spawn and the app's exec,
 so startup rows include it. Cleanup
 signals only the processes the run spawned (pinned by start time), those whose executable lies in
 the profile, and an app copy's own process that names the profile (crashpad); anything else that
