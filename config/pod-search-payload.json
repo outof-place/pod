@@ -1,8 +1,8 @@
 {
   "//": "The pod-search payload Pod ships in its runtime's Contents/Resources/pod-search: og, ogd, ogctl and a plain ripgrep 15.2.0, arm64 (scripts/payload.sh in outof-place/pod-search, built from `commit`). The tarball is an asset of a release on `repository` (private: the fetch reads it with POD_PAYLOAD_TOKEN through config/scripts/github-release-asset.mjs). Bump tag, asset, sha256 and commit together; config/scripts/fetch-pod-search-payload.mjs refuses a download that does not match, and refuses to download at all while sha256 is null.",
-  "repository": "outof-place/pod",
-  "tag": "payload-pod-search-PENDING",
-  "asset": "pod-search-payload-PENDING-arm64.tar.gz",
-  "sha256": null,
-  "commit": null
+  "repository": "outof-place/pod-search",
+  "tag": "search-payload-a3b8c7972d",
+  "asset": "pod-search-payload-a3b8c7972d09-arm64.tar.gz",
+  "sha256": "e7931a97333da96867e832133f3870a665a99270daed5d5f20700bce14941cc0",
+  "commit": "a3b8c7972d09cdd2f60cbee03b20f181a7274bf8"
 }
