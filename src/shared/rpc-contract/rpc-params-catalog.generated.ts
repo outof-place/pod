@@ -494,6 +494,7 @@ import {
   PodWorkspaceUserIntentParams,
   PodWorkspaceValidateRootParams
 } from './pod-workspace-params'
+import { HostSetDisplayLabelParams, RepoSparsePresetRemove } from './pod-workspace-rows-params'
 import {
   PreflightAgentDetection,
   PreflightCheck,
@@ -1024,6 +1025,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'host.gitBash.isAvailable': null,
   'host.platform': null,
   'host.pwsh.isAvailable': null,
+  'host.setDisplayLabel': HostSetDisplayLabelParams,
   'host.wsl.isAvailable': null,
   'host.wsl.listDistros': null,
   'hostedReview.create': HostedReviewCreate,
@@ -1256,6 +1258,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.issueCommandRead': RepoSelector,
   'repo.issueCommandWrite': RepoIssueCommandWrite,
   'repo.list': null,
+  'repo.removeSparsePreset': RepoSparsePresetRemove,
   'repo.reorder': RepoReorder,
   'repo.rm': RepoSelector,
   'repo.saveSparsePreset': RepoSparsePresetSave,

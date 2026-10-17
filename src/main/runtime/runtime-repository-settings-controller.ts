@@ -78,6 +78,10 @@ export class RuntimeRepositorySettingsController {
     if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
       sanitizedUpdates.worktreeBasePath = undefined
     }
+    // Fork-only (Pod): JSON has no undefined, so a client's `worktreeBaseRef: null` arrives as this.
+    if ('worktreeBaseRef' in updates && updates.worktreeBaseRef === undefined) {
+      sanitizedUpdates.worktreeBaseRef = undefined
+    }
     if (
       'externalWorktreeDiscoverySuppressedAt' in updates &&
       updates.externalWorktreeDiscoverySuppressedAt === null
