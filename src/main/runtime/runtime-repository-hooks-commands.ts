@@ -9,7 +9,7 @@ import {
   parseOrcaYaml
 } from '../hooks'
 import { getEffectiveHooksFromConfig, getEffectiveSetupRunPolicy } from '../effective-hook-config'
-import { readOrcaYamlAtRef, type GitShowExec } from '../orca-yaml-at-ref'
+import { isOwnBranch, readOrcaYamlAtRef, type GitShowExec } from '../orca-yaml-at-ref'
 import { orcaYamlSetupTrust } from '../orca-yaml-setup-trust'
 import { isENOENT } from '../ipc/filesystem-auth'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
@@ -26,16 +26,18 @@ type RuntimeRepositoryHooksCommandsDeps = {
 export class RuntimeRepositoryHooksCommands {
   constructor(private readonly deps: RuntimeRepositoryHooksCommandsDeps) {}
 
-  /** Pod: the ref's committed orca.yaml (the base a create would run), or null if unreadable. */
+  /** Pod: the ref's committed orca.yaml (the base a create would run), or null if unreadable, and
+   *  whether the ref is the repo's own branch (a create from any other asks every time). */
   private async atRef(repo: Repo, ref: string) {
-    const exec = this.deps.gitShowExec?.(repo)
-    return exec ? readOrcaYamlAtRef(exec, ref) : null
+    const exec = this.deps.gitShowExec?.(repo) ?? null
+    const baseOwned = await isOwnBranch(exec, ref)
+    return { read: exec ? await readOrcaYamlAtRef(exec, ref) : null, baseOwned }
   }
 
   async getRepoHooks(repoSelector: string, ref?: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
     if (ref) {
-      const read = await this.atRef(repo, ref)
+      const { read, baseOwned } = await this.atRef(repo, ref)
       const shared = read?.status === 'ok' ? read.hooks : null
       return {
         hasHooksFile: Boolean(read?.hasHooks),
@@ -43,7 +45,8 @@ export class RuntimeRepositoryHooksCommands {
         setupRunPolicy: getEffectiveSetupRunPolicy(repo),
         source: read?.hasHooks ? ('orca.yaml' as const) : null,
         ...(read?.status === 'ok' ? {} : { status: 'error' as const }),
-        setupTrust: orcaYamlSetupTrust(repo, shared)
+        setupTrust: orcaYamlSetupTrust(repo, shared),
+        baseOwned
       }
     }
     const connectionId = getStoredRepoSshConnectionId(repo)
@@ -94,14 +97,16 @@ export class RuntimeRepositoryHooksCommands {
       return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
     if (ref) {
-      return (
-        (await this.atRef(repo, ref)) ?? {
+      const { read, baseOwned } = await this.atRef(repo, ref)
+      return {
+        ...(read ?? {
           status: 'error' as const,
           hasHooks: false,
           hooks: null,
           mayNeedUpdate: false
-        }
-      )
+        }),
+        baseOwned
+      }
     }
     const connectionId = getStoredRepoSshConnectionId(repo)
     if (connectionId) {

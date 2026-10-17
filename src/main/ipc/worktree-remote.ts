@@ -73,6 +73,7 @@ import {
   untrustedCreateSetup,
   withoutTabCommands
 } from '../orca-yaml-setup-trust'
+import { isForeignCreate, repoGitShowExec } from '../orca-yaml-at-ref'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
@@ -2162,7 +2163,9 @@ export async function createRemoteWorktree(
       setupTrust =
         args.setupDecision === 'skip'
           ? undefined
-          : (untrustedCreateSetup(store, repo, yamlHooks, args.setupTrustHash) ?? undefined)
+          : ((await untrustedCreateSetup(store, repo, yamlHooks, args.setupTrustHash, () =>
+              isForeignCreate(repoGitShowExec(store, repo), args)
+            )) ?? undefined)
       if (setupTrust) {
         shouldLaunchSetup = false
         defaultTabs = withoutTabCommands(defaultTabs)
@@ -2922,7 +2925,9 @@ async function performLocalWorktreeCreate(
     setupTrust =
       args.setupDecision === 'skip'
         ? undefined
-        : (untrustedCreateSetup(store, repo, createdYamlHooks, args.setupTrustHash) ?? undefined)
+        : ((await untrustedCreateSetup(store, repo, createdYamlHooks, args.setupTrustHash, () =>
+            isForeignCreate(repoGitShowExec(store, repo), args)
+          )) ?? undefined)
     if (setupTrust) {
       shouldLaunchSetup = false
       defaultTabs = withoutTabCommands(defaultTabs)

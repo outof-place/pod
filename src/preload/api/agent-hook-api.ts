@@ -4,12 +4,14 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../shared/setup-script-imports'
 
 export type HooksApi = {
-  /** `ref` (Pod): that ref's committed orca.yaml instead of the root checkout's. */
+  /** `ref` (Pod): that ref's committed orca.yaml instead of the root checkout's, and whether the
+   *  ref is the repo's own branch (`baseOwned`). */
   check: (args: { repoId: string; hostId?: ExecutionHostId; ref?: string }) => Promise<{
     status?: 'ok' | 'error'
     hasHooks: boolean
     hooks: OrcaHooks | null
     mayNeedUpdate: boolean
+    baseOwned?: boolean
   }>
   inspectSetupScriptImports: (args: {
     repoId: string

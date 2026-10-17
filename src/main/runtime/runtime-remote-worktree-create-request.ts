@@ -37,6 +37,8 @@ export async function requestRuntimeRemoteWorktree(
       ...(args.branchNameOverride ? { branchNameOverride: args.branchNameOverride } : {}),
       ...(args.runHooks ? { setupDecision: 'run' as const } : {}),
       ...(!args.runHooks && args.setupDecision ? { setupDecision: args.setupDecision } : {}),
+      // Pod: the hash the client approved, which the SSH create checks against what it would run.
+      ...(args.setupTrustHash ? { setupTrustHash: args.setupTrustHash } : {}),
       ...(args.sparseCheckout ? { sparseCheckout: args.sparseCheckout } : {}),
       ...(args.linkedIssue != null ? { linkedIssue: args.linkedIssue } : {}),
       ...(args.linkedPR != null ? { linkedPR: args.linkedPR } : {}),
