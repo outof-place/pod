@@ -114,7 +114,8 @@ describe('worktree script preparation', () => {
       'vmRecipe',
       'ssh:remote-1',
       undefined,
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     )
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1')
     expect(store.updatePendingWorktreeCreation).not.toHaveBeenCalled()

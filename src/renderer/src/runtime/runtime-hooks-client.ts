@@ -31,19 +31,25 @@ export type IssueCommandReadResult = {
   source: 'local' | 'shared' | 'none'
 }
 
+/** `ref` (Pod): that ref's committed orca.yaml, the base a create from it runs. */
 export async function checkRuntimeHooks(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   repoId: string,
-  hostId?: ExecutionHostId
+  hostId?: ExecutionHostId,
+  ref?: string
 ): Promise<HookCheckResult> {
   const target = getHookInspectionTarget(settings, hostId)
   if (target.kind !== 'environment') {
-    return window.api.hooks.check({ repoId, ...(hostId ? { hostId } : {}) })
+    return window.api.hooks.check({
+      repoId,
+      ...(hostId ? { hostId } : {}),
+      ...(ref ? { ref } : {})
+    })
   }
   return callRuntimeRpc<HookCheckResult>(
     target,
     'repo.hooksCheck',
-    { repo: repoId },
+    { repo: repoId, ...(ref ? { ref } : {}) },
     { timeoutMs: 15_000 }
   )
 }

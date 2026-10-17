@@ -1,5 +1,4 @@
 import { getStoredRepoSshConnectionId } from '../repo-execution-host'
-import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import type { Repo } from '../../shared/repo-types'
 import {
@@ -9,10 +8,9 @@ import {
   loadHooks,
   parseOrcaYaml
 } from '../hooks'
-import {
-  getDefaultTabCommandTrustContent,
-  getEffectiveSetupRunPolicy
-} from '../effective-hook-config'
+import { getEffectiveHooksFromConfig, getEffectiveSetupRunPolicy } from '../effective-hook-config'
+import { readOrcaYamlAtRef, type GitShowExec } from '../orca-yaml-at-ref'
+import { orcaYamlSetupTrust } from '../orca-yaml-setup-trust'
 import { isENOENT } from '../ipc/filesystem-auth'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -21,13 +19,33 @@ import { joinWorktreeRelativePath } from './runtime-relative-paths'
 
 type RuntimeRepositoryHooksCommandsDeps = {
   resolveRepo: (selector: string) => Promise<Repo>
+  /** Pod: git where the repo lives, to read a ref's orca.yaml; null when the host is unreachable. */
+  gitShowExec?: (repo: Repo) => GitShowExec | null
 }
 
 export class RuntimeRepositoryHooksCommands {
   constructor(private readonly deps: RuntimeRepositoryHooksCommandsDeps) {}
 
-  async getRepoHooks(repoSelector: string) {
+  /** Pod: the ref's committed orca.yaml (the base a create would run), or null if unreadable. */
+  private async atRef(repo: Repo, ref: string) {
+    const exec = this.deps.gitShowExec?.(repo)
+    return exec ? readOrcaYamlAtRef(exec, ref) : null
+  }
+
+  async getRepoHooks(repoSelector: string, ref?: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
+    if (ref) {
+      const read = await this.atRef(repo, ref)
+      const shared = read?.status === 'ok' ? read.hooks : null
+      return {
+        hasHooksFile: Boolean(read?.hasHooks),
+        hooks: getEffectiveHooksFromConfig(repo, shared),
+        setupRunPolicy: getEffectiveSetupRunPolicy(repo),
+        source: read?.hasHooks ? ('orca.yaml' as const) : null,
+        ...(read?.status === 'ok' ? {} : { status: 'error' as const }),
+        setupTrust: orcaYamlSetupTrust(repo, shared)
+      }
+    }
     const connectionId = getStoredRepoSshConnectionId(repo)
     if (connectionId) {
       const fsProvider = getSshFilesystemProvider(connectionId)
@@ -47,7 +65,7 @@ export class RuntimeRepositoryHooksCommands {
           hooks,
           setupRunPolicy: getEffectiveSetupRunPolicy(repo),
           source: hooks ? ('orca.yaml' as const) : null,
-          setupTrust: setupTrust(repo, getDefaultTabCommandTrustContent(hooks))
+          setupTrust: orcaYamlSetupTrust(repo, hooks)
         }
       } catch {
         return {
@@ -66,14 +84,24 @@ export class RuntimeRepositoryHooksCommands {
       hooks,
       setupRunPolicy: getEffectiveSetupRunPolicy(repo),
       source: hasFile ? ('orca.yaml' as const) : hooks ? ('legacy' as const) : null,
-      setupTrust: setupTrust(repo, getDefaultTabCommandTrustContent(sharedHooks))
+      setupTrust: orcaYamlSetupTrust(repo, sharedHooks)
     }
   }
 
-  async checkRepoHooks(repoSelector: string) {
+  async checkRepoHooks(repoSelector: string, ref?: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
     if (isFolderRepo(repo)) {
       return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
+    }
+    if (ref) {
+      return (
+        (await this.atRef(repo, ref)) ?? {
+          status: 'error' as const,
+          hasHooks: false,
+          hooks: null,
+          mayNeedUpdate: false
+        }
+      )
     }
     const connectionId = getStoredRepoSshConnectionId(repo)
     if (connectionId) {
@@ -141,15 +169,4 @@ export class RuntimeRepositoryHooksCommands {
       }
     })
   }
-}
-
-function setupTrust(
-  repo: Repo,
-  scriptContentValue: string | undefined
-): { contentHash: string; scriptContent: string } | undefined {
-  const scriptContent = scriptContentValue?.trim()
-  if (!scriptContent || repo.hookSettings?.commandSourcePolicy === 'local-only') {
-    return undefined
-  }
-  return { contentHash: createHash('sha256').update(scriptContent).digest('hex'), scriptContent }
 }

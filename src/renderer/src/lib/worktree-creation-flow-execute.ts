@@ -98,6 +98,9 @@ export async function executeWorktreeCreation(
           executionHostId:
             preparedRequest.workspaceRunContext?.hostId ?? preparedRequest.executionHostId,
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
+          ...(preparedRequest.setupTrustHash
+            ? { setupTrustHash: preparedRequest.setupTrustHash }
+            : {}),
           ...(preparedRequest.displayNameKind
             ? { displayNameKind: preparedRequest.displayNameKind }
             : {}),
