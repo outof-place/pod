@@ -187,6 +187,31 @@ describe('claude-acc lifecycle', () => {
   })
 
   it.each([
+    ['a dev build installed outside Pod', { version: '1.34.2', installedApp: 'dev' }, 'dev'],
+    [
+      'its own release candidate',
+      { version: '1.34.2', owner: { owner: 'pod', version: '1.35.0-rc1', app: APP } },
+      '1.35.0-rc1'
+    ],
+    ['a payload it cannot order', { version: '1.35.0-beta', installedApp: '1.34.2' }, '1.34.2']
+  ])('keeps what is installed over %s, naming both versions', (_name, options, installed) => {
+    expect(decideAccLifecycle(fixture(options))).toEqual({
+      action: 'skip',
+      reason: 'incomparable-installed',
+      installed,
+      payload: options.version
+    })
+  })
+
+  it('treats the same unordered version as its own install, not a reason to skip', () => {
+    const owner = { owner: 'pod', version: '1.35.0-rc1', app: APP }
+    expect(decideAccLifecycle(fixture({ version: '1.35.0-rc1', owner }))).toMatchObject({
+      action: 'up-to-date',
+      version: '1.35.0-rc1'
+    })
+  })
+
+  it.each([
     ['brew', { owner: 'brew' }],
     ['none', { owner: 'none' }]
   ])('stays aside once claude-acc was handed back (%s tombstone)', (_name, owner) => {
@@ -199,12 +224,11 @@ describe('claude-acc lifecycle', () => {
   it.each([
     ['first-install', { version: '1.34.1', installedApp: '1.31.15' }],
     ['first-install', { version: '1.10.0', installedApp: '1.9.0' }],
-    ['first-install', { version: '1.34.1', installedApp: 'dev' }],
     [
       'version-changed',
       { version: '1.34.1', owner: { owner: 'pod', version: '1.31.15', app: APP } }
     ]
-  ])('takes a newer or unordered payload as %s', (reason, options) => {
+  ])('takes a newer payload as %s', (reason, options) => {
     expect(decideAccLifecycle(fixture(options))).toMatchObject({ action: 'install', reason })
   })
 

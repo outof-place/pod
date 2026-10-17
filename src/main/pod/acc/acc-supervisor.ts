@@ -44,6 +44,9 @@ function describe(outcome: AccLifecycleOutcome): string {
   const d = outcome.decision
   switch (outcome.status) {
     case 'skipped':
+      if (d.action === 'skip' && d.installed !== undefined) {
+        return `claude-acc: skipped (${d.reason}: installed ${d.installed}, payload ${d.payload ?? ''})`
+      }
       return `claude-acc: skipped (${d.action === 'skip' ? d.reason : ''})`
     case 'up-to-date':
       return `claude-acc: ${d.action === 'up-to-date' ? d.version : ''} is installed`
