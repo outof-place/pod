@@ -377,6 +377,26 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     expect(runProcessMock).toHaveBeenCalledOnce()
   })
 
+  it("keeps a probe's throwing callback from becoming an unhandled rejection (Pod)", async () => {
+    setPlatform('darwin')
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+    try {
+      const outcome = await prepareMacosTccLoginShell({
+        warmUp: true,
+        onProbeSettled: () => {
+          throw new Error('logger failed')
+        }
+      })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(outcome).toEqual(ACCEPTED_OUTCOME)
+      expect(unhandled).not.toHaveBeenCalled()
+      expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
+    } finally {
+      process.off('unhandledRejection', unhandled)
+    }
+  })
+
   it('backs off a warm-up its own 4 s bound killed instead of caching a refusal (Pod)', async () => {
     setPlatform('darwin')
     let now = 1_000

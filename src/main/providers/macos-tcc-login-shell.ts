@@ -196,9 +196,10 @@ function loginPreflightSucceeds(
       return outcome
     })
     // Pod: the probe's own verdict and duration, to the caller that started it only.
-    void loginPreflightInFlight.then((outcome) =>
-      onProbeSettled?.(outcome, Date.now() - probeStartedAtMs)
-    )
+    // A throwing callback must never surface as the daemon's uncaught rejection (it ends terminals).
+    void loginPreflightInFlight
+      .then((outcome) => onProbeSettled?.(outcome, Date.now() - probeStartedAtMs))
+      .catch(() => {})
   }
   return loginPreflightInFlight
 }
