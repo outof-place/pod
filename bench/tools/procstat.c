@@ -1,9 +1,10 @@
 // procstat: CPU time and memory of one app's process set, as one JSON object on stdout.
 //
-//   procstat [--root PID]... [--argv STR]... [--exe PATH]...
+//   procstat [--root PID]... [--argv STR]... [--exe PATH]... [--exe-prefix DIR/]...
 //
 // Selects every --root pid, every process whose argv contains an --argv string, every process
-// whose executable (proc_pidpath) is an --exe path, and all their descendants. Per process: cumulative user+system CPU (ns), resident size and phys_footprint
+// whose executable (proc_pidpath) is an --exe path or lies under an --exe-prefix, and all their
+// descendants. Each process says why it was picked: "via" is root, argv, exe or descendant. Per process: cumulative user+system CPU (ns), resident size and phys_footprint
 // (the "Memory" column of Activity Monitor) and cumulative interrupt and package-idle wakeups, from proc_pid_rusage, and the first 512 bytes of argv. Also the host's cumulative
 // busy and idle CPU time, so a caller can tell how busy the rest of the machine was.
 #include <libproc.h>
@@ -62,8 +63,8 @@ static int read_argv(pid_t pid, char *out, size_t cap) {
 int main(int argc, char **argv) {
   pid_t roots[64];
   const char *needles[16];
-  const char *exes[8];
-  int nroots = 0, nneedles = 0, nexes = 0;
+  const char *exes[8], *prefixes[8];
+  int nroots = 0, nneedles = 0, nexes = 0, nprefixes = 0;
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "--root") && i + 1 < argc && nroots < 64) {
       roots[nroots++] = (pid_t)atoi(argv[++i]);
@@ -71,8 +72,10 @@ int main(int argc, char **argv) {
       needles[nneedles++] = argv[++i];
     } else if (!strcmp(argv[i], "--exe") && i + 1 < argc && nexes < 8) {
       exes[nexes++] = argv[++i];
+    } else if (!strcmp(argv[i], "--exe-prefix") && i + 1 < argc && nprefixes < 8) {
+      prefixes[nprefixes++] = argv[++i];
     } else {
-      fprintf(stderr, "usage: procstat [--root PID]... [--argv STR]... [--exe PATH]...\n");
+      fprintf(stderr, "usage: procstat [--root PID]... [--argv STR]... [--exe PATH]... [--exe-prefix DIR/]...\n");
       return 2;
     }
   }
@@ -84,7 +87,10 @@ int main(int argc, char **argv) {
   struct kinfo_proc *procs = malloc(size);
   if (!procs || sysctl(mib, 3, procs, &size, NULL, 0) != 0) return 1;
   int n = (int)(size / sizeof(struct kinfo_proc));
+  // Why each process was picked: 1 a root, 2 its executable, 3 its argv; a descendant takes its
+  // ancestor's reason, with `inherited` set.
   char *selected = calloc((size_t)n, 1);
+  char *inherited = calloc((size_t)n, 1);
   static char args[1 << 16];
 
   for (int i = 0; i < n; i++) {
@@ -92,17 +98,20 @@ int main(int argc, char **argv) {
     for (int r = 0; r < nroots; r++) {
       if (pid == roots[r]) selected[i] = 1;
     }
-    if (!selected[i] && nexes > 0) {
+    if (!selected[i] && (nexes > 0 || nprefixes > 0)) {
       char exe[PROC_PIDPATHINFO_MAXSIZE] = "";
       if (proc_pidpath(pid, exe, sizeof(exe)) > 0) {
         for (int k = 0; k < nexes; k++) {
-          if (!strcmp(exe, exes[k])) selected[i] = 1;
+          if (!strcmp(exe, exes[k])) selected[i] = 2;
+        }
+        for (int k = 0; k < nprefixes; k++) {
+          if (!strncmp(exe, prefixes[k], strlen(prefixes[k]))) selected[i] = 2;
         }
       }
     }
     if (!selected[i] && nneedles > 0 && read_argv(pid, args, sizeof(args)) == 0) {
       for (int k = 0; k < nneedles; k++) {
-        if (strstr(args, needles[k])) selected[i] = 1;
+        if (strstr(args, needles[k])) selected[i] = 3;
       }
     }
   }
@@ -114,7 +123,8 @@ int main(int argc, char **argv) {
       pid_t ppid = procs[i].kp_eproc.e_ppid;
       for (int j = 0; j < n; j++) {
         if (selected[j] && procs[j].kp_proc.p_pid == ppid) {
-          selected[i] = 1;
+          selected[i] = selected[j];
+          inherited[i] = 1;
           changed = 1;
           break;
         }
@@ -139,7 +149,9 @@ int main(int argc, char **argv) {
     char path[PROC_PIDPATHINFO_MAXSIZE] = "";
     proc_pidpath(pid, path, sizeof(path));
     read_argv(pid, args, 512);
-    printf("%s{\"pid\":%d,\"ppid\":%d,\"name\":", first ? "" : ",", pid, procs[i].kp_eproc.e_ppid);
+    static const char *reasons[] = {"", "root", "exe", "argv"};
+    printf("%s{\"pid\":%d,\"ppid\":%d,\"via\":\"%s\",\"inherited\":%s,\"name\":", first ? "" : ",", pid,
+           procs[i].kp_eproc.e_ppid, reasons[(int)selected[i]], inherited[i] ? "true" : "false");
     json_string(procs[i].kp_proc.p_comm);
     printf(",\"path\":");
     json_string(path);

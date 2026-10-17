@@ -173,9 +173,9 @@ function installApp(name, appPath) {
 
 // The suite runs each app's own installer, which writes Claude's settings: the account's real
 // files must come out of the run unchanged (lib/real-home-guard.mjs), or no row is written.
-function checkRealHome(where) {
+function checkRealHome(where, strict = {}) {
   try {
-    const rewritten = assertRealHomeUntouched(realBefore, where, runDir)
+    const rewritten = assertRealHomeUntouched(realBefore, where, runDir, strict)
     if (rewritten.length > 0) {
       log(`hooks: rewritten with the same content ${where} (not by this run, whose writes would differ): ${rewritten.join(', ')}`)
     }
@@ -186,7 +186,7 @@ function checkRealHome(where) {
 }
 const realBefore = realHomeState()
 const apps = [installApp('orca', ORCA_APP), installApp('pod', POD_APP)]
-checkRealHome('during the installs')
+checkRealHome('during the installs', { strictMtime: true })
 const payloads = recordedPayloads()
 // Claude runs a hook only for the events installed; recorded events neither app installs are left out.
 const replayed = payloads.filter((payload) => apps.every((app) => app.events[payload.event]))
