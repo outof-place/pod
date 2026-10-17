@@ -250,6 +250,18 @@ describe('OrcaRuntimeService automation methods', () => {
     )
   })
 
+  it('adds no hash to a base-branch edit, so the store drops the stored one (Pod)', async () => {
+    const store = makeStore([existingAutomation])
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await runtime.updateAutomation('auto-1', { baseBranch: 'fork/main' })
+    expect(store.updateAutomation).toHaveBeenCalledWith(
+      'auto-1',
+      { baseBranch: 'fork/main' },
+      undefined
+    )
+  })
+
   it('passes session reuse updates for existing-workspace automations', async () => {
     const existing = {
       ...existingAutomation,

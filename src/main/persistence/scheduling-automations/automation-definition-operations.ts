@@ -13,6 +13,7 @@ import {
   storedExtraAgentArgs
 } from '../../../shared/automation-extra-agent-args-record'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
+import { updatedSetupTrustHash } from '../../../shared/automation-setup-trust'
 import {
   applyAutomationExecutionTarget,
   deriveAutomationExecutionTargetForCreate,
@@ -222,12 +223,6 @@ export function updateAutomation(
             )
           : normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, current.setupDecision)
         : undefined,
-    setupTrustHash:
-      workspaceMode === 'new_per_run'
-        ? Object.hasOwn(definedUpdates, 'setupTrustHash')
-          ? (definedUpdates.setupTrustHash ?? null)
-          : (current.setupTrustHash ?? null)
-        : null,
     reuseSession:
       workspaceMode === 'existing'
         ? (updates.reuseSession ?? current.reuseSession ?? false)
@@ -239,6 +234,7 @@ export function updateAutomation(
       : current.nextRunAt,
     updatedAt: Date.now()
   }
+  merged.setupTrustHash = updatedSetupTrustHash(current, merged, definedUpdates)
   if (extraAgentArgs === undefined) {
     delete merged.extraAgentArgs
   } else {
