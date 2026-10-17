@@ -204,7 +204,7 @@ export function createAnthropicRoute(args: {
   /** One row per request, for the relay log. */
   onRow?: (row: RelayConnectionRecord) => void
   /** The sandbox's credential placeholder: a request that needs a credential must carry it. */
-  placeholder?: () => string | null
+  placeholder: () => string | null
 }) {
   const upstream = args.upstream ?? ANTHROPIC_UPSTREAM
   const source = args.credentials ?? getPodSandboxAnthropicCredentials
@@ -245,11 +245,7 @@ export function createAnthropicRoute(args: {
       refuse('path', 403, 'permission_error', 'Pod does not forward this request from a sandbox.')
       return
     }
-    if (
-      rule.auth &&
-      args.placeholder &&
-      !carriesSandboxPlaceholder(req.rawHeaders, args.placeholder())
-    ) {
+    if (rule.auth && !carriesSandboxPlaceholder(req.rawHeaders, args.placeholder())) {
       refuse('token', 401, 'authentication_error', 'Pod has no credential for this request.')
       return
     }

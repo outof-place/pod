@@ -124,7 +124,9 @@ describe('relay log redaction', () => {
         authHeaders: async () => ({ 'x-api-key': 'sk-ant-api03-APIKEYSECRET-abcdef' })
       }),
       upstream: { host: '127.0.0.1', port: upstreamPort, ca: upstreamCa.caCertPem },
-      onRow: (row) => events.relay({ machine: 'pod-x-sbx', route: 'anthropic-api', ...row })
+      onRow: (row) => events.relay({ machine: 'pod-x-sbx', route: 'anthropic-api', ...row }),
+      // The request below carries this as its key, so it goes through to the stub.
+      placeholder: () => 'sk-ant-api03-APIKEYSECRET-abcdef'
     })
     const front = createServer((socket) => route.attach(socket))
     const frontPort = await listen(front)
