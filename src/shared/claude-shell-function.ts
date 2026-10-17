@@ -14,7 +14,9 @@ if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" 
     local __orca_claude_home __orca_claude_pointer="\${ORCA_CLAUDE_PROFILE_POINTER:-}"
     # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
     case "$__orca_claude_pointer" in '~/'*) __orca_claude_pointer="\${HOME:-}/\${__orca_claude_pointer#??}" ;; esac
-    __orca_claude_home="$(cat "$__orca_claude_pointer" 2>/dev/null || :)"
+    # Why read, not $(cat): no fork per launch; || : as read returns 1 at Pod's newline-less EOF.
+    __orca_claude_home=
+    { [ -f "$__orca_claude_pointer" ] && [ -r "$__orca_claude_pointer" ] && IFS= read -r __orca_claude_home < "$__orca_claude_pointer"; } 2>/dev/null || :
     if [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "\${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ]; then
       command claude "$@"; return
     fi

@@ -40,7 +40,12 @@ function fixture() {
   )
   chmodSync(fake, 0o700)
   const pointer = join(root, 'selected')
-  const run = (shell: string, env: string[] = [], fakeKind: 'summary' | 'printenv' = 'summary') => {
+  const run = (
+    shell: string,
+    env: string[] = [],
+    fakeKind: 'summary' | 'printenv' = 'summary',
+    prelude = ''
+  ) => {
     if (fakeKind === 'printenv') {
       writeFileSync(fake, '#!/bin/sh\nenv\n')
     }
@@ -62,7 +67,7 @@ function fixture() {
         shell,
         ...(fish ? ['--no-config'] : shell.endsWith('zsh') ? ['-f'] : ['--norc', '--noprofile']),
         '-c',
-        `${guard}\n${fn}\nclaude`
+        `${guard}\n${fn}\n${prelude}claude`
       ],
       { encoding: 'utf8', cwd: root }
     )
@@ -88,6 +93,17 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
     expect(next.stdout).toBe(`HOME=${f.b} KEY=fake TWIN=${f.b}\n`)
     expect(next.status).toBe(23)
   })
+
+  it.skipIf(shell.endsWith('fish'))(
+    "reads Pod's newline-less selection under ERR_EXIT and an ERR trap without tripping them",
+    () => {
+      const f = fixture()
+      writeFileSync(f.pointer, f.a)
+      // Why printenv: it exits 0, so only the selection read could trip the trap (run checks stderr).
+      const result = f.run(shell, [], 'printenv', "set -e\ntrap 'echo ERR >&2' ERR\n")
+      expect(result.stdout).toContain(`CLAUDE_CONFIG_DIR=${f.a}\n`)
+    }
+  )
 
   it("passes a shell proxy's key and address through to an account", () => {
     const f = fixture()
