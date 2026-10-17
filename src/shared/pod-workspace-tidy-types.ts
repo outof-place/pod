@@ -78,6 +78,42 @@ export type PodAdoptRecord = {
   movedAt: number
   worktreesDirMoved: boolean
   claudeProjectDirMoved: boolean
+  /** What followed the folders; absent on a record from a Pod that moved the folders alone. */
+  relink?: PodAdoptRelinkRecord
+}
+
+/** A value git keeps as an absolute path into the moved folders, as Move In rewrote it. */
+export type PodAdoptConfigPath = {
+  /** `local`: the repo's own config; `global`: `maintenance.repo` in the user's. */
+  scope: 'local' | 'global'
+  key: string
+  from: string
+  to: string
+}
+
+/** What Move In carries to the new path besides the folders, each pair as `[before, after]`. */
+export type PodAdoptRelinkRecord = {
+  /** The repo row's path before the move (Pod may know the repo by a symlinked spelling). */
+  repoPath: string
+  repoPathAfter: string
+  /** Orca's worktree ids, re-keyed so sidebar state, tabs and lineage stay with each worktree. */
+  worktreeIds: [string, string][]
+  /** Claude Code project folders renamed for each checkout; the old name stays as a link. */
+  claudeProjectDirs: [string, string][]
+  /** Per-worktree shell history folders under the profile's `terminal-history/`. */
+  historyDirs: [string, string][]
+  configPaths: PodAdoptConfigPath[]
+}
+
+/** What a Move In would carry along, so the plan shows every change before the user applies it. */
+export type PodAdoptRelinkPlan = {
+  /** Checkout paths, before and after: the repo itself and each worktree that moves with it. */
+  worktrees: [string, string][]
+  claudeProjectDirs: [string, string][]
+  historyDirs: number
+  configPaths: PodAdoptConfigPath[]
+  /** Worktrees with a live Pod terminal: Close Terminals first, so no running pane is re-keyed. */
+  terminalsOpen: string[]
 }
 
 export type PodTidyScan = PodWorkspacePlanRef & {
@@ -159,6 +195,7 @@ export type PodAdoptBlocker =
   | 'target-exists'
   | 'other-volume'
   | 'process-inside'
+  | 'terminals-open'
 
 export type PodAdoptPlan = PodWorkspacePlanRef & {
   repoId: string
@@ -171,6 +208,7 @@ export type PodAdoptPlan = PodWorkspacePlanRef & {
   /** `<repo>.worktrees/`, which moves along when it exists. */
   worktreesDir: string | null
   claudeProjectDir: string | null
+  relink: PodAdoptRelinkPlan
 }
 
 export type PodAdoptUndoPlan = PodWorkspacePlanRef & {

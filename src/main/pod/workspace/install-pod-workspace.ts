@@ -10,7 +10,9 @@ import {
 } from '../../ipc/repos/repo-clone-options'
 import { setDefaultCreateProjectParentOverride } from '../../ipc/repos/repo-creation-handlers'
 import { isPodNativeSearchEnabled } from '../search/pod-native-search-flag'
+import { getHistoryRoot } from '../../terminal-history-paths'
 import { isPodWorkspaceEnabled } from './pod-workspace-flag'
+import type { AdoptRelinkStore } from './workspace-adopt-relink'
 import { workspaceCreateProjectParent } from './workspace-clone-destination'
 import { createPodCloneOptions } from './workspace-clone-options'
 import { createPodWorkspaceRpcService } from './create-workspace-rpc-service'
@@ -47,11 +49,12 @@ import { createWorkspaceToolRunner } from './workspace-tool-runner'
 const FINDER_SYNC_CACHE_MS = 10 * 60 * 1000
 const ROOT_SETTING_KEYS = new Set<string>(['podWorkspaceRoot', 'experimentalPodWorkspace'])
 
-type PodWorkspaceStore = WorkspaceStrayStore & {
-  getSettings(): GlobalSettings
-  getRepos(): Repo[]
-  onSettingsChanged(listener: (updates: Partial<GlobalSettings>) => void): () => void
-}
+type PodWorkspaceStore = WorkspaceStrayStore &
+  AdoptRelinkStore & {
+    getSettings(): GlobalSettings
+    getRepos(): Repo[]
+    onSettingsChanged(listener: (updates: Partial<GlobalSettings>) => void): () => void
+  }
 
 type PodWorkspaceRuntime = {
   onClientEvent(
@@ -101,6 +104,7 @@ export function installPodWorkspace(store: PodWorkspaceStore, runtime: PodWorksp
     validation,
     home,
     userDataDir: app.getPath('userData'),
+    historyRoot: getHistoryRoot(),
     osTrash: (path) => shell.trashItem(path),
     onBackgroundDone: (repoId, message) => console.info(`[pod-workspace] ${repoId}: ${message}`)
   })

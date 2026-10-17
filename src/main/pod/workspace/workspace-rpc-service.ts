@@ -18,6 +18,7 @@ import type {
   PodWorkspaceAdoptParams,
   PodWorkspaceGitProfileParams
 } from '../../../shared/rpc-contract/pod-workspace-params'
+import type { AdoptRelinkRuntime } from './workspace-adopt-relink'
 import type { PodTuneResult } from './workspace-git-profile'
 import type { WorkspaceTidyRequest } from './workspace-tidy-actions'
 
@@ -40,8 +41,10 @@ export type PodWorkspaceRpcService = {
   gitProfile(
     request: PodWorkspaceGitProfileRequest
   ): Promise<PodWorkspaceGitProfile | PodTuneResult>
+  /** `runtime` lists live terminals and tells clients about re-keyed worktrees and repos. */
   adopt(
-    request: PodWorkspaceAdoptRequest
+    request: PodWorkspaceAdoptRequest,
+    runtime: AdoptRelinkRuntime | null
   ): Promise<PodAdoptPlan | PodAdoptRecord | PodAdoptUndoPlan>
 }
 

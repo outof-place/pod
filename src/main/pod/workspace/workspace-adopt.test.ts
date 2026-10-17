@@ -33,16 +33,24 @@ describe('workspace adopt (real git)', () => {
 
   afterEach(() => fx.dispose())
 
-  const adopt = () =>
-    createWorkspaceAdopt({
+  const adopt = () => {
+    const row = fx.repoRecord(repo)
+    return createWorkspaceAdopt({
       git: createWorkspaceGitExec(),
       journal: createWorkspaceJournal(join(fx.root, 'journal.json')),
       plans,
       processes,
-      getRepo: () => fx.repoRecord(repo),
+      getRepo: () => row,
+      store: {
+        getAllWorktreeMeta: () => ({}),
+        migrateWorktreeIdentity: () => undefined,
+        updateRepo: (_id, updates) => Object.assign(row, updates)
+      },
       root: () => podRoot,
-      home: fx.home
+      home: fx.home,
+      historyRoot: join(fx.root, 'terminal-history')
     })
+  }
 
   it('moves the repo to <root>/<owner>/<repo>, keeps the old path working and undoes it', async () => {
     // One worktree in Pod's sibling layout (moves along), one elsewhere (stays, gets repaired).
