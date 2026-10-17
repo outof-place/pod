@@ -20,6 +20,7 @@ import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { extractAsar } from '../lib/asar.mjs'
 import { assertRealHomeUntouched, realHomeState } from '../lib/real-home-guard.mjs'
+import { assertHeavyGate } from '../lib/heavy-gate.mjs'
 import {
   BENCH_ROOT,
   TOOLS_BIN,
@@ -78,6 +79,7 @@ function recordedPayloads() {
   return payloads
 }
 
+assertHeavyGate('the hooks suite')
 const version = claudeVersion()
 // Under the run's own /private/tmp dir (run-final.sh's base, else this process's own).
 mkdirSync(path.dirname(PROFILE_BASE), { recursive: true })

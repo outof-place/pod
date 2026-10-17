@@ -30,6 +30,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { parseArgs, promisify } from 'node:util'
 import { checkAcc, guardInstance, releaseInstance } from '../lib/acc-guard.mjs'
+import { assertHeavyGate } from '../lib/heavy-gate.mjs'
 import { assertRealHomeUntouched, realHomeState } from '../lib/real-home-guard.mjs'
 import {
   MAX_LOAD,
@@ -518,6 +519,7 @@ const results = []
 for (let index = 0; index < launches * variants.length; index += 1) {
   const variant = variants[(index + Math.floor(index / variants.length)) % variants.length]
   const gate = await waitForQuiet()
+  assertHeavyGate(`native-idle launch ${index + 1}`)
   const result = await measureLaunch(variant, index)
   results.push({ ...result, loadAtStart: gate.load })
 }
