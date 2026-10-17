@@ -30,7 +30,7 @@ import { publishDaemonPidFile } from './daemon-spawner'
 import { isNativePtyException } from './daemon-native-pty-exception'
 import { startDaemonScopeDeathWatch } from './daemon-scope-death-watch'
 import { isWindowsProcessTableAvailable } from '../windows/windows-process-table'
-import { dropLaunchdJobEnv, reportToLaunchd, takeLaunchdReportPath } from './daemon-launchd-report'
+import { reportToLaunchd, startAsLaunchdJob } from './daemon-launchd-report'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -133,9 +133,7 @@ async function main(): Promise<void> {
     logFilePath
   } = parseArgs(process.argv.slice(2))
   // Why this early: the launcher watches this pid for an exit during startup.
-  takeLaunchdReportPath(process.argv.slice(2))
-  reportToLaunchd({ type: 'started', pid: process.pid })
-  const launchdLabel = dropLaunchdJobEnv()
+  const launchdLabel = startAsLaunchdJob(process.argv.slice(2))
   const startedAtMs = Date.now() - process.uptime() * 1000
   const readyIdentity = await readCurrentDaemonReadyIdentity(startedAtMs)
   // Fail-open: a broken log path must never block daemon startup.

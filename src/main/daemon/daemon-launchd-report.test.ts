@@ -1,8 +1,10 @@
 import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { EventEmitter } from 'node:events'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  bootoutOwnLaunchdJobAtExit,
   dropLaunchdJobEnv,
   readDaemonLaunchdReport,
   reportToLaunchd,
@@ -46,5 +48,32 @@ describe('the launchd report of a daemon', () => {
   it('never throws where it cannot write', () => {
     takeLaunchdReportPath(['--launchd-report', join(dir, 'missing', 'report.json')])
     expect(() => reportToLaunchd({ type: 'started', pid: 7 })).not.toThrow()
+  })
+})
+
+describe("a launchd daemon's own job", () => {
+  const fakeSpawn = () => vi.fn(() => ({ unref: vi.fn(), on: vi.fn() }))
+
+  it('is booted out by a detached launchctl when the daemon exits', () => {
+    const spawn = fakeSpawn()
+    const target = new EventEmitter()
+    bootoutOwnLaunchdJobAtExit('codes.pod.daemon.abc.n1', spawn, target)
+    expect(spawn).not.toHaveBeenCalled()
+    target.emit('exit')
+    expect(spawn).toHaveBeenCalledWith({
+      program: '/bin/launchctl',
+      args: ['bootout', `gui/${process.getuid?.()}/codes.pod.daemon.abc.n1`],
+      detached: true,
+      stdio: 'ignore'
+    })
+  })
+
+  it('is left alone unless Pod made it', () => {
+    const spawn = fakeSpawn()
+    const target = new EventEmitter()
+    bootoutOwnLaunchdJobAtExit(undefined, spawn, target)
+    bootoutOwnLaunchdJobAtExit('application.codes.pod.app.1234', spawn, target)
+    target.emit('exit')
+    expect(spawn).not.toHaveBeenCalled()
   })
 })

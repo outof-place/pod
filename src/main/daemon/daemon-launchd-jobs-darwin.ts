@@ -1,5 +1,6 @@
 // Fork-only (Pod): the daemon-host side of a launchd daemon (daemon-launchd-launch.ts): one job per
-// launch, its plist (0600 under userData: it holds the daemon's environment), and its bootout.
+// launch, its plist (0600 under the daemon runtime dir: it holds the daemon's environment; removed
+// once bootstrapped, so nothing persists, not even in ~/Library/LaunchAgents), and its bootout.
 import { createHash } from 'node:crypto'
 import {
   appendFileSync,
@@ -23,8 +24,7 @@ import type {
 
 const LAUNCHCTL_PATH = '/bin/launchctl'
 const LAUNCHCTL_TIMEOUT_MS = 10_000
-const LABEL_PREFIX = 'codes.pod.daemon.'
-const JOBS_DIR_NAME = 'daemon-launchd'
+export const DAEMON_LAUNCHD_LABEL_PREFIX = 'codes.pod.daemon.'
 export const DAEMON_LAUNCHD_STDERR_LOG_NAME = 'daemon-launchd-stderr.log'
 /** The previous file is kept once as `.1`, like runtime-stderr.log. */
 const STDERR_LOG_MAX_BYTES = 2 * 1024 * 1024
@@ -36,7 +36,12 @@ const runLaunchctl: RunLaunchctl = (args) =>
 
 /** Every job of this profile starts with it, so two profiles never sweep each other's. */
 export function daemonLaunchdLabelPrefix(userDataPath: string): string {
-  return `${LABEL_PREFIX}${createHash('sha256').update(userDataPath).digest('hex').slice(0, 12)}.`
+  return `${DAEMON_LAUNCHD_LABEL_PREFIX}${createHash('sha256').update(userDataPath).digest('hex').slice(0, 12)}.`
+}
+
+/** Under userData/daemon, which an uninstall's zap already removes. */
+export function daemonLaunchdJobsDir(runtimeDir: string): string {
+  return join(runtimeDir, 'launchd')
 }
 
 function escapeXml(text: string): string {
@@ -108,6 +113,7 @@ function startStderrSection(path: string, label: string): void {
 }
 
 export function createDarwinDaemonLaunchdJobs(
+  jobsDir: string,
   launchctl: RunLaunchctl = runLaunchctl,
   logsDirectory: () => string = getLogsDirectory
 ): DaemonLaunchdJobs {
@@ -115,11 +121,10 @@ export function createDarwinDaemonLaunchdJobs(
   return {
     paths: ({ userDataPath, launchNonce }) => {
       const label = `${daemonLaunchdLabelPrefix(userDataPath)}${launchNonce}`
-      const dir = join(userDataPath, JOBS_DIR_NAME)
       return {
         label,
-        plistPath: join(dir, `${label}.plist`),
-        reportPath: join(dir, `${label}.report.json`),
+        plistPath: join(jobsDir, `${label}.plist`),
+        reportPath: join(jobsDir, `${label}.report.json`),
         stdoutPath: '/dev/null',
         stderrPath: join(logsDirectory(), DAEMON_LAUNCHD_STDERR_LOG_NAME)
       }
@@ -164,6 +169,7 @@ export function parseDaemonLaunchdList(
  *  in the same call, so it never races that launch's own bootstrap. */
 export async function sweepDeadDaemonLaunchdJobs(
   userDataPath: string,
+  jobsDir: string,
   jobs: Pick<DaemonLaunchdJobs, 'bootout'>,
   launchctl: RunLaunchctl = runLaunchctl
 ): Promise<string[]> {
@@ -183,17 +189,16 @@ export async function sweepDeadDaemonLaunchdJobs(
     }
   }
   const live = new Set(entries.filter((entry) => entry.pid !== null).map((entry) => entry.label))
-  const dir = join(userDataPath, JOBS_DIR_NAME)
   let names: string[] = []
   try {
-    names = readdirSync(dir)
+    names = readdirSync(jobsDir)
   } catch {
     return swept
   }
   for (const name of names) {
     const label = name.replace(/\.(plist|report\.json)(\.\d+\.tmp)?$/, '')
     if (label.startsWith(prefix) && !live.has(label)) {
-      removeQuietly(join(dir, name))
+      removeQuietly(join(jobsDir, name))
     }
   }
   return swept

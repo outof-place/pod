@@ -2,6 +2,8 @@
 // launcher. Such a daemon has no IPC channel, so the launcher reads these files instead of
 // messages. The records have the same shape as the forked daemon's IPC messages.
 import { readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { spawnProcess } from '@orca/process-host'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import type { DaemonReadyIdentity } from './daemon-ready-identity'
 
 export const DAEMON_LAUNCHD_REPORT_ARG = '--launchd-report'
@@ -42,6 +44,47 @@ export function dropLaunchdJobEnv(env: NodeJS.ProcessEnv = process.env): string 
   const label = env.XPC_SERVICE_NAME
   delete env.XPC_SERVICE_NAME
   delete env.XPC_FLAGS
+  return label
+}
+
+/** Unloads this daemon's job once it exits, so no job outlives its daemon (an uninstall leaves no
+ *  loaded job behind). The detached launchctl outlives the daemon: the job abandons its group. */
+export function bootoutOwnLaunchdJobAtExit(
+  label: string | undefined,
+  spawn: (spec: ProcessSpec) => {
+    unref(): void
+    on(event: 'error', listener: () => void): unknown
+  } = spawnProcess,
+  target: Pick<NodeJS.Process, 'once'> = process
+): void {
+  const uid = process.getuid?.()
+  // Why the prefix: only a job Pod made; a launchd-started runtime carries its own label.
+  if (!label?.startsWith('codes.pod.daemon.') || uid === undefined) {
+    return
+  }
+  target.once('exit', () => {
+    try {
+      const child = spawn({
+        program: '/bin/launchctl',
+        args: ['bootout', `gui/${uid}/${label}`],
+        detached: true,
+        stdio: 'ignore'
+      })
+      child.on('error', () => {})
+      child.unref()
+    } catch {
+      // The next launch's sweep boots it out.
+    }
+  })
+}
+
+/** daemon-entry's launchd start: the report path, the first report, the job env dropped and the
+ *  job's bootout at exit. Returns the label; all no-ops unless launchd started this daemon. */
+export function startAsLaunchdJob(argv: string[]): string | undefined {
+  takeLaunchdReportPath(argv)
+  reportToLaunchd({ type: 'started', pid: process.pid })
+  const label = dropLaunchdJobEnv()
+  bootoutOwnLaunchdJobAtExit(label)
   return label
 }
 
