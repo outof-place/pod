@@ -180,6 +180,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     applyEnablement: (pluginKey, enabled) =>
       applyPluginEnablement({ store, pluginService: state.pluginService!, pluginKey, enabled })
   })
+  // Fork-only (Pod): registerPluginHandlers binds the runtime only on the window path, so a serve
+  // with no window answered every plugin host call "runtime is not available".
+  state.pluginService.setRuntimeDelegate(runtime)
   // Fork-only (Pod): install, remove and the marketplace over RPC, through the IPC's own functions.
   const pluginService = state.pluginService
   setPodPluginManage({
