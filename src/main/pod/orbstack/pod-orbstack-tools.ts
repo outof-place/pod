@@ -38,6 +38,7 @@ export function resolveOrbstackSkipAgentInstall(env: NodeJS.ProcessEnv = process
 /**
  * E2E only: the sandbox's anthropic-api route goes to a stub API (`host:port`, with the stub's CA
  * file) under a fake key, so no run touches the real API or a real credential.
+ * `POD_E2E_ANTHROPIC_MODE=oauth` sends a fake bearer instead, as the Mac login does.
  */
 export function resolveOrbstackE2eAnthropic(env: NodeJS.ProcessEnv = process.env): {
   upstream: { host: string; port: number; ca: string }
@@ -50,10 +51,16 @@ export function resolveOrbstackE2eAnthropic(env: NodeJS.ProcessEnv = process.env
   }
   return {
     upstream: { host: target[1] ?? '', port: Number(target[2]), ca: readFileSync(caFile, 'utf8') },
-    credentials: {
-      mode: () => 'api-key',
-      authHeaders: async () => ({ 'x-api-key': 'pod-e2e-stub-key' })
-    }
+    credentials:
+      env.POD_E2E_ANTHROPIC_MODE === 'oauth'
+        ? {
+            mode: () => 'oauth',
+            authHeaders: async () => ({ authorization: 'Bearer pod-e2e-stub-token' })
+          }
+        : {
+            mode: () => 'api-key',
+            authHeaders: async () => ({ 'x-api-key': 'pod-e2e-stub-key' })
+          }
   }
 }
 
