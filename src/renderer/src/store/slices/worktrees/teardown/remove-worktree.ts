@@ -1,9 +1,8 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { skipRemovalArchive } from './removal-archive-trust'
 import { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
@@ -94,16 +93,9 @@ export function createRemoveWorktree(
 
     try {
       // Why: forget-local touches no remote, so there's no archive hook to run or trust prompt needed.
-      // Why `get`: same-repo local deletes start together, and one approval must cover the rest.
-      const skipArchive = policy.forgetLocalOnly
-        ? true
-        : (await ensureHooksConfirmed(
-            get,
-            getRepoIdFromWorktreeId(worktreeId),
-            'archive',
-            hostId,
-            removalRoute?.runtimeEnvironmentId
-          )) === 'skip'
+      const skipArchive =
+        policy.forgetLocalOnly ||
+        (await skipRemovalArchive(get, worktreeId, hostId, removalRoute?.runtimeEnvironmentId))
 
       const worktreeBeforeRemoval = findWorktreeOnConfirmedHost(
         get,

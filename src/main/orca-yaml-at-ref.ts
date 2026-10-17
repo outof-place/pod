@@ -96,6 +96,14 @@ export async function isForeignCreate(
   return create.baseBranch ? !(await isOwnBranch(exec, create.baseBranch)) : false
 }
 
+/** Pod: the meta that marks a worktree made from someone else's code, kept for its removal. */
+export async function foreignOriginMeta(
+  exec: GitShowExec | null,
+  create: LinkedCodeReviewFields & { baseBranch?: string }
+): Promise<{ foreignOrigin?: true }> {
+  return (await isForeignCreate(exec, create)) ? { foreignOrigin: true } : {}
+}
+
 /** Runs git where the repo lives: this Mac's project runtime, or the SSH host's relay. */
 export function repoGitShowExec(store: Store, repo: Repo): GitShowExec | null {
   if (!repo.connectionId) {
