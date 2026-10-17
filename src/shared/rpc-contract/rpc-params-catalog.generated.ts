@@ -458,6 +458,13 @@ import {
   SshCredentialPromptsUnsubscribeParams,
   SshSubmitCredentialParams
 } from './pod-ssh-credential-params'
+import {
+  SshAddPortForwardParams,
+  SshListDetectedPortsParams,
+  SshPortsUnsubscribeParams,
+  SshRemovePortForwardParams,
+  SshUpdatePortForwardParams
+} from './pod-ssh-port-forward-params'
 import { RepoAddRemoteParams, SshBrowseDirParams } from './pod-ssh-remote-project-params'
 import {
   SshAddTargetParams,
@@ -1281,6 +1288,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'speech.models.delete': SpeechModelAction,
   'speech.models.download': SpeechModelAction,
   'speech.models.list': null,
+  'ssh.addPortForward': SshAddPortForwardParams,
   'ssh.addTarget': SshAddTargetParams,
   'ssh.browseDir': SshBrowseDirParams,
   'ssh.connect': SshTarget,
@@ -1289,12 +1297,17 @@ export const RPC_PARAMS_BY_METHOD = {
   'ssh.disconnect': SshTarget,
   'ssh.getState': SshTarget,
   'ssh.importConfig': SshImportConfigParams,
+  'ssh.listDetectedPorts': SshListDetectedPortsParams,
   'ssh.listRemovedTargetLabels': null,
   'ssh.listTargetConfigs': null,
   'ssh.listTargetSummaries': null,
   'ssh.listTargets': null,
+  'ssh.ports.subscribe': null,
+  'ssh.ports.unsubscribe': SshPortsUnsubscribeParams,
+  'ssh.removePortForward': SshRemovePortForwardParams,
   'ssh.removeTarget': SshTarget,
   'ssh.submitCredential': SshSubmitCredentialParams,
+  'ssh.updatePortForward': SshUpdatePortForwardParams,
   'ssh.updateTarget': SshUpdateTargetParams,
   'stats.summary': null,
   'status.get': null,
@@ -1370,7 +1383,8 @@ export const RPC_PARAMS_BY_METHOD = {
 export const RPC_METHODS_WITHOUT_SHARED_PARAMS: readonly string[] = [
   'emulator.install',
   'orchestration.send',
-  'orchestration.taskUpdate'
+  'orchestration.taskUpdate',
+  'ssh.listPortForwards'
 ]
 
 export type RpcMethodName = keyof typeof RPC_PARAMS_BY_METHOD
