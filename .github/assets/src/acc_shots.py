@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from house import _FONT_FILES, _find_font
 
 OUT = Path(__file__).resolve().parent.parent
-SHOTS = ("orca-plugin-panel.png", "orca-plugin-statusbar.png", "panel.png")
+SHOTS = ("panel.png",)
 
 
 def _data(raw: bytes, mime: str) -> str:
@@ -72,36 +72,6 @@ h2 span{display:block;color:rgba(241,240,235,.54)}
 .call em{order:2;width:7px;height:7px;border-radius:50%;background:oklch(.8 .1 205);font-style:normal}
 .cap{font-size:13px;color:rgba(241,240,235,.45)}
 """
-
-
-def window_html(img: dict[str, str], narrow: bool) -> tuple[str, int, int]:
-    """The plugin's panel and status bar: Pod's window, where the agents are."""
-    if narrow:
-        w, h = 720, 1160
-        body = f"""
-<div class="stage" style="width:{w}px;height:{h}px">
- <div style="left:40px;top:44px"><span class="chip"><i></i>In the Pod window</span></div>
- <h2 style="left:40px;top:96px;font-size:46px">In the window.<span>Next to the agents.</span></h2>
- <div class="card fade" style="left:118px;top:262px;width:484px;height:700px"><img src="{img["orca-plugin-panel.png"]}"></div>
- <div class="card" style="left:40px;top:1004px;width:640px;padding:10px 14px;background:#fff"><img src="{img["orca-plugin-statusbar.png"]}"></div>
- <div class="cap" style="left:40px;top:1110px">claude-acc's panel and status bar in Pod. Demo data.</div>
-</div>"""
-        return body, w, h
-    w, h = 1280, 760
-    calls = [(150, "Account"), (300, "Other accounts"), (440, "Memory"), (610, "Builds")]
-    call_html = "".join(f'<div class="call" style="left:600px;top:{48 + y}px;width:180px"><b>{t}</b><em></em></div>' for y, t in calls)
-    body = f"""
-<div class="stage" style="width:{w}px;height:{h}px">
- <div style="left:64px;top:56px"><span class="chip"><i></i>In the Pod window</span></div>
- <h2 style="left:64px;top:108px;font-size:52px">In the window.<span>Next to the agents.</span></h2>
- <p class="lead" style="left:64px;top:252px;width:440px">A Pod plugin puts claude-acc in the status bar and in a panel of its own: the account and its next switch, memory against the dev servers' budget, and builds waiting for memory.</p>
- <div style="left:64px;top:392px" class="cap">Status bar</div>
- <div class="card" style="left:64px;top:418px;width:480px;padding:8px 12px;background:#fff"><img src="{img['orca-plugin-statusbar.png']}"></div>
- {call_html}
- <div class="card fade" style="left:790px;top:48px;width:400px;height:712px"><img src="{img['orca-plugin-panel.png']}"></div>
- <div class="cap" style="left:64px;top:704px">claude-acc's panel and status bar in Pod. Demo data.</div>
-</div>"""
-    return body, w, h
 
 
 def menu_html(img: dict[str, str], narrow: bool) -> tuple[str, int, int]:
@@ -158,7 +128,7 @@ async def render(repo: Path) -> None:
 
     img = _shots(repo)
     fonts = _fonts_css()
-    jobs = [("acc-window", window_html), ("acc-menu", menu_html)]
+    jobs = [("acc-menu", menu_html)]
     async with async_playwright() as p:
         browser = await p.chromium.launch()
         for name, make in jobs:
