@@ -61,12 +61,20 @@ const PROBE_ENV = [
   'POD_ORIG_BASH_ENV',
   'POD_SEARCH_TOOL',
   'POD_CLAUDE_OG_VERSION',
+  'POD_SEARCH_UGREP',
   'POD_CLAUDE_EXECPATH',
   'OG_UGREP_FALLBACK',
   'USER_STARTUP'
 ]
+// The probe names the ugrep it "embeds" the way Claude's binary does (NUL-delimited): 7.8.4, the
+// checked one, unless built with -DOTHER_UGREP.
 const PROBE_SOURCE = `#include <stdio.h>
 #include <stdlib.h>
+#ifdef OTHER_UGREP
+__attribute__((used)) static const char ugrep_version[] = "x\\0ugrep 7.9.0\\0x";
+#else
+__attribute__((used)) static const char ugrep_version[] = "x\\0ugrep 7.8.4\\0x";
+#endif
 int main(int argc, char **argv) {
   static const char *names[] = {${PROBE_ENV.map((name) => `"${name}"`).join(', ')}};
   printf("argv0=%s\\n", argv[0]);
@@ -78,7 +86,7 @@ int main(int argc, char **argv) {
   return 0;
 }
 `
-// Claude Code 2.1.296's snapshot `grep` defaults.
+// Claude Code's snapshot `grep` defaults (2.1.295 to 2.1.302).
 const UGREP_DEFAULTS = [
   '-G',
   '--ignore-files',
@@ -301,6 +309,7 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
     const claudeBin = (): string => join(root, 'claude', 'bin')
     const otherBin = (): string => join(root, 'claude', 'other-bin')
     const entry = (): string => join(root, 'og', 'ugrep')
+    const bundledEntry = (): string => join(root, 'Resources', 'pod-search', 'ugrep-shim', 'ugrep')
     const userZdot = (): string => join(root, 'user zdot')
     const userBashEnv = (): string => join(root, 'user-bashenv')
     let agentEnv: Record<string, string> = {}
@@ -308,18 +317,25 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
     beforeAll(() => {
       mkdirSync(versions(), { recursive: true })
       const probe = join(versions(), '2.1.296')
-      const compiled = spawnSync('xcrun', ['clang', '-O2', '-x', 'c', '-', '-o', probe], {
-        input: PROBE_SOURCE,
-        encoding: 'utf8'
-      })
-      if (compiled.status !== 0) {
-        throw new Error(compiled.stderr)
+      for (const [out, flags] of [
+        [probe, []],
+        [join(versions(), '2.1.999'), ['-DOTHER_UGREP']]
+      ] as const) {
+        const compiled = spawnSync('xcrun', ['clang', '-O2', ...flags, '-x', 'c', '-', '-o', out], {
+          input: PROBE_SOURCE,
+          encoding: 'utf8'
+        })
+        if (compiled.status !== 0) {
+          throw new Error(compiled.stderr)
+        }
       }
-      copyFileSync(probe, join(versions(), '2.1.999'))
-      chmodSync(join(versions(), '2.1.999'), 0o755)
       mkdirSync(join(root, 'og'), { recursive: true })
       copyFileSync(probe, entry())
       chmodSync(entry(), 0o755)
+      // The launcher hands og only over the bundled entry (indexed search installed).
+      mkdirSync(join(bundledEntry(), '..'), { recursive: true })
+      copyFileSync(probe, bundledEntry())
+      chmodSync(bundledEntry(), 0o755)
       mkdirSync(claudeBin(), { recursive: true })
       symlinkSync(join('..', 'versions', '2.1.296'), join(claudeBin(), 'claude'))
       mkdirSync(otherBin(), { recursive: true })
@@ -361,11 +377,12 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
         POD_ORIG_ZDOTDIR: userZdot(),
         BASH_ENV: join(shellDir(), 'bash', 'bashenv'),
         POD_SEARCH_TOOL: join(shellDir(), 'pod-search-tool'),
+        POD_SEARCH_UGREP: bundledEntry(),
         POD_CLAUDE_OG_VERSION: '2.1.296'
       })
     })
 
-    it('runs any other Claude build as if the flag were off', () => {
+    it('runs a build that embeds another ugrep as if the flag were off', () => {
       const other = run('claude', [], [binDir, otherBin()], { POD_CLAUDE_OG: '1' })
       expect(probeOutput(other.stdout).env).toEqual({})
     })
@@ -378,6 +395,7 @@ describe.skipIf(process.platform !== 'darwin')('pod-agent-launcher', () => {
         ZDOTDIR: userZdot(),
         POD_SEARCH_TOOL: join(shellDir(), 'pod-search-tool'),
         POD_CLAUDE_OG_VERSION: '2.1.296',
+        POD_SEARCH_UGREP: entry(),
         POD_CLAUDE_EXECPATH: join(versions(), '2.1.296'),
         OG_UGREP_FALLBACK: join(versions(), '2.1.296'),
         USER_STARTUP: `zshenv:${userZdot()}`
