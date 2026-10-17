@@ -264,8 +264,9 @@ export function envTreeCheck(run, procs, { launched, labelOf, dirs }) {
 }
 
 /**
- * The run root guard_env_pid_check takes for a path under /private/tmp: its first dir there (a
- * run's dir, or the dir of the run's own app clone); null for any other path, which it can't prove.
+ * The run root guard_env_pid_check takes for a path under /private/tmp: its first dir there. That
+ * dir isn't checked as the run's own: the caller names an app it launched itself (its pid is the
+ * caller's) or a dir it made. null for any other path, which the helper can't prove.
  */
 export function runRootOf(target) {
   const parts = target.split('/')

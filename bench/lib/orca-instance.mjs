@@ -145,6 +145,11 @@ export function benchRepo() {
 const PROMPT_HOOK = 'zmodload zsh/datetime\nprecmd() { print -r -- $EPOCHREALTIME >> $POD_BENCH_PROMPT_LOG }\nPS1="%# "\n'
 
 export function createProfile(settings = {}) {
+  // The run dir (PROFILE_BASE's parent) is the profile's run root for guard_env_pid_check: a dir
+  // strictly under /private/tmp, never /private/tmp itself.
+  if (!runRootOf(path.resolve(path.dirname(PROFILE_BASE)))) {
+    throw new Error(`refusing POD_BENCH_PROFILE_BASE ${PROFILE_BASE}: its parent must be a dir under /private/tmp`)
+  }
   mkdirSync(PROFILE_BASE, { recursive: true })
   const ud = mkdtempSync(path.join(PROFILE_BASE, 'p'))
   const seed = completedOnboardingSeed()
@@ -607,8 +612,9 @@ async function checkEnv(instance) {
   const options = profileTreeOptions(instance.profile)
   const { procs } = await runTree(instance.profile.ud, { scan: true, roots: options.roots })
   const ours = procs.filter((proc) => proc.via === 'exe' || proc.via === 'root' || (proc.via === 'argv' && options.argvOwned(proc)))
-  // The app's bundle (its run root: the dir of the run's own clone under /private/tmp; an app
-  // anywhere else can't be proven, and fails), and the profile (the daemon's copy of the runtime).
+  // The app's bundle, as the run was given it (POD_BENCH_*_APP: a copy under /private/tmp, whose
+  // first dir there is the run root; an app anywhere else can't be proven, and fails), and the
+  // profile (the daemon's copy of the runtime) with the run dir.
   const dirs = [
     { exeDir: instance.info.realPath, runRoot: runRootOf(instance.info.realPath) },
     { exeDir: realpathSync(instance.profile.ud), runRoot: realpathSync(path.dirname(PROFILE_BASE)) }
