@@ -1,11 +1,13 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
   statSync,
-  writeFileSync,
-  existsSync
+  symlinkSync,
+  utimesSync,
+  writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
