@@ -286,6 +286,9 @@ export async function ensureHooksConfirmed(
         const read = await readCreateSetupHooks(ownerSettings, repoId, hostId, createSetup)
         const result = read.result
         foreign = read.foreign
+        if (foreign && createSetup?.onForeignBase) {
+          return createSetup.onForeignBase()
+        }
         if (result.status === 'error') {
           return 'skip'
         }

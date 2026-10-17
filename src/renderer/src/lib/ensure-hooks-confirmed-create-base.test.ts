@@ -146,4 +146,24 @@ describe('setup trust for a create, on its base (Pod)', () => {
     pending[0].resolve('skip')
     expect(await decision).toBe('skip')
   })
+
+  it('asks nothing and keeps no hash for an automation’s base outside the repo’s own branches', async () => {
+    const { state, pending } = testState({ 'repo-1': { all: { approvedAt: 1 } } })
+    hooksCheckMock.mockImplementation(async (args: { ref?: string }) =>
+      args.ref ? { ...hooks('./setup.sh'), baseOwned: false } : hooks('./setup.sh')
+    )
+    const onTrusted = vi.fn()
+    const decision = await ensureHooksConfirmed(
+      state,
+      'repo-1',
+      'setup',
+      undefined,
+      undefined,
+      undefined,
+      { baseRef: 'fork/main', onTrusted, onForeignBase: () => 'run' }
+    )
+    expect(decision).toBe('run')
+    expect(pending).toHaveLength(0)
+    expect(onTrusted).not.toHaveBeenCalled()
+  })
 })

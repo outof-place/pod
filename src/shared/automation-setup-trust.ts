@@ -5,6 +5,14 @@ export type AutomationSetupTrust = {
   setupTrustHash?: string | null
 }
 
+/** What a run shows when its setup was skipped because the base isn't the repo's own branch. */
+export const FOREIGN_BASE_SETUP_SKIPPED = 'setup skipped: base is outside your branches'
+
+export type AutomationRunSetupNotice = {
+  /** Pod: why the host skipped this run's setup, shown with the run. */
+  setupNotice?: string | null
+}
+
 type SetupTrustTarget = AutomationSetupTrust & {
   projectId: string
   workspaceMode: string
