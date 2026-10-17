@@ -73,6 +73,8 @@ const APPLIED_FOR_PODNATIVE = [
   // Browser: PodNative's link handling reads them
   'openLinksInApp',
   'openLinksInAppModifierInverts',
+  'terminalLinkClickBehavior',
+  'terminalUrlMiddleClickBehavior',
   // Notifications, Git, Claude
   'notifications',
   'branchPrefix',
