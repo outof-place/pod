@@ -34,6 +34,7 @@ describe('claude-acc supervisor', () => {
       platform: 'darwin',
       env: {},
       run,
+      hasTray: true,
       setTrayYield: (fn) => {
         yieldTo = fn
       },
@@ -49,6 +50,29 @@ describe('claude-acc supervisor', () => {
     helper = false
   })
 
+  it('never probes the menu helper where Pod has no tray', async () => {
+    const run = vi.fn(async (_spec: ProcessSpec) => result(0))
+    const setTrayYield = vi.fn()
+    const supervisor = startPodAccSupervisor({
+      config: { payload: 'claude-acc', pluginKey: 'outof-place.pod-acc' },
+      resourcesPath: '/nonexistent/Resources',
+      execPath: '/Applications/Pod.app/Contents/MacOS/Pod',
+      ...ACCOUNT,
+      platform: 'darwin',
+      env: {},
+      run,
+      hasTray: false,
+      setTrayYield,
+      syncTray: () => {},
+      log: () => {}
+    })
+    await supervisor.lifecycle
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(run.mock.calls.some(([spec]) => spec.program === '/usr/bin/pgrep')).toBe(false)
+    expect(setTrayYield).not.toHaveBeenCalled()
+    supervisor.stop()
+  })
+
   it('skips the lifecycle for a harness launch with a throwaway HOME and profile', async () => {
     const run = vi.fn(async (_spec: ProcessSpec) => result(1))
     const log = vi.fn()
@@ -62,6 +86,7 @@ describe('claude-acc supervisor', () => {
       platform: 'darwin',
       env: { ORCA_E2E_USER_DATA_DIR: '/private/tmp/e2e-home/userData' },
       run,
+      hasTray: true,
       setTrayYield: () => {},
       syncTray: () => {},
       log

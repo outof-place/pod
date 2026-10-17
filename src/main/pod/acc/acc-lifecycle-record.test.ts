@@ -61,6 +61,7 @@ function installedPod() {
         platform: 'darwin',
         env,
         run,
+        hasTray: true,
         setTrayYield: () => {},
         syncTray: () => {},
         log
