@@ -160,8 +160,11 @@ preferences domain by bundle id and account, never by `HOME`, so the clone write
 domain, never the account's Ghostty one. Its config sets `auto-update = off`, so Sparkle neither
 checks nor prompts. Both results record the account's Ghostty domain (the plist's sha256 and
 mtime, `defaults export`'s sha256, the saved state's mtime) before the first round and after the
-last, and name what changed. The clone's own preferences and saved state, if it left any, go to
-the Trash after the last round as a known trace, and the results list them. Orca and Pod run
+last, and name what changed. The clone's own domain is a known trace: when the run created it
+(it didn't exist before the first round), the suite runs `defaults delete codes.pod.bench.ghostty`
+after the last round, then moves the plist and saved state left on disk to the Trash, and the
+results show the domain before and after. A domain that existed before the run is left alone and
+reported. Orca and Pod run
 there too, so the visible numbers compare all four with painting included. Those results go to
 `throughput-visible.json`.
 
