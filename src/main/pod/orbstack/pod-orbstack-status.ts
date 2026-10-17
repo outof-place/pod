@@ -5,6 +5,7 @@ import type {
   PodOrbstackWorktreeLink,
   PodOrbstackChurn
 } from '../../../shared/pod-orbstack-types'
+import { orbstackKeepsDeletedAddresses } from './pod-orbstack-churn'
 import {
   DOCKER_PS_FORMAT,
   DOCKER_STATS_FORMAT,
@@ -152,12 +153,13 @@ export async function readPodOrbstackStatus(deps: {
     }
   }
 
+  const version = versionResult?.code === 0 ? parseOrbctlVersion(versionResult.stdout) : null
   return {
     install: {
       appInstalled: paths.appInstalled,
       orbPath: paths.orb,
       dockerPath: paths.docker,
-      version: versionResult?.code === 0 ? parseOrbctlVersion(versionResult.stdout) : null
+      version
     },
     service,
     dockerContext:
@@ -184,6 +186,7 @@ export async function readPodOrbstackStatus(deps: {
     busyWorktreeIds: [...deps.busyWorktreeIds],
     errors,
     checkedAt: (deps.now ?? Date.now)(),
-    ...(deps.churn ? { churn: deps.churn } : {})
+    // Only a version that keeps deleted machines' addresses needs the count's warning.
+    ...(deps.churn && orbstackKeepsDeletedAddresses(version) ? { churn: deps.churn } : {})
   }
 }

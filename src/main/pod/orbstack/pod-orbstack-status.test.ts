@@ -34,7 +34,11 @@ const ok = (stdout: string): OrbstackToolResult => ({
   timedOut: false
 })
 
-function fakeRunner(service: 'Running' | 'Stopped', calls: string[]): OrbstackToolRunner {
+function fakeRunner(
+  service: 'Running' | 'Stopped',
+  calls: string[],
+  version = '2.2.3 (2020300)'
+): OrbstackToolRunner {
   return async (tool, args) => {
     const call = `${tool} ${args.join(' ')}`
     calls.push(call)
@@ -42,7 +46,7 @@ function fakeRunner(service: 'Running' | 'Stopped', calls: string[]): OrbstackTo
       return { ...ok(`${service}\n`), code: service === 'Running' ? 0 : 1 }
     }
     if (call === 'orbctl version') {
-      return ok('Version: 2.2.3 (2020300)\n')
+      return ok(`Version: ${version}\n`)
     }
     if (call.startsWith('docker context ls')) {
       return ok(
@@ -94,6 +98,22 @@ describe('readPodOrbstackStatus', () => {
     ])
     // Read-only: nothing that changes OrbStack state.
     expect(calls.some((call) => /\b(create|delete|start|stop|run)\b/.test(call))).toBe(false)
+  })
+
+  it("warns of churn only on an OrbStack that keeps deleted machines' addresses", async () => {
+    const churn = { creates: 200, since: 1, warnAt: 180 }
+    const read = (version: string) =>
+      readPodOrbstackStatus({
+        paths,
+        run: fakeRunner('Stopped', [], version),
+        registry: registry(),
+        busyWorktreeIds: [],
+        churn
+      })
+    expect((await read('2.2.3 (2020300)')).churn).toEqual(churn)
+    expect((await read('2.2.4 (2020400)')).churn).toBeUndefined()
+    expect((await read('2.10.0 (2100000)')).churn).toBeUndefined()
+    expect((await read('unknown')).churn).toEqual(churn)
   })
 
   it('runs no machine or container commands while OrbStack is stopped', async () => {
