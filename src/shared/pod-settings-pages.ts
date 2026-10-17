@@ -204,7 +204,10 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
     title: 'Advanced',
     sections: [
       { title: 'Network proxy', keys: ['httpProxyBypassRules'] },
-      { title: 'Experimental', keys: ['experimentalTerminalAttention'] }
+      {
+        title: 'Experimental',
+        keys: ['experimentalTerminalAttention', 'nativeChatResumeWorkOnRestart']
+      }
     ]
   }
 ]

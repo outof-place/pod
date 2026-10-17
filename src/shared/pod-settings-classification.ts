@@ -152,7 +152,6 @@ export const POD_SETTINGS_HIDDEN = {
   experimentalNativeChat: 'later',
   nativeChatAppearance: 'later',
   nativeChatAutoName: 'later',
-  nativeChatResumeWorkOnRestart: 'later',
   nativeChatQueueFollowUps: 'later',
   nativeChatInlineVisuals: 'later',
   nativeChatInheritShellEnvironment: 'later',
