@@ -15,7 +15,8 @@ export function readInstalledAppVersion(home: string): string | null {
   }
 }
 
-/** Dotted numeric versions ("1.31.15"); null when either is not one, so nothing is ordered. */
+/** Dotted numeric versions ("1.31.15"); null when either is not one, so nothing is ordered
+ *  (the lifecycle then keeps what is installed). */
 export function compareAccVersions(a: string, b: string): number | null {
   const parse = (version: string): number[] | null =>
     /^\d+(\.\d+){0,3}$/.test(version) ? version.split('.').map(Number) : null
