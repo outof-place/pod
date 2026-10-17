@@ -1,6 +1,7 @@
 // Visible-window suite: keystroke-to-pixels latency in every app, and (with --throughput) the
-// throughput workloads in visible windows, including Ghostty and Terminal.app, which have no
-// windowless mode.
+// throughput workloads in visible windows, including Ghostty, which has no windowless mode.
+// Terminal.app is not a subject: driving it takes AppleScript against the user's own running
+// Terminal by name, which a run never does (TEAM-START: no app activated or closed by name).
 //
 // Latency is measured the same way in every app by keylat:
 //   - a CGEvent key is posted to the app's pid;
@@ -12,8 +13,8 @@
 // agreed to. Without --confirm-visible it only checks permissions and the detector (dry run).
 //
 //   node bench/suites/latency.mjs [--confirm-visible] [--throughput] [--rounds 5] [--keys 40]
-//        [--subjects orca,pod-native,pod-xterm,ghostty,terminal-app] [--display ID]
-import { execFile } from 'node:child_process'
+//        [--subjects orca,pod-native,pod-xterm,ghostty] [--display ID]
+import { execFile, execFileSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { parseArgs, promisify } from 'node:util'
@@ -40,6 +41,7 @@ import {
   waitForPrompts,
   writePromptHook
 } from '../lib/orca-instance.mjs'
+import { runTree, stopRunTree } from '../lib/run-tree.mjs'
 import { summarize } from '../lib/sample-stats.mjs'
 import { ensureLogFile, measureWorkload, workloads } from '../lib/terminal-workloads.mjs'
 
@@ -50,7 +52,7 @@ const { values: options } = parseArgs({
     throughput: { type: 'boolean', default: false },
     rounds: { type: 'string', default: '5' },
     keys: { type: 'string', default: '40' },
-    subjects: { type: 'string', default: 'orca,pod-native,pod-xterm,ghostty,terminal-app' },
+    subjects: { type: 'string', default: 'orca,pod-native,pod-xterm,ghostty' },
     display: { type: 'string' }
   }
 })
@@ -74,7 +76,8 @@ const display = options.display
 // Every window gets the same frame on the chosen display.
 const frame = { x: display.bounds[0] + 80, y: display.bounds[1] + 80, width: 1100, height: 700 }
 const GHOSTTY = '/Applications/Ghostty.app'
-const TERMINAL_APP = '/System/Applications/Utilities/Terminal.app'
+const LSREGISTER =
+  '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
 // The top-left of the terminal content: the prompt row after `clear`, and the row below.
 const PROMPT_REGION = { width: 360, height: 48 }
 // Title bar height of a standard macOS window, for apps whose content origin we cannot query.
@@ -182,18 +185,29 @@ async function orcaSubject(name) {
 }
 
 // A command queue the harness feeds through a file: Ghostty has no way to type into its shell
-// from outside, so its throughput window runs this loop instead of an interactive prompt.
+// from outside, so its throughput window runs this loop instead of an interactive prompt. A command
+// it took is moved aside (queue.1, queue.2, …), never deleted.
 function writeRunner(profile, queue) {
   const script = path.join(profile.ud, 'runner.zsh')
   writeFileSync(
     script,
-    `while :; do\n  if [[ -f '${queue}' ]]; then c=$(<'${queue}'); rm -f '${queue}'; eval "$c"; fi\n  sleep 0.05\ndone\n`
+    `n=0\nwhile :; do\n  if [[ -f '${queue}' ]]; then c=$(<'${queue}'); mv -f '${queue}' '${queue}'.$((n += 1)); eval "$c"; fi\n  sleep 0.05\ndone\n`
   )
   return script
 }
 
-// Ghostty: a separate instance (open -n) with no user config, Orca's default font size (14).
-async function launchGhostty(profile, command) {
+// Ghostty: an APFS clone in the profile (its executable is then the run's own, so its processes
+// are found and stopped by executable, never by argv), opened as a separate instance (open -n)
+// with no user config, Orca's default font size (14).
+function cloneGhostty(profile) {
+  const clone = path.join(profile.ud, 'Ghostty.app')
+  execFileSync('/bin/cp', ['-c', '-R', GHOSTTY, clone])
+  // A quarantined clone would make `open` show a Gatekeeper dialog: this run's own clone only.
+  execFileSync('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', clone])
+  return clone
+}
+
+async function launchGhostty(profile, clone, command) {
   const config = path.join(profile.ud, `ghostty-${Date.now()}.conf`)
   writeFileSync(
     config,
@@ -210,30 +224,31 @@ async function launchGhostty(profile, command) {
       `command = ${command}`
     ].join('\n')
   )
-  await run('/usr/bin/open', [
-    '-n',
-    '-a',
-    GHOSTTY,
-    '--args',
-    '--config-default-files=false',
-    `--config-file=${config}`
-  ])
+  const exe = path.join(clone, 'Contents/MacOS/ghostty')
+  await run('/usr/bin/open', ['-n', clone, '--args', '--config-default-files=false', `--config-file=${config}`])
   for (let i = 0; i < 100; i += 1) {
-    const found = await run('/usr/bin/pgrep', ['-n', '-f', config]).catch(() => null)
-    if (found) {
-      return Number(found.stdout.trim())
+    const main = (await runTree(clone)).procs.find((proc) => proc.path === exe)
+    if (main) {
+      return main.pid
     }
     await sleep(100)
   }
   throw new Error('Ghostty did not start')
 }
 
+// The clone's processes and their descendants (its shell), by executable (lib/run-tree.mjs).
+async function stopGhostty(clone) {
+  const { left } = await stopRunTree(clone)
+  if (left.length > 0) throw new Error(`Ghostty processes left: ${left.map((proc) => proc.pid).join(' ')}`)
+}
+
 async function ghosttySubject() {
   const profile = createProfile()
   writePromptHook(profile)
   const env = `/usr/bin/env ZDOTDIR=${profile.zdot} POD_BENCH_PROMPT_LOG=${profile.promptLog}`
+  const clone = cloneGhostty(profile)
   // `clear` first: login(1) may print a "Last login" line above the prompt.
-  let pid = await launchGhostty(profile, `/bin/sh -c "clear; exec ${env} /bin/zsh -i"`)
+  let pid = await launchGhostty(profile, clone, `/bin/sh -c "clear; exec ${env} /bin/zsh -i"`)
   try {
     await waitForPrompts(profile, 1)
     await keylatJSON(['--activate', String(pid)])
@@ -243,9 +258,9 @@ async function ghosttySubject() {
     const latency = { ...(await measureRegion(pid, rect)), rect }
     let throughput = null
     if (options.throughput) {
-      process.kill(pid, 'SIGTERM')
+      await stopGhostty(clone)
       const queue = path.join(profile.ud, 'queue')
-      pid = await launchGhostty(profile, `/bin/zsh -f ${writeRunner(profile, queue)}`)
+      pid = await launchGhostty(profile, clone, `/bin/zsh -f ${writeRunner(profile, queue)}`)
       await windowOf(pid)
       const runner = pid
       throughput = await runWorkloads(
@@ -257,63 +272,22 @@ async function ghosttySubject() {
     return { ...latency, throughput }
   } finally {
     try {
-      process.kill(pid, 'SIGTERM')
-    } catch {}
-    await removeProfile(profile)
-  }
-}
-
-// Terminal.app: one new window running the hermetic zsh, closed afterwards.
-async function terminalAppSubject() {
-  const profile = createProfile()
-  writePromptHook(profile)
-  const command = `exec /usr/bin/env ZDOTDIR=${profile.zdot} POD_BENCH_PROMPT_LOG=${profile.promptLog} /bin/zsh -i`
-  const doScript = (text) =>
-    run('/usr/bin/osascript', [
-      '-e',
-      `tell application "Terminal" to do script ${JSON.stringify(text)} in front window`
-    ])
-  await run('/usr/bin/osascript', [
-    '-e',
-    `tell application "Terminal"
-      do script ${JSON.stringify(command)}
-      set bounds of front window to {${frame.x}, ${frame.y}, ${frame.x + frame.width}, ${frame.y + frame.height}}
-      activate
-    end tell`
-  ])
-  try {
-    await waitForPrompts(profile, 1)
-    await doScript('clear')
-    const { stdout } = await run('/usr/bin/pgrep', ['-nx', 'Terminal'])
-    const pid = Number(stdout.trim())
-    const bounds = await windowOf(pid)
-    await sleep(1_500)
-    const rect = regionBelowTitleBar(bounds)
-    const latency = { ...(await measureRegion(pid, rect)), rect, pid }
-    const throughput = options.throughput
-      ? await runWorkloads(doScript, () => snapshotProcesses(pid), profile.ud)
-      : null
-    return { ...latency, throughput }
-  } finally {
-    await run('/usr/bin/osascript', [
-      '-e',
-      'tell application "Terminal" to close front window saving no'
-    ]).catch(() => {})
-    await removeProfile(profile)
+      await stopGhostty(clone)
+    } finally {
+      await removeProfile(profile)
+      // The clone registered with LaunchServices when it opened: out again, as orca-instance does.
+      try {
+        execFileSync(LSREGISTER, ['-u', clone])
+      } catch {}
+    }
   }
 }
 
 const labels = {
   ghostty: 'Ghostty',
-  'terminal-app': 'Terminal.app',
   ...Object.fromEntries(Object.entries(SUBJECTS).map(([name, subject]) => [name, subject.label]))
 }
-const measure = (name) =>
-  name === 'ghostty'
-    ? ghosttySubject()
-    : name === 'terminal-app'
-      ? terminalAppSubject()
-      : orcaSubject(name)
+const measure = (name) => (name === 'ghostty' ? ghosttySubject() : orcaSubject(name))
 const names = options.subjects.split(',')
 const rounds = Number(options.rounds)
 const samples = Object.fromEntries(names.map((name) => [name, []]))
@@ -331,7 +305,6 @@ for (let round = 0; round < rounds; round += 1) {
 
 const versions = {
   ghostty: appVersion(GHOSTTY),
-  'terminal-app': appVersion(TERMINAL_APP),
   ...Object.fromEntries(
     names.filter((name) => SUBJECTS[name]).map((name) => [name, describeApp(SUBJECTS[name].app)])
   )

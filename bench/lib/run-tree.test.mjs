@@ -106,13 +106,20 @@ test('a signal goes only to a target that still has its start time', { skip: !ex
   }
 })
 
-test('when procstat fails, nothing is signalled and the error names every target left running', () => {
-  const targets = [
-    { pid: process.pid, path: '/the/run/app', startUs: 1 },
-    { pid: 1, path: '/sbin/launchd', startUs: 1 }
-  ]
-  assert.throws(
-    () => signalIfSame(targets, 'SIGTERM', { procstat: '/nonexistent/procstat' }),
-    (error) => error instanceof UnsignalledError && /left running: .*\/the\/run\/app.*\/sbin\/launchd/.test(error.message)
-  )
+test('when procstat fails, nothing is signalled and the error names every target left running', async () => {
+  // The targets are this test's own children: should a change ever signal on a failed read, only
+  // they would get it, never this runner or anyone else.
+  const children = [spawn('/bin/sleep', ['30'], { stdio: 'ignore' }), spawn('/bin/sleep', ['30'], { stdio: 'ignore' })]
+  try {
+    await sleep(100)
+    const targets = children.map((child, i) => ({ ...rootOfPid(child.pid), path: `/the/run/app${i}` }))
+    assert.throws(
+      () => signalIfSame(targets, 'SIGTERM', { procstat: '/nonexistent/procstat' }),
+      (error) => error instanceof UnsignalledError && /left running: .*\/the\/run\/app0.*\/the\/run\/app1/.test(error.message)
+    )
+    await sleep(100)
+    for (const child of children) assert.ok(alive(child.pid), `${child.pid} got no signal`)
+  } finally {
+    for (const child of children) child.kill('SIGKILL')
+  }
 })
