@@ -5540,7 +5540,8 @@
           "95bf974a1a": "{{value0}} script",
           "9e52effffd": "New {{value0}} script",
           "e4a51dc4b3": "Run {{value0}} from {{value1}}?",
-          "02b0ede5ad": "{{value0}}'s {{value1}} changed — run the new version?"
+          "02b0ede5ad": "{{value0}}'s {{value1}} changed — run the new version?",
+          "4d10aa4aaa": "No Always trust here: this code comes from a pull request or a branch that isn't this repository's own, so Pod asks every time."
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Cancel worktree creation",

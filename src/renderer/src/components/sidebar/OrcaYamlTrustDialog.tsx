@@ -179,7 +179,14 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
           </div>
         )}
 
-        {!foreign && (
+        {foreign ? (
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.sidebar.OrcaYamlTrustDialog.4d10aa4aaa',
+              "No Always trust here: this code comes from a pull request or a branch that isn't this repository's own, so Pod asks every time."
+            )}
+          </p>
+        ) : (
           <label
             className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 transition-colors ${
               alwaysTrust
