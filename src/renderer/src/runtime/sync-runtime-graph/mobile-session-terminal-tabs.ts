@@ -3,6 +3,7 @@ import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sani
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import { customTitleField } from '../../../../shared/session-tab-custom-title'
 import {
   isNativeChatTabWideFallbackSafe,
   nativeChatLaunchAgentForLeaf
@@ -36,7 +37,6 @@ export function buildMobileTerminalSurfaceTabs(
     ? capture.liveActiveLeafId
     : (savedLayout?.activeLeafId ?? leafIds[0] ?? null)
   const paneTitles = inputs.paneTitlesByTabId.get(terminal.id) ?? {}
-  const customTitle = terminal.customTitle?.trim()
   const sanitizedSavedLayout = savedLayout
     ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminal)
     : undefined
@@ -106,7 +106,7 @@ export function buildMobileTerminalSurfaceTabs(
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
       title,
-      ...(customTitle ? { customTitle } : {}),
+      ...customTitleField(terminal.customTitle),
       ...(tabWideFallbackSafe && terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
         : {}),

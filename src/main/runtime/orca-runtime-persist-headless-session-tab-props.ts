@@ -10,6 +10,7 @@ import type {
   TerminalPaneLayoutNode
 } from '../../shared/terminal-tab-types'
 import { cloneTerminalLayoutSnapshot } from './mobile-session-layout-projection'
+import { givenTabName } from '../../shared/session-tab-custom-title'
 
 export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWithCloseHeadlessMobileTerminalTab {
   protected persistHeadlessSessionTabProps(
@@ -81,7 +82,7 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
       return
     }
     let changed = false
-    const customTitle = props.customTitle?.trim()
+    const customTitle = givenTabName(props.customTitle)
     const tabs = snapshot.tabs.map((tab) => {
       if (this.getMobileSessionTopLevelTabId(tab) !== tabId) {
         return tab

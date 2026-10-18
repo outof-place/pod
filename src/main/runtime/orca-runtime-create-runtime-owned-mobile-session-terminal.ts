@@ -16,6 +16,7 @@ import { copySleepingAgentLaunchConfig } from './runtime-agent-launch-resolution
 import { deriveRemoteRuntimeTerminalCreateHandle } from './remote-runtime-terminal-create-identity'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { placeCreatedSessionTab } from '../../shared/session-tab-placement'
+import { customTitleField, customTitleOfTab } from '../../shared/session-tab-custom-title'
 import {
   buildHeadlessMobileSessionTabGroups,
   buildMaterializedHeadlessParentLayout,
@@ -213,6 +214,8 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       ptyId: livePty.pty.ptyId,
       incarnationId: livePty.pty.incarnationId,
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
+      // A restarted or rematerialized pane of a named tab keeps the name its old surface carried.
+      ...customTitleField(customTitleOfTab(existing, parentTabId)),
       ...(cwd ? { startupCwd: cwd } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),

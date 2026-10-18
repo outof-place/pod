@@ -1,6 +1,6 @@
 import './orca-runtime-test-lifecycle.spec'
 import type { RuntimeStore } from './runtime-store-contract'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
@@ -11,6 +11,10 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
 import type { RuntimeMobileSessionClientTab } from '../../shared/runtime-types'
+import {
+  recordPodTerminalExit,
+  resetPodTerminalExitsForTests
+} from '../pod/terminal-exit/pod-terminal-exits'
 
 const POD_CUSTOM_TITLE = 'pod.session-tabs.custom-title.v1'
 
@@ -31,6 +35,30 @@ function headlessRuntime(session = makeWorkspaceSessionWithHeadlessTerminal()) {
   const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore)
   return { runtime, getSession }
 }
+
+function ptyController() {
+  let spawned = 0
+  return {
+    spawn: vi.fn(async () => ({ id: `named-pty-${++spawned}` })),
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null
+  }
+}
+
+async function listedSurfaces(
+  runtime: InstanceType<typeof OrcaRuntimeService>,
+  parentTabId = 'host-tab'
+): Promise<TerminalClientTab[]> {
+  return terminalsOf(
+    (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs,
+    parentTabId
+  )
+}
+
+afterEach(() => {
+  resetPodTerminalExitsForTests()
+})
 
 describe('a terminal tab name on session tabs (customTitle)', () => {
   it('is advertised, so a client tells an older host from a tab with no name', () => {
@@ -116,20 +144,90 @@ describe('a terminal tab name on session tabs (customTitle)', () => {
     })
     await runtime.renameTerminal(created.handle, 'Auth refactor')
 
-    await runtime.splitTerminal(created.handle, { direction: 'vertical' })
+    const split = await runtime.splitTerminal(created.handle, { direction: 'vertical' })
 
-    const leaves = terminalsOf(
-      (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs,
-      'host-tab'
-    )
+    const leaves = await listedSurfaces(runtime)
     expect(leaves).toHaveLength(2)
     expect(leaves.map((tab) => tab.customTitle)).toEqual(['Auth refactor', 'Auth refactor'])
-    // The host's own record of each pane, which outlives the first pane's close.
-    const stored = runtime['mobileSessionTabsByWorktree'].get(TEST_WORKTREE_ID)!.tabs
-    expect(stored.map((tab) => (tab.type === 'terminal' ? tab.customTitle : null))).toEqual([
-      'Auth refactor',
-      'Auth refactor'
-    ])
+
+    await runtime.closeTerminal(created.handle)
+
+    const [left, ...rest] = await listedSurfaces(runtime)
+    expect(rest).toHaveLength(0)
+    expect(left).toMatchObject({ terminal: split.handle, customTitle: 'Auth refactor' })
+  })
+
+  it('keeps the name when a pane of a named tab restarts on a host with no window', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const [hostTab] = session.tabsByWorktree[TEST_WORKTREE_ID]!
+    session.tabsByWorktree[TEST_WORKTREE_ID] = [{ ...hostTab!, customTitle: 'Auth refactor' }]
+    const { runtime } = headlessRuntime(session)
+    runtime.setPtyController(ptyController())
+    runtime['hydrateHeadlessMobileSessionTabsFromWorkspaceSession'](TEST_WORKTREE_ID)
+    expect((await listedSurfaces(runtime))[0]).toMatchObject({ customTitle: 'Auth refactor' })
+    recordPodTerminalExit(
+      { worktreeId: TEST_WORKTREE_ID, parentTabId: 'host-tab', leafId: HEADLESS_LEAF_ID },
+      { exitCode: 1, exitedAt: 1_000 }
+    )
+
+    const { terminal } = await runtime.restartExitedMobileSessionTerminal(
+      `id:${TEST_WORKTREE_ID}`,
+      'host-tab',
+      HEADLESS_LEAF_ID
+    )
+
+    const surfaces = await listedSurfaces(runtime)
+    expect(surfaces).toHaveLength(1)
+    expect(surfaces[0]).toMatchObject({ terminal, customTitle: 'Auth refactor' })
+  })
+
+  it('follows a rename that reaches a window not yet holding its pane graph', async () => {
+    const { runtime } = headlessRuntime()
+    runtime.setPtyController(ptyController())
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID,
+      activate: true
+    })
+    const renameTerminal = vi.fn()
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal,
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+
+    await runtime.renameTerminal(created.handle, 'Auth refactor')
+
+    expect(renameTerminal).toHaveBeenCalledWith('host-tab', 'Auth refactor')
+    expect((await listedSurfaces(runtime))[0]).toMatchObject({ customTitle: 'Auth refactor' })
+    await runtime.renameTerminal(created.handle, null)
+    expect((await listedSurfaces(runtime))[0]).not.toHaveProperty('customTitle')
+  })
+
+  it('publishes a title the host applies to a new worktree’s tab as its name', async () => {
+    const { runtime, getSession } = headlessRuntime()
+    runtime.setPtyController(ptyController())
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID,
+      activate: true
+    })
+
+    await runtime['getWorktreeTerminalProvisioningHost']().setTabTitle(created.handle, 'Setup')
+
+    expect((await listedSurfaces(runtime))[0]).toMatchObject({
+      customTitle: 'Setup',
+      title: 'Setup'
+    })
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]?.[0]?.customTitle).toBe('Setup')
   })
 
   it('passes a Pod-window publication’s name through to clients', async () => {

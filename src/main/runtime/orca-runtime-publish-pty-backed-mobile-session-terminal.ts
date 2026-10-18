@@ -3,6 +3,7 @@ import { OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding } from './or
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { normalizeCompatibleAgentTitleForOwner } from '../../shared/agent-title-owner'
 import { getLatestPtyTitle } from './runtime-worktree-status-projection'
+import { customTitleField, customTitleOfTab } from '../../shared/session-tab-custom-title'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
@@ -81,13 +82,6 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
           candidate.parentTabId === args.tabId &&
           candidate.viewMode !== undefined
       )?.viewMode
-    // A new leaf of a named tab carries its name, as every leaf does.
-    const customTitle = existing?.tabs.find(
-      (candidate): candidate is RuntimeMobileSessionTerminalTab =>
-        candidate.type === 'terminal' &&
-        candidate.parentTabId === args.tabId &&
-        Boolean(candidate.customTitle)
-    )?.customTitle
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${args.tabId}::${args.leafId}`,
@@ -96,7 +90,8 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
       ptyId: pty.ptyId,
       incarnationId: pty.incarnationId,
       title,
-      ...(customTitle ? { customTitle } : {}),
+      // A new leaf of a named tab carries its name, as every leaf does.
+      ...customTitleField(customTitleOfTab(existing, args.tabId)),
       ...(pty.launchAgent ? { launchAgent: pty.launchAgent } : {}),
       ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
       ...(viewMode ? { viewMode } : {}),

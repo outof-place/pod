@@ -1,6 +1,7 @@
 import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
 import type { TerminalTab } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { customTitleField, givenTabName } from '../../shared/session-tab-custom-title'
 import {
   cloneTerminalLayoutSnapshot,
   collectPersistedTerminalLeafIds,
@@ -21,7 +22,7 @@ export function buildHeadlessMobileSessionTerminalTabs(
       if (leafIds.length === 0) {
         leafIds.push(deriveHeadlessLegacyTerminalLeafId(tab.id))
       }
-      const customTitle = tab.customTitle?.trim()
+      const customTitle = givenTabName(tab.customTitle)
       return leafIds.flatMap((leafId) => {
         const ptyId = layout?.ptyIdsByLeafId?.[leafId] ?? (leafIds.length === 1 ? tab.ptyId : null)
         const title =
@@ -37,7 +38,7 @@ export function buildHeadlessMobileSessionTerminalTabs(
             parentTabId: tab.id,
             leafId,
             title,
-            ...(customTitle ? { customTitle } : {}),
+            ...customTitleField(customTitle),
             ...(ptyId ? { ptyId } : {}),
             ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
             ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),
