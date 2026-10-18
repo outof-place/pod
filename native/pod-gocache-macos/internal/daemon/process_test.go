@@ -48,6 +48,10 @@ type helperCfg struct {
 	TickMs, LogMax     int64
 	KillAfterInner     bool
 	CrashAfter         time.Duration // SIGKILL itself after this
+	FullBatch          time.Duration // FullBatchTime; 0 keeps the production 10 s
+	EvictPause         time.Duration // each removal takes this long
+	MarkOutput         string        // created at the first output removal (inside removePending)
+	MarkAction         string        // created at the first -a removal (inside the plan loop)
 }
 
 func helperDaemon() int {
@@ -64,6 +68,19 @@ func helperDaemon() int {
 		Tick: tick, HeartbeatEvery: 10 * tick, ModeEvery: 5 * tick, IdleRelist: 5 * tick, PressureRelist: 5 * tick,
 		PlanEvery: 5 * tick, ProcEvery: 5 * tick, OutputSettle: 5 * tick, LogMax: h.LogMax,
 		Disk: newDisk(h.Free), Procs: noProcs{},
+	}
+	cfg.FullBatchTime = h.FullBatch
+	if h.EvictPause > 0 || h.MarkOutput != "" || h.MarkAction != "" {
+		cfg.OnEvict = func(e Eviction) {
+			mark := h.MarkAction
+			if strings.HasSuffix(e.Rel, "-d") || strings.Contains(e.Rel, "-d/") {
+				mark = h.MarkOutput
+			}
+			if mark != "" {
+				os.WriteFile(mark, nil, 0o600)
+			}
+			time.Sleep(h.EvictPause)
+		}
 	}
 	if h.KillAfterInner {
 		cfg.AfterInnerUnlink = func() { syscall.Kill(os.Getpid(), syscall.SIGKILL) }
@@ -165,6 +182,47 @@ func TestDuplicateDaemonExits(t *testing.T) {
 	}
 	if code := a.term(t); code != 0 {
 		t.Errorf("SIGTERM exit %d", code)
+	}
+}
+
+// A SIGTERM mid-batch in the emergency tier ends in shutdown well inside the
+// plist's ExitTimeOut (10 s): exit 0 and owner.json in observe mode within 2 s,
+// whether it lands in the plan loop or in removePending. Each removal is slow,
+// so the batch alone would run to its 10 s FullBatchTime.
+func TestSigtermMidBatchStopsFast(t *testing.T) {
+	for _, phase := range []string{"plan loop", "removePending"} {
+		t.Run(phase, func(t *testing.T) {
+			cache, state := tempDir(t), tempDir(t)
+			for i := 0; i < 400; i++ {
+				putEntry(t, cache, 2000, 3*time.Hour)
+			}
+			setMode(t, state, "owner")
+			mark := filepath.Join(tempDir(t), "mark")
+			h := helperCfg{CacheDir: cache, StateDir: state, Free: 5e9, EvictPause: 20 * time.Millisecond, FullBatch: 4 * time.Second}
+			if phase == "plan loop" {
+				h.MarkAction = mark
+			} else {
+				h.MarkOutput = mark
+			}
+			p := spawnHelper(t, h, nil)
+			waitFor(t, time.Minute, phase, func() bool { return exists(mark) })
+			start := time.Now()
+			p.cmd.Process.Signal(syscall.SIGTERM)
+			code := p.wait(t, time.Minute)
+			if d := time.Since(start); d > 2*time.Second {
+				t.Errorf("stopped %s after SIGTERM, want under 2 s", d.Round(time.Millisecond))
+			}
+			if code != 0 {
+				t.Errorf("exit %d, want 0; stderr %q", code, p.stderr.String())
+			}
+			o, ok, err := ownerstate.ReadOwner(state)
+			if err != nil || !ok || o.Mode != ownerstate.ModeObserve || o.PID != p.cmd.Process.Pid {
+				t.Errorf("owner.json %+v (ok %v, err %v), want observe from pid %d", o, ok, err, p.cmd.Process.Pid)
+			}
+			if st := readState(t, state); st.Extra.Phase != PhaseStopped || st.Extra.Tier != "emergency" {
+				t.Errorf("state.json phase %q tier %q, want stopped in emergency", st.Extra.Phase, st.Extra.Tier)
+			}
+		})
 	}
 }
 

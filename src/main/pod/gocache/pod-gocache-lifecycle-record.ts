@@ -1,4 +1,4 @@
-import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 // Same file name and failure fields as claude-acc's record, so its failedSetup backoff applies as is.
 import { ACC_LIFECYCLE_RECORD } from '../acc/acc-lifecycle-record'
@@ -10,9 +10,9 @@ export type PodGoCacheLifecycleRecord = {
   at: string
   pid: number
   app: string
-  /** The bundled helper's version this launch acted on. */
-  payload: string
-  status: 'installed' | 'failed' | 'refused' | 'up-to-date'
+  /** The bundled helper's version this launch acted on; null for a removal, which reads none. */
+  payload: string | null
+  status: 'installed' | 'removed' | 'failed' | 'refused' | 'up-to-date'
   reason: string | null
   /** The installed helper's version before this launch. */
   from: string | null
@@ -41,19 +41,31 @@ export function podGoCacheLifecycleRecord(
     return null
   }
   const failed = outcome.status === 'failed'
+  const install = decision.action === 'install' ? decision : null
   return {
     version: 1,
     at: context.at.toISOString(),
     pid: context.pid,
     app: context.app,
-    payload: decision.version,
+    payload: decision.action === 'remove' ? null : decision.version,
     status: outcome.status,
-    reason: decision.action === 'install' ? decision.reason : null,
-    from: decision.action === 'install' ? decision.from : null,
+    reason: decision.action === 'up-to-date' ? null : decision.reason,
+    from: install?.from ?? null,
     exit: 'exit' in outcome ? outcome.exit : null,
     timedOut: 'timedOut' in outcome ? outcome.timedOut : false,
     message: 'message' in outcome ? outcome.message || null : null,
-    attempts: failed ? (decision.action === 'install' ? (decision.failedAttempts ?? 0) : 0) + 1 : 0
+    attempts: failed ? (install?.failedAttempts ?? 0) + 1 : 0
+  }
+}
+
+/** The last record's status, null without a readable one. */
+export function lastPodGoCacheLifecycleStatus(stateDir: string): string | null {
+  try {
+    const record: unknown = JSON.parse(readFileSync(join(stateDir, ACC_LIFECYCLE_RECORD), 'utf8'))
+    const status: unknown = Reflect.get(Object(record), 'status')
+    return typeof status === 'string' ? status : null
+  } catch {
+    return null
   }
 }
 

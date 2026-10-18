@@ -28,6 +28,9 @@ const (
 // code: 0 on SIGTERM, for a duplicate instance, and when the crash-loop
 // breaker trips (launchd must not respawn any of those).
 func Run(ctx context.Context, cfg Config) int {
+	// First, so a SIGTERM during startup also ends in shutdown and exit 0, never a signal death.
+	ctx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
 	stderr := cfg.Log
 	if stderr == nil {
 		stderr = os.Stderr
@@ -93,10 +96,8 @@ func Run(ctx context.Context, cfg Config) int {
 	if _, isNo := cfg.Prio.(noPriority); isNo {
 		cfg.Prio = ThreadPriority{}
 	}
-	ctx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
-	defer stop()
-
 	c := newCore(cfg, log)
+	c.stop = ctx.Done()
 	c.restarts = max(0, starts-1)
 	c.log.Printf("start version=%s pid=%d cache=%s state=%s restarts=%d", cfg.Version, c.pid, cfg.CacheDir, cfg.StateDir, starts-1)
 	timer := time.NewTimer(0)
@@ -104,13 +105,15 @@ func Run(ctx context.Context, cfg Config) int {
 	for {
 		select {
 		case <-ctx.Done():
+		case <-timer.C:
+		}
+		// select picks at random between a stop and a due tick; the stop wins.
+		if ctx.Err() != nil {
 			c.shutdown()
 			ownerstate.ClearStart(cfg.StateDir, c.pid)
 			return ExitOK
-		case <-timer.C:
 		}
-		next := c.tick()
-		timer.Reset(next)
+		timer.Reset(c.tick())
 	}
 }
 

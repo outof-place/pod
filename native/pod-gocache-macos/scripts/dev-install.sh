@@ -3,8 +3,9 @@
 # (src/main/pod/gocache/pod-gocache-lifecycle.ts): the helper copied to ~/.pod/gocache/bin, proven
 # to answer `version`, renamed into place, and the codes.pod.gocache launch agent written to
 # ~/Library/LaunchAgents and (re)loaded in gui/<uid>. The build is a dev prerelease of build.sh's
-# version: a Pod that bundles that version or newer replaces it at its next start, unless
-# POD_GOCACHE=0 or the setting is off. It needs go on PATH: Pod installs nothing without it.
+# version: a Pod that bundles that version or newer replaces it at its next start, a Pod with the
+# setting off removes the agent, and POD_GOCACHE=0 leaves it alone. It needs go on PATH: Pod installs
+# nothing without it.
 #
 #   native/pod-gocache-macos/scripts/dev-install.sh [--dry-run] [--force]
 #   native/pod-gocache-macos/scripts/dev-install.sh --uninstall [--purge] [--dry-run]

@@ -41,7 +41,7 @@ func (c *core) execute(full bool) (more bool) {
 	}
 	now := c.cfg.Clock.Mono()
 	deadline, pollUntil := now+spend, now+spend/2
-	pollTime := func() bool { return c.cfg.Clock.Mono() < pollUntil }
+	pollTime := func() bool { return c.cfg.Clock.Mono() < pollUntil && !c.stopping() }
 	// Outputs go only after a full poll and relist in this batch, so every -a
 	// written meanwhile is known; half the batch at most, so -a files still go.
 	fresh := c.idx.Poll(pollTime) && c.idx.RelistDirty(pollTime)
@@ -57,7 +57,7 @@ func (c *core) execute(full bool) (more bool) {
 		}
 	}
 	for i := range c.plan.Units {
-		if b.files >= limit || c.cfg.Clock.Mono() >= deadline {
+		if b.files >= limit || c.cfg.Clock.Mono() >= deadline || c.stopping() {
 			more = true
 			break
 		}
@@ -257,7 +257,7 @@ func (c *core) clearPending() {
 }
 
 // removePending removes queued outputs that settled. It returns true when
-// the deadline cut it short.
+// the deadline or a stop cut it short.
 func (c *core) removePending(b *batch, deadline time.Duration) bool {
 	if len(c.pending) == 0 {
 		return false
@@ -270,7 +270,7 @@ func (c *core) removePending(b *batch, deadline time.Duration) bool {
 	}
 	slices.SortFunc(ids, func(a, b index.ID) int { return bytes.Compare(a[:], b[:]) })
 	for _, id := range ids {
-		if c.cfg.Clock.Mono() >= deadline {
+		if c.cfg.Clock.Mono() >= deadline || c.stopping() {
 			return true
 		}
 		if !c.clockSteady() {

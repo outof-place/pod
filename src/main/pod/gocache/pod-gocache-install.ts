@@ -3,11 +3,14 @@ import { join } from 'node:path'
 import { launchctlSpec, rotateLaunchdJobLog } from '../launchd/launchctl-darwin'
 import { installHelperAtomically, type RunProcess } from './pod-gocache-helper-binary'
 import {
+  TEARDOWN_WAIT_MS,
   bootoutSpec,
   isBootoutDone,
   podGoCacheDaemonArgs,
   podGoCacheLaunchAgentPlist,
-  readPlistProgramArguments
+  readAgentState,
+  readPlistProgramArguments,
+  serviceTarget
 } from './pod-gocache-launch-agent'
 // types only: the lifecycle imports this module
 import type { PodGoCacheDecision, PodGoCacheLifecycleInput } from './pod-gocache-lifecycle'
@@ -21,10 +24,12 @@ import {
 
 const LOCK = 'pod-install.lock'
 const STALE_LOCK_MS = 10 * 60_000
-// launchd may still be tearing the old job down right after bootout.
+// A last resort: the teardown wait already saw the old job gone.
 const BOOTSTRAP_ATTEMPTS = 3
+const TEARDOWN_POLL_MS = 250
 
 type AgentInput = Pick<PodGoCacheLifecycleInput, 'home' | 'bundleId'>
+type LaunchdInput = Pick<PodGoCacheLifecycleInput, 'bootstrapRetryMs' | 'teardownPollMs'>
 
 /** Only the daemon's command line counts: another Pod's bundle id or plist template never flips it. */
 export function plistIsCurrent(home: string, cacheDir: string): boolean {
@@ -72,8 +77,11 @@ function writePlist(input: AgentInput, cacheDir: string): void {
 
 type Step = { message: string; exit: number | null; timedOut: boolean }
 
-async function loadAgent(
-  input: Pick<PodGoCacheLifecycleInput, 'home' | 'bootstrapRetryMs'>,
+const sleep = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms))
+
+/** bootout, then until `launchctl print` says the job is gone: bootstrap fails while launchd still lists it. */
+async function bootoutAndWait(
+  input: LaunchdInput,
   uid: number,
   run: RunProcess
 ): Promise<Step | null> {
@@ -84,6 +92,32 @@ async function loadAgent(
       exit: bootout.code,
       timedOut: bootout.timedOut
     }
+  }
+  const deadline = Date.now() + TEARDOWN_WAIT_MS
+  for (;;) {
+    const print = await run(launchctlSpec(['print', serviceTarget(uid)]))
+    if (readAgentState(print) === 'not-loaded') {
+      return null
+    }
+    if (Date.now() >= deadline) {
+      return {
+        message: `launchctl bootout: ${serviceTarget(uid)} still loaded ${TEARDOWN_WAIT_MS / 1000} s later`,
+        exit: bootout.code,
+        timedOut: true
+      }
+    }
+    await sleep(input.teardownPollMs ?? TEARDOWN_POLL_MS)
+  }
+}
+
+async function loadAgent(
+  input: Pick<PodGoCacheLifecycleInput, 'home'> & LaunchdInput,
+  uid: number,
+  run: RunProcess
+): Promise<Step | null> {
+  const teardown = await bootoutAndWait(input, uid, run)
+  if (teardown) {
+    return teardown
   }
   const plist = podGoCacheLaunchAgentPath(input.home)
   let last: Step | null = null
@@ -98,10 +132,24 @@ async function loadAgent(
       timedOut: bootstrap.timedOut
     }
     if (attempt < BOOTSTRAP_ATTEMPTS) {
-      await new Promise((done) => setTimeout(done, input.bootstrapRetryMs ?? 1000))
+      await sleep(input.bootstrapRetryMs ?? 1000)
     }
   }
   return last
+}
+
+/**
+ * The agent goes and stays gone: bootout, and the plist deleted even when bootout failed, so the
+ * next login never loads it. The helper stays: open terminals may name it in GOCACHEPROG.
+ */
+export async function removeAgent(
+  input: Pick<PodGoCacheLifecycleInput, 'home'> & LaunchdInput,
+  uid: number,
+  run: RunProcess
+): Promise<Step | null> {
+  const teardown = await bootoutAndWait(input, uid, run)
+  rmSync(podGoCacheLaunchAgentPath(input.home), { force: true })
+  return teardown
 }
 
 /** Helper (when replaced), plist (with a new helper, or when its command line differs), then bootout and bootstrap. */

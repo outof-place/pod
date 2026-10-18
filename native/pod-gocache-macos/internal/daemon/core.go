@@ -92,9 +92,10 @@ type core struct {
 	lastFullAt    time.Time
 	lastSummary   time.Duration
 	lastJumpSecs  int64
-	fatal         string // a startup error shown in state.json
-	behind        bool   // low disk and the plan cannot cover the need
-	restarts      int    // unclean starts within the crash window, before this one
+	fatal         string          // a startup error shown in state.json
+	behind        bool            // low disk and the plan cannot cover the need
+	restarts      int             // unclean starts within the crash window, before this one
+	stop          <-chan struct{} // closed on SIGTERM: long work ends early so shutdown runs within ExitTimeOut
 }
 
 type pendingOut struct {
@@ -190,7 +191,17 @@ func (c *core) prio(bg bool) {
 }
 
 // scanMore reports whether this tick's scan budget has time left.
-func (c *core) scanMore() bool { return c.cfg.Clock.Mono() < c.scanUntil }
+func (c *core) scanMore() bool { return c.cfg.Clock.Mono() < c.scanUntil && !c.stopping() }
+
+// stopping reports whether a stop was asked for; a nil stop (the simulations) never is.
+func (c *core) stopping() bool {
+	select {
+	case <-c.stop:
+		return true
+	default:
+		return false
+	}
+}
 
 func (c *core) limits() evict.Limits { return c.cfg.Limits }
 
@@ -216,7 +227,7 @@ func (c *core) tick() time.Duration {
 		c.refreshPlan(false)
 	}
 	more := false
-	if c.mode == ownerstate.ModeOwner && c.idx.Complete() {
+	if c.mode == ownerstate.ModeOwner && c.idx.Complete() && !c.stopping() {
 		more = c.execute(full)
 		c.normalizeFuture()
 		c.sweepTemps()

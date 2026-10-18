@@ -67,7 +67,8 @@ export function lifecycleFixture(
     bundleId: options.bundleId ?? 'codes.pod.app',
     settingEnabled: true,
     goEnv: { PATH: `/nonexistent:relative/bin:${goBin}` },
-    bootstrapRetryMs: 0
+    bootstrapRetryMs: 0,
+    teardownPollMs: 0
   }
   return {
     root,
@@ -97,16 +98,25 @@ type LaunchdOptions = {
   failedBootstraps?: number
   disabled?: boolean
   bootoutCode?: number
+  /** With bootoutCode 36: launchd lists the job (and refuses its bootstrap) this long after bootout. */
+  teardownMs?: number
 }
 
 /** launchd's gui/<uid> domain as far as the lifecycle can see it. */
 export function fakeLaunchd(options: LaunchdOptions = {}) {
   const state = { loaded: options.loaded ?? false, running: options.running ?? false }
   let failedBootstraps = options.failedBootstraps ?? 0
+  let goneAt = 0
+  /** Bootstraps refused because the old job was still being torn down. */
+  const refusedDuringTeardown = { count: 0 }
   const calls: string[][] = []
   const specs: ProcessSpec[] = []
   const launchctl = (args: readonly string[]): ProcessResult => {
     const [verb, target] = args
+    if (goneAt !== 0 && Date.now() >= goneAt) {
+      goneAt = 0
+      state.loaded = false
+    }
     if (verb === 'print-disabled') {
       const ours =
         options.disabled === undefined
@@ -116,8 +126,12 @@ export function fakeLaunchd(options: LaunchdOptions = {}) {
     }
     if (verb === 'bootout') {
       const was = state.loaded
-      state.loaded = false
       state.running = false
+      if (was && options.bootoutCode === 36 && options.teardownMs) {
+        goneAt = Date.now() + options.teardownMs
+        return result(36, '', 'Boot-out failed: 36: Operation now in progress')
+      }
+      state.loaded = false
       if (options.bootoutCode !== undefined) {
         return result(options.bootoutCode, '', `Boot-out failed: ${options.bootoutCode}`)
       }
@@ -129,6 +143,9 @@ export function fakeLaunchd(options: LaunchdOptions = {}) {
         return result(5, '', 'Bootstrap failed: 5: Input/output error')
       }
       if (state.loaded) {
+        if (goneAt !== 0) {
+          refusedDuringTeardown.count++
+        }
         return result(5, '', 'Bootstrap failed: 5: Input/output error')
       }
       state.loaded = true
@@ -161,7 +178,7 @@ export function fakeLaunchd(options: LaunchdOptions = {}) {
   /** What changed launchd: everything but the read-only `print` and `print-disabled`. */
   const writes = (): string[][] =>
     calls.filter(([verb]) => verb !== 'print' && verb !== 'print-disabled')
-  return { run, calls, specs, state, writes }
+  return { run, calls, specs, state, writes, refusedDuringTeardown }
 }
 
 export async function helperVersion(path: string): Promise<string> {

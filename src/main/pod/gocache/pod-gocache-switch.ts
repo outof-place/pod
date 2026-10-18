@@ -1,9 +1,10 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 
 /**
- * The two ways to turn pod-gocache off: `POD_GOCACHE=0` (or `off`) in Pod's own environment, and
- * the podGoCacheEnabled setting, on unless the user turned it off. Either stops installs and
- * GOCACHEPROG for new terminals; neither removes an installed agent.
+ * The two ways to turn pod-gocache off. The podGoCacheEnabled setting, on unless the user turned it
+ * off, removes the agent at the next lifecycle run (the helper stays) and drops GOCACHEPROG for new
+ * terminals. `POD_GOCACHE=0` (or `off`) in Pod's own environment touches nothing: dev and harness
+ * instances leave the account's agent as it is.
  */
 export const POD_GOCACHE_ENV = 'POD_GOCACHE'
 // Dev opt-in for terminal GOCACHEPROG until Pod routes go's subcommands itself.

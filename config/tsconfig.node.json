@@ -21,7 +21,8 @@
     "../src/shared/**/*",
     "../src/packages/process-host/src/__fixtures__/**/*",
     "../src/relay/**/*",
-    "../src/types/**/*"
+    "../src/types/**/*",
+    "../native/pod-gocache-macos/scripts/dev-install-lifecycle.ts"
   ],
   "compilerOptions": {
     "composite": true,

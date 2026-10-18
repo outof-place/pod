@@ -13,11 +13,13 @@ import {
 
 // A crash loop restarts at most this often; launchd's default is 10 s.
 const THROTTLE_INTERVAL_S = 30
-// The daemon's SIGTERM budget to flush its journal before launchd's SIGKILL.
+// The daemon's SIGTERM budget to write owner.json (observe) and state.json before launchd's SIGKILL.
 const EXIT_TIMEOUT_S = 10
 // bootout waits for the job to exit, which may take all of ExitTimeOut.
 const BOOTOUT_TIMEOUT_MS = (EXIT_TIMEOUT_S + 10) * 1000
-// EINPROGRESS: launchd still tears the job down; bootstrap's retries cover the rest.
+/** How long launchd may still list the job after bootout returns: ExitTimeOut plus slack. */
+export const TEARDOWN_WAIT_MS = (EXIT_TIMEOUT_S + 5) * 1000
+// EINPROGRESS: launchd still tears the job down; the caller waits for `print` to report it gone.
 const BOOTOUT_IN_PROGRESS = 36
 
 export function podGoCacheDaemonArgs(home: string, cacheDir: string): string[] {
@@ -47,7 +49,7 @@ export function podGoCacheLaunchAgentPlist(
     // A SIGKILL (memory brake, jetsam) or a crash restarts it; a clean exit 0 stays down.
     '  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>',
     `  <key>ThrottleInterval</key><integer>${THROTTLE_INTERVAL_S}</integer>`,
-    // Why not Background: misses wait on the daemon; it lowers its own I/O for eviction.
+    // Why not Background: below 10 GB free it evicts at full speed and keeps its heartbeat fresh; otherwise it lowers its own I/O.
     '  <key>ProcessType</key><string>Standard</string>',
     `  <key>ExitTimeOut</key><integer>${EXIT_TIMEOUT_S}</integer>`,
     `  <key>StandardOutPath</key>${string('/dev/null')}`,

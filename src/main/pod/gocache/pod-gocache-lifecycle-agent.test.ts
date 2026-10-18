@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import { runProcess } from '@orca/process-host'
 import { runPodGoCacheLifecycle } from './pod-gocache-lifecycle'
 import {
@@ -117,6 +118,54 @@ describe('pod-gocache launch agent', () => {
     // longer than the plist's ExitTimeOut (10 s), which bootout may wait out in full
     expect(bootout?.timeoutMs).toBeGreaterThanOrEqual(20_000)
     expect(launchd.state.loaded).toBe(true)
+  })
+
+  it('waits until launchd lets the old job go before it bootstraps the new one', async () => {
+    const f = fixture({ bundled: '0.3.0', installed: '0.2.0' })
+    // the old daemon takes 300 ms to exit after bootout answered "in progress"
+    const launchd = fakeLaunchd({ loaded: true, running: true, bootoutCode: 36, teardownMs: 300 })
+    const started = Date.now()
+
+    await expect(
+      runPodGoCacheLifecycle({ ...f.input, teardownPollMs: 20 }, launchd.run)
+    ).resolves.toMatchObject({ status: 'installed' })
+    expect(Date.now() - started).toBeGreaterThanOrEqual(300)
+    expect(launchd.refusedDuringTeardown.count).toBe(0)
+    const verbs = launchd.calls.map(([verb]) => verb)
+    const between = verbs.slice(verbs.indexOf('bootout') + 1, verbs.indexOf('bootstrap'))
+    expect(between.length).toBeGreaterThan(1)
+    expect(between.every((verb) => verb === 'print')).toBe(true)
+  })
+
+  it('gives up on an old job launchd never lets go, ExitTimeOut + 5 s after bootout, without bootstrapping', async () => {
+    const f = fixture({ bundled: '0.3.0', installed: '0.2.0' })
+    const launchd = fakeLaunchd({
+      loaded: true,
+      running: true,
+      bootoutCode: 36,
+      teardownMs: Number.POSITIVE_INFINITY
+    })
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const started = Date.now()
+    // each poll is a second of launchd's time
+    const run = async (spec: ProcessSpec): Promise<ProcessResult> => {
+      const answer = await launchd.run(spec)
+      if (spec.args?.[0] === 'print') {
+        vi.setSystemTime(Date.now() + 1000)
+      }
+      return answer
+    }
+    try {
+      await expect(runPodGoCacheLifecycle(f.input, run)).resolves.toMatchObject({
+        status: 'failed',
+        timedOut: true,
+        message: expect.stringContaining('still loaded 15 s later')
+      })
+      expect(Date.now() - started).toBeLessThanOrEqual(17_000)
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(launchd.calls.some(([verb]) => verb === 'bootstrap')).toBe(false)
   })
 
   it('respects an agent the user disabled: no install, no retries, no record', async () => {

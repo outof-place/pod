@@ -24,6 +24,9 @@ import {
 
 afterEach(removeLifecycleFixtures)
 
+const record = (home: string): unknown =>
+  JSON.parse(readFileSync(join(home, '.pod/gocache/pod-lifecycle.json'), 'utf8'))
+
 describe('pod-gocache lifecycle', () => {
   it('installs the bundled helper at the stable path and loads its launch agent', async () => {
     const f = fixture({ bundled: '0.2.0' })
@@ -266,23 +269,140 @@ describe('pod-gocache lifecycle', () => {
   })
 
   it.each([
-    ['POD_GOCACHE=0', { mode: '0' }, 'disabled'],
-    ['POD_GOCACHE=off', { mode: 'off' }, 'disabled'],
-    ['the setting', { settingEnabled: false }, 'setting-off']
+    ['POD_GOCACHE=0', { mode: '0' }],
+    ['POD_GOCACHE=off', { mode: 'off' }],
+    ['POD_GOCACHE=0 with the setting off too', { mode: '0', settingEnabled: false }]
   ])(
     'turned off by %s, leaves an installed agent running and installs nothing',
-    async (_name, override, reason) => {
+    async (_name, override) => {
       const f = fixture({ bundled: '0.3.0', installed: '0.2.0' })
       const launchd = fakeLaunchd({ loaded: true, running: true })
 
       const outcome = await runPodGoCacheLifecycle({ ...f.input, ...override }, launchd.run)
 
-      expect(outcome).toEqual({ status: 'skipped', decision: { action: 'skip', reason } })
+      expect(outcome).toEqual({
+        status: 'skipped',
+        decision: { action: 'skip', reason: 'disabled' }
+      })
       expect(await helperVersion(f.installedHelper)).toBe('0.2.0')
       expect(launchd.calls).toEqual([])
       expect(launchd.state).toEqual({ loaded: true, running: true })
     }
   )
+
+  it('the setting off removes the agent once, keeps the helper, and the setting on brings it back', async () => {
+    const f = fixture({ bundled: '0.3.0' })
+    const launchd = fakeLaunchd()
+    await runPodGoCacheLifecycle(f.input, launchd.run)
+    const off = { ...f.input, settingEnabled: false }
+    launchd.calls.length = 0
+
+    await expect(runPodGoCacheLifecycle(off, launchd.run)).resolves.toMatchObject({
+      status: 'removed',
+      decision: { action: 'remove', reason: 'setting-off', plist: true, agent: 'running' }
+    })
+    expect(launchd.state.loaded).toBe(false)
+    expect(existsSync(f.plist)).toBe(false)
+    // open terminals may still name it in GOCACHEPROG
+    expect(await helperVersion(f.installedHelper)).toBe('0.3.0')
+    expect(launchd.writes()).toEqual([['bootout', `gui/${UID}/codes.pod.gocache`]])
+    expect(record(f.home)).toMatchObject({
+      status: 'removed',
+      reason: 'setting-off',
+      payload: null
+    })
+
+    launchd.calls.length = 0
+    await expect(runPodGoCacheLifecycle(off, launchd.run)).resolves.toEqual({
+      status: 'skipped',
+      decision: { action: 'skip', reason: 'setting-off' }
+    })
+    expect(launchd.calls).toEqual([])
+
+    await expect(runPodGoCacheLifecycle(f.input, launchd.run)).resolves.toMatchObject({
+      status: 'installed',
+      decision: { reason: 'agent-changed', replaceHelper: false }
+    })
+    expect(launchd.state.loaded).toBe(true)
+    expect(record(f.home)).toMatchObject({ status: 'installed' })
+  })
+
+  it('the setting off removes a plist a dev install wrote after an earlier removal', async () => {
+    const f = fixture({ bundled: '0.3.0' })
+    const launchd = fakeLaunchd()
+    const off = { ...f.input, settingEnabled: false }
+    await runPodGoCacheLifecycle(f.input, launchd.run)
+    await runPodGoCacheLifecycle(off, launchd.run)
+    // dev-install.sh ignores the setting and leaves an `installed` record; a hand-copied plist leaves none
+    await runPodGoCacheLifecycle(f.input, launchd.run)
+    writeFileSync(join(f.home, '.pod/gocache/pod-lifecycle.json'), '{"status":"removed"}')
+
+    await expect(runPodGoCacheLifecycle(off, launchd.run)).resolves.toMatchObject({
+      status: 'removed'
+    })
+    expect(existsSync(f.plist)).toBe(false)
+    expect(launchd.state.loaded).toBe(false)
+  })
+
+  it('the setting off on an account that never had the agent creates nothing', async () => {
+    const f = fixture({ bundled: '0.3.0' })
+    const launchd = fakeLaunchd()
+
+    await expect(
+      runPodGoCacheLifecycle({ ...f.input, settingEnabled: false }, launchd.run)
+    ).resolves.toEqual({ status: 'skipped', decision: { action: 'skip', reason: 'setting-off' } })
+    expect(readdirSync(f.home)).toEqual([])
+    expect(launchd.writes()).toEqual([])
+  })
+
+  it.each([
+    ['a harness launched Pod', { automatedBy: 'ORCA_E2E_HEADLESS' }, 'automated-launch'],
+    ['HOME is not the account home', { accountHome: '/Users/the-real-account' }, 'home-override'],
+    ['Pod runs another profile', { userDataPath: '/private/tmp/bench/userData' }, 'custom-profile']
+  ])('the setting off removes nothing when %s', async (_name, override, reason) => {
+    const f = fixture({ bundled: '0.3.0' })
+    const launchd = fakeLaunchd()
+    await runPodGoCacheLifecycle(f.input, launchd.run)
+    launchd.calls.length = 0
+
+    await expect(
+      runPodGoCacheLifecycle({ ...f.input, ...override, settingEnabled: false }, launchd.run)
+    ).resolves.toEqual({ status: 'skipped', decision: { action: 'skip', reason } })
+    expect(existsSync(f.plist)).toBe(true)
+    expect(launchd.calls).toEqual([])
+  })
+
+  it('a removal launchd refuses still deletes the plist, and never backs off a later install', async () => {
+    const f = fixture({ bundled: '0.3.0' })
+    await runPodGoCacheLifecycle(f.input, fakeLaunchd().run)
+    const refusing = fakeLaunchd({ loaded: true, running: true, bootoutCode: 5 })
+
+    await expect(
+      runPodGoCacheLifecycle({ ...f.input, settingEnabled: false }, refusing.run)
+    ).resolves.toMatchObject({ status: 'failed', exit: 5 })
+    expect(existsSync(f.plist)).toBe(false)
+    expect(record(f.home)).toMatchObject({ status: 'failed', payload: null, attempts: 1 })
+
+    await expect(runPodGoCacheLifecycle(f.input, fakeLaunchd().run)).resolves.toMatchObject({
+      status: 'installed'
+    })
+  })
+
+  it('the setting off removes an agent the user disabled, and never enables it again', async () => {
+    const f = fixture({ bundled: '0.3.0' })
+    await runPodGoCacheLifecycle(f.input, fakeLaunchd().run)
+    const launchd = fakeLaunchd({ loaded: true, disabled: true })
+
+    await expect(
+      runPodGoCacheLifecycle({ ...f.input, settingEnabled: false }, launchd.run)
+    ).resolves.toMatchObject({ status: 'removed' })
+    await expect(runPodGoCacheLifecycle(f.input, launchd.run)).resolves.toMatchObject({
+      status: 'skipped',
+      decision: { reason: 'user-disabled' }
+    })
+    expect(existsSync(f.plist)).toBe(false)
+    expect(launchd.writes().map(([verb]) => verb)).toEqual(['bootout'])
+  })
 
   it('retries a bootstrap launchd refuses while it still tears the old job down', async () => {
     const f = fixture({ bundled: '0.3.0', installed: '0.2.0' })

@@ -31,12 +31,16 @@ function describe(outcome: PodGoCacheLifecycleOutcome): string {
     case 'busy':
       return 'pod-gocache: another Pod is installing it'
     case 'dry-run':
-      return `pod-gocache: would ${d.action === 'install' ? `install ${d.version} (${d.reason})` : 'do nothing'}`
+      return `pod-gocache: would ${d.action === 'install' ? `install ${d.version} (${d.reason})` : d.action === 'remove' ? 'remove the agent' : 'do nothing'}`
     case 'refused':
       return `pod-gocache: install refused: ${outcome.message}`
+    case 'removed':
+      return `pod-gocache: agent removed (setting off): ${outcome.message}`
     case 'installed':
     case 'failed':
-      return `pod-gocache: install ${outcome.status} (${d.action === 'install' ? `${d.reason} → ${d.version}` : ''}${outcome.exit === null ? '' : `, exit ${outcome.exit}`}): ${outcome.message}`
+      return d.action === 'remove'
+        ? `pod-gocache: removal failed${outcome.exit === null ? '' : ` (exit ${outcome.exit})`}: ${outcome.message}`
+        : `pod-gocache: install ${outcome.status} (${d.action === 'install' ? `${d.reason} → ${d.version}` : ''}${outcome.exit === null ? '' : `, exit ${outcome.exit}`}): ${outcome.message}`
   }
 }
 

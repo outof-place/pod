@@ -10,7 +10,7 @@ export type PodGlobalSettings = {
   thirdPartyPluginsEnabled?: boolean
   /** Experimental (Pod): answer local quick open and file search from the ogd index daemon. */
   experimentalPodNativeSearch?: boolean
-  /** Pod (macOS): installs and runs the pod-gocache helper and daemon (src/main/pod/gocache); absent means on. */
+  /** Pod (macOS): the pod-gocache agent (src/main/pod/gocache); off removes it at the next launch, absent means on. */
   podGoCacheEnabled?: boolean
   /** Fork-only (Pod): lets main's terminal model go dormant; Pod builds default it off. */
   podTerminalMainModelDormancy?: boolean

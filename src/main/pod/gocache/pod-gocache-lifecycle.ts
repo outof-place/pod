@@ -1,4 +1,4 @@
-import { rmSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { failedSetup } from '../acc/acc-lifecycle-record'
 import { launchctlSpec } from '../launchd/launchctl-darwin'
@@ -12,15 +12,20 @@ import {
 import {
   installHelperAndAgent,
   plistIsCurrent,
+  removeAgent,
   rotateDaemonLog,
   takeInstallLock
 } from './pod-gocache-install'
 import { isAgentDisabled, readAgentState, serviceTarget } from './pod-gocache-launch-agent'
-import { writePodGoCacheLifecycleRecord } from './pod-gocache-lifecycle-record'
-import { podGoCacheStateDir } from './pod-gocache-paths'
+import {
+  lastPodGoCacheLifecycleStatus,
+  writePodGoCacheLifecycleRecord
+} from './pod-gocache-lifecycle-record'
+import { podGoCacheLaunchAgentPath, podGoCacheStateDir } from './pod-gocache-paths'
 import { isPodGoCacheOff } from './pod-gocache-switch'
 
-// acc-lifecycle.ts's install rules (own HOME and profile, no harness, no downgrade, lock, backoff) for pod-gocache.
+// acc-lifecycle.ts's install rules (own HOME and profile, no harness, no downgrade, lock, backoff) for pod-gocache;
+// the podGoCacheEnabled setting off removes the agent under the same rules.
 // No owner record like acc's: the helper answers its own version, launchd names the stable copy, owner.json is the daemon's.
 
 export type PodGoCacheSkipReason =
@@ -65,6 +70,13 @@ export type PodGoCacheDecision =
       /** Installs of this version that failed in a row before this one (pod-lifecycle.json). */
       failedAttempts?: number
     }
+  | {
+      action: 'remove'
+      reason: 'setting-off'
+      /** The plist exists: the next login would load the agent again. */
+      plist: boolean
+      agent: AgentState
+    }
 
 export type PodGoCacheLifecycleInput = {
   platform: NodeJS.Platform
@@ -94,6 +106,8 @@ export type PodGoCacheLifecycleInput = {
   now?: number
   /** Between bootstrap attempts; tests pass 0. */
   bootstrapRetryMs?: number
+  /** Between `launchctl print` polls while launchd tears the old job down; tests pass 0. */
+  teardownPollMs?: number
 }
 
 export type PodGoCacheLifecycleOutcome =
@@ -101,7 +115,7 @@ export type PodGoCacheLifecycleOutcome =
   | { status: 'up-to-date'; decision: PodGoCacheDecision; kickstarted: boolean }
   | { status: 'refused'; decision: PodGoCacheDecision; message: string }
   | {
-      status: 'installed' | 'failed'
+      status: 'installed' | 'removed' | 'failed'
       decision: PodGoCacheDecision
       message: string
       exit: number | null
@@ -119,9 +133,6 @@ function preflightSkip(input: PodGoCacheLifecycleInput): PodGoCacheSkipReason | 
   if (isPodGoCacheOff(input.mode)) {
     return 'disabled'
   }
-  if (!input.settingEnabled) {
-    return 'setting-off'
-  }
   if (input.automatedBy) {
     return 'automated-launch'
   }
@@ -134,7 +145,7 @@ function preflightSkip(input: PodGoCacheLifecycleInput): PodGoCacheSkipReason | 
   ) {
     return 'custom-profile'
   }
-  return isRegularFile(input.bundledHelper) ? null : 'no-helper'
+  return null
 }
 
 async function agentState(input: PodGoCacheLifecycleInput, run: RunProcess): Promise<AgentState> {
@@ -155,6 +166,22 @@ async function isDisabledByUser(
   return isAgentDisabled(await run(launchctlSpec(['print-disabled', `gui/${input.uid}`])))
 }
 
+/** Setting off: remove what is there; a `removed` record and no plist mean nothing is, without asking launchd. */
+async function decideRemoval(
+  input: PodGoCacheLifecycleInput,
+  run: RunProcess
+): Promise<PodGoCacheDecision> {
+  const plist = existsSync(podGoCacheLaunchAgentPath(input.home))
+  if (!plist && lastPodGoCacheLifecycleStatus(podGoCacheStateDir(input.home)) === 'removed') {
+    return { action: 'skip', reason: 'setting-off' }
+  }
+  const agent = await agentState(input, run)
+  if (!plist && (agent === 'not-loaded' || agent === null)) {
+    return { action: 'skip', reason: 'setting-off' }
+  }
+  return { action: 'remove', reason: 'setting-off', plist, agent }
+}
+
 export async function decidePodGoCacheLifecycle(
   input: PodGoCacheLifecycleInput,
   run: RunProcess
@@ -162,6 +189,12 @@ export async function decidePodGoCacheLifecycle(
   const skip = preflightSkip(input)
   if (skip) {
     return { action: 'skip', reason: skip }
+  }
+  if (!input.settingEnabled) {
+    return decideRemoval(input, run)
+  }
+  if (!isRegularFile(input.bundledHelper)) {
+    return { action: 'skip', reason: 'no-helper' }
   }
   if (await isDisabledByUser(input, run)) {
     return { action: 'skip', reason: 'user-disabled' }
@@ -249,6 +282,28 @@ async function install(
   }
 }
 
+async function remove(
+  input: PodGoCacheLifecycleInput,
+  decision: Extract<PodGoCacheDecision, { action: 'remove' }>,
+  uid: number,
+  run: RunProcess
+): Promise<PodGoCacheLifecycleOutcome> {
+  try {
+    const failure = await removeAgent(input, uid, run)
+    return failure
+      ? { status: 'failed', decision, ...failure }
+      : {
+          status: 'removed',
+          decision,
+          message: 'the agent is gone; the helper stays for open terminals',
+          exit: 0,
+          timedOut: false
+        }
+  } catch (error) {
+    return { status: 'failed', decision, message: String(error), exit: null, timedOut: false }
+  }
+}
+
 async function act(
   input: PodGoCacheLifecycleInput,
   decision: PodGoCacheDecision,
@@ -281,9 +336,15 @@ async function act(
   try {
     // another Pod may have installed while this one decided: never act on a stale decision
     const locked = await decidePodGoCacheLifecycle(input, run)
-    return locked.action === 'install'
-      ? await install(input, locked, uid, run)
-      : await act(input, locked, run)
+    switch (locked.action) {
+      case 'install':
+        return await install(input, locked, uid, run)
+      case 'remove':
+        return await remove(input, locked, uid, run)
+      case 'skip':
+      case 'up-to-date':
+        return await act(input, locked, run)
+    }
   } finally {
     rmSync(lock, { force: true })
   }
