@@ -3,6 +3,7 @@ import type { CdpWsProxy } from './cdp-ws-proxy'
 import type { BrowserError } from './cdp-bridge'
 import type { AgentBrowserDaemonExchange } from './agent-browser-daemon-socket'
 import type { AgentBrowserSnapshotNarrowing } from './agent-browser-snapshot-narrowing'
+import type { AgentBrowserClickMove } from './agent-browser-click-move'
 
 // Why: must exceed agent-browser's internal timeouts (goto 30s, wait 60s) so the bridge never kills a command before its own timeout fires.
 export const EXEC_TIMEOUT_MS = 90_000
@@ -40,6 +41,8 @@ export type SessionState = {
   daemonSocketProtocol?: boolean | null
   // What the next snapshot prints, for the CDP proxy to cut its tree short.
   snapshotNarrowing?: AgentBrowserSnapshotNarrowing
+  // A click in flight, for the CDP proxy to answer its pointer move at once.
+  clickMove?: AgentBrowserClickMove
 }
 
 export type QueuedCommand = {

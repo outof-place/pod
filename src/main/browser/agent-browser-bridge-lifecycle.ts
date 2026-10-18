@@ -1,5 +1,6 @@
 import { CdpWsProxy } from './cdp-ws-proxy'
 import { AgentBrowserSnapshotNarrowing } from './agent-browser-snapshot-narrowing'
+import { AgentBrowserClickMove } from './agent-browser-click-move'
 import { BrowserError } from './cdp-bridge'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { AgentBrowserBridgeRawProcess } from './agent-browser-bridge-raw-process'
@@ -108,10 +109,11 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
       await this.closeStaleAgentBrowserSession(sessionName)
 
       const snapshotNarrowing = new AgentBrowserSnapshotNarrowing()
+      const clickMove = new AgentBrowserClickMove()
       const proxy = new CdpWsProxy(
         wc,
         () => this.browserManager.holdPaintForCapture(webContentsId),
-        snapshotNarrowing
+        { snapshotNarrowing, clickMove }
       )
       const cdpEndpoint = await proxy.start()
 
@@ -125,7 +127,8 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
         lastCommandAt: Date.now(),
         webContentsId,
         activeProcess: null,
-        snapshotNarrowing
+        snapshotNarrowing,
+        clickMove
       })
     }
 

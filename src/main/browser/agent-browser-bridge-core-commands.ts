@@ -49,9 +49,9 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserClickResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['click', element])) as BrowserClickResult
-    })
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, (sessionName) =>
+      this.clickWith(sessionName, ['click', element])
+    )
   }
 
   async dblclick(
@@ -59,9 +59,20 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserClickResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['dblclick', element])) as BrowserClickResult
-    })
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, (sessionName) =>
+      this.clickWith(sessionName, ['dblclick', element])
+    )
+  }
+
+  private async clickWith(sessionName: string, args: string[]): Promise<BrowserClickResult> {
+    const clickMove = this.sessions.get(sessionName)?.clickMove
+    clickMove?.expect()
+    try {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's click reply, as before.
+      return (await this.execAgentBrowser(sessionName, args)) as BrowserClickResult
+    } finally {
+      clickMove?.done()
+    }
   }
 
   async goto(url: string, worktreeId?: string, browserPageId?: string): Promise<BrowserGotoResult> {

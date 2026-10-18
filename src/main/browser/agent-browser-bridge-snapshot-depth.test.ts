@@ -16,9 +16,9 @@ vi.mock('./cdp-ws-proxy', () => ({
     this: Record<string, unknown>,
     _wc: unknown,
     _hold: unknown,
-    narrowing: { narrows: (params: Record<string, unknown>) => boolean }
+    hints: { snapshotNarrowing: { narrows: (params: Record<string, unknown>) => boolean } }
   ) {
-    narrowings.push(narrowing)
+    narrowings.push(hints.snapshotNarrowing)
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
     this.getPort = vi.fn(() => 9222)

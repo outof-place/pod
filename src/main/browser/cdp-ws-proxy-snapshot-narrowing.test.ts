@@ -29,7 +29,7 @@ describe('CdpWsProxy with snapshot narrowing', () => {
     proxy = null
   })
 
-  it("asks Chromium for a cut tree for a depth snapshot, and the whole tree for a ref lookup", async () => {
+  it('asks Chromium for a cut tree for a depth snapshot, and the whole tree for a ref lookup', async () => {
     const mock = createMockWebContents()
     mock.webContents.debugger.sendCommand.mockImplementation(async (method, params) =>
       method === 'Accessibility.getFullAXTree'
@@ -38,7 +38,9 @@ describe('CdpWsProxy with snapshot narrowing', () => {
     )
     const narrowing = new AgentBrowserSnapshotNarrowing()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
-    proxy = new CdpWsProxy(mock.webContents as never, () => () => {}, narrowing)
+    proxy = new CdpWsProxy(mock.webContents as never, () => () => {}, {
+      snapshotNarrowing: narrowing
+    })
     const client = await connect(await proxy.start())
     const treeRequests = () =>
       getSendCommandCalls(mock)

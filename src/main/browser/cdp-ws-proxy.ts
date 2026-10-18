@@ -10,7 +10,7 @@ import { CdpDomFocusReplay } from './cdp-dom-focus-replay'
 import { CdpPageCaptureCommands } from './cdp-page-capture-commands'
 import type { CapturePaintHold } from './cdp-screenshot'
 import { podCdpProxyReply, podCdpProxyRequest } from '../pod/browser/cdp-proxy-hooks'
-import type { AgentBrowserSnapshotNarrowing } from './agent-browser-snapshot-narrowing'
+import { CdpAgentCommandHints, type AgentBrowserCommandHints } from './cdp-agent-command-hints'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -29,12 +29,13 @@ export class CdpWsProxy {
   private readonly navigation: CdpPageNavigationCommands
   private readonly domFocusReplay: CdpDomFocusReplay
   private readonly pageCapture: CdpPageCaptureCommands
+  private readonly commandHints: CdpAgentCommandHints
 
   constructor(
     private readonly webContents: WebContents,
     holdPaint: CapturePaintHold,
-    // Fork-only (Pod): what the bridge's next snapshot prints, so its tree can be cut short.
-    private readonly snapshotNarrowing: AgentBrowserSnapshotNarrowing | null = null
+    // Fork-only (Pod): what the bridge says about the command agent-browser runs now.
+    hints: AgentBrowserCommandHints = {}
   ) {
     this.discovery = new CdpTargetDiscovery(
       webContents,
@@ -57,6 +58,13 @@ export class CdpWsProxy {
     )
     this.domFocusReplay = new CdpDomFocusReplay(webContents, this.responder, this.debuggerChannel)
     this.pageCapture = new CdpPageCaptureCommands(webContents, this.responder, holdPaint)
+    this.commandHints = new CdpAgentCommandHints(
+      webContents,
+      this.responder,
+      this.sessions,
+      this.debuggerChannel,
+      hints
+    )
   }
 
   async start(): Promise<string> {
@@ -240,9 +248,7 @@ export class CdpWsProxy {
       void this.navigation.reloadWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
       return
     }
-    const narrowing = this.snapshotNarrowing
-    if (msg.method === 'Accessibility.getFullAXTree' && narrowing?.narrows(msg.params)) {
-      void this.forwardNarrowedAxTree(narrowing, client, clientId, msg.params ?? {}, msg.sessionId)
+    if (this.commandHints.handleCommand(client, clientId, msg)) {
       return
     }
     this.debuggerChannel.forwardCommand(
@@ -252,27 +258,5 @@ export class CdpWsProxy {
       msg.params ?? {},
       msg.sessionId
     )
-  }
-
-  private async forwardNarrowedAxTree(
-    narrowing: AgentBrowserSnapshotNarrowing,
-    client: WebSocket,
-    clientId: number,
-    params: Record<string, unknown>,
-    msgSessionId?: string
-  ): Promise<void> {
-    if (this.webContents.isDestroyed()) {
-      this.responder.sendError(clientId, 'Browser tab is no longer available', client)
-      return
-    }
-    const sessionId = this.sessions.resolveDebuggerSessionId(msgSessionId)
-    try {
-      const result = await narrowing.fetch(params, this.webContents.getURL(), (next) =>
-        this.debuggerChannel.sendDebuggerCommand('Accessibility.getFullAXTree', next, sessionId)
-      )
-      this.responder.sendResult(clientId, result, client)
-    } catch (err) {
-      this.responder.sendError(clientId, err instanceof Error ? err.message : String(err), client)
-    }
   }
 }
