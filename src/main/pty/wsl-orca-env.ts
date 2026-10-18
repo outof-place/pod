@@ -10,8 +10,10 @@ import {
 } from '../../shared/setup-agent-sequencing'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 import { ORCA_IMAGE_PROTOCOL_ENV } from '../../shared/terminal-image-protocol'
+import { POD_ALIASED_ORCA_ENV_NAMES, podSpellingOf } from '../../shared/pod-env-aliases'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
+const POD_ALIASED = new Set(POD_ALIASED_ORCA_ENV_NAMES)
 
 function parseWslenvEntries(value: string | undefined): string[] {
   return value ? value.split(WSLENV_ENTRY_SEPARATOR).filter(Boolean) : []
@@ -36,6 +38,13 @@ function applyWslenvPassthrough(
     const variableName = entry.split('/')[0]
     if (env[variableName]) {
       upsertWslenvEntry(entries, entry)
+      // Fork-only (Pod): the POD_ alias the final spawn pass sets crosses with the same flag.
+      if (POD_ALIASED.has(variableName)) {
+        upsertWslenvEntry(
+          entries,
+          `${podSpellingOf(variableName)}${entry.slice(variableName.length)}`
+        )
+      }
     }
   }
   env.WSLENV = entries.join(WSLENV_ENTRY_SEPARATOR)

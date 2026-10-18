@@ -1,3 +1,5 @@
+// Fork-only (Pod): first, so every module that reads env at load sees the user's POD_ settings.
+import './pod/decouple/adopt-pod-user-env'
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { productUrlSchemes } from './product-identity/product-identity'
