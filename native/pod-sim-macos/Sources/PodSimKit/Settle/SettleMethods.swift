@@ -43,14 +43,19 @@ private final class LiveSettleSignals: SettleSignals {
     let knownSinceNs: UInt64
     let device: SimDeviceHandle
     let readsTree: Bool
+    let surface: @Sendable () -> (id: UInt32, seed: UInt32)?
 
-    init(watch: DamageWatch?, scale: Double, options: SettleOptions, knownSinceNs: UInt64, device: SimDeviceHandle, readsTree: Bool) {
+    init(
+        watch: DamageWatch?, scale: Double, options: SettleOptions, knownSinceNs: UInt64, device: SimDeviceHandle, readsTree: Bool,
+        surface: @escaping @Sendable () -> (id: UInt32, seed: UInt32)?
+    ) {
         self.watch = watch
         self.scale = scale
         self.options = options
         self.knownSinceNs = knownSinceNs
         self.device = device
         self.readsTree = readsTree
+        self.surface = surface
     }
 
     func now() -> UInt64 { clock_gettime_nsec_np(CLOCK_UPTIME_RAW) }
@@ -73,7 +78,10 @@ private final class LiveSettleSignals: SettleSignals {
 
     func readTree() -> TreeRead? {
         let options = AXSnapshotOptions(maxNodes: 1, filter: nil, all: false)
-        guard case .success(let snapshot) = AccessibilitySnapshots.take(device, options: options, hitTest: false) else { return nil }
+        // Kept for `ax`: once settled, the next snapshot answers from settle's last read.
+        guard case .success(let snapshot) = AccessibilitySnapshots.take(device, options: options, hitTest: false, surface: surface) else {
+            return nil
+        }
         return TreeRead(fingerprint: snapshot.fingerprint, alertSuspected: snapshot.alertSuspected)
     }
 }
@@ -142,7 +150,8 @@ extension HelperMethods {
             }
             let scale = watched?.0.scale ?? DeviceScreen.of(device).scale
             let signals = LiveSettleSignals(
-                watch: watched?.1, scale: scale, options: options, knownSinceNs: knownSince, device: device, readsTree: treeOK)
+                watch: watched?.1, scale: scale, options: options, knownSinceNs: knownSince, device: device, readsTree: treeOK,
+                surface: axSurface(udid))
             let outcome = SettleLoop.run(options, signals)
             let cost = watched?.1.cost ?? (hashes: 0, meanMicros: 0)
             return .encoding(SettleResult(

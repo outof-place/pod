@@ -188,10 +188,8 @@ struct AXCoveringTests {
 
 @Suite("Accessibility tree cache")
 struct AXTreeCacheTests {
-    let device = NSObject()
-
-    func tree(on device: NSObject? = nil) -> AXTreeRead {
-        AXTreeRead(elements: [], parents: [], objectIDs: [], pids: [], appPid: 1, device: device ?? self.device)
+    func tree() -> AXTreeRead {
+        AXTreeRead(elements: [], parents: [], objectIDs: [], pids: [], appPid: 1)
     }
 
     func listening() -> AXTreeCache {
@@ -205,7 +203,7 @@ struct AXTreeCacheTests {
         var cache = listening()
         let stamp = cache.stamp(surface: (id: 3, seed: 41))
         cache.keep(tree(), stamp: stamp)
-        #expect(cache.cached(at: cache.stamp(surface: (id: 3, seed: 41)), device: device) != nil)
+        #expect(cache.cached(at: cache.stamp(surface: (id: 3, seed: 41))) != nil)
     }
 
     @Test("a notification or input after the stamp, a new seed or a new surface each end the kept tree")
@@ -213,10 +211,10 @@ struct AXTreeCacheTests {
         var cache = listening()
         let stamp = cache.stamp(surface: (id: 3, seed: 41))
         cache.keep(tree(), stamp: stamp)
-        #expect(cache.cached(at: cache.stamp(surface: (id: 3, seed: 42)), device: device) == nil)
-        #expect(cache.cached(at: cache.stamp(surface: (id: 4, seed: 41)), device: device) == nil)
+        #expect(cache.cached(at: cache.stamp(surface: (id: 3, seed: 42))) == nil)
+        #expect(cache.cached(at: cache.stamp(surface: (id: 4, seed: 41))) == nil)
         cache.changed()
-        #expect(cache.cached(at: cache.stamp(surface: (id: 3, seed: 41)), device: device) == nil)
+        #expect(cache.cached(at: cache.stamp(surface: (id: 3, seed: 41))) == nil)
     }
 
     @Test("a change while the tree was being read leaves it unused: the stamp was taken before the read")
@@ -225,7 +223,7 @@ struct AXTreeCacheTests {
         let before = cache.stamp(surface: (id: 3, seed: 41))
         cache.changed()
         cache.keep(tree(), stamp: before)
-        #expect(cache.cached(at: cache.stamp(surface: (id: 3, seed: 41)), device: device) == nil)
+        #expect(cache.cached(at: cache.stamp(surface: (id: 3, seed: 41))) == nil)
     }
 
     @Test("nothing is kept without notifications or without a framebuffer to read")
@@ -233,8 +231,17 @@ struct AXTreeCacheTests {
         var deaf = AXTreeCache()
         #expect(deaf.stamp(surface: (id: 3, seed: 41)) == nil)
         deaf.keep(tree(), stamp: AXScreenStamp(changes: 0, surface: 3, seed: 41))
-        #expect(deaf.cached(at: AXScreenStamp(changes: 0, surface: 3, seed: 41), device: device) == nil)
+        #expect(deaf.cached(at: AXScreenStamp(changes: 0, surface: 3, seed: 41)) == nil)
         #expect(listening().stamp(surface: nil) == nil)
+    }
+
+    @Test("a read kept without a stamp (no framebuffer to read) leaves the kept tree, which its own stamp still proves")
+    func unstampedReadLeavesIt() {
+        var cache = listening()
+        let stamp = cache.stamp(surface: (id: 3, seed: 41))
+        cache.keep(tree(), stamp: stamp)
+        cache.keep(tree(), stamp: nil)
+        #expect(cache.cached(at: stamp) != nil)
     }
 
     @Test("notifications that stop drop the kept tree, even when they come back")
@@ -243,15 +250,7 @@ struct AXTreeCacheTests {
         cache.keep(tree(), stamp: cache.stamp(surface: (id: 3, seed: 41)))
         cache.deaf()
         cache.listen()
-        #expect(cache.cached(at: cache.stamp(surface: (id: 3, seed: 41)), device: device) == nil)
-    }
-
-    @Test("a rebooted device (a new device object) never gets the old boot's tree")
-    func reboot() {
-        var cache = listening()
-        let stamp = cache.stamp(surface: (id: 3, seed: 41))
-        cache.keep(tree(), stamp: stamp)
-        #expect(cache.cached(at: stamp, device: NSObject()) == nil)
+        #expect(cache.cached(at: cache.stamp(surface: (id: 3, seed: 41))) == nil)
     }
 
     @Test("hit answers join the kept tree only when tested under its stamp")
@@ -262,7 +261,7 @@ struct AXTreeCacheTests {
         let cannotTell: Bool? = nil
         cache.addHits([2: false, 5: cannotTell], stamp: stamp)
         cache.addHits([7: true], stamp: AXScreenStamp(changes: 0, surface: 3, seed: 40))
-        let hits = try #require(cache.cached(at: stamp, device: device)?.hits)
+        let hits = try #require(cache.cached(at: stamp)?.hits)
         #expect(hits.count == 2)
         #expect(hits[2] == .some(false))
         // Tested and "cannot tell": kept as an answer, so it is not asked again.
@@ -424,7 +423,7 @@ struct AXBridgeXPCTests {
         return true
     }
 
-    func tree() -> AXTreeRead { AXTreeRead(elements: [], parents: [], objectIDs: [], pids: [], appPid: 1, device: NSObject()) }
+    func tree() -> AXTreeRead { AXTreeRead(elements: [], parents: [], objectIDs: [], pids: [], appPid: 1) }
 
     @Test("listening starts without waiting, once the first request is answered; a notification then ends the kept tree")
     func listensAndHears() throws {
@@ -437,7 +436,7 @@ struct AXBridgeXPCTests {
         #expect(Date().timeIntervalSince(started) < 0.15)
         #expect(eventually { session.isListening })
         let stamp = session.stamp(surface: (id: 1, seed: 1))
-        session.keep(AXTreeRead(elements: [], parents: [], objectIDs: [], pids: [], appPid: 1, device: device), stamp: stamp)
+        session.keep(tree(), stamp: stamp)
         #expect(session.cached(at: session.stamp(surface: (id: 1, seed: 1))) != nil)
         service.notify()
         #expect(eventually { session.cached(at: session.stamp(surface: (id: 1, seed: 1))) == nil })

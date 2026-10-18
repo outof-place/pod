@@ -39,10 +39,9 @@ enum SimXPCService {
         return missing
     }
 
-    /// A resumed connection whose errors reach `onError` ("invalid" or "interrupted"), on `queue`.
-    static func connect(
-        _ device: SimDeviceHandle, service: String, queue: DispatchQueue, onError: @escaping @Sendable (String) -> Void
-    ) -> Result<xpc_connection_t, HelperError> {
+    /// The service's endpoint: one `-[SimDevice lookup:error:]` (a CoreSimulatorService call), after
+    /// which `connection(from:)` makes connections locally in microseconds.
+    static func endpoint(device: SimDeviceHandle, service: String) -> Result<xpc_object_t, HelperError> {
         guard let calls = Calls.resolved else {
             return .failure(HelperError(.failed, "libxpc has no _4sim endpoint calls on this macOS"))
         }
@@ -56,23 +55,45 @@ enum SimXPCService {
             }
             return .success(port)
         }.flatMap { $0 }
-        let port: mach_port_t
-        switch looked {
-        case .failure(let error): return .failure(error)
-        case .success(let found): port = found
+        return looked.flatMap { port in
+            // +1, as idb takes it; the endpoint owns the port's send right from here.
+            guard let endpoint = calls.endpoint(port, 0, 0)?.takeRetainedValue() as? xpc_object_t else {
+                // No endpoint took the send right: it is still ours to give back.
+                mach_port_deallocate(mach_task_self_, port)
+                return .failure(HelperError(.failed, "libxpc made no endpoint for \(service)"))
+            }
+            return .success(endpoint)
         }
-        // Both calls hand back +1 objects (idb takes them retained too).
-        guard let endpoint = calls.endpoint(port, 0, 0)?.takeRetainedValue() as? xpc_object_t,
-              let connection = calls.connection(endpoint)?.takeRetainedValue() as? xpc_connection_t
-        else { return .failure(HelperError(.failed, "libxpc made no connection for \(service)")) }
+    }
+
+    /// A resumed simulator-to-host connection from `endpoint`; every message that is not a reply
+    /// (errors included) goes to `onEvent` on `queue`.
+    static func connection(
+        from endpoint: xpc_object_t, queue: DispatchQueue, onEvent: @escaping @Sendable (xpc_object_t) -> Void
+    ) -> xpc_connection_t? {
+        // +1, as idb takes it.
+        guard let calls = Calls.resolved, let connection = calls.connection(endpoint)?.takeRetainedValue() as? xpc_connection_t else {
+            return nil
+        }
         calls.sim2host(connection)
         xpc_connection_set_target_queue(connection, queue)
-        xpc_connection_set_event_handler(connection) { event in
-            guard xpc_get_type(event) == XPC_TYPE_ERROR else { return }
-            onError(event === XPC_ERROR_CONNECTION_INVALID ? "the \(service) connection is invalid" : "the \(service) connection was interrupted")
-        }
+        xpc_connection_set_event_handler(connection, onEvent)
         xpc_connection_resume(connection)
-        return .success(connection)
+        return connection
+    }
+
+    /// A resumed connection whose errors reach `onError` ("invalid" or "interrupted"), on `queue`.
+    static func connect(
+        _ device: SimDeviceHandle, service: String, queue: DispatchQueue, onError: @escaping @Sendable (String) -> Void
+    ) -> Result<xpc_connection_t, HelperError> {
+        endpoint(device: device, service: service).flatMap { endpoint in
+            let made = connection(from: endpoint, queue: queue) { event in
+                guard xpc_get_type(event) == XPC_TYPE_ERROR else { return }
+                onError(event === XPC_ERROR_CONNECTION_INVALID ? "the \(service) connection is invalid" : "the \(service) connection was interrupted")
+            }
+            guard let made else { return .failure(HelperError(.failed, "libxpc made no connection for \(service)")) }
+            return .success(made)
+        }
     }
 
     /// One request and its reply, or nil when no reply came within `timeout` or XPC answered an error.

@@ -22,7 +22,8 @@ struct AXParams: Decodable {
     let all: Bool?
     /// Hit-test each on-screen node so a covered one is not offered (default true).
     let hitTest: Bool?
-    /// Read the device now even when the kept tree still matches the screen (default false).
+    /// Read the device now even when the kept tree still matches the screen (default false, `all` too:
+    /// see the helper README's "The kept tree").
     let fresh: Bool?
 }
 
@@ -51,11 +52,9 @@ extension HelperMethods {
                 switch booted(params.udid.uppercased()) {
                 case .failure(let error): return .error(error)
                 case .success(let device):
-                    // Without a readable framebuffer nothing proves the screen held still, so nothing is kept.
-                    let screenshots = startupReport.capabilities.screenshot.status == .ok
                     taken = AccessibilitySnapshots.snapshot(
                         device, options: options, hitTest: params.hitTest ?? true, fresh: params.fresh ?? false,
-                        surface: { screenshots ? self.surfaceStamp(device.udid) : nil })
+                        surface: axSurface(device.udid))
                 }
             }
             switch taken {
@@ -65,9 +64,14 @@ extension HelperMethods {
         }
     }
 
-    /// The main display's framebuffer as an IOSurface id and seed: the seed moves whenever the device draws.
-    private func surfaceStamp(_ udid: String) -> (id: UInt32, seed: UInt32)? {
-        guard case .success(let surface) = mainSurface(udid) else { return nil }
-        return (IOSurfaceGetID(surface), IOSurfaceGetSeed(surface))
+    /// The main display's framebuffer as an IOSurface id and seed (the seed moves whenever the device
+    /// draws), for a kept tree's stamp. Without a readable framebuffer nothing proves the screen held
+    /// still, so nothing is kept.
+    func axSurface(_ udid: String) -> @Sendable () -> (id: UInt32, seed: UInt32)? {
+        let readable = startupReport.capabilities.screenshot.status == .ok
+        return { [weak self] in
+            guard readable, let self, case .success(let surface) = self.mainSurface(udid) else { return nil }
+            return (IOSurfaceGetID(surface), IOSurfaceGetSeed(surface))
+        }
     }
 }

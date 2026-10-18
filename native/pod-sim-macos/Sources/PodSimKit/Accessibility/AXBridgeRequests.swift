@@ -167,7 +167,7 @@ final class AXBridgeReadLane: AXLane, @unchecked Sendable {
 
 /// Raw values to the walk's elements, through the translator's element methods, on its queue. What the
 /// conversion asks the device (`conversionAttributes`) is answered from the element's own values; a
-/// question about anything else gets no answer, which the translator reads as no value.
+/// question the read has no answer for fails the conversion.
 enum AXBridgeValues {
     static func elements(_ reads: [AXParallelWalk.Read], bridge: AXTranslatorBridge, vocabulary: AXBridgeRequests.Vocabulary) -> Result<[AXRawElement], HelperError> {
         let answers = AXBatchAnswers()
@@ -199,7 +199,10 @@ enum AXBridgeValues {
                 return AXTreeReader.raw(named, depth: read.depth)
             }
         }
-        if route.unanswered > 0 { AXBatchAnswers.noteOnce("ax: converting values asked \(route.unanswered) questions the batch had no answer for") }
+        // A value converted without its answer would be missing or wrong, unseen: the call reads through the translator.
+        guard route.unanswered == 0 else {
+            return .failure(HelperError(.failed, "converting the values asked \(route.unanswered) questions the read had no answer for"))
+        }
         return converted
     }
 }
@@ -228,11 +231,4 @@ private final class AXBatchAnswers: AXTransport, @unchecked Sendable {
     }
 
     func close() {}
-
-    private static let noted = NSLock()
-    nonisolated(unsafe) private static var said = false
-    static func noteOnce(_ message: String) {
-        guard noted.withLock({ () -> Bool in defer { said = true }; return !said }) else { return }
-        HelperLog.note(message)
-    }
 }

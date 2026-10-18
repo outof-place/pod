@@ -60,167 +60,150 @@ enum AccessibilitySnapshots {
     private static let routeLock = NSLock()
     nonisolated(unsafe) private static var configured: (route: AXRoute, note: String?) = (.translator, nil)
 
-    /// Set once from the version table's pick, before the self-test: `parallelWalk` needs its own
-    /// symbols too, and without them reads go through the translator, said in `note`.
+    /// Set once from the version table's pick, before the self-test.
     @discardableResult
     static func configure(implementation: String?) -> (route: AXRoute, note: String?) {
-        var chosen: (route: AXRoute, note: String?) = (.translator, nil)
         // The translator's classes are there to look at only once it is loaded.
-        if implementation == "parallelWalk", case .success = AXTranslatorBridge.shared() {
-            let missing = AXBridgeRequests.missingSymbols()
-            chosen = missing.isEmpty
-                ? (.parallel, nil)
-                : (.translator, "parallelWalk lacks \(missing.joined(separator: ", ")); reads go through the translator")
-        }
+        let loaded = implementation == "parallelWalk" && (try? AXTranslatorBridge.shared().get()) != nil
+        let chosen = choose(
+            implementation: implementation, translatorLoaded: loaded,
+            missing: loaded ? AXBridgeRequests.missingSymbols() + SimXPCService.missingSymbols() : [])
         routeLock.withLock { configured = chosen }
         return chosen
     }
 
+    /// `parallelWalk` needs its own symbols too (the request classes, libxpc's `_4sim` calls and
+    /// `-[SimDevice lookup:error:]`); without them reads go through the translator, said in `note`.
+    static func choose(implementation: String?, translatorLoaded: Bool, missing: [String]) -> (route: AXRoute, note: String?) {
+        guard implementation == "parallelWalk", translatorLoaded else { return (.translator, nil) }
+        return missing.isEmpty ? (.parallel, nil) : (.translator, "parallelWalk lacks \(missing.joined(separator: ", ")); reads go through the translator")
+    }
+
     static var route: (route: AXRoute, note: String?) { routeLock.withLock { configured } }
 
-    /// A fresh read on the configured route (settle and the self-test compare reads, so never the cache).
-    static func take(_ device: SimDeviceHandle, options: AXSnapshotOptions, hitTest: Bool) -> Result<AXSnapshotResult, HelperError> {
-        snapshot(device, options: options, hitTest: hitTest, fresh: true, surface: { nil })
+    /// A fresh read on the configured route (settle and the self-test compare reads, so never the
+    /// kept tree), kept under `surface`'s stamp for the next `ax`. `force` reads in parallel even while
+    /// that route is paused for the device (the self-test says how it is now).
+    static func take(
+        _ device: SimDeviceHandle, options: AXSnapshotOptions, hitTest: Bool,
+        surface: () -> (id: UInt32, seed: UInt32)? = { nil }, force: Bool = false
+    ) -> Result<AXSnapshotResult, HelperError> {
+        snapshot(device, options: options, hitTest: hitTest, fresh: true, surface: surface, force: force)
     }
 
     /// `ax`: the kept tree while its stamp still holds (`surface` gives the framebuffer's id and seed),
     /// else a fresh read, which is kept in turn.
     static func snapshot(
         _ device: SimDeviceHandle, options: AXSnapshotOptions, hitTest: Bool, fresh: Bool,
-        surface: () -> (id: UInt32, seed: UInt32)?
+        surface: () -> (id: UInt32, seed: UInt32)?, force: Bool = false
     ) -> Result<AXSnapshotResult, HelperError> {
         let started = DispatchTime.now()
+        // The device may answer the translator when our own requests failed (a service that moved).
+        // Both share one budget, so a fallback still answers inside `ax`'s deadline.
+        let translator = { timed(device, options: options, hitTest: hitTest, started: started).map(\.result) }
         guard route.route == .parallel else {
-            return timed(device, options: options, hitTest: hitTest).map { taken in
-                var result = taken.result
+            return translator().map { taken in
+                var result = taken
                 result.basis = .translator
                 return result
             }
         }
-        let parallel = parallelSnapshot(device, options: options, hitTest: hitTest, fresh: fresh, surface: surface, started: started)
-        guard case .failure(let failure) = parallel else { return parallel }
-        // The device may answer the translator when our own requests failed (a service that moved).
-        // Both share one budget, so a fallback still answers inside `ax`'s deadline.
-        HelperLog.note("ax \(device.udid): \(failure.message); reading through the translator")
-        return timed(device, options: options, hitTest: hitTest, started: started)
-            .map { taken in
-                var result = taken.result
-                result.basis = .translator
-                result.fallbackReason = failure.message
-                return result
-            }
-            .mapError { HelperError($0.code, "\(failure.message); through the translator: \($0.message)") }
+        return AXParallelFallback.answer(
+            key: .init(udid: device.udid, boot: device.lastBootedAt), backoff: .shared, force: force,
+            parallel: { parallelSnapshot(device, options: options, hitTest: hitTest, fresh: fresh, surface: surface, started: started) },
+            translator: translator, log: HelperLog.note)
     }
 
     private static func parallelSnapshot(
         _ device: SimDeviceHandle, options: AXSnapshotOptions, hitTest: Bool, fresh: Bool,
         surface: () -> (id: UInt32, seed: UInt32)?, started: DispatchTime
-    ) -> Result<AXSnapshotResult, HelperError> {
+    ) -> Result<AXSnapshotResult, AXParallelFailure> {
         let bridge: AXTranslatorBridge
         switch AXTranslatorBridge.shared() {
-        case .failure(let error): return .failure(error)
+        case .failure(let error): return .failure(AXParallelFailure(kind: .unavailable, error: error))
         case .success(let loaded): bridge = loaded
         }
         let vocabulary: AXBridgeRequests.Vocabulary
         switch AXBridgeRequests.vocabulary() {
-        case .failure(let error): return .failure(error)
+        case .failure(let error): return .failure(AXParallelFailure(kind: .unavailable, error: error))
         case .success(let learned): vocabulary = learned
         }
         let session: AXDeviceSession
         switch AXDeviceSessions.shared.session(for: device, vocabulary: vocabulary, timeout: requestTimeout) {
-        case .failure(let error): return .failure(error)
+        case .failure(let error): return .failure(AXParallelFailure(kind: .lookup, error: error))
         case .success(let made): session = made
         }
         let deadline = started + .milliseconds(walkBudgetMs)
-        let deviceScreen = DeviceScreen.of(device)
-        // Taken before anything is read, so a change while reading leaves a stamp that no longer holds.
-        let stamp = session.stamp(surface: surface())
         let lanes = Lanes(session: session, vocabulary: vocabulary)
         defer { lanes.close() }
-        var basis = AXBasis.cache
-        var tree: AXTreeRead
-        var hits: [Int: Bool?]
-        if !fresh, let kept = session.cached(at: stamp) {
-            (tree, hits) = kept
-        } else {
-            switch read(device, bridge: bridge, vocabulary: vocabulary, lanes: lanes, deadline: deadline) {
-            case .failure(let error):
-                // Nothing answered on its connections: the endpoint may be stale (the service restarted).
-                if error.unanswered { AXDeviceSessions.shared.discard(session) }
-                return .failure(error.error)
-            case .success(let read): tree = read
-            }
-            hits = [:]
-            basis = .parallel
-            session.keep(tree, stamp: stamp)
+        var answer: AXKeptTree.Answer
+        switch AXKeptTree.answer(
+            keeper: session, fresh: fresh, surface: surface,
+            read: { read(device, bridge: bridge, vocabulary: vocabulary, lanes: lanes, deadline: deadline) },
+            discard: { AXDeviceSessions.shared.discard(session) }) {
+        case .failure(let failure): return .failure(failure)
+        case .success(let given): answer = given
         }
-        let rootSize = tree.elements.first.map { AXNormalizer.finite($0.frame).size }.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
-        let points = rootSize ?? deviceScreen.points
+        let screen = Self.screen(device, rootFrame: answer.tree.elements.first?.frame)
         if hitTest {
-            let wanted = AXTreeReader.hitPoints(tree.elements, parents: tree.parents, screen: CGRect(origin: .zero, size: points), filter: options.filter)
-                .enumerated().compactMap { index, point in point.flatMap { hits[index] == nil ? (index, $0) : nil } }
+            let bounds = CGRect(x: 0, y: 0, width: screen.width, height: screen.height)
+            let wanted = AXTreeReader.hitPoints(answer.tree.elements, parents: answer.tree.parents, screen: bounds, filter: options.filter)
+                .enumerated().compactMap { index, point in point.flatMap { answer.hits[index] == nil ? (index, $0) : nil } }
             if !wanted.isEmpty {
-                let answers = AXParallelWalk.hitTests(wanted.map(\.1), lanes: lanes.open(min(wanted.count, Self.lanes)), deadline: deadline)
-                let families = AXCovering.families(objectIDs: tree.objectIDs, parents: tree.parents)
+                let hits = AXParallelWalk.hitTests(wanted.map(\.1), lanes: lanes.open(min(wanted.count, Self.lanes)), deadline: deadline)
+                let families = AXCovering.families(objectIDs: answer.tree.objectIDs, parents: answer.tree.parents)
                 var found: [Int: Bool?] = [:]
                 // An unanswered hit test is asked again next time; "cannot tell" is an answer and kept.
-                for ((index, _), hit) in zip(wanted, answers) {
+                for ((index, _), hit) in zip(wanted, hits) {
                     guard let hit else { continue }
-                    found[index] = .some(AXCovering.lands(hit, element: index, families: families, pids: tree.pids, root: tree.objectIDs.first ?? nil))
+                    found[index] = .some(AXCovering.lands(
+                        hit, element: index, families: families, pids: answer.tree.pids, root: answer.tree.objectIDs.first ?? nil))
                 }
-                hits.merge(found) { _, new in new }
-                session.addHits(found, stamp: stamp)
+                answer.hits.merge(found) { _, new in new }
+                session.addHits(found, stamp: answer.stamp)
             }
-            for (index, landed) in hits { tree.elements[index].hitsItself = landed }
+            for (index, landed) in answer.hits { answer.tree.elements[index].hitsItself = landed }
         }
-        let orientation = rootSize.flatMap { InterfaceOrientation.of(root: $0, native: deviceScreen.points) }
-        DeviceOrientations.shared.record(orientation, for: device)
-        let screen = AXScreen(width: Double(points.width), height: Double(points.height), scale: deviceScreen.scale, orientation: orientation)
-        let normalized = AXNormalizer.normalize(tree.elements, screen: screen, options: options)
-        var result = AXSnapshotResult(
-            udid: device.udid, screen: screen, app: tree.appPid.map { AXSnapshotResult.App(pid: Int($0)) },
-            nodes: normalized.nodes, total: normalized.total, shown: normalized.shown, omitted: normalized.omitted,
-            notVisible: normalized.notVisible, alertSuspected: normalized.alertSuspected, fingerprint: normalized.fingerprint,
-            ms: Int((DispatchTime.now().uptimeNanoseconds - started.uptimeNanoseconds) / 1_000_000), transport: "bridge")
-        result.basis = basis
+        var result = assemble(
+            device, screen: screen, elements: answer.tree.elements, appPid: answer.tree.appPid, options: options,
+            started: started, transport: "bridge")
+        result.basis = answer.basis
         return .success(result)
     }
 
     /// The frontmost application's tree over the session's lanes.
-    private struct ReadFailure: Error {
-        let error: HelperError
-        /// The device answered nothing at all.
-        let unanswered: Bool
-    }
-
     private static func read(
         _ device: SimDeviceHandle, bridge: AXTranslatorBridge, vocabulary: AXBridgeRequests.Vocabulary, lanes: Lanes, deadline: DispatchTime
-    ) -> Result<AXTreeRead, ReadFailure> {
+    ) -> Result<AXTreeRead, AXParallelFailure> {
         let open = lanes.open(Self.lanes)
         guard let first = open.first as? AXBridgeReadLane else {
-            return .failure(ReadFailure(error: HelperError(.failed, "no connection to \(AXBridgeTransport.service)"), unanswered: true))
+            return .failure(AXParallelFailure(kind: .unanswered, error: HelperError(.failed, "no connection to \(AXBridgeTransport.service)")))
         }
         let asked = DispatchSemaphore(value: 0)
         let app = AppBox()
         first.frontmost { app.set($0); asked.signal() }
         guard asked.wait(timeout: deadline) == .success, let root = app.value else {
-            return .failure(ReadFailure(
-                error: HelperError(.failed, "no frontmost application answered (the device may still be starting)"), unanswered: true))
+            return .failure(AXParallelFailure(
+                kind: .unanswered, error: HelperError(.failed, "no frontmost application answered (the device may still be starting)")))
         }
         let children = vocabulary.children
         let walked = AXParallelWalk.run(
             root: root, lanes: open, limits: .init(deadline: deadline),
             children: { ($0[children] as? [Any] ?? []).compactMap { $0 as? NSObject } })
-        return walked.flatMap { reads in
-            AXTranslatorBridge.queue.sync { AXBridgeValues.elements(reads, bridge: bridge, vocabulary: vocabulary) }.map { elements in
+        let reads: [AXParallelWalk.Read]
+        switch walked {
+        case .failure(let error): return .failure(AXParallelFailure(kind: .budget, error: error))
+        case .success(let walk): reads = walk
+        }
+        return AXTranslatorBridge.queue.sync { AXBridgeValues.elements(reads, bridge: bridge, vocabulary: vocabulary) }
+            .map { elements in
                 AXTreeRead(
                     elements: elements, parents: reads.map(\.parent),
                     objectIDs: reads.map { AXTreeReader.number($0.element, "objectID")?.uint64Value },
                     pids: reads.map { AXTreeReader.number($0.element, "pid")?.int32Value },
-                    appPid: AXTreeReader.number(root, "pid")?.int32Value, device: device.object)
+                    appPid: AXTreeReader.number(root, "pid")?.int32Value)
             }
-        }
-        .mapError { ReadFailure(error: $0, unanswered: false) }
+            .mapError { AXParallelFailure(kind: .conversion, error: $0) }
     }
 
     /// One read's connections, made from the session's endpoint as needed and closed with the read:
@@ -279,22 +262,35 @@ enum AccessibilitySnapshots {
         case .failure(let error):
             return .failure(HelperError(error.code, "\(error.message) (\(route.unanswered) of \(route.sent) requests unanswered via \(transport.kind))"))
         case .success(let walk):
-            // The application element spans the screen in the orientation the app is in.
-            let root = walk.rootFrame.flatMap { AXNormalizer.finite($0).size }.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
-            let points = root ?? deviceScreen.points
-            let orientation = root.flatMap { InterfaceOrientation.of(root: $0, native: deviceScreen.points) }
-            DeviceOrientations.shared.record(orientation, for: device)
-            let screen = AXScreen(
-                width: Double(points.width), height: Double(points.height), scale: deviceScreen.scale, orientation: orientation)
-            let normalized = AXNormalizer.normalize(walk.elements, screen: screen, options: options)
-            let ms = Int((DispatchTime.now().uptimeNanoseconds - started.uptimeNanoseconds) / 1_000_000)
-            let result = AXSnapshotResult(
-                udid: device.udid, screen: screen, app: walk.appPid.map { AXSnapshotResult.App(pid: Int($0)) },
-                nodes: normalized.nodes, total: normalized.total, shown: normalized.shown, omitted: normalized.omitted,
-                notVisible: normalized.notVisible, alertSuspected: normalized.alertSuspected,
-                fingerprint: normalized.fingerprint, ms: ms, transport: transport.kind)
+            let result = assemble(
+                device, screen: screen(device, rootFrame: walk.rootFrame), elements: walk.elements, appPid: walk.appPid,
+                options: options, started: started, transport: transport.kind)
             return .success((result, walk.timings, route.sent, route.transportMs))
         }
+    }
+
+    /// The screen a read saw: the application element spans it in the orientation the app is in
+    /// (recorded for `hid`), else the device's own.
+    private static func screen(_ device: SimDeviceHandle, rootFrame: CGRect?) -> AXScreen {
+        let deviceScreen = DeviceScreen.of(device)
+        let root = rootFrame.map { AXNormalizer.finite($0).size }.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
+        let points = root ?? deviceScreen.points
+        let orientation = root.flatMap { InterfaceOrientation.of(root: $0, native: deviceScreen.points) }
+        DeviceOrientations.shared.record(orientation, for: device)
+        return AXScreen(width: Double(points.width), height: Double(points.height), scale: deviceScreen.scale, orientation: orientation)
+    }
+
+    /// `ax`'s answer from a read's elements, normalized as `options` asks.
+    private static func assemble(
+        _ device: SimDeviceHandle, screen: AXScreen, elements: [AXRawElement], appPid: Int32?, options: AXSnapshotOptions,
+        started: DispatchTime, transport: String
+    ) -> AXSnapshotResult {
+        let normalized = AXNormalizer.normalize(elements, screen: screen, options: options)
+        return AXSnapshotResult(
+            udid: device.udid, screen: screen, app: appPid.map { AXSnapshotResult.App(pid: Int($0)) },
+            nodes: normalized.nodes, total: normalized.total, shown: normalized.shown, omitted: normalized.omitted,
+            notVisible: normalized.notVisible, alertSuspected: normalized.alertSuspected, fingerprint: normalized.fingerprint,
+            ms: Int((DispatchTime.now().uptimeNanoseconds - started.uptimeNanoseconds) / 1_000_000), transport: transport)
     }
 }
 

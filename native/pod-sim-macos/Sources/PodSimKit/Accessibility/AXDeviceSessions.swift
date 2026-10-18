@@ -10,8 +10,6 @@ struct AXTreeRead: @unchecked Sendable {
     var objectIDs: [UInt64?]
     var pids: [Int32?]
     var appPid: Int32?
-    /// The device object the walk read: another one means the device rebooted since.
-    let device: NSObject
 }
 
 /// What must hold for a kept tree to still be the screen's: no accessibility notification and no
@@ -46,14 +44,16 @@ struct AXTreeCache {
         return AXScreenStamp(changes: changes, surface: surface.id, seed: surface.seed)
     }
 
-    /// The kept tree while `now` (taken just before) matches its stamp and the device did not reboot.
-    func cached(at now: AXScreenStamp?, device: NSObject) -> (tree: AXTreeRead, hits: [Int: Bool?])? {
-        guard let now, listening, let kept, kept.stamp == now, kept.tree.device === device else { return nil }
+    /// The kept tree while `now` (taken just before) matches its stamp. A reboot never gets here: it
+    /// makes a new session (AXDeviceSessions, by `lastBootedAt`).
+    func cached(at now: AXScreenStamp?) -> (tree: AXTreeRead, hits: [Int: Bool?])? {
+        guard let now, listening, let kept, kept.stamp == now else { return nil }
         return (kept.tree, kept.hits)
     }
 
+    /// A read without a stamp proves nothing and leaves the kept tree, which its own stamp still checks.
     mutating func keep(_ tree: AXTreeRead, stamp: AXScreenStamp?) {
-        guard let stamp, listening else { return kept = nil }
+        guard let stamp, listening else { return }
         kept = (tree, stamp, [:])
     }
 
@@ -72,40 +72,72 @@ protocol AXBridgeConnector: Sendable {
 
 extension AXBridgeEndpoint: AXBridgeConnector {}
 
+/// Where a device's kept tree lives (AXDeviceSession; tests give their own).
+protocol AXTreeKeeper: AnyObject {
+    func stamp(surface: (id: UInt32, seed: UInt32)?) -> AXScreenStamp?
+    func cached(at now: AXScreenStamp?) -> (tree: AXTreeRead, hits: [Int: Bool?])?
+    func keep(_ tree: AXTreeRead, stamp: AXScreenStamp?)
+}
+
 /// A device's accessibility session in this helper, for one boot: the bridge endpoint, one connection
 /// that stays open only to hear the device's notifications, and the tree cache. Nothing polls: the
 /// cache's counter moves when a notification or an input arrives, and the session ends after its idle
 /// time (AXDeviceSessions), closing the connection.
-final class AXDeviceSession: @unchecked Sendable {
+final class AXDeviceSession: AXTreeKeeper, @unchecked Sendable {
     let udid: String
     let device: NSObject
     /// The device's `lastBootedAt` when the session began: the same SimDevice object outlives a reboot.
     let boot: Date?
     let endpoint: AXBridgeConnector
-    private let lock = NSLock()
+    // A condition so the self-test can wait for the listening connection's first answer.
+    private let lock = NSCondition()
     private var listener: (lane: AXBridgeLane, generation: Int)?
     private var generations = 0
     private var asking = false
     private var closed = false
     private var cache = AXTreeCache()
     private var problem: String?
+    private var toldProblem = false
+    private let log: @Sendable (String) -> Void
     private var nextListen = DispatchTime(uptimeNanoseconds: 0)
     fileprivate var lastUse = DispatchTime.now()
     private let events = DispatchQueue(label: "pod-sim.ax.notifications", qos: .utility)
     /// A service that did not answer is asked again at most this often, not on every snapshot.
     private let listenRetrySeconds: Double
 
-    init(udid: String, device: NSObject, boot: Date?, endpoint: AXBridgeConnector, listenRetrySeconds: Double = 10) {
+    init(
+        udid: String, device: NSObject, boot: Date?, endpoint: AXBridgeConnector, listenRetrySeconds: Double = 10,
+        log: @escaping @Sendable (String) -> Void = HelperLog.note
+    ) {
         self.udid = udid
         self.device = device
         self.boot = boot
         self.endpoint = endpoint
         self.listenRetrySeconds = listenRetrySeconds
+        self.log = log
     }
 
     /// Why the session does not hear notifications (so keeps no tree); nil while it does.
     var listenProblem: String? { lock.withLock { cache.listening ? nil : (problem ?? "not listening") } }
     var isListening: Bool { lock.withLock { cache.listening } }
+
+    /// `listenProblem` once the listening connection's first request has been answered, or `timeout` passed.
+    func listenProblem(within timeout: TimeInterval) -> String? {
+        let end = Date().addingTimeInterval(timeout)
+        return lock.withLock {
+            while asking, lock.wait(until: end) {}
+            if cache.listening { return nil }
+            return problem ?? (asking ? "the notification connection did not answer within \(timeout) s" : "not listening")
+        }
+    }
+
+    /// Under the lock: why the session does not listen; what to log the first time in this session.
+    private func failed(_ reason: String) -> String? {
+        problem = reason
+        guard !toldProblem else { return nil }
+        toldProblem = true
+        return "ax \(udid): no accessibility notifications (\(reason)), so no tree is kept; asked again at most every \(Int(listenRetrySeconds)) s"
+    }
 
     /// Opens the listening connection unless it is open or being opened, without waiting: the
     /// service sends notifications only to a connection that has asked something, so it asks for the
@@ -121,27 +153,31 @@ final class AXDeviceSession: @unchecked Sendable {
         }
         guard let generation else { return }
         guard let lane = endpoint.connect(queue: events, onEvent: { [weak self] event in self?.heard(event, on: generation) }) else {
-            return lock.withLock {
+            let told = lock.withLock { () -> String? in
                 asking = false
-                problem = "no connection to \(AXBridgeTransport.service)"
+                lock.broadcast()
+                return failed("no connection to \(AXBridgeTransport.service)")
             }
+            if let told { log(told) }
+            return
         }
         AXBridgeReadLane(lane, vocabulary: vocabulary, timeout: timeout).frontmost { [weak self] app in
             guard let self else { return lane.cancel() }
-            let unused = self.lock.withLock { () -> [AXBridgeLane] in
+            let (unused, told) = self.lock.withLock { () -> ([AXBridgeLane], String?) in
                 asking = false
+                lock.broadcast()
                 guard app != nil, !closed else {
-                    if !closed { problem = "the notification connection's first request went unanswered" }
-                    return [lane]
+                    return ([lane], closed ? nil : failed("the notification connection's first request went unanswered"))
                 }
                 defer {
                     listener = (lane, generation)
                     cache.listen()
                     problem = nil
                 }
-                return listener.map { [$0.lane] } ?? []
+                return (listener.map { [$0.lane] } ?? [], nil)
             }
             unused.forEach { $0.cancel() }
+            if let told { self.log(told) }
         }
     }
 
@@ -149,13 +185,17 @@ final class AXDeviceSession: @unchecked Sendable {
     /// one does not matter, since a notification's element is where VoiceOver should go next, not
     /// what changed. Only the current listening connection's end makes the session deaf.
     func heard(_ event: xpc_object_t, on generation: Int) {
-        lock.withLock {
-            guard xpc_get_type(event) == XPC_TYPE_ERROR else { return cache.changed() }
-            guard listener?.generation == generation else { return }
+        let told = lock.withLock { () -> String? in
+            guard xpc_get_type(event) == XPC_TYPE_ERROR else {
+                cache.changed()
+                return nil
+            }
+            guard listener?.generation == generation else { return nil }
             listener = nil
             cache.deaf()
-            problem = "the notification connection ended"
+            return failed("the notification connection ended")
         }
+        if let told { log(told) }
     }
 
     /// Input sent through this helper: the screen is about to change.
@@ -163,7 +203,7 @@ final class AXDeviceSession: @unchecked Sendable {
 
     func stamp(surface: (id: UInt32, seed: UInt32)?) -> AXScreenStamp? { lock.withLock { cache.stamp(surface: surface) } }
 
-    func cached(at now: AXScreenStamp?) -> (tree: AXTreeRead, hits: [Int: Bool?])? { lock.withLock { cache.cached(at: now, device: device) } }
+    func cached(at now: AXScreenStamp?) -> (tree: AXTreeRead, hits: [Int: Bool?])? { lock.withLock { cache.cached(at: now) } }
 
     func keep(_ tree: AXTreeRead, stamp: AXScreenStamp?) { lock.withLock { cache.keep(tree, stamp: stamp) } }
 

@@ -259,7 +259,7 @@ export const SimHelperAxResult = z.object({
   transport: z.enum(['bridge', 'coreSimulator', 'fallback']),
   // A public fallback read the tree instead of the translator: the version table's reason.
   degraded: z.string().optional(),
-  // How the tree was read: `cache` (the last read, nothing on screen changed since), `parallel`
+  // How the tree was read: `cache` (the last read; no notification, input or redraw since), `parallel`
   // (read now, many requests at once) or `translator` (read now, one request at a time). Absent
   // from a public fallback and from helpers before stage 3b.
   basis: z.enum(['cache', 'parallel', 'translator']).optional(),
@@ -323,7 +323,9 @@ export const SIM_HELPER_METHODS = {
       all: z.boolean().optional(),
       // Hit-test each on-screen node so a covered one is not offered (default true).
       hitTest: z.boolean().optional(),
-      // Read the device now even when the last read still matches the screen (default false).
+      // Read the device now even when the last read still matches the screen (default false, with
+      // `all` too: an off-screen node can change with no notification and no redraw, so a caller
+      // that needs off-screen truth asks for it).
       fresh: z.boolean().optional()
     }),
     result: SimHelperAxResult

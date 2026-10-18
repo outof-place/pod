@@ -30,9 +30,6 @@ final class AXLanePool: @unchecked Sendable {
     private var underWay = 0
     private var stopped = false
     private let finished = DispatchSemaphore(value: 0)
-    private var widestSeen = 0
-    /// Most pieces under way at once, for tests and probes.
-    var widest: Int { lock.withLock { widestSeen } }
 
     init(lanes: [AXLane]) {
         self.lanes = lanes
@@ -63,7 +60,6 @@ final class AXLanePool: @unchecked Sendable {
                 starts.append((lane, queued.removeFirst()))
                 underWay += 1
             }
-            widestSeen = max(widestSeen, underWay)
         }
         for (lane, work) in starts {
             work(lanes[lane]) { [self] in
