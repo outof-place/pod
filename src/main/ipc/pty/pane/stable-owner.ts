@@ -2,6 +2,7 @@ import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persiste
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { applyPodEnvAliasesToRequest } from '../../../../shared/pod-env-aliases'
 import { UNVERIFIED_PROCESS_EXIT_CODE } from '../../../../shared/terminal-exit-cause'
 import type { Store } from '../../../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../../../runtime/mobile-session-terminal-persistence-retirement'
@@ -308,6 +309,8 @@ export async function spawnForStablePane(
       return attached
     }
   }
+  // Fork-only (Pod): user POD_ settings reach a daemon from before the aliases as ORCA_ too.
+  applyPodEnvAliasesToRequest(args.spawnOptions)
   const result = await args.provider.spawn(args.spawnOptions)
   args.onFreshSpawn?.(result)
   return { result, owner: null }
