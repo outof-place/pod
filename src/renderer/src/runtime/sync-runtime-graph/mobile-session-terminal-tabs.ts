@@ -36,6 +36,7 @@ export function buildMobileTerminalSurfaceTabs(
     ? capture.liveActiveLeafId
     : (savedLayout?.activeLeafId ?? leafIds[0] ?? null)
   const paneTitles = inputs.paneTitlesByTabId.get(terminal.id) ?? {}
+  const customTitle = terminal.customTitle?.trim()
   const sanitizedSavedLayout = savedLayout
     ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminal)
     : undefined
@@ -105,6 +106,7 @@ export function buildMobileTerminalSurfaceTabs(
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
       title,
+      ...(customTitle ? { customTitle } : {}),
       ...(tabWideFallbackSafe && terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
         : {}),

@@ -21,10 +21,11 @@ export function buildHeadlessMobileSessionTerminalTabs(
       if (leafIds.length === 0) {
         leafIds.push(deriveHeadlessLegacyTerminalLeafId(tab.id))
       }
+      const customTitle = tab.customTitle?.trim()
       return leafIds.flatMap((leafId) => {
         const ptyId = layout?.ptyIdsByLeafId?.[leafId] ?? (leafIds.length === 1 ? tab.ptyId : null)
         const title =
-          tab.customTitle?.trim() ||
+          customTitle ||
           tab.generatedTitle?.trim() ||
           tab.title?.trim() ||
           tab.defaultTitle?.trim() ||
@@ -36,6 +37,7 @@ export function buildHeadlessMobileSessionTerminalTabs(
             parentTabId: tab.id,
             leafId,
             title,
+            ...(customTitle ? { customTitle } : {}),
             ...(ptyId ? { ptyId } : {}),
             ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
             ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),

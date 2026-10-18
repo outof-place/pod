@@ -90,6 +90,14 @@ export const POD_SESSION_TABS_PANE_LAYOUT_SYNC_RUNTIME_CAPABILITY =
   'pod.session-tabs.pane-layout-sync.v1' as const
 
 /**
+ * Session tabs' terminal surfaces carry `customTitle`, the name a person gave the tab in any client
+ * (Pod's window, the phone, the CLI's `terminal rename`). Older hosts publish no name at all, so a
+ * client tells "no name" from "not published" only by this.
+ */
+export const POD_SESSION_TABS_CUSTOM_TITLE_RUNTIME_CAPABILITY =
+  'pod.session-tabs.custom-title.v1' as const
+
+/**
  * sim.*: iOS simulators for agents (lease, drive, release; the pool snapshot and its stream). A
  * client shows simulator UI, and the CLI calls sim.*, only on a host that lists this. Not listed
  * below until the sim.* handlers land (stage 7): a runtime never advertises what it cannot serve.
@@ -110,5 +118,6 @@ export const POD_RUNTIME_CAPABILITIES = [
   POD_NOTIFICATION_SOURCES_RUNTIME_CAPABILITY,
   POD_SESSION_TABS_RESTART_TERMINAL_RUNTIME_CAPABILITY,
   POD_SESSION_TABS_PANE_LAYOUT_SYNC_RUNTIME_CAPABILITY,
+  POD_SESSION_TABS_CUSTOM_TITLE_RUNTIME_CAPABILITY,
   POD_ORCA_IMPORT_RUNTIME_CAPABILITY
 ] as const

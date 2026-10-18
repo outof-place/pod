@@ -34,7 +34,10 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
         this.notifier?.renameTerminal(tabId, title, { recordInteraction: false })
         if (!this.getAvailableAuthoritativeWindow()) {
           this.persistHeadlessTerminalTitle(worktreeId, tabId, title)
-          this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, { title })
+          this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, {
+            title,
+            customTitle: title
+          })
         }
       },
       setTabColor: async (handle, color) => {

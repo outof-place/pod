@@ -10,6 +10,10 @@ export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  /** Fork-only (Pod): the name a person gave the tab (any client, the CLI), the same on every
+   *  leaf; absent when it has none. `title` stays the live title. Hosts listing
+   *  `pod.session-tabs.custom-title.v1` publish it. */
+  customTitle?: string | null
   quickCommandLabel?: string | null
   parentTabId: string
   leafId: string

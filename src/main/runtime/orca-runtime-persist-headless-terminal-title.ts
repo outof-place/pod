@@ -42,6 +42,19 @@ export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWith
     })
   }
 
+  // Fork-only (Pod): the stored snapshot's `customTitle` follows a rename that no renderer will
+  // republish; a window's renderer owns its own publication.
+  protected applyHeadlessTerminalCustomTitle(
+    worktreeId: string,
+    tabId: string,
+    title: string | null
+  ): void {
+    if (this.getAvailableAuthoritativeWindow()) {
+      return
+    }
+    this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, { customTitle: title })
+  }
+
   protected normalizeMobileSessionTabOrder(
     snapshot: RuntimeMobileSessionTabsSnapshot | undefined,
     targetGroup: RuntimeMobileSessionTabGroup,

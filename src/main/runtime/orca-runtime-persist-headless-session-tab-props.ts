@@ -69,6 +69,8 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
     tabId: string,
     props: {
       title?: string
+      /** A terminal tab's given name; null or blank clears it. */
+      customTitle?: string | null
       color?: string | null
       isPinned?: boolean
       viewMode?: 'terminal' | 'chat'
@@ -79,18 +81,27 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
       return
     }
     let changed = false
+    const customTitle = props.customTitle?.trim()
     const tabs = snapshot.tabs.map((tab) => {
       if (this.getMobileSessionTopLevelTabId(tab) !== tabId) {
         return tab
       }
       changed = true
-      return {
+      const next = {
         ...tab,
         ...(props.title !== undefined ? { title: props.title } : {}),
         ...(props.color !== undefined ? { color: props.color } : {}),
         ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
         ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
       }
+      if (props.customTitle !== undefined && next.type === 'terminal') {
+        if (customTitle) {
+          next.customTitle = customTitle
+        } else {
+          delete next.customTitle
+        }
+      }
+      return next
     })
     if (!changed) {
       return
