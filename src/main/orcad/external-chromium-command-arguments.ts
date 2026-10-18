@@ -228,7 +228,9 @@ export function externalChromiumCommandArguments(
     case 'browserExec':
       return stripTargetOverrideArguments(parseExecArguments(text('command')))
     case 'browserSetViewport':
+      // Why null for reset: agent-browser has no clear-override verb, and `set viewport "" ""` is not one.
       if (
+        params.reset === true ||
         params.mobile === true ||
         (params.deviceScaleFactor != null && params.deviceScaleFactor !== 1)
       ) {

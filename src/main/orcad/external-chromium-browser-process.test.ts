@@ -96,3 +96,24 @@ describe('external Chromium snapshot options', () => {
     expect(run).toHaveBeenCalledWith(['snapshot'])
   })
 })
+
+describe('external Chromium viewport reset', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('says a reset is unavailable instead of sending an empty viewport', async () => {
+    resolveTargetPage.mockResolvedValue({ publicPageId: 'page-1', agentPageId: 't1' })
+    run.mockResolvedValue({})
+    const browser = new ExternalChromiumBrowserProcess(
+      '/opt/orca/agent-browser',
+      { executablePath: '/opt/orca/chromium', provider: 'chromium' },
+      '/state'
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the commands proxy only reads the host it is handed through to mocked collaborators.
+    const commands = browser.createCommands({} as Parameters<typeof browser.createCommands>[0])
+
+    await expect(
+      commands.browserSetViewport({ page: 'page-1', reset: true })
+    ).rejects.toMatchObject({ code: 'browser_command_unavailable' })
+    expect(run).not.toHaveBeenCalledWith(expect.arrayContaining(['viewport']))
+  })
+})
