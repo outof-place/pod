@@ -11,6 +11,7 @@ export const POD_ENV_ALIAS_EXCLUSIONS: Readonly<Record<string, string>> = {
   ORIG_ZDOTDIR: 'the shell wrapper consumes and unsets it',
   SHELL_FEATURES: 'the shell wrapper consumes and unsets it',
   CLAUDE_INJECTED_CONFIG_DIR: 'the shell wrapper consumes and unsets it',
+  FISH_XDG_DATA_DIRS_PREFIX: 'the shell wrapper consumes and unsets it',
   VERSION: 'POD_VERSION is the app version (electron-builder.pod.cjs)',
   ATTRIBUTION_BYPASS: 'the legacy-terminal tombstone unsets it',
   ATTRIBUTION_SHIM_DIR: 'the legacy-terminal tombstone unsets it',
