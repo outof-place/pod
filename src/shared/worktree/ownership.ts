@@ -170,6 +170,8 @@ export function toDetectedWorktree(args: {
   isLegacyRepoForVisibility?: boolean
   agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
   worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher
+  /** The real path of `repo.path`: Git lists a checkout registered through a symlink by it. */
+  repoCheckoutPath?: string
 }): DetectedWorktree {
   const sourceMatcher =
     args.worktreeVisibilitySourceMatcher ??
@@ -183,7 +185,10 @@ export function toDetectedWorktree(args: {
     ...args,
     worktreeVisibilitySourceMatcher: sourceMatcher
   })
-  const selectedCheckout = areRuntimePathsEqual(args.worktree.path, args.repo.path)
+  const selectedCheckout =
+    areRuntimePathsEqual(args.worktree.path, args.repo.path) ||
+    (args.repoCheckoutPath !== undefined &&
+      areRuntimePathsEqual(args.worktree.path, args.repoCheckoutPath))
   const isLegacyRepoForVisibility =
     args.isLegacyRepoForVisibility ?? isLegacyRepoForExternalWorktreeVisibility(args.repo)
   const visible = shouldShowWorktree({

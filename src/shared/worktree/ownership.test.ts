@@ -336,6 +336,22 @@ describe('worktree ownership classification', () => {
     expect(gitMain.visible).toBe(false)
     expect(gitMain.ownership).toBe('external')
   })
+
+  it('recognizes the checkout Git lists by the real path of a symlinked repo path', () => {
+    const repo = makeRepo({ path: '/tmp/app', externalWorktreeVisibilityLegacy: false })
+    const settings = makeSettings()
+    const detect = (repoCheckoutPath?: string) =>
+      toDetectedWorktree({
+        repo,
+        settings,
+        worktree: makeWorktree({ id: 'repo-1::/private/tmp/app', path: '/private/tmp/app' }),
+        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),
+        repoCheckoutPath
+      })
+
+    expect(detect()).toMatchObject({ selectedCheckout: false, visible: false })
+    expect(detect('/private/tmp/app')).toMatchObject({ selectedCheckout: true, visible: true })
+  })
 })
 
 describe('external worktree visibility policy', () => {

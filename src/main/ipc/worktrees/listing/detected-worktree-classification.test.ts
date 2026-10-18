@@ -3,6 +3,9 @@
  * used to be run through `mergeWorktree` + `toDetectedWorktree` twice per catalog pass.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
@@ -230,5 +233,30 @@ describe('buildDetectedGitWorktrees classification passes', () => {
       fn(createStore({ [worktreeId]: seed }), repo, [gitWorktree('/workspace/one')], undefined)
 
     expect(build(buildDetectedGitWorktrees)).toEqual(build(buildDetectedGitWorktreesTwoPass))
+  })
+})
+
+describe('buildDetectedGitWorktrees for a repo added through a symlink', () => {
+  it('shows the checkout Git lists by its real path', () => {
+    const base = realpathSync(mkdtempSync(join(tmpdir(), 'pod-checkout-symlink-')))
+    try {
+      mkdirSync(join(base, 'real', 'app'), { recursive: true })
+      symlinkSync(join(base, 'real'), join(base, 'link'))
+      const linked: Repo = {
+        ...repo,
+        path: join(base, 'link', 'app'),
+        kind: 'git',
+        externalWorktreeVisibilityLegacy: false
+      }
+      const checkout = { ...gitWorktree(join(base, 'real', 'app')), isMainWorktree: true }
+
+      const detected = buildDetectedGitWorktrees(createStore({}, [linked]), linked, [checkout], {})
+
+      expect(detected).toMatchObject([
+        { path: checkout.path, selectedCheckout: true, visible: true }
+      ])
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+    }
   })
 })

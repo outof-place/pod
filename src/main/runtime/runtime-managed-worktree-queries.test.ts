@@ -27,6 +27,11 @@ import {
   getLocalWorktreeScanGeneration,
   resetLocalWorktreeScanGenerationsForTests
 } from '../local-worktree-scan-generation'
+import { mkdirSync, symlinkSync } from 'node:fs'
+import { join } from 'node:path'
+import { listWorktreesStrict } from '../git/worktree'
+import { mergeWorktree } from '../ipc/worktree-logic'
+import { createRealGitFixture } from '../pod/workspace/workspace-real-git-test-fixture'
 
 const settings = {
   workspaceDir: '/worktrees',
@@ -383,5 +388,56 @@ describe('RuntimeManagedWorktreeQueries.listDetected overtaken scan', () => {
 
     expect(scanRepo).toHaveBeenCalledTimes(1)
     expect(result).toMatchObject({ authoritative: false, source: 'metadata-fallback' })
+  })
+})
+
+describe('RuntimeManagedWorktreeQueries with a repo registered through a symlink', () => {
+  it('lists the checkout Git names by its real path, under the id the resolver matches', async () => {
+    const fixture = await createRealGitFixture('pod-checkout-symlink-')
+    try {
+      const realCheckout = join(fixture.root, 'real', 'app')
+      mkdirSync(realCheckout, { recursive: true })
+      await fixture.git(realCheckout, 'init', '-q')
+      symlinkSync(join(fixture.root, 'real'), join(fixture.root, 'link'))
+      const repo = {
+        ...fixture.repoRecord(join(fixture.root, 'link', 'app')),
+        externalWorktreeVisibilityLegacy: false
+      }
+      const rows = await listWorktreesStrict(repo.path)
+      // Git spells the checkout by its real path, never by the link the repo was added through.
+      expect(rows.map((row) => row.path)).toEqual([realCheckout])
+      const resolved = rows.map((row) => ({
+        ...mergeWorktree(repo.id, row, undefined, repo.displayName),
+        hostId: 'local' as const,
+        parentWorktreeId: null,
+        childWorktreeIds: [],
+        lineage: null,
+        git: row
+      }))
+      const store = {
+        getRepos: () => [repo],
+        getRepo: () => repo,
+        getAllWorktreeMeta: () => ({}),
+        getWorktreeMeta: () => undefined,
+        setWorktreeMeta: vi.fn(),
+        getAllWorktreeLineage: () => ({}),
+        getSettings: () => settings
+      } as unknown as RuntimeStore
+      const subject = queries(store, {
+        listResolved: async () => resolved,
+        scanRepo: async () => ({ ok: true, worktrees: rows })
+      })
+
+      const listed = await subject.list(undefined, 50)
+      const detected = await subject.listDetected(repo)
+
+      expect(listed.worktrees.map((worktree) => worktree.id)).toEqual([resolved[0]!.id])
+      expect(resolved[0]!.id).toBe(`${repo.id}::${realCheckout}`)
+      expect(detected.worktrees).toMatchObject([
+        { id: resolved[0]!.id, selectedCheckout: true, visible: true }
+      ])
+    } finally {
+      fixture.dispose()
+    }
   })
 })

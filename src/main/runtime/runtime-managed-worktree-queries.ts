@@ -34,6 +34,7 @@ import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/configured-worktree-base-path'
 import { getRetiredNameRegistryForRepo } from '../worktree-name-retirement'
+import { readRepoCheckoutRealPath } from '../repo-checkout-real-path'
 
 type Dependencies = {
   getStore(): RuntimeStore | null
@@ -263,7 +264,8 @@ export class RuntimeManagedWorktreeQueries {
       settings: { ...settings, worktreeVisibilityDefaults: visibilityDefaults },
       knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),
       isLegacyRepoForVisibility: isLegacyRepoForExternalWorktreeVisibility(repo),
-      worktreeVisibilitySourceMatcher: matcher
+      worktreeVisibilitySourceMatcher: matcher,
+      repoCheckoutPath: readRepoCheckoutRealPath(repo)
     })
   }
 
