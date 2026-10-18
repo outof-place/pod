@@ -156,6 +156,7 @@ import {
   resolveNodePtyInstallDir
 } from './node-pty-binding-survey'
 import { describeRelayRuntime } from './relay-runtime-identity'
+import { applyPodEnvAliases } from '../shared/pod-env-aliases'
 import { relayConptyDllSpawnOptions } from './relay-windows-conpty'
 import {
   formatNodePtyUnavailableMessage,
@@ -2161,6 +2162,8 @@ export class PtyHandler {
       [SHELL_STARTUP_FEATURE_ENV]: '',
       ...shellLaunch.env
     }
+    // Fork-only (Pod): the object pty.spawn gets, after every relay env write.
+    applyPodEnvAliases(ptyEnv)
     let term: IPty
     try {
       term = pty.spawn(shell, shellLaunch.args, {
@@ -3317,6 +3320,8 @@ export class PtyHandler {
       [SHELL_STARTUP_FEATURE_ENV]: '',
       ...shellLaunch.env
     }
+    // Fork-only (Pod): the object pty.spawn gets, after every relay env write.
+    applyPodEnvAliases(ptyEnv)
     let term: IPty
     try {
       term = ptyMod.spawn(shell, shellLaunch.args, {
