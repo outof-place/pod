@@ -347,6 +347,18 @@ describe('co-browse pointers', () => {
     expect(mark.replyTo.map((r) => r.label)).toEqual(['Step 2', 'Also this'])
   })
 
+  it('a locator the page cannot take as CSS says which forms point takes', async () => {
+    const { cobrowse, page } = setup([FORM])
+    const evaluate = page.cdp
+    page.cdp = async (method, params) =>
+      method === 'Runtime.evaluate'
+        ? { exceptionDetails: { text: 'SyntaxError' } }
+        : evaluate(method, params)
+    await expect(cobrowse.point({ selector: 'text=Save', label: '', keep: false })).rejects.toThrow(
+      /an @ref from snapshot, or xpath=/
+    )
+  })
+
   it('a selector that matches nothing says so', async () => {
     const { cobrowse } = setup([FORM])
     await expect(cobrowse.point({ selector: '#missing', label: '', keep: false })).rejects.toThrow(

@@ -113,7 +113,9 @@ export async function querySelectorNode(
     })
   )
   if (reply.exceptionDetails) {
-    throw new Error(`Not a CSS selector this page takes: ${selector}`)
+    throw new Error(
+      `Not a CSS selector this page takes: ${selector}. Point at a CSS selector, an @ref from snapshot, or xpath=...`
+    )
   }
   const objectId = str(rec(reply.result).objectId)
   if (!objectId) {

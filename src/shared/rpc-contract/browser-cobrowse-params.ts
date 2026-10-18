@@ -12,7 +12,7 @@ export const BrowserMarks = BrowserTarget.extend({
 })
 
 export const BrowserPoint = BrowserTarget.extend({
-  // A CSS selector, or any locator agent-browser takes (@e3, text=..., xpath=...).
+  // A CSS selector, an agent-browser ref (@e3) or xpath=...
   element: z.string().min(1).max(COBROWSE_LIMITS.selector).optional(),
   x: OptionalFiniteNumber,
   y: OptionalFiniteNumber,

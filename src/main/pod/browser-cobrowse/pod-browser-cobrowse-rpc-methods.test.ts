@@ -98,12 +98,13 @@ describe('browser.marks and browser.point', () => {
     const point = vi.fn(async () => ({ pointerId: 'p1', box: null, shown: true, cleared: 0 }))
     install({ point })
     const { ctx, runtime } = context()
-    for (const element of ['@e3', 'text=Save', 'xpath=//button']) {
+    for (const element of ['@e3', 'xpath=//button']) {
       runtime.browserElementBox.mockClear()
       await call('browser.point', { element }, ctx)
       expect(runtime.browserElementBox).toHaveBeenCalledTimes(1)
     }
-    for (const element of ['role=button', 'label=Email', 'testid=save']) {
+    // The bench's real daemon: get box answers none of these (text= included, unlike click).
+    for (const element of ['text=Save', 'role=button', 'label=Email', 'testid=save']) {
       runtime.browserElementBox.mockClear()
       await call('browser.point', { element }, ctx)
       expect(runtime.browserElementBox).not.toHaveBeenCalled()
