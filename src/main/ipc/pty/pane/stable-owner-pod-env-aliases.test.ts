@@ -3,33 +3,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { IPtyProvider, PtySpawnOptions } from '../../../providers/types'
 import { spawnForStablePane } from './stable-owner'
+import { podEnvAliasProviderDouble } from '../../../pod/decouple/pod-env-aliases.test-support'
 
 async function spawnRequest(spawnOptions: PtySpawnOptions): Promise<PtySpawnOptions> {
   const spawn = vi.fn<IPtyProvider['spawn']>(async () => ({ id: 'pty-1', isReattach: false }))
-  const provider: IPtyProvider = {
-    spawn,
-    attach: vi.fn(),
-    write: vi.fn(),
-    writeWithSettlement: vi.fn(),
-    resize: vi.fn(),
-    shutdown: vi.fn(),
-    sendSignal: vi.fn(),
-    getCwd: vi.fn(),
-    getInitialCwd: vi.fn(),
-    clearBuffer: vi.fn(),
-    resetInputModes: vi.fn(),
-    acknowledgeDataEvent: vi.fn(),
-    hasChildProcesses: vi.fn(),
-    getForegroundProcess: vi.fn(),
-    serialize: vi.fn(),
-    revive: vi.fn(),
-    listProcesses: vi.fn(async () => []),
-    getDefaultShell: vi.fn(),
-    getProfiles: vi.fn(),
-    onData: vi.fn(() => () => {}),
-    onReplay: vi.fn(() => () => {}),
-    onExit: vi.fn(() => () => {})
-  }
+  const provider = podEnvAliasProviderDouble(spawn)
   await spawnForStablePane({ runtime: undefined, provider, spawnOptions, owner: null })
   return spawn.mock.calls[0][0]
 }
