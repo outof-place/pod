@@ -20,6 +20,11 @@ function isSnapshotDepth(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
 }
 
+/** The depth agent-browser's -d receives for these options, if any. */
+export function agentBrowserSnapshotDepth(options: BrowserSnapshotOptions = {}): number | undefined {
+  return isSnapshotDepth(options.depth) ? options.depth : undefined
+}
+
 /** agent-browser's `snapshot` argv for these options (its -i, -c, -d and -s). */
 export function agentBrowserSnapshotArgs(options: BrowserSnapshotOptions = {}): string[] {
   const args = ['snapshot']

@@ -16,7 +16,7 @@ import {
   waitForAbortedNavigationReplacement
 } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeQueue } from './agent-browser-bridge-queue'
-import { agentBrowserSnapshotArgs } from './agent-browser-snapshot-args'
+import { agentBrowserSnapshotArgs, agentBrowserSnapshotDepth } from './agent-browser-snapshot-args'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
   async snapshot(
@@ -27,11 +27,19 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     // Why: snapshot creates fresh refs so it must bypass the stale-ref guard
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
       const args = agentBrowserSnapshotArgs(options)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's snapshot reply, as before; the flags only narrow its tree.
-      const result = (await this.execAgentBrowser(sessionName, args)) as BrowserSnapshotResult
-      return {
-        ...result,
-        browserPageId: target.browserPageId
+      // Why not with a selector: its depth counts from the selected element, wherever that sits.
+      const narrowing = this.sessions.get(sessionName)?.snapshotNarrowing
+      const depth = options?.selector ? undefined : agentBrowserSnapshotDepth(options)
+      narrowing?.expect(depth === undefined ? null : { depth, interactive: !!options?.interactive })
+      try {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's snapshot reply, as before; the flags only narrow its tree.
+        const result = (await this.execAgentBrowser(sessionName, args)) as BrowserSnapshotResult
+        return {
+          ...result,
+          browserPageId: target.browserPageId
+        }
+      } finally {
+        narrowing?.expect(null)
       }
     })
   }

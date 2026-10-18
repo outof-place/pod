@@ -1,4 +1,5 @@
 import { CdpWsProxy } from './cdp-ws-proxy'
+import { AgentBrowserSnapshotNarrowing } from './agent-browser-snapshot-narrowing'
 import { BrowserError } from './cdp-bridge'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { AgentBrowserBridgeRawProcess } from './agent-browser-bridge-raw-process'
@@ -106,7 +107,12 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
       // Why: the daemon persists sessions (incl. CDP port) across restarts; close the stale one first or it ignores --cdp and hits the dead port.
       await this.closeStaleAgentBrowserSession(sessionName)
 
-      const proxy = new CdpWsProxy(wc, () => this.browserManager.holdPaintForCapture(webContentsId))
+      const snapshotNarrowing = new AgentBrowserSnapshotNarrowing()
+      const proxy = new CdpWsProxy(
+        wc,
+        () => this.browserManager.holdPaintForCapture(webContentsId),
+        snapshotNarrowing
+      )
       const cdpEndpoint = await proxy.start()
 
       this.sessions.set(sessionName, {
@@ -118,7 +124,8 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
         activeCapture: false,
         lastCommandAt: Date.now(),
         webContentsId,
-        activeProcess: null
+        activeProcess: null,
+        snapshotNarrowing
       })
     }
 
@@ -163,6 +170,8 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     // Why: queued commands would hang forever if we just delete the queue — drain and reject them.
     this.rejectQueuedCommandsForClosedSession(sessionName)
 
+    session.activeDaemonExchange?.cancel()
+    session.activeDaemonExchange = null
     if (session.activeProcess) {
       // Why: rejecting the queue isn't enough for an in-flight command — kill the process so callers don't wait out the exec timeout.
       this.cancelledProcesses.add(session.activeProcess)

@@ -10,6 +10,7 @@ import { CdpDomFocusReplay } from './cdp-dom-focus-replay'
 import { CdpPageCaptureCommands } from './cdp-page-capture-commands'
 import type { CapturePaintHold } from './cdp-screenshot'
 import { podCdpProxyReply, podCdpProxyRequest } from '../pod/browser/cdp-proxy-hooks'
+import type { AgentBrowserSnapshotNarrowing } from './agent-browser-snapshot-narrowing'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -31,7 +32,9 @@ export class CdpWsProxy {
 
   constructor(
     private readonly webContents: WebContents,
-    holdPaint: CapturePaintHold
+    holdPaint: CapturePaintHold,
+    // Fork-only (Pod): what the bridge's next snapshot prints, so its tree can be cut short.
+    private readonly snapshotNarrowing: AgentBrowserSnapshotNarrowing | null = null
   ) {
     this.discovery = new CdpTargetDiscovery(
       webContents,
@@ -237,6 +240,11 @@ export class CdpWsProxy {
       void this.navigation.reloadWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
       return
     }
+    const narrowing = this.snapshotNarrowing
+    if (msg.method === 'Accessibility.getFullAXTree' && narrowing?.narrows(msg.params)) {
+      void this.forwardNarrowedAxTree(narrowing, client, clientId, msg.params ?? {}, msg.sessionId)
+      return
+    }
     this.debuggerChannel.forwardCommand(
       client,
       clientId,
@@ -244,5 +252,27 @@ export class CdpWsProxy {
       msg.params ?? {},
       msg.sessionId
     )
+  }
+
+  private async forwardNarrowedAxTree(
+    narrowing: AgentBrowserSnapshotNarrowing,
+    client: WebSocket,
+    clientId: number,
+    params: Record<string, unknown>,
+    msgSessionId?: string
+  ): Promise<void> {
+    if (this.webContents.isDestroyed()) {
+      this.responder.sendError(clientId, 'Browser tab is no longer available', client)
+      return
+    }
+    const sessionId = this.sessions.resolveDebuggerSessionId(msgSessionId)
+    try {
+      const result = await narrowing.fetch(params, this.webContents.getURL(), (next) =>
+        this.debuggerChannel.sendDebuggerCommand('Accessibility.getFullAXTree', next, sessionId)
+      )
+      this.responder.sendResult(clientId, result, client)
+    } catch (err) {
+      this.responder.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+    }
   }
 }

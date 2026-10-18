@@ -36,6 +36,14 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     execOptions?: AgentBrowserExecOptions
   ): Promise<string>
 
+  /** The daemon's reply over its socket, or null when only the CLI process can run the command. */
+  protected abstract runOverDaemonSocket(
+    sessionName: string,
+    session: SessionState,
+    commandArgs: string[],
+    execOptions?: AgentBrowserExecOptions
+  ): Promise<string | null>
+
   protected requireTargetWebContents(target: ResolvedBrowserCommandTarget): WebContents {
     const wc = this.getWebContents(target.webContentsId)
     if (!wc || wc.isDestroyed()) {
@@ -58,7 +66,13 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     ) {
       return
     }
+    this.markDaemonReplaced(sessionName, session)
+  }
+
+  /** The session's daemon is gone: the next CLI call starts one, and its routes come back. */
+  protected markDaemonReplaced(sessionName: string, session: SessionState): void {
     session.initialized = false
+    session.daemonSocketProtocol = null
     if (session.activeInterceptPatterns.length > 0) {
       this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
     }
@@ -92,21 +106,25 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     // Fork-only (Pod): a native pane shows this page as driven by an agent.
     notePodAgentBrowserCommand(session.webContentsId)
 
-    const args = ['--session', sessionName]
     const managesInterceptRoutes =
       commandArgs[0] === 'network' && (commandArgs[1] === 'route' || commandArgs[1] === 'unroute')
 
+    // Why the socket first: a running daemon answers without the CLI's process start (~9 ms).
+    let stdout = session.initialized
+      ? await this.runOverDaemonSocket(sessionName, session, commandArgs, execOptions)
+      : null
     const needsInit = !session.initialized
-    // Why: a restarted named daemon auto-launches Chrome unless every invocation reasserts Orca's CDP owner.
-    args.push('--cdp', String(session.proxy.getPort()))
-
-    // Why: exec passthrough can produce a large argv; spreading into push risks V8 argument limits.
-    for (const commandArg of commandArgs) {
-      args.push(commandArg)
+    if (stdout === null) {
+      const args = ['--session', sessionName]
+      // Why: a restarted named daemon auto-launches Chrome unless every invocation reasserts Orca's CDP owner.
+      args.push('--cdp', String(session.proxy.getPort()))
+      // Why: exec passthrough can produce a large argv; spreading into push risks V8 argument limits.
+      for (const commandArg of commandArgs) {
+        args.push(commandArg)
+      }
+      args.push('--json')
+      stdout = await this.runAgentBrowserRaw(sessionName, args, execOptions)
     }
-    args.push('--json')
-
-    const stdout = await this.runAgentBrowserRaw(sessionName, args, execOptions)
     const translated = translateResult(stdout)
 
     if (!translated.ok) {

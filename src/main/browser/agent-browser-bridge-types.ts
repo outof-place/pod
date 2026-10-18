@@ -1,6 +1,8 @@
 import type { ChildProcess } from 'node:child_process'
 import type { CdpWsProxy } from './cdp-ws-proxy'
 import type { BrowserError } from './cdp-bridge'
+import type { AgentBrowserDaemonExchange } from './agent-browser-daemon-socket'
+import type { AgentBrowserSnapshotNarrowing } from './agent-browser-snapshot-narrowing'
 
 // Why: must exceed agent-browser's internal timeouts (goto 30s, wait 60s) so the bridge never kills a command before its own timeout fires.
 export const EXEC_TIMEOUT_MS = 90_000
@@ -11,6 +13,10 @@ export const AGENT_BROWSER_EXIT_DRAIN_MS = 500
 // Why separate from EXEC_TIMEOUT_MS: a close is a member of the 20s will-quit barrier and must finish well inside it.
 export const AGENT_BROWSER_CLEANUP_TIMEOUT_MS = 5_000
 export const AGENT_BROWSER_CLEANUP_CONCURRENCY = 4
+// Why 2 minutes: an idle daemon costs 7 to 47 MB and 20 wakeups a second, and its refs outlive an
+// agent's usual pause between two browser steps. The daemon's own 10 minutes stay the bound for a
+// runtime that dies; this one runs only between commands.
+export const AGENT_BROWSER_IDLE_RETIRE_MS = 2 * 60 * 1000
 export const EMBEDDED_NAVIGATION_TIMEOUT_MS = 30_000
 export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
 export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
@@ -28,6 +34,12 @@ export type SessionState = {
   // Why: verify the tab is alive at execution time, not just enqueue time — queue delay can destroy it in between.
   webContentsId: number
   activeProcess: ChildProcess | null
+  // A command sent straight to the daemon's socket, cancelled like a process when the tab closes.
+  activeDaemonExchange?: AgentBrowserDaemonExchange | null
+  // Whether this session's daemon speaks the socket protocol Pod writes; null until checked.
+  daemonSocketProtocol?: boolean | null
+  // What the next snapshot prints, for the CDP proxy to cut its tree short.
+  snapshotNarrowing?: AgentBrowserSnapshotNarrowing
 }
 
 export type QueuedCommand = {

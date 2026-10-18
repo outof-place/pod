@@ -2,11 +2,21 @@ import { execFile, type ChildProcess } from 'node:child_process'
 import { BrowserError } from './cdp-bridge'
 import { classifyErrorCode } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeExecution } from './agent-browser-bridge-execution'
+import { agentBrowserDaemonCommand } from './agent-browser-daemon-command'
+import {
+  AgentBrowserDaemonCancelled,
+  AgentBrowserDaemonTimeout,
+  AgentBrowserDaemonUnreachable,
+  agentBrowserDaemonEndpoint,
+  agentBrowserDaemonSpeaksSupportedProtocol,
+  exchangeAgentBrowserDaemonCommand
+} from './agent-browser-daemon-socket'
 import {
   AGENT_BROWSER_EXIT_DRAIN_MS,
   CONSECUTIVE_TIMEOUT_LIMIT,
   EXEC_TIMEOUT_MS,
-  type AgentBrowserExecOptions
+  type AgentBrowserExecOptions,
+  type SessionState
 } from './agent-browser-bridge-types'
 
 export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExecution {
@@ -14,6 +24,78 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
     sessionName: string,
     options?: { closeTimeoutMs?: number }
   ): Promise<void>
+
+  protected async runOverDaemonSocket(
+    sessionName: string,
+    session: SessionState,
+    commandArgs: string[],
+    execOptions?: AgentBrowserExecOptions
+  ): Promise<string | null> {
+    // Why not with env overrides: they configure the CLI process, which this path skips.
+    const daemonCommand = execOptions?.envOverrides
+      ? null
+      : agentBrowserDaemonCommand(commandArgs, execOptions?.stdinText)
+    if (!daemonCommand) {
+      return null
+    }
+    session.daemonSocketProtocol ??= agentBrowserDaemonSpeaksSupportedProtocol(
+      this.agentBrowserEnv,
+      sessionName
+    )
+    if (!session.daemonSocketProtocol) {
+      return null
+    }
+    const exchange = exchangeAgentBrowserDaemonCommand(
+      agentBrowserDaemonEndpoint(this.agentBrowserEnv, sessionName),
+      daemonCommand,
+      execOptions?.timeoutMs ?? EXEC_TIMEOUT_MS
+    )
+    session.activeDaemonExchange = exchange
+    try {
+      const reply = await exchange.reply
+      session.consecutiveTimeouts = 0
+      return reply
+    } catch (error) {
+      if (error instanceof AgentBrowserDaemonUnreachable) {
+        // The daemon retired itself: the CLI starts the next one against Pod's CDP proxy.
+        this.markDaemonReplaced(sessionName, session)
+        return null
+      }
+      if (error instanceof AgentBrowserDaemonCancelled) {
+        throw new BrowserError('browser_tab_closed', error.message)
+      }
+      if (error instanceof AgentBrowserDaemonTimeout) {
+        throw this.noteCommandTimeout(sessionName, execOptions)
+      }
+      const message = error instanceof Error ? error.message : String(error)
+      throw this.createCommandError(
+        sessionName,
+        message,
+        classifyErrorCode(message),
+        session.webContentsId
+      )
+    } finally {
+      if (session.activeDaemonExchange === exchange) {
+        session.activeDaemonExchange = null
+      }
+    }
+  }
+
+  /** The error for a command that outlived its timeout; three in a row retire the session. */
+  private noteCommandTimeout(sessionName: string, execOptions?: AgentBrowserExecOptions): Error {
+    if (execOptions?.timeoutError) {
+      return execOptions.timeoutError
+    }
+    const liveSession = this.sessions.get(sessionName)
+    if (liveSession) {
+      liveSession.consecutiveTimeouts++
+      if (liveSession.consecutiveTimeouts >= CONSECUTIVE_TIMEOUT_LIMIT) {
+        // Why: 3 consecutive timeouts means the daemon is likely stuck — destroy and recreate
+        this.destroySession(sessionName)
+      }
+    }
+    return new BrowserError('browser_error', 'Browser command timed out')
+  }
 
   protected runAgentBrowserRaw(
     sessionName: string,
@@ -54,18 +136,7 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
           const liveSession = this.sessions.get(sessionName)
 
           if (error && (error as NodeJS.ErrnoException & { killed?: boolean }).killed) {
-            if (execOptions?.timeoutError) {
-              reject(execOptions.timeoutError)
-              return
-            }
-            if (liveSession) {
-              liveSession.consecutiveTimeouts++
-              if (liveSession.consecutiveTimeouts >= CONSECUTIVE_TIMEOUT_LIMIT) {
-                // Why: 3 consecutive timeouts means the daemon is likely stuck — destroy and recreate
-                this.destroySession(sessionName)
-              }
-            }
-            reject(new BrowserError('browser_error', 'Browser command timed out'))
+            reject(this.noteCommandTimeout(sessionName, execOptions))
             return
           }
 
