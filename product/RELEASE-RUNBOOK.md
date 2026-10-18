@@ -74,6 +74,16 @@ Pods up to rc4 read `https://github.com/outof-place/pod/releases/download/appcas
    - Not across a key change: an app with `SURequireSignedFeed` checks the feed only against its own `SUPublicEDKey`, and Sparkle 2.10.0 refuses another key's feed for 20 days from the first failure (`SUAppcastDriver.m`). rc2 rotated the key (rc1 `6Ru5s8…`, rc2 `rMnqNp…`, the old private key is gone), so rc1 installs rc2 by hand. `update-rehearsal.sh` uses one key for both builds and cannot catch this.
 7. **Unregister the build's apps**: every `.app` a release leaves outside `/Applications` (the `dist/` moved out of the checkout, `~/pod-releases/<version>`, the dry run's directory, a hotfix build) carries Pod's bundle ids, so LaunchServices may open one of them instead of `/Applications/Pod.app` (on 17.10 a stale build ran next to the installed Pod). Find them with `fd -u -t d -e app --prune . ~/pod-releases` (`-u`: `dist/` is gitignored), run `/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u <app>` on each, then move them to the Trash; keep the DMG, the zip and `release/`.
 
+## Env names in 1.0
+
+The release notes of the first release with the POD_ aliases carry this note:
+- Pod terminals also export POD_* aliases of ORCA_*. ORCA_* stay canonical in 1.0, because the hook scripts, agent configs and plugins Pod shares with Orca.app read them.
+- In a terminal's environment a POD_* setting wins over ORCA_* (orca.yaml, quick commands, launch configs, the env Pod was started with). Pod itself takes POD_* settings (tokens, switches, tool paths) once at start.
+- Processes that aren't terminals (ACP, codex app-server, agent session hosts) get no POD_* aliases in 1.0.
+- POD_ names appear in new terminals after Pod's terminal daemon restarts (at the latest after logout or restart).
+
+The full rename (ORCA_* → POD_*) comes with the ~/.pod release.
+
 ## Closing the repo
 
 When outof-place/pod turns private, GitHub's feed and every release asset of outof-place/pod answer 404 to installed apps; pod-releases stays public. Pods since rc5 read updates.pod.codes and are not affected. A Pod still on rc4 or older stops finding updates: Sparkle checks once a day by default, so close the repo only after rc5 has been on GitHub's feed for a while and the team's Pods show rc5 or later (Pod › About). A Pod left behind updates by hand: quit it, replace `/Applications/Pod.app` with the app from `https://updates.pod.codes/download/v<latest>/Pod-<latest>.dmg`, open it; Sparkle takes it from there.
