@@ -487,6 +487,7 @@ func TestS16ForgedRecordsPublishNothing(t *testing.T) {
 // the daemon, which republishes the entry well before its periodic re-stat.
 func TestEndedClientsHintsCount(t *testing.T) {
 	r := newLiveRig(t, 96, nil)
+	r.w.SetMode("owner", true) // only the owner publishes; the start grace keeps everything
 	// Placed under an hour ago: the simulated -a time stays positive, so the
 	// entries parse and get published.
 	as := r.place(3000, cachesim.Archive, 100_000, 30*time.Minute)
@@ -519,6 +520,7 @@ func TestEndedClientsHintsCount(t *testing.T) {
 
 func TestPublisherFollowsTheIndex(t *testing.T) {
 	r := newLiveRig(t, 95, nil)
+	r.w.SetMode("owner", true)
 	as := r.place(30, cachesim.Archive, 1_000_000, time.Hour)
 	r.run(time.Minute)
 	if e, _, _ := r.cfg.Shared.IndexStats(); e != 30 {
@@ -646,4 +648,121 @@ func clientDay(t *testing.T, seed int64, active time.Duration) {
 	dstLive.builtinFailures += len(w.Failures) - len(r.clientFailures())
 	t.Logf("seed %d: fast %d disk %d dying %d handshakes %d pressured ticks %d pinned removed %d failures %d (client %d)",
 		seed, w.FastHits, w.DiskHits, w.DyingMisses, w.Shared().Batches, pressured, len(w.PinnedRemovals), len(w.Failures), len(r.clientFailures()))
+}
+
+// Gate fix 2: a pinned output planned to give way in the emergency tier is
+// queued, and free disk recovers to the hard tier before it settles. The
+// give-way lapses with the emergency: the pin keeps the output.
+func TestGiveWayLapsesWithTheEmergency(t *testing.T) {
+	r := buildRig(t, 41, simStart, nil)
+	r.cfg.Shared = r.w.Shared()
+	pinnedRel := map[string]bool{}
+	recovered := false
+	orig := r.cfg.OnEvict
+	r.cfg.OnEvict = func(e Eviction) {
+		orig(e)
+		if pinnedRel[e.Rel] && !recovered {
+			recovered = true
+			r.setFree(9 * GB) // the next tick samples the hard tier
+		}
+	}
+	r.start()
+	r.warm()
+	pinned := r.place(5, cachesim.Archive, 200_000_000, 50*time.Minute)
+	for _, a := range pinned {
+		pinnedRel[actionRel(a)] = true
+	}
+	r.place(10, cachesim.Archive, 100_000_000, 72*time.Hour)
+	r.run(time.Minute)
+	p := r.w.Spawn(cachesim.ProcSpec{Comm: "go", Kind: "build", Life: 3 * time.Hour, Client: true})
+	for _, a := range pinned {
+		r.w.Lookup(p, a)
+	}
+	r.run(time.Minute)
+	r.setFree(5 * GB)
+	r.run(15 * time.Minute)
+	r.noViolations()
+	if !recovered {
+		t.Fatal("no pinned unit gave way: the scenario did not happen")
+	}
+	for _, rm := range r.w.PinnedRemovals {
+		if rm.FreeAtCut >= r.cfg.Limits.EmergencyFloor+r.cfg.Limits.Hysteresis {
+			t.Fatalf("pinned output removed after the emergency ended: %+v", rm)
+		}
+	}
+}
+
+// Gate fix 5: a client whose log filled up pins nothing more. While it
+// lives, outside the emergency tier, nothing used since its session began
+// is removed: an entry it served (and refreshed, 3 h old) and reads again
+// 45 minutes later survives the hard tier's 30 minute window. The rule off
+// (sabotage) loses it.
+func TestOverflowedSessionKeepsWhatItUsed(t *testing.T) {
+	run := func(hide bool) *rig {
+		r := newLiveRig(t, 33, nil)
+		r.w.Shared().HideOverflow = hide
+		r.warm()
+		x := r.place(1, cachesim.Archive, 50_000_000, 3*time.Hour)[0]
+		r.place(20, cachesim.Archive, 5_000_000, 72*time.Hour)
+		r.run(time.Minute)
+		p := r.w.Spawn(cachesim.ProcSpec{Comm: "go", Kind: "build", Life: 50 * time.Minute, Client: true})
+		r.w.Shared().Overflow(p)
+		r.w.Lookup(p, x)
+		r.w.UseAt(p, outputRel(x), r.w.Now()+45*time.Minute)
+		r.hardTier()
+		r.run(30 * time.Minute)
+		if !hide && !reasonsHave(r, "logged more outputs than their slot holds") {
+			t.Errorf("status does not say an overflowed session holds removals: %q", r.state().Extra.Reasons)
+		}
+		r.run(30 * time.Minute)
+		r.noViolations()
+		return r
+	}
+	r := run(false)
+	if fs := r.clientFailures(); len(fs) > 0 {
+		t.Fatalf("the overflowed session lost an output it used: %+v", fs[0])
+	}
+	if r.c.live.overflowKept == 0 {
+		t.Error("no removal was held for the overflowed session")
+	}
+	// Sabotage: the daemon never learns the log is full, and x goes.
+	if s := run(true); len(s.clientFailures()) == 0 {
+		t.Fatal("without the overflow rule the build lost nothing: the test proves nothing")
+	}
+}
+
+// Gate fix 10: over the pin cap, the oldest live session's pins keep their
+// protection first (a long build reads its early outputs last); a session
+// that started later loses protection beyond the cap.
+func TestPinCapKeepsTheOldestSession(t *testing.T) {
+	r := newLiveRig(t, 34, func(c *Config) { c.PinCap = 550_000_000 })
+	r.warm()
+	early := r.place(4, cachesim.Archive, 100_000_000, 72*time.Hour)
+	late := r.place(4, cachesim.Archive, 100_000_000, 72*time.Hour)
+	r.run(time.Minute)
+	old := r.w.Spawn(cachesim.ProcSpec{Comm: "go", Kind: "test", Life: 3 * time.Hour, Client: true})
+	r.run(time.Minute)
+	for _, a := range early {
+		r.w.Lookup(old, a)
+	}
+	r.run(time.Minute)
+	young := r.w.Spawn(cachesim.ProcSpec{Comm: "go", Kind: "build", Life: 3 * time.Hour, Client: true})
+	for _, a := range late {
+		r.w.Lookup(young, a) // the newest pins, of the session that started later
+	}
+	r.run(time.Minute)
+	for _, a := range early {
+		if !r.c.live.keeps(a.Out) {
+			t.Errorf("an output of the oldest session lost its protection to the cap")
+		}
+	}
+	capped := 0
+	for _, a := range late {
+		if !r.c.live.keeps(a.Out) {
+			capped++
+		}
+	}
+	if capped != 3 {
+		t.Errorf("%d of the later session's outputs over the cap, want 3 (550 MB cap, 400 MB taken by the oldest session)", capped)
+	}
 }

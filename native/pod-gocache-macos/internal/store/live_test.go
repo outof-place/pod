@@ -343,3 +343,77 @@ func BenchmarkGetPaths(b *testing.B) {
 	}
 	b.Run("s9-stale", func(b *testing.B) { loop(b, r.s, false) })
 }
+
+// Gate fix 9: the real Get against the real clients file, with the daemon's
+// side of the dying handshake (publish the batch, drain the slot, unlink
+// unless pinned, end the batch) injected at every point around the pin:
+// before the get, before the pin, after the pin, after the get. Every get
+// either misses or its -d is still there after the daemon is done.
+func TestDyingHandshakeAtEveryPoint(t *testing.T) {
+	r := newLiveRig(t)
+	id := sha256.Sum256([]byte("contested"))
+	data := []byte("contested output")
+	out := sha256.Sum256(data)
+	dpath := entryFile(r.dir, out, "d")
+	const before, beforePin, afterPin, after = 0, hookBeforePin, hookAfterPin, 3
+	points := []int{before, beforePin, afterPin, after}
+	defer func() { testHook = nil }()
+	hits, misses, unlinked := 0, 0, 0
+	for _, pb := range points {
+		for _, pu := range points {
+			for _, pe := range points {
+				if pu < pb || pe < pu {
+					continue
+				}
+				// A fresh session, so the output is not pinned yet.
+				r.live.Close()
+				r.live = livestate.OpenClient(r.dir, 1)
+				r.s.SetLive(r.live)
+				put(t, Open(r.dir), id, data) // written by another go process
+				r.publish(id)
+				decided, removed := false, false
+				daemon := func(p int) {
+					if p == pb {
+						if !r.cli.BeginDying([]uint64{livestate.Prefix(&out)}) {
+							t.Fatal("BeginDying")
+						}
+						pinned := false
+						for _, rec := range r.records() {
+							pinned = pinned || rec.Out == livestate.Prefix(&out)
+						}
+						decided = !pinned
+					}
+					if p == pu && decided {
+						removed = os.Remove(dpath) == nil
+					}
+					if p == pe {
+						r.cli.EndDying()
+					}
+				}
+				testHook = daemon
+				daemon(before)
+				h, ok := r.get(id)
+				daemon(after)
+				testHook = nil
+				if removed {
+					unlinked++
+				}
+				switch {
+				case !ok:
+					misses++
+				case removed:
+					t.Errorf("begin/unlink/end at %d/%d/%d: hit on %s, which the daemon then unlinked", pb, pu, pe, filepath.Base(dpath))
+				default:
+					hits++
+					if _, err := os.Stat(string(h.DiskPath())); err != nil {
+						t.Errorf("begin/unlink/end at %d/%d/%d: hit whose -d is gone: %v", pb, pu, pe, err)
+					}
+				}
+			}
+		}
+	}
+	if hits == 0 || misses == 0 || unlinked == 0 {
+		t.Errorf("not every outcome happened: %d hits, %d misses, %d unlinks", hits, misses, unlinked)
+	}
+	t.Logf("%d hits, %d misses, %d unlinks", hits, misses, unlinked)
+}

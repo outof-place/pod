@@ -150,6 +150,9 @@ func (c *core) reasons() []string {
 		return r
 	case "indexing":
 		add("indexing: %d of 256 buckets", c.idx.Progress())
+		if c.lagging != "" {
+			add("working at normal priority until caught up: %s", c.lagging)
+		}
 		return r
 	}
 	if c.mode != ownerstate.ModeOwner {
@@ -162,6 +165,9 @@ func (c *core) reasons() []string {
 	if c.whyWin != "" {
 		add("window %s because %s", c.window.Round(time.Minute), c.whyWin)
 	}
+	if c.lagging != "" {
+		add("working at normal priority until caught up: %s", c.lagging)
+	}
 	if left := c.need.Total() - c.plan.Bytes; left > 0 && !c.plan.Capped {
 		add("cannot keep up: %s more needed, nothing else is outside the %s window (%s used within the %s normal window)",
 			gb(left), c.tierWindow().Round(time.Second), gb(c.plan.Protected), c.window.Round(time.Minute))
@@ -171,6 +177,10 @@ func (c *core) reasons() []string {
 	}
 	if c.live.sh != nil && !c.live.open {
 		add("shared state with clients off: %s", c.live.reason)
+	}
+	if c.live.open && c.live.overflowSince != 0 {
+		add("%d client sessions logged more outputs than their slot holds: outside the emergency tier nothing used since %s is removed",
+			c.live.overflowed, time.Unix(0, c.live.overflowSince).Format("15:04"))
 	}
 	if c.plan.Capped && c.episode.Active {
 		add("low-disk episode cap: evicted %s for disk, allowance %s (the largest deficit to %s free plus %s whose removal showed up as free disk)",
@@ -311,7 +321,29 @@ func (c *core) liveStatus() *ownerstate.Live {
 	if l.sh == nil {
 		return nil
 	}
-	st := &ownerstate.Live{Reason: l.reason, Kept: l.skipped, Records: l.records, Rereads: l.rereads, Handshake: l.batches}
+	st := &ownerstate.Live{Reason: l.reason, Kept: l.skipped, Records: l.records, Rereads: l.rereads, Handshake: l.batches,
+		Repairs: l.repairs, LastRepair: l.lastRepair, OverflowKept: l.overflowKept}
+	sum := l.ended
+	reasons := map[string]uint64{}
+	for r, n := range l.endedReasons {
+		reasons[r.String()] += n
+	}
+	for _, g := range l.gens {
+		for i := range g.slots {
+			s := &g.slots[i]
+			if !s.alive {
+				continue
+			}
+			sum.add(s.counts)
+			if s.counts.reported {
+				reasons[s.counts.reason.String()]++
+			}
+			if len(s.pins) > 0 && len(st.PinningPIDs) < maxPinningShown {
+				st.PinningPIDs = append(st.PinningPIDs, ownerstate.PinningProcess{PID: s.pid, GoPID: s.goPID, Pins: len(s.pins)})
+			}
+		}
+	}
+	st.Sessions = ownerstate.SessionCounts{FastHits: sum.fast, DiskHits: sum.disk, Misses: sum.misses, Puts: sum.puts, IndexReasons: reasons}
 	if !l.open {
 		return st
 	}
@@ -319,5 +351,12 @@ func (c *core) liveStatus() *ownerstate.Live {
 	st.Entries, st.Slots, st.Refused = l.sh.IndexStats()
 	st.Clients, st.Pinning, st.Overflow = l.clients, l.pinning, l.overflowed
 	st.Pinned, st.OverCap, st.GaveWay = l.pinnedBytes, l.overCap, c.plan.GaveWay
+	if l.overflowSince != 0 {
+		st.OverflowSince = l.overflowSince / int64(time.Second)
+	}
+	st.ClientsFiles = len(l.gens)
 	return st
 }
+
+// maxPinningShown bounds the pinning processes listed in state.json.
+const maxPinningShown = 32

@@ -70,6 +70,8 @@ type World struct {
 	modeChangedAt time.Duration
 	tickStart     time.Duration
 	daemonStart   time.Duration
+	lastStateBoot int64 // kern.boottime in the last state.json written or restored
+	graceSkipped  bool
 	freeSamples   [2]int64
 	lastProcList  []ProcSnap
 	lastProcWall  int64
@@ -270,8 +272,13 @@ func (w *World) Run(until time.Duration, tick func() time.Duration) {
 }
 
 // DaemonStarted records a (re)start, for the start-grace check; a new daemon
-// starts a new low-disk episode too.
-func (w *World) DaemonStarted() { w.daemonStart, w.d4, w.d4Outs = w.mono, d4State{}, nil }
+// starts a new low-disk episode too. After a reboot since the state.json it
+// finds (no go process survives one) there is no grace to check.
+func (w *World) DaemonStarted() {
+	w.daemonStart, w.d4, w.d4Outs = w.mono, d4State{}, nil
+	d := w.lastStateBoot - w.BootUs
+	w.graceSkipped = w.lastStateBoot != 0 && (d > int64(time.Minute/time.Microsecond) || -d > int64(time.Minute/time.Microsecond))
+}
 
 // SetMode changes what the mode file says.
 func (w *World) SetMode(m string, valid bool) {

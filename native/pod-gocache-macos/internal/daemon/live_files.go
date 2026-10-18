@@ -6,6 +6,7 @@ import (
 	"math/bits"
 	"os"
 	"path/filepath"
+	"slices"
 	"syscall"
 
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/index"
@@ -20,9 +21,14 @@ type fileShared struct {
 	id             livestate.CacheID
 	boot           [16]byte
 	lockFD         int
+	lockID         livestate.FileID
 	gen            uint64
 	idx            *livestate.IndexWriter
-	cli            *livestate.Clients
+	// cli holds the clients files still mapped, oldest first; the last is
+	// current. An older one stays while clients that claimed a slot in it
+	// before it was deleted or replaced may still live.
+	cli  []*livestate.Clients
+	logf func(format string, a ...any)
 }
 
 func newFileShared(root, cacheDir string) *fileShared {
@@ -31,6 +37,12 @@ func newFileShared(root, cacheDir string) *fileShared {
 
 func (f *fileShared) Where() string { return f.dir }
 
+func (f *fileShared) log(format string, a ...any) {
+	if f.logf != nil {
+		f.logf(format, a...)
+	}
+}
+
 func (f *fileShared) Open() error {
 	f.Close()
 	id, ok := livestate.StatCache(f.cacheDir)
@@ -38,6 +50,27 @@ func (f *fileShared) Open() error {
 		return errors.New("cache directory missing")
 	}
 	f.id, f.dir = id, livestate.Dir(f.root, id)
+	if err := f.lock(); err != nil {
+		return err
+	}
+	for _, name := range livestate.CleanTemps(f.dir) {
+		f.log("removed %s/%s left by a dead daemon", f.dir, name)
+	}
+	for _, dir := range livestate.SweepStale(f.root, f.dir) {
+		f.log("removed %s: its cache directory is gone and nothing uses it", dir)
+	}
+	c, err := livestate.OpenClients(f.dir, id, f.boot)
+	if err != nil {
+		f.Close()
+		return fmt.Errorf("clients file: %w", err)
+	}
+	f.cli = []*livestate.Clients{c}
+	return nil
+}
+
+// lock creates the live directory if needed and takes its publisher lock,
+// letting go of a lock held on a file that is no longer there.
+func (f *fileShared) lock() error {
 	if err := privateDir(f.root); err != nil {
 		return err
 	}
@@ -55,12 +88,78 @@ func (f *fileShared) Open() error {
 		}
 		return fmt.Errorf("publisher lock: %w", err)
 	}
-	f.lockFD = fd
-	if f.cli, err = livestate.OpenClients(f.dir, id, f.boot); err != nil {
-		f.Close()
-		return fmt.Errorf("clients file: %w", err)
+	var st syscall.Stat_t
+	if err := syscall.Fstat(fd, &st); err != nil {
+		syscall.Close(fd)
+		return fmt.Errorf("publisher lock: %w", err)
 	}
+	if f.lockFD >= 0 {
+		syscall.Close(f.lockFD)
+	}
+	f.lockFD, f.lockID = fd, livestate.FileID{Dev: uint64(uint32(st.Dev)), Ino: st.Ino, Size: st.Size}
 	return nil
+}
+
+// Check compares what the live directory holds now with the files mapped:
+// "" while they are the same, else what changed (a file deleted, replaced or
+// cut short under the daemon, the directory removed).
+func (f *fileShared) Check() string {
+	if err := livestate.PathIs(filepath.Join(f.dir, livestate.PublisherLockName), f.lockID); err != nil {
+		return "publisher lock: " + err.Error()
+	}
+	if c := f.current(); c != nil {
+		if err := livestate.PathIs(c.Path(), c.Identity()); err != nil {
+			return "clients file: " + err.Error()
+		}
+	}
+	if f.idx != nil {
+		if err := livestate.PathIs(f.idx.Path(), f.idx.Identity()); err != nil {
+			return "index: " + err.Error()
+		}
+	}
+	return ""
+}
+
+// Repair puts back what Check found missing or changed: the directory and
+// the lock, a new current clients file (the old mapping stays, for the
+// clients that hold slots in it), and a new index when the published one is
+// not the daemon's. reindexed says the caller must publish every entry again.
+func (f *fileShared) Repair(entries int) (reindexed bool, err error) {
+	lockBad := livestate.PathIs(filepath.Join(f.dir, livestate.PublisherLockName), f.lockID) != nil
+	if lockBad {
+		if err := f.lock(); err != nil {
+			return false, err
+		}
+	}
+	if c := f.current(); c == nil || livestate.PathIs(c.Path(), c.Identity()) != nil {
+		next, err := livestate.OpenClients(f.dir, f.id, f.boot)
+		if err != nil {
+			return false, fmt.Errorf("clients file: %w", err)
+		}
+		f.cli = append(f.cli, next)
+	}
+	if f.idx == nil || livestate.PathIs(f.idx.Path(), f.idx.Identity()) != nil {
+		return true, f.Reset(entries)
+	}
+	return false, nil
+}
+
+func (f *fileShared) current() *livestate.Clients {
+	if len(f.cli) == 0 {
+		return nil
+	}
+	return f.cli[len(f.cli)-1]
+}
+
+func (f *fileShared) Gens() int { return len(f.cli) }
+
+// Retire unmaps older clients file g.
+func (f *fileShared) Retire(g int) {
+	if g < 0 || g >= len(f.cli)-1 {
+		return
+	}
+	f.cli[g].Close()
+	f.cli = slices.Delete(f.cli, g, g+1)
 }
 
 // privateDir creates dir 0700, or accepts an existing one that is a real
@@ -93,10 +192,10 @@ func (f *fileShared) Close() {
 		f.idx.Close()
 		f.idx = nil
 	}
-	if f.cli != nil {
-		f.cli.Close()
-		f.cli = nil
+	for _, c := range f.cli {
+		c.Close()
 	}
+	f.cli = nil
 	if f.lockFD >= 0 {
 		syscall.Close(f.lockFD)
 		f.lockFD = -1
@@ -116,10 +215,20 @@ func (f *fileShared) Reset(entries int) error {
 		return err
 	}
 	if f.idx != nil {
+		// Readers of the old file move over; for a file replaced under the
+		// daemon, the rename above did not reach them.
+		f.idx.Supersede()
 		f.idx.Close()
 	}
 	f.idx = w
 	return nil
+}
+
+// Sync writes the index's informational counters, once per publishing round.
+func (f *fileShared) Sync() {
+	if f.idx != nil {
+		f.idx.SyncLive()
+	}
 }
 
 func (f *fileShared) Publish(id index.ID, e index.Exact) bool {
@@ -139,12 +248,12 @@ func (f *fileShared) IndexStats() (entries, slots, full int) {
 	return f.idx.Live(), f.idx.Slots(), f.idx.Full
 }
 
-func (f *fileShared) Slot(i int, v *livestate.SlotView) bool { return f.cli.Slot(i, v) }
+func (f *fileShared) Slot(g, i int, v *livestate.SlotView) bool { return f.cli[g].Slot(i, v) }
 
 // Alive treats a failed query as alive: a pin then lasts until its expiry
 // rather than going early.
-func (f *fileShared) Alive(i int) bool {
-	pid, err := f.cli.Holder(i)
+func (f *fileShared) Alive(g, i int) bool {
+	pid, err := f.cli[g].Holder(i)
 	return err != nil || pid != 0
 }
 
@@ -169,10 +278,25 @@ func liveRoot(cfg Config) (string, bool) {
 	return livestate.Root()
 }
 
-func (f *fileShared) Records(i int, from, to uint64, dst []livestate.Record) ([]livestate.Record, bool) {
-	return f.cli.Records(i, from, to, dst)
+func (f *fileShared) Records(g, i int, from, to uint64, dst []livestate.Record) ([]livestate.Record, bool) {
+	return f.cli[g].Records(i, from, to, dst)
 }
 
-func (f *fileShared) BeginDying(prefixes []uint64) bool { return f.cli.BeginDying(prefixes) }
-func (f *fileShared) EndDying() bool                    { return f.cli.EndDying() }
-func (f *fileShared) Heartbeat(wallNs int64)            { f.cli.Heartbeat(wallNs) }
+// BeginDying and EndDying write every clients file still mapped: a client of
+// an older one reads its batches there. Only the current one's failure
+// counts; an older one cut short has no reader left to protect.
+func (f *fileShared) BeginDying(prefixes []uint64) bool {
+	for _, c := range f.cli[:len(f.cli)-1] {
+		c.BeginDying(prefixes)
+	}
+	return f.current().BeginDying(prefixes)
+}
+
+func (f *fileShared) EndDying() bool {
+	for _, c := range f.cli[:len(f.cli)-1] {
+		c.EndDying()
+	}
+	return f.current().EndDying()
+}
+
+func (f *fileShared) Heartbeat(wallNs int64) { f.current().Heartbeat(wallNs) }

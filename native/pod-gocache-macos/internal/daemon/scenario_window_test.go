@@ -3,6 +3,7 @@ package daemon
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -483,4 +484,121 @@ func TestS12bHeartbeatUnderThrottledDisk(t *testing.T) {
 		t.Errorf("phase %q, %d removals: the run did not get through indexing to eviction", st.Extra.Phase, len(r.w.Removals))
 	}
 	t.Logf("longest tick %s, heartbeat gap %s, %d removals", longest, r.maxHeartbeatGap(start), len(r.w.Removals))
+}
+
+// Phase A follow-up: after a reboot since the last state.json no go process
+// can hold entries the daemon has not seen used, so the start grace is
+// skipped and an over-budget cache shrinks at once (18.10: it grew 32 -> 43
+// GB in 70 minutes of grace). With the same boot the grace holds.
+func TestRebootSkipsStartGrace(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		sameBoot bool
+	}{{"reboot", false}, {"same-boot", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			r1 := newRig(t, 80, tinyBudget)
+			r1.run(10 * time.Minute)
+			prev := r1.state()
+			r2 := buildRig(t, 81, time.Unix(0, prev.Extra.LastWallNs).Add(time.Hour), tinyBudget)
+			if tc.sameBoot {
+				r2.w.BootUs = r1.w.BootUs
+			}
+			r2.sink.Restore(prev)
+			r2.place(200, cachesim.Archive, 5_000_000, 72*time.Hour)
+			r2.w.SetMode("owner", true)
+			r2.start()
+			r2.run(20 * time.Minute)
+			r2.noViolations()
+			removed := len(r2.w.Removals) > 0
+			if removed == tc.sameBoot {
+				t.Fatalf("removals %d within 20 minutes of start; log:\n%s", len(r2.w.Removals), tail(r2.log.String(), 1500))
+			}
+			if tc.sameBoot != reasonsHave(r2, "start grace") {
+				t.Errorf("reasons %q", r2.state().Extra.Reasons)
+			}
+		})
+	}
+}
+
+// prioLog records each priority change with how far behind the loop was.
+type prioLog struct {
+	inner cachesim.Prio
+	r     *rig
+	calls []prioCall
+}
+
+type prioCall struct {
+	bg         bool
+	indexTicks int  // ticks into an incomplete initial index, 0 once complete
+	overBudget bool // indexed, past the grace, over budget with removals planned
+}
+
+func (p *prioLog) Background(on bool) {
+	p.inner.Background(on)
+	c := p.r.c
+	if c == nil {
+		return
+	}
+	over := c.idx.Complete() && !c.inGrace() && c.idx.Size() > c.limits().Budget && c.plan.Bytes > 0
+	p.calls = append(p.calls, prioCall{on, c.indexTicks, over})
+}
+
+// NOTICED 1 of S9: at load 60-130 the background band starved the loop. A
+// slow initial index (every call 50 ms, 10k files) leaves the band after
+// lagIndexTicks; then, on a calmer disk, an over-budget cache with removals
+// planned keeps it out until the cache is back under budget, and it returns
+// to the band.
+func TestLoopLeavesBackgroundBandWhenBehind(t *testing.T) {
+	r := buildRig(t, 82, simStart, func(c *Config) { c.Limits.Budget = 4 * GB })
+	p := &prioLog{inner: cachesim.Prio{W: r.w}, r: r}
+	r.cfg.Prio = p
+	r.w.OpCost = 50 * time.Millisecond
+	r.place(10_000, cachesim.Archive, 1_000_000, 72*time.Hour) // 10 GB, 6 over budget
+	r.w.SetMode("owner", true)
+	r.start()
+	for i := 0; i < 600 && !r.c.idx.Complete(); i++ {
+		r.run(10 * time.Second)
+	}
+	r.w.OpCost = time.Millisecond
+	r.run(r.cfg.Limits.Window + time.Hour)
+	r.noViolations()
+	late, lateBG, over, overBG := 0, 0, 0, 0
+	for _, c := range p.calls {
+		if c.indexTicks > lagIndexTicks {
+			late++
+			if c.bg {
+				lateBG++
+			}
+		}
+		if c.overBudget {
+			over++
+			if c.bg {
+				overBG++
+			}
+		}
+	}
+	if late == 0 || lateBG > 0 {
+		t.Errorf("a slow index past %d ticks still ran in the background band: %d of %d changes", lagIndexTicks, lateBG, late)
+	}
+	// The plan can turn over budget within a tick; the band follows next tick.
+	if over < 10 || overBG > 2 {
+		t.Errorf("an over-budget cache with removals planned ran in the background band: %d of %d changes", overBG, over)
+	}
+	if size := r.w.CacheBytes(); size > 4*GB {
+		t.Errorf("cache %s after 3 h past the grace, budget 4 GB", gbf(size))
+	}
+	if !strings.HasSuffix(strings.TrimSpace(lastLine(r.log.String(), "loop ")), "background band again") {
+		t.Errorf("the loop did not go back to the background band once caught up:\n%s", tail(r.log.String(), 2000))
+	}
+}
+
+// lastLine is the last line of s containing sub.
+func lastLine(s, sub string) string {
+	lines := strings.Split(s, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], sub) {
+			return lines[i]
+		}
+	}
+	return ""
 }

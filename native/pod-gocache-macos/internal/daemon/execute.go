@@ -153,7 +153,7 @@ func (c *core) stageWindow(p evict.Stage, planned time.Duration) time.Duration {
 
 func (c *core) evictUnit(u *evict.Planned, b *batch) {
 	b.done[u.ID] = true
-	if c.live.unitKept(u) {
+	if c.live.unitKept(u, c.tier) {
 		c.live.skipped++
 		return // pinned since the plan: a live go process holds its output
 	}
@@ -312,7 +312,8 @@ func (c *core) removeChunk(chunk []index.ID, b *batch, deadline time.Duration) (
 		if c.live.open && !c.live.drain(c, c.cfg.Clock.Mono(), false) {
 			return false, true
 		}
-		if !p.gaveWay && c.live.keeps(id) {
+		// A give-way planned in the emergency tier lapses with it.
+		if !(p.gaveWay && c.tier == evict.Emergency) && c.live.keeps(id) {
 			c.live.skipped++
 			continue
 		}
@@ -330,6 +331,12 @@ func (c *core) removeChunk(chunk []index.ID, b *batch, deadline time.Duration) (
 
 func (c *core) removeOutput(id index.ID, ov index.OutputView, window time.Duration, stage evict.Stage, b *batch) {
 	cut := c.cutoff(window, ov.Recency)
+	if held := c.live.overflowCut(cut, c.tier); held != cut {
+		cut = held
+		if ov.Recency >= cut {
+			c.live.overflowKept++
+		}
+	}
 	switch ov.Shape {
 	case index.ShapeFile:
 		out, st, err := c.fs.RemoveIfIdle(ov.Rel, ov.St.Ino, cut)

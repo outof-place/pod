@@ -135,11 +135,17 @@ func TestE2ES9RevivalRaceClient(t *testing.T) {
 	if later < 1000 {
 		t.Errorf("only %d fast-path hits on entries evicted later in the run; want at least 1000", later)
 	}
+	// What the go processes' clients reported reaches state.json after they exit.
+	if st == nil || st.Sessions.FastHits == 0 || st.Sessions.Puts == 0 || st.Sessions.IndexReasons["ok"] == 0 {
+		t.Errorf("state.json does not sum the ended sessions: %+v", st)
+	}
 }
 
-// S6: shared files truncated, replaced or renamed over, and the daemon
-// restarted, while eight loops of warm builds and tests run through the
-// client. Every go command succeeds; none sees a fault.
+// S6: shared files truncated, replaced or renamed over, the live directory
+// deleted, and the daemon restarted, while eight loops of warm builds and
+// tests run through the client. Every go command succeeds; none sees a
+// fault. After the last step (the directory deleted) the daemon recreates
+// the files: most later sessions use the index again and fast hits resume.
 func TestE2ES9TamperedSharedFiles(t *testing.T) {
 	e := newE2E(t, 60_000_000_000)
 	e.useClient()
@@ -188,6 +194,8 @@ func TestE2ES9TamperedSharedFiles(t *testing.T) {
 			e.stop()
 			e.startDaemon(nil)
 		}},
+		{"clients unlinked and recreated smaller", func() { replace(cli, 20000, false) }},
+		{"live directory deleted", func() { os.RemoveAll(dir) }},
 	}
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -222,14 +230,16 @@ func TestE2ES9TamperedSharedFiles(t *testing.T) {
 			}
 		}()
 	}
+	var last int64
 	for range 2 {
 		for _, s := range steps {
 			time.Sleep(2 * time.Second)
 			t.Logf("%s: %s", time.Now().Format("15:04:05.000"), s.name)
 			s.do()
+			last = time.Now().UnixNano()
 		}
 	}
-	time.Sleep(3 * time.Second)
+	time.Sleep(15 * time.Second)
 	close(done)
 	wg.Wait()
 	e.stop()
@@ -240,6 +250,30 @@ func TestE2ES9TamperedSharedFiles(t *testing.T) {
 	t.Logf("%d go failures; fast-path hits %d; sessions by index reason %v", len(failures), fast, sessions)
 	if fast == 0 {
 		t.Error("no get came from the shared index: the tampering met no live mapping")
+	}
+	// Sessions that ended a few seconds after the last step started after the
+	// daemon's repair (one tick) or ran through it.
+	after := last + int64(5*time.Second)
+	recs, err := trace.ReadDir(e.trace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	used, total, fastAfter := 0, 0, 0
+	for _, r := range recs {
+		switch {
+		case r.Time < after:
+		case r.Op == trace.OpLive:
+			total++
+			if livestate.Reason(r.Live().Index) == livestate.ReasonOK {
+				used++
+			}
+		case r.Op == trace.OpGetFast:
+			fastAfter++
+		}
+	}
+	t.Logf("after the last step: %d of %d sessions used the index, %d fast hits", used, total, fastAfter)
+	if total == 0 || used*2 <= total || fastAfter == 0 {
+		t.Errorf("the shared state did not come back after the live directory was deleted: %d of %d sessions ok, %d fast hits", used, total, fastAfter)
 	}
 }
 
@@ -293,7 +327,10 @@ func TestE2ES9StoppedDaemon(t *testing.T) {
 	var stoppedList, stoppedHello []time.Duration
 	var testTimes []time.Duration
 	for round := range 3 {
-		p := spawnHelper(t, helperCfg{CacheDir: e.cache, StateDir: state, LiveRoot: e.live, Free: 60_000_000_000, Observe: true}, nil)
+		// Owner (only the owner publishes), with a window no fixture entry
+		// leaves during the test.
+		setMode(t, state, "owner")
+		p := spawnHelper(t, helperCfg{CacheDir: e.cache, StateDir: state, LiveRoot: e.live, Free: 60_000_000_000, Window: 6 * time.Hour}, nil)
 		if round > 0 {
 			waitFor(t, 3*time.Minute, "the helper to publish", func() bool {
 				l := readState(t, state).Extra.Live

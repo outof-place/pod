@@ -20,7 +20,11 @@ import (
 // slot and waits to be killed.
 func TestMain(m *testing.M) {
 	if v := os.Getenv("LIVESTATE_HELPER"); len(v) > 6 && v[:6] == "claim:" {
-		s, err := ClaimSlot(v[6:], testCache, BootID(), os.Getppid())
+		id := testCache
+		if named, ok := parseDirName(filepath.Base(v[6:])); ok {
+			id = named // a live directory named for its cache
+		}
+		s, err := ClaimSlot(v[6:], id, BootID(), os.Getppid())
 		if err != nil {
 			fmt.Println("error", err)
 			os.Exit(1)
@@ -345,5 +349,37 @@ func TestPrefixSet(t *testing.T) {
 			t.Fatalf("add(%d) disagrees with the map", p)
 		}
 		seen[p] = true
+	}
+}
+
+// Gate fix 3: a batch left by a daemon of another boot is ignored, whatever
+// its awake-clock age says (the clock restarts at boot); a batch from this
+// boot is honored, and so is one from a daemon that wrote no boot.
+func TestBatchFromAnotherBootIgnored(t *testing.T) {
+	dir, c := newClients(t) // the daemon's boot is {1}
+	out, act := idOf("o"), idOf("a")
+	c.BeginDying([]uint64{Prefix(&out)})
+	defer c.EndDying()
+	for _, tc := range []struct {
+		name        string
+		client      [16]byte
+		daemonBoot  bool
+		wantHonored bool
+	}{
+		{"same boot", [16]byte{1}, true, true},
+		{"another boot", [16]byte{2}, true, false},
+		{"daemon wrote no boot", [16]byte{2}, false, true},
+	} {
+		if !tc.daemonBoot {
+			c.hdr.store(chDaemonBoot, 0)
+			c.hdr.store(chDaemonBoot+8, 0)
+		}
+		s, err := ClaimSlot(dir, testCache, tc.client, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := pin(t, s, &out, &act, KindPutPin); got != tc.wantHonored {
+			t.Errorf("%s: dying %v, want %v", tc.name, got, tc.wantHonored)
+		}
 	}
 }

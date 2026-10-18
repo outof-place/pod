@@ -147,6 +147,37 @@ type Live struct {
 	Records   uint64 `json:"records"`
 	Rereads   uint64 `json:"rereads"`
 	Handshake uint64 `json:"dyingBatches"`
+	// Sessions sums what client sessions reported (live and ended since start).
+	Sessions SessionCounts `json:"sessions"`
+	// PinningPIDs lists live clients holding pins (at most 32).
+	PinningPIDs []PinningProcess `json:"pinningPids,omitempty"`
+	// OverflowSince (unix s): while a live session's log is full, nothing used
+	// since its start is removed outside the emergency tier.
+	OverflowSince int64  `json:"overflowHoldSince,omitempty"`
+	OverflowKept  uint64 `json:"overflowKept,omitempty"`
+	// Repairs counts shared files recreated after they were deleted or
+	// replaced under the daemon; LastRepair says when and what.
+	Repairs      uint64 `json:"repairs,omitempty"`
+	LastRepair   string `json:"lastRepair,omitempty"`
+	ClientsFiles int    `json:"clientsFiles,omitempty"` // mapped, the current one and older ones still in use
+}
+
+// SessionCounts are client sessions' gets and puts, and why sessions went
+// without the shared index (by reason: "ok" used it). Clients report every 32
+// requests and at exit, so live sessions lag a little.
+type SessionCounts struct {
+	FastHits     uint64            `json:"fastHits"`
+	DiskHits     uint64            `json:"diskHits"`
+	Misses       uint64            `json:"misses"`
+	Puts         uint64            `json:"puts"`
+	IndexReasons map[string]uint64 `json:"indexReasons,omitempty"`
+}
+
+// PinningProcess is a client holding pins and the go process it serves.
+type PinningProcess struct {
+	PID   int `json:"pid"`
+	GoPID int `json:"goPid"`
+	Pins  int `json:"pins"`
 }
 
 // Episode is a low-disk episode in progress.

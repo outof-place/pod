@@ -138,6 +138,7 @@ const (
 	chHeartbeat         = 144 // wall ns, informational
 	chActiveGen         = 152 // even: that dying batch is active; odd: none
 	chBatchStart        = 160 // awake-clock ns when the active batch began
+	chDaemonBoot        = 168 // 16 bytes: the adopting daemon's boot; zero from a daemon before it
 )
 
 // Slot header fields (byte offsets within the 256-byte header). Only the
@@ -158,6 +159,7 @@ const (
 	shDiskHits   = 104
 	shMisses     = 112
 	shPuts       = 120
+	shReason     = 128 // why the session goes without the index: Reason+1, 0 not reported
 )
 
 // Slot flags.

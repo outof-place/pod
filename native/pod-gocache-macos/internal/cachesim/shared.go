@@ -19,6 +19,8 @@ type Shared struct {
 	// OnBegin runs right after a dying batch is published, before the
 	// daemon drains: a scenario makes a client act inside the handshake.
 	OnBegin func()
+	// HideOverflow keeps full logs from the daemon (sabotage runs).
+	HideOverflow bool
 
 	open    bool
 	entries map[[32]byte]index.Exact
@@ -31,10 +33,13 @@ type Shared struct {
 }
 
 type simSlot struct {
-	token uint64
-	proc  *Proc
-	recs  []livestate.Record
-	at    []time.Duration // when each record was written (awake)
+	token     uint64
+	proc      *Proc
+	recs      []livestate.Record
+	at        []time.Duration // when each record was written (awake)
+	claimWall int64
+	claimMono int64
+	overflow  bool // the log is full: nothing more is logged
 }
 
 // Shared returns the world's shared-state model, creating it on first use.
@@ -54,11 +59,16 @@ func (s *Shared) Open() error {
 	return nil
 }
 
-func (s *Shared) Close()                { s.open = false }
-func (s *Shared) Where() string         { return "sim" }
-func (s *Shared) Heartbeat(int64)       {}
-func (s *Shared) Crowded() bool         { return false }
-func (s *Shared) Unpublish(id index.ID) { delete(s.entries, id) }
+func (s *Shared) Close()                   { s.open = false }
+func (s *Shared) Where() string            { return "sim" }
+func (s *Shared) Heartbeat(int64)          {}
+func (s *Shared) Crowded() bool            { return false }
+func (s *Shared) Unpublish(id index.ID)    { delete(s.entries, id) }
+func (s *Shared) Sync()                    {}
+func (s *Shared) Check() string            { return "" } // the model's files never change under it
+func (s *Shared) Repair(int) (bool, error) { return false, nil }
+func (s *Shared) Gens() int                { return 1 }
+func (s *Shared) Retire(int)               {}
 
 // Reset starts an empty index, as a daemon start does.
 func (s *Shared) Reset(int) error {
@@ -79,21 +89,24 @@ func (s *Shared) Published(id [32]byte) (index.Exact, bool) {
 	return e, ok
 }
 
-func (s *Shared) Slot(i int, v *livestate.SlotView) bool {
+func (s *Shared) Slot(_, i int, v *livestate.SlotView) bool {
 	sl := &s.slots[i]
-	*v = livestate.SlotView{Token: sl.token, LogLen: uint64(len(sl.recs))}
+	*v = livestate.SlotView{Token: sl.token, LogLen: uint64(len(sl.recs)), ClaimWall: sl.claimWall, ClaimMono: sl.claimMono}
+	if sl.overflow && !s.HideOverflow {
+		v.Flags = livestate.FlagOverflow
+	}
 	if sl.proc != nil {
 		v.PID = int(sl.proc.PID)
 	}
 	return true
 }
 
-func (s *Shared) Alive(i int) bool {
+func (s *Shared) Alive(_, i int) bool {
 	p := s.slots[i].proc
 	return p != nil && !p.dead
 }
 
-func (s *Shared) Records(i int, from, to uint64, dst []livestate.Record) ([]livestate.Record, bool) {
+func (s *Shared) Records(_, i int, from, to uint64, dst []livestate.Record) ([]livestate.Record, bool) {
 	return append(dst, s.slots[i].recs[from:to]...), true
 }
 
@@ -122,7 +135,7 @@ func (s *Shared) claim(p *Proc) {
 		sl := &s.slots[i]
 		if sl.proc == nil || sl.proc.dead {
 			s.token++
-			*sl = simSlot{token: s.token, proc: p}
+			*sl = simSlot{token: s.token, proc: p, claimWall: s.W.WallNs(), claimMono: int64(s.W.mono)}
 			p.slot, p.seen = i, map[uint64]bool{}
 			return
 		}
@@ -137,13 +150,23 @@ func (s *Shared) pin(p *Proc, out, action [32]byte, kind uint64) bool {
 		return false
 	}
 	o := index.Prefix(out)
-	if !p.seen[o] || kind&0xff >= livestate.KindPutStored || kind&0xff00 != 0 {
+	if s.slots[p.slot].overflow {
+		// Logged nothing: the daemon cannot see this pin.
+	} else if !p.seen[o] || kind&0xff >= livestate.KindPutStored || kind&0xff00 != 0 {
 		p.seen[o] = true
 		sl := &s.slots[p.slot]
 		sl.recs = append(sl.recs, livestate.Record{Out: o, Action: index.Prefix(action), Kind: uint8(kind), Flags: uint16(kind & 0xff00)})
 		sl.at = append(sl.at, s.W.mono)
 	}
 	return s.active && s.dying[o] && s.W.mono-s.batchAt < livestate.BatchLife
+}
+
+// Overflow fills p's log: from now on its pins are not logged, as a real
+// client's are not once its slot's log is full.
+func (s *Shared) Overflow(p *Proc) {
+	if p.slot >= 0 {
+		s.slots[p.slot].overflow = true
+	}
 }
 
 // pinnedBy reports whether a live client pinned output prefix o less than

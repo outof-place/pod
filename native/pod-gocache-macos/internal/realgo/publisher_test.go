@@ -12,15 +12,18 @@ import (
 	"time"
 
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/daemon"
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/evict"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/ownerstate"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/trace"
 )
 
-// publisher is a daemon in observe mode publishing shared state for one
-// cache, in this test process (go's clients are other processes), with its
-// own state and live directories and tick lengths a test can wait for.
-// It stays out of the background band: at load 130 a background thread
-// published nothing for a minute, and these tests wait for it.
+// publisher is a daemon owning one test cache and publishing shared state
+// for it (only the owner publishes), in this test process (go's clients are
+// other processes), with its own state and live directories and tick
+// lengths a test can wait for. Its budget and free disk are so large that it
+// never removes anything. It stays out of the background band: at load 130 a
+// background thread published nothing for a minute, and these tests wait
+// for it.
 type publisher struct {
 	state string
 	stop  func()
@@ -30,9 +33,12 @@ type publisher struct {
 func startPublisher(t *testing.T, ce cacheEnv) *publisher {
 	t.Helper()
 	p := &publisher{state: filepath.Join(filepath.Dir(ce.live), "state"), done: make(chan int, 1)}
+	ownMode(t, p.state)
 	ctx, cancel := context.WithCancel(context.Background())
+	limits := evict.Defaults()
+	limits.Budget = 1 << 50
 	cfg := daemon.Config{
-		CacheDir: ce.gocache, StateDir: p.state, LiveRoot: ce.live, Version: "realgo", ObserveOnly: true,
+		CacheDir: ce.gocache, StateDir: p.state, LiveRoot: ce.live, Version: "realgo", Limits: limits, Disk: plentyOfDisk{},
 		Tick: 20 * time.Millisecond, HeartbeatEvery: 50 * time.Millisecond, IdleRelist: 20 * time.Millisecond,
 		PressureRelist: 20 * time.Millisecond, ScanBudget: 500 * time.Millisecond, RestatCycle: 2 * time.Second,
 		PressureRestat: 2 * time.Second, PlanEvery: time.Second, ProcEvery: time.Second, Log: io.Discard,
@@ -55,16 +61,33 @@ type foreground struct{}
 
 func (foreground) Background(bool) {}
 
+// plentyOfDisk keeps the publisher out of every low-disk tier.
+type plentyOfDisk struct{}
+
+func (plentyOfDisk) Free() (int64, error) { return 1 << 50, nil }
+
+// ownMode writes mode=owner into a state directory.
+func ownMode(t *testing.T, state string) {
+	t.Helper()
+	if err := os.MkdirAll(state, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(state, ownerstate.ModeFile), []byte("owner"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func skewed() bool {
 	return os.Getenv("POD_GOCACHE_DAEMON_BIN") != "" || os.Getenv("POD_GOCACHE_CLIENT_BIN") != ""
 }
 
-// startDaemonBin runs another daemon build on the cache in observe mode, with
-// its own state directory and a throwaway HOME.
+// startDaemonBin runs another daemon build owning the cache (S9 builds
+// publish only as owner), with its own state directory and a throwaway HOME.
 func startDaemonBin(t *testing.T, bin string, ce cacheEnv) {
 	t.Helper()
 	root := filepath.Dir(ce.live)
-	cmd := exec.Command(bin, "daemon", "--cache-dir", ce.gocache, "--state-dir", filepath.Join(root, "other-state"), "--mode", "observe")
+	ownMode(t, filepath.Join(root, "other-state"))
+	cmd := exec.Command(bin, "daemon", "--cache-dir", ce.gocache, "--state-dir", filepath.Join(root, "other-state"))
 	cmd.Env = append(os.Environ(), "HOME="+filepath.Join(root, "other-home"))
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)

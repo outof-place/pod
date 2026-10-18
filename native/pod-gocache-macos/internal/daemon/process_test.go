@@ -87,7 +87,10 @@ func helperDaemon() int {
 		}
 	}
 	if h.KillAfterInner {
-		cfg.AfterInnerUnlink = func() { syscall.Kill(os.Getpid(), syscall.SIGKILL) }
+		cfg.AfterInnerUnlink = func() {
+			syscall.Kill(os.Getpid(), syscall.SIGKILL)
+			select {} // the kill can land after the loop went on to the next unlink
+		}
 	}
 	if h.CrashAfter > 0 {
 		go func() {
@@ -416,26 +419,36 @@ func TestLogRotation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	p := spawnHelper(t, helperCfg{CacheDir: cache, StateDir: state, Free: 50e9, LogMax: 2048}, f)
+	p := spawnHelper(t, helperCfg{CacheDir: cache, StateDir: state, Free: 50e9, LogMax: 512}, f)
 	waitOwner(t, state, p.cmd.Process.Pid)
-	// Each switch logs a line; flip until the log passes LogMax and rotates
-	// (a loaded machine notices fewer switches per second).
-	deadline := time.Now().Add(30 * time.Second)
-	for i := 0; i < 60 || (!exists(logPath+".1") && time.Now().Before(deadline)); i++ {
+	// LogMax is a few lines: the startup lines and a switch or two rotate the
+	// log. Flip until a line lands in the new daemon.log; a loaded machine's
+	// daemon notices few switches per second.
+	wroteAfter := false
+	for i, deadline := 0, time.Now().Add(30*time.Second); !wroteAfter && time.Now().Before(deadline); i++ {
 		setMode(t, state, []string{"owner", "observe"}[i%2])
 		time.Sleep(40 * time.Millisecond)
+		st, err := os.Stat(logPath)
+		wroteAfter = err == nil && st.Size() > 0 && exists(logPath+".1")
 	}
 	p.term(t)
-	old, err := os.Stat(logPath + ".1")
+	if !wroteAfter {
+		t.Fatal("the log never rotated with the daemon writing to the new daemon.log")
+	}
+	old, err := os.ReadFile(logPath + ".1")
 	if err != nil {
 		t.Fatalf("no daemon.log.1: %v", err)
 	}
 	cur, _ := os.ReadFile(logPath)
-	if old.Size() < 2048 || len(cur) == 0 || len(cur) > 2048+400 {
-		t.Errorf("daemon.log.1 %d bytes, daemon.log %d bytes", old.Size(), len(cur))
+	if len(old) < 512 || len(cur) > 512+400 {
+		t.Errorf("daemon.log.1 %d bytes, daemon.log %d bytes", len(old), len(cur))
 	}
-	if !strings.Contains(string(cur), "stop evicted=") {
-		t.Errorf("the daemon stopped writing after rotating: %q", cur)
+	last := cur
+	if len(cur) == 0 {
+		last = old // the shutdown line itself crossed LogMax
+	}
+	if !strings.Contains(string(last), "stop evicted=") {
+		t.Errorf("no shutdown line: daemon.log %q", cur)
 	}
 }
 

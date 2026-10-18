@@ -23,6 +23,12 @@ type core struct {
 	live *live // state shared with clients (S9)
 	pid  int
 	bg   bool // the loop's thread is in the background band now
+	// lagging says why the loop works outside the background band ("" when
+	// it keeps up): at load 60-130 a background thread indexed nothing for
+	// minutes and missed its eviction slots.
+	lagging     string
+	indexTicks  int  // ticks spent on the initial index so far
+	evictBehind bool // the last batch left planned work undone
 
 	startWall time.Time
 	startMono time.Duration
@@ -89,6 +95,7 @@ type core struct {
 	vanished      int64 // index.Vanished last seen
 	vanishedAt    time.Time
 	boot          int64 // kern.boottime, unix us
+	noGrace       bool  // rebooted since the last state.json: no start grace
 	refusedLogged map[string]bool
 	futureLogged  map[string]bool
 	lastFullAt    time.Time
@@ -124,13 +131,23 @@ func newCore(cfg Config, log *Logger) *core {
 	c.fs = pacedFS{FS: cfg.FS, pulse: c.pulse}
 	c.idx = index.New(c.fs)
 	c.live = newLive(cfg.Shared, cfg.PinExpiry, cfg.PinCap)
+	if f, ok := cfg.Shared.(*fileShared); ok && f.logf == nil {
+		f.logf = log.Printf
+	}
 	c.startWall, c.startMono = cfg.Clock.Wall(), cfg.Clock.Mono()
 	c.wall, c.mono = c.startWall, c.startMono
 	c.boot = cfg.Clock.Boot()
 	c.jumps.observe(c.startWall.UnixNano(), c.startMono, cfg.JumpTolerance)
 	// Sleeps seen by the previous run, or missed while none ran, still count;
 	// after a reboot none do, since no go process survives one.
-	if prev, ok := cfg.Sink.Previous(); ok && prev.CacheDir == cfg.CacheDir {
+	prev, hadPrev := cfg.Sink.Previous()
+	// No go process survives a reboot, so the start grace (time for builds the
+	// daemon cannot see to show their use) has nothing to protect.
+	if hadPrev && rebooted(prev.Extra.BootTimeUs, c.boot) {
+		c.noGrace = true
+		log.Printf("reboot since the last run: no start grace")
+	}
+	if hadPrev && prev.CacheDir == cfg.CacheDir {
 		if rebooted(prev.Extra.BootTimeUs, c.boot) {
 			log.Printf("reboot since the last run: no sleep credit carried over")
 		} else {
@@ -188,10 +205,42 @@ func (c *core) pulse() {
 	}
 }
 
-// prio moves the loop's thread in or out of the background band.
+// prio moves the loop's thread in or out of the background band; a loop
+// that fell behind stays out.
 func (c *core) prio(bg bool) {
+	bg = bg && c.lagging == ""
 	c.bg = bg
 	c.cfg.Prio.Background(bg)
+}
+
+// lagIndexTicks is how many ticks the initial index may take in the
+// background band (about 30 s at the default tick).
+var lagIndexTicks = 15 // a var so the CPU-loaded rig can measure the band alone
+
+// updateLag decides whether the loop has fallen behind: the initial index
+// still incomplete after lagIndexTicks, the last batch cut short with work
+// left, or the cache over budget with removals planned. It goes back to the
+// background band once none holds.
+func (c *core) updateLag() {
+	why := ""
+	switch {
+	case !c.idx.Complete() && c.indexTicks >= lagIndexTicks:
+		why = "indexing for " + strconv.Itoa(c.indexTicks) + " ticks"
+	case c.mode != ownerstate.ModeOwner || !c.idx.Complete() || c.inGrace() || c.episode.Paused(c.mono):
+	case c.evictBehind:
+		why = "the last eviction batch left work undone"
+	case c.idx.Size() > c.limits().Budget && c.plan.Bytes > 0:
+		why = "over budget with " + gb(c.plan.Bytes) + " to remove"
+	}
+	if (why == "") != (c.lagging == "") {
+		if why != "" {
+			c.log.Printf("loop behind (%s): out of the background band", why)
+		} else {
+			c.log.Printf("loop caught up: background band again")
+		}
+		c.changed = true
+	}
+	c.lagging = why
 }
 
 // scanMore reports whether this tick's scan budget has time left.
@@ -218,9 +267,11 @@ func (c *core) tick() time.Duration {
 	c.updateMode()
 	if !c.wroteOnce {
 		c.idx.CheckRoot()
+		c.followRoot()  // the baseline root: a replacement later in this tick still counts
 		c.writeStatus() // owner.json within a second of start, before indexing
 	}
 	full := c.tier.FullSpeed()
+	c.updateLag()
 	indexed := c.indexWork(full)
 	c.followRoot()
 	c.liveStep()
@@ -234,6 +285,7 @@ func (c *core) tick() time.Duration {
 	more := false
 	if c.mode == ownerstate.ModeOwner && c.idx.Complete() && !c.stopping() {
 		more = c.execute(full)
+		c.evictBehind = more
 		c.normalizeFuture()
 		c.sweepTemps()
 		c.followRoot()
@@ -265,6 +317,7 @@ func (c *core) followRoot() {
 	}
 	first := c.rootGen == 0
 	c.rootGen = g
+	c.lockTryAt = 0 // a directory that appeared or was replaced gets its lock tried on the next tick
 	if first {
 		return
 	}
@@ -323,8 +376,10 @@ func (c *core) indexWork(full bool) (indexed bool) {
 	c.prio(!full)
 	defer c.prio(false)
 	if !c.idx.Complete() {
+		c.indexTicks++
 		before := c.idx.Progress()
 		if c.idx.IndexStep(c.scanMore) {
+			c.indexTicks = 0
 			c.lastFullAt = c.wall
 			c.relistAt, c.restatAt = c.mono, c.mono
 			c.log.Printf("indexed entries=%d size=%s unmanaged=%s", c.idx.Entries(), gb(c.idx.Size()), gb(c.idx.UnmanagedBytes()))
@@ -465,8 +520,9 @@ func (c *core) room() int64 {
 
 // inGrace: no deletions for Window after start while free disk >= DiskFloor
 // or unknown (amendment 3, D2). Awake time, so a sleep doesn't shorten it.
+// None after a reboot since the last state.json.
 func (c *core) inGrace() bool {
-	return (!c.freeOK || c.free >= c.limits().DiskFloor) && c.mono-c.startMono < c.limits().Window
+	return !c.noGrace && (!c.freeOK || c.free >= c.limits().DiskFloor) && c.mono-c.startMono < c.limits().Window
 }
 
 func (c *core) graceUntil() int64 {

@@ -61,9 +61,14 @@ type Client struct {
 	// wait is what is left of the session's budget for waiting on a dying
 	// batch (a put replacing an output the daemon is deleting).
 	wait time.Duration
-	// Session counts, for the trace.
-	Fast, Disk, Stale, DyingMisses, DyingPuts uint64
+	// Session counts, for the trace; the slot carries the first four.
+	Fast, Disk, Misses, Puts, Stale, DyingMisses, DyingPuts uint64
+	requests                                                uint64
 }
+
+// reportEvery is how many requests go by between two reports of the
+// counters into the slot: the daemon's status may lag by that much.
+const reportEvery = 32
 
 // WaitBudget bounds a session's total wait on the daemon.
 const WaitBudget = 50 * time.Millisecond
@@ -90,6 +95,7 @@ func OpenClient(gocache string, goPID int) *Client {
 	if c.slot, err = ClaimSlot(c.dir, c.id, BootID(), goPID); err != nil {
 		c.Pins = reasonFor(err)
 	}
+	c.report()
 	return c
 }
 
@@ -125,6 +131,7 @@ func (c *Client) reopen() {
 	c.idx = next
 	if err != nil {
 		c.Index = reasonFor(err)
+		c.report()
 	}
 }
 
@@ -134,6 +141,7 @@ func (c *Client) dropIndex(r Reason) {
 		c.idx = nil
 	}
 	c.Index = r
+	c.report()
 }
 
 // Pin logs out as handed to go and reports whether the daemon is deleting
@@ -172,9 +180,16 @@ func (c *Client) Nap(d time.Duration) bool {
 	return true
 }
 
-// Count bumps a slot counter (CountFastHit, ...).
-func (c *Client) Count(field int) {
-	if c.slot != nil && !protect(func() { c.slot.Count(field) }) {
+// Note counts one request and every reportEvery requests publishes the
+// session's counters and index reason into the slot.
+func (c *Client) Note() {
+	if c.requests++; c.requests%reportEvery == 0 {
+		c.report()
+	}
+}
+
+func (c *Client) report() {
+	if c.slot != nil && !protect(func() { c.slot.Report(c.Fast, c.Disk, c.Misses, c.Puts, c.Index) }) {
 		c.slot, c.Pins = nil, ReasonFault
 	}
 }
@@ -188,6 +203,7 @@ func (c *Client) Overflowed() bool { return c.slot != nil && c.slot.Overflowed()
 // Close marks the slot closed. The slot's lock is released when the process
 // exits, which is when the daemon stops counting its pins.
 func (c *Client) Close() {
+	c.report()
 	if c.slot != nil {
 		c.slot.Close()
 	}

@@ -374,3 +374,36 @@ func TestLockDir(t *testing.T) {
 		t.Errorf("locking wrote into the cache dir: %d -> %d names", len(before), len(after))
 	}
 }
+
+// A put that renames a fresh copy over an output right after the daemon's
+// check (its link-only wait ran out) must keep its file: the removal takes
+// away only the file it checked and puts the fresh copy back under its name.
+func TestRemoveIfIdleKeepsAFileRenamedOverAfterTheCheck(t *testing.T) {
+	dir, c := cache(t)
+	rel := "ab/" + hex64 + "-d"
+	path := filepath.Join(dir, rel)
+	old := write(t, path, 100, 3*time.Hour)
+	fresh := filepath.Join(dir, "ab", store.TempPrefix+"1.1")
+	write(t, fresh, 100, 0)
+	beforeRemove = func(string) {
+		if err := os.Rename(fresh, path); err != nil {
+			t.Error(err)
+		}
+	}
+	defer func() { beforeRemove = nil }()
+	out, _, err := c.RemoveIfIdle(rel, old.Ino, time.Now().Add(-time.Hour).UnixNano())
+	if err != nil || out != Replaced {
+		t.Errorf("outcome %v %v, want Replaced", out, err)
+	}
+	var st syscall.Stat_t
+	if err := syscall.Lstat(path, &st); err != nil {
+		t.Fatalf("the fresh output was removed: %v", err)
+	}
+	if st.Ino == old.Ino {
+		t.Error("the old output is back")
+	}
+	names, _ := os.ReadDir(filepath.Join(dir, "ab"))
+	if len(names) != 1 {
+		t.Errorf("bucket holds %d names, want only the output", len(names))
+	}
+}

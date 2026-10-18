@@ -62,19 +62,20 @@ func TestSharedFieldsAligned(t *testing.T) {
 		"chRecordSize": chRecordSize, "chDyingOffset": chDyingOffset, "chDyingEntries": chDyingEntries,
 		"chCacheDev": chCacheDev, "chCacheIno": chCacheIno, "chCreated": chCreated, "chBootID": chBootID,
 		"chDaemonPID": chDaemonPID, "chDaemonStart": chDaemonStart, "chHeartbeat": chHeartbeat, "chActiveGen": chActiveGen,
+		"chBatchStart": chBatchStart, "chDaemonBoot": chDaemonBoot,
 		"dyingOffset": dyingOffset, "dyingEntrySize": dyingEntrySize, "slotHeadersOffset": slotHeadersOffset,
 		"slotHeaderSize": slotHeaderSize, "logsOffset": logsOffset, "recordSize": recordSize,
 		"shPID": shPID, "shGoPID": shGoPID, "shClaimMono": shClaimMono, "shClaimWall": shClaimWall,
 		"shClosedMono": shClosedMono, "shLogLen": shLogLen, "shFlags": shFlags, "shBootID": shBootID,
 		"shCacheDev": shCacheDev, "shCacheIno": shCacheIno, "shFastHits": shFastHits, "shDiskHits": shDiskHits,
-		"shMisses": shMisses, "shPuts": shPuts,
+		"shMisses": shMisses, "shPuts": shPuts, "shReason": shReason,
 	}
 	for name, off := range offsets {
 		if off%8 != 0 {
 			t.Errorf("%s = %d is not 8-byte aligned", name, off)
 		}
 	}
-	if (isMtime+1)*8 > idxSlotSize || shPuts+8 > slotHeaderSize || chActiveGen+8 > cliHeaderSize {
+	if (isMtime+1)*8 > idxSlotSize || shReason+8 > slotHeaderSize || chDaemonBoot+16 > cliHeaderSize {
 		t.Error("a field runs past its block")
 	}
 	if dyingOffset+dyingEntries*dyingEntrySize > slotHeadersOffset || slotHeadersOffset+SlotCount*slotHeaderSize > logsOffset {
@@ -438,5 +439,32 @@ func TestClientFollowsRebuild(t *testing.T) {
 	w2.Put(&a, &ea2)
 	if !c.Lookup(&a, &got) || got != ea2 {
 		t.Fatalf("client did not move to the rebuilt index: %+v", got)
+	}
+}
+
+// Gate fix 10: the informational live count is written once per publishing
+// round (SyncLive), not on every put and delete.
+func TestLiveCountWrittenOncePerRound(t *testing.T) {
+	w, err := CreateIndex(t.TempDir(), testCache, idxMinSlots, 1, [16]byte{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	for i := range 10 {
+		id := idOf("live" + string(rune('a'+i)))
+		w.Put(&id, &Entry{Size: 1})
+	}
+	if got := w.r.load(ihLive); got != 0 {
+		t.Fatalf("live count %d written before the round ended", got)
+	}
+	w.SyncLive()
+	if got := w.r.load(ihLive); got != 10 {
+		t.Fatalf("live count %d after the round, want 10", got)
+	}
+	id := idOf("livea")
+	w.Delete(&id)
+	w.SyncLive()
+	if got := w.r.load(ihLive); got != 9 {
+		t.Fatalf("live count %d after a delete, want 9", got)
 	}
 }

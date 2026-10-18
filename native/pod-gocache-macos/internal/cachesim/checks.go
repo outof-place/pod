@@ -76,7 +76,7 @@ func (w *World) processWindow() time.Duration {
 func (w *World) checkRemoval(rel string, f, in *file) {
 	w.checkMode("remove " + rel)
 	free := w.freeSamples[1]
-	if free >= w.L.DiskFloor && w.mono-w.daemonStart < w.L.Window {
+	if !w.graceSkipped && free >= w.L.DiskFloor && w.mono-w.daemonStart < w.L.Window {
 		w.violate("removed %s inside the start grace (free %d)", rel, free)
 	}
 	win := w.legalWindow()
@@ -278,6 +278,7 @@ func (s *Sink) WriteOwner(o ownerstate.Owner) error {
 }
 
 func (s *Sink) WriteState(st ownerstate.State) error {
+	s.W.lastStateBoot = st.Extra.BootTimeUs
 	if !s.wrote {
 		s.First = st
 	}
@@ -288,7 +289,10 @@ func (s *Sink) WriteState(st ownerstate.State) error {
 func (s *Sink) Previous() (ownerstate.State, bool) { return s.Last, s.wrote }
 
 // Restore makes st the state.json a previous run left behind.
-func (s *Sink) Restore(st ownerstate.State) { s.First, s.Last, s.wrote = st, st, true }
+func (s *Sink) Restore(st ownerstate.State) {
+	s.First, s.Last, s.wrote = st, st, true
+	s.W.lastStateBoot = st.Extra.BootTimeUs
+}
 
 // Prio records whether eviction ran throttled.
 type Prio struct{ W *World }

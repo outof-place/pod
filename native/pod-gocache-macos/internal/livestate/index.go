@@ -152,6 +152,8 @@ type IndexWriter struct {
 	where map[[32]byte]uint32 // live IDs -> slot
 	used  int                 // slots ever written: live and deleted
 	Full  int                 // inserts refused: no free slot within maxProbe
+	id    FileID              // the file as created
+	live  int                 // ihLive as last written
 }
 
 // CreateIndex writes a new, empty index for cache id with slots slots (a
@@ -171,11 +173,11 @@ func createIndex(dir string, id CacheID, slots int, generation uint64, boot [16]
 	size := idxHeaderSize + slots*idxSlotSize
 	tmp := filepath.Join(dir, ".index."+strconv.Itoa(os.Getpid())+"."+strconv.FormatUint(generation, 10))
 	syscall.Unlink(tmp)
-	b, err := createZeroed(tmp, size)
+	b, fid, err := createZeroed(tmp, size)
 	if err != nil {
 		return nil, err
 	}
-	w := &IndexWriter{dir: dir, b: b, r: region{b}, mask: uint64(slots - 1), seed: seed, where: map[[32]byte]uint32{}}
+	w := &IndexWriter{dir: dir, b: b, r: region{b}, mask: uint64(slots - 1), seed: seed, where: map[[32]byte]uint32{}, id: fid}
 	ok := protect(func() {
 		copy(b[ihMagic:], idxMagic)
 		h := w.r
@@ -227,22 +229,69 @@ func supersedable(path string) ([]byte, error) {
 
 // createZeroed creates path (0600, failing if it exists), fills size bytes
 // of zeros and maps it read-write.
-func createZeroed(path string, size int) ([]byte, error) {
+func createZeroed(path string, size int) ([]byte, FileID, error) {
 	fd, err := syscall.Open(path, syscall.O_RDWR|syscall.O_CREAT|syscall.O_EXCL|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0o600)
 	if err != nil {
-		return nil, err
+		return nil, FileID{}, err
 	}
 	defer syscall.Close(fd)
 	if err := zeroFill(fd, 0, size); err != nil {
 		syscall.Unlink(path)
-		return nil, err
+		return nil, FileID{}, err
+	}
+	fid, err := fdIdentity(fd)
+	if err != nil {
+		syscall.Unlink(path)
+		return nil, FileID{}, err
 	}
 	b, err := mapShared(fd, 0, size, true)
 	if err != nil {
 		syscall.Unlink(path)
 	}
-	return b, err
+	return b, fid, err
 }
+
+// FileID is what tells a mapped file apart from whatever its path names now.
+type FileID struct {
+	Dev, Ino uint64
+	Size     int64
+}
+
+func fdIdentity(fd int) (FileID, error) {
+	var st syscall.Stat_t
+	if err := syscall.Fstat(fd, &st); err != nil {
+		return FileID{}, err
+	}
+	return FileID{Dev: uint64(uint32(st.Dev)), Ino: st.Ino, Size: st.Size}, nil
+}
+
+// PathIs compares what path names now (lstat) with id: nil when it is the
+// same file at the same size, else why not (ENOENT when it is gone).
+func PathIs(path string, id FileID) error {
+	var st syscall.Stat_t
+	for {
+		err := syscall.Lstat(path, &st)
+		if err == syscall.EINTR {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		break
+	}
+	switch {
+	case uint64(uint32(st.Dev)) != id.Dev || st.Ino != id.Ino:
+		return errReplaced
+	case st.Size != id.Size:
+		return errResized
+	}
+	return nil
+}
+
+var (
+	errReplaced = errors.New("replaced by another file")
+	errResized  = errors.New("size changed under the mapping")
+)
 
 func zeroFill(fd, off, n int) error {
 	zeros := make([]byte, 1<<20)
@@ -258,6 +307,27 @@ func zeroFill(fd, off, n int) error {
 		off, n = off+m, n-m
 	}
 	return nil
+}
+
+// Identity is the file as the writer created it.
+func (w *IndexWriter) Identity() FileID { return w.id }
+
+// Path is where the writer published its file.
+func (w *IndexWriter) Path() string { return filepath.Join(w.dir, IndexName) }
+
+// Supersede tells readers of this file to move to the published one: for a
+// file the daemon replaced after it was deleted or replaced under it.
+func (w *IndexWriter) Supersede() {
+	if w.b != nil {
+		protect(func() { w.r.store(ihSuperseded, 1) })
+	}
+}
+
+// SyncLive writes the live entry count (informational) when it changed.
+func (w *IndexWriter) SyncLive() {
+	if n := len(w.where); n != w.live && w.b != nil && protect(func() { w.r.store(ihLive, uint64(n)) }) {
+		w.live = n
+	}
 }
 
 // Close unmaps the file. The file stays published.
@@ -329,9 +399,6 @@ func (w *IndexWriter) Put(id *[32]byte, e *Entry) bool {
 	if !placed {
 		w.Full++
 	}
-	if ok {
-		protect(func() { w.r.store(ihLive, uint64(len(w.where))) })
-	}
 	return ok && placed
 }
 
@@ -342,8 +409,5 @@ func (w *IndexWriter) Delete(id *[32]byte) {
 		return
 	}
 	delete(w.where, *id)
-	protect(func() {
-		w.writeSlot(i, slotDeleted, nil, nil)
-		w.r.store(ihLive, uint64(len(w.where)))
-	})
+	protect(func() { w.writeSlot(i, slotDeleted, nil, nil) })
 }

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -115,6 +116,19 @@ func TestRootReplacedMovesTheLock(t *testing.T) {
 	os.Mkdir(dir, 0o777)
 	putEntry(t, dir, 1000, 0)
 	cfg := fastConfig(t, dir, 50_000_000_000)
+	// Watch the daemon's own lock calls: probing dir with flock while the
+	// daemon tries it would fail its try and push the retry a minute out.
+	var takes atomic.Int32
+	var holding atomic.Bool
+	cfg.OwnerLock = func() (func(), bool, error) {
+		release, held, err := cachefs.LockDir(dir)
+		if err != nil || !held {
+			return release, held, err
+		}
+		takes.Add(1)
+		holding.Store(true)
+		return func() { holding.Store(false); release() }, true, nil
+	}
 	setMode(t, cfg.StateDir, "owner")
 	stop := startRun(t, cfg)
 	waitFor(t, 3*time.Minute, "owner mode", func() bool { return readState(t, cfg.StateDir).Mode == ownerstate.ModeOwner })
@@ -124,6 +138,9 @@ func TestRootReplacedMovesTheLock(t *testing.T) {
 	}
 	os.Mkdir(dir, 0o777)
 	putEntry(t, dir, 1000, 0)
+	waitFor(t, 3*time.Minute, "the lock let go and taken again on the new directory", func() bool {
+		return takes.Load() >= 2 && holding.Load()
+	})
 	lockable := func(p string) bool {
 		release, held, err := cachefs.LockDir(p)
 		if err == nil && held {
@@ -131,9 +148,9 @@ func TestRootReplacedMovesTheLock(t *testing.T) {
 		}
 		return err == nil && held
 	}
-	waitFor(t, 3*time.Minute, "the old directory's lock released and the new one's taken", func() bool {
-		return lockable(old) && !lockable(dir)
-	})
+	if !lockable(old) || lockable(dir) {
+		t.Errorf("old directory lockable %v, new directory lockable %v; want the lock moved to the new one", lockable(old), lockable(dir))
+	}
 	stop()
 }
 

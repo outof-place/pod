@@ -6,8 +6,13 @@ import (
 	"io/fs"
 	"os"
 	"slices"
+	"strconv"
+	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/store"
 )
 
 // OS is a GOCACHE directory on disk. Reads use plain lstat/open on full paths
@@ -159,6 +164,13 @@ func (c *OS) RemoveIfIdle(rel string, ino uint64, cutoff int64) (Outcome, Stat, 
 	case RecencyOf(rel, st) >= cutoff:
 		return Fresh, st, nil
 	}
+	if beforeRemove != nil {
+		beforeRemove(rel)
+	}
+	if strings.HasSuffix(rel, "-d") {
+		// Only an output file can be renamed over by a put after the check.
+		return c.removeChecked(r, rel, ino, cutoff, st)
+	}
 	if err := r.Remove(rel); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return Gone, st, nil
@@ -166,6 +178,53 @@ func (c *OS) RemoveIfIdle(rel string, ino uint64, cutoff int64) (Outcome, Stat, 
 		return Refused, st, err
 	}
 	return Removed, st, nil
+}
+
+// beforeRemove runs between RemoveIfIdle's check and its removal (tests).
+var beforeRemove func(rel string)
+
+var privateSeq atomic.Uint64
+
+// removeChecked takes whatever rel names now away under a private name in
+// its bucket (a client temp name, so a crash leaves something the sweep
+// removes), and unlinks it only if it is still the file that was checked. A
+// file put there since the check (a put renaming a fresh copy over a dying
+// output) goes back under rel, unless yet another copy took the name; copies
+// of one output are the same bytes, so either one serves.
+func (c *OS) removeChecked(r *os.Root, rel string, ino uint64, cutoff int64, checked Stat) (Outcome, Stat, error) {
+	bucket, _, _ := strings.Cut(rel, "/")
+	private := bucket + "/" + store.TempPrefix + strconv.Itoa(os.Getpid()) + "." + strconv.FormatUint(privateSeq.Add(1), 10)
+	if err := r.Rename(rel, private); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return Gone, checked, nil
+		}
+		return Refused, checked, err
+	}
+	fi, err := r.Lstat(private)
+	var st Stat
+	if err == nil {
+		if sys, ok := fi.Sys().(*syscall.Stat_t); ok {
+			st = StatFromSys(sys)
+		}
+	}
+	if err == nil && st.Type == Regular && st.Ino == ino && RecencyOf(rel, st) < cutoff {
+		if err := r.Remove(private); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return Refused, st, err
+		}
+		return Removed, st, nil
+	}
+	// Not the file checked, or used since: put it back, never over a newer one.
+	if lerr := r.Link(private, rel); lerr != nil && !errors.Is(lerr, fs.ErrExist) {
+		if rerr := r.Rename(private, rel); rerr != nil {
+			return Refused, st, rerr
+		}
+		return Replaced, st, nil
+	}
+	r.Remove(private)
+	if st.Ino == ino {
+		return Fresh, st, nil
+	}
+	return Replaced, st, nil
 }
 
 func (c *OS) RemoveTemp(rel string, ino uint64, cutoff int64) (Outcome, Stat, error) {

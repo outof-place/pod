@@ -61,7 +61,9 @@ type Clients struct {
 	hdr     region
 	logs    region
 	gen     uint64 // activeGen as last written
-	Adopted bool   // the file was already there (live clients may hold slots)
+	id      FileID
+	path    string
+	Adopted bool // the file was already there (live clients may hold slots)
 }
 
 // OpenClients adopts dir/clients when it is valid for cache id, and otherwise
@@ -72,8 +74,8 @@ type Clients struct {
 func OpenClients(dir string, id CacheID, boot [16]byte) (*Clients, error) {
 	path := filepath.Join(dir, ClientsName)
 	if c, err := adoptClients(path, id); err == nil {
-		c.Adopted = true
-		c.claim()
+		c.Adopted, c.path = true, path
+		c.claim(boot)
 		return c, nil
 	}
 	tmp := filepath.Join(dir, ".clients."+strconv.Itoa(os.Getpid()))
@@ -125,7 +127,8 @@ func OpenClients(dir string, id CacheID, boot [16]byte) (*Clients, error) {
 		syscall.Unlink(tmp)
 		return nil, err
 	}
-	c.claim()
+	c.path = path
+	c.claim(boot)
 	return c, nil
 }
 
@@ -147,6 +150,10 @@ func adoptClients(path string, id CacheID) (*Clients, error) {
 }
 
 func mapClients(fd int) (*Clients, error) {
+	fid, err := fdIdentity(fd)
+	if err != nil {
+		return nil, err
+	}
 	hdr, err := mapShared(fd, 0, logsOffset, true)
 	if err != nil {
 		return nil, err
@@ -156,20 +163,29 @@ func mapClients(fd int) (*Clients, error) {
 		syscall.Munmap(hdr)
 		return nil, err
 	}
-	return &Clients{fd: fd, hdr: region{hdr}, logs: region{logs}}, nil
+	return &Clients{fd: fd, hdr: region{hdr}, logs: region{logs}, id: fid}, nil
 }
 
-// claim records this daemon in the header and clears any dying batch a dead
-// predecessor left active.
-func (c *Clients) claim() {
+// claim records this daemon (and its boot, which dates the batches it
+// starts) in the header and clears any dying batch a dead predecessor left
+// active.
+func (c *Clients) claim(boot [16]byte) {
 	protect(func() {
 		c.gen = c.hdr.load(chActiveGen) | 1
 		c.gen += 2
 		c.hdr.store(chActiveGen, c.gen)
+		c.hdr.store(chDaemonBoot, binary.LittleEndian.Uint64(boot[0:]))
+		c.hdr.store(chDaemonBoot+8, binary.LittleEndian.Uint64(boot[8:]))
 		c.hdr.store(chDaemonPID, uint64(os.Getpid()))
 		c.hdr.store(chDaemonStart, uint64(AwakeNow()))
 	})
 }
+
+// Identity is the file as the daemon mapped it.
+func (c *Clients) Identity() FileID { return c.id }
+
+// Path is where the file was published.
+func (c *Clients) Path() string { return c.path }
 
 // Close unmaps the file and drops the descriptor.
 func (c *Clients) Close() {
@@ -249,6 +265,8 @@ type SlotView struct {
 	DiskHits   uint64
 	Misses     uint64
 	Puts       uint64
+	Reason     Reason // why the session goes without the index
+	Reported   bool   // the client wrote Reason (clients before it did not)
 }
 
 // Slot reads slot i's header. Token is read first: a new owner writes it
@@ -271,6 +289,8 @@ func (c *Clients) Slot(i int, v *SlotView) bool {
 		v.Cache = CacheID{Dev: h.load(o + shCacheDev), Ino: h.load(o + shCacheIno)}
 		v.FastHits, v.DiskHits = h.load(o+shFastHits), h.load(o+shDiskHits)
 		v.Misses, v.Puts = h.load(o+shMisses), h.load(o+shPuts)
+		r := h.load(o + shReason)
+		v.Reported, v.Reason = r != 0, Reason(max(r, 1)-1)
 	})
 }
 
@@ -315,6 +335,7 @@ type Slot struct {
 	off       int // this slot's header offset in hdr
 	n         uint64
 	claimMono int64
+	boot      [2]uint64
 	seen      prefixSet
 	overflow  bool
 }
@@ -357,7 +378,8 @@ func ClaimSlot(dir string, id CacheID, boot [16]byte, goPID int) (*Slot, error) 
 	}
 	var tok [8]byte
 	rand.Read(tok[:])
-	s := &Slot{fd: fd, hdr: region{hdr}, log: region{log}, off: slotHeadersOffset + slot*slotHeaderSize, claimMono: AwakeNow()}
+	s := &Slot{fd: fd, hdr: region{hdr}, log: region{log}, off: slotHeadersOffset + slot*slotHeaderSize, claimMono: AwakeNow(),
+		boot: [2]uint64{binary.LittleEndian.Uint64(boot[0:]), binary.LittleEndian.Uint64(boot[8:])}}
 	ok := protect(func() {
 		h, o := s.hdr, s.off
 		h.store(o+shLogLen, 0)
@@ -371,7 +393,7 @@ func ClaimSlot(dir string, id CacheID, boot [16]byte, goPID int) (*Slot, error) 
 		h.store(o+shBootID+8, binary.LittleEndian.Uint64(boot[8:]))
 		h.store(o+shCacheDev, id.Dev)
 		h.store(o+shCacheIno, id.Ino)
-		for _, f := range []int{shFastHits, shDiskHits, shMisses, shPuts} {
+		for _, f := range []int{shFastHits, shDiskHits, shMisses, shPuts, shReason} {
 			h.store(o+f, 0)
 		}
 		h.store(o+shToken, binary.LittleEndian.Uint64(tok[:])|1)
@@ -401,11 +423,15 @@ func (s *Slot) Pin(out, action *[32]byte, kind uint64, size int64) (dying bool) 
 }
 
 // Dying reports whether the output with prefix p is in the active dying
-// batch, unless that batch is older than BatchLife (or from another boot).
-// Call inside protect.
+// batch, unless that batch is older than BatchLife or its daemon ran in
+// another boot (the awake clock restarts at boot, so its age means nothing).
+// A daemon that wrote no boot is trusted on age alone. Call inside protect.
 func (s *Slot) Dying(p uint64) bool {
 	g := s.hdr.load(chActiveGen)
 	if g&1 != 0 {
+		return false
+	}
+	if b0, b1 := s.hdr.load(chDaemonBoot), s.hdr.load(chDaemonBoot+8); (b0 != 0 || b1 != 0) && (s.boot != [2]uint64{} && [2]uint64{b0, b1} != s.boot) {
 		return false
 	}
 	for k := uint64(0); k < dyingEntries; k++ {
@@ -439,16 +465,16 @@ func (s *Slot) append(out, action, kind uint64, size int64) {
 	s.hdr.store(s.off+shLogLen, s.n)
 }
 
-// Count bumps one of the slot's informational counters.
-func (s *Slot) Count(field int) { s.hdr.store(s.off+field, s.hdr.load(s.off+field)+1) }
-
-// Counter fields for Count.
-const (
-	CountFastHit = shFastHits
-	CountDiskHit = shDiskHits
-	CountMiss    = shMisses
-	CountPut     = shPuts
-)
+// Report publishes the session's counters and index reason (informational,
+// for the daemon's status). Call inside protect.
+func (s *Slot) Report(fast, disk, misses, puts uint64, r Reason) {
+	h, o := s.hdr, s.off
+	h.store(o+shFastHits, fast)
+	h.store(o+shDiskHits, disk)
+	h.store(o+shMisses, misses)
+	h.store(o+shPuts, puts)
+	h.store(o+shReason, uint64(r)+1)
+}
 
 // Close marks the slot closed; the lock goes when the process exits.
 func (s *Slot) Close() {

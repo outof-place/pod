@@ -9,6 +9,7 @@ import (
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/evict"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/index"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/livestate"
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/ownerstate"
 )
 
 // Shared is the state the daemon shares with its clients (S9): livestate
@@ -26,13 +27,25 @@ type Shared interface {
 	Unpublish(id index.ID)
 	Crowded() bool
 	IndexStats() (entries, slots, full int)
-	// Slot reads client slot i's header. Alive asks the OS whether the slot's
-	// holder lives: the claim is a lock that goes with the process.
-	Slot(i int, v *livestate.SlotView) bool
-	Alive(i int) bool
-	Records(i int, from, to uint64, dst []livestate.Record) ([]livestate.Record, bool)
-	// BeginDying publishes the outputs about to be removed; EndDying
-	// retracts them once the removals are done.
+	// Sync writes the index's informational counters, once per round.
+	Sync()
+	// Check reports what changed under the open files ("" for nothing): a
+	// file deleted, replaced or cut short, the directory removed. Repair
+	// puts them back; reindexed means every entry must be published again.
+	Check() string
+	Repair(entries int) (reindexed bool, err error)
+	// Gens is how many clients files are mapped: the last is current, older
+	// ones were deleted or replaced while clients held slots in them.
+	// Retire unmaps older file g.
+	Gens() int
+	Retire(g int)
+	// Slot reads slot i's header in clients file g. Alive asks the OS whether
+	// the slot's holder lives: the claim is a lock that goes with the process.
+	Slot(g, i int, v *livestate.SlotView) bool
+	Alive(g, i int) bool
+	Records(g, i int, from, to uint64, dst []livestate.Record) ([]livestate.Record, bool)
+	// BeginDying publishes the outputs about to be removed, in every clients
+	// file; EndDying retracts them once the removals are done.
 	BeginDying(prefixes []uint64) bool
 	EndDying() bool
 	Heartbeat(wallNs int64)
@@ -44,24 +57,48 @@ var ErrOtherPublisher = errors.New("another daemon publishes shared state for th
 
 // Pin defaults (decisions in the README): a pin lasts at most PinExpiry of
 // awake time after the daemon first saw it, and pins keep at most PinCap
-// bytes; beyond it the pins first taken longest ago stop protecting.
+// bytes, the oldest live session's first; beyond it pins stop protecting.
 const (
 	DefaultPinExpiry = 6 * time.Hour
 	DefaultPinCap    = 10 * evict.GB
 )
 
 type slotState struct {
-	token    uint64
-	cursor   uint64
-	alive    bool
-	pid      int
-	overflow bool
-	pins     map[uint64]time.Duration // output prefix -> awake time first seen
+	token      uint64
+	cursor     uint64
+	alive      bool
+	pid, goPID int
+	claimMono  int64 // the client's claim, awake ns: orders sessions for the pin cap
+	claimWall  int64
+	overflow   bool
+	ended      bool                     // its counts joined the ended sessions'
+	pins       map[uint64]time.Duration // output prefix -> awake time first seen
+	counts     sessionCounts            // as the client last reported them
 }
 
+// sessionCounts are what a client reports in its slot (informational).
+type sessionCounts struct {
+	fast, disk, misses, puts uint64
+	reason                   livestate.Reason
+	reported                 bool
+}
+
+func (a *sessionCounts) add(b sessionCounts) {
+	a.fast, a.disk, a.misses, a.puts = a.fast+b.fast, a.disk+b.disk, a.misses+b.misses, a.puts+b.puts
+}
+
+// slotGen is the daemon's view of one clients file's slots.
+type slotGen struct {
+	slots   [livestate.SlotCount]slotState
+	retired time.Duration // when a newer file replaced it (0: current)
+}
+
+// oldGenGrace keeps an older clients file mapped at least this long after it
+// was replaced: a client that opened it just before may claim a slot late.
+const oldGenGrace = time.Minute
+
 type pin struct {
-	slots  int32         // live slots holding it
-	newest time.Duration // the latest first sighting: how recently a session took it
+	slots int32 // live slots holding it
 }
 
 // live is the daemon's side of the shared state.
@@ -76,7 +113,7 @@ type live struct {
 	expiry  time.Duration
 	cap     int64
 
-	slots    [livestate.SlotCount]slotState
+	gens     []*slotGen // one per mapped clients file, the current one last
 	pins     map[uint64]*pin
 	version  uint64          // bumped whenever the pin set changes
 	capped   map[uint64]bool // pins over the cap at the last plan
@@ -85,14 +122,20 @@ type live struct {
 	expireAt time.Duration
 
 	clients, pinning, overflowed int
+	overflowSince                int64 // wall ns: the oldest overflowed live session's start, 0 none
 	pinnedBytes, overCap         int64
 	records, rereads, batches    uint64
 	skipped                      uint64 // outputs kept because a live client pinned them
-	keepUp                       string
+	overflowKept                 uint64 // removals skipped for an overflowed session
+	repairs                      uint64
+	lastRepair                   string
+	ended                        sessionCounts               // summed over sessions that ended
+	endedReasons                 map[livestate.Reason]uint64 // ended sessions by index reason
 }
 
 func newLive(sh Shared, expiry time.Duration, capBytes int64) *live {
-	return &live{sh: sh, expiry: expiry, cap: capBytes, pins: map[uint64]*pin{}, capped: map[uint64]bool{}, reason: "not started"}
+	return &live{sh: sh, expiry: expiry, cap: capBytes, pins: map[uint64]*pin{}, capped: map[uint64]bool{},
+		endedReasons: map[livestate.Reason]uint64{}, reason: "not started"}
 }
 
 // close unmaps the shared files and releases the publisher lock.
@@ -106,13 +149,29 @@ func (l *live) close() {
 func (l *live) fail(c *core, why string) {
 	if l.open {
 		c.log.Printf("shared state off: %s (retry in 1m; S2 rules alone decide meanwhile)", why)
+	}
+	l.end(c, why, c.mono+time.Minute)
+}
+
+// stop ends sharing without counting it as a failure (owner mode lost).
+func (l *live) stop(c *core, why string) {
+	if l.open {
+		c.log.Printf("shared state off: %s", why)
+	}
+	l.end(c, why, c.mono)
+}
+
+func (l *live) end(c *core, why string, retryAt time.Duration) {
+	if l.open {
 		l.sh.Close()
 	}
-	l.open, l.reason, l.retryAt = false, why, c.mono+time.Minute
-	for i := range l.slots {
-		l.dropSlot(i)
-		l.slots[i] = slotState{}
+	l.open, l.reason, l.retryAt = false, why, retryAt
+	for _, g := range l.gens {
+		for i := range g.slots {
+			l.endSlot(&g.slots[i])
+		}
 	}
+	l.gens = nil
 	c.changed = true
 }
 
@@ -124,17 +183,27 @@ func (c *core) liveStep() {
 	if l.sh == nil {
 		return
 	}
+	if c.mode != ownerstate.ModeOwner {
+		// Only the cache's owner publishes: an observe daemon holding the
+		// publisher lock would keep the owner from removing anything.
+		if l.open || l.reason != notOwner {
+			l.stop(c, notOwner)
+		}
+		return
+	}
 	if l.open && l.rootGen != c.idx.RootGen() {
 		l.fail(c, "cache directory replaced")
 		l.retryAt = c.mono
 	}
 	if !l.open {
-		if c.mono < l.retryAt || !c.idx.RootOK() {
+		if (c.mono < l.retryAt && l.reason != notOwner) || !c.idx.RootOK() {
 			return
 		}
 		if !c.openLive() {
 			return
 		}
+	} else if why := l.sh.Check(); why != "" && !c.repairLive(why) {
+		return
 	}
 	if !l.drain(c, c.mono, true) {
 		return
@@ -164,81 +233,199 @@ func (c *core) openLive() bool {
 		return false
 	}
 	l.open, l.reason, l.other, l.rootGen = true, "", false, c.idx.RootGen()
-	c.idx.TakeChanged(func(index.ID) {})
-	c.idx.EachExact(func(id index.ID, e index.Exact) { l.sh.Publish(id, e) })
+	l.syncGens(c.mono)
+	c.republish()
 	c.log.Printf("shared state at %s", l.sh.Where())
 	c.changed = true
 	return true
 }
 
-// drain reads every slot's new records into pins and hints. full also asks
-// the OS which slots' holders still live; a quick drain (between removals)
-// only reads records of slots already known to be alive.
-func (l *live) drain(c *core, now time.Duration, full bool) bool {
-	var v livestate.SlotView
-	clients, pinning, overflowed := 0, 0, 0
-	for i := range l.slots {
-		st := &l.slots[i]
-		if !full && !st.alive {
-			continue
-		}
-		if !l.sh.Slot(i, &v) {
-			l.fail(c, "client slots unreadable")
-			return false
-		}
-		if v.Token == 0 {
-			l.dropSlot(i)
-			*st = slotState{}
-			continue
-		}
-		if v.Token != st.token || v.LogLen < st.cursor {
-			// A new client, or one still writing its claim: start over.
-			l.dropSlot(i)
-			*st = slotState{token: v.Token}
-		}
-		if full {
-			if !l.sh.Alive(i) {
-				// Ended since the last drain: its pins end with it, its requests
-				// to re-read entries (stale ones, puts) still count.
-				if !l.read(c, i, st, &v, false, now) {
-					return false
-				}
-				l.dropSlot(i)
-				st.alive = false
-				continue
-			}
-			st.alive, st.pid = true, v.PID
-		}
-		if !l.read(c, i, st, &v, true, now) {
-			return false
-		}
-		st.overflow = v.Flags&livestate.FlagOverflow != 0
-		clients++
-		if len(st.pins) > 0 {
-			pinning++
-		}
-		if st.overflow {
-			overflowed++
-		}
+// notOwner is the reason shown while the daemon does not own the cache.
+const notOwner = "observe mode: only the cache's owner shares state with clients"
+
+func (c *core) republish() {
+	l := c.live
+	c.idx.TakeChanged(func(index.ID) {})
+	c.idx.EachExact(func(id index.ID, e index.Exact) { l.sh.Publish(id, e) })
+	l.sh.Sync()
+}
+
+// repairLive puts back shared files deleted or replaced under the daemon.
+// Clients that hold slots in a replaced clients file keep their pins: the
+// old file stays mapped and drained until none of them lives.
+func (c *core) repairLive(why string) bool {
+	l := c.live
+	c.log.Printf("shared state: %s; recreating it", why)
+	l.repairs++
+	l.lastRepair = c.wall.Format("15:04:05") + " " + why
+	c.changed = true
+	reindexed, err := l.sh.Repair(c.idx.Actions())
+	if err != nil {
+		l.fail(c, "repair: "+err.Error())
+		l.other = errors.Is(err, ErrOtherPublisher)
+		return false
 	}
-	if full {
-		l.clients, l.pinning, l.overflowed = clients, pinning, overflowed
+	l.syncGens(c.mono)
+	if reindexed {
+		c.republish()
 	}
 	return true
 }
 
-// take applies one record: a pin on its output, and a re-read of its -a when
-// the client wrote it, refreshed it, or found the index out of date.
+// syncGens follows the Shared's clients files: a new current one is added
+// last, and the previous one starts its retirement.
+func (l *live) syncGens(now time.Duration) {
+	for len(l.gens) < l.sh.Gens() {
+		if n := len(l.gens); n > 0 {
+			l.gens[n-1].retired = now
+		}
+		l.gens = append(l.gens, &slotGen{})
+	}
+}
+
+// retire drops older clients file g: its sessions end for the daemon.
+func (l *live) retire(g int) {
+	for i := range l.gens[g].slots {
+		l.endSlot(&l.gens[g].slots[i])
+	}
+	l.sh.Retire(g)
+	l.gens = slices.Delete(l.gens, g, g+1)
+}
+
+// drain reads every slot's new records into pins and hints, in every
+// clients file mapped. full also asks the OS which slots' holders still
+// live; a quick drain (between removals) only reads records of slots already
+// known to be alive.
+func (l *live) drain(c *core, now time.Duration, full bool) bool {
+	var v livestate.SlotView
+	clients, pinning, overflowed := 0, 0, 0
+	var since int64
+	cur := len(l.gens) - 1
+	for g := cur; g >= 0; g-- {
+		gen := l.gens[g]
+		alive := 0
+		for i := range gen.slots {
+			st := &gen.slots[i]
+			if !full && !st.alive {
+				continue
+			}
+			if !l.sh.Slot(g, i, &v) {
+				if g == cur {
+					l.fail(c, "client slots unreadable")
+					return false
+				}
+				l.retireBroken(c, g)
+				cur--
+				alive = -1
+				break
+			}
+			if v.Token == 0 {
+				l.endSlot(st)
+				*st = slotState{}
+				continue
+			}
+			if v.Token != st.token || v.LogLen < st.cursor {
+				// A new client, or one still writing its claim: start over.
+				l.endSlot(st)
+				*st = slotState{token: v.Token}
+			}
+			st.counts = sessionCounts{fast: v.FastHits, disk: v.DiskHits, misses: v.Misses, puts: v.Puts, reason: v.Reason, reported: v.Reported}
+			if full {
+				if !l.sh.Alive(g, i) {
+					// Ended since the last drain: its pins end with it, its requests
+					// to re-read entries (stale ones, puts) still count.
+					if !l.read(g, i, st, &v, false, now) {
+						if g == cur {
+							l.fail(c, "client logs unreadable")
+							return false
+						}
+						l.retireBroken(c, g)
+						cur--
+						alive = -1
+						break
+					}
+					l.endSlot(st)
+					continue
+				}
+				st.alive, st.pid, st.goPID, st.claimMono, st.claimWall = true, v.PID, v.GoPID, v.ClaimMono, v.ClaimWall
+			}
+			if !l.read(g, i, st, &v, true, now) {
+				if g == cur {
+					l.fail(c, "client logs unreadable")
+					return false
+				}
+				l.retireBroken(c, g)
+				cur--
+				alive = -1
+				break
+			}
+			st.overflow = v.Flags&livestate.FlagOverflow != 0
+			alive++
+			clients++
+			if len(st.pins) > 0 {
+				pinning++
+			}
+			if st.overflow {
+				overflowed++
+				if start := l.sessionStart(c, st); since == 0 || start < since {
+					since = start
+				}
+			}
+		}
+		if full && g < cur && alive == 0 && now-gen.retired >= oldGenGrace {
+			l.retire(g)
+			cur--
+		}
+	}
+	if full {
+		l.clients, l.pinning, l.overflowed, l.overflowSince = clients, pinning, overflowed, since
+	}
+	return true
+}
+
+// retireBroken drops an older clients file that faults when read (cut
+// short under the daemon): its sessions' pins can't be read any more.
+func (l *live) retireBroken(c *core, g int) {
+	c.log.Printf("an older clients file is unreadable (cut short): the pins of its sessions end")
+	l.retire(g)
+}
+
+// sessionStart is when an overflowed session began (wall ns), as its client
+// says, but never earlier than a pin may last.
+func (l *live) sessionStart(c *core, st *slotState) int64 {
+	floor := c.wall.UnixNano() - int64(l.expiry)
+	if st.claimWall <= floor || st.claimWall > c.wall.UnixNano() {
+		return floor
+	}
+	return st.claimWall
+}
+
+// endSlot ends a session for the daemon: its pins stop protecting and its
+// counters join the ended sessions', once. Token and cursor stay, so a dead
+// client's records are not read again.
+func (l *live) endSlot(st *slotState) {
+	if st.token != 0 && !st.ended {
+		st.ended = true
+		l.ended.add(st.counts)
+		if st.counts.reported {
+			l.endedReasons[st.counts.reason]++
+		}
+	}
+	for p := range st.pins {
+		l.unpin(p)
+	}
+	st.pins, st.alive, st.overflow = nil, false, false
+}
+
 // read takes slot i's records past the cursor: pins too when the client
-// lives, re-read requests in any case.
-func (l *live) read(c *core, i int, st *slotState, v *livestate.SlotView, pins bool, now time.Duration) bool {
+// lives, re-read requests in any case. False: the log faulted.
+func (l *live) read(g, i int, st *slotState, v *livestate.SlotView, pins bool, now time.Duration) bool {
 	if v.LogLen <= st.cursor {
 		return true
 	}
 	var ok bool
-	l.recs, ok = l.sh.Records(i, st.cursor, v.LogLen, l.recs[:0])
+	l.recs, ok = l.sh.Records(g, i, st.cursor, v.LogLen, l.recs[:0])
 	if !ok {
-		l.fail(c, "client logs unreadable")
 		return false
 	}
 	st.cursor = min(v.LogLen, livestate.LogRecords)
@@ -253,6 +440,8 @@ func (l *live) read(c *core, i int, st *slotState, v *livestate.SlotView, pins b
 	return true
 }
 
+// take applies one record: a pin on its output, and a re-read of its -a when
+// the client wrote it, refreshed it, or found the index out of date.
 func (l *live) take(st *slotState, r livestate.Record, now time.Duration) {
 	if st.pins == nil {
 		st.pins = map[uint64]time.Duration{}
@@ -265,7 +454,6 @@ func (l *live) take(st *slotState, r livestate.Record, now time.Duration) {
 			l.pins[r.Out] = p
 		}
 		p.slots++
-		p.newest = max(p.newest, now)
 		l.version++
 	}
 	l.hint(r)
@@ -288,26 +476,30 @@ func (l *live) unpin(prefix uint64) {
 	}
 }
 
-func (l *live) dropSlot(i int) {
-	st := &l.slots[i]
-	for p := range st.pins {
-		l.unpin(p)
-	}
-	st.pins = nil
-}
-
 // expire drops pins first seen more than expiry ago, whatever the client
 // wrote: a pin's lifetime is bounded by the daemon's own clock.
 func (l *live) expire(now time.Duration) {
-	for i := range l.slots {
-		st := &l.slots[i]
-		for p, at := range st.pins {
-			if now-at >= l.expiry {
-				delete(st.pins, p)
-				l.unpin(p)
+	for _, g := range l.gens {
+		for i := range g.slots {
+			st := &g.slots[i]
+			for p, at := range st.pins {
+				if now-at >= l.expiry {
+					delete(st.pins, p)
+					l.unpin(p)
+				}
 			}
 		}
 	}
+}
+
+// overflowCut lowers a removal's cutoff while a live client's log is full
+// (its later outputs are not pinned): outside the emergency tier, nothing
+// used since that session began goes.
+func (l *live) overflowCut(cut int64, tier evict.Tier) int64 {
+	if !l.open || l.overflowSince == 0 || tier == evict.Emergency || cut <= l.overflowSince {
+		return cut
+	}
+	return l.overflowSince
 }
 
 // keeps reports whether a live client pinned the output id (within the cap).
@@ -319,9 +511,10 @@ func (l *live) keeps(id index.ID) bool {
 	return l.pins[p] != nil && !l.capped[p]
 }
 
-// unitKept reports whether a planned unit's output is pinned now.
-func (l *live) unitKept(u *evict.Planned) bool {
-	if u.GaveWay {
+// unitKept reports whether a planned unit's output is pinned now. A unit
+// planned to give way does so only while the emergency lasts.
+func (l *live) unitKept(u *evict.Planned, tier evict.Tier) bool {
+	if u.GaveWay && tier == evict.Emergency {
 		return false
 	}
 	if u.Orphan {
@@ -372,10 +565,12 @@ func (c *core) publishChanged() {
 		}
 		c.idx.EachExact(func(id index.ID, e index.Exact) { l.sh.Publish(id, e) })
 	}
+	l.sh.Sync()
 }
 
-// markPinned flags pinned candidates and applies the byte cap: the pins most
-// recently taken keep protection up to PinCap, the rest stop protecting.
+// markPinned flags pinned candidates and applies the byte cap: pins of the
+// oldest live session keep protection first, up to PinCap; the rest stop
+// protecting. A long build's early outputs are the ones it reads last.
 func (c *core) markPinned(cands []evict.Candidate) {
 	l := c.live
 	l.pinnedBytes, l.overCap = 0, 0
@@ -386,9 +581,20 @@ func (c *core) markPinned(cands []evict.Candidate) {
 		}
 		return
 	}
+	oldest := make(map[uint64]int64, len(l.pins)) // pin -> earliest claim among its live sessions
+	for _, g := range l.gens {
+		for i := range g.slots {
+			st := &g.slots[i]
+			for p := range st.pins {
+				if at, ok := oldest[p]; !ok || st.claimMono < at {
+					oldest[p] = st.claimMono
+				}
+			}
+		}
+	}
 	type held struct {
 		prefix uint64
-		newest time.Duration
+		claim  int64
 		bytes  int64
 	}
 	var hs []held
@@ -400,15 +606,14 @@ func (c *core) markPinned(cands []evict.Candidate) {
 			out = u.ID
 		}
 		p := index.Prefix(out)
-		pn := l.pins[p]
-		u.Pinned = pn != nil && (u.HasOut || u.Orphan)
+		u.Pinned = l.pins[p] != nil && (u.HasOut || u.Orphan)
 		if u.Pinned && !seen[p] {
 			seen[p] = true
-			hs = append(hs, held{prefix: p, newest: pn.newest, bytes: u.DBytes})
+			hs = append(hs, held{prefix: p, claim: oldest[p], bytes: u.DBytes})
 		}
 	}
 	slices.SortFunc(hs, func(a, b held) int {
-		return cmp.Or(cmp.Compare(b.newest, a.newest), cmp.Compare(a.prefix, b.prefix))
+		return cmp.Or(cmp.Compare(a.claim, b.claim), cmp.Compare(a.prefix, b.prefix))
 	})
 	for _, h := range hs {
 		if l.pinnedBytes+h.bytes > l.cap {

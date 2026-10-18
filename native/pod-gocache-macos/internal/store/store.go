@@ -22,8 +22,10 @@ const maxPath = 1024
 // mtimeInterval mirrors cache.go: mtimes are refreshed at most hourly.
 const mtimeInterval = time.Hour
 
-// Store is one client's view of a GOCACHE directory. Get is safe for
-// concurrent use; Put is called by one goroutine at a time.
+// Store is one client's view of a GOCACHE directory. Without shared state
+// Get is safe for concurrent use; with it (SetLive), the session counters
+// need one caller at a time, as runProg's single serving loop is. Put is
+// called by one goroutine at a time.
 type Store struct {
 	dir  string // absolute GOCACHE, or "" when there is no usable store
 	pid  int
@@ -104,6 +106,17 @@ func (h *Hit) DiskPath() []byte { return h.path.bytes() }
 // check every cmd/go caller makes (GetFile, GetBytes, GetMmap). It never
 // fails: anything unexpected is a miss.
 func (s *Store) Get(id *[hashSize]byte, h *Hit) bool {
+	ok := s.get(id, h)
+	if s.live != nil {
+		if !ok {
+			s.live.Misses++
+		}
+		s.live.Note()
+	}
+	return ok
+}
+
+func (s *Store) get(id *[hashSize]byte, h *Hit) bool {
 	if s.dir == "" {
 		return false
 	}
@@ -132,9 +145,15 @@ func (s *Store) Get(id *[hashSize]byte, h *Hit) bool {
 	}
 	// Pin before the -d is looked at: the daemon either sees the pin before it
 	// deletes the output, or the output shows up here as dying.
+	if testHook != nil {
+		testHook(hookBeforePin)
+	}
 	if s.live != nil && s.live.Pin(&e.out, id, kind, e.size) {
 		s.live.DyingMisses++
 		return false
+	}
+	if testHook != nil {
+		testHook(hookAfterPin)
 	}
 	dpath := s.entryPath(&h.path, &e.out, 'd')
 	var dst syscall.Stat_t
@@ -164,6 +183,14 @@ func (s *Store) Get(id *[hashSize]byte, h *Hit) bool {
 	}
 	return true
 }
+
+// testHook lets a test act as the daemon at points inside Get.
+var testHook func(point int)
+
+const (
+	hookBeforePin = 1
+	hookAfterPin  = 2
+)
 
 // Where an entry came from.
 const (

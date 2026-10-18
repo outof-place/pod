@@ -87,6 +87,17 @@ const putBufSize = 1 << 20
 // store and the error is returned for the go command to handle, as it handles
 // the built-in cache's put errors. The body is always consumed.
 func (s *Store) Put(id, out *[hashSize]byte, valid bool, size int64, body Body, res *PutResult) error {
+	err := s.put(id, out, valid, size, body, res)
+	if s.live != nil {
+		if err == nil {
+			s.live.Puts++
+		}
+		s.live.Note()
+	}
+	return err
+}
+
+func (s *Store) put(id, out *[hashSize]byte, valid bool, size int64, body Body, res *PutResult) error {
 	switch {
 	case !valid || size < 0:
 		body.Discard()
