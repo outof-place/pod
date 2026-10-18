@@ -78,6 +78,7 @@ func (c *core) stateFile() ownerstate.State {
 		WindowSeconds:  int64(c.window / time.Second),
 		WindowReason:   c.whyWin,
 		GraceUntil:     c.graceUntil(),
+		GraceLeftNs:    int64(c.graceLeft()),
 		Policy:         c.cfg.Policy.Name(),
 		TrimError:      c.trimErr,
 		UnmanagedBytes: c.idx.UnmanagedBytes(),
@@ -159,8 +160,20 @@ func (c *core) reasons() []string {
 		add("observe mode, deleting nothing: %s", c.modeReason)
 	}
 	if c.inGrace() {
-		add("start grace until %s: no deletions for %s after start while free disk is unknown or >= %s",
-			time.Unix(c.graceUntil(), 0).Format("15:04"), c.limits().Window, gb(c.limits().DiskFloor))
+		add("start grace until %s: no deletions while free disk is unknown or >= %s",
+			time.Unix(c.graceUntil(), 0).Format("15:04"), gb(c.limits().DiskFloor))
+	}
+	if cw := c.carried(); cw > 0 {
+		grace := "no start grace"
+		if c.handover.graceLeft > 0 {
+			grace = "the rest of its start grace carried over"
+		}
+		line := fmt.Sprintf("handover from pid %d (version %s): %s", c.handover.pid, c.handover.version, grace)
+		if cw > c.limits().Window {
+			line += fmt.Sprintf("; until %s the window is at least %s, the stopped run's, so go processes it saw exit still count",
+				c.carriedUntil().Format("15:04"), cw.Round(time.Minute))
+		}
+		r = append(r, line)
 	}
 	if c.whyWin != "" {
 		add("window %s because %s", c.window.Round(time.Minute), c.whyWin)

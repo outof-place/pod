@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -43,13 +44,14 @@ func (r *ringLog) String() string {
 
 // rig is the daemon core on a simulated machine.
 type rig struct {
-	t    testing.TB
-	w    *cachesim.World
-	sink *cachesim.Sink
-	cfg  Config
-	c    *core
-	log  *ringLog
-	ev   []Eviction
+	t     testing.TB
+	w     *cachesim.World
+	sink  *cachesim.Sink
+	cfg   Config
+	c     *core
+	log   *ringLog
+	ev    []Eviction
+	stops []time.Duration // awake times of clean stops
 }
 
 func simLimits(l evict.Limits) cachesim.Limits {
@@ -57,13 +59,17 @@ func simLimits(l evict.Limits) cachesim.Limits {
 		Window: l.Window, HardWindow: l.HardWindow, EmergencyWindow: l.EmergencyWindow,
 		ProcessMargin: l.ProcessMargin, ProcessAgeCap: l.ProcessAgeCap, GoRunCap: l.GoRunCap, Budget: l.Budget,
 		DiskFloor: l.DiskFloor, HardFloor: l.HardFloor, EmergencyFloor: l.EmergencyFloor,
-		Hysteresis: l.Hysteresis, ProcLag: 10 * time.Second,
+		Hysteresis: l.Hysteresis, ProcLag: 10 * time.Second, ExitGrace: l.ExitGrace,
 	}
 }
 
 // floors8and6 pins the hard and emergency floors a scenario's numbers were
 // worked out for.
 func floors8and6(c *Config) { c.Limits.HardFloor, c.Limits.EmergencyFloor = 8*GB, 6*GB }
+
+// budget30 pins the 30 GB budget, the default before 18.10, that a scenario's
+// numbers were worked out for.
+func budget30(c *Config) { c.Limits.Budget = 30 * GB }
 
 func newRig(t testing.TB, seed int64, tweak func(*Config)) *rig {
 	r := buildRig(t, seed, simStart, tweak)
@@ -98,8 +104,20 @@ func buildRig(t testing.TB, seed int64, start time.Time, tweak func(*Config)) *r
 // start (re)starts the daemon on the same machine, like launchd after a kill.
 func (r *rig) start() {
 	r.c = newCore(r.cfg, NewLogger(r.log, r.w.Wall))
-	r.w.DaemonStarted()
+	r.w.DaemonStarted(r.cfg.CacheDir)
 	r.w.Note("daemon start")
+}
+
+// stop shuts the daemon down as SIGTERM does (a Pod update, a reinstall).
+func (r *rig) stop() {
+	r.c.shutdown()
+	r.stops = append(r.stops, r.w.Now())
+	r.w.Note("daemon stop")
+}
+
+// idle lets d of awake time pass with no daemon ticking.
+func (r *rig) idle(d time.Duration) {
+	r.w.Run(r.w.Now()+d, func() time.Duration { return time.Hour })
 }
 
 func (r *rig) run(d time.Duration) { r.w.Run(r.w.Now()+d, r.c.tick) }
@@ -169,7 +187,8 @@ func (r *rig) noUnexplainedFailures() {
 	}
 }
 
-// maxHeartbeatGap is the longest awake time between owner.json writes.
+// maxHeartbeatGap is the longest awake time between owner.json writes,
+// leaving out the time after a clean stop, when no daemon runs.
 func (r *rig) maxHeartbeatGap(from time.Duration) time.Duration {
 	var gap time.Duration
 	prev := time.Duration(-1)
@@ -177,7 +196,7 @@ func (r *rig) maxHeartbeatGap(from time.Duration) time.Duration {
 		if b.Mono < from {
 			continue
 		}
-		if prev >= 0 {
+		if prev >= 0 && !slices.ContainsFunc(r.stops, func(s time.Duration) bool { return prev <= s && s < b.Mono }) {
 			gap = max(gap, b.Mono-prev)
 		}
 		prev = b.Mono

@@ -36,7 +36,7 @@ func evictedBytes(w *cachesim.World) int64 {
 // minutes. Free disk never reaches zero, and below 6 GB eviction works with
 // the 15 minute window at full speed.
 func TestS5EmergencyReplay(t *testing.T) {
-	r := newRig(t, 50, nil)
+	r := newRig(t, 50, budget30)
 	rng := r.w.Rand()
 	for i := 0; i < 340; i++ {
 		r.place(1, cachesim.Archive, 100_000_000, time.Duration(2+rng.Intn(160))*time.Hour)
@@ -205,7 +205,7 @@ func TestQueuedOutputsDontSpin(t *testing.T) {
 // observe mode, and owner mode gets to the budget and then serves the 1 GB
 // deficit below it, no more.
 func TestD4BudgetEvictionNotCapped(t *testing.T) {
-	r := newRig(t, 72, nil)
+	r := newRig(t, 72, budget30)
 	r.run(time.Minute)
 	r.place(400, cachesim.Archive, 100_000_000, 5*time.Hour)
 	r.w.SetCapacity(r.w.CacheBytes() + 14*GB)

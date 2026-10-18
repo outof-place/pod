@@ -233,6 +233,56 @@ func TestSigtermMidBatchStopsFast(t *testing.T) {
 	}
 }
 
+// A Pod update with the real binary: SIGTERM, then the next daemon on the
+// same cache seconds later. It hands over: its start grace ends when the
+// stopped run's would have, and its log names the stopped pid. After a
+// SIGKILL a fresh grace starts.
+func TestHandoverAcrossProcesses(t *testing.T) {
+	for _, clean := range []bool{true, false} {
+		t.Run(map[bool]string{true: "sigterm", false: "sigkill"}[clean], func(t *testing.T) {
+			cache, state := tempDir(t), tempDir(t)
+			setMode(t, state, "owner")
+			h := helperCfg{CacheDir: cache, StateDir: state, Free: 50e9, Window: 10 * time.Minute}
+			a := spawnHelper(t, h, nil)
+			waitOwner(t, state, a.cmd.Process.Pid)
+			waitFor(t, time.Minute, "state.json from the first daemon", func() bool {
+				st, ok, err := ownerstate.ReadState(state)
+				return err == nil && ok && st.Extra.PID == a.cmd.Process.Pid && st.Extra.Phase == "ready"
+			})
+			time.Sleep(2 * time.Second) // so a fresh grace ends at least 2 s after the first one
+			if clean {
+				if code := a.term(t); code != 0 {
+					t.Fatalf("SIGTERM exit %d", code)
+				}
+			} else {
+				a.cmd.Process.Kill()
+				a.wait(t, time.Minute)
+			}
+			graceEnd := func(st ownerstate.State) time.Duration {
+				return time.Duration(st.Extra.LastWallNs + st.Extra.GraceLeftNs)
+			}
+			aEnd := graceEnd(readState(t, state))
+			b := spawnHelper(t, h, nil)
+			waitFor(t, time.Minute, "state.json from the second daemon", func() bool {
+				st, ok, err := ownerstate.ReadState(state)
+				return err == nil && ok && st.Extra.PID == b.cmd.Process.Pid && st.Extra.Phase == "ready"
+			})
+			st := readState(t, state)
+			if code := b.term(t); code != 0 {
+				t.Errorf("SIGTERM exit %d", code)
+			}
+			from := "handover from pid " + strconv.Itoa(a.cmd.Process.Pid)
+			d := graceEnd(st) - aEnd
+			if st.Extra.GraceUntil == 0 || clean != (d > -time.Second && d < time.Second) || (!clean && d < 2*time.Second) {
+				t.Errorf("grace ends %s after the first run's (graceUntil %d) after a clean stop %v; reasons %q", d, st.Extra.GraceUntil, clean, st.Extra.Reasons)
+			}
+			if clean != strings.Contains(b.stderr.String(), from) {
+				t.Errorf("%q in the log %v, want %v:\n%s", from, !clean, clean, b.stderr.String())
+			}
+		})
+	}
+}
+
 // S25b: two owners on one cache through different state dirs: only one
 // deletes and writes trim.txt.
 func TestTwoStateDirsOneOwner(t *testing.T) {

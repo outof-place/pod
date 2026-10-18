@@ -94,8 +94,9 @@ type core struct {
 	evictions     ownerstate.Evictions
 	vanished      int64 // index.Vanished last seen
 	vanishedAt    time.Time
-	boot          int64 // kern.boottime, unix us
-	noGrace       bool  // rebooted since the last state.json: no start grace
+	boot          int64     // kern.boottime, unix us
+	noGrace       bool      // rebooted since the last state.json: no start grace
+	handover      *handover // the clean stop this start took over from; nil for none
 	refusedLogged map[string]bool
 	futureLogged  map[string]bool
 	lastFullAt    time.Time
@@ -146,6 +147,12 @@ func newCore(cfg Config, log *Logger) *core {
 	if hadPrev && rebooted(prev.Extra.BootTimeUs, c.boot) {
 		c.noGrace = true
 		log.Printf("reboot since the last run: no start grace")
+	}
+	if h, ok := findHandover(prev, cfg.CacheDir, c.boot, c.startWall, cfg.Limits); hadPrev && ok {
+		c.handover = &h
+		c.window = max(c.window, h.window)
+		log.Printf("handover from pid %d version %s (clean stop %s before this start): start grace left %s, the stopped run's; window at least %s, the stopped run's, for %s",
+			h.pid, h.version, h.gap.Round(time.Second), h.graceLeft.Round(time.Second), h.window, cfg.Limits.ExitGrace)
 	}
 	if hadPrev && prev.CacheDir == cfg.CacheDir {
 		if rebooted(prev.Extra.BootTimeUs, c.boot) {
@@ -437,6 +444,9 @@ func (c *core) refreshProcs(force bool) {
 			}
 		}
 	}
+	if cw := c.carried(); cw > w {
+		w, why = cw, "the stopped run's window, carried over by the handover"
+	}
 	if w != c.window {
 		c.changed = true
 		if w > c.window+10*time.Minute || w < c.window-10*time.Minute {
@@ -520,16 +530,29 @@ func (c *core) room() int64 {
 
 // inGrace: no deletions for Window after start while free disk >= DiskFloor
 // or unknown (amendment 3, D2). Awake time, so a sleep doesn't shorten it.
-// None after a reboot since the last state.json.
+// None after a reboot since the last state.json; after a handover only what
+// the stopped run had left, since the grace belongs to the ownership episode.
 func (c *core) inGrace() bool {
-	return !c.noGrace && (!c.freeOK || c.free >= c.limits().DiskFloor) && c.mono-c.startMono < c.limits().Window
+	return (!c.freeOK || c.free >= c.limits().DiskFloor) && c.graceLeft() > 0
+}
+
+// graceLeft is the awake time of start grace left, free disk aside.
+func (c *core) graceLeft() time.Duration {
+	span := c.limits().Window
+	switch {
+	case c.noGrace:
+		span = 0
+	case c.handover != nil:
+		span = c.handover.graceLeft
+	}
+	return max(0, span-(c.mono-c.startMono))
 }
 
 func (c *core) graceUntil() int64 {
 	if !c.inGrace() {
 		return 0
 	}
-	return c.wall.Add(c.limits().Window - (c.mono - c.startMono)).Unix()
+	return c.wall.Add(c.graceLeft()).Unix()
 }
 
 func (c *core) logEpisode() {

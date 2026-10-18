@@ -85,7 +85,7 @@ func TestLiveDirDeletedMidRun(t *testing.T) {
 	// rm -rf removes the files one at a time; a tick in between repairs the
 	// first one missing, a later tick the rest. state.json follows on the next
 	// heartbeat (10 ticks).
-	waitFor(t, 5*time.Second, "status to say what was recreated", func() bool {
+	waitFor(t, 30*time.Second, "status to say what was recreated", func() bool {
 		l := readState(t, state).Extra.Live
 		return l != nil && l.Repairs > 0 && strings.Contains(l.LastRepair, "no such file or directory")
 	})

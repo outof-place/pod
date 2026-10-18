@@ -539,9 +539,12 @@ var dstLive struct {
 	fast, disk, gone, dying, batches, pressured, pinnedGone, builtinFailures int
 }
 
+var dstLiveRestarts restartTotals
+
 // TestDSTClients is TestDSTRandom with most go commands running through the
 // client: on top of S2's invariants, a pinned output goes only in the
-// emergency tier, and client builds fail only there.
+// emergency tier, and client builds fail only there. Restarts are kills and
+// clean stops, most of them handovers, as in TestDSTRandom.
 func TestDSTClients(t *testing.T) {
 	seeds := envInt("POD_GOCACHE_DST_SEEDS", 6)
 	hours := envInt("POD_GOCACHE_DST_HOURS", 3)
@@ -556,13 +559,14 @@ func TestDSTClients(t *testing.T) {
 	})
 	t.Logf("DST clients: %d fast hits, %d disk hits, %d index-gone misses, %d dying misses, %d handshakes, %d ticks with pins in the hard or emergency tier, %d pinned outputs removed (emergency give-way), %d built-in build failures (relaxed tiers), 0 client build failures outside the emergency tier",
 		dstLive.fast, dstLive.disk, dstLive.gone, dstLive.dying, dstLive.batches, dstLive.pressured, dstLive.pinnedGone, dstLive.builtinFailures)
+	t.Logf("DST clients restarts: %s", &dstLiveRestarts)
 	if seeds >= 3 && (dstLive.fast == 0 || dstLive.batches == 0 || dstLive.pressured == 0 || dstLive.builtinFailures == 0) {
 		t.Error("the shared state was never exercised under pressure: the run proves nothing")
 	}
 }
 
 func clientDay(t *testing.T, seed int64, active time.Duration) {
-	r := newLiveRig(t, seed, func(c *Config) { c.PinCap = 1 << 50 })
+	r := newLiveRig(t, seed, func(c *Config) { budget30(c); c.PinCap = 1 << 50 })
 	w := r.w
 	rng := w.Rand()
 	wl := w.NewWorkload(3000)
@@ -576,7 +580,7 @@ func clientDay(t *testing.T, seed int64, active time.Duration) {
 	setFree(40 * GB)
 	end := w.Now() + active
 	w.Start(wl, end)
-	restart := false
+	rs := newRestarts(r)
 	pressured := 0
 	var wander func()
 	wander = func() {
@@ -600,15 +604,16 @@ func clientDay(t *testing.T, seed int64, active time.Duration) {
 		case 1:
 			w.StepClock(time.Duration(rng.Intn(7)-3) * time.Hour)
 		case 2:
-			restart = true
+			rs.kill = true
+		case 3:
+			rs.stopSoon(rng)
 		}
 		w.After(time.Duration(20+rng.Intn(60))*time.Minute, trouble)
 	}
 	w.After(time.Duration(rng.Intn(60))*time.Minute, trouble)
 	tick := func() time.Duration {
-		if restart {
-			restart = false
-			r.start()
+		if d, down := rs.before(); down {
+			return d
 		}
 		d := r.c.tick()
 		if r.c.tier >= evict.Hard && r.c.live.pinnedBytes > 0 {
@@ -636,6 +641,7 @@ func clientDay(t *testing.T, seed int64, active time.Duration) {
 		}
 		t.Errorf("client build failed outside the emergency tier: %+v", f)
 	}
+	rs.addTo(&dstLiveRestarts)
 	dstLive.Lock()
 	defer dstLive.Unlock()
 	dstLive.fast += w.FastHits

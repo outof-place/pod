@@ -29,7 +29,7 @@ type Limits struct {
 // Defaults are the production limits.
 func Defaults() Limits {
 	return Limits{
-		Budget:          30 * GB,
+		Budget:          45 * GB,
 		DiskFloor:       15 * GB,
 		CacheFloor:      15 * GB,
 		HardFloor:       10 * GB,

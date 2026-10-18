@@ -520,6 +520,129 @@ func TestRebootSkipsStartGrace(t *testing.T) {
 	}
 }
 
+// Phase A follow-up: a Pod update or reinstall stops the daemon (SIGTERM)
+// and launchd starts the new one seconds later. That handover gets only what
+// was left of the start grace, so an over-budget cache keeps shrinking (18.10:
+// trimming stopped for 2 h at 48 GB after each restart). A crash, a gap over 2
+// minutes, a clock set back meanwhile, an observe run or another cache before
+// keep the grace.
+func TestHandoverSkipsStartGrace(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		clean    bool
+		gap      time.Duration
+		prep     func(r *rig)  // before the first run
+		between  func(r *rig)  // while no daemon runs
+		first    time.Duration // the first run's length; default past its grace
+		handover bool
+	}{
+		{name: "clean-stop", clean: true, gap: 30 * time.Second, handover: true},
+		{name: "clean-stop-at-once", clean: true, handover: true},
+		{name: "clean-stop-2min", clean: true, gap: 2 * time.Minute, handover: true},
+		{name: "sigkill", gap: 30 * time.Second},
+		{name: "gap-3min", clean: true, gap: 3 * time.Minute},
+		{name: "clock-set-back", clean: true, gap: 30 * time.Second, between: func(r *rig) { r.w.StepClock(-time.Minute) }},
+		{name: "previous-observe", clean: true, gap: 30 * time.Second, prep: func(r *rig) { r.w.SetMode("observe", true) }},
+		{name: "other-cache", clean: true, gap: 30 * time.Second, between: func(r *rig) { r.cfg.CacheDir = "/sim/other-go-build" }},
+		{name: "stopped-inside-grace", clean: true, gap: 30 * time.Second, first: 30 * time.Minute, handover: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := buildRig(t, 83, simStart, tinyBudget)
+			r.w.SetMode("owner", true)
+			if tc.prep != nil {
+				tc.prep(r)
+			}
+			r.start()
+			first := r.cfg.Limits.Window + time.Minute
+			if tc.first != 0 {
+				first = tc.first
+			}
+			r.run(first)
+			if tc.clean {
+				r.stop()
+			}
+			r.idle(tc.gap)
+			if tc.between != nil {
+				tc.between(r)
+			}
+			r.place(200, cachesim.Archive, 5_000_000, 72*time.Hour)
+			r.w.SetMode("owner", true)
+			r.start()
+			if tc.first != 0 {
+				// The grace belongs to the ownership episode: the rest of it carries over.
+				left := r.cfg.Limits.Window - tc.first - tc.gap
+				r.run(left - 2*time.Minute)
+				r.noViolations()
+				if len(r.w.Removals) != 0 || !r.logHas("handover from pid") || !reasonsHave(r, "start grace until") {
+					t.Fatalf("removals %d with %s of the stopped run's grace left, reasons %q; log:\n%s",
+						len(r.w.Removals), left, r.state().Extra.Reasons, tail(r.log.String(), 1500))
+				}
+				r.run(25 * time.Minute)
+				r.noViolations()
+				if len(r.w.Removals) == 0 || reasonsHave(r, "start grace until") {
+					t.Fatalf("removals %d after the carried grace, reasons %q; log:\n%s",
+						len(r.w.Removals), r.state().Extra.Reasons, tail(r.log.String(), 1500))
+				}
+				return
+			}
+			r.run(20 * time.Minute)
+			r.noViolations()
+			if removed := len(r.w.Removals) > 0; removed != tc.handover {
+				t.Fatalf("removals %d within 20 minutes of start, handover %v; log:\n%s", len(r.w.Removals), tc.handover, tail(r.log.String(), 1500))
+			}
+			if tc.handover != reasonsHave(r, "handover from pid") || tc.handover == reasonsHave(r, "start grace until") {
+				t.Errorf("reasons %q", r.state().Extra.Reasons)
+			}
+			if tc.handover != r.logHas("handover from pid") {
+				t.Errorf("handover line in the log %v, want %v:\n%s", r.logHas("handover from pid"), tc.handover, tail(r.log.String(), 1500))
+			}
+		})
+	}
+}
+
+// The handover keeps what the process tracker knew: a go process the stopped
+// run saw exit still counts for 45 minutes after its exit, so the 5 h window
+// it set holds for 45 minutes after the restart. An entry idle 3 h (outside
+// the 2 h window, inside the carried 5 h) survives that long, then goes.
+func TestHandoverCarriesWindow(t *testing.T) {
+	r := newRig(t, 84, tinyBudget)
+	r.warm()
+	l := r.cfg.Limits
+	p := r.w.Spawn(cachesim.ProcSpec{Comm: "go", Kind: "build", Child: "compile", Life: 2 * time.Minute})
+	p.Start -= int64(5*time.Hour - l.ProcessMargin - 2*time.Minute) // 5 h window just before it exits
+	r.run(2*time.Minute + 30*time.Second)
+	if r.w.Live() != 0 {
+		t.Fatalf("%d processes alive before the stop", r.w.Live())
+	}
+	if got := time.Duration(r.state().Extra.WindowSeconds) * time.Second; got < 5*time.Hour {
+		t.Fatalf("window %s before the stop, want 5 h from the process that just exited (reason %q)", got, r.state().Extra.WindowReason)
+	}
+	r.stop()
+	r.idle(20 * time.Second)
+	kept := r.place(50, cachesim.Archive, 1_000_000, 3*time.Hour)
+	junk := r.place(50, cachesim.Archive, 1_000_000, 72*time.Hour)
+	r.start()
+	r.run(l.ExitGrace - 2*time.Minute)
+	r.noViolations()
+	if n := outputsGone(r.w, junk); n != len(junk) {
+		t.Fatalf("%d of %d week-old entries evicted after the handover: the start grace held; log:\n%s", n, len(junk), tail(r.log.String(), 1500))
+	}
+	if n := outputsGone(r.w, kept); n != 0 {
+		t.Fatalf("%d entries idle 3 h evicted within the carried window; log:\n%s", n, tail(r.log.String(), 1500))
+	}
+	if got := time.Duration(r.state().Extra.WindowSeconds) * time.Second; got < 5*time.Hour || !reasonsHave(r, "the window is at least 5h0m0s") {
+		t.Errorf("window %s (reason %q), reasons %q", got, r.state().Extra.WindowReason, r.state().Extra.Reasons)
+	}
+	r.run(10 * time.Minute)
+	r.noViolations()
+	if n := outputsGone(r.w, kept); n != len(kept) {
+		t.Errorf("%d of %d entries idle 3 h evicted once the carried window ended", n, len(kept))
+	}
+	if got := time.Duration(r.state().Extra.WindowSeconds) * time.Second; got != l.Window || reasonsHave(r, "handover from pid") {
+		t.Errorf("window %s after the carry, reasons %q", got, r.state().Extra.Reasons)
+	}
+}
+
 // prioLog records each priority change with how far behind the loop was.
 type prioLog struct {
 	inner cachesim.Prio

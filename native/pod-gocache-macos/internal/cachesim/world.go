@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/ownerstate"
 )
 
 // Removal is one entry the daemon removed, with the ground truth at that
@@ -47,6 +49,7 @@ type Limits struct {
 	DiskFloor, HardFloor, EmergencyFloor   int64
 	Hysteresis                             int64
 	ProcLag                                time.Duration // the daemon's process-table refresh period
+	ExitGrace                              time.Duration // an exited go process still counts this long
 }
 
 // World is the simulated machine.
@@ -70,8 +73,10 @@ type World struct {
 	modeChangedAt time.Duration
 	tickStart     time.Duration
 	daemonStart   time.Duration
-	lastStateBoot int64 // kern.boottime in the last state.json written or restored
-	graceSkipped  bool
+	lastState     ownerstate.State // the last state.json written or restored
+	lastGraceLeft time.Duration    // start grace left when lastState was written
+	graceSpan     time.Duration    // the running daemon's start grace, awake time after its start
+	carried       time.Duration    // a handover's window, for ExitGrace after the start
 	freeSamples   [2]int64
 	lastProcList  []ProcSnap
 	lastProcWall  int64
@@ -271,13 +276,36 @@ func (w *World) Run(until time.Duration, tick func() time.Duration) {
 	}
 }
 
-// DaemonStarted records a (re)start, for the start-grace check; a new daemon
-// starts a new low-disk episode too. After a reboot since the state.json it
-// finds (no go process survives one) there is no grace to check.
-func (w *World) DaemonStarted() {
+// DaemonStarted records a (re)start of a daemon on cacheDir, for the
+// start-grace check; a new daemon starts a new low-disk episode too. After a
+// reboot since the state.json it finds (no go process survives one) there is
+// no grace to check. After a handover (that state.json shows a clean stop of
+// an owner-mode daemon on cacheDir at most 2 minutes ago on this boot) the
+// grace is what the stopped run had left less the gap, and its window holds
+// for ExitGrace.
+func (w *World) DaemonStarted(cacheDir string) {
 	w.daemonStart, w.d4, w.d4Outs = w.mono, d4State{}, nil
-	d := w.lastStateBoot - w.BootUs
-	w.graceSkipped = w.lastStateBoot != 0 && (d > int64(time.Minute/time.Microsecond) || -d > int64(time.Minute/time.Microsecond))
+	x := w.lastState.Extra
+	slack := int64(time.Minute / time.Microsecond)
+	d := x.BootTimeUs - w.BootUs
+	sameBoot := x.BootTimeUs == 0 || (d <= slack && -d <= slack)
+	gap := w.WallNs() - x.LastWallNs
+	handover := x.Phase == "stopped" && x.ModeRequested == "owner" && w.lastState.CacheDir == cacheDir && sameBoot &&
+		x.LastWallNs != 0 && gap >= 0 && gap <= int64(2*time.Minute)
+	switch {
+	case !sameBoot:
+		w.graceSpan = 0
+	case handover:
+		w.graceSpan = max(0, w.lastGraceLeft-time.Duration(gap))
+	default:
+		w.graceSpan = w.L.Window
+	}
+	w.carried = 0
+	if handover {
+		maxWin := max(w.L.Window, w.L.ProcessAgeCap+w.L.ProcessMargin)
+		w.carried = time.Duration(min(max(x.WindowSeconds, 0), int64(maxWin/time.Second))) * time.Second
+		w.Note("handover: window %s and grace %s carried", w.carried, w.graceSpan)
+	}
 }
 
 // SetMode changes what the mode file says.

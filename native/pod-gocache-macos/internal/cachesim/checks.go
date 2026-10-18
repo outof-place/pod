@@ -27,11 +27,15 @@ func (w *World) checkMode(what string) {
 }
 
 // legalWindow is the smallest window the rules allow at the daemon's last
-// free-disk sample, computed independently of the daemon's code.
+// free-disk sample, computed independently of the daemon's code. A
+// handover's window holds in the normal and low-disk tiers for ExitGrace.
 func (w *World) legalWindow() time.Duration {
 	free := w.freeSamples[1]
 	switch {
 	case free >= w.L.HardFloor+w.L.Hysteresis:
+		if w.mono-w.daemonStart < w.L.ExitGrace {
+			return max(w.processWindow(), w.carried)
+		}
 		return w.processWindow()
 	case free >= w.L.EmergencyFloor+w.L.Hysteresis:
 		return w.L.HardWindow
@@ -76,7 +80,7 @@ func (w *World) processWindow() time.Duration {
 func (w *World) checkRemoval(rel string, f, in *file) {
 	w.checkMode("remove " + rel)
 	free := w.freeSamples[1]
-	if !w.graceSkipped && free >= w.L.DiskFloor && w.mono-w.daemonStart < w.L.Window {
+	if free >= w.L.DiskFloor && w.mono-w.daemonStart < w.graceSpan {
 		w.violate("removed %s inside the start grace (free %d)", rel, free)
 	}
 	win := w.legalWindow()
@@ -278,7 +282,8 @@ func (s *Sink) WriteOwner(o ownerstate.Owner) error {
 }
 
 func (s *Sink) WriteState(st ownerstate.State) error {
-	s.W.lastStateBoot = st.Extra.BootTimeUs
+	s.W.lastState = st
+	s.W.lastGraceLeft = max(0, s.W.graceSpan-(s.W.mono-s.W.daemonStart))
 	if !s.wrote {
 		s.First = st
 	}
@@ -291,7 +296,8 @@ func (s *Sink) Previous() (ownerstate.State, bool) { return s.Last, s.wrote }
 // Restore makes st the state.json a previous run left behind.
 func (s *Sink) Restore(st ownerstate.State) {
 	s.First, s.Last, s.wrote = st, st, true
-	s.W.lastStateBoot = st.Extra.BootTimeUs
+	s.W.lastState = st
+	s.W.lastGraceLeft = time.Duration(st.Extra.GraceLeftNs)
 }
 
 // Prio records whether eviction ran throttled.

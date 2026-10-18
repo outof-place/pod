@@ -75,7 +75,7 @@ func TestS11OwnerBeforeIndex(t *testing.T) {
 // budget part back once free disk is above 15 GB (D2).
 func TestS23ObservePlanEqualsOwnerRemovals(t *testing.T) {
 	fixture := func() *rig {
-		r := newRig(t, 23, nil)
+		r := newRig(t, 23, budget30)
 		wl := r.w.NewWorkload(8000)
 		for i := 0; r.w.CacheBytes() < 40*GB && i < len(wl.Actions); i++ {
 			r.w.Place(wl.Actions[i], time.Duration(r.w.Rand().Int63n(int64(7*24*time.Hour))))

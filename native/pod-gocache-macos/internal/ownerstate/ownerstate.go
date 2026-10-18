@@ -91,6 +91,7 @@ type Extra struct {
 	WindowSeconds  int64      `json:"windowSeconds,omitempty"`
 	WindowReason   string     `json:"windowReason,omitempty"`
 	GraceUntil     int64      `json:"graceUntil,omitempty"`
+	GraceLeftNs    int64      `json:"graceLeftNs,omitempty"` // awake start grace left at this write, free disk aside; a handover carries it
 	ProtectedBytes int64      `json:"protectedBytes"`
 	EvictableBytes int64      `json:"evictableBytes"`
 	FutureBytes    int64      `json:"futureBytes,omitempty"`

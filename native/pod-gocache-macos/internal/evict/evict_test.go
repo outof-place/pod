@@ -19,6 +19,12 @@ func floors8and6() Limits {
 	return l
 }
 
+// budget30 pins the 30 GB budget, the default before 18.10, of the worked examples.
+func budget30(l Limits) Limits {
+	l.Budget = 30 * GB
+	return l
+}
+
 func TestNextTier(t *testing.T) {
 	l := floors8and6()
 	cases := []struct {
@@ -53,7 +59,7 @@ func TestNextTier(t *testing.T) {
 // Targets from the brief's formula: min(30, max(15, size - deficit)), with
 // the relaxed stages only up to their threshold + 1 GB (D3).
 func TestNeeds(t *testing.T) {
-	l := floors8and6()
+	l := budget30(floors8and6())
 	cases := []struct {
 		name        string
 		size, free  int64
