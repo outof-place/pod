@@ -68,6 +68,9 @@ func (c *core) updateMode() {
 		c.trimWall = time.Time{} // own trim.txt at once
 	} else {
 		c.clearPending() // no removal after the switch is noticed
+		if c.wroteOnce {
+			c.publishOwner(true) // at once: from here the heartbeat goroutine refreshes observe
+		}
 	}
 }
 

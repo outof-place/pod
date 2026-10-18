@@ -107,6 +107,8 @@ func Run(ctx context.Context, cfg Config) int {
 	c.stop = ctx.Done()
 	c.restarts = max(0, starts-1)
 	c.log.Printf("start version=%s pid=%d cache=%s state=%s restarts=%d", cfg.Version, c.pid, cfg.CacheDir, cfg.StateDir, starts-1)
+	c.beat.start()
+	defer c.beat.stop()
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 	for {
@@ -154,11 +156,12 @@ func disown(cfg Config, now time.Time) {
 // rather than up to 120 s later, writes a last state.json and lets go of the
 // shared state, so the next daemon publishes at once, in this process too.
 func (c *core) shutdown() {
+	c.beat.stop() // before the observe write below, so nothing follows it
 	c.wall, c.mono = c.cfg.Clock.Wall(), c.cfg.Clock.Mono()
 	c.releaseOwner()
 	st := c.stateFile()
 	c.mode = ownerstate.ModeObserve
-	c.writeOwner(c.ownerFile(c.wall), c.mono)
+	c.publishOwner(true)
 	st.Mode, st.Extra.Phase = ownerstate.ModeObserve, PhaseStopped
 	st.Extra.Reasons = append([]string{"daemon stopped at " + c.wall.Format("15:04") + "; nothing owns the cache, the old trimmers resume; the rest is as it was then"}, st.Extra.Reasons...)
 	if err := c.cfg.Sink.WriteState(st); err != nil {

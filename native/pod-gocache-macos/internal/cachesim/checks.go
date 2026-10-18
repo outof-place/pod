@@ -275,6 +275,9 @@ type Sink struct {
 }
 
 func (s *Sink) WriteOwner(o ownerstate.Owner) error {
+	if now := s.W.Wall().Unix(); o.HeartbeatAt < now-1 {
+		s.W.violate("owner.json written with heartbeatAt %d s behind the clock", now-o.HeartbeatAt)
+	}
 	s.Owner = o
 	bg := len(s.W.BG) > 0 && s.W.BG[0]
 	s.W.Owners = append(s.W.Owners, OwnerBeat{Mono: s.W.mono, HeartbeatAt: o.HeartbeatAt, Mode: o.Mode, Background: bg})

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/cachefs"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/evict"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/ownerstate"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/realhome"
@@ -56,6 +57,11 @@ type helperCfg struct {
 	MarkAction         string        // created at the first -a removal (inside the plan loop)
 	LiveRoot           string
 	Observe            bool
+	Heartbeat          time.Duration // HeartbeatEvery; 0 keeps 10 ticks
+	ProgressLimit      time.Duration // 0 keeps the production 5 minutes
+	StallFile          string        // while it exists, the loop blocks in its next Lstat
+	StallMark          string        // written with the wall ns when a stall begins
+	SlowOwnerWrite     time.Duration // each owner.json write takes this long, as on a loaded disk
 }
 
 func helperDaemon() int {
@@ -74,6 +80,16 @@ func helperDaemon() int {
 		Disk: newDisk(h.Free), Procs: noProcs{}, LiveRoot: h.LiveRoot, ObserveOnly: h.Observe,
 	}
 	cfg.FullBatchTime = h.FullBatch
+	if h.Heartbeat > 0 {
+		cfg.HeartbeatEvery = h.Heartbeat
+	}
+	cfg.ProgressLimit = h.ProgressLimit
+	if h.StallFile != "" {
+		cfg.FS = newStallFS(cachefs.NewOS(h.CacheDir), h.StallFile, h.StallMark)
+	}
+	if h.SlowOwnerWrite > 0 {
+		cfg.Sink = slowOwnerSink{FileSink{Dir: h.StateDir}, h.SlowOwnerWrite}
+	}
 	if h.EvictPause > 0 || h.MarkOutput != "" || h.MarkAction != "" {
 		cfg.OnEvict = func(e Eviction) {
 			mark := h.MarkAction
@@ -145,7 +161,12 @@ func (p *proc) wait(t *testing.T, d time.Duration) int {
 	case c := <-p.done:
 		return c
 	case <-time.After(d):
-		t.Fatalf("process %d still running after %s", p.cmd.Process.Pid, d)
+		p.cmd.Process.Signal(syscall.SIGQUIT) // the Go runtime dumps every goroutine to stderr
+		select {
+		case <-p.done:
+		case <-time.After(5 * time.Second):
+		}
+		t.Fatalf("process %d still running after %s; stderr:\n%s", p.cmd.Process.Pid, d, tail(p.stderr.String(), 6000))
 		return -1
 	}
 }

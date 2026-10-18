@@ -19,6 +19,7 @@ type core struct {
 	cfg  Config
 	log  *Logger
 	fs   cachefs.FS // cfg.FS, pulsing the heartbeat on every call
+	beat *beat      // owner.json's writer, with its own heartbeat goroutine
 	idx  *index.Index
 	live *live // state shared with clients (S9)
 	pid  int
@@ -75,8 +76,9 @@ type core struct {
 	pending      map[index.ID]pendingOut // outputs whose last -a the daemon removed
 	pendingBytes int64                   // their bytes: committed, not yet freed
 
-	ownerAt     time.Duration // last owner.json write
 	stateAt     time.Duration // last state.json write
+	oldBeatAt   time.Duration // the loop last found owner.json's heartbeat over 2 x HeartbeatEvery old
+	oldBeat     time.Duration // how old it was then
 	wroteOnce   bool
 	trimAt      time.Duration
 	trimWall    time.Time
@@ -129,6 +131,7 @@ func newCore(cfg Config, log *Logger) *core {
 		window:        cfg.Limits.Window,
 		procs:         procscan.Tracker{Grace: cfg.Limits.ExitGrace},
 	}
+	c.beat = newBeat(cfg.Sink, cfg.Clock, log, cfg.HeartbeatEvery, cfg.ProgressLimit)
 	c.fs = pacedFS{FS: cfg.FS, pulse: c.pulse}
 	c.idx = index.New(c.fs)
 	c.live = newLive(cfg.Shared, cfg.PinExpiry, cfg.PinCap)
@@ -168,13 +171,14 @@ func newCore(cfg Config, log *Logger) *core {
 			c.jumps.prune(c.startWall.UnixNano(), 6*24*time.Hour)
 		}
 	}
-	c.ownerAt, c.stateAt = -1<<62, -1<<62
+	c.stateAt, c.oldBeatAt = -1<<62, -1<<62
 	c.rootWalkAt = -1 << 62
 	return c
 }
 
-// pacedFS calls pulse before every call into the cache directory, so a long
-// scan or batch keeps owner.json fresh for as long as it makes progress.
+// pacedFS calls pulse before every call into the cache directory: each call
+// is progress the heartbeat goroutine waits for, and a long scan or batch
+// writes owner.json itself when it is due.
 type pacedFS struct {
 	cachefs.FS
 	pulse func()
@@ -205,11 +209,31 @@ func (p pacedFS) RemoveTemp(rel string, ino uint64, cutoff int64) (cachefs.Outco
 }
 func (p pacedFS) WriteTrim(data []byte) error { p.pulse(); return p.FS.WriteTrim(data) }
 
-// pulse writes owner.json when it is due, from inside long work.
+// pulse marks progress and writes owner.json when it is due, from inside long work.
 func (c *core) pulse() {
-	if c.wroteOnce && c.cfg.Clock.Mono()-c.ownerAt >= c.cfg.HeartbeatEvery {
-		c.writeOwner(c.ownerFile(c.cfg.Clock.Wall()), c.cfg.Clock.Mono())
+	mono := c.cfg.Clock.Mono()
+	c.beat.mark(mono)
+	if c.noteBeatAge(mono) >= c.cfg.HeartbeatEvery {
+		c.publishOwner(true)
 	}
+}
+
+// oldBeatHold is how long the loop stays out of the background band after
+// finding owner.json's heartbeat over twice HeartbeatEvery old.
+const oldBeatHold = 10 * time.Minute
+
+// noteBeatAge returns owner.json's heartbeat age (0 before the first write)
+// and remembers one over twice HeartbeatEvery: the heartbeat goroutine did
+// not cover the loop, so updateLag takes it out of the background band.
+func (c *core) noteBeatAge(mono time.Duration) time.Duration {
+	if !c.wroteOnce {
+		return 0
+	}
+	age := c.beat.age(mono)
+	if age > 2*c.cfg.HeartbeatEvery {
+		c.oldBeatAt, c.oldBeat = mono, age
+	}
+	return age
 }
 
 // prio moves the loop's thread in or out of the background band; a loop
@@ -225,14 +249,17 @@ func (c *core) prio(bg bool) {
 var lagIndexTicks = 15 // a var so the CPU-loaded rig can measure the band alone
 
 // updateLag decides whether the loop has fallen behind: the initial index
-// still incomplete after lagIndexTicks, the last batch cut short with work
-// left, or the cache over budget with removals planned. It goes back to the
-// background band once none holds.
+// still incomplete after lagIndexTicks, owner.json's heartbeat found over
+// twice HeartbeatEvery old within oldBeatHold, the last batch cut short with
+// work left, or the cache over budget with removals planned. It goes back to
+// the background band once none holds.
 func (c *core) updateLag() {
 	why := ""
 	switch {
 	case !c.idx.Complete() && c.indexTicks >= lagIndexTicks:
 		why = "indexing for " + strconv.Itoa(c.indexTicks) + " ticks"
+	case c.mode == ownerstate.ModeOwner && c.mono-c.oldBeatAt < oldBeatHold:
+		why = "owner.json heartbeat was " + c.oldBeat.Round(time.Second).String() + " old"
 	case c.mode != ownerstate.ModeOwner || !c.idx.Complete() || c.inGrace() || c.episode.Paused(c.mono):
 	case c.evictBehind:
 		why = "the last eviction batch left work undone"
@@ -268,6 +295,8 @@ func (c *core) limits() evict.Limits { return c.cfg.Limits }
 // tick runs one round and returns how long to wait before the next.
 func (c *core) tick() time.Duration {
 	c.wall, c.mono = c.cfg.Clock.Wall(), c.cfg.Clock.Mono()
+	c.beat.mark(c.mono)
+	c.noteBeatAge(c.mono)
 	c.scanUntil = c.mono + c.cfg.ScanBudget
 	c.observeClock()
 	c.sampleDisk()
@@ -302,8 +331,11 @@ func (c *core) tick() time.Duration {
 	if v := c.idx.Vanished; v != c.vanished {
 		c.vanished, c.vanishedAt = v, c.wall
 	}
+	due := c.noteBeatAge(c.cfg.Clock.Mono()) >= c.cfg.HeartbeatEvery
 	if c.changed || c.jumped || c.mono-c.stateAt >= c.cfg.HeartbeatEvery {
 		c.writeStatus()
+	} else if due {
+		c.publishOwner(true)
 	}
 	if full && (more || indexed) {
 		return 0

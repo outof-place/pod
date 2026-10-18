@@ -282,58 +282,6 @@ func TestS4bCorpusUnderDaemon(t *testing.T) {
 	}
 }
 
-// S12a: the heartbeat comes from the loop. Wedge the loop and owner.json
-// stops changing while the process lives; unwedge and it resumes.
-func TestHeartbeatStopsWhenLoopWedges(t *testing.T) {
-	dir := tempDir(t)
-	putEntry(t, dir, 100, 0)
-	cfg := fastConfig(t, dir, 50_000_000_000)
-	w := &wedgeFS{FS: cachefs.NewOS(dir), gate: make(chan struct{})}
-	cfg.FS = w
-	stop := startRun(t, cfg)
-	ownerPath := filepath.Join(cfg.StateDir, ownerstate.OwnerFile)
-	mtime := func() int64 {
-		st, err := os.Stat(ownerPath)
-		if err != nil {
-			return 0
-		}
-		return st.ModTime().UnixNano()
-	}
-	waitFor(t, time.Minute, "owner.json", func() bool { return mtime() != 0 })
-	first := mtime()
-	waitFor(t, 5*time.Second, "heartbeats", func() bool { return mtime() > first })
-	w.wedged.Store(true)
-	time.Sleep(500 * time.Millisecond)
-	frozen := mtime()
-	time.Sleep(2 * time.Second)
-	if mtime() != frozen {
-		t.Fatal("owner.json kept changing while the loop was wedged")
-	}
-	o, _, _ := ownerstate.ReadOwner(cfg.StateDir)
-	if ownerstate.Fresh(o.HeartbeatAt, time.Now().Add(121*time.Second)) {
-		t.Error("readers would still see a fresh owner 121 s into the wedge")
-	}
-	w.wedged.Store(false)
-	close(w.gate)
-	waitFor(t, 5*time.Second, "heartbeats after the wedge", func() bool { return mtime() > frozen })
-	if code := stop(); code != 0 {
-		t.Errorf("exit %d", code)
-	}
-}
-
-type wedgeFS struct {
-	cachefs.FS
-	wedged atomic.Bool
-	gate   chan struct{}
-}
-
-func (w *wedgeFS) Lstat(rel string) (cachefs.Stat, error) {
-	if w.wedged.Load() {
-		<-w.gate
-	}
-	return w.FS.Lstat(rel)
-}
-
 // The loop's thread runs at background priority only while asked to.
 func TestThreadPriority(t *testing.T) {
 	runtime.LockOSThread()

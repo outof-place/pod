@@ -33,6 +33,7 @@ type Config struct {
 
 	Tick            time.Duration // loop period; also how often free disk is sampled
 	HeartbeatEvery  time.Duration
+	ProgressLimit   time.Duration // the heartbeat goroutine writes only while the loop progressed within this
 	TrimEvery       time.Duration
 	ModeEvery       time.Duration // forced re-read of the mode file
 	IdleRelist      time.Duration // bucket poll cadence with plenty of disk
@@ -199,6 +200,7 @@ func (c Config) withDefaultsNoCache() (Config, error) {
 	}
 	def(&c.Tick, 2*time.Second)
 	def(&c.HeartbeatEvery, 30*time.Second)
+	def(&c.ProgressLimit, 5*time.Minute)
 	def(&c.TrimEvery, 6*time.Hour)
 	def(&c.ModeEvery, time.Minute)
 	def(&c.IdleRelist, 30*time.Second)

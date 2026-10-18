@@ -229,25 +229,27 @@ func (c *core) reasons() []string {
 	return r
 }
 
+// writeStatus writes state.json, and owner.json when something changed or
+// its heartbeat is due; otherwise the heartbeat goroutine gets the new content.
 func (c *core) writeStatus() {
+	write := c.changed || c.beat.age(c.cfg.Clock.Mono()) >= c.cfg.HeartbeatEvery
 	c.stateAt, c.wroteOnce, c.changed = c.mono, true, false
-	c.writeOwner(c.ownerFile(c.wall), c.mono)
+	c.publishOwner(write)
 	if err := c.cfg.Sink.WriteState(c.stateFile()); err != nil {
 		c.log.Once("state-write", "state.json not written: %v", err)
 	}
 }
 
-// writeOwner writes owner.json at normal priority, so the heartbeat never
-// queues behind throttled scanning.
-func (c *core) writeOwner(o ownerstate.Owner, mono time.Duration) {
-	c.ownerAt = mono
-	if c.bg {
+// publishOwner hands owner.json to the heartbeat and, with write, writes it
+// now at normal priority, so the loop's write never queues behind throttled
+// scanning. heartbeatAt is the clock now, not at the tick's start: a long
+// tick's last write must not set the heartbeat back behind its pulses.
+func (c *core) publishOwner(write bool) {
+	if write && c.bg {
 		c.cfg.Prio.Background(false)
 		defer c.cfg.Prio.Background(true)
 	}
-	if err := c.cfg.Sink.WriteOwner(o); err != nil {
-		c.log.Once("owner-write", "owner.json not written: %v", err)
-	}
+	c.beat.publish(c.ownerFile(c.cfg.Clock.Wall()), c.cfg.Clock.Mono(), write)
 }
 
 // Status is what `pod-gocache status --json` prints: state.json plus whether
