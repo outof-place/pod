@@ -4,12 +4,15 @@ import { BrowserError } from './cdp-bridge'
 import { AgentBrowserBridgeShutdown } from './agent-browser-bridge-shutdown'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { podGuestPageSleep } from '../pod/headless-host/guest-page-sleep'
-import type {
-  EnqueueTargetedCommandOptions,
-  ResolvedBrowserCommandTarget
+import {
+  AGENT_BROWSER_IDLE_RETIRE_MS,
+  type EnqueueTargetedCommandOptions,
+  type ResolvedBrowserCommandTarget
 } from './agent-browser-bridge-types'
 
 export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown {
+  private readonly idleRetirements = new Map<string, ReturnType<typeof setTimeout>>()
+
   // Why: route tab switch through the command queue so it can't race in-flight commands targeting the old tab.
   async tabSwitch(
     index: number | undefined,
@@ -67,6 +70,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
       options.requireScopedTarget
     )
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${pageId}`
+    this.cancelIdleRetirement(sessionName)
 
     return new Promise<T>((resolve, reject) => {
       let queue = this.commandQueues.get(sessionName)
@@ -122,5 +126,39 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
       this.commandQueues.delete(sessionName)
     }
     this.processingQueues.delete(sessionName)
+    this.scheduleIdleRetirement(sessionName)
+  }
+
+  // Why only between commands: a running one (a long wait included) is never cut. A daemon holding
+  // what an agent set up in it (network routes, a HAR capture) stays for its own idle timeout.
+  private scheduleIdleRetirement(sessionName: string): void {
+    this.cancelIdleRetirement(sessionName)
+    if (!this.sessions.has(sessionName) || this.shutdownStarted) {
+      return
+    }
+    const timer = setTimeout(() => {
+      this.idleRetirements.delete(sessionName)
+      const session = this.sessions.get(sessionName)
+      if (
+        !session ||
+        this.processingQueues.has(sessionName) ||
+        this.commandQueues.has(sessionName) ||
+        session.activeInterceptPatterns.length > 0 ||
+        session.activeCapture
+      ) {
+        return
+      }
+      void this.destroySession(sessionName).catch(() => {})
+    }, AGENT_BROWSER_IDLE_RETIRE_MS)
+    timer.unref?.()
+    this.idleRetirements.set(sessionName, timer)
+  }
+
+  private cancelIdleRetirement(sessionName: string): void {
+    const timer = this.idleRetirements.get(sessionName)
+    if (timer) {
+      clearTimeout(timer)
+      this.idleRetirements.delete(sessionName)
+    }
   }
 }
