@@ -240,6 +240,7 @@ export class PodUiHostServer {
           ...(this.options.onBrowser
             ? [
                 'browser',
+                'browserCobrowse',
                 'browserContextMenu',
                 'browserDownloadCancel',
                 'browserFrameSelect',

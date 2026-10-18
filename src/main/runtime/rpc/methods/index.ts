@@ -73,6 +73,7 @@ import { POD_SETTINGS_METHODS } from '../../../pod/settings/pod-settings-rpc-met
 import { POD_MCP_LAZY_METHODS } from '../../../pod/mcp-lazy/mcp-lazy-rpc-methods'
 import { POD_KEYBINDINGS_METHODS } from '../../../pod/keybindings/pod-keybindings-rpc-methods'
 import { POD_ORCA_IMPORT_METHODS } from '../../../pod/orca-import/orca-import-rpc-methods'
+import { POD_BROWSER_COBROWSE_METHODS } from '../../../pod/browser-cobrowse/pod-browser-cobrowse-rpc-methods'
 import { observePodComputerActions } from '../../../pod/computer-actions/pod-computer-actions'
 import { POD_COMPUTER_ACTIONS_METHODS } from '../../../pod/computer-actions/pod-computer-actions-rpc-methods'
 import { POD_TERMINAL_PROCESSES_METHODS } from '../../../pod/terminal-processes/pod-terminal-processes-rpc-methods'
@@ -172,6 +173,7 @@ export const ALL_RPC_METHODS = [
   ...POD_KEYBINDINGS_METHODS,
   // Fork-only (Pod): Import from Orca, local callers only.
   ...POD_ORCA_IMPORT_METHODS,
+  ...POD_BROWSER_COBROWSE_METHODS,
   ...EMULATOR_METHODS,
   ...PAIRING_METHODS,
   ...UPDATER_METHODS,

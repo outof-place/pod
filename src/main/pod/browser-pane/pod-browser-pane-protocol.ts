@@ -4,6 +4,11 @@
 // PodRuntime/BrowserPaneProtocol.swift (outof-place/pod-native).
 import { z } from 'zod'
 import { PANE_PASSKEY_MAX_CREDENTIAL_ID } from './pod-browser-pane-passkeys'
+import {
+  POD_BROWSER_COBROWSE_CLIENT_MESSAGES,
+  type PodBrowserCobrowseClientMessage,
+  type PodBrowserCobrowseServerMessage
+} from './pod-browser-cobrowse-protocol'
 
 const PageId = z.string().min(1).max(200)
 const Size = z.number().int().min(1).max(8192)
@@ -196,7 +201,9 @@ export const POD_BROWSER_PANE_CLIENT_MESSAGES = [
   PopupChoose,
   PasskeyChoose,
   DownloadCancel,
-  Zoom
+  Zoom,
+  // Feature browserCobrowse: marks, hover and pointers (pod-browser-cobrowse-protocol.ts).
+  ...POD_BROWSER_COBROWSE_CLIENT_MESSAGES
 ] as const
 
 export type PodBrowserPaneClientMessage =
@@ -215,8 +222,10 @@ export type PodBrowserPaneClientMessage =
   | z.infer<typeof PasskeyChoose>
   | z.infer<typeof DownloadCancel>
   | z.infer<typeof Zoom>
+  | PodBrowserCobrowseClientMessage
 
 export type PodBrowserPaneServerMessage =
+  | PodBrowserCobrowseServerMessage
   | {
       type: 'browserState'
       pageId: string

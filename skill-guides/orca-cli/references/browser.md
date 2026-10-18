@@ -21,6 +21,8 @@ The fast way, one line per task:
 - Read a value from the page: `ORCA eval --expression "<js>" --json` (the quickest command; it skips the accessibility tree).
 - Wait for a change instead of sleeping: `ORCA wait --text "<text>" --json` (or `--selector`, `--url`, `--load networkidle`).
 - Drive several tabs at once: `ORCA tab list --json`, then pass `--page <browserPageId>` on every command.
+- Work a page together with the user (Pod): start `ORCA marks --wait --save --json` in the background; when the user marks elements in Pod's browser pane and presses Send, it exits with each mark's note, URL, `element.selector` (use it as `--element`), role and name, box, text, a DOM excerpt and a screenshot file. Act on them, then wait again.
+- Show the user something on the page (Pod): `ORCA point --element <@ref or css> --label "<one line>" --json`; the next `point` replaces it (a walkthrough step), `--keep` adds one, `ORCA point --clear --json` removes yours. `result.shown` false means nobody sees the tab now. A mark the user makes while you point carries `replyTo` with your label.
 
 Common commands:
 

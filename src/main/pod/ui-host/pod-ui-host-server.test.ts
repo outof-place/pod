@@ -196,6 +196,7 @@ describe('PodUiHostServer', () => {
       const client = await hello(options.socketPath)
       expect(JSON.parse(client.lines[0]).features).toEqual([
         'browser',
+        'browserCobrowse',
         'browserContextMenu',
         'browserDownloadCancel',
         'browserFrameSelect',
@@ -219,6 +220,7 @@ describe('PodUiHostServer', () => {
       // unchanged.
       expect(JSON.parse(client.lines[0]).features).toEqual([
         'browser',
+        'browserCobrowse',
         'browserContextMenu',
         'browserDownloadCancel',
         'browserFrameSelect',

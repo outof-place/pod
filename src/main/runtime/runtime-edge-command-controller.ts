@@ -109,7 +109,10 @@ const BROWSER_COMMAND_NAMES = [
   'browserProfileDetectBrowsers',
   'browserProfileImportFromBrowser',
   'browserProfileClearDefaultCookies',
-  'browserTabClose'
+  'browserTabClose',
+  // Fork-only (Pod): co-browse (pod-browser-cobrowse-rpc-methods.ts).
+  'browserCobrowseTarget',
+  'browserElementBox'
 ] as const satisfies readonly (keyof RuntimeBrowserCommands)[]
 
 function bindPrefixedMethods<T extends object>(

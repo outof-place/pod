@@ -43,6 +43,41 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
       'orca viewport (--width <w> --height <h> [--scale <n>] [--mobile] | --reset) [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'width', 'height', 'scale', 'mobile', 'reset', 'worktree']
   },
+  // ── Co-browse (Fork-only, Pod) ──
+  {
+    path: ['marks'],
+    summary: 'Take what the user marked on the tab in Pod (a note, element, locator, screenshot)',
+    usage:
+      'orca marks [--wait [--timeout <ms>]] [--save] [--peek] [--page <browserPageId>] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'wait', 'timeout', 'save', 'peek', 'page', 'worktree'],
+    notes: [
+      'The user marks elements on a Pod browser pane (Mark, ⇧⌘K) and presses Send; --wait blocks until then (default 10 min, at most 1 h). Run it in the background and act on the marks when it exits.',
+      "--save writes each mark's screenshot to its own private file. From an SSH worktree use --json and decode screenshot.data instead."
+    ]
+  },
+  {
+    path: ['point'],
+    summary: 'Show the user an element or region on the tab in Pod, with a short label',
+    usage:
+      'orca point (--element <selector|@ref> | --x <x> --y <y> --width <w> --height <h>) [--label <text>] [--keep] | --clear [--pointer <id>] [--page <browserPageId>] [--worktree <selector>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'element',
+      'x',
+      'y',
+      'width',
+      'height',
+      'label',
+      'keep',
+      'clear',
+      'pointer',
+      'page',
+      'worktree'
+    ],
+    notes: [
+      'A new point replaces your previous one (a walkthrough step) unless --keep. The pointer follows its element and goes when the element does. Pages and screenshots never contain it.'
+    ]
+  },
   // ── Geolocation ──
   {
     path: ['geolocation'],

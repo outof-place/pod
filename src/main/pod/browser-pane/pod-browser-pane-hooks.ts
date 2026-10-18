@@ -1,5 +1,7 @@
 // Fork-only (Pod): what upstream modules call into one-app's browser panes. Dependency-free, so the
 // runtime and the agent bridge import nothing of the panes themselves.
+import type { CobrowseBox, CobrowseMarksResult } from '../../../shared/browser-cobrowse-types'
+
 type AgentCommandSink = (webContentsId: number) => void
 
 /** A download of a page no renderer hosts, as the browser manager would have told the renderer. */
@@ -42,11 +44,31 @@ type PasskeySink = (
 /** Holds a page's pane on its last frame; returns the release. */
 type CaptureFrameHoldSink = (webContentsId: number) => () => void
 
+/** Co-browse on a pane page (browser.marks, browser.point); null: no pane controller hosts it. */
+export type PodBrowserCobrowseSink = {
+  marks: (
+    browserPageId: string,
+    options: { wait: boolean; timeoutMs: number; peek: boolean; signal?: AbortSignal }
+  ) => Promise<CobrowseMarksResult> | null
+  point: (
+    browserPageId: string,
+    request:
+      | { selector?: string; box?: CobrowseBox; region?: CobrowseBox; label: string; keep: boolean }
+      | { clear: true; pointerId?: string }
+  ) => Promise<{
+    pointerId: string | null
+    box: CobrowseBox | null
+    shown: boolean
+    cleared: number
+  } | null>
+}
+
 let agentCommandSink: AgentCommandSink | null = null
 let captureFrameHoldSink: CaptureFrameHoldSink | null = null
 let downloadSink: ((event: PodBrowserDownloadEvent) => void) | null = null
 let linkOpenSink: LinkOpenSink | null = null
 let passkeySink: PasskeySink | null = null
+let cobrowseSink: PodBrowserCobrowseSink | null = null
 
 export function setPodBrowserPaneHooks(
   hooks: {
@@ -55,6 +77,7 @@ export function setPodBrowserPaneHooks(
     openLink: LinkOpenSink
     passkey: PasskeySink
     holdFramesForCapture?: CaptureFrameHoldSink
+    cobrowse?: PodBrowserCobrowseSink
   } | null
 ): void {
   agentCommandSink = hooks?.agentCommand ?? null
@@ -62,6 +85,12 @@ export function setPodBrowserPaneHooks(
   downloadSink = hooks?.download ?? null
   linkOpenSink = hooks?.openLink ?? null
   passkeySink = hooks?.passkey ?? null
+  cobrowseSink = hooks?.cobrowse ?? null
+}
+
+/** Co-browse on one-app's pane pages; null outside one-app. */
+export function podBrowserCobrowse(): PodBrowserCobrowseSink | null {
+  return cobrowseSink
 }
 
 /** True once one-app's panes own browser pages: browser commands then take the offscreen path. */

@@ -119,6 +119,12 @@ export const BROWSER_HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/browser-env.js')).BROWSER_ENV_HANDLERS
   },
   {
+    // Fork-only (Pod): co-browse.
+    name: 'browser-cobrowse',
+    keys: ['marks', 'point'],
+    load: async () => (await import('./handlers/browser-cobrowse.js')).BROWSER_COBROWSE_HANDLERS
+  },
+  {
     name: 'browser-storage',
     keys: [
       'storage local get',

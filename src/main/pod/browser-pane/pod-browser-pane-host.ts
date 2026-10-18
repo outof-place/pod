@@ -12,6 +12,7 @@ import { addPodCdpProxySink } from '../browser/cdp-proxy-hooks'
 import { setPodBrowserPaneHooks } from './pod-browser-pane-hooks'
 import type { PodBrowserPaneServerMessage } from './pod-browser-pane-protocol'
 import { PodBrowserPaneController } from './pod-browser-pane'
+import { paneCobrowse, pointOnPane } from './pod-browser-pane-cobrowse'
 
 export function installPodBrowserPanes(options: {
   runtime: Pick<OrcaRuntimeService, 'setOffscreenBrowserBackend'>
@@ -57,7 +58,14 @@ export function installPodBrowserPanes(options: {
     openLink: (browserPageId, url, activate) => panes.openLink(browserPageId, url, activate),
     passkey: (webContentsId, relyingPartyId, accounts) =>
       panes.pickPasskey(webContentsId, relyingPartyId, accounts),
-    holdFramesForCapture: (webContentsId) => panes.holdFramesForCapture(webContentsId)
+    holdFramesForCapture: (webContentsId) => panes.holdFramesForCapture(webContentsId),
+    cobrowse: {
+      marks: (browserPageId, options) => paneCobrowse(browserPageId)?.takeMarks(options) ?? null,
+      point: async (browserPageId, request) => {
+        const cobrowse = paneCobrowse(browserPageId)
+        return cobrowse ? pointOnPane(cobrowse, request) : null
+      }
+    }
   })
   app.once('will-quit', () => setPodBrowserPaneHooks(null))
   return panes

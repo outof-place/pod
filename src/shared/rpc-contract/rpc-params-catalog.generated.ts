@@ -68,6 +68,7 @@ import {
   AutomationRuns,
   AutomationUpdate
 } from './automation-params'
+import { BrowserMarks, BrowserPoint } from './browser-cobrowse-params'
 import { CertificateProceed } from './browser-core-params'
 import { MouseClick } from './browser-extras-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser-identity-params'
@@ -799,6 +800,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.is': Is,
   'browser.keyboardInsertText': KeyboardInsert,
   'browser.keypress': Keypress,
+  'browser.marks': BrowserMarks,
   'browser.mouseClick': MouseClick,
   'browser.mouseDown': MouseButton,
   'browser.mouseMove': MouseXY,
@@ -807,6 +809,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.network': LimitParam,
   'browser.openUrl': BrowserOpenUrlParams,
   'browser.pdf': BrowserTarget,
+  'browser.point': BrowserPoint,
   'browser.profileClearDefaultCookies': null,
   'browser.profileCreate': ProfileCreate,
   'browser.profileDelete': ProfileDelete,

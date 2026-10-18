@@ -58,6 +58,11 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   if (POD_ORBSTACK_LONG_METHODS.has(request.method)) {
     return 'wait'
   }
+  // Fork-only (Pod): `marks --wait` holds until the user sends marks, up to an hour.
+  if (request.method === 'browser.marks') {
+    const params = request.params as { wait?: unknown } | undefined
+    return params?.wait === true ? 'wait' : null
+  }
   if (request.method === 'browser.clientHost.attach') {
     return 'browser-host'
   }

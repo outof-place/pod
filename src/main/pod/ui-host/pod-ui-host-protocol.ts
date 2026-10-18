@@ -91,12 +91,15 @@ export type PodUiHostQuitReason = z.infer<typeof Quit>['reason']
 // `browserDownloadCancel`: browserDownloadCancel stops one of a page's downloads.
 // `browserFrameSelect`: a <select> in an iframe comes as browserPopupMenu too, not only the page's own.
 // `browserHardReload`: browserNavigate takes reloadHard, a reload past the cache.
+// `browserCobrowse`: browserCobrowse, browserMarkMode, browserHover, browserMark* go; browserHover and
+// browserCobrowseState come for a page PodNative watches.
 // `browserPageZoom`: browserZoom zooms the page, and browserState carries zoomPercent.
 // `browserOpenLink`: a page's new-tab link (⌘-click, middle-click, target=_blank) comes as browserOpenLink.
 // `browserTargetUrl`: the link under an attached page's pointer comes as browserTargetUrl.
 // `browserPasskey`: a security key's accounts come as browserPasskeyAccounts; browserPasskeyChoose answers.
 export const POD_UI_HOST_FEATURES = [
   'browser',
+  'browserCobrowse',
   'browserContextMenu',
   'browserDownloadCancel',
   'browserFrameSelect',

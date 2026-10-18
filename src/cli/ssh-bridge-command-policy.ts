@@ -18,7 +18,7 @@ const OWNER_MACHINE_COMMANDS: readonly (readonly string[])[] = [
 ]
 
 // Why: the CLI runs on the Orca host here, so a file it writes would land on the host, not where the caller is.
-const SCREENSHOT_FILE_COMMANDS: readonly string[] = ['screenshot', 'full-screenshot']
+const SCREENSHOT_FILE_COMMANDS: readonly string[] = ['screenshot', 'full-screenshot', 'marks']
 const SCREENSHOT_FILE_FLAGS: readonly string[] = ['path', 'save']
 
 function isSshBridgeInvocation(env: NodeJS.ProcessEnv = process.env): boolean {

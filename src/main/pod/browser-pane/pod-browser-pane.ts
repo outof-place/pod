@@ -25,6 +25,7 @@ import { followPanePage, panePageState } from './pod-browser-pane-page-events'
 import { applyPanePageInput } from './pod-browser-pane-page-input'
 import { PaneZoom } from './pod-browser-pane-zoom'
 import { PaneAgentDriving } from './pod-browser-pane-agent-driving'
+import { handlePaneCobrowse, newPaneCobrowse } from './pod-browser-pane-cobrowse'
 const PANE_FRAME_RATE = 60
 // A page nobody sees and no agent drives. Why 10: a rate change waits for the next tick, so a
 // pane coming back (or an agent's screenshot) waits ≤100 ms; an animated page costs 13 ms/s here
@@ -133,6 +134,7 @@ export class PodBrowserPaneController {
     wc.stopPainting()
     wc.setFrameRate(UNSEEN_FRAME_RATE)
     wc.on('paint', (event) => this.frames.paint(page, event.texture))
+    newPaneCobrowse(pageId, wc, this.deps.send, () => page)
     followPanePage(pageId, page, {
       send: this.deps.send,
       userDriven: () => this.userDriven(page),
@@ -216,6 +218,9 @@ export class PodBrowserPaneController {
       }
       return
     }
+    if (handlePaneCobrowse(message)) {
+      return
+    }
     const { wc } = page
     switch (message.type) {
       case 'browserAttach':
@@ -269,7 +274,9 @@ export class PodBrowserPaneController {
         return
       case 'browserDownloadCancel':
         if (!this.deps.cancelDownload?.(message.pageId, message.downloadId)) {
-          this.deps.log(`browser-pane: no download ${message.downloadId} of ${message.pageId} to cancel`)
+          this.deps.log(
+            `browser-pane: no download ${message.downloadId} of ${message.pageId} to cancel`
+          )
         }
         return
       case 'browserFind':
