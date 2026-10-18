@@ -48,6 +48,7 @@ describe('browser.marks and browser.point', () => {
       ['browser.point', 'workspace']
     ])
     expect(POD_RUNTIME_CAPABILITIES).toContain('pod.browser.cobrowse.v1')
+    expect(POD_RUNTIME_CAPABILITIES).toContain('pod.browser.cobrowse.point-mark.v1')
   })
 
   it('marks --wait is a long poll (keepalive and the abort signal), a plain marks is not', () => {
@@ -114,6 +115,21 @@ describe('browser.marks and browser.point', () => {
         keep: false
       })
     }
+  })
+
+  it("points at a user's mark by its number; the runtime that hosts the page finds its element", async () => {
+    const point = vi.fn(async () => ({ pointerId: 'p1', box: null, shown: true, cleared: 0 }))
+    install({ point })
+    const { ctx, runtime } = context()
+    await call('browser.point', { mark: 3, label: 'This label?' }, ctx)
+    expect(runtime.browserElementBox).not.toHaveBeenCalled()
+    expect(point).toHaveBeenLastCalledWith('page-1', { mark: 3, label: 'This label?', keep: false })
+    const entry = methods.find((m) => m.name === 'browser.point')
+    expect(entry?.params?.safeParse({ mark: 3, element: '#save' }).success).toBe(false)
+    expect(entry?.params?.safeParse({ mark: 3, x: 1, y: 2, width: 3, height: 4 }).success).toBe(
+      false
+    )
+    expect(entry?.params?.safeParse({ mark: 0 }).success).toBe(false)
   })
 
   it('refuses a point with neither an element nor a whole region', () => {

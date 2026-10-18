@@ -110,6 +110,13 @@ export const POD_SIM_RUNTIME_CAPABILITY = 'pod.sim.v1' as const
  */
 export const POD_BROWSER_COBROWSE_RUNTIME_CAPABILITY = 'pod.browser.cobrowse.v1' as const
 
+/**
+ * browser.point takes `mark` (point --mark <n>): the element of one of the user's marks, found by the
+ * runtime that hosts the page in the mark's own frame or shadow root. An older host drops the field.
+ */
+export const POD_BROWSER_COBROWSE_POINT_MARK_RUNTIME_CAPABILITY =
+  'pod.browser.cobrowse.point-mark.v1' as const
+
 export const POD_RUNTIME_CAPABILITIES = [
   POD_CREATE_TERMINAL_AGENT_ARGS_RUNTIME_CAPABILITY,
   POD_TERMINAL_OPENED_BEFORE_CLAUDE_ACCOUNTS_RUNTIME_CAPABILITY,
@@ -126,5 +133,6 @@ export const POD_RUNTIME_CAPABILITIES = [
   POD_SESSION_TABS_PANE_LAYOUT_SYNC_RUNTIME_CAPABILITY,
   POD_SESSION_TABS_CUSTOM_TITLE_RUNTIME_CAPABILITY,
   POD_ORCA_IMPORT_RUNTIME_CAPABILITY,
-  POD_BROWSER_COBROWSE_RUNTIME_CAPABILITY
+  POD_BROWSER_COBROWSE_RUNTIME_CAPABILITY,
+  POD_BROWSER_COBROWSE_POINT_MARK_RUNTIME_CAPABILITY
 ] as const

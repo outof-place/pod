@@ -53,13 +53,21 @@ export type PodBrowserCobrowseSink = {
   point: (
     browserPageId: string,
     request:
-      | { selector?: string; box?: CobrowseBox; region?: CobrowseBox; label: string; keep: boolean }
+      | {
+          selector?: string
+          box?: CobrowseBox
+          region?: CobrowseBox
+          mark?: number
+          label: string
+          keep: boolean
+        }
       | { clear: true; pointerId?: string }
   ) => Promise<{
     pointerId: string | null
     box: CobrowseBox | null
     shown: boolean
     cleared: number
+    outOfSight?: true
   } | null>
 }
 

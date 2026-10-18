@@ -59,10 +59,11 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
     path: ['point'],
     summary: 'Show the user an element or region on the tab in Pod, with a short label',
     usage:
-      'orca point (--element <selector|@ref> | --x <x> --y <y> --width <w> --height <h>) [--label <text>] [--keep] | --clear [--pointer <id>] [--page <browserPageId>] [--worktree <selector>] [--json]',
+      'orca point (--element <selector|@ref> | --mark <n> | --x <x> --y <y> --width <w> --height <h>) [--label <text>] [--keep] | --clear [--pointer <id>] [--page <browserPageId>] [--worktree <selector>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'element',
+      'mark',
       'x',
       'y',
       'width',
@@ -75,7 +76,8 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
       'worktree'
     ],
     notes: [
-      'A new point replaces your previous one (a walkthrough step) unless --keep. The pointer follows its element and goes when the element does. Pages and screenshots never contain it.'
+      "--mark <n> points at the element of the user's mark n (the number `marks` prints), in its iframe or shadow root too, where --element would search only the main document.",
+      'A new point replaces your previous one (a walkthrough step) unless --keep. The pointer follows its element and goes when the element does; one scrolled out of sight (in its list or the page) shows as an arrow toward it. Pages and screenshots never contain it.'
     ]
   },
   // ── Geolocation ──

@@ -80,7 +80,9 @@ export type PodBrowserCobrowseClientMessage =
   | z.infer<typeof MarkRemove>
   | z.infer<typeof MarksSend>
 
-// Boxes are view coordinates (CSS px times the page's zoom); null while the element is off the page.
+// Boxes are view coordinates (CSS px times the page's zoom); `rect` null once the element went. A
+// mark or pointer's `clip` is where its scroll containers and frames let it show (absent: only the
+// viewport clips it), `outOfSight` that none of it shows; an older PodNative ignores both.
 export type PodBrowserCobrowseServerMessage =
   | { type: 'browserHover'; pageId: string; rect: CobrowseBox | null; label: string; seq?: number }
   // A browserMarkAdd that made no mark (the page is full, nothing there): PodNative shows why.
@@ -97,8 +99,16 @@ export type PodBrowserCobrowseServerMessage =
         kind: 'element' | 'region'
         label: string
         rect: CobrowseBox | null
+        clip?: CobrowseBox
+        outOfSight?: true
       }[]
-      pointers: { id: string; label: string; rect: CobrowseBox | null }[]
+      pointers: {
+        id: string
+        label: string
+        rect: CobrowseBox | null
+        clip?: CobrowseBox
+        outOfSight?: true
+      }[]
     }
 
 // Why a browserMarkAdd made no mark, as PodNative's hint line shows it.

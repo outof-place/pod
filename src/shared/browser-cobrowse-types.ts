@@ -69,6 +69,8 @@ export type CobrowsePointResult = {
   /** A pane that draws pointers shows the page now; false on an older PodNative or a hidden tab. */
   shown: boolean
   cleared: number
+  /** None of the element shows (scrolled away in its list, frame or the page): the user sees an arrow toward it. */
+  outOfSight?: true
 }
 
 export const COBROWSE_LIMITS = {
@@ -148,7 +150,7 @@ export function formatCobrowseMarksMarkdown(
         lines.push(`- Role and name: ${mark.element.role} ${code(inline(mark.element.name, 120))}`)
       }
       if (mark.element.frameUrl) {
-        lines.push(`- In the iframe ${mark.element.frameUrl}`)
+        lines.push(`- In the iframe ${mark.element.frameUrl}: the locator is unique inside it`)
       }
       if (mark.element.inShadowRoot) {
         lines.push('- Inside a shadow root: the locator is unique there, not from the document')
@@ -160,6 +162,7 @@ export function formatCobrowseMarksMarkdown(
     lines.push(
       `- Box: ${round(mark.box)} in a ${mark.viewport.width}x${mark.viewport.height} viewport, scrolled to ${Math.round(mark.viewport.scrollX)},${Math.round(mark.viewport.scrollY)}`
     )
+    lines.push(`- Point back at it: \`point --mark ${mark.n}\``)
     for (const pointer of mark.replyTo) {
       lines.push(`- In reply to your pointer: ${inline(pointer.label, 120) || pointer.pointerId}`)
     }

@@ -7,6 +7,8 @@ import {
   type CobrowseMarksResult,
   type CobrowsePointResult
 } from '../../shared/browser-cobrowse-types'
+import { POD_BROWSER_COBROWSE_POINT_MARK_RUNTIME_CAPABILITY } from '../../shared/pod-runtime-capabilities'
+import type { RuntimeStatus } from '../../shared/runtime-types'
 import { saveAgentScreenshotTempFile } from '../agent-screenshot-temp-file'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
@@ -15,7 +17,7 @@ import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag
 } from '../flags'
-import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
+import { RuntimeClientError, type RuntimeClient, type RuntimeRpcSuccess } from '../runtime-client'
 import { getBrowserCommandTarget } from '../selectors'
 
 // Why: an older runtime has no such method, and "Unknown method" says nothing about what to do.
@@ -27,6 +29,22 @@ function explainOlderRuntime(error: unknown): never {
     )
   }
   throw error
+}
+
+// Why only once a point --mark failed: the happy path costs no status call, and a host with
+// co-browse but without marks drops the field and says nothing about why.
+async function explainNoPointMark(client: RuntimeClient, error: unknown): Promise<never> {
+  const status = await client.call<RuntimeStatus>('status.get').catch(() => null)
+  if (
+    status &&
+    !status.result.capabilities?.includes(POD_BROWSER_COBROWSE_POINT_MARK_RUNTIME_CAPABILITY)
+  ) {
+    throw new RuntimeClientError(
+      'unsupported',
+      'This Pod runtime cannot point at a mark yet; update Pod, or point with --element and the mark locator.'
+    )
+  }
+  return explainOlderRuntime(error)
 }
 
 type SavedShot = { path: string; width: number; height: number; bytes: number }
@@ -107,14 +125,22 @@ export const BROWSER_COBROWSE_HANDLERS: Record<string, CommandHandler> = {
   point: async ({ flags, client, cwd, json }) => {
     const clear = flags.get('clear') === true
     const element = getOptionalStringFlag(flags, 'element')
+    const mark = getOptionalPositiveIntegerFlag(flags, 'mark')
     const region = {
       x: getOptionalNumberFlag(flags, 'x'),
       y: getOptionalNumberFlag(flags, 'y'),
       width: getOptionalNumberFlag(flags, 'width'),
       height: getOptionalNumberFlag(flags, 'height')
     }
-    if (clear && (element || Object.values(region).some((v) => v !== undefined))) {
-      throw new RuntimeClientError('invalid_argument', '--clear takes no element or region.')
+    const hasRegion = Object.values(region).some((v) => v !== undefined)
+    if (clear && (element || mark !== undefined || hasRegion)) {
+      throw new RuntimeClientError('invalid_argument', '--clear takes no mark, element or region.')
+    }
+    if ([element !== undefined, mark !== undefined, hasRegion].filter(Boolean).length > 1) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Point at one of --mark, --element or a region (--x --y --width --height).'
+      )
     }
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const response = await client
@@ -122,22 +148,25 @@ export const BROWSER_COBROWSE_HANDLERS: Record<string, CommandHandler> = {
         ...(clear
           ? { clear: true, pointer: getOptionalStringFlag(flags, 'pointer') }
           : {
-              element,
-              ...region,
+              ...(mark === undefined ? { element, ...region } : { mark }),
               label: getOptionalStringFlag(flags, 'label'),
               keep: flags.get('keep') === true
             }),
         ...target
       })
-      .catch(explainOlderRuntime)
+      .catch((error: unknown) =>
+        mark === undefined ? explainOlderRuntime(error) : explainNoPointMark(client, error)
+      )
     printResult(response, json, (value) => {
       if (clear) {
         return value.cleared === 1 ? 'Cleared 1 pointer' : `Cleared ${value.cleared} pointers`
       }
-      const seen = value.shown
-        ? 'the user sees it'
-        : 'no Pod pane shows this tab now, so nobody sees it (an older Pod, or the tab is hidden)'
-      return `Pointing at ${element ?? 'the region'}: ${seen}`
+      const seen = !value.shown
+        ? 'no Pod pane shows this tab now, so nobody sees it (an older Pod, or the tab is hidden)'
+        : value.outOfSight
+          ? 'it is out of sight now (scrolled away), so the user sees an arrow toward it'
+          : 'the user sees it'
+      return `Pointing at ${mark === undefined ? (element ?? 'the region') : `mark ${mark}`}: ${seen}`
     })
   }
 }

@@ -15,26 +15,39 @@ import {
   boxOf,
   hitTest,
   hoverLabel,
-  nodeForBox,
-  querySelectorNode,
   readViewport,
-  revealBox,
   screenshotClip,
-  scrollIntoView,
   type CobrowseCdp,
   type CobrowseViewport
 } from './pod-browser-cobrowse-cdp'
+import {
+  clipChain,
+  clipsBox,
+  clipsHolding,
+  intersect,
+  nonNegative,
+  showsIn,
+  type Clip
+} from './pod-browser-cobrowse-clip'
 import type { PodBrowserCobrowseServerMessage } from './pod-browser-cobrowse-protocol'
 import { readElement } from './pod-browser-cobrowse-read-element'
 
 export type Anchor = {
   node: number | null
+  // The node's frame, from the hit test that found it: point --mark finds the node there again.
+  frameId?: string
+  // What clips the node (scroll containers, frames), found when it was anchored.
+  clips: Clip[]
   // A region's place relative to its node's box; null for the node's own box.
   offset: CobrowseBox | null
   // With no node: its place in the document (CSS px), so it scrolls with the page.
   doc: CobrowseBox | null
   // What PodNative last drew; null while not on the page.
   rect: CobrowseBox | null
+  // Where its clips let it show (view coordinates), null when nothing but the viewport does.
+  clip: CobrowseBox | null
+  // None of it shows: its clips or the viewport hide all of it.
+  outOfSight: boolean
 }
 
 export type StoredMark = {
@@ -49,6 +62,8 @@ export type PointRequest = {
   selector?: string
   box?: CobrowseBox
   region?: CobrowseBox
+  // The number of one of the user's marks on the page: its own element, in its frame.
+  mark?: number
   label: string
   keep: boolean
 }
@@ -71,11 +86,14 @@ export function scaleBox(box: CobrowseBox, zoom: number): CobrowseBox {
   return { x: round(box.x), y: round(box.y), width: round(box.width), height: round(box.height) }
 }
 
-function relative(region: CobrowseBox | null, nodeBox: CobrowseBox | null): CobrowseBox | null {
+export function relative(
+  region: CobrowseBox | null,
+  nodeBox: CobrowseBox | null
+): CobrowseBox | null {
   return region && nodeBox ? { ...region, x: region.x - nodeBox.x, y: region.y - nodeBox.y } : null
 }
 
-function inDocument(box: CobrowseBox, viewport: CobrowseViewport): CobrowseBox {
+export function inDocument(box: CobrowseBox, viewport: CobrowseViewport): CobrowseBox {
   return { ...box, x: box.x + viewport.scrollX, y: box.y + viewport.scrollY }
 }
 
@@ -84,26 +102,74 @@ export function isLive(anchor: Anchor): boolean {
   return anchor.node !== null || anchor.doc !== null
 }
 
+/** The anchor as PodNative draws it: its box (CSS px, null once gone), where its clips let it show. */
+export function settle(
+  anchor: Anchor,
+  box: CobrowseBox | null,
+  clip: CobrowseBox | null,
+  viewport: CobrowseViewport | null,
+  zoom: number
+): void {
+  anchor.rect = box ? scaleBox(box, zoom) : null
+  anchor.clip = box && clip ? scaleBox(nonNegative(clip), zoom) : null
+  const view = viewport && { x: 0, y: 0, width: viewport.width, height: viewport.height }
+  const inClip = box !== null && (!clip || showsIn(box, clip))
+  anchor.outOfSight =
+    box !== null && !(inClip && (!view || showsIn(clip ? intersect(box, clip) : box, view)))
+}
+
+/** The part of a box its clips and the viewport show (CSS px), or null when none of it does. */
+export function shownPart(
+  box: CobrowseBox,
+  clip: CobrowseBox | null,
+  viewport: CobrowseViewport
+): CobrowseBox | null {
+  const view = { x: 0, y: 0, width: viewport.width, height: viewport.height }
+  const inClip = clip ? intersect(box, clip) : box
+  return (!clip || showsIn(box, clip)) && showsIn(inClip, view)
+    ? nonNegative(intersect(inClip, view))
+    : null
+}
+
+/** A node anchor's clips, kept to those around all of a region on it. */
+export async function anchorClips(
+  cdp: CobrowseCdp,
+  node: number,
+  frameId: string | undefined,
+  region: CobrowseBox | null,
+  boxes: Map<number, Promise<CobrowseBox | null>>
+): Promise<Clip[]> {
+  const clips = await clipChain(cdp, node, frameId)
+  return region ? clipsHolding(cdp, clips, region, boxes) : clips
+}
+
 /** Each anchor's box as the page has it now, in view coordinates; null once its node is gone. */
 export async function placeAnchors(
   cdp: CobrowseCdp,
   tracked: readonly { anchor: Anchor }[],
   zoom: number
 ): Promise<void> {
-  let viewport: Promise<CobrowseViewport> | null = null
+  const viewport = tracked.length > 0 ? readViewport(cdp).catch(() => null) : null
+  const boxes = new Map<number, Promise<CobrowseBox | null>>()
   await Promise.all(
     tracked.map(async ({ anchor }) => {
-      let box: CobrowseBox | null = null
       if (anchor.node !== null) {
-        const nodeBox = await boxOf(cdp, anchor.node)
-        box = nodeBox ? placed(nodeBox, anchor.offset) : null
+        const [nodeBox, clip] = await Promise.all([
+          boxOf(cdp, anchor.node),
+          clipsBox(cdp, anchor.clips, boxes)
+        ])
+        settle(anchor, nodeBox ? placed(nodeBox, anchor.offset) : null, clip, await viewport, zoom)
       } else if (anchor.doc) {
-        const { scrollX, scrollY } = await (viewport ??= readViewport(cdp))
-        box = { ...anchor.doc, x: anchor.doc.x - scrollX, y: anchor.doc.y - scrollY }
-      } else {
-        return
+        const view = await viewport
+        if (view) {
+          const box = {
+            ...anchor.doc,
+            x: anchor.doc.x - view.scrollX,
+            y: anchor.doc.y - view.scrollY
+          }
+          settle(anchor, box, null, view, zoom)
+        }
       }
-      anchor.rect = box ? scaleBox(box, zoom) : null
     })
   )
 }
@@ -123,13 +189,20 @@ export async function newMark(
     at.width > 2 && at.height > 2
       ? { x: at.x / zoom, y: at.y / zoom, width: at.width / zoom, height: at.height / zoom }
       : null
-  const node = await hitTest(
+  const hit = await hitTest(
     cdp,
     region ? region.x + region.width / 2 : at.x / zoom,
     region ? region.y + region.height / 2 : at.y / zoom,
     viewport
   )
-  const nodeBox = node === null ? null : await boxOf(cdp, node)
+  const node = hit?.node ?? null
+  const boxes = new Map<number, Promise<CobrowseBox | null>>()
+  const [nodeBox, clips] = hit
+    ? await Promise.all([
+        boxOf(cdp, hit.node),
+        anchorClips(cdp, hit.node, hit.frameId, region, boxes)
+      ])
+    : [null, []]
   const box = region ?? nodeBox
   if (!box) {
     return null
@@ -150,16 +223,18 @@ export async function newMark(
     replyTo: pointers.map((p) => ({ pointerId: p.id, label: p.label })),
     screenshot: null
   }
-  return {
-    mark,
-    anchor: {
-      node,
-      offset: relative(region, nodeBox),
-      doc: nodeBox ? null : inDocument(box, viewport),
-      rect: scaleBox(box, zoom)
-    },
-    viewport
+  const anchor: Anchor = {
+    node,
+    frameId: hit?.frameId,
+    clips,
+    offset: relative(region, nodeBox),
+    doc: nodeBox ? null : inDocument(box, viewport),
+    rect: null,
+    clip: null,
+    outOfSight: false
   }
+  settle(anchor, box, await clipsBox(cdp, clips, boxes), viewport, zoom)
+  return { mark, anchor, viewport }
 }
 
 /** What an agent reads of a mark: its element and a PNG of it, read once the ring shows. */
@@ -181,66 +256,28 @@ export async function describeMark(
   }
 }
 
-/**
- * The node and box an agent's pointer is on; throws when its locator names nothing on the page.
- * Without `scroll` (the user is marking) the page stays put and the pointer may sit off screen.
- */
-export async function resolvePointer(
-  cdp: CobrowseCdp,
-  request: PointRequest,
-  zoom: number,
-  scroll: boolean
-): Promise<{ anchor: Anchor; box: CobrowseBox }> {
-  let viewport = await readViewport(cdp)
-  const region = request.region ?? null
-  let node: number | null = null
-  if (request.selector !== undefined) {
-    node = await querySelectorNode(cdp, request.selector)
-    if (node === null) {
-      throw new Error(`Nothing on the page matches ${request.selector}`)
-    }
-  } else if (request.box) {
-    const revealed = scroll ? await revealBox(cdp, request.box, viewport) : null
-    viewport = revealed?.viewport ?? viewport
-    node = await nodeForBox(cdp, revealed?.box ?? request.box, viewport)
-  } else if (region) {
-    node = await hitTest(cdp, region.x + region.width / 2, region.y + region.height / 2, viewport)
-  }
-  if (node !== null && !region && scroll) {
-    await scrollIntoView(cdp, node)
-  }
-  const nodeBox = node === null ? null : await boxOf(cdp, node)
-  // A box off screen while the page may not scroll: held by its place in the document.
-  const box = region ?? nodeBox ?? (scroll ? null : (request.box ?? null))
-  if (!box) {
-    throw new Error('That element is not on the page now')
-  }
-  const after = node !== null && !region && scroll ? await readViewport(cdp) : viewport
-  return {
-    anchor: {
-      node,
-      offset: relative(region, nodeBox),
-      doc: nodeBox ? null : inDocument(box, after),
-      rect: scaleBox(box, zoom)
-    },
-    box
-  }
-}
-
-/** The hover outline for a view point: the element under it, its box and short name. */
+/** The hover outline for a view point: the part of the element under it that shows, its short name. */
 export async function hoverAnswer(
   cdp: CobrowseCdp,
   point: { x: number; y: number },
-  zoom: number
+  zoom: number,
+  clipsOf: (node: number, frameId?: string) => Promise<Clip[]>
 ): Promise<{ rect: CobrowseBox | null; label: string; key: string }> {
   const viewport = await readViewport(cdp)
-  const node = await hitTest(cdp, point.x / zoom, point.y / zoom, viewport)
-  const box = node === null ? null : await boxOf(cdp, node)
-  const label = node === null || !box ? '' : await hoverLabel(cdp, node)
-  const rect = box ? scaleBox(box, zoom) : null
+  const hit = await hitTest(cdp, point.x / zoom, point.y / zoom, viewport)
+  if (!hit) {
+    return { rect: null, label: '', key: '' }
+  }
+  const [box, label, clips] = await Promise.all([
+    boxOf(cdp, hit.node),
+    hoverLabel(cdp, hit.node),
+    clipsOf(hit.node, hit.frameId)
+  ])
+  const shown = box ? shownPart(box, await clipsBox(cdp, clips), viewport) : null
+  const rect = shown ? scaleBox(shown, zoom) : null
   return {
     rect,
-    label,
+    label: rect ? label : '',
     key: rect ? `${label}|${rect.x}|${rect.y}|${rect.width}|${rect.height}` : ''
   }
 }
@@ -263,9 +300,23 @@ export function stateMessage(
       kind: mark.kind,
       label: cobrowseElementLabel(mark.element),
       // A taken mark is no longer tracked: its ring goes, the tray keeps it.
-      rect: state === 'taken' ? null : anchor.rect
+      rect: state === 'taken' ? null : anchor.rect,
+      ...(state === 'taken' ? {} : sight(anchor))
     })),
-    pointers: pointers.map((p) => ({ id: p.id, label: p.label, rect: p.anchor.rect }))
+    pointers: pointers.map((p) => ({
+      id: p.id,
+      label: p.label,
+      rect: p.anchor.rect,
+      ...sight(p.anchor)
+    }))
+  }
+}
+
+// Optional on the wire: an older PodNative draws `rect` as it always did.
+function sight(anchor: Anchor): { clip?: CobrowseBox; outOfSight?: true } {
+  return {
+    ...(anchor.rect && anchor.clip ? { clip: anchor.clip } : {}),
+    ...(anchor.rect && anchor.outOfSight ? { outOfSight: true as const } : {})
   }
 }
 

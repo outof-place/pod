@@ -13,12 +13,12 @@ import {
   isLive,
   newMark,
   placeAnchors,
-  resolvePointer,
   stateMessage,
   type Pointer,
   type PointRequest
 } from './pod-browser-cobrowse-anchors'
 import { CobrowseHover } from './pod-browser-cobrowse-hover'
+import { markTarget, resolvePointer, type PointTarget } from './pod-browser-cobrowse-pointer'
 import { CobrowseMarkQueue, type MarkTakeOptions } from './pod-browser-cobrowse-mark-queue'
 import {
   COBROWSE_REFUSALS,
@@ -175,16 +175,23 @@ export class PaneCobrowse {
     return { browserPageId: this.deps.pageId, ...(await this.queue.takeFor(options)) }
   }
 
-  /** An agent's pointer: a node it named, a box another tool found for its locator, or a region. */
-  async point(request: PointRequest): Promise<{ pointerId: string; box: CobrowseBox }> {
+  /**
+   * An agent's pointer: a node it named, a box another tool found for its locator, a region, or one
+   * of the user's marks by its number.
+   */
+  async point(
+    request: PointRequest
+  ): Promise<{ pointerId: string; box: CobrowseBox; outOfSight?: true }> {
     const cdp = this.cdp()
     if (!cdp) {
       throw new Error('The page is gone')
     }
+    const mark = request.mark === undefined ? undefined : markTarget(this.queue.marks, request.mark)
+    const target: PointTarget = { ...request, mark }
     this.busy += 1
     try {
       // Why no scroll while the user marks: the page must not move under their pointer.
-      const { anchor, box } = await resolvePointer(cdp, request, this.deps.zoom(), !this.markMode)
+      const { anchor, box } = await resolvePointer(cdp, target, this.deps.zoom(), !this.markMode)
       if (!request.keep) {
         this.pointers = []
       }
@@ -199,7 +206,11 @@ export class PaneCobrowse {
       this.pointers.push(pointer)
       this.publish()
       this.schedule()
-      return { pointerId: pointer.id, box }
+      return {
+        pointerId: pointer.id,
+        box,
+        ...(anchor.outOfSight ? { outOfSight: true as const } : {})
+      }
     } finally {
       this.busy -= 1
       this.syncLease()

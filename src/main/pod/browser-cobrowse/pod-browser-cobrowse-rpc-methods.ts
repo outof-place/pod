@@ -76,6 +76,8 @@ export const POD_BROWSER_COBROWSE_METHODS = [
       try {
         if (params.clear === true) {
           reply = await cobrowse.point(browserPageId, { clear: true, pointerId: params.pointer })
+        } else if (params.mark !== undefined) {
+          reply = await cobrowse.point(browserPageId, { mark: params.mark, label, keep })
         } else if (params.element !== undefined && AGENT_BROWSER_LOCATOR.test(params.element)) {
           const box = await runtime.browserElementBox({
             element: params.element,

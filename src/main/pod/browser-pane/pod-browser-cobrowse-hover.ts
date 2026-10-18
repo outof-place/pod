@@ -4,6 +4,7 @@
 import type { CobrowseBox } from '../../../shared/browser-cobrowse-types'
 import { hoverAnswer } from './pod-browser-cobrowse-anchors'
 import type { CobrowseCdp } from './pod-browser-cobrowse-cdp'
+import { clipChain, type Clip } from './pod-browser-cobrowse-clip'
 import type { PodBrowserCobrowseServerMessage } from './pod-browser-cobrowse-protocol'
 
 type HoverDeps = {
@@ -14,9 +15,14 @@ type HoverDeps = {
   log: (what: string, error: unknown) => void
 }
 
+// Enough for the elements a pointer crosses on its way; each one's clips are walked once.
+const CHAINS_KEPT = 32
+
 export class CobrowseHover {
   private point: { x: number; y: number } | null = null
   private shown = ''
+  // What clips each element hovered lately: a refresh while the page scrolls reads only boxes.
+  private readonly chains = new Map<number, Promise<Clip[]>>()
 
   constructor(private readonly deps: HoverDeps) {}
 
@@ -43,6 +49,7 @@ export class CobrowseHover {
 
   end(): void {
     this.point = null
+    this.chains.clear()
     if (this.shown !== '') {
       this.shown = ''
       this.answer(null, '')
@@ -53,6 +60,19 @@ export class CobrowseHover {
   reset(): void {
     this.point = null
     this.shown = ''
+    this.chains.clear()
+  }
+
+  private clipsOf(cdp: CobrowseCdp, node: number, frameId?: string): Promise<Clip[]> {
+    let chain = this.chains.get(node)
+    if (!chain) {
+      if (this.chains.size >= CHAINS_KEPT) {
+        this.chains.delete(this.chains.keys().next().value ?? node)
+      }
+      chain = clipChain(cdp, node, frameId)
+      this.chains.set(node, chain)
+    }
+    return chain
   }
 
   private async read(always: boolean, seq?: number): Promise<void> {
@@ -66,7 +86,9 @@ export class CobrowseHover {
     }
     let found: Awaited<ReturnType<typeof hoverAnswer>>
     try {
-      found = await hoverAnswer(cdp, point, this.deps.zoom())
+      found = await hoverAnswer(cdp, point, this.deps.zoom(), (node, frameId) =>
+        this.clipsOf(cdp, node, frameId)
+      )
     } catch (error) {
       this.deps.log('hover', error)
       found = { rect: null, label: '', key: '' }

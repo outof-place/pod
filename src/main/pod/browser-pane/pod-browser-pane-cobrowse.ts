@@ -122,11 +122,23 @@ export function handlePaneCobrowse(message: { type: string; pageId?: string }): 
 export async function pointOnPane(
   cobrowse: PaneCobrowse,
   request: PointRequest | { clear: true; pointerId?: string }
-): Promise<{ pointerId: string | null; box: CobrowseBox | null; shown: boolean; cleared: number }> {
+): Promise<{
+  pointerId: string | null
+  box: CobrowseBox | null
+  shown: boolean
+  cleared: number
+  outOfSight?: true
+}> {
   if ('clear' in request) {
     const cleared = cobrowse.clearPointers(request.pointerId)
     return { pointerId: null, box: null, shown: cobrowse.shownToUser, cleared }
   }
-  const { pointerId, box } = await cobrowse.point(request)
-  return { pointerId, box, shown: cobrowse.shownToUser, cleared: 0 }
+  const { pointerId, box, outOfSight } = await cobrowse.point(request)
+  return {
+    pointerId,
+    box,
+    shown: cobrowse.shownToUser,
+    cleared: 0,
+    ...(outOfSight ? { outOfSight } : {})
+  }
 }

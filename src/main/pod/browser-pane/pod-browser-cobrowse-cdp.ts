@@ -32,13 +32,16 @@ export async function readViewport(cdp: CobrowseCdp): Promise<CobrowseViewport> 
   }
 }
 
+/** A node a hit test found, and its frame (Page frame id). */
+export type Hit = { node: number; frameId?: string }
+
 /** The node under a viewport point (CSS px); it pierces shadow roots and same-process iframes. */
 export async function hitTest(
   cdp: CobrowseCdp,
   x: number,
   y: number,
   viewport: CobrowseViewport
-): Promise<number | null> {
+): Promise<Hit | null> {
   if (x < 0 || y < 0 || x >= viewport.width || y >= viewport.height) {
     return null
   }
@@ -53,7 +56,8 @@ export async function hitTest(
         ignorePointerEventsNone: false
       })
     )
-    return num(hit.backendNodeId) ?? null
+    const node = num(hit.backendNodeId)
+    return node === undefined ? null : { node, frameId: str(hit.frameId) }
   } catch {
     return null
   }
@@ -147,12 +151,12 @@ export async function nodeForBox(
   cdp: CobrowseCdp,
   box: CobrowseBox,
   viewport: CobrowseViewport
-): Promise<number | null> {
+): Promise<Hit | null> {
   const hit = await hitTest(cdp, box.x + box.width / 2, box.y + box.height / 2, viewport)
   if (hit === null) {
     return null
   }
-  const resolved = await cdp('DOM.resolveNode', { backendNodeId: hit }).catch(() => null)
+  const resolved = await cdp('DOM.resolveNode', { backendNodeId: hit.node }).catch(() => null)
   const objectId = str(rec(rec(resolved).object).objectId)
   if (!objectId) {
     return hit
@@ -169,9 +173,11 @@ export async function nodeForBox(
     if (!matchId) {
       return hit
     }
-    return (
-      num(rec(rec(await cdp('DOM.describeNode', { objectId: matchId })).node).backendNodeId) ?? hit
+    // The match is an ancestor in the same document: the same frame.
+    const node = num(
+      rec(rec(await cdp('DOM.describeNode', { objectId: matchId })).node).backendNodeId
     )
+    return node === undefined ? hit : { ...hit, node }
   } catch {
     return hit
   } finally {
