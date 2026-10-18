@@ -13,6 +13,7 @@
     "ORCA_POD_SEARCH": "Pod-process override for tests and measurements; never exported",
     "ORCA_POD_WORKSPACE": "Pod-process override for tests and measurements; never exported",
     "ORCA_PORT": "orca.yaml repository contract (setup scripts, VM recipes), shared with Orca users",
+    "ORCA_POSIX_SHELL_STARTUP_COMMAND": "a one-shot shell launch key the shell wrapper consumes and unsets (pty/posix-shell-startup-command.ts); no POD_ alias",
     "ORCA_POSTHOG_WRITE_KEY": "build-time input the release build substitutes; never read at runtime",
     "ORCA_PROJECT_ROOT": "orca.yaml repository contract (setup scripts, VM recipes), shared with Orca users",
     "ORCA_REAL_*": "opt-in real-binary test switches",
