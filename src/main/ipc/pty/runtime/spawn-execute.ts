@@ -1,4 +1,5 @@
 import type { PtySpawnResult } from '../../../providers/types'
+import { applyPodEnvAliasesToRequest } from '../../../../shared/pod-env-aliases'
 import { ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { tryGetProviderForPty } from '../provider/registry'
@@ -88,6 +89,8 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
         surface: args.agentSessionEnsure.surface,
         spawn: async () => {
           assertClientStillConnected()
+          // Fork-only (Pod): as spawnForStablePane, for agent-session spawns.
+          applyPodEnvAliasesToRequest(ctx.spawnOptions)
           providerResult = await ctx.provider.spawn(ctx.spawnOptions)
           ctx.rejectedRegistrationCandidate = providerResult
           // Why: a successful lower-owner return proves physical work committed even if admission sees an early exit.

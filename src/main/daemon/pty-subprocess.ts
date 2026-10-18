@@ -4,6 +4,7 @@ import { TerminalAttachCanceledError } from './daemon-errors'
 import { createDaemonPtyEnvironment } from './pty-subprocess/spawn-environment'
 import { notePodHookRelaySpawnEnv } from './pod-hook-relay/pod-hook-relay-endpoints'
 import { createPtyShellLaunchPlan } from './pty-subprocess/shell-launch-plan'
+import { applyPodEnvAliases } from '../../shared/pod-env-aliases'
 import { spawnNativeDaemonPty, type SpawnedDaemonPty } from './pty-subprocess/native-pty-spawn'
 import {
   formatPtySpawnError,
@@ -73,6 +74,8 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
   const env = createDaemonPtyEnvironment(opts)
   notePodHookRelaySpawnEnv(opts.sessionId, env)
   const launch = createPtyShellLaunchPlan(opts, env)
+  // Fork-only (Pod): after the launch plan's finalize, the last write to env before the spawn.
+  applyPodEnvAliases(env)
 
   await preflightPtySpawn({
     validationCwd: launch.validationCwd,
