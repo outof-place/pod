@@ -16,6 +16,7 @@ import { PaneSelectMenus } from './pod-browser-pane-select'
 import { PaneLinks } from './pod-browser-pane-links'
 import { PanePasskeys, type PanePasskeyAccount } from './pod-browser-pane-passkeys'
 import {
+  holdPaneFrames,
   PaneFramePump,
   POD_BROWSER_PANE_DEFAULT_SCALE,
   type PodBrowserFrames
@@ -23,13 +24,12 @@ import {
 import { followPanePage, panePageState } from './pod-browser-pane-page-events'
 import { applyPanePageInput } from './pod-browser-pane-page-input'
 import { PaneZoom } from './pod-browser-pane-zoom'
+import { PaneAgentDriving } from './pod-browser-pane-agent-driving'
 const PANE_FRAME_RATE = 60
 // A page nobody sees and no agent drives. Why 10: a rate change waits for the next tick, so a
 // pane coming back (or an agent's screenshot) waits ≤100 ms; an animated page costs 13 ms/s here
 // against 67 at 60 fps (1 fps: 1.7 ms/s but up to a second's wait). Measured on Electron 45.
 const UNSEEN_FRAME_RATE = 10
-// How long after an agent's last command its page still reads as driven.
-const AGENT_DRIVING_MS = 3_000
 
 type Page = {
   win: BrowserWindow
@@ -40,11 +40,11 @@ type Page = {
   seq: number
   // The device scale it renders at: Electron fixes an offscreen page's when it opens.
   scale: number
+  captureFrameHolds: number
   input: PaneInputState
   select: PaneSelectMenus
   links: PaneLinks
-  agentDrivingUntil: number
-  agentTimer: ReturnType<typeof setTimeout> | null
+  agent: PaneAgentDriving
   // The icon the current document declares; a new document starts without one.
   favicon: string | undefined
   zoom: PaneZoom
@@ -108,6 +108,7 @@ export class PodBrowserPaneController {
       // What the backend just gave its window (a pane reporting another scale meanwhile changes
       // nothing for it).
       scale: this.openingScale ?? this.newPageScale(),
+      captureFrameHolds: 0,
       input: new PaneInputState(),
       select: new PaneSelectMenus(wc, {
         pageId,
@@ -120,8 +121,10 @@ export class PodBrowserPaneController {
         }
       }),
       links: new PaneLinks(pageId, (message) => this.deps.send(message)),
-      agentDrivingUntil: 0,
-      agentTimer: null,
+      agent: new PaneAgentDriving(() => {
+        this.pace(page)
+        this.sendState(pageId)
+      }),
       favicon: undefined,
       zoom: new PaneZoom(wc, this.deps.defaultZoomLevel?.(), () => this.sendState(pageId))
     }
@@ -136,9 +139,7 @@ export class PodBrowserPaneController {
       state: () => this.sendState(pageId)
     })
     wc.once('destroyed', () => {
-      if (page.agentTimer) {
-        clearTimeout(page.agentTimer)
-      }
+      page.agent.dispose()
       if (this.pages.get(pageId) === page) {
         this.pages.delete(pageId)
       }
@@ -148,28 +149,24 @@ export class PodBrowserPaneController {
 
   /** An agent command reached this WebContents: its pane shows the "agent is driving" badge. */
   noteAgentCommand(webContentsId: number): void {
-    for (const [pageId, page] of this.pages) {
-      if (page.wc.isDestroyed() || page.wc.id !== webContentsId) {
-        continue
+    const [, page] = this.pageEntry(webContentsId) ?? []
+    page?.links.noteAgentCommand()
+    page?.agent.noteCommand()
+  }
+
+  private pageEntry(webContentsId: number): [string, Page] | null {
+    for (const entry of this.pages) {
+      if (!entry[1].wc.isDestroyed() && entry[1].wc.id === webContentsId) {
+        return entry
       }
-      const wasDriving = Date.now() < page.agentDrivingUntil
-      page.agentDrivingUntil = Date.now() + AGENT_DRIVING_MS
-      if (page.agentTimer) {
-        clearTimeout(page.agentTimer)
-      }
-      page.agentTimer = setTimeout(() => {
-        page.agentTimer = null
-        this.pace(page)
-        this.sendState(pageId)
-      }, AGENT_DRIVING_MS)
-      page.agentTimer.unref?.()
-      page.links.noteAgentCommand()
-      if (!wasDriving) {
-        this.pace(page)
-        this.sendState(pageId)
-      }
-      return
     }
+    return null
+  }
+
+  /** A capture beyond the viewport on this WebContents: its pane keeps its last frame until the release. */
+  holdFramesForCapture(webContentsId: number): () => void {
+    const [, page] = this.pageEntry(webContentsId) ?? []
+    return page ? holdPaneFrames(page, () => page.visible && page.wc.invalidate()) : () => {}
   }
 
   /** A download of one of these pages: PodNative's list follows it. */
@@ -197,13 +194,11 @@ export class PodBrowserPaneController {
     relyingPartyId: string,
     accounts: readonly PanePasskeyAccount[]
   ): Promise<string | null> | null {
-    for (const [pageId, page] of this.pages) {
-      if (!page.wc.isDestroyed() && page.wc.id === webContentsId) {
-        // Why not while an agent drives: nobody at the screen asked for it.
-        return this.userDriven(page) ? this.passkeys.request(pageId, relyingPartyId, accounts) : null
-      }
-    }
-    return null
+    const [pageId, page] = this.pageEntry(webContentsId) ?? []
+    // Why not while an agent drives: nobody at the screen asked for it.
+    return pageId && page && this.userDriven(page)
+      ? this.passkeys.request(pageId, relyingPartyId, accounts)
+      : null
   }
 
   handle(message: PodBrowserPaneClientMessage): void {
@@ -304,7 +299,7 @@ export class PodBrowserPaneController {
 
   // Why: what an agent does to a page must not open menus or show links on the user's screen.
   private userDriven(page: Page): boolean {
-    return page.token !== null && Date.now() >= page.agentDrivingUntil
+    return page.token !== null && !page.agent.driving
   }
 
   private refuse(pageId: string, reason: string): void {
@@ -328,7 +323,7 @@ export class PodBrowserPaneController {
 
   // Why an agent counts: rAF-polled waits (Playwright's default) would crawl at one frame a second.
   private pace(page: Page): void {
-    const seen = (page.token !== null && page.visible) || Date.now() < page.agentDrivingUntil
+    const seen = (page.token !== null && page.visible) || page.agent.driving
     if (!page.wc.isDestroyed()) {
       page.wc.setFrameRate(seen ? PANE_FRAME_RATE : UNSEEN_FRAME_RATE)
     }

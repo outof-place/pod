@@ -39,7 +39,11 @@ type PasskeySink = (
   accounts: readonly { credentialId: string; displayName?: string; name?: string }[]
 ) => Promise<string | null> | null
 
+/** Holds a page's pane on its last frame; returns the release. */
+type CaptureFrameHoldSink = (webContentsId: number) => () => void
+
 let agentCommandSink: AgentCommandSink | null = null
+let captureFrameHoldSink: CaptureFrameHoldSink | null = null
 let downloadSink: ((event: PodBrowserDownloadEvent) => void) | null = null
 let linkOpenSink: LinkOpenSink | null = null
 let passkeySink: PasskeySink | null = null
@@ -50,9 +54,11 @@ export function setPodBrowserPaneHooks(
     download: (event: PodBrowserDownloadEvent) => void
     openLink: LinkOpenSink
     passkey: PasskeySink
+    holdFramesForCapture?: CaptureFrameHoldSink
   } | null
 ): void {
   agentCommandSink = hooks?.agentCommand ?? null
+  captureFrameHoldSink = hooks?.holdFramesForCapture ?? null
   downloadSink = hooks?.download ?? null
   linkOpenSink = hooks?.openLink ?? null
   passkeySink = hooks?.passkey ?? null
@@ -83,4 +89,12 @@ export function pickPodPanePasskey(
   ...args: Parameters<PasskeySink>
 ): Promise<string | null> | null {
   return passkeySink?.(...args) ?? null
+}
+
+/**
+ * A capture beyond the viewport resizes the page's view while it runs: its pane keeps the last frame
+ * meanwhile instead of showing the tall one. A no-op outside one-app.
+ */
+export function holdPodPaneFramesForCapture(webContentsId: number): () => void {
+  return captureFrameHoldSink?.(webContentsId) ?? (() => {})
 }

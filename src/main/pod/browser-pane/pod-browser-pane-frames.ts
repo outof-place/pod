@@ -28,7 +28,31 @@ export type PodBrowserPaneStats = { framesSent: number; sendFailures: number; se
  * What a page's paint needs to go out: its pane's token (null: no pane), whether it shows, and the
  * device scale it renders at (fixed when it opened).
  */
-export type PaneFrameTarget = { token: number | null; visible: boolean; seq: number; scale: number }
+export type PaneFrameTarget = {
+  token: number | null
+  visible: boolean
+  seq: number
+  scale: number
+  // Captures beyond the viewport running now: their tall frames stay off the pane.
+  captureFrameHolds: number
+}
+
+/** Keeps `target`'s frames off its pane until the release, which asks for a fresh one. */
+export function holdPaneFrames(target: PaneFrameTarget, repaint: () => void): () => void {
+  target.captureFrameHolds += 1
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    target.captureFrameHolds -= 1
+    // Why: the frame Chromium drew back at the page's own size may have come while held.
+    if (target.captureFrameHolds === 0) {
+      repaint()
+    }
+  }
+}
 
 export class PaneFramePump {
   readonly stats: PodBrowserPaneStats = { framesSent: 0, sendFailures: 0, sendNs: 0 }
@@ -75,6 +99,7 @@ export class PaneFramePump {
       if (
         target.token === null ||
         !target.visible ||
+        target.captureFrameHolds > 0 ||
         !this.connected ||
         !this.frames ||
         !ioSurface

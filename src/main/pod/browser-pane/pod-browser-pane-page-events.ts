@@ -21,7 +21,7 @@ export type PanePage = {
   wc: WebContents
   token: number | null
   links: PaneLinks
-  agentDrivingUntil: number
+  agent: { readonly driving: boolean }
   // The icon the current document declares; a new document starts without one.
   favicon: string | undefined
 }
@@ -89,7 +89,7 @@ export function panePageState(pageId: string, page: PanePage): PodBrowserPaneSer
     loading: wc.isLoading(),
     canGoBack: wc.navigationHistory.canGoBack(),
     canGoForward: wc.navigationHistory.canGoForward(),
-    agentDriving: Date.now() < page.agentDrivingUntil,
+    agentDriving: page.agent.driving,
     ...(page.favicon ? { faviconUrl: page.favicon } : {}),
     zoomPercent: browserPageZoomLevelToPercent(wc.getZoomLevel())
   }

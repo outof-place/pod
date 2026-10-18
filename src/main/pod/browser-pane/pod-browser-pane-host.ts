@@ -56,7 +56,8 @@ export function installPodBrowserPanes(options: {
     download: (event) => panes.noteDownload(event),
     openLink: (browserPageId, url, activate) => panes.openLink(browserPageId, url, activate),
     passkey: (webContentsId, relyingPartyId, accounts) =>
-      panes.pickPasskey(webContentsId, relyingPartyId, accounts)
+      panes.pickPasskey(webContentsId, relyingPartyId, accounts),
+    holdFramesForCapture: (webContentsId) => panes.holdFramesForCapture(webContentsId)
   })
   app.once('will-quit', () => setPodBrowserPaneHooks(null))
   return panes
