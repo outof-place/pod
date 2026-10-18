@@ -8,8 +8,9 @@ import type { PodGoCacheLifecycleInput } from './pod-gocache-lifecycle'
 const lifecycle = vi.hoisted(() => ({ run: vi.fn() }))
 vi.mock('electron', () => ({
   app: {
+    // macOS Electron: getPath('home') comes from the user database whatever HOME says
     getPath: (name: string) =>
-      name === 'home' ? '/private/tmp/harness-home' : '/private/tmp/harness-home/userData'
+      name === 'home' ? '/Users/account' : '/private/tmp/harness-home/userData'
   }
 }))
 vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
@@ -55,6 +56,7 @@ beforeEach(() => {
     vi.stubEnv(name, undefined)
   }
   vi.stubEnv('PATH', '/usr/bin:/bin')
+  vi.stubEnv('HOME', '/private/tmp/harness-home')
   lifecycle.run.mockReset()
   lifecycle.run.mockResolvedValue({
     status: 'skipped',

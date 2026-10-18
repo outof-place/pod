@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { runProcess } from '@orca/process-host'
@@ -31,7 +32,8 @@ export function startPodAccFromStartup(): void {
     config,
     resourcesPath: process.resourcesPath,
     execPath: process.execPath,
-    home: app.getPath('home'),
+    // $HOME: on macOS Electron's getPath('home') ignores an override, so the HOME guard needs this
+    home: homedir(),
     accountHome: account,
     userDataPath: app.getPath('userData'),
     // the profile applyProductIdentityPreReady pins, anchored at the account home instead of $HOME

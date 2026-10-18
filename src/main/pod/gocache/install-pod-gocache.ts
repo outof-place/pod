@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { runProcess } from '@orca/process-host'
@@ -63,7 +64,8 @@ async function startPodGoCacheLifecycle(store: { getSettings(): GlobalSettings }
     const outcome = await runPodGoCacheLifecycle(
       {
         platform: process.platform,
-        home: app.getPath('home'),
+        // $HOME: on macOS Electron's getPath('home') ignores an override, so the HOME guard needs this
+        home: homedir(),
         accountHome: account,
         userDataPath: app.getPath('userData'),
         // the profile applyProductIdentityPreReady pins, anchored at the account home
