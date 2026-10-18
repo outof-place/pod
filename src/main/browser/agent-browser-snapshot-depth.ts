@@ -120,8 +120,7 @@ function shape(nodes: readonly AxTreeNode[]): Shaped[] {
 // agent-browser might give a ref only through its cursor scan (which runs in the page) is unsure,
 // and unsure counts as not printed: the indent found is then a lower bound.
 function surelyPrinted(node: Shaped, interactive: boolean): boolean {
-  const ref =
-    INTERACTIVE_ROLES.has(node.role) || (CONTENT_ROLES.has(node.role) && node.name !== '')
+  const ref = INTERACTIVE_ROLES.has(node.role) || (CONTENT_ROLES.has(node.role) && node.name !== '')
   if (node.role === '' || node.role === 'RootWebArea' || node.role === 'WebArea') {
     return false
   }
@@ -152,6 +151,8 @@ export function axTreeCoversSnapshotDepth(
   }
   // Parents come first in a breadth-first list, so one pass fills every indent.
   const indent = Array.from({ length: shaped.length }, () => 0)
+  let cut = false
+  let printsFrame = false
   for (let index = 0; index < shaped.length; index++) {
     const parent = parents[index]
     if (parent !== -1) {
@@ -161,6 +162,9 @@ export function axTreeCoversSnapshotDepth(
     if (shaped[index].cut && indent[index] <= depth) {
       return false
     }
+    cut ||= shaped[index].cut
+    printsFrame ||= shaped[index].role === 'Iframe' && indent[index] <= depth
   }
-  return true
+  // Why: agent-browser numbers a child frame's refs after every main-frame ref, which a cut tree lacks.
+  return !(cut && printsFrame)
 }

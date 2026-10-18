@@ -26,8 +26,12 @@ describe('axTreeCoversSnapshotDepth', () => {
       role: 'RootWebArea',
       children: [{ role: 'generic', children: [{ role: 'link', name: 'a' }, wrapped(3, SAVE)] }]
     })
-    expect(axTreeCoversSnapshotDepth(twoChildren.cut(3), { depth: 0, interactive: false })).toBe(true)
-    expect(axTreeCoversSnapshotDepth(twoChildren.cut(3), { depth: 1, interactive: false })).toBe(false)
+    expect(axTreeCoversSnapshotDepth(twoChildren.cut(3), { depth: 0, interactive: false })).toBe(
+      true
+    )
+    expect(axTreeCoversSnapshotDepth(twoChildren.cut(3), { depth: 1, interactive: false })).toBe(
+      false
+    )
   })
 
   it('never fetches deeper for text cut off at the boundary: its only children are text boxes', () => {
@@ -47,12 +51,28 @@ describe('axTreeCoversSnapshotDepth', () => {
     const nav = axTree({
       role: 'RootWebArea',
       children: [
-        { role: 'navigation', name: 'Main', children: [{ role: 'list', children: [wrapped(2, SAVE)] }] }
+        {
+          role: 'navigation',
+          name: 'Main',
+          children: [{ role: 'list', children: [wrapped(2, SAVE)] }]
+        }
       ]
     })
     // The list prints nothing in interactive mode, so Save sits at depth 1 under the navigation.
     expect(axTreeCoversSnapshotDepth(nav.cut(4), { depth: 1, interactive: true })).toBe(false)
     expect(axTreeCoversSnapshotDepth(nav.cut(5), { depth: 1, interactive: true })).toBe(true)
+  })
+
+  it('refuses a cut that prints an iframe: its frame refs come after every main-frame ref', () => {
+    const framed = axTree({
+      role: 'RootWebArea',
+      children: [
+        { role: 'Iframe', name: 'Checkout' },
+        { role: 'main', children: [wrapped(5, SAVE)] }
+      ]
+    })
+    expect(axTreeCoversSnapshotDepth(framed.cut(2), { depth: 0, interactive: false })).toBe(false)
+    expect(axTreeCoversSnapshotDepth(framed.cut(), { depth: 0, interactive: false })).toBe(true)
   })
 
   it('refuses a tree where a node has two parents (aria-owns)', () => {
