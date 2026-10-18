@@ -2,13 +2,12 @@
  * Fork-only (Pod): a Pod terminal carries every renamed ORCA_ env name also as POD_, with the same
  * value, and no POD_ alias without its ORCA_ name (src/shared/pod-env-aliases.ts).
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { buildShellCommandFromArgv } from '../../src/shared/tui-agent-startup-shell'
 import {
   POD_ALIASED_ORCA_ENV_NAMES,
-  POD_ENV_ALIAS_EXCLUSIONS,
-  podSpellingOf
+  POD_ENV_ALIAS_EXCLUSIONS
 } from '../../src/shared/pod-env-aliases'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -33,32 +32,37 @@ test('a Pod terminal exports each aliased ORCA_ name as POD_ with the same value
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage)
   const ptyId = await waitForActivePanePtyId(orcaPage)
-  const dump = testInfo.outputPath('terminal-env.txt')
+  // Why names in and names out: the terminal compares the values itself, so none reach the disk.
+  const script = testInfo.outputPath('compare-pod-env-aliases.sh')
+  const result = testInfo.outputPath('pod-env-alias-findings.txt')
+  writeFileSync(script, aliasComparisonScript())
   await execInTerminal(
     orcaPage,
     ptyId,
-    buildShellCommandFromArgv(['/bin/sh', '-c', `env > "${dump}"`], 'posix')
+    buildShellCommandFromArgv(['/bin/sh', script, result], 'posix')
   )
-  await expect
-    .poll(() => existsSync(dump) && readFileSync(dump, 'utf8').includes('POD_PANE_KEY='), {
-      timeout: 30_000
-    })
-    .toBe(true)
-
-  const terminalEnv = new Map(
-    readFileSync(dump, 'utf8')
-      .split('\n')
-      .filter((line) => line.includes('='))
-      .map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)])
-  )
-  expect(terminalEnv.get('POD_PANE_KEY')).toBe(terminalEnv.get('ORCA_PANE_KEY'))
-  expect(terminalEnv.get('POD_TAB_ID')).toBe(terminalEnv.get('ORCA_TAB_ID'))
-  for (const name of POD_ALIASED_ORCA_ENV_NAMES) {
-    expect(terminalEnv.get(podSpellingOf(name)), podSpellingOf(name)).toBe(terminalEnv.get(name))
-  }
-  for (const suffix of Object.keys(POD_ENV_ALIAS_EXCLUSIONS)) {
-    if (suffix !== 'VERSION') {
-      expect(terminalEnv.has(`POD_${suffix}`), suffix).toBe(false)
-    }
-  }
+  await expect.poll(() => existsSync(result), { timeout: 30_000 }).toBe(true)
+  expect(readFileSync(result, 'utf8').split('\n').filter(Boolean)).toEqual(['pane key aliased'])
 })
+
+/** A POSIX sh script that writes only the names of aliases that differ from their ORCA_ name. */
+function aliasComparisonScript(): string {
+  const aliased = POD_ALIASED_ORCA_ENV_NAMES.map((name) => name.slice('ORCA_'.length))
+  const excluded = Object.keys(POD_ENV_ALIAS_EXCLUSIONS).filter((suffix) => suffix !== 'VERSION')
+  return `out=$1
+{
+  [ -n "\${ORCA_PANE_KEY+x}" ] && [ "\${POD_PANE_KEY-}" = "\${ORCA_PANE_KEY}" ] && echo 'pane key aliased'
+  for n in ${aliased.join(' ')}; do
+    eval "orca_set=\\\${ORCA_$n+x} pod_set=\\\${POD_$n+x}"
+    if [ "$orca_set" != "$pod_set" ]; then
+      echo "mismatch $n"
+    elif [ -n "$orca_set" ] && ! eval '[ "$ORCA_'"$n"'" = "$POD_'"$n"'" ]'; then
+      echo "mismatch $n"
+    fi
+  done
+  for n in ${excluded.join(' ')}; do
+    eval "[ -z \\"\\\${POD_$n+x}\\" ]" || echo "excluded name aliased $n"
+  done
+} > "$out.part" && mv "$out.part" "$out"
+`
+}
