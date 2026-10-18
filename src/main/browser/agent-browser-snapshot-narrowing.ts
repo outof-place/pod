@@ -4,7 +4,8 @@ import {
   type SnapshotDepthOptions
 } from './agent-browser-snapshot-depth'
 
-// A cut this large that still falls short costs more than the rest of the tree: fetch it all.
+// A cut this large that still falls short ends the search (the whole tree comes next): it bounds
+// what a failed search wastes to about a fifth of a 60,000-node page's whole-tree fetch.
 const CUT_NODE_LIMIT = 5_000
 const MAX_CUT_DEPTH = 64
 const REMEMBERED_CUTS_LIMIT = 64
