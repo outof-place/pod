@@ -14,11 +14,14 @@ export const LONG_POLL_CAP = 16
 export const ASK_LONG_POLL_SHARE = 0.5
 // Why: eight host slots preserve four-host overlap for two independently paired desktops.
 export const BROWSER_HOST_LONG_POLL_SHARE = 0.5
-// Why: asks and permanent hosts together retain the prior quarter-budget reservation for waits.
+// Fork-only (Pod): agents waiting on `marks --wait` block until the user sends marks, up to an hour;
+// a fleet of them must not take the slots terminal.wait and check --wait need.
+export const MARKS_LONG_POLL_SHARE = 0.25
+// Why: asks, permanent hosts and marks waits together retain the prior quarter-budget reservation for waits.
 export const SPECIALIZED_LONG_POLL_SHARE = 0.75
 
 // Why: 'ask' is metered separately from 'wait' — same keepalive/abort wiring, its own sub-cap.
-export type RuntimeLongPollClass = 'ask' | 'browser-host' | 'wait'
+export type RuntimeLongPollClass = 'ask' | 'browser-host' | 'browser-marks' | 'wait'
 
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
 export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollClass | null {
@@ -61,7 +64,7 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   // Fork-only (Pod): `marks --wait` holds until the user sends marks, up to an hour.
   if (request.method === 'browser.marks') {
     const params = request.params as { wait?: unknown } | undefined
-    return params?.wait === true ? 'wait' : null
+    return params?.wait === true ? 'browser-marks' : null
   }
   if (request.method === 'browser.clientHost.attach') {
     return 'browser-host'

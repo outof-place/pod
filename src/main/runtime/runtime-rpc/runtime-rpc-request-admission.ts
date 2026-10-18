@@ -46,8 +46,8 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     }
   }
 
-  // Why: one fence for both transports — the total cap protects short RPCs, the ask
-  // sub-cap protects terminal.wait / check --wait from slow reply-blocked asks.
+  // Why: one fence for both transports: the total cap protects short RPCs, the ask, host and
+  // marks sub-caps protect terminal.wait / check --wait from slow reply-blocked waits.
   // Returns the rejection message, or null once the slot is reserved.
   protected admitLongPoll(
     longPoll: RuntimeLongPollClass | null,
@@ -60,12 +60,18 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
       return 'long-poll capacity reached; retry with backoff'
     }
     if (
-      (longPoll === 'ask' || longPoll === 'browser-host') &&
-      this.activeAskLongPolls + this.activeBrowserHostLongPolls >= this.specializedLongPollCap
+      longPoll !== 'wait' &&
+      this.activeAskLongPolls + this.activeBrowserHostLongPolls + this.activeMarksLongPolls >=
+        this.specializedLongPollCap
     ) {
       return longPoll === 'ask'
         ? 'orchestration.ask capacity reached; retry with backoff'
-        : 'browser-host capacity reached; retry with backoff'
+        : longPoll === 'browser-host'
+          ? 'browser-host capacity reached; retry with backoff'
+          : 'browser.marks capacity reached; retry with backoff'
+    }
+    if (longPoll === 'browser-marks' && this.activeMarksLongPolls >= this.marksLongPollCap) {
+      return 'browser.marks capacity reached; retry with backoff'
     }
     if (longPoll === 'ask' && this.activeAskLongPolls >= this.askLongPollCap) {
       return 'orchestration.ask capacity reached; retry with backoff'
@@ -82,6 +88,8 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     this.activeLongPolls += 1
     if (longPoll === 'ask') {
       this.activeAskLongPolls += 1
+    } else if (longPoll === 'browser-marks') {
+      this.activeMarksLongPolls += 1
     } else if (longPoll === 'browser-host') {
       this.activeBrowserHostLongPolls += 1
       if (pairedDeviceId !== undefined) {
@@ -101,6 +109,8 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
     if (longPoll === 'ask') {
       this.activeAskLongPolls = Math.max(0, this.activeAskLongPolls - 1)
+    } else if (longPoll === 'browser-marks') {
+      this.activeMarksLongPolls = Math.max(0, this.activeMarksLongPolls - 1)
     } else if (longPoll === 'browser-host') {
       this.activeBrowserHostLongPolls = Math.max(0, this.activeBrowserHostLongPolls - 1)
       if (pairedDeviceId !== undefined) {

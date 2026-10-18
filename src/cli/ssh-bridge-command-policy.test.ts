@@ -42,6 +42,14 @@ describe('owner-only commands over the SSH bridge', () => {
     ).toThrow(/decode result\.data/)
   })
 
+  it('refuses marks --save with what marks carries instead', () => {
+    expect(() =>
+      refuseOwnerOnlySshBridgeCommand(['marks'], new Map([['save', true]]), BRIDGED)
+    ).toThrow(
+      /marks --save would write each mark's screenshot on the Orca host.*marks\[\]\.screenshot\.data/
+    )
+  })
+
   it('leaves --path alone on other commands and outside the bridge', () => {
     expect(() =>
       refuseOwnerOnlySshBridgeCommand(['file', 'open'], new Map([['path', 'a.txt']]), BRIDGED)

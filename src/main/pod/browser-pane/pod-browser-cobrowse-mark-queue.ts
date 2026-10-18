@@ -3,7 +3,9 @@
 import { COBROWSE_LIMITS, type CobrowseMark } from '../../../shared/browser-cobrowse-types'
 import type { StoredMark } from './pod-browser-cobrowse-anchors'
 
-type Waiter = (marks: CobrowseMark[]) => void
+type Taken = { marks: CobrowseMark[]; timedOut: boolean; pageClosed?: true }
+// A waiter answers true when it took the marks (its agent was still there).
+type Waiter = (result: Taken) => boolean
 
 export type MarkTakeOptions = {
   wait: boolean
@@ -13,10 +15,19 @@ export type MarkTakeOptions = {
   signal?: AbortSignal
 }
 
+/** A note cut to COBROWSE_LIMITS.note code points (PodNative cuts by Unicode scalars, the same count). */
+export function cutNote(note: string): string {
+  const points = Array.from(note)
+  return points.length > COBROWSE_LIMITS.note
+    ? points.slice(0, COBROWSE_LIMITS.note).join('')
+    : note
+}
+
 export class CobrowseMarkQueue {
   private stored: StoredMark[] = []
   private readonly waiters = new Set<Waiter>()
   private nextNumber = 1
+  private closed = false
 
   // `changed`: what PodNative draws of the marks, or whether an agent waits, changed.
   constructor(private readonly changed: () => void) {}
@@ -29,40 +40,48 @@ export class CobrowseMarkQueue {
     return this.waiters.size > 0
   }
 
-  get idle(): boolean {
-    return this.stored.length === 0 && this.waiters.size === 0
-  }
-
   has(markId: string): boolean {
     return this.stored.some((m) => m.mark.id === markId)
   }
 
-  /**
-   * The next mark's number, claimed now so marks made at once differ; null when the page holds
-   * marksPerPage no agent took yet (the oldest taken one gives way, a draft never does).
-   */
-  claimNumber(): number | null {
-    if (this.stored.length >= COBROWSE_LIMITS.marksPerPage) {
-      const oldest = this.stored.findIndex((m) => m.state === 'taken')
-      if (oldest === -1) {
-        return null
-      }
-      this.stored.splice(oldest, 1)
-    }
-    this.nextNumber += 1
-    return this.nextNumber - 1
+  /** Room for one more mark: under marksPerPage, or a taken one can give way (a draft never does). */
+  get hasRoom(): boolean {
+    return (
+      this.stored.length < COBROWSE_LIMITS.marksPerPage ||
+      this.stored.some((m) => m.state === 'taken')
+    )
   }
 
-  add(stored: StoredMark): void {
-    this.stored.push(stored)
-    void stored.ready.then(this.changed)
+  /**
+   * A draft the user just made, numbered now (the oldest taken mark gives way when the page is
+   * full); `describe` reads what an agent gets of it. Null when there is no room: nothing changed.
+   */
+  add(
+    entry: { mark: Omit<CobrowseMark, 'n'>; anchor: StoredMark['anchor'] },
+    describe: (mark: CobrowseMark) => Promise<void>
+  ): CobrowseMark | null {
+    if (this.closed || this.has(entry.mark.id) || !this.hasRoom) {
+      return null
+    }
+    if (this.stored.length >= COBROWSE_LIMITS.marksPerPage) {
+      this.stored.splice(
+        this.stored.findIndex((m) => m.state === 'taken'),
+        1
+      )
+    }
+    const mark: CobrowseMark = { ...entry.mark, n: this.nextNumber }
+    this.nextNumber += 1
+    const ready = describe(mark)
+    this.stored.push({ mark, state: 'draft', anchor: entry.anchor, ready })
+    void ready.then(this.changed)
     this.changed()
+    return mark
   }
 
   setNote(markId: string, note: string): void {
     const stored = this.stored.find((m) => m.mark.id === markId)
     if (stored) {
-      stored.mark.note = note.slice(0, COBROWSE_LIMITS.note)
+      stored.mark.note = cutNote(note)
       this.changed()
     }
   }
@@ -88,43 +107,72 @@ export class CobrowseMarkQueue {
   }
 
   /** `browser.marks`: what the user sent and no agent took yet; waits up to `timeoutMs` for some. */
-  async takeFor(options: MarkTakeOptions): Promise<{ marks: CobrowseMark[]; timedOut: boolean }> {
+  async takeFor(options: MarkTakeOptions): Promise<Taken> {
     if (options.peek) {
       await Promise.all(this.stored.map((m) => m.ready))
       return { marks: this.stored.map((m) => m.mark), timedOut: false }
+    }
+    if (this.closed) {
+      return { marks: [], timedOut: false, pageClosed: true }
     }
     if (this.stored.some((m) => m.state === 'sent') || !options.wait) {
       return { marks: await this.take(), timedOut: false }
     }
     return await new Promise((resolve) => {
-      const finish = (marks: CobrowseMark[], timedOut: boolean): void => {
+      let done = false
+      const finish = (result: Taken): boolean => {
+        if (done) {
+          return false
+        }
+        done = true
         clearTimeout(timer)
         options.signal?.removeEventListener('abort', abort)
-        this.waiters.delete(waiter)
+        this.waiters.delete(finish)
         this.changed()
-        resolve({ marks, timedOut })
+        resolve(result)
+        return true
       }
-      const waiter: Waiter = (marks) => finish(marks, false)
-      const abort = (): void => finish([], true)
+      const abort = (): void => void finish({ marks: [], timedOut: true })
       const timer = setTimeout(abort, options.timeoutMs)
+      if (options.signal?.aborted) {
+        abort()
+        return
+      }
       options.signal?.addEventListener('abort', abort, { once: true })
-      this.waiters.add(waiter)
+      this.waiters.add(finish)
       this.changed()
     })
   }
 
-  /** The page is gone: waiting agents get nothing. */
+  /** The page is gone: waiting agents learn it closed. */
   dispose(): void {
+    this.closed = true
     for (const waiter of this.waiters) {
-      waiter([])
+      waiter({ marks: [], timedOut: false, pageClosed: true })
     }
     this.stored = []
   }
 
+  // Why taken only once a waiter took them: one whose agent left during the reads must not swallow
+  // them, and the tray must not say the agent has them before it does.
   private async deliver(): Promise<void> {
-    const marks = await this.take()
+    const sent = this.stored.filter((m) => m.state === 'sent')
+    await Promise.all(sent.map((m) => m.ready))
+    // Another take may have had some meanwhile, or the user removed them.
+    const still = sent.filter((m) => m.state === 'sent' && this.stored.includes(m))
+    if (still.length === 0) {
+      return
+    }
+    const marks = still.map((m) => m.mark)
+    let took = false
     for (const waiter of this.waiters) {
-      waiter(marks)
+      took = waiter({ marks, timedOut: false }) || took
+    }
+    if (took) {
+      for (const m of still) {
+        m.state = 'taken'
+      }
+      this.changed()
     }
   }
 

@@ -70,7 +70,7 @@ function saveShots(response: RuntimeRpcSuccess<CobrowseMarksResult>): {
 export const BROWSER_COBROWSE_HANDLERS: Record<string, CommandHandler> = {
   marks: async ({ flags, client, cwd, json }) => {
     const wait = flags.get('wait') === true
-    const timeout = getOptionalPositiveIntegerFlag(flags, 'timeout')
+    const timeout = getOptionalPositiveIntegerFlag(flags, 'timeout-ms')
     const peek = flags.get('peek') === true
     if (peek && wait) {
       throw new RuntimeClientError('invalid_argument', 'Use --peek or --wait, not both.')
@@ -96,9 +96,12 @@ export const BROWSER_COBROWSE_HANDLERS: Record<string, CommandHandler> = {
         // The Markdown's marks carry no image data; their screenshots are the saved files.
         return formatCobrowseMarksMarkdown(response.result.marks, paths)
       }
+      if (value.pageClosed) {
+        return 'No marks: the tab closed before the user sent any.'
+      }
       return value.timedOut
         ? 'No marks: the wait ended before the user sent any.'
-        : 'No marks waiting. Run with --wait to wait for the user to send some.'
+        : 'No marks waiting. Ask the user to mark something, then run with --wait.'
     })
   },
   point: async ({ flags, client, cwd, json }) => {

@@ -57,7 +57,7 @@ describe('browser.marks and browser.point', () => {
       method: 'browser.marks',
       params
     })
-    expect(classifyRuntimeLongPoll(request({ wait: true }))).toBe('wait')
+    expect(classifyRuntimeLongPoll(request({ wait: true }))).toBe('browser-marks')
     expect(classifyRuntimeLongPoll(request({}))).toBeNull()
   })
 
@@ -92,6 +92,27 @@ describe('browser.marks and browser.point', () => {
     })
     await call('browser.point', { clear: true }, ctx)
     expect(point).toHaveBeenLastCalledWith('page-1', { clear: true, pointerId: undefined })
+  })
+
+  it('hands agent-browser only the locator forms its get box takes; the rest are CSS', async () => {
+    const point = vi.fn(async () => ({ pointerId: 'p1', box: null, shown: true, cleared: 0 }))
+    install({ point })
+    const { ctx, runtime } = context()
+    for (const element of ['@e3', 'text=Save', 'xpath=//button']) {
+      runtime.browserElementBox.mockClear()
+      await call('browser.point', { element }, ctx)
+      expect(runtime.browserElementBox).toHaveBeenCalledTimes(1)
+    }
+    for (const element of ['role=button', 'label=Email', 'testid=save']) {
+      runtime.browserElementBox.mockClear()
+      await call('browser.point', { element }, ctx)
+      expect(runtime.browserElementBox).not.toHaveBeenCalled()
+      expect(point).toHaveBeenLastCalledWith('page-1', {
+        selector: element,
+        label: '',
+        keep: false
+      })
+    }
   })
 
   it('refuses a point with neither an element nor a whole region', () => {

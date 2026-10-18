@@ -46,7 +46,9 @@ export function refuseOwnerOnlySshBridgeCommand(
       if (flags.has(flag)) {
         throw new RuntimeClientError(
           'forbidden',
-          `--${flag} would write the image on the Orca host, not on this machine. Omit it and decode result.data (base64) from the --json reply.`
+          commandPath[0] === 'marks'
+            ? "marks --save would write each mark's screenshot on the Orca host, not on this machine. Omit it and decode result.marks[].screenshot.data (base64) from the --json reply."
+            : `--${flag} would write the image on the Orca host, not on this machine. Omit it and decode result.data (base64) from the --json reply.`
         )
       }
     }

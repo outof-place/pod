@@ -26,11 +26,23 @@ const READ_ONLY = new Set([
   'Accessibility.getPartialAXTree'
 ])
 
-/** A page as CDP sees it: elements at document coordinates, a scroll, a 1000x600 viewport. */
+/**
+ * A page as Chromium's CDP answers for it (checked on Electron 45, zoom-probe/result.json): elements
+ * at document CSS px, a 1000x600 DIP view whose CSS viewport is that over the zoom; getBoxModel in
+ * viewport CSS px, getNodeForLocation in document CSS px, whatever the zoom.
+ */
 class FakePage {
   scrollY = 0
+  failLayout = false
   readonly calls: { method: string; params?: Record<string, unknown> }[] = []
-  constructor(readonly elements: Element[]) {}
+  constructor(
+    readonly elements: Element[],
+    readonly zoom = 1
+  ) {}
+
+  get viewHeight(): number {
+    return 600 / this.zoom
+  }
 
   find(id: number): Element | undefined {
     return this.elements.find((e) => e.id === id && !e.gone)
@@ -44,8 +56,16 @@ class FakePage {
         : Number(String(params.objectId ?? '').slice(4))
     switch (method) {
       case 'Page.getLayoutMetrics':
+        if (this.failLayout) {
+          throw new Error('Target closed')
+        }
         return {
-          cssLayoutViewport: { pageX: 0, pageY: this.scrollY, clientWidth: 1000, clientHeight: 600 }
+          cssLayoutViewport: {
+            pageX: 0,
+            pageY: this.scrollY,
+            clientWidth: Math.floor(1000 / this.zoom),
+            clientHeight: Math.floor(this.viewHeight)
+          }
         }
       case 'DOM.getNodeForLocation': {
         const x = Number(params.x)
@@ -121,7 +141,8 @@ class FakePage {
         const element = this.find(id)
         if (
           element &&
-          (element.box.y < this.scrollY || element.box.y + element.box.height > this.scrollY + 600)
+          (element.box.y < this.scrollY ||
+            element.box.y + element.box.height > this.scrollY + this.viewHeight)
         ) {
           this.scrollY = Math.max(0, element.box.y - 100)
         }
@@ -135,23 +156,39 @@ class FakePage {
   }
 }
 
-function setup(elements: Element[], options: { watching?: boolean } = {}) {
+function setup(
+  elements: Element[],
+  options: { watching?: boolean; zoom?: number; url?: string } = {}
+) {
   // Each test its own copy, so one that fails leaves the next a whole page.
-  const page = new FakePage(elements.map((e) => ({ ...e, box: { ...e.box } })))
+  const page = new FakePage(
+    elements.map((e) => ({ ...e, box: { ...e.box } })),
+    options.zoom ?? 1
+  )
   const sent: PodBrowserCobrowseServerMessage[] = []
-  const capture = vi.fn(async () => 'iVBORw0KGgo=')
-  const release = vi.fn()
+  const capture = vi.fn(async (_clip: Record<string, number>) => 'iVBORw0KGgo=')
+  // The page's debugger: held from the first CDP sender handed out until released.
+  const lease = { held: false, takes: 0 }
+  const release = vi.fn(() => {
+    lease.held = false
+  })
   let ids = 0
   const cobrowse = new PaneCobrowse({
     pageId: 'page-1',
-    cdp: () => page.cdp,
+    cdp: () => {
+      if (!lease.held) {
+        lease.held = true
+        lease.takes += 1
+      }
+      return page.cdp
+    },
     releaseCdp: release,
     capture,
     send: (message) => sent.push(message),
     attached: () => true,
     paneShown: () => true,
-    page: () => ({ url: 'http://localhost:5173/settings', title: 'Settings' }),
-    zoom: () => 1,
+    page: () => ({ url: options.url ?? 'http://localhost:5173/settings', title: 'Settings' }),
+    zoom: () => page.zoom,
     now: () => new Date('2026-10-18T12:00:00Z'),
     randomId: () => `pointer-${++ids}`
   })
@@ -159,7 +196,8 @@ function setup(elements: Element[], options: { watching?: boolean } = {}) {
     cobrowse.setWatching(true)
   }
   const state = () => sent.findLast((m) => m.type === 'browserCobrowseState')
-  return { page, sent, cobrowse, capture, release, state }
+  const refused = () => sent.filter((m) => m.type === 'browserMarkRefused')
+  return { page, sent, cobrowse, capture, release, state, lease, refused }
 }
 
 const SAVE: Element = {
@@ -386,8 +424,299 @@ describe('co-browse costs and page safety', () => {
   it('lets go of the page debugger once nothing is marked, pointed at or hovered', async () => {
     const { cobrowse, release } = setup([FORM, SAVE])
     await cobrowse.point({ selector: 'button#save', label: 'x', keep: false })
+    await settle()
     release.mockClear()
     cobrowse.clearPointers()
     expect(release).toHaveBeenCalled()
+  })
+})
+
+describe('co-browse limits and refusals', () => {
+  const MARK = (i: number) => `6c1f7f0e-9a3b-4c2d-8e1f-${String(i).padStart(12, '0')}`
+
+  it('refuses the 21st mark nobody took, without evicting a draft or using up a number', async () => {
+    const { cobrowse, state, refused } = setup([FORM, SAVE])
+    for (let i = 0; i < 20; i++) {
+      await cobrowse.addMark(MARK(i), 120, 300, 0, 0)
+    }
+    await cobrowse.addMark(MARK(20), 120, 300, 0, 0)
+    expect(state()?.marks).toHaveLength(20)
+    expect(refused().at(-1)).toMatchObject({
+      markId: MARK(20),
+      reason: expect.stringContaining('20 marks')
+    })
+    cobrowse.removeMark(MARK(19))
+    await cobrowse.addMark(MARK(21), 120, 300, 0, 0)
+    // 20 went to the mark removed; the refused one used none.
+    expect(state()?.marks.at(-1)).toMatchObject({ id: MARK(21), n: 21 })
+  })
+
+  it('a full page makes room by dropping the oldest mark an agent already took', async () => {
+    const { cobrowse, state } = setup([FORM, SAVE])
+    for (let i = 0; i < 20; i++) {
+      await cobrowse.addMark(MARK(i), 120, 300, 0, 0)
+    }
+    cobrowse.send()
+    await cobrowse.takeMarks({ wait: false, timeoutMs: 1000, peek: false })
+    await cobrowse.addMark(MARK(20), 120, 300, 0, 0)
+    expect(state()?.marks).toHaveLength(20)
+    expect(state()?.marks[0].id).toBe(MARK(1))
+    expect(state()?.marks.at(-1)).toMatchObject({ id: MARK(20), n: 21, state: 'draft' })
+  })
+
+  it('a click on nothing hit-testable is refused and burns no number', async () => {
+    const { page, cobrowse, state, refused } = setup([SAVE])
+    await cobrowse.addMark(MARK(1), 900, 500, 0, 0)
+    expect(refused()).toEqual([
+      {
+        type: 'browserMarkRefused',
+        pageId: 'page-1',
+        markId: MARK(1),
+        reason: 'Nothing on the page there to mark.'
+      }
+    ])
+    expect(state()?.marks ?? []).toEqual([])
+    page.scrollY = 800
+    await cobrowse.addMark(MARK(2), 120, 110, 0, 0)
+    expect(state()?.marks.map((m) => m.n)).toEqual([1])
+  })
+
+  it('a repeated markAdd makes one mark', async () => {
+    const { cobrowse, state } = setup([FORM, SAVE])
+    await Promise.all([
+      cobrowse.addMark(MARK_ID, 120, 300, 0, 0),
+      cobrowse.addMark(MARK_ID, 120, 300, 0, 0)
+    ])
+    await cobrowse.addMark(MARK_ID, 120, 300, 0, 0)
+    expect(state()?.marks.map((m) => m.n)).toEqual([1])
+  })
+
+  it('keeps at most five pointers, the oldest giving way', async () => {
+    const { cobrowse, state } = setup([FORM, SAVE])
+    for (let i = 1; i <= 6; i++) {
+      await cobrowse.point({ selector: 'form.settings', label: `Step ${i}`, keep: true })
+    }
+    expect(state()?.pointers.map((p) => p.label)).toEqual([
+      'Step 2',
+      'Step 3',
+      'Step 4',
+      'Step 5',
+      'Step 6'
+    ])
+  })
+
+  it('cuts a note at 2000 code points, emoji counted once', async () => {
+    const { cobrowse } = setup([FORM, SAVE])
+    await cobrowse.addMark(MARK_ID, 120, 300, 0, 0)
+    cobrowse.setNote(MARK_ID, '😀'.repeat(2100))
+    const [mark] = (await cobrowse.takeMarks({ wait: false, timeoutMs: 1, peek: true })).marks
+    expect(Array.from(mark.note)).toHaveLength(2000)
+    expect(mark.note.endsWith('😀')).toBe(true)
+  })
+})
+
+describe('co-browse waiting agents', () => {
+  it('a wait with nothing sent ends at its timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const { cobrowse, state } = setup([FORM])
+      const waiting = cobrowse.takeMarks({ wait: true, timeoutMs: 5000, peek: false })
+      await vi.advanceTimersByTimeAsync(4999)
+      expect(state()?.agentWaiting).toBe(true)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(await waiting).toMatchObject({ marks: [], timedOut: true })
+      expect(state()?.agentWaiting).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a waiter learns the tab closed, not that the wait timed out', async () => {
+    const { cobrowse } = setup([FORM])
+    const waiting = cobrowse.takeMarks({ wait: true, timeoutMs: 60_000, peek: false })
+    cobrowse.dispose()
+    expect(await waiting).toMatchObject({ marks: [], timedOut: false, pageClosed: true })
+    expect(await cobrowse.takeMarks({ wait: true, timeoutMs: 60_000, peek: false })).toMatchObject({
+      pageClosed: true
+    })
+  })
+
+  it('marks sent while the only waiter leaves stay sent for the next agent', async () => {
+    const { cobrowse, capture, state } = setup([FORM, SAVE])
+    let finishShot: (data: string) => void = () => {}
+    capture.mockImplementationOnce(() => new Promise<string>((resolve) => (finishShot = resolve)))
+    const abort = new AbortController()
+    const waiting = cobrowse.takeMarks({
+      wait: true,
+      timeoutMs: 60_000,
+      peek: false,
+      signal: abort.signal
+    })
+    await cobrowse.addMark(MARK_ID, 120, 300, 0, 0)
+    cobrowse.send()
+    // The screenshot is still being read when the agent goes away.
+    await vi.waitFor(() => expect(capture).toHaveBeenCalled())
+    expect(state()?.marks[0].state).toBe('sent')
+    abort.abort()
+    expect((await waiting).timedOut).toBe(true)
+    finishShot('iVBORw0KGgo=')
+    await settle()
+    expect(state()?.marks[0].state).toBe('sent')
+    const next = await cobrowse.takeMarks({ wait: true, timeoutMs: 60_000, peek: false })
+    expect(next.marks.map((m) => m.id)).toEqual([MARK_ID])
+  })
+})
+
+describe('co-browse debugger lease', () => {
+  it('a waiting agent does not hold the page debugger, and it goes once the wait ends', async () => {
+    const { cobrowse, lease } = setup([FORM, SAVE])
+    await cobrowse.point({ selector: 'button#save', label: 'x', keep: false })
+    const waiting = cobrowse.takeMarks({ wait: true, timeoutMs: 10, peek: false })
+    cobrowse.clearPointers()
+    await settle()
+    expect(lease.held).toBe(false)
+    await waiting
+    expect(lease.held).toBe(false)
+  })
+
+  it('lets go once a pointer whose element went is pruned', async () => {
+    const { page, cobrowse, lease } = setup([FORM, SAVE])
+    await cobrowse.point({ selector: 'button#save', label: 'x', keep: false })
+    expect(lease.held).toBe(true)
+    page.elements.find((e) => e.id === SAVE.id)!.gone = true
+    cobrowse.onPaint()
+    await settle()
+    await settle()
+    expect(lease.held).toBe(false)
+  })
+
+  it('a page no pane draws holds nothing after a point, and a detached pane with marks lets go', async () => {
+    const unwatched = setup([FORM, SAVE], { watching: false })
+    await unwatched.cobrowse.point({ selector: 'button#save', label: 'x', keep: false })
+    await settle()
+    expect(unwatched.lease.held).toBe(false)
+
+    const { cobrowse, lease } = setup([FORM, SAVE])
+    await cobrowse.addMark(MARK_ID, 120, 300, 0, 0)
+    await settle()
+    expect(lease.held).toBe(true)
+    cobrowse.setWatching(false)
+    expect(lease.held).toBe(false)
+  })
+
+  it('marks an agent took stop being tracked: paints read nothing and the lease goes', async () => {
+    const { page, cobrowse, lease, state } = setup([FORM, SAVE])
+    await cobrowse.addMark(MARK_ID, 120, 300, 0, 0)
+    cobrowse.send()
+    await cobrowse.takeMarks({ wait: false, timeoutMs: 1, peek: false })
+    await settle()
+    expect(lease.held).toBe(false)
+    expect(state()?.marks[0]).toMatchObject({ state: 'taken', rect: null })
+    page.calls.length = 0
+    cobrowse.onPaint()
+    await settle()
+    expect(page.calls).toEqual([])
+  })
+})
+
+describe('co-browse hover answers', () => {
+  it('echoes the hover seq and answers a failed hit test with no outline', async () => {
+    const { page, cobrowse, sent } = setup([FORM, SAVE])
+    cobrowse.setMarkMode(true)
+    await cobrowse.hoverAt(120, 110, 7)
+    expect(sent.at(-1)).toMatchObject({ type: 'browserHover', seq: 7, label: 'form' })
+    page.failLayout = true
+    await cobrowse.hoverAt(130, 110, 8)
+    expect(sent.at(-1)).toEqual({
+      type: 'browserHover',
+      pageId: 'page-1',
+      rect: null,
+      label: '',
+      seq: 8
+    })
+    cobrowse.setMarkMode(false)
+    await cobrowse.hoverAt(120, 110, 9)
+    expect(sent.at(-1)).toMatchObject({ rect: null, seq: 9 })
+  })
+
+  it('a refresh push carries no seq, so PodNative does not take it for its answer', async () => {
+    const { page, cobrowse, sent } = setup([FORM, SAVE])
+    page.scrollY = 800
+    cobrowse.setMarkMode(true)
+    await cobrowse.hoverAt(120, 110, 1)
+    page.scrollY = 850
+    cobrowse.onPaint()
+    await settle()
+    await settle()
+    const hovers = sent.filter((m) => m.type === 'browserHover')
+    expect(hovers.at(-1)).not.toHaveProperty('seq')
+  })
+})
+
+describe('co-browse while the user marks', () => {
+  it('a point never scrolls the page in mark mode; the pointer reports where it is', async () => {
+    const { page, cobrowse, state } = setup([FORM, SAVE])
+    cobrowse.setMarkMode(true)
+    const { box } = await cobrowse.point({ selector: 'button#save', label: 'Below', keep: false })
+    expect(page.scrollY).toBe(0)
+    expect(box).toEqual({ x: 100, y: 900, width: 80, height: 30 })
+    expect(state()?.pointers[0].rect).toEqual({ x: 100, y: 900, width: 80, height: 30 })
+    cobrowse.setMarkMode(false)
+    await cobrowse.point({ selector: 'button#save', label: 'Now', keep: false })
+    expect(page.scrollY).toBe(800)
+  })
+})
+
+describe('co-browse privacy', () => {
+  it('the mark carries the page URL without its query or fragment', async () => {
+    const { cobrowse } = setup([FORM, SAVE], {
+      url: 'http://localhost:5173/settings?token=abc123&x=1#access_token=zzz'
+    })
+    await cobrowse.addMark(MARK_ID, 120, 300, 0, 0)
+    const [mark] = (await cobrowse.takeMarks({ wait: false, timeoutMs: 1, peek: true })).marks
+    expect(mark.url).toBe('http://localhost:5173/settings')
+  })
+})
+
+// At 150% the view (PodNative's coordinates, browserInput's) is CSS px times 1.5; boxes below are
+// worked out by hand from the elements' document boxes, not from the code's own scaling.
+describe('co-browse at page zoom 150%', () => {
+  it('a mark on an element follows it through a scroll', async () => {
+    const { page, cobrowse, state, capture } = setup([FORM, SAVE], { zoom: 1.5 })
+    page.scrollY = 800
+    // View 180,165 is CSS 120,110 of the viewport, document 120,910: the Save button.
+    await cobrowse.addMark(MARK_ID, 180, 165, 0, 0)
+    expect(state()?.marks[0].rect).toEqual({ x: 150, y: 150, width: 120, height: 45 })
+    page.scrollY = 850
+    cobrowse.onPaint()
+    await settle()
+    expect(state()?.marks[0].rect).toEqual({ x: 150, y: 75, width: 120, height: 45 })
+    // Its screenshot clip is in DIP: CSS 92,892 96x46 (the box and 8 px) times 1.5.
+    expect(capture).toHaveBeenCalledWith({ x: 138, y: 1338, width: 144, height: 69, scale: 1 })
+    const [mark] = (await cobrowse.takeMarks({ wait: false, timeoutMs: 1, peek: true })).marks
+    expect(mark.box).toEqual({ x: 100, y: 100, width: 80, height: 30 })
+  })
+
+  it('the hover outline is the element under the view point', async () => {
+    const { page, cobrowse, sent } = setup([FORM, SAVE], { zoom: 1.5 })
+    page.scrollY = 800
+    cobrowse.setMarkMode(true)
+    await cobrowse.hoverAt(180, 165, 1)
+    expect(sent.at(-1)).toMatchObject({ rect: { x: 150, y: 150, width: 120, height: 45 } })
+    // View 180,120 is CSS 120,80: above the button, on the form.
+    await cobrowse.hoverAt(180, 120, 2)
+    expect(sent.at(-1)).toMatchObject({
+      label: 'form',
+      rect: { x: 0, y: -1200, width: 1500, height: 3000 }
+    })
+  })
+
+  it('a pointer scrolls its element into the smaller CSS viewport and rings it', async () => {
+    const { page, cobrowse, state } = setup([FORM, SAVE], { zoom: 1.5 })
+    const { box } = await cobrowse.point({ selector: 'button#save', label: 'Save', keep: false })
+    // 900 + 30 is below the 400 CSS px viewport: scrolled to 900 - 100.
+    expect(page.scrollY).toBe(800)
+    expect(box).toEqual({ x: 100, y: 100, width: 80, height: 30 })
+    expect(state()?.pointers[0].rect).toEqual({ x: 150, y: 150, width: 120, height: 45 })
   })
 })

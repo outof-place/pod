@@ -13,10 +13,12 @@ export type CobrowseElement = {
   role: string | null
   name: string | null
   text: string
-  /** outerHTML, scripts left out, cut to COBROWSE_LIMITS.html. */
+  /** The element's markup without scripts, styles, event handlers or secret values, cut to COBROWSE_LIMITS.html. */
   html: string
-  /** The frame's URL when the element sits in an iframe. */
+  /** The frame's URL (no query or fragment) when the element sits in an iframe. */
   frameUrl: string | null
+  /** In a shadow root: the selector is unique inside it, not from the document. */
+  inShadowRoot: boolean
 }
 
 export type CobrowseMarkState = 'draft' | 'sent' | 'taken'
@@ -54,6 +56,8 @@ export type CobrowseMarksResult = {
   marks: CobrowseMark[]
   /** The wait ended with nothing sent. */
   timedOut: boolean
+  /** The tab closed while the agent waited. */
+  pageClosed?: boolean
   /** With peek: the marks as Markdown, as `marks` prints them. */
   markdown?: string
 }
@@ -76,8 +80,8 @@ export const COBROWSE_LIMITS = {
   html: 2048,
   selector: 700,
   screenshotBytes: 2 * 1024 * 1024,
-  /** marks --wait: default and ceiling, ms. */
-  waitDefaultMs: 10 * 60_000,
+  /** marks --wait: default and ceiling, ms. The default ends before an SSH relay's 10 min budget. */
+  waitDefaultMs: 8 * 60_000,
   waitMaxMs: 60 * 60_000
 } as const
 
@@ -145,6 +149,9 @@ export function formatCobrowseMarksMarkdown(
       }
       if (mark.element.frameUrl) {
         lines.push(`- In the iframe ${mark.element.frameUrl}`)
+      }
+      if (mark.element.inShadowRoot) {
+        lines.push('- Inside a shadow root: the locator is unique there, not from the document')
       }
       if (mark.element.text && mark.element.text !== mark.element.name) {
         lines.push(`- Text: ${inline(mark.element.text, 200)}`)

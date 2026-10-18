@@ -14,8 +14,9 @@ import {
 
 export const POD_BROWSER_COBROWSE_RPC = { marks: 'browser.marks', point: 'browser.point' } as const
 
-// agent-browser's own locator syntaxes, which only its daemon resolves (refs live in its snapshot).
-const AGENT_BROWSER_LOCATOR = /^(@|(text|xpath|role|label|placeholder|alt|title|testid)=)/
+// The locators agent-browser 0.27.3's `get box` takes besides CSS (its README "Selectors": refs live
+// in its daemon's snapshot, text= and xpath=). role, label, testid and the like are `find` verbs.
+const AGENT_BROWSER_LOCATOR = /^(@|(text|xpath)=)/
 
 function unavailable(browserPageId: string): BrowserError {
   return new BrowserError(

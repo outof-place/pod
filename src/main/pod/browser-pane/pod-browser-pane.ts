@@ -25,7 +25,7 @@ import { followPanePage, panePageState } from './pod-browser-pane-page-events'
 import { applyPanePageInput } from './pod-browser-pane-page-input'
 import { PaneZoom } from './pod-browser-pane-zoom'
 import { PaneAgentDriving } from './pod-browser-pane-agent-driving'
-import { handlePaneCobrowse, newPaneCobrowse } from './pod-browser-pane-cobrowse'
+import { handlePaneCobrowse, newPaneCobrowse, paneCobrowse } from './pod-browser-pane-cobrowse'
 const PANE_FRAME_RATE = 60
 // A page nobody sees and no agent drives. Why 10: a rate change waits for the next tick, so a
 // pane coming back (or an agent's screenshot) waits ≤100 ms; an animated page costs 13 ms/s here
@@ -134,7 +134,7 @@ export class PodBrowserPaneController {
     wc.stopPainting()
     wc.setFrameRate(UNSEEN_FRAME_RATE)
     wc.on('paint', (event) => this.frames.paint(page, event.texture))
-    newPaneCobrowse(pageId, wc, this.deps.send, () => page)
+    newPaneCobrowse(pageId, wc, this.deps.send, () => page, this.deps.log)
     followPanePage(pageId, page, {
       send: this.deps.send,
       userDriven: () => this.userDriven(page),
@@ -241,7 +241,7 @@ export class PodBrowserPaneController {
         this.sendState(message.pageId)
         return
       case 'browserDetach':
-        this.detach(page)
+        this.detach(message.pageId, page)
         return
       case 'browserPane':
         if (message.rendezvous && message.rendezvous !== this.frames.service) {
@@ -297,9 +297,7 @@ export class PodBrowserPaneController {
 
   /** PodNative went away or was replaced: nothing stays attached or connected. */
   reset(): void {
-    for (const page of this.pages.values()) {
-      this.detach(page)
-    }
+    this.pages.forEach((page, pageId) => this.detach(pageId, page))
     this.passkeys.cancelAll()
     this.frames.disconnect()
   }
@@ -336,8 +334,9 @@ export class PodBrowserPaneController {
     }
   }
 
-  private detach(page: Page): void {
+  private detach(pageId: string, page: Page): void {
     page.token = null
+    paneCobrowse(pageId)?.setWatching(false)
     page.input.reset()
     page.links.reset()
     this.show(page, false)

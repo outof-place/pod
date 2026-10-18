@@ -16,6 +16,7 @@ import type { RuntimeMetadataOwnershipWatch } from '../runtime-metadata-ownershi
 import { RUNTIME_METADATA_OWNERSHIP_POLL_MS } from '../runtime-metadata-ownership-watch'
 import {
   ASK_LONG_POLL_SHARE,
+  MARKS_LONG_POLL_SHARE,
   BROWSER_HOST_LONG_POLL_SHARE,
   KEEPALIVE_INTERVAL_MS,
   LONG_POLL_CAP,
@@ -56,6 +57,7 @@ export class RuntimeRpcState {
   protected readonly browserHostLongPollCap: number
   protected readonly browserHostLongPollCapPerDevice: number
   protected readonly specializedLongPollCap: number
+  protected readonly marksLongPollCap: number
   protected readonly relayRevokeOutbox: RelayRevokeOutbox
   protected readonly pushUnregisterOutbox: PushUnregisterOutbox
   protected deviceRegistry: DeviceRegistry | null = null
@@ -90,6 +92,7 @@ export class RuntimeRpcState {
   // Why: subset of activeLongPolls held by orchestration.ask, fenced by askLongPollCap.
   protected activeAskLongPolls = 0
   protected activeBrowserHostLongPolls = 0
+  protected activeMarksLongPolls = 0
   protected readonly activeBrowserHostLongPollsByDevice = new Map<string, number>()
   protected clientRequestsInFlight = 0
   protected lastClientRequestAt = Date.now()
@@ -132,6 +135,7 @@ export class RuntimeRpcState {
     )
     this.browserHostLongPollCapPerDevice = Math.max(1, Math.floor(this.browserHostLongPollCap / 2))
     this.specializedLongPollCap = Math.max(1, Math.floor(longPollCap * SPECIALIZED_LONG_POLL_SHARE))
+    this.marksLongPollCap = Math.max(1, Math.floor(longPollCap * MARKS_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
     this.pushUnregisterOutbox = new PushUnregisterOutbox(userDataPath)
     this.runtime.configureNotificationDismissalStore(userDataPath)

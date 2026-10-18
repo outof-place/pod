@@ -48,11 +48,11 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
     path: ['marks'],
     summary: 'Take what the user marked on the tab in Pod (a note, element, locator, screenshot)',
     usage:
-      'orca marks [--wait [--timeout <ms>]] [--save] [--peek] [--page <browserPageId>] [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'wait', 'timeout', 'save', 'peek', 'page', 'worktree'],
+      'orca marks [--wait [--timeout-ms <ms>]] [--save] [--peek] [--page <browserPageId>] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'wait', 'timeout-ms', 'save', 'peek', 'page', 'worktree'],
     notes: [
-      'The user marks elements on a Pod browser pane (Mark, ⇧⌘K) and presses Send; --wait blocks until then (default 10 min, at most 1 h). Run it in the background and act on the marks when it exits.',
-      "--save writes each mark's screenshot to its own private file. From an SSH worktree use --json and decode screenshot.data instead."
+      'The user marks elements on a Pod browser pane (Mark, ⇧⌘K) and presses Send; --wait blocks until then (default 8 min, at most 1 h). Wait only after asking the user to mark something; run it in the background and act on the marks when it exits.',
+      "--save writes each mark's screenshot to its own private file. From an SSH worktree use --json and decode marks[].screenshot.data instead."
     ]
   },
   {

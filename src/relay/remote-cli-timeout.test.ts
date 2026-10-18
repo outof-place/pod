@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { MAX_TIMER_DELAY_MS } from '../shared/timer-delay'
+import { COBROWSE_LIMITS } from '../shared/browser-cobrowse-types'
 
 describe('remoteCliRequestTimeoutMs', () => {
   it('gives Linear issue context reads the general CLI budget', () => {
@@ -42,6 +43,15 @@ describe('remoteCliRequestTimeoutMs', () => {
       remoteCliRequestTimeoutMs({
         argv: ['orchestration', 'check', '--wait', '--timeout-ms=1800000']
       })
+    ).toBe(1_860_000)
+  })
+
+  it('lets marks --wait run to its own end over SSH, default or explicit', () => {
+    // The CLI waits its budget plus 5 s for the reply; the relay must outlast that with its grace left.
+    const relay = remoteCliRequestTimeoutMs({ argv: ['marks', '--wait', '--save', '--json'] })
+    expect(COBROWSE_LIMITS.waitDefaultMs + 5000).toBeLessThan((relay ?? 0) - 60_000)
+    expect(
+      remoteCliRequestTimeoutMs({ argv: ['marks', '--wait', '--timeout-ms', '1800000', '--json'] })
     ).toBe(1_860_000)
   })
 

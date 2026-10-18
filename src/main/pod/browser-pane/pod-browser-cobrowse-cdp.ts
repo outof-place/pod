@@ -1,11 +1,7 @@
 // Fork-only (Pod): co-browse's reads of a page over CDP. Read only: nothing here adds to the page's DOM
 // or CSS, listens in it, or draws into its frames (no Overlay domain), so the page and every agent
 // screenshot stay as they are; PodNative draws marks and pointers natively.
-import {
-  COBROWSE_LIMITS,
-  type CobrowseBox,
-  type CobrowseElement
-} from '../../../shared/browser-cobrowse-types'
+import type { CobrowseBox } from '../../../shared/browser-cobrowse-types'
 
 export type CobrowseCdp = (method: string, params?: Record<string, unknown>) => Promise<unknown>
 
@@ -53,7 +49,8 @@ export async function hitTest(
         x: Math.round(x + viewport.scrollX),
         y: Math.round(y + viewport.scrollY),
         includeUserAgentShadowDOM: false,
-        ignorePointerEventsNone: true
+        // As a click would: an element with pointer-events: none is not what the user points at.
+        ignorePointerEventsNone: false
       })
     )
     return num(hit.backendNodeId) ?? null
@@ -101,98 +98,6 @@ export async function hoverLabel(cdp: CobrowseCdp, backendNodeId: number): Promi
     return (firstClass ? `${tag}.${firstClass}` : tag).slice(0, 80)
   } catch {
     return ''
-  }
-}
-
-// Runs on the element itself (Runtime.callFunctionOn), returns plain data and changes nothing.
-export const COBROWSE_READ_ELEMENT = `function (limits) {
-  var el = this && this.nodeType === 1 ? this : this && this.parentElement;
-  if (!el) return null;
-  var root = el.getRootNode ? el.getRootNode() : el.ownerDocument;
-  function esc(v) { return window.CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/[^a-zA-Z0-9_-]/g, function (c) { return '\\\\' + c; }); }
-  function stable(v) { return v && v.length < 40 && !/[0-9]{3,}|[0-9a-f]{8,}|^css-|^sc-|__/i.test(v); }
-  function part(e) {
-    var tag = e.tagName.toLowerCase();
-    if (stable(e.id)) return tag + '#' + esc(e.id);
-    var classes = Array.prototype.filter.call(e.classList || [], stable).slice(0, 2);
-    return tag + classes.map(function (c) { return '.' + esc(c); }).join('');
-  }
-  function unique(selector) { try { return root.querySelectorAll(selector).length === 1; } catch (e) { return false; } }
-  function nth(e) {
-    var index = 1, s = e.previousElementSibling, more = false;
-    while (s) { if (s.tagName === e.tagName) index++; s = s.previousElementSibling; }
-    s = e.nextElementSibling;
-    while (s) { if (s.tagName === e.tagName) { more = true; break; } s = s.nextElementSibling; }
-    return index > 1 || more ? ':nth-of-type(' + index + ')' : '';
-  }
-  var parts = [], current = el;
-  while (current && current.nodeType === 1 && parts.length < 12) {
-    var plain = part(current);
-    if (unique([plain].concat(parts).join(' > '))) { parts.unshift(plain); break; }
-    parts.unshift(plain + nth(current));
-    if (unique(parts.join(' > '))) break;
-    current = current.parentElement;
-  }
-  var text = (el.textContent || '').slice(0, 4 * limits.text).replace(/\\s+/g, ' ').trim().slice(0, limits.text);
-  var html = (el.outerHTML || '').slice(0, 2 * limits.html).replace(/<script[\\s\\S]*?<\\/script>/gi, '');
-  if (html.length > limits.html) html = html.slice(0, limits.html) + '...';
-  var win = el.ownerDocument && el.ownerDocument.defaultView;
-  var frameUrl = null;
-  try { if (win && win !== win.top) frameUrl = String(win.location.href); } catch (e) {}
-  return { tag: el.tagName.toLowerCase(), selector: parts.join(' > ').slice(0, limits.selector), text: text, html: html, frameUrl: frameUrl };
-}`
-
-/** What the element is, for an agent: a selector, its role and name, text and a DOM excerpt. */
-export async function readElement(
-  cdp: CobrowseCdp,
-  backendNodeId: number
-): Promise<CobrowseElement | null> {
-  let objectId: string | undefined
-  try {
-    objectId = str(rec(rec(await cdp('DOM.resolveNode', { backendNodeId })).object).objectId)
-    if (!objectId) {
-      return null
-    }
-    const [read, ax] = await Promise.all([
-      cdp('Runtime.callFunctionOn', {
-        objectId,
-        functionDeclaration: COBROWSE_READ_ELEMENT,
-        arguments: [{ value: COBROWSE_LIMITS }],
-        returnByValue: true,
-        silent: true
-      }),
-      cdp('Accessibility.getPartialAXTree', { backendNodeId, fetchRelatives: false }).catch(
-        () => null
-      )
-    ])
-    const value = rec(rec(rec(read).result).value)
-    const selector = str(value.selector)
-    if (!selector) {
-      return null
-    }
-    const nodes = rec(ax).nodes
-    const node = rec(
-      Array.isArray(nodes)
-        ? nodes.find((n) => rec(n).ignored !== true && rec(n).backendDOMNodeId === backendNodeId)
-        : undefined
-    )
-    const role = str(rec(node.role).value) ?? null
-    const name = str(rec(node.name).value) || null
-    return {
-      tag: str(value.tag) ?? '',
-      selector,
-      text: str(value.text) ?? '',
-      html: str(value.html) ?? '',
-      frameUrl: str(value.frameUrl) ?? null,
-      role,
-      name: name ? name.slice(0, COBROWSE_LIMITS.label) : null
-    }
-  } catch {
-    return null
-  } finally {
-    if (objectId) {
-      void cdp('Runtime.releaseObject', { objectId }).catch(() => {})
-    }
   }
 }
 
@@ -279,10 +184,14 @@ export async function scrollIntoView(cdp: CobrowseCdp, backendNodeId: number): P
   await cdp('DOM.scrollIntoViewIfNeeded', { backendNodeId }).catch(() => {})
 }
 
-/** The PNG clip for a mark: its box with a little context, in document px, inside the viewport. */
+/**
+ * The PNG clip for a mark: its box with a little context, inside the viewport. Page.captureScreenshot
+ * takes the clip in DIP (document CSS px times the page's zoom; checked on Electron 45 at 150%).
+ */
 export function screenshotClip(
   box: CobrowseBox,
-  viewport: CobrowseViewport
+  viewport: CobrowseViewport,
+  zoom: number
 ): { x: number; y: number; width: number; height: number; scale: number } | null {
   const pad = 8
   const left = Math.max(0, box.x - pad)
@@ -292,11 +201,17 @@ export function screenshotClip(
   if (right - left < 1 || bottom - top < 1) {
     return null
   }
-  const width = right - left
-  const height = bottom - top
+  const width = (right - left) * zoom
+  const height = (bottom - top) * zoom
   // Why a cap: a mark on a whole section must not become a multi-megabyte image in the agent's context.
   const scale = Math.min(1, 1200 / Math.max(width, height))
-  return { x: left + viewport.scrollX, y: top + viewport.scrollY, width, height, scale }
+  return {
+    x: (left + viewport.scrollX) * zoom,
+    y: (top + viewport.scrollY) * zoom,
+    width,
+    height,
+    scale
+  }
 }
 
 /**

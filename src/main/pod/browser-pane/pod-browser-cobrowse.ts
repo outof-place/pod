@@ -7,20 +7,23 @@ import {
   type CobrowseBox,
   type CobrowseMarksResult
 } from '../../../shared/browser-cobrowse-types'
-import { boxOf, type CobrowseCdp } from './pod-browser-cobrowse-cdp'
+import type { CobrowseCdp } from './pod-browser-cobrowse-cdp'
 import {
   describeMark,
-  hoverAnswer,
+  isLive,
   newMark,
-  placed,
+  placeAnchors,
   resolvePointer,
-  scaleBox,
   stateMessage,
   type Pointer,
   type PointRequest
 } from './pod-browser-cobrowse-anchors'
+import { CobrowseHover } from './pod-browser-cobrowse-hover'
 import { CobrowseMarkQueue, type MarkTakeOptions } from './pod-browser-cobrowse-mark-queue'
-import type { PodBrowserCobrowseServerMessage } from './pod-browser-cobrowse-protocol'
+import {
+  COBROWSE_REFUSALS,
+  type PodBrowserCobrowseServerMessage
+} from './pod-browser-cobrowse-protocol'
 
 export type PaneCobrowseDeps = {
   pageId: string
@@ -35,6 +38,7 @@ export type PaneCobrowseDeps = {
   page: () => { url: string; title: string }
   // The page's zoom: view coordinates (PodNative's) are CSS px times this.
   zoom: () => number
+  log?: (message: string) => void
   now?: () => Date
   randomId?: () => string
 }
@@ -42,15 +46,28 @@ export type PaneCobrowseDeps = {
 export class PaneCobrowse {
   private watching = false
   private markMode = false
-  private hover: { x: number; y: number } | null = null
-  private hoverShown = ''
-  private readonly queue = new CobrowseMarkQueue(() => this.publish())
+  private readonly hover: CobrowseHover
+  private readonly queue = new CobrowseMarkQueue(() => {
+    this.publish()
+    this.syncLease()
+  })
   private pointers: Pointer[] = []
   private refreshing = false
   private dirty = false
   private lastState = ''
+  // CDP reads in flight outside the per-frame refresh (a mark being made or described, a point).
+  private busy = 0
+  private leased = false
 
-  constructor(private readonly deps: PaneCobrowseDeps) {}
+  constructor(private readonly deps: PaneCobrowseDeps) {
+    this.hover = new CobrowseHover({
+      pageId: deps.pageId,
+      cdp: () => this.cdp(),
+      zoom: deps.zoom,
+      send: deps.send,
+      log: (what, error) => this.log(what, error)
+    })
+  }
 
   /** PodNative's pane draws this page's marks and pointers (or stopped: detached, gone). */
   setWatching(watching: boolean): void {
@@ -58,13 +75,12 @@ export class PaneCobrowse {
     this.lastState = ''
     if (!this.watching) {
       this.markMode = false
-      this.hover = null
-      this.hoverShown = ''
+      this.hover.reset()
     } else {
       this.publish()
       this.schedule()
     }
-    this.releaseWhenIdle()
+    this.syncLease()
   }
 
   setMarkMode(on: boolean): void {
@@ -72,27 +88,24 @@ export class PaneCobrowse {
     if (!this.markMode) {
       this.hoverEnd()
     }
-    this.releaseWhenIdle()
+    this.syncLease()
   }
 
-  /** The pointer moved over the page in mark mode: one answer per call, so PodNative paces itself. */
-  async hoverAt(x: number, y: number): Promise<void> {
-    if (!this.markMode) {
-      return
-    }
-    this.hover = { x, y }
-    await this.sendHover(true)
+  /** The pointer moved over the page in mark mode: always one answer, tagged with PodNative's `seq`. */
+  async hoverAt(x: number, y: number, seq?: number): Promise<void> {
+    await this.hover.ask(x, y, seq, this.markMode)
+    this.syncLease()
   }
 
   hoverEnd(): void {
-    this.hover = null
-    if (this.hoverShown !== '') {
-      this.hoverShown = ''
-      this.deps.send({ type: 'browserHover', pageId: this.deps.pageId, rect: null, label: '' })
-    }
+    this.hover.end()
+    this.syncLease()
   }
 
-  /** A click (width and height 0) or a dragged region in mark mode, in view coordinates. */
+  /**
+   * A click (width and height 0) or a dragged region in mark mode, in view coordinates. One that
+   * cannot become a mark is answered with browserMarkRefused, so PodNative drops its note field.
+   */
   async addMark(
     markId: string,
     x: number,
@@ -100,17 +113,49 @@ export class PaneCobrowse {
     width: number,
     height: number
   ): Promise<void> {
-    const cdp = this.deps.cdp()
-    const n = cdp && this.watching && !this.queue.has(markId) ? this.queue.claimNumber() : null
-    if (!cdp || n === null) {
+    if (!this.watching || this.queue.has(markId)) {
       return
     }
-    const made = await newMark(cdp, { markId, n, x, y, width, height }, this.deps, this.pointers)
-    if (made) {
+    if (!this.queue.hasRoom) {
+      this.refuse(markId, COBROWSE_REFUSALS.full)
+      return
+    }
+    const cdp = this.cdp()
+    if (!cdp) {
+      this.refuse(markId, COBROWSE_REFUSALS.gone)
+      return
+    }
+    this.busy += 1
+    try {
+      const zoom = this.deps.zoom()
+      const made = await newMark(
+        cdp,
+        { markId, x, y, width, height },
+        zoom,
+        this.deps,
+        this.pointers
+      )
+      if (!made) {
+        this.refuse(markId, COBROWSE_REFUSALS.nothing)
+        return
+      }
       // The ring shows now; what an agent reads of it follows and is waited for before delivery.
-      const { mark, anchor, viewport } = made
-      const ready = describeMark(cdp, mark, anchor.node, viewport, this.deps.capture)
-      this.queue.add({ mark, state: 'draft', anchor, ready })
+      const added = this.queue.add({ mark: made.mark, anchor: made.anchor }, (mark) =>
+        this.track(
+          describeMark(cdp, mark, made.anchor.node, made.viewport, zoom, this.deps.capture).catch(
+            (error: unknown) => this.log('describe a mark', error)
+          )
+        )
+      )
+      if (!added) {
+        this.refuse(markId, COBROWSE_REFUSALS.full)
+      }
+    } catch (error) {
+      this.log('add a mark', error)
+      this.refuse(markId, COBROWSE_REFUSALS.failed)
+    } finally {
+      this.busy -= 1
+      this.syncLease()
     }
   }
 
@@ -120,7 +165,6 @@ export class PaneCobrowse {
 
   removeMark(markId: string): void {
     this.queue.remove(markId)
-    this.releaseWhenIdle()
   }
 
   send(): void {
@@ -133,33 +177,40 @@ export class PaneCobrowse {
 
   /** An agent's pointer: a node it named, a box another tool found for its locator, or a region. */
   async point(request: PointRequest): Promise<{ pointerId: string; box: CobrowseBox }> {
-    const cdp = this.deps.cdp()
+    const cdp = this.cdp()
     if (!cdp) {
       throw new Error('The page is gone')
     }
-    const { anchor, box } = await resolvePointer(cdp, request, this.deps.zoom())
-    if (!request.keep) {
-      this.pointers = []
+    this.busy += 1
+    try {
+      // Why no scroll while the user marks: the page must not move under their pointer.
+      const { anchor, box } = await resolvePointer(cdp, request, this.deps.zoom(), !this.markMode)
+      if (!request.keep) {
+        this.pointers = []
+      }
+      if (this.pointers.length >= COBROWSE_LIMITS.pointersPerPage) {
+        this.pointers.shift()
+      }
+      const pointer: Pointer = {
+        id: this.deps.randomId?.() ?? crypto.randomUUID(),
+        label: request.label.slice(0, COBROWSE_LIMITS.label),
+        anchor
+      }
+      this.pointers.push(pointer)
+      this.publish()
+      this.schedule()
+      return { pointerId: pointer.id, box }
+    } finally {
+      this.busy -= 1
+      this.syncLease()
     }
-    if (this.pointers.length >= COBROWSE_LIMITS.pointersPerPage) {
-      this.pointers.shift()
-    }
-    const pointer: Pointer = {
-      id: this.deps.randomId?.() ?? crypto.randomUUID(),
-      label: request.label.slice(0, COBROWSE_LIMITS.label),
-      anchor
-    }
-    this.pointers.push(pointer)
-    this.publish()
-    this.schedule()
-    return { pointerId: pointer.id, box }
   }
 
   clearPointers(pointerId?: string): number {
     const before = this.pointers.length
     this.pointers = pointerId ? this.pointers.filter((p) => p.id !== pointerId) : []
     this.publish()
-    this.releaseWhenIdle()
+    this.syncLease()
     return before - this.pointers.length
   }
 
@@ -178,12 +229,51 @@ export class PaneCobrowse {
     this.watching = false
     this.queue.dispose()
     this.pointers = []
-    this.deps.releaseCdp()
+    this.busy = 0
+    this.syncLease()
   }
 
+  /** Whether the page's debugger is held now (tests and probes read it). */
+  get holdsDebugger(): boolean {
+    return this.leased
+  }
+
+  // Marks an agent took and pointers no pane draws need no geometry; neither do waiting agents.
   private tracking(): boolean {
-    const tracked = this.hover !== null || this.queue.marks.length > 0 || this.pointers.length > 0
-    return this.watching && this.deps.attached() && tracked
+    if (!this.watching || !this.deps.attached()) {
+      return false
+    }
+    return (
+      this.hover.active ||
+      this.pointers.some((p) => isLive(p.anchor)) ||
+      this.queue.marks.some((m) => m.state !== 'taken' && isLive(m.anchor))
+    )
+  }
+
+  private cdp(): CobrowseCdp | null {
+    const cdp = this.deps.cdp()
+    this.leased ||= cdp !== null
+    return cdp
+  }
+
+  // One rule after every change: hold the page's debugger only while something needs it.
+  private syncLease(): void {
+    const needed =
+      this.busy > 0 ||
+      this.refreshing ||
+      (this.watching && this.deps.attached() && (this.markMode || this.tracking()))
+    if (this.leased && !needed) {
+      this.leased = false
+      this.deps.releaseCdp()
+    }
+  }
+
+  private track<T>(work: Promise<T>): Promise<T> {
+    this.busy += 1
+    return work.finally(() => {
+      this.busy -= 1
+      this.syncLease()
+    })
   }
 
   private schedule(): void {
@@ -192,56 +282,46 @@ export class PaneCobrowse {
       return
     }
     this.refreshing = true
-    void this.refresh().finally(() => {
-      this.refreshing = false
-      if (this.dirty) {
-        this.dirty = false
-        this.schedule()
-      }
-    })
+    void this.refresh()
+      .catch((error: unknown) => this.log('refresh', error))
+      .finally(() => {
+        this.refreshing = false
+        if (this.dirty) {
+          this.dirty = false
+          this.schedule()
+        } else {
+          this.syncLease()
+        }
+      })
   }
 
   private async refresh(): Promise<void> {
-    const cdp = this.deps.cdp()
-    if (!cdp || !this.tracking()) {
+    if (!this.tracking()) {
       return
     }
-    const zoom = this.deps.zoom()
-    const anchors = [...this.queue.marks, ...this.pointers].map((tracked) => tracked.anchor)
-    await Promise.all(
-      anchors.map(async (anchor) => {
-        if (anchor.node === null) {
-          return
-        }
-        const box = await boxOf(cdp, anchor.node)
-        anchor.rect = box ? scaleBox(placed(box, anchor.offset), zoom) : null
-      })
-    )
+    const cdp = this.cdp()
+    if (!cdp) {
+      return
+    }
+    const marks = this.queue.marks.filter((m) => m.state !== 'taken')
+    await placeAnchors(cdp, [...marks, ...this.pointers], this.deps.zoom())
     // A pointer goes with its element; a mark stays listed and only loses its ring.
     const gone = this.pointers.filter((p) => p.anchor.node !== null && p.anchor.rect === null)
     if (gone.length > 0) {
       this.pointers = this.pointers.filter((p) => !gone.includes(p))
     }
-    if (this.hover) {
-      await this.sendHover(false)
-    }
+    await this.hover.refresh()
     this.publish()
   }
 
-  private async sendHover(always: boolean): Promise<void> {
-    const cdp = this.deps.cdp()
-    const point = this.hover
-    if (!cdp || !point) {
-      return
-    }
-    const { rect, label, key } = await hoverAnswer(cdp, point, this.deps.zoom())
-    if (this.hover !== point && !always) {
-      return
-    }
-    if (always || key !== this.hoverShown) {
-      this.hoverShown = key
-      this.deps.send({ type: 'browserHover', pageId: this.deps.pageId, rect, label })
-    }
+  private refuse(markId: string, reason: string): void {
+    this.deps.send({ type: 'browserMarkRefused', pageId: this.deps.pageId, markId, reason })
+  }
+
+  private log(what: string, error: unknown): void {
+    this.deps.log?.(
+      `browser-cobrowse: ${what} failed: ${error instanceof Error ? error.message : String(error)}`
+    )
   }
 
   private publish(): void {
@@ -254,12 +334,6 @@ export class PaneCobrowse {
     if (text !== this.lastState) {
       this.lastState = text
       this.deps.send(message)
-    }
-  }
-
-  private releaseWhenIdle(): void {
-    if (!this.tracking() && !this.markMode && this.queue.idle && this.pointers.length === 0) {
-      this.deps.releaseCdp()
     }
   }
 }

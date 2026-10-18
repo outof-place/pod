@@ -27,7 +27,8 @@ export function newPaneCobrowse(
   pageId: string,
   wc: WebContents,
   send: (message: PodBrowserCobrowseServerMessage) => boolean,
-  pane: () => PaneSide
+  pane: () => PaneSide,
+  log: (message: string) => void
 ): PaneCobrowse {
   // The page's debugger lease: taken on first use, released when nothing is tracked.
   let lease: { release: () => void } | null = null
@@ -61,7 +62,8 @@ export function newPaneCobrowse(
     zoom: () => {
       const zoom = wc.getZoomFactor()
       return Number.isFinite(zoom) && zoom > 0 ? zoom : 1
-    }
+    },
+    log
   })
   pages.set(pageId, cobrowse)
   // Its marks, pointers and hover may move with each frame the page paints.
@@ -73,6 +75,11 @@ export function newPaneCobrowse(
     }
   })
   return cobrowse
+}
+
+// Both answer their own failures; this only keeps a bug from becoming an unhandled rejection.
+function logged(error: unknown): void {
+  console.warn('[browser-cobrowse]', error instanceof Error ? error.message : String(error))
 }
 
 /** A pane verb for co-browse, done; false for any other verb. */
@@ -89,13 +96,15 @@ export function handlePaneCobrowse(message: { type: string; pageId?: string }): 
       cobrowse.setMarkMode(message.on)
       break
     case 'browserHover':
-      void cobrowse.hoverAt(message.x, message.y)
+      void cobrowse.hoverAt(message.x, message.y, message.seq).catch(logged)
       break
     case 'browserHoverEnd':
       cobrowse.hoverEnd()
       break
     case 'browserMarkAdd':
-      void cobrowse.addMark(message.markId, message.x, message.y, message.width, message.height)
+      void cobrowse
+        .addMark(message.markId, message.x, message.y, message.width, message.height)
+        .catch(logged)
       break
     case 'browserMarkNote':
       cobrowse.setNote(message.markId, message.note)

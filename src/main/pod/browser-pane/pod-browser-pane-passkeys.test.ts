@@ -94,7 +94,11 @@ describe('PanePasskeys', () => {
     const first = lastRequestId(sent)
     vi.advanceTimersByTime(PANE_PASSKEY_TIMEOUT_MS)
     await expect(timedOut).resolves.toBeNull()
-    expect(sent).toContainEqual({ type: 'browserPasskeyClosed', pageId: 'page-1', requestId: first })
+    expect(sent).toContainEqual({
+      type: 'browserPasskeyClosed',
+      pageId: 'page-1',
+      requestId: first
+    })
 
     const closed = passkeys.request('page-1', 'example.com', accounts)
     const other = passkeys.request('page-2', 'example.com', accounts)
@@ -137,7 +141,9 @@ describe('PanePasskeys', () => {
     void lone.passkeys.request('page-1', 'example.com', [
       { credentialId: 'c', displayName: 'a\ud800' }
     ])
-    expect(lone.sent[0]).toMatchObject({ accounts: [{ credentialId: 'c', displayName: 'a\ufffd' }] })
+    expect(lone.sent[0]).toMatchObject({
+      accounts: [{ credentialId: 'c', displayName: 'a\ufffd' }]
+    })
   })
 
   it('asks nobody about a key with no account it could send back', async () => {

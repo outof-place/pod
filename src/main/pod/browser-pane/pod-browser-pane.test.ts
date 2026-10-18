@@ -510,7 +510,9 @@ describe('PodBrowserPaneController', () => {
     })
     wc.emit('frame-created', {}, { frame })
     frame.emit('dom-ready')
-    const doc = /const doc = "([0-9a-f]{16})"/.exec(String(frame.executeJavaScript.mock.calls[0]?.[0]))?.[1]
+    const doc = /const doc = "([0-9a-f]{16})"/.exec(
+      String(frame.executeJavaScript.mock.calls[0]?.[0])
+    )?.[1]
     const message = `\u0000pod-select-frame ${JSON.stringify({ doc, menuId: 1, clientX: 5, clientY: 6, x: 0, y: 0, width: 50, height: 20, items: [] })}`
     sent.length = 0
     wc.emit('console-message', { message, frame })
@@ -518,14 +520,24 @@ describe('PodBrowserPaneController', () => {
     const down = (button: 'left' | 'right') => ({
       type: 'browserInput' as const,
       pageId: 'page-1',
-      event: { kind: 'mouse' as const, action: 'down' as const, x: 5, y: 6, button, clickCount: 1, modifiers: [] }
+      event: {
+        kind: 'mouse' as const,
+        action: 'down' as const,
+        x: 5,
+        y: 6,
+        button,
+        clickCount: 1,
+        modifiers: []
+      }
     })
     panes.handle(down('right'))
     wc.emit('console-message', { message, frame })
     expect(sent).toEqual([])
     panes.handle(down('left'))
     wc.emit('console-message', { message, frame })
-    expect(sent).toEqual([expect.objectContaining({ type: 'browserPopupMenu', x: 0, y: 0, width: 50 })])
+    expect(sent).toEqual([
+      expect.objectContaining({ type: 'browserPopupMenu', x: 0, y: 0, width: 50 })
+    ])
   })
 
   it("lists its pages' downloads, and repeats them to a PodNative that connects", () => {
