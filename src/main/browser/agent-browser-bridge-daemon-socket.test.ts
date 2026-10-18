@@ -1,5 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer, type Server } from 'node:net'
+import { createServer, type Server, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -61,7 +61,9 @@ function cliAnswers(data: unknown): void {
 }
 
 // What the CLI leaves behind once it started the session's daemon: its socket and version file.
-async function startDaemon(reply: (command: Record<string, unknown>) => unknown): Promise<void> {
+async function startDaemon(
+  reply: (command: Record<string, unknown>, socket: Socket) => unknown
+): Promise<void> {
   writeFileSync(join(directory, `${SESSION}.version`), '0.27.3')
   daemon = createServer((socket) => {
     let buffered = ''
@@ -73,7 +75,7 @@ async function startDaemon(reply: (command: Record<string, unknown>) => unknown)
       }
       const command: Record<string, unknown> = JSON.parse(buffered.slice(0, newline))
       daemonLines.push(command)
-      const answer = reply(command)
+      const answer = reply(command, socket)
       if (answer !== undefined) {
         socket.write(`${JSON.stringify(answer)}\n`)
       }
@@ -177,6 +179,21 @@ describe('AgentBrowserBridge over the daemon socket', () => {
 
     expect(daemonLines).toEqual([])
     expect(cliCommands()).toEqual([['wait', '#done']])
+  })
+
+  it('never runs a click twice: a daemon that drops the connection after reading it fails the click', async () => {
+    cliAnswers({})
+    await bridge.snapshot()
+    await startDaemon((_command, socket) => {
+      socket.destroy()
+      return undefined
+    })
+    execFileMock.mockClear()
+
+    await expect(bridge.click('@e1')).rejects.toThrow()
+
+    expect(execFileMock).not.toHaveBeenCalled()
+    expect(daemonLines).toEqual([expect.objectContaining({ action: 'click', selector: '@e1' })])
   })
 
   it('rejects an in-flight daemon command when its tab closes', async () => {
