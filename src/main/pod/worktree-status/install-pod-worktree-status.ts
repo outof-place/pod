@@ -79,7 +79,7 @@ export function subscribePodWorktreeStatus(
         console.warn('[pod-worktree-status] worktree.ps read failed:', error)
       }
     },
-    { agents: options !== true && options.agents === true }
+    { agents: readParams.agents === true, rows: readParams.rows === true }
   )
 }
 

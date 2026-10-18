@@ -2,12 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-freshness'
 import type { PodWorktreeStatusChangedEvent } from '../../../shared/pod-worktree-status-event'
 import {
+  POD_AGENT_ROWS_COALESCE_MS,
   POD_WORKTREE_STATUS_COALESCE_MS,
   PodWorktreeStatusHub,
   type PodWorktreeStatusRead
 } from './worktree-status-hub'
-import type { RuntimeWorktreeAgentRow } from '../../../shared/runtime-types'
+import type {
+  RuntimeWorktreeAgentRow,
+  RuntimeWorktreePsSummary
+} from '../../../shared/runtime-types'
 import type { PodAgentStatusRow, PodStatusRow } from './worktree-status-signature'
+import { psRow } from './worktree-ps-row.test-fixture'
 
 function row(
   paneKey: string,
@@ -57,6 +62,7 @@ function makeStore(initial: PodAgentStatusRow[] = []) {
   }
   return {
     store,
+    rows: () => rows,
     listenerCount: () => mutations.size + freshness.size,
     write(next: PodAgentStatusRow[]) {
       rows = next
@@ -69,18 +75,40 @@ function makeStore(initial: PodAgentStatusRow[] = []) {
   }
 }
 
-type Rank = PodWorktreeStatusRead['worktrees'][number]
-
 // Settles pending reads without firing the 30-minute decay timer.
 const settle = () => vi.advanceTimersByTimeAsync(0)
 
-function makeReader(...answers: [string, Rank[]][]) {
+function makeReader(...answers: [string, RuntimeWorktreePsSummary[]][]) {
   let last = answers[0]
   const read = vi.fn(async (): Promise<PodWorktreeStatusRead> => {
     last = answers.shift() ?? last
     return { snapshotId: last[0], worktrees: last[1] }
   })
   return read
+}
+
+const RANK_OF_STATE: Record<PodStatusRow['state'], RuntimeWorktreePsSummary['status']> = {
+  working: 'working',
+  blocked: 'permission',
+  waiting: 'permission',
+  done: 'done'
+}
+
+/** worktree.ps over the store as it is when the read runs, one row per worktree; notes each start. */
+function readFromStore(harness: ReturnType<typeof makeStore>, options: { agents?: boolean } = {}) {
+  const startedAt: number[] = []
+  const read = vi.fn(async (): Promise<PodWorktreeStatusRead> => {
+    startedAt.push(Date.now())
+    const worktrees = harness.rows().map((status) =>
+      psRow(status.worktreeId ?? '', RANK_OF_STATE[status.state], {
+        agents: options.agents
+          ? [agentRow(status.paneKey, status.state, { toolName: status.toolName ?? null })]
+          : []
+      })
+    )
+    return { snapshotId: `s${startedAt.length}`, worktrees }
+  })
+  return { read, startedAt }
 }
 
 describe('PodWorktreeStatusHub', () => {
@@ -102,7 +130,7 @@ describe('PodWorktreeStatusHub', () => {
   it('reads a baseline on subscribe and emits nothing for it', async () => {
     const { store } = makeStore()
     const hub = new PodWorktreeStatusHub(store)
-    const read = makeReader(['s1', [{ worktreeId: 'wt-a', status: 'working' }]])
+    const read = makeReader(['s1', [psRow('wt-a', 'working')]])
     const emit = vi.fn()
     hub.subscribe(read, emit)
     await settle()
@@ -110,43 +138,176 @@ describe('PodWorktreeStatusHub', () => {
     expect(emit).not.toHaveBeenCalled()
   })
 
-  it('turns a burst of state changes into one read and one event per moved worktree', async () => {
+  it('pushes the first change after a quiet period at once, with its worktree.ps row', async () => {
     const harness = makeStore([row('p1', 'working')])
     const hub = new PodWorktreeStatusHub(harness.store)
-    const read = makeReader(
-      [
-        's1',
-        [
-          { worktreeId: 'wt-a', status: 'working' },
-          { worktreeId: 'wt-b', status: 'active' }
-        ]
-      ],
-      [
-        's2',
-        [
-          { worktreeId: 'wt-a', status: 'permission' },
-          { worktreeId: 'wt-b', status: 'active' }
-        ]
-      ]
-    )
+    const { read } = readFromStore(harness)
     const events: PodWorktreeStatusChangedEvent[] = []
-    hub.subscribe(read, (event) => events.push(event))
+    hub.subscribe(read, (event) => events.push(event), undefined, { rows: true })
     await settle()
 
+    const writtenAt = Date.now()
     harness.write([row('p1', 'blocked')])
-    harness.write([row('p1', 'waiting')])
-    harness.write([row('p1', 'blocked')])
-    await vi.advanceTimersByTimeAsync(POD_WORKTREE_STATUS_COALESCE_MS)
-
-    expect(read).toHaveBeenCalledTimes(2)
+    await settle()
+    expect(Date.now()).toBe(writtenAt)
     expect(events).toEqual([
       {
         type: 'worktreeStatusChanged',
         worktreeId: 'wt-a',
         snapshotId: 's2',
-        status: 'permission'
+        status: 'permission',
+        worktree: psRow('wt-a', 'permission')
       }
     ])
+
+    // Long after the window, the next change is the first of a new quiet period.
+    await vi.advanceTimersByTimeAsync(1_000)
+    harness.write([row('p1', 'done')])
+    await settle()
+    expect(events.map((event) => event.status)).toEqual(['permission', 'done'])
+  })
+
+  it('holds what follows a push to the end of its window, and the last state wins', async () => {
+    const harness = makeStore([row('p1', 'working')])
+    const hub = new PodWorktreeStatusHub(harness.store)
+    const { read } = readFromStore(harness)
+    const events: PodWorktreeStatusChangedEvent[] = []
+    hub.subscribe(read, (event) => events.push(event), undefined, { rows: true })
+    await settle()
+
+    harness.write([row('p1', 'blocked')])
+    await settle()
+    harness.write([row('p1', 'working')])
+    harness.write([row('p1', 'done')])
+    await vi.advanceTimersByTimeAsync(1)
+    harness.write([row('p1', 'blocked')])
+    harness.write([row('p1', 'done')])
+    await settle()
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(events).toHaveLength(1)
+
+    await vi.advanceTimersByTimeAsync(POD_WORKTREE_STATUS_COALESCE_MS)
+    expect(read).toHaveBeenCalledTimes(3)
+    expect(events.map((event) => event.status)).toEqual(['permission', 'done'])
+    expect(events[1]?.worktree).toEqual(psRow('wt-a', 'done'))
+
+    // Nothing moved during that window: the hub is quiet again.
+    await vi.advanceTimersByTimeAsync(POD_WORKTREE_STATUS_COALESCE_MS * 4)
+    expect(read).toHaveBeenCalledTimes(3)
+  })
+
+  it('turns 35 agents changing together into a read per window, not a push per agent', async () => {
+    const panes = Array.from({ length: 35 }, (_, index) => `p${index}`)
+    let rows = panes.map((pane) => row(pane, 'working', { worktreeId: `wt-${pane}` }))
+    const harness = makeStore(rows)
+    const hub = new PodWorktreeStatusHub(harness.store)
+    const { read, startedAt } = readFromStore(harness)
+    const events: PodWorktreeStatusChangedEvent[] = []
+    hub.subscribe(read, (event) => events.push(event))
+    await settle()
+
+    // Their hooks land over 34 ms, one a millisecond.
+    const firstAt = Date.now()
+    const writtenAt: number[] = []
+    for (const pane of panes) {
+      rows = rows.map((status) =>
+        status.paneKey === pane ? { ...status, state: 'blocked' } : status
+      )
+      writtenAt.push(Date.now())
+      harness.write(rows)
+      await vi.advanceTimersByTimeAsync(1)
+    }
+    const spreadMs = Date.now() - firstAt
+    await vi.advanceTimersByTimeAsync(POD_WORKTREE_STATUS_COALESCE_MS * 2)
+
+    const flushes = startedAt.slice(1)
+    expect(flushes.length).toBeLessThanOrEqual(
+      Math.ceil(spreadMs / POD_WORKTREE_STATUS_COALESCE_MS) + 1
+    )
+    for (const [index, at] of flushes.entries()) {
+      if (index > 0) {
+        expect(at - flushes[index - 1]!).toBeGreaterThanOrEqual(POD_WORKTREE_STATUS_COALESCE_MS)
+      }
+    }
+    // A throttle, not a debounce: no write waits past one window while the burst goes on.
+    const longestWait = Math.max(
+      ...writtenAt.map((at) => Math.min(...flushes.filter((start) => start >= at)) - at)
+    )
+    expect(longestWait).toBeLessThanOrEqual(POD_WORKTREE_STATUS_COALESCE_MS + 1)
+    const heard = new Map(events.map((event) => [event.worktreeId, event.status]))
+    expect(heard.size).toBe(35)
+    expect([...heard.values()].every((status) => status === 'permission')).toBe(true)
+  })
+
+  it('leaves no window behind a write that moved nothing', async () => {
+    const working = row('p1', 'working', { toolName: 'Bash' })
+    const harness = makeStore([working])
+    const hub = new PodWorktreeStatusHub(harness.store)
+    const { read } = readFromStore(harness)
+    const emit = vi.fn()
+    hub.subscribe(read, emit)
+    await settle()
+
+    // A tool update moves no ranking field: no read, and the next real change is not held back.
+    harness.write([{ ...working, toolName: 'Edit' }])
+    await settle()
+    expect(read).toHaveBeenCalledTimes(1)
+    harness.write([{ ...working, state: 'blocked' }])
+    await settle()
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({ status: 'permission' }))
+  })
+
+  it('holds what only the agent rows show to the trailing window, so a tool stream reads once a window', async () => {
+    let working = row('p1', 'working', { toolName: 'Bash' })
+    const harness = makeStore([working])
+    const hub = new PodWorktreeStatusHub(harness.store)
+    const { read, startedAt } = readFromStore(harness, { agents: true })
+    const events: PodWorktreeStatusChangedEvent[] = []
+    hub.subscribe(read, (event) => events.push(event), undefined, { agents: true, rows: true })
+    await settle()
+
+    // A tool update is not what the mark shows: it waits as it did before the leading edge.
+    harness.write([{ ...working, toolName: 'Edit' }])
+    await vi.advanceTimersByTimeAsync(POD_AGENT_ROWS_COALESCE_MS - 1)
+    expect(read).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(events.map((event) => event.worktree?.agents[0]?.toolName)).toEqual(['Edit'])
+
+    // A working agent's hooks, one every 4 ms for 400 ms.
+    const streamFrom = Date.now()
+    for (let index = 0; index < 100; index += 1) {
+      working = { ...working, toolName: `tool-${index}` }
+      harness.write([working])
+      await vi.advanceTimersByTimeAsync(4)
+    }
+    await vi.advanceTimersByTimeAsync(POD_AGENT_ROWS_COALESCE_MS)
+    const streamReads = startedAt.filter((at) => at >= streamFrom)
+    expect(streamReads.length).toBeLessThanOrEqual(Math.ceil(400 / POD_AGENT_ROWS_COALESCE_MS) + 1)
+    expect(events.at(-1)?.worktree?.agents[0]?.toolName).toBe('tool-99')
+  })
+
+  it('pushes a state move at once while a tool move waits, and that read covers both', async () => {
+    const working = row('p1', 'working', { toolName: 'Bash' })
+    const harness = makeStore([working])
+    const hub = new PodWorktreeStatusHub(harness.store)
+    const { read } = readFromStore(harness, { agents: true })
+    const events: PodWorktreeStatusChangedEvent[] = []
+    hub.subscribe(read, (event) => events.push(event), undefined, { agents: true, rows: true })
+    await settle()
+
+    harness.write([{ ...working, toolName: 'Edit' }])
+    await vi.advanceTimersByTimeAsync(10)
+    const blockedAt = Date.now()
+    harness.write([{ ...working, toolName: 'Edit', state: 'blocked' }])
+    await settle()
+    expect(Date.now()).toBe(blockedAt)
+    expect(events.map((event) => event.status)).toEqual(['permission'])
+    expect(events[0]?.worktree?.agents[0]?.toolName).toBe('Edit')
+
+    // The tool move's window has nothing left to read.
+    await vi.advanceTimersByTimeAsync(POD_AGENT_ROWS_COALESCE_MS * 2)
+    expect(read).toHaveBeenCalledTimes(2)
   })
 
   it('reads nothing for a write that leaves the ranking fields alone', async () => {
@@ -170,55 +331,50 @@ describe('PodWorktreeStatusHub', () => {
     const harness = makeStore([working, waiting])
     const hub = new PodWorktreeStatusHub(harness.store)
     const rank = 'permission' as const
-    const rankOnly = makeReader(['s1', [{ worktreeId: 'wt-a', status: rank }]])
+    const rankOnly = makeReader(['s1', [psRow('wt-a', rank)]])
     const rankEvents: PodWorktreeStatusChangedEvent[] = []
     hub.subscribe(rankOnly, (event) => rankEvents.push(event))
+    const toolMoved = psRow('wt-a', rank, {
+      agents: [agentRow('p1', 'working', { toolName: 'Edit' }), agentRow('p2', 'waiting')]
+    })
     const agents = makeReader(
       [
         's1',
-        [
-          {
-            worktreeId: 'wt-a',
-            status: rank,
-            agents: [agentRow('p1', 'working'), agentRow('p2', 'waiting')]
-          }
-        ]
+        [psRow('wt-a', rank, { agents: [agentRow('p1', 'working'), agentRow('p2', 'waiting')] })]
       ],
-      [
-        's2',
-        [
-          {
-            worktreeId: 'wt-a',
-            status: rank,
-            agents: [agentRow('p1', 'working', { toolName: 'Edit' }), agentRow('p2', 'waiting')]
-          }
-        ]
-      ],
+      ['s2', [toolMoved]],
       [
         's3',
         [
-          {
-            worktreeId: 'wt-a',
-            status: rank,
+          psRow('wt-a', rank, {
             agents: [
               agentRow('p1', 'done', { lastAssistantMessage: 'All green.' }),
               agentRow('p2', 'waiting')
             ]
-          }
+          })
         ]
       ]
     )
     const agentEvents: PodWorktreeStatusChangedEvent[] = []
-    hub.subscribe(agents, (event) => agentEvents.push(event), undefined, { agents: true })
+    hub.subscribe(agents, (event) => agentEvents.push(event), undefined, {
+      agents: true,
+      rows: true
+    })
     await settle()
 
     // A tool update moves no ranking field: only the agents subscriber reads, and hears of it.
     harness.write([{ ...working, toolName: 'Edit' }, waiting])
-    await vi.advanceTimersByTimeAsync(POD_WORKTREE_STATUS_COALESCE_MS)
+    await vi.advanceTimersByTimeAsync(POD_AGENT_ROWS_COALESCE_MS)
     expect(rankOnly).toHaveBeenCalledTimes(1)
     expect(agents).toHaveBeenCalledTimes(2)
     expect(agentEvents).toEqual([
-      { type: 'worktreeStatusChanged', worktreeId: 'wt-a', snapshotId: 's2', status: rank }
+      {
+        type: 'worktreeStatusChanged',
+        worktreeId: 'wt-a',
+        snapshotId: 's2',
+        status: rank,
+        worktree: toolMoved
+      }
     ])
 
     // One agent finishes while the other still waits: the ranking stays, so a ranking subscriber
@@ -248,15 +404,13 @@ describe('PodWorktreeStatusHub', () => {
   it('carries the working mode', async () => {
     const harness = makeStore([row('p1', 'working')])
     const hub = new PodWorktreeStatusHub(harness.store)
-    const read = makeReader(
-      ['s1', [{ worktreeId: 'wt-a', status: 'working' }]],
-      ['s2', [{ worktreeId: 'wt-a', status: 'working', workingMode: 'monitoring' }]]
-    )
+    const monitoring = psRow('wt-a', 'working', { workingMode: 'monitoring' })
+    const read = makeReader(['s1', [psRow('wt-a', 'working')]], ['s2', [monitoring]])
     const emit = vi.fn()
     hub.subscribe(read, emit)
     await settle()
     harness.write([row('p1', 'working', { workingMode: 'monitoring' })])
-    await vi.advanceTimersByTimeAsync(POD_WORKTREE_STATUS_COALESCE_MS)
+    await settle()
     expect(emit).toHaveBeenCalledWith({
       type: 'worktreeStatusChanged',
       worktreeId: 'wt-a',
@@ -266,21 +420,34 @@ describe('PodWorktreeStatusHub', () => {
     })
   })
 
+  it('puts the row only on the events of a subscriber that asked for rows', async () => {
+    const harness = makeStore([row('p1', 'working')])
+    const hub = new PodWorktreeStatusHub(harness.store)
+    const { read } = readFromStore(harness)
+    const plain: PodWorktreeStatusChangedEvent[] = []
+    const withRows: PodWorktreeStatusChangedEvent[] = []
+    hub.subscribe(read, (event) => plain.push(event))
+    hub.subscribe(read, (event) => withRows.push(event), undefined, { rows: true })
+    await settle()
+
+    harness.write([row('p1', 'blocked')])
+    await settle()
+    expect(plain).toEqual([expect.not.objectContaining({ worktree: expect.anything() })])
+    expect(plain[0]).toMatchObject({ worktreeId: 'wt-a', status: 'permission' })
+    expect(withRows.map((event) => event.worktree)).toEqual([psRow('wt-a', 'permission')])
+  })
+
   it('re-reads when a row goes stale, which no hook announces', async () => {
     const harness = makeStore([row('p1', 'working')])
     const hub = new PodWorktreeStatusHub(harness.store)
-    const read = makeReader(
-      ['s1', [{ worktreeId: 'wt-a', status: 'working' }]],
-      ['s2', [{ worktreeId: 'wt-a', status: 'active' }]]
-    )
+    const read = makeReader(['s1', [psRow('wt-a', 'working')]], ['s2', [psRow('wt-a', 'active')]])
     const emit = vi.fn()
     hub.subscribe(read, emit)
     await settle()
     expect(read).toHaveBeenCalledTimes(1)
 
-    await vi.advanceTimersByTimeAsync(
-      AGENT_STATUS_STALE_AFTER_MS + POD_WORKTREE_STATUS_COALESCE_MS + 1
-    )
+    // The deadline is 1 ms past stale; fake timers run an immediate set inside a timer 1 ms later.
+    await vi.advanceTimersByTimeAsync(AGENT_STATUS_STALE_AFTER_MS + 2)
     expect(read).toHaveBeenCalledTimes(2)
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'wt-a', status: 'active' })
@@ -292,9 +459,9 @@ describe('PodWorktreeStatusHub', () => {
     const hub = new PodWorktreeStatusHub(harness.store)
     const gate = { release: () => {} }
     const answers: PodWorktreeStatusRead[] = [
-      { snapshotId: 's1', worktrees: [{ worktreeId: 'wt-a', status: 'working' }] },
-      { snapshotId: 's2', worktrees: [{ worktreeId: 'wt-a', status: 'permission' }] },
-      { snapshotId: 's3', worktrees: [{ worktreeId: 'wt-a', status: 'inactive' }] }
+      { snapshotId: 's1', worktrees: [psRow('wt-a', 'working')] },
+      { snapshotId: 's2', worktrees: [psRow('wt-a', 'permission')] },
+      { snapshotId: 's3', worktrees: [psRow('wt-a', 'inactive')] }
     ]
     const read = vi.fn(async () => {
       const answer = answers.shift() ?? { snapshotId: 'end', worktrees: [] }
@@ -327,15 +494,9 @@ describe('PodWorktreeStatusHub', () => {
     const read = vi
       .fn<() => Promise<PodWorktreeStatusRead>>()
       .mockResolvedValue({ snapshotId: 'end', worktrees: [] })
-      .mockResolvedValueOnce({
-        snapshotId: 's1',
-        worktrees: [{ worktreeId: 'wt-a', status: 'working' }]
-      })
+      .mockResolvedValueOnce({ snapshotId: 's1', worktrees: [psRow('wt-a', 'working')] })
       .mockRejectedValueOnce(new Error('runtime busy'))
-      .mockResolvedValueOnce({
-        snapshotId: 's3',
-        worktrees: [{ worktreeId: 'wt-a', status: 'inactive' }]
-      })
+      .mockResolvedValueOnce({ snapshotId: 's3', worktrees: [psRow('wt-a', 'inactive')] })
     const emit = vi.fn()
     const onError = vi.fn()
     hub.subscribe(read, emit, onError)
@@ -354,7 +515,7 @@ describe('PodWorktreeStatusHub', () => {
   it('lets go of the store and its timers when the last subscriber leaves', async () => {
     const harness = makeStore([row('p1', 'working')])
     const hub = new PodWorktreeStatusHub(harness.store)
-    const read = makeReader(['s1', [{ worktreeId: 'wt-a', status: 'working' }]])
+    const read = makeReader(['s1', [psRow('wt-a', 'working')]])
     const stopFirst = hub.subscribe(read, vi.fn())
     const stopSecond = hub.subscribe(read, vi.fn())
     expect(harness.store.subscribeStatusRowMutations).toHaveBeenCalledTimes(1)
@@ -370,10 +531,24 @@ describe('PodWorktreeStatusHub', () => {
     expect(read).toHaveBeenCalledTimes(2)
   })
 
+  it('drops a change still queued when the last subscriber leaves', async () => {
+    const harness = makeStore([row('p1', 'working')])
+    const hub = new PodWorktreeStatusHub(harness.store)
+    const { read } = readFromStore(harness)
+    const stop = hub.subscribe(read, vi.fn())
+    await settle()
+
+    harness.write([row('p1', 'blocked')])
+    stop()
+    expect(vi.getTimerCount()).toBe(0)
+    await settle()
+    expect(read).toHaveBeenCalledTimes(1)
+  })
+
   it('drops a read that finishes after its subscriber left', async () => {
     const { store } = makeStore()
     const hub = new PodWorktreeStatusHub(store)
-    const read = makeReader(['s1', [{ worktreeId: 'wt-a', status: 'working' }]])
+    const read = makeReader(['s1', [psRow('wt-a', 'working')]])
     const emit = vi.fn()
     hub.subscribe(read, emit)()
     await settle()

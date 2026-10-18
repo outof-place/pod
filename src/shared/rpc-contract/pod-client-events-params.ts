@@ -6,12 +6,14 @@ import { WorktreePsParams } from './worktree-params'
 export const PodClientEventsSubscribeParams = z
   .object({
     /** Opt in to `worktreeStatusChanged`, for these worktree.ps read params (`true`: defaults).
-     *  `agents: true` also sends it when a worktree's agent rows change what they show. */
+     *  `agents: true` also sends it when a worktree's agent rows change what they show;
+     *  `rows: true` puts the worktree's worktree.ps row on each event. */
     worktreeStatus: z
       .union([
         z.literal(true),
         WorktreePsParams.omit({ afterSnapshotId: true }).extend({
-          agents: z.literal(true).optional().catch(undefined)
+          agents: z.literal(true).optional().catch(undefined),
+          rows: z.literal(true).optional().catch(undefined)
         })
       ])
       .optional()

@@ -55,6 +55,12 @@ describe('PodClientEventsSubscribeParams', () => {
     expect(
       PodClientEventsSubscribeParams.parse({ worktreeStatus: { limit: 10_000, agents: 'yes' } })
     ).toEqual({ worktreeStatus: { limit: 10_000 } })
+    expect(
+      PodClientEventsSubscribeParams.parse({ worktreeStatus: { limit: 10_000, rows: true } })
+    ).toEqual({ worktreeStatus: { limit: 10_000, rows: true } })
+    expect(
+      PodClientEventsSubscribeParams.parse({ worktreeStatus: { limit: 10_000, rows: 1 } })
+    ).toEqual({ worktreeStatus: { limit: 10_000 } })
   })
 })
 

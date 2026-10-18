@@ -13,6 +13,12 @@ export type PodWorktreeStatusChangedEvent = {
   snapshotId: string
   status: RuntimeWorktreePsSummary['status']
   workingMode?: RuntimeWorktreePsSummary['workingMode']
+  /**
+   * For `worktreeStatus.rows`: this worktree's row exactly as worktree.ps returned it at
+   * `snapshotId`, so a client can draw it without waiting for a read; keep reading worktree.ps
+   * when `snapshotId` differs from the client's own. Absent from runtimes before it.
+   */
+  worktree?: RuntimeWorktreePsSummary
 }
 
 /** Added to the subscription's `ready` frame when the runtime honours the opt-in; the second
