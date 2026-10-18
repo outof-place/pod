@@ -146,6 +146,8 @@ export type BrowserViewportResult = {
   height: number
   deviceScaleFactor: number
   mobile: boolean
+  // True when `viewport --reset` returned the page to its own size (the one reported here).
+  reset?: boolean
 }
 
 export type BrowserGeolocationResult = {

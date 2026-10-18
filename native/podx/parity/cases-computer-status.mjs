@@ -198,6 +198,18 @@ export function addComputerAndStatusCases(add) {
     add(`${argv.join(' ')} --json`, [...argv, '--json'])
   }
   add('viewport negative falls back', ['viewport', '--width', '-1', '--height', '2'])
+  const resetReply = { 'browser.viewport': ok({ width: 898, height: 723, deviceScaleFactor: 2, mobile: false, reset: true }) }
+  add('viewport --reset', ['viewport', '--reset'], { responses: resetReply })
+  add('viewport --reset --json', ['viewport', '--reset', '--json'], { responses: resetReply })
+  add('viewport --reset --page', ['viewport', '--reset', '--page', 'page-1'], { responses: resetReply })
+  add('viewport --reset with a size falls back', ['viewport', '--reset', '--width', '390'])
+  add('viewport --reset on a runtime before it', ['viewport', '--reset'], {
+    responses: {
+      'browser.viewport': [
+        { error: { code: 'invalid_argument', message: 'Width and height must be positive numbers' } }
+      ]
+    }
+  })
   add('get object result', ['get', '--what', 'box', '--element', '@e1'], {
     responses: { 'browser.get': ok({ x: 1, y: [2] }) }
   })

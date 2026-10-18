@@ -265,17 +265,6 @@ export const CookieDelete = BrowserTarget.extend({
   url: OptionalPlainString
 })
 
-export const Viewport = BrowserTarget.extend({
-  width: z.custom<number>((v) => typeof v === 'number' && v > 0, {
-    message: 'Width and height must be positive numbers'
-  }),
-  height: z.custom<number>((v) => typeof v === 'number' && v > 0, {
-    message: 'Width and height must be positive numbers'
-  }),
-  deviceScaleFactor: OptionalFiniteNumber,
-  mobile: OptionalBoolean
-})
-
 export const Geolocation = BrowserTarget.extend({
   latitude: z.custom<number>((v) => typeof v === 'number', {
     message: 'Missing latitude or longitude'

@@ -121,11 +121,11 @@ import {
   TabSwitch,
   Type,
   Upload,
-  Viewport,
   Wait
 } from './browser-params'
 import { ScreencastUnsubscribe } from './browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-create-params'
+import { Viewport } from './browser-viewport-params'
 import { ClientEventsUnsubscribeParams } from './client-events-params'
 import {
   NativeChatSessionOptionsMutation,

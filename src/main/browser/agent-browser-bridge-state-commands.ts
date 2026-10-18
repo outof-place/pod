@@ -16,6 +16,8 @@ import { BrowserError } from './cdp-bridge'
 import { parseShellArgs, stripAgentBrowserTargetArgs } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeInteractionCommands } from './agent-browser-bridge-interaction-commands'
 import { sendGuestCdpCommand } from './guest-cdp-command'
+import { acquireElectronDebugger } from './electron-debugger-lease'
+import { waitForSettledCaptures } from './cdp-capture-settle'
 
 export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridgeInteractionCommands {
   // ── Cookie commands ──
@@ -100,6 +102,7 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
       if (!dbg.isAttached()) {
         throw new BrowserError('browser_error', 'Debugger not attached')
       }
+      await this.waitForPageCaptures(wc)
 
       // Why: agent-browser's `set viewport` has no `mobile` flag, so apply the emulation directly via CDP to honor Orca's --mobile.
       await sendGuestCdpCommand(wc, 'Emulation.setDeviceMetricsOverride', {
@@ -118,6 +121,51 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
         mobile
       }
     })
+  }
+
+  /** Drops an emulated viewport: the page takes its own size again (its pane's, when one shows it). */
+  async resetViewport(worktreeId?: string, browserPageId?: string): Promise<BrowserViewportResult> {
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        const wc = this.getWebContents(target.webContentsId)
+        if (!wc) {
+          throw new BrowserError('browser_tab_not_found', 'Tab is no longer available')
+        }
+        // Why no attach first: a detached debugger already took any emulation with it.
+        const emulating = wc.debugger.isAttached()
+        const lease = acquireElectronDebugger(wc)
+        try {
+          await this.waitForPageCaptures(wc)
+          if (emulating) {
+            // Why: Chromium puts back the view size it had before the override, unless it was resized meanwhile.
+            await sendGuestCdpCommand(wc, 'Emulation.clearDeviceMetricsOverride', {})
+          }
+          const reply: { result?: { value?: unknown } } = await wc.debugger.sendCommand(
+            'Runtime.evaluate',
+            { expression: '[innerWidth, innerHeight, devicePixelRatio]', returnByValue: true }
+          )
+          const value = reply.result?.value
+          const [width, height, deviceScaleFactor] = Array.isArray(value)
+            ? value.map(Number)
+            : [0, 0, 1]
+          return { width, height, deviceScaleFactor, mobile: false, reset: true }
+        } finally {
+          lease.release()
+        }
+      },
+      { ensureSession: false }
+    )
+  }
+
+  // Why: a capture still running puts its own emulation back when it ends, over a change made meanwhile.
+  private async waitForPageCaptures(wc: Electron.WebContents): Promise<void> {
+    try {
+      await waitForSettledCaptures(wc)
+    } catch (error) {
+      throw new BrowserError('browser_error', error instanceof Error ? error.message : String(error))
+    }
   }
 
   async setGeolocation(

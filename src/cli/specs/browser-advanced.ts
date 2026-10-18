@@ -38,10 +38,10 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
   // ── Viewport ──
   {
     path: ['viewport'],
-    summary: 'Set browser viewport size',
+    summary: 'Set browser viewport size, or --reset to the page own size',
     usage:
-      'orca viewport --width <w> --height <h> [--scale <n>] [--mobile] [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'width', 'height', 'scale', 'mobile', 'worktree']
+      'orca viewport (--width <w> --height <h> [--scale <n>] [--mobile] | --reset) [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'width', 'height', 'scale', 'mobile', 'reset', 'worktree']
   },
   // ── Geolocation ──
   {

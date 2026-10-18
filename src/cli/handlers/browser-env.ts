@@ -1,5 +1,5 @@
 import type { BrowserGeolocationResult, BrowserViewportResult } from '../../shared/runtime-types'
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler, HandlerContext } from '../dispatch'
 import { printResult } from '../format'
 import {
   getOptionalStringFlag,
@@ -11,8 +11,35 @@ import {
 import { RuntimeClientError } from '../runtime-client'
 import { getBrowserCommandTarget } from '../selectors'
 
+async function resetViewport({ flags, client, cwd, json }: HandlerContext): Promise<void> {
+  if (flags.has('width') || flags.has('height') || flags.has('scale') || flags.has('mobile')) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--reset takes no size: it returns the page to its own size'
+    )
+  }
+  const params = { reset: true, ...(await getBrowserCommandTarget(flags, cwd, client)) }
+  const result = await client
+    .call<BrowserViewportResult>('browser.viewport', params)
+    .catch((error: unknown) => {
+      // Why: a runtime from before --reset rejects the call for its missing size.
+      if (error instanceof RuntimeClientError && /Width and height/.test(error.message)) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          'This Pod runtime predates viewport --reset; update Pod, or pass the pane size as --width and --height'
+        )
+      }
+      throw error
+    })
+  printResult(result, json, (v) => `Viewport reset to the page's own ${v.width}×${v.height}`)
+}
+
 export const BROWSER_ENV_HANDLERS: Record<string, CommandHandler> = {
   viewport: async ({ flags, client, cwd, json }) => {
+    if (flags.get('reset') === true) {
+      await resetViewport({ flags, client, cwd, json })
+      return
+    }
     const width = getRequiredPositiveNumber(flags, 'width')
     const height = getRequiredPositiveNumber(flags, 'height')
     const params: Record<string, unknown> = { width, height }

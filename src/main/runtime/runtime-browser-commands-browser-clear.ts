@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split class members.
 import { RuntimeBrowserCommandsWithBrowserTabList } from './runtime-browser-commands-browser-tab-list'
+import { BrowserError } from '../browser/browser-error'
 import type { BrowserCommandTargetParams } from './runtime-browser-commands-browser-command-target-params'
 import type {
   BrowserCaptureStartResult,
@@ -125,14 +126,22 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
 
   async browserSetViewport(
     params: {
-      width: number
-      height: number
+      width?: number
+      height?: number
       deviceScaleFactor?: number
       mobile?: boolean
+      reset?: boolean
     } & BrowserCommandTargetParams
   ): Promise<BrowserViewportResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().setViewport(
+    const bridge = this.requireAgentBrowserBridge()
+    if (params.reset === true) {
+      return bridge.resetViewport(target.worktreeId, target.browserPageId)
+    }
+    if (params.width === undefined || params.height === undefined) {
+      throw new BrowserError('invalid_argument', 'Width and height must be positive numbers')
+    }
+    return bridge.setViewport(
       params.width,
       params.height,
       params.deviceScaleFactor,

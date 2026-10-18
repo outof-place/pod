@@ -315,6 +315,28 @@ describe('browser RPC methods', () => {
     expect(runtime.cleanupSubscription).not.toHaveBeenCalled()
   })
 
+  it('takes viewport --reset without a size, and still wants a size otherwise', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only getRuntimeId and the single browser method stubbed here.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      browserSetViewport: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_EXTRA_METHODS })
+
+    const reset = await dispatcher.dispatch(
+      makeRequest('browser.viewport', { page: 'page-1', reset: true })
+    )
+    const sizeless = await dispatcher.dispatch(makeRequest('browser.viewport', { page: 'page-1' }))
+
+    expect(reset).toMatchObject({ ok: true })
+    expect(runtime.browserSetViewport).toHaveBeenCalledWith({ page: 'page-1', reset: true })
+    expect(sizeless).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('Width and height must be positive numbers') }
+    })
+    expect(runtime.browserSetViewport).toHaveBeenCalledTimes(1)
+  })
+
   it('routes browser session and environment controls to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

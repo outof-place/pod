@@ -345,6 +345,25 @@ describe('AgentBrowserBridge', () => {
     expect(viewportCall).toBeUndefined()
   })
 
+  it('resets an emulated viewport to the page own size through CDP', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockImplementation(async (method: string) =>
+      method === 'Runtime.evaluate' ? { result: { value: [898, 723, 2] } } : {}
+    )
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await expect(bridge.resetViewport()).resolves.toEqual({
+      width: 898,
+      height: 723,
+      deviceScaleFactor: 2,
+      mobile: false,
+      reset: true
+    })
+
+    expect(wc.debugger.sendCommand).toHaveBeenCalledWith('Emulation.clearDeviceMetricsOverride', {})
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
   it('normalizes selector wait state=visible to the default supported semantics', async () => {
     succeedWith({ selector: 'h1', waited: 'selector' })
 

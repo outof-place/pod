@@ -50,9 +50,9 @@ export {
   TabSwitch,
   Type,
   Upload,
-  Viewport,
   Wait
 } from '../../../../shared/rpc-contract/browser-params'
+export { Viewport } from '../../../../shared/rpc-contract/browser-viewport-params'
 export {
   BrowserIdentitySet,
   ProfileCreate

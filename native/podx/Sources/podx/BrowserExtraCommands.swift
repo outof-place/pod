@@ -39,13 +39,37 @@ func stringOrStringify(_ v: JSONValue?) -> String {
   return String(decoding: stringifyResult(v), as: UTF8.self)
 }
 
-let BROWSER_EXTRA_HANDLERS: [String: Handler] = [
-  "viewport": targetHandler("browser.viewport", { inv throws(CliError) in
+let viewportSize: Handler = targetHandler("browser.viewport", { inv throws(CliError) in
     var params: [(String, JSONValue?)] = [("width", try inv.reqPositiveNumber("width")), ("height", try inv.reqPositiveNumber("height"))]
     if let scale = try inv.optPositiveNumberString("scale") { params.append(("deviceScaleFactor", scale)) }
     if inv.flags.has("mobile") { params.append(("mobile", .bool(true))) }
     return params
-  }) { _, v in "Viewport set to \(v["width"].templateString)×\(v["height"].templateString)\(v["mobile"].truthy ? " (mobile)" : "")" },
+  }) { _, v in "Viewport set to \(v["width"].templateString)×\(v["height"].templateString)\(v["mobile"].truthy ? " (mobile)" : "")" }
+
+/// browser-env.ts resetViewport: `viewport --reset`, the page back to its own size.
+func resetViewport(_ inv: Invocation) throws(CliError) {
+  if ["width", "height", "scale", "mobile"].contains(where: { inv.flags.has($0) }) { throw .needsNode }
+  try inv.checkBrowserTargetFlags()
+  let r: JSONObject
+  do {
+    r = try inv.call("browser.viewport", [("reset", .bool(true))] + (try inv.browserCommandTarget()))
+  } catch {
+    // Why: a runtime from before --reset rejects the call for its missing size.
+    if case .rpcFailure(let failure) = error, failure["error"]?["message"].templateString.contains("Width and height") == true {
+      throw .client(
+        code: "invalid_argument",
+        message: "This Pod runtime predates viewport --reset; update Pod, or pass the pane size as --width and --height",
+        data: nil)
+    }
+    throw error
+  }
+  inv.printResult(r) { v in "Viewport reset to the page's own \(v["width"].templateString)×\(v["height"].templateString)" }
+}
+
+let BROWSER_EXTRA_HANDLERS: [String: Handler] = [
+  "viewport": { inv in
+    if case .bool? = inv.flags["reset"] { try resetViewport(inv) } else { try viewportSize(inv) }
+  },
   "set device": targetHandler("browser.setDevice", { inv throws(CliError) in [("name", .str(try inv.reqString("name")))] }) {
     inv, _ in "Device emulation set to \((try? inv.reqString("name")) ?? "")"
   },

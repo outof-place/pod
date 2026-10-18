@@ -808,4 +808,46 @@ describe('orca cli browser waits and viewport flags', () => {
       worktree: undefined
     })
   })
+
+  it('resets the viewport to the page own size with --reset', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_viewport_reset', {
+        width: 898,
+        height: 723,
+        deviceScaleFactor: 2,
+        mobile: false,
+        reset: true
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['viewport', '--reset', '--worktree', 'all'], '/tmp/not-an-orca-worktree')
+
+    expect(callMock).toHaveBeenCalledWith('browser.viewport', { reset: true, worktree: undefined })
+    expect(logSpy).toHaveBeenCalledWith("Viewport reset to the page's own 898×723")
+  })
+
+  it('refuses a size together with --reset', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      ['viewport', '--reset', '--width', '390', '--worktree', 'all'],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('--reset takes no size'))
+  })
+
+  it('says a runtime from before --reset needs an update', async () => {
+    callMock.mockRejectedValueOnce(
+      new RuntimeClientError('invalid_argument', 'Width and height must be positive numbers')
+    )
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['viewport', '--reset', '--worktree', 'all'], '/tmp/not-an-orca-worktree')
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('predates viewport --reset'))
+  })
 })
