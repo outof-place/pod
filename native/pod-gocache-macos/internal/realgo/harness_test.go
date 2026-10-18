@@ -14,14 +14,23 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/realhome"
 )
 
 // clientBin is the pod-gocache binary built once for the package's tests.
+// POD_GOCACHE_CLIENT_BIN runs them with another build instead (the S14 skew
+// matrix: an S1 client against this daemon).
 var clientBin string
 
 func TestMain(m *testing.M) {
+	home := os.Getenv("HOME") // G3: the real one, checked after the tests
 	if os.Getenv("POD_GOCACHE_REALGO") != "1" {
-		os.Exit(m.Run())
+		os.Exit(realhome.Run(m, home))
+	}
+	if bin := os.Getenv("POD_GOCACHE_CLIENT_BIN"); bin != "" {
+		clientBin = bin
+		os.Exit(realhome.Run(m, home))
 	}
 	dir, err := os.MkdirTemp("", "pgc-realgo-bin-")
 	if err != nil {
@@ -35,7 +44,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "building pod-gocache:", err)
 		os.Exit(1)
 	}
-	code := m.Run()
+	code := realhome.Run(m, home)
 	os.RemoveAll(dir)
 	os.Exit(code)
 }
@@ -149,6 +158,7 @@ func canonical(t *testing.T, dir string) string {
 type cacheEnv struct {
 	gocache string
 	trace   string // POD_GOCACHE_TRACE_DIR for the client
+	live    string // POD_GOCACHE_LIVE_DIR: this test's own shared-state root (G3)
 	prog    bool   // set GOCACHEPROG to the client
 	extra   []string
 }
@@ -156,7 +166,7 @@ type cacheEnv struct {
 func newCache(t *testing.T, prog bool) cacheEnv {
 	t.Helper()
 	root := canonical(t, t.TempDir())
-	ce := cacheEnv{gocache: filepath.Join(root, "gocache"), trace: filepath.Join(root, "trace"), prog: prog}
+	ce := cacheEnv{gocache: filepath.Join(root, "gocache"), trace: filepath.Join(root, "trace"), live: filepath.Join(root, "live"), prog: prog}
 	if err := os.MkdirAll(ce.gocache, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -206,6 +216,7 @@ func goEnv(ce cacheEnv) []string {
 		"GOPROXY=off",
 		"GOFLAGS=-p=2 -trimpath",
 		"POD_GOCACHE_TRACE_DIR="+ce.trace,
+		"POD_GOCACHE_LIVE_DIR="+ce.live,
 	)
 	if ce.prog {
 		env = append(env, "GOCACHEPROG="+clientBin+" prog")

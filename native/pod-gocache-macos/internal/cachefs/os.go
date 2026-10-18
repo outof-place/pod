@@ -37,6 +37,7 @@ func StatFromSys(st *syscall.Stat_t) Stat {
 		Alloc: st.Blocks * 512,
 		Mtime: st.Mtimespec.Nano(),
 		Atime: st.Atimespec.Nano(),
+		Ctime: st.Ctimespec.Nano(),
 		Ino:   st.Ino,
 	}
 	switch st.Mode & syscall.S_IFMT {

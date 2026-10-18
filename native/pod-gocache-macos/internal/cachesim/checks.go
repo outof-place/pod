@@ -1,11 +1,13 @@
 package cachesim
 
 import (
+	"encoding/hex"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/cachefs"
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/index"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/ownerstate"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/procscan"
 )
@@ -299,3 +301,23 @@ func (p Prio) Background(on bool) {
 }
 
 var _ cachefs.FS = (*World)(nil)
+
+// checkPinned records an output removed while a live client process pinned
+// it; the test decides which tiers allow that (B1: emergency only).
+func (w *World) checkPinned(rel string) {
+	if w.shared == nil || !strings.HasSuffix(strings.SplitN(rel, "/", 3)[1], "-d") {
+		return
+	}
+	name := strings.SplitN(rel, "/", 3)[1]
+	var out [32]byte
+	if _, err := hex.Decode(out[:], []byte(name[:64])); err != nil {
+		return
+	}
+	expiry := w.PinExpiry
+	if expiry == 0 {
+		expiry = 6 * time.Hour
+	}
+	if w.shared.pinnedBy(index.Prefix(out), expiry) {
+		w.PinnedRemovals = append(w.PinnedRemovals, Removal{Rel: rel, Mono: w.mono, FreeAtCut: w.freeSamples[1], Live: w.liveGo()})
+	}
+}

@@ -13,6 +13,9 @@ import (
 type Candidate struct {
 	index.Unit
 	Age time.Duration
+	// Pinned: a live go process was handed the unit's output (S9). A pinned
+	// unit is picked only in the emergency stage, after every unpinned one.
+	Pinned bool
 }
 
 // Policy orders candidates; Less(a, b) means a is evicted before b. It must
@@ -108,6 +111,9 @@ type Planned struct {
 	Candidate
 	Stage  Stage
 	Window time.Duration
+	// GaveWay: picked although pinned, because the emergency need was still
+	// unmet after every unpinned candidate.
+	GaveWay bool
 }
 
 // Plan is what the daemon would evict now, in order.
@@ -120,6 +126,8 @@ type Plan struct {
 	Future     int64 // bytes whose timestamps lie in the future
 	Stuck      int64 // bytes whose removal was refused
 	OldestUsed int64 // the oldest recency among candidates (wall ns), 0 if none
+	Pinned     int64 // bytes kept by pins (S9)
+	GaveWay    int64 // pinned bytes picked for the emergency need
 }
 
 // Assign picks sorted units until every stage's need is met or room (the
@@ -135,6 +143,21 @@ func Assign(sorted []Candidate, need Need, w Windows, room int64) Plan {
 		StageEmergency: need.Emergency,
 	}
 	drops := map[index.ID]int32{}
+	pick := func(c *Candidate, stage Stage, gaveWay bool) {
+		last := c.Orphan
+		if !c.Orphan && c.HasOut {
+			drops[c.Out]++
+			last = c.Refs-drops[c.Out] <= 0
+		}
+		// An empty file frees no bytes but is still an entry to clean up.
+		b := max(c.Bytes(last), 1)
+		p.Bytes += b
+		if gaveWay {
+			p.GaveWay += b
+		}
+		p.Units = append(p.Units, Planned{Candidate: *c, Stage: stage, Window: w.of(stage), GaveWay: gaveWay})
+	}
+	pinned := false
 	for i := range sorted {
 		c := &sorted[i]
 		bytesAll := c.ABytes + c.DBytes
@@ -154,6 +177,11 @@ func Assign(sorted []Candidate, need Need, w Windows, room int64) Plan {
 		if p.OldestUsed == 0 || c.Recency < p.OldestUsed {
 			p.OldestUsed = c.Recency
 		}
+		if c.Pinned {
+			p.Pinned += bytesAll
+			pinned = true
+			continue
+		}
 		if p.Bytes >= limit[StageNormal] {
 			continue
 		}
@@ -165,15 +193,18 @@ func Assign(sorted []Candidate, need Need, w Windows, room int64) Plan {
 		if !ok {
 			continue
 		}
-		last := c.Orphan
-		if !c.Orphan && c.HasOut {
-			drops[c.Out]++
-			last = c.Refs-drops[c.Out] <= 0
+		pick(c, stage, false)
+	}
+	// B1: pins give way in the emergency tier, only for what every unpinned
+	// candidate the emergency window allows left of the emergency need.
+	for i := range sorted {
+		if !pinned || p.Bytes >= limit[StageEmergency] || (room >= 0 && p.Bytes >= room) {
+			break
 		}
-		// An empty file frees no bytes but is still an entry to clean up.
-		b := max(c.Bytes(last), 1)
-		p.Bytes += b
-		p.Units = append(p.Units, Planned{Candidate: *c, Stage: stage, Window: w.of(stage)})
+		c := &sorted[i]
+		if c.Pinned && c.FutureAt == 0 && !c.Stuck && c.Age > w.Emergency {
+			pick(c, StageEmergency, true)
+		}
 	}
 	return p
 }

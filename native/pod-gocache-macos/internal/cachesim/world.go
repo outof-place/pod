@@ -36,6 +36,7 @@ type Failure struct {
 	Detail   string
 	Removed  bool // the daemon removed it (vs. something else)
 	Acquired time.Duration
+	Client   bool // the process ran through the GOCACHEPROG client
 }
 
 // Limits mirror the daemon's, for the independent checks.
@@ -103,6 +104,13 @@ type World struct {
 	// Journal records sleeps, clock steps and notes, for failure reports.
 	Journal  []string
 	workload *Workload
+
+	// S9: the shared-state model and what client processes did with it.
+	shared                         *Shared
+	FastHits, DiskHits, GoneMisses int
+	DyingMisses, DyingPuts         int
+	PinnedRemovals                 []Removal // outputs removed while a live client pinned them
+	PinExpiry                      time.Duration
 }
 
 // OwnerBeat is one owner.json write; Background marks one made while the
@@ -156,6 +164,14 @@ func (w *World) Boot() int64 { return w.BootUs }
 func (w *World) Sleep(d time.Duration) {
 	w.offset += int64(d)
 	w.Journal = append(w.Journal, fmt.Sprintf("t=%s wall=%s sleep %s", w.mono-time.Hour, w.Wall().UTC().Format(time.TimeOnly), d))
+}
+
+// Stall moves awake and wall time forward by d inside an event, as a daemon
+// stopped (SIGSTOP) or starved for d between two instructions sees it; events
+// due meanwhile run when the event returns.
+func (w *World) Stall(d time.Duration) {
+	w.mono += d
+	w.Journal = append(w.Journal, fmt.Sprintf("t=%s stall %s", w.mono-time.Hour, d))
 }
 
 // StepClock sets the wall clock by d (either direction) without sleeping.

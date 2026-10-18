@@ -21,7 +21,7 @@ CGO_ENABLED=0 go build -ldflags "-X main.version=<version>" -o pod-gocache ./cmd
 | Command | Behavior |
 |---|---|
 | `pod-gocache prog` | The GOCACHEPROG client, for `GOCACHEPROG="<path> prog"`. Speaks the protocol on stdin and stdout until `go` sends `close` or its stdin ends, then exits 0. |
-| `pod-gocache daemon [--cache-dir <abs>] [--state-dir <abs>] [--mode observe]` | The cache daemon, normally started by launchd. See [Daemon](#daemon). |
+| `pod-gocache daemon [--cache-dir <abs>] [--state-dir <abs>] [--mode observe] [--live-dir <abs>\|off]` | The cache daemon, normally started by launchd. See [Daemon](#daemon) and [Shared state](#shared-state-s9). |
 | `pod-gocache status [--json] [--state-dir <abs>]` | The daemon's last status, read from the state directory, so it works with the daemon down. `--json` prints `state.json` plus `heartbeatFresh` and `stale` and exits 0; it exits 74 only when `state.json` exists but can't be read or parsed. When no daemon ever ran it prints `{"version":"<version>","mode":"standalone","neverRan":true,"heartbeatFresh":false,"stale":false}`. Without `--json` it prints the same in words. `-json` is accepted as an alias of `--json`. `version` and `mode` are always present. |
 | `pod-gocache version` | Prints the bare version on one line, exit 0. |
 
@@ -34,7 +34,9 @@ Anything else prints usage to stderr and exits 64 (EX_USAGE). New flags, if any,
 | `GOCACHE` | The store. `go` sets it to its effective value (absolute) for every subprocess (`cmd/go/main.go`, `envcmd.MkEnv`), so the client never runs `go env`. Unset, the client uses go's default, `os.UserCacheDir()/go-build`. `off`, a relative path, invalid UTF-8 or a path near PATH_MAX leaves the client without a store: gets miss and puts fail. `go` itself refuses to start in those cases, so this only matters when the client is run by hand. |
 | `POD_GOCACHE_TRACE_DIR` | Where the access trace goes. Default `~/.pod/gocache/trace`. |
 | `POD_GOCACHE_TRACE=off` | No trace. |
-| `~/.pod/gocache/disabled` | Kill switch, checked once at start. When the file exists the client writes no trace and will contact no daemon: it is a plain native-layout disk cache. This is the rollback for terminals whose environment already holds GOCACHEPROG. |
+| `POD_GOCACHE_LIVE_DIR` | Root of the state the daemon shares with clients ([Shared state](#shared-state-s9)). Default `~/Library/Caches/pod-gocache/live`. A relative value leaves the client without shared state. |
+| `POD_GOCACHE_LIVE=off` | The client ignores the shared state and works as S1 did: every get reads the `-a` file. |
+| `~/.pod/gocache/disabled` | Kill switch, checked once at start. When the file exists the client writes no trace and never opens the shared state: it is a plain native-layout disk cache. This is the rollback for terminals whose environment already holds GOCACHEPROG. |
 
 Beyond the frozen contract, the client also has: `POD_GOCACHE_TRACE=off` and `POD_GOCACHE_TRACE_DIR` (above), the plain-words `status` and the `-json` alias, the unknown-command error reply, and bucket directories re-created on a put when a cleanup removed them.
 
@@ -89,8 +91,10 @@ Each record is 40 bytes, little-endian, and a file is a plain sequence of record
 | 24 | 8 | body size in bytes |
 | 32 | 4 | client pid |
 | 36 | 2 | microseconds spent serving the request, saturating at 65535 |
-| 38 | 1 | op: 1 start, 2 get hit, 3 get miss, 4 put stored, 5 put of an existing output, 6 put failed, 7 close, 8 end of input without close |
+| 38 | 1 | op: 1 start, 2 get hit, 3 get miss, 4 put stored, 5 put of an existing output, 6 put failed, 7 close, 8 end of input without close, 9 get hit served from the shared index, 10 the session's use of the shared state |
 | 39 | 1 | format version, 1 |
+
+A session writes one op 10 record when it ends. Its three fields carry: at offset 8, the index reason (byte 0), the pins reason (byte 1), 1 in byte 2 when the pin log filled up, and from bit 32 the puts that rewrote an output the daemon was deleting; at offset 16, fast hits (low 32 bits) and hits that read the `-a` file (high 32 bits); at offset 24, lookups that found the index stale (low) and hits turned into misses because the output was being deleted (high). Reasons are numbered 0 ok, 1 no-root, 2 no-cache, 3 missing, 4 invalid, 5 denied, 6 no-slot, 7 fault, 8 error, 9 off ([Shared state](#shared-state-s9)). Ops 9 and 10 are new in S9 within version 1: an S1 reader skips them as unknown records.
 
 `internal/trace.ReadDir` decodes a trace directory.
 
@@ -208,6 +212,7 @@ Fields outside `extra` are fixed; `extra` may gain fields and never renames one.
 | `extra.trimWrittenAt`, `extra.trimError` | Last `trim.txt` write. |
 | `extra.scan`, `extra.cpuSeconds`, `extra.maxRssBytes` | File system calls since start, own CPU time and peak RSS. |
 | `extra.policy` | `age-buckets-v2`. |
+| `extra.live` | The shared state: `dir`, `reason` (why nothing is shared now), `entries` and `slots` of the index, `refused` entries, live `clients`, `pinningProcesses`, `overflowedClients`, `pinnedBytes`, `pinnedOverCapBytes`, `pinnedGaveWayBytes`, `pinnedKept` (removals skipped for a pin since start), `records` read from client logs, `rereads` of `-a` files clients flagged, `dyingBatches`. |
 | `extra.sleepCredits`, `extra.lastWallNs`, `extra.lastAwakeNs`, `extra.bootTimeUs` | Internal: how the next start learns about sleeps and reboots. |
 
 ### Exit codes
@@ -232,6 +237,96 @@ Phase B, when the daemon answers gets on the build's hot path over a socket: `Pr
 - W is always an age-bucket bound (`age-buckets-v2`), so a relaxed tier never takes an entry inside W while entries outside it are left.
 - No sleep credit across a reboot (`kern.boottime` moved), and the start grace holds while free disk is unknown.
 
+## Shared state (S9)
+
+The daemon publishes what it knows about the cache in two memory-mapped files, and the client reads them without asking the daemon anything. A get then costs a hash lookup and one stat of the `-a` file instead of an open, read and close, and every output a go process was handed stays on disk until that process exits. Nothing depends on it: a client with no shared state, or with broken files, works exactly as S1 did.
+
+### Where the files are
+
+`<root>/v1-<dev>-<ino>/`, where `<dev>` and `<ino>` (hex) identify the cache directory itself. Every spelling of one cache (a symlink, a trailing slash) finds the same files, and no other cache ever does.
+
+| Process | Root |
+|---|---|
+| daemon | `--live-dir`, else `$POD_GOCACHE_LIVE_DIR`, else `<state-dir>/live` when `--state-dir` is not the default, else `~/Library/Caches/pod-gocache/live` |
+| client | `$POD_GOCACHE_LIVE_DIR`, else `~/Library/Caches/pod-gocache/live` |
+
+`~/Library/Caches` is left out of Time Machine backups. `--live-dir off` turns publishing off. The daemon creates the directories `0700` and the files `0600`. A client never creates, renames or truncates anything there, and opens only regular files of its own user with no group or other permission bits, with `O_NOFOLLOW` and `O_NONBLOCK`, so a symlink can't redirect it and a FIFO can't block it.
+
+| File | Size | Written by |
+|---|---|---|
+| `index` | a 16 KiB header and 4,096 to 4,194,304 slots of 128 bytes (512 KiB to 512 MiB) | the daemon; clients map it read-only |
+| `clients` | 512 MiB plus 128 KiB, sparse: only written log pages take disk | the daemon (header and dying table) and each client (its own slot) |
+| `publisher.lock` | empty | the daemon holds a flock on it while it publishes |
+
+### Versioning
+
+The layout version is in the directory name (`v1-`), in each file's magic (`PODGCIDX`, `PODGCCLI`) and in a header field. A new layout gets a new version and a new directory, and files are never reinterpreted: an older client and a newer daemon (or the reverse) don't see each other's files, so the client works as S1 did and the daemon protects it by the S2 rules alone. A file whose version, geometry, cache identity, owner, mode or type doesn't match is refused. The daemon replaces a refused `clients` file by renaming a new one over it and never reinitializes one in place, because live clients may still hold slots in it.
+
+### The index
+
+The header holds the version, the geometry, the cache directory's device and inode, a random hash seed, a generation, the daemon's pid and boot UUID, and a `superseded` flag. Slots are found by linear probing, at most 64 steps, from a seeded hash of the whole action ID. Each slot holds the action ID, output ID, size and time from the `-a` line, and the inode and ctime the `-a` file had when the daemon read it. The daemon reads an `-a` file between two lstats and publishes it only when inode, ctime and size agree before and after.
+
+Each slot is a seqlock: the daemon makes its sequence odd, writes the slot, then makes it even. A client retries a slot 4 times when the sequence is odd or moved, then reads the `-a` file instead, so nothing ever waits on the daemon. Past 45% live slots (65% counting deleted ones) the daemon writes a larger table to a new file, renames it over `index` and sets `superseded` in the old one; a client still mapping the old file moves to the new one on its next lookup.
+
+### What a get does
+
+1. Look the action ID up in the index.
+2. If found, stat the `-a` file. The entry is used only when the inode and ctime equal the published ones and the size is 175 bytes. APFS changes the ctime on every write and every `utimes` (200,000 writes in a row never repeated one here), so a match means the file still holds the published line.
+3. If not found, unsure (a slot being rewritten) or not matching, read the `-a` file as S1 does. A mismatch also flags the entry, so the daemon reads it again.
+4. Refresh the `-a` and `-d` mtimes as Go's `markUsed` does, in the client, before answering, as S1 did.
+5. Pin the output (below) and check the dying table. An output the daemon is deleting at this moment is answered as a miss.
+6. Stat the `-d` file and answer.
+
+A hit returns what reading the `-a` file at that moment would return, and an entry missing from the index is never a cache miss.
+
+### Pins
+
+A client claims one of the 256 slots in `clients` with an fcntl byte-range lock on that slot's byte. The lock belongs to the process, and the kernel drops it when the process exits, however it exits. A claim writes a new random token, the client's pid, its go process's pid and the boot UUID, so a reused slot or pid never inherits an older client's pins.
+
+Each output the client hands to go, and each put, goes into the slot's log as a 32-byte record: the first 8 bytes of the output and action IDs, a kind and the size. Hits are logged once per output and session (again when a hit refreshed the mtimes or found the entry stale), puts always. The log holds 65,536 records; a session that fills it is counted in `extra.live.overflowedClients`, and the outputs it serves after that are protected by the S2 rules only.
+
+The daemon reads the new records of every slot each tick, at the start of every deletion batch and right before every output unlink. It does not delete an output pinned by a slot whose lock is still held, within three limits:
+
+- A pin lasts at most 6 hours of awake time from the moment the daemon first saw it. The daemon's clock decides; nothing a client writes extends a pin.
+- Pins keep at most 10 GB in total, the newest first. The rest show in `pinnedOverCapBytes` and are treated as unpinned.
+- Below 7 GB free (the emergency tier), pinned outputs give way, but only after every unpinned candidate the tier's 15 minute window allows.
+
+Nothing a client writes changes what another client is served: a record can only add a pin or ask the daemon to read an `-a` file again from disk.
+
+### The deletion handshake
+
+An output can be served while the daemon decides to delete it. Before unlinking outputs, the daemon writes up to 1,024 of them into the dying table of `clients`, activates that batch with one store, and then reads every log. A client appends its pin first and reads the dying table second. These fields are 64-bit atomics, sequentially consistent on arm64, so in every interleaving either the daemon's read sees the pin and keeps the output, or the client sees the batch and answers a miss.
+
+A batch is honored for 60 seconds of awake time. The daemon unlinks nothing in a batch older than 30 seconds and starts a new batch instead, so a daemon that is stopped, starved or killed mid-batch turns outputs into misses for at most a minute. A starting daemon clears any batch its predecessor left active.
+
+A put that finds its output in the active batch writes a fresh copy. It hard-links the new file into place once the old one is gone, and otherwise renames it over the old one after waiting at most 50 ms per session for the batch to end. The daemon checks the inode before every unlink, so it never removes the fresh copy.
+
+### When the shared state is not used
+
+Every failure leaves the client where S1 was: the `-a` file is read, mtimes are refreshed, and the output is protected by the S2 rules. Each session's op 10 trace record says why, once for the index and once for the pins:
+
+| Reason | When |
+|---|---|
+| `missing` | No live directory or file: no daemon publishes for this cache. |
+| `invalid` | Wrong magic, version, geometry, cache, owner, mode or file type (a FIFO, a symlink, a directory). |
+| `denied` | EACCES or EPERM, as under a sandbox profile that denies the live directory. |
+| `no-slot` | All 256 slots are held by live processes. |
+| `fault` | A mapped file was truncated under the client. The fault is recovered (`debug.SetPanicOnFault`) and that part stays off for the rest of the session. |
+| `off` | `POD_GOCACHE_LIVE=off` or the kill switch. |
+
+The index and the pins fail independently. A client that can read the index but holds no slot (all taken, or writes denied) still serves from the index; what it serves has S1's protection. The kill switch turns off both and the trace.
+
+The daemon falls back the same way. When it can't create or write the files (a full disk makes a write into a sparse page fault, which is recovered), it logs `shared state off`, the S2 rules alone decide, and it retries every minute. A daemon that finds `publisher.lock` held by another neither publishes nor deletes. A daemon that stops unmaps the files and releases the lock, so the next one publishes at once.
+
+### Decisions (S9)
+
+- Memory-mapped files, not a socket to the daemon. A get makes no extra system call, and a hung daemon can't stall go: the worst a stopped daemon causes is a stale index, where lookups fall back to the `-a` file, and for at most a minute a batch of up to 1,024 outputs answered as misses.
+- Entries are checked against the inode and ctime of the `-a` file, not against a version the daemon keeps. The check costs the one stat that replaces the open, read and close, and it covers every writer: go's built-in cache, `go clean`, a person.
+- Pins live in per-client logs, with fcntl locks for liveness. Every field has one writer, no counter is shared between cores, and a crashed client's pins end with its process. A pid alone can be reused, and a heartbeat can't tell a sleeping client from a dead one.
+- Pin lifetime (6 hours awake), the 10 GB cap and the emergency give-way bound what pins can cost. In the simulated replay of S2's 35-session scenario under a 10 GB cap, free disk never went below 11 GB.
+- A batch lives 60 seconds. The daemon has 30 of them for at most 1,024 unlinks, and a dead daemon's batch stops costing recompiles within a minute.
+- The client's QoS class is unchanged: raising it showed no gain at load 14 to 19.
+
 ## Tests
 
 ```sh
@@ -253,10 +348,20 @@ The daemon's tests:
 - `TestMatrix`: build, `build -o`, vet (with a finding), test (a passing and a failing package), `test -v`, `-race`, `-cover`, `-coverprofile`, `list -export`, `list -test -compiled`, run, `test -c`, then `go clean -testcache` and the tests again. Cold and warm, built-in against client: exit codes, normalized output and the bytes of every binary, profile and export file must be identical, and the client's store must pass a full consistency check.
 - `TestCrossRead*`: what the built-in cache wrote is a hit for the client (no compile, vet or link reruns, tests `(cached)`), and the other way round.
 - `TestConcurrentProcessesShareOneCache`: two client and one built-in `go build -a ./...` at once on one fresh GOCACHE, then a consistent store and a warm build with no compile in both modes.
-- `TestClientHitsKeepEntriesAliveAgainstBuiltinTrim`: entries aged 6 days, used through the client, survive the built-in daily trim.
+- `TestClientHitsKeepEntriesAliveAgainstBuiltinTrim`: entries aged 6 days, used through the client from the shared index, survive the built-in daily trim.
 - Failure paths: read-only buckets (same messages as the built-in), a nearly full disk image, `go` killed mid-build, the client killed mid-build.
+- `TestMatrix`, `TestCrossRead*`, `TestConcurrentProcessesShareOneCache` and `TestClientHitsKeepEntriesAliveAgainstBuiltinTrim` run with a daemon publishing for the cache (in the test process, its own state and live directories, outside the background band so a loaded machine can't starve it) and require most hits to come from the shared index: at least 300 and 60% in the matrix, 50 and 80% (built-in to client) and 20 and 30% (client to built-in) in the cross reads, 20 and 90% in the warm builds of the other two.
+- `TestKillSwitchAndFIFOs`, `TestOtherCacheAndSpellings`, `TestSandboxedClient`: the kill switch with FIFOs in place of the shared files (never opened, atime unchanged, no trace) and the FIFOs refused without blocking; a client for another cache never touches the published state, while a symlink or a trailing slash to the same cache uses it and keeps its spelling in every export path; go under `sandbox-exec` profiles that deny writes outside the cache, reads of the live directory, or network and POSIX shared memory, each with the session reason it must report.
 
-The tests never use `~/Library/Caches/go-build`; the harness refuses to run against it. Fuzz targets run with a throwaway cache too, because `go test -fuzz` keeps its corpus under GOCACHE:
+Shared state (S9) tests:
+
+- `internal/livestate`: no torn reads under a writer rewriting slots (about 6 million lookups in 0.4 s, 60 s with `POD_GOCACHE_LONG=1`), colliding IDs sharing a probe chain and a hash prefix, a slot left odd by a stopped writer, faults from truncation recovered (inside `copy()` too), every refused file (wrong magic, version, cache, slots, size, mode, a symlink, directory, FIFO, empty or 10 GB sparse file), the handshake in 3,000 random interleavings (200,000 with `POD_GOCACHE_LONG=1`), a slot that lives exactly as long as its process (a helper process killed with SIGKILL), a clients file adopted across daemon restarts, and batches older than `BatchLife` or from another boot ignored.
+- `internal/store`: fast hits, an `-a` rewritten in place never served from the stale entry, every entry shape through the fast path, `markUsed` still done by the client, a dying output answered as a miss, a put beside a dying output; `BenchmarkGetPaths` times a get on the S1, fast and stale paths.
+- `internal/index` `TestRefreshedActionIsRead`: an `-a` rewritten in place and seen by the removal path is read again, so the index never pairs a new stat with old content.
+- `internal/daemon` `TestS9Interleaving*`, `TestS5StalledBatchUnlinksNothing`, `TestS7*`, `TestS9Pinned*`, `TestB1*`, `TestS10*`, `TestS11*`, `TestS16*`, `TestS17*`, `TestEndedClientsHintsCount` and `TestDSTClients`: the skeptic's S9 scenarios on the simulated machine (and `TestRestartedDaemonPublishes` on real files: a stopped daemon's successor publishes), with go processes that run through a model of the client (index lookups, pins, the dying check, puts beside dying outputs). Each scenario that protects something has a sabotage run or a mutation that turns it red.
+- `TestE2ES9*` (with `POD_GOCACHE_E2E=1`): S2's ten build, vet, test and list loops at 6 GB free with every go command through the client on the fast path; shared files truncated, replaced and renamed over and the daemon restarted under eight build and test loops; the daemon stopped with SIGSTOP at random moments while go keeps working. Every e2e daemon publishes, so the built-in cache's runs (S1, S2, S10, S14, S15, S17) also run beside a publishing daemon.
+
+The tests never use `~/Library/Caches/go-build`; the harness refuses to run against it. The test binaries of `internal/daemon`, `internal/realgo` and `cmd/pod-gocache` fail when the run changed anything in the real `~/.pod/gocache`, its `bin`, `~/Library/Caches/pod-gocache` or the real `trim.txt` (`internal/realhome`); the live daemon's own rewrites of `owner.json`, `state.json`, `daemon.log` and `trim.txt` pass when they name no temp path and the `trim.txt` time is the one `state.json` reports. Fuzz targets run with a throwaway cache too, because `go test -fuzz` keeps its corpus under GOCACHE:
 
 ```sh
 GOCACHE=$(mktemp -d) go test ./internal/protocol -run '^$' -fuzz '^FuzzReader$' -fuzztime 3m
@@ -267,3 +372,5 @@ Fuzz targets: `FuzzParseFast` (whatever the hand-written request parser accepts,
 ## Cost per get
 
 A get is what `go` asks for most (about 3,600 for a warm `go test` of `charter-service/internal/domain`, over 10,000 for `internal/handlers`). The client answers it with no allocation in its own code. Two small allocations remain inside the standard library, which copies each path into a C string for open(2) and stat(2). The file system calls match the built-in lookup: open, fstat, read and close of the `-a` file and one stat of the `-d` file. open(2) alone measured 12 to 20 µs on this Mac and dominates the lookup. The rest of the cost is the pipe round trip every GOCACHEPROG client pays, which grows with machine load (S0 `bench/RESULTS.md`, section 6).
+
+With the shared state (S9), a hit served from the index makes one stat of the `-a` file instead of its open, fstat, read and close, then the stat of the `-d`: 4.0 to 6.7 µs per get in process against 18.4 to 23.4 µs for S1 (`BenchmarkGetPaths`, load 40). Through the pipe, below load 35 a get then costs what the built-in lookup costs inside go (23 to 25 µs at p50, against 43 to 48 µs for S1). With the CPU saturated the pipe round trip dominates again, and a warm `go test` of a cached package still waits on it: `bench/RESULTS.md`, section S9.

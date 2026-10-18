@@ -31,6 +31,10 @@ var clientModes = map[string][]string{
 	// The module index (cmd/go/internal/modindex) is most of the gets of a warm go command.
 	"builtin-noindex": nil,
 	"client-noindex":  {"-put=decode", "-decoder=neon", "-write=pwrite"},
+	// pod-gocache itself (-pgc), under /usr/bin/time -l for its CPU and memory:
+	// S1 with the shared state off, S9 on the fast path of the daemon publishing in -live.
+	"pgc-s1": nil,
+	"pgc-s9": nil,
 }
 
 // modeEnv is extra environment per mode.
@@ -66,6 +70,7 @@ type runRecord struct {
 
 type harness struct {
 	scenario, src, gocache, prog, shim, out, goflags string
+	pgc, live                                        string
 	args                                             []string
 	target                                           *putTarget
 	trace                                            bool
@@ -80,6 +85,8 @@ func main() {
 	flag.StringVar(&h.src, "src", "/tmp/podgc-s0/src/apps/charter-service", "charter-service checkout (a snapshot, never the live repo)")
 	flag.StringVar(&h.gocache, "gocache", "/tmp/podgc-s0/gocache", "GOCACHE clone used by every mode")
 	flag.StringVar(&h.prog, "prog", "/tmp/podgc-s0/bin/passprog", "passprog binary")
+	flag.StringVar(&h.pgc, "pgc", "/tmp/podgc-s0/bin/pod-gocache", "pod-gocache binary for the pgc-* modes")
+	flag.StringVar(&h.live, "live", "/tmp/podgc-s0/live", "POD_GOCACHE_LIVE_DIR of the daemon publishing for -gocache (pgc-s9)")
 	flag.StringVar(&h.shim, "shim", "/tmp/podgc-s0/shim", "directory holding goshim installed as \"go\"")
 	flag.StringVar(&h.out, "out", "/tmp/podgc-s0/e2e", "results directory")
 	flag.StringVar(&h.goflags, "goflags", "-p=2 -trimpath", "GOFLAGS for every run (the sessions' go env value)")
@@ -169,11 +176,21 @@ func (h *harness) run(mode string, round int) runRecord {
 		case "GOCACHE", "GOCACHEPROG", "GOFLAGS", "PATH", "PODGC_TIMING", "GOEXPERIMENT", "GODEBUG":
 			continue
 		}
+		if strings.HasPrefix(k, "POD_GOCACHE_") {
+			continue
+		}
 		env = append(env, kv)
 	}
 	env = append(env, "GOCACHE="+h.gocache, "GOFLAGS="+h.goflags, "PODGC_TIMING="+timing,
 		"PATH="+h.shim+":"+os.Getenv("PATH"))
 	env = append(env, modeEnv[mode]...)
+	pgcTrace := filepath.Join(h.out, "logs", tag+".pgctrace")
+	switch mode {
+	case "pgc-s1":
+		env = append(env, "GOCACHEPROG=/usr/bin/time -l "+h.pgc+" prog", "POD_GOCACHE_TRACE_DIR="+pgcTrace, "POD_GOCACHE_LIVE=off")
+	case "pgc-s9":
+		env = append(env, "GOCACHEPROG=/usr/bin/time -l "+h.pgc+" prog", "POD_GOCACHE_TRACE_DIR="+pgcTrace, "POD_GOCACHE_LIVE_DIR="+h.live)
+	}
 	if flags := clientModes[mode]; flags != nil {
 		env = append(env, "GOCACHEPROG="+strings.Join(append([]string{h.prog, "-dir", h.gocache, "-log", clog}, flags...), " "))
 	}
@@ -202,6 +219,10 @@ func (h *harness) run(mode string, round int) runRecord {
 	}
 	if clientModes[mode] != nil {
 		rec.Client = summarizeClient(clog)
+	}
+	if strings.HasPrefix(mode, "pgc-") {
+		rec.Client = summarizePgc(pgcTrace, rec.Log)
+		os.RemoveAll(pgcTrace)
 	}
 	if h.trace && rec.OK {
 		rec.Phases = splitAtLink(trace, rec.Go)

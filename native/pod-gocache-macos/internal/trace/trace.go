@@ -26,11 +26,15 @@ const (
 	OpStart       Op = 1 // session started
 	OpGetHit      Op = 2
 	OpGetMiss     Op = 3
-	OpPutStored   Op = 4 // output written into the store
-	OpPutExisting Op = 5 // output already in the store and verified, body skipped
-	OpPutFailed   Op = 6 // put answered with an error
-	OpClose       Op = 7 // session ended by the go command's close
-	OpEOF         Op = 8 // session ended without close (go list, or go died)
+	OpPutStored   Op = 4  // output written into the store
+	OpPutExisting Op = 5  // output already in the store and verified, body skipped
+	OpPutFailed   Op = 6  // put answered with an error
+	OpClose       Op = 7  // session ended by the go command's close
+	OpEOF         Op = 8  // session ended without close (go list, or go died)
+	OpGetFast     Op = 9  // a hit served from the daemon's shared index
+	OpLive        Op = 10 // the session's use of the shared state (see Live)
+
+	opLast = OpLive
 )
 
 // RecordSize is the size of one encoded record.
@@ -65,7 +69,7 @@ func (r Record) Encode(b []byte) {
 
 // Decode reads one record. ok is false for an unknown version or op.
 func Decode(b []byte) (r Record, ok bool) {
-	if len(b) < RecordSize || b[39] != Version || b[38] < byte(OpStart) || b[38] > byte(OpEOF) {
+	if len(b) < RecordSize || b[39] != Version || b[38] < byte(OpStart) || b[38] > byte(opLast) {
 		return r, false
 	}
 	r.Time = int64(binary.LittleEndian.Uint64(b[0:]))
@@ -157,6 +161,45 @@ func (r *Recorder) Record(op Op, action, output *[32]byte, size int64, took time
 		return
 	}
 	r.add(op, IDKey(action), IDKey(output), size, took)
+}
+
+// Live is a session's use of the daemon's shared state, recorded once at the
+// end. Index and Pins are livestate.Reason values (0: in use).
+type Live struct {
+	Index, Pins            uint8
+	Overflow               bool // the pin log filled up
+	Fast, Disk, Stale      uint32
+	DyingMisses, DyingPuts uint32
+}
+
+func sat32(v uint64) uint64 { return min(v, 1<<32-1) }
+
+// RecordLive adds the session's OpLive record.
+func (r *Recorder) RecordLive(l Live) {
+	if r == nil {
+		return
+	}
+	var ov uint64
+	if l.Overflow {
+		ov = 1
+	}
+	r.add(OpLive, uint64(l.Index)|uint64(l.Pins)<<8|ov<<16|uint64(l.DyingPuts)<<32,
+		uint64(l.Fast)|uint64(l.Disk)<<32, int64(uint64(l.Stale)|uint64(l.DyingMisses)<<32), 0)
+}
+
+// Live decodes an OpLive record.
+func (rec Record) Live() Live {
+	return Live{
+		Index: uint8(rec.Action), Pins: uint8(rec.Action >> 8), Overflow: rec.Action>>16&1 != 0,
+		DyingPuts: uint32(rec.Action >> 32), Fast: uint32(rec.Output), Disk: uint32(rec.Output >> 32),
+		Stale: uint32(uint64(rec.Size)), DyingMisses: uint32(uint64(rec.Size) >> 32),
+	}
+}
+
+// LiveCounts saturates session counters into a Live.
+func LiveCounts(fast, disk, stale, dyingMisses, dyingPuts uint64) Live {
+	return Live{Fast: uint32(sat32(fast)), Disk: uint32(sat32(disk)), Stale: uint32(sat32(stale)),
+		DyingMisses: uint32(sat32(dyingMisses)), DyingPuts: uint32(sat32(dyingPuts))}
 }
 
 func (r *Recorder) add(op Op, action, output uint64, size int64, took time.Duration) {

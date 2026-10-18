@@ -20,6 +20,16 @@ type entry struct {
 	time int64 // unix nanoseconds
 }
 
+// EntryReadSize is the buffer ParseEntry expects data to be read with.
+const EntryReadSize = entrySize + 1
+
+// ParseEntry is parseEntry for the daemon, which publishes only entries go
+// itself would accept.
+func ParseEntry(data []byte, id *[hashSize]byte) (out [hashSize]byte, size, unixNano int64, ok bool) {
+	e, ok := parseEntry(data, id)
+	return e.out, e.size, e.time, ok
+}
+
 // parseEntry accepts exactly what (*DiskCache).get accepts. data is what was
 // read with a buffer of entrySize+1 bytes.
 func parseEntry(data []byte, id *[hashSize]byte) (entry, bool) {

@@ -127,12 +127,21 @@ func (x *Index) OutputEmptied(id ID, dirSt cachefs.Stat) {
 	x.size += d.bytes()
 }
 
-// RefreshAction stores a newer stat seen while removing (the entry was in use).
+// RefreshAction takes a newer stat seen while removing (the entry was in
+// use). A changed file (go's markUsed, or a put rewriting it in place) is read
+// again, so the stat the index keeps always belongs to the content it keeps.
 func (x *Index) RefreshAction(id ID, st cachefs.Stat) {
-	if a := x.bucketOf(id).a[id]; a != nil && st.Ino == a.st.Ino {
+	bk := x.bucketOf(id)
+	a := bk.a[id]
+	if a == nil || st.Ino != a.st.Ino {
+		return
+	}
+	if st.Ctime == a.st.Ctime && st.Size == a.st.Size {
 		x.size += st.Alloc - a.st.Alloc
 		a.st = st
+		return
 	}
+	x.seeAction(bk, id, cachefs.EntryRel(id, cachefs.KindAction), a.gen, true)
 }
 
 // RefreshOutput stores a newer stat of an output file or its executable.

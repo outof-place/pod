@@ -28,6 +28,7 @@ type Stat struct {
 	Alloc int64 // st_blocks * 512: what removing the file gives back
 	Mtime int64
 	Atime int64
+	Ctime int64 // any write, rename or attribute change moves it
 	Ino   uint64
 }
 

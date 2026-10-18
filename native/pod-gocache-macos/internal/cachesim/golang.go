@@ -38,7 +38,10 @@ type Workload struct {
 	LongP     float64 // a long go test (up to MaxLife x 4)
 	HotSize   int
 	Drift     time.Duration
-	hot       int
+	// ClientP is the share of go commands that run through the GOCACHEPROG
+	// client (only in a world whose Shared model exists).
+	ClientP float64
+	hot     int
 }
 
 // NewWorkload makes n actions with a realistic size mix.
@@ -167,6 +170,7 @@ func (w *World) Place(a *Action, age time.Duration) {
 func (w *World) age(f *file, age time.Duration) {
 	t := w.WallNs() - int64(age)
 	f.mtime, f.atime, f.useMono, f.recMono, f.written = t, t, w.mono-age, w.mono-age, w.mono-age
+	w.changed(f)
 }
 
 func (w *World) writeOutput(a *Action, out [32]byte) {
@@ -178,9 +182,11 @@ func (w *World) writeOutput(a *Action, out [32]byte) {
 		w.release(old.totalAlloc())
 	}
 	f := &file{size: a.Size, alloc: alloc4k(a.Size), mtime: now, atime: now, useMono: w.mono, recMono: w.mono, ino: w.fs.newIno()}
+	w.changed(f)
 	if a.Kind == Exec {
 		inner := f
 		f = &file{dir: true, mtime: now, atime: now, useMono: w.mono, recMono: w.mono, ino: w.fs.newIno(), inner: inner, innerName: "prog"}
+		w.changed(f)
 	}
 	b.files[name] = f
 	w.addUsed(f.totalAlloc())
@@ -198,6 +204,7 @@ func (w *World) writeAction(a *Action, out [32]byte) {
 	}
 	now := w.WallNs()
 	f.out, f.mtime, f.atime, f.useMono, f.recMono, f.written, f.content = out, now, now, w.mono, w.mono, w.mono, nil
+	w.changed(f)
 }
 
 // --- go processes ---
@@ -215,6 +222,9 @@ type Proc struct {
 	export    bool
 	held      []held
 	dead      bool
+	client    bool // runs through the GOCACHEPROG client (S9)
+	slot      int
+	seen      map[uint64]bool
 }
 
 type held struct {
@@ -230,6 +240,7 @@ type ProcSpec struct {
 	Life   time.Duration
 	Export bool
 	Child  string // a child process name, "" for none
+	Client bool   // through the GOCACHEPROG client; needs the world's Shared
 }
 
 // Spawn starts a process now and returns it.
@@ -237,6 +248,10 @@ func (w *World) Spawn(s ProcSpec) *Proc {
 	w.pidSeq++
 	p := &Proc{PID: w.pidSeq, PPID: 1, Start: w.WallNs(), Comm: s.Comm, kind: s.Kind, life: s.Life, begin: w.mono, end: w.mono + s.Life, export: s.Export}
 	p.readsEnd = p.end
+	if s.Client && w.shared != nil {
+		p.client = true
+		w.shared.claim(p)
+	}
 	if s.Kind == "gorun" {
 		// Build, link and exec take minutes; a removed binary keeps running.
 		p.readsEnd = min(p.end, p.begin+12*time.Minute)
@@ -274,6 +289,7 @@ func (w *World) spawnRandom(wl *Workload) {
 	case u < wl.GoRunP+wl.LongP+wl.ExportP:
 		spec.Kind, spec.Export = "list", true
 	}
+	spec.Client = w.shared != nil && r.Float64() < wl.ClientP
 	p := w.Spawn(spec)
 	looks := 1 + r.Intn(wl.MaxLooks)
 	span := p.life * 6 / 10
@@ -295,6 +311,10 @@ func (w *World) get(p *Proc, a *Action, wl *Workload) {
 	if p.dead {
 		return
 	}
+	if p.client {
+		w.clientGet(p, a, wl)
+		return
+	}
 	af := w.lookup(a.ID, cachefs.KindAction)
 	if af == nil || af.special != 0 || af.content != nil {
 		w.compile(p, a, wl)
@@ -303,29 +323,32 @@ func (w *World) get(p *Proc, a *Action, wl *Workload) {
 	w.read(af)
 	w.markUsed(af)
 	out := af.out
-	w.After(30*time.Microsecond, func() {
-		if p.dead {
-			return
-		}
-		d := w.lookup(out, cachefs.KindOutput)
-		if d == nil || d.special != 0 {
+	w.After(30*time.Microsecond, func() { w.finishGet(p, a, wl, out) })
+}
+
+// finishGet is OutputFile and the size check after the -a was read.
+func (w *World) finishGet(p *Proc, a *Action, wl *Workload, out [32]byte) {
+	if p.dead {
+		return
+	}
+	d := w.lookup(out, cachefs.KindOutput)
+	if d == nil || d.special != 0 {
+		w.compile(p, a, wl)
+		return
+	}
+	w.markUsed(d)
+	rel := cachefs.EntryRel(out, cachefs.KindOutput)
+	if d.dir {
+		if d.inner == nil {
 			w.compile(p, a, wl)
 			return
 		}
-		w.markUsed(d)
-		rel := cachefs.EntryRel(out, cachefs.KindOutput)
-		if d.dir {
-			if d.inner == nil {
-				w.compile(p, a, wl)
-				return
-			}
-			rel += "/" + d.innerName
-		} else if d.size != a.Size && a.Kind != TestLog {
-			w.compile(p, a, wl)
-			return
-		}
-		w.hold(p, rel, false)
-	})
+		rel += "/" + d.innerName
+	} else if d.size != a.Size && a.Kind != TestLog {
+		w.compile(p, a, wl)
+		return
+	}
+	w.hold(p, rel, false)
 }
 
 func (w *World) compile(p *Proc, a *Action, wl *Workload) {
@@ -338,6 +361,10 @@ func (w *World) compile(p *Proc, a *Action, wl *Workload) {
 // calls OutputFile on it.
 func (w *World) put(p *Proc, a *Action, wl *Workload) {
 	if p.dead {
+		return
+	}
+	if p.client {
+		w.clientPut(p, a, wl)
 		return
 	}
 	out := a.Out
@@ -366,20 +393,25 @@ func (w *World) put(p *Proc, a *Action, wl *Workload) {
 		}
 		w.writeAction(a, out)
 		if p.export {
-			d := w.lookup(out, cachefs.KindOutput)
-			rel := cachefs.EntryRel(out, cachefs.KindOutput)
-			if d == nil {
-				p.held = append(p.held, held{rel: rel, at: w.mono, race: true})
-				w.useLater(p, len(p.held)-1)
-				return
-			}
-			w.markUsed(d)
-			if d.dir && d.inner != nil {
-				rel += "/" + d.innerName
-			}
-			w.hold(p, rel, false)
+			w.holdExport(p, out)
 		}
 	})
+}
+
+// holdExport is an export build's OutputFile on what it just put.
+func (w *World) holdExport(p *Proc, out [32]byte) {
+	d := w.lookup(out, cachefs.KindOutput)
+	rel := cachefs.EntryRel(out, cachefs.KindOutput)
+	if d == nil {
+		p.held = append(p.held, held{rel: rel, at: w.mono, race: true})
+		w.useLater(p, len(p.held)-1)
+		return
+	}
+	w.markUsed(d)
+	if d.dir && d.inner != nil {
+		rel += "/" + d.innerName
+	}
+	w.hold(p, rel, false)
 }
 
 func (w *World) hold(p *Proc, rel string, race bool) {
@@ -426,7 +458,7 @@ func (w *World) use(p *Proc, h held) {
 	_, removed := w.removedAt[h.rel]
 	w.Failures = append(w.Failures, Failure{
 		Rel: h.rel, Kind: p.kind, Life: p.life, HeldFor: w.mono - h.at, Class: class, At: w.mono,
-		Proc: p.PID, Removed: removed, Acquired: h.at,
+		Proc: p.PID, Removed: removed, Acquired: h.at, Client: p.client,
 	})
 }
 

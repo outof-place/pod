@@ -63,9 +63,21 @@ type Config struct {
 	OwnerLock func() (release func(), held bool, err error)
 	Log       io.Writer
 
+	// Shared state with clients (S9). LiveRoot is the root of the live
+	// directories ("" derives one, "off" disables); Shared overrides the
+	// files (simulation). Pins last PinExpiry of awake time at most and keep
+	// at most PinCap bytes.
+	LiveRoot  string
+	Shared    Shared
+	PinExpiry time.Duration
+	PinCap    int64
+
 	// Test hooks.
 	OnEvict          func(Eviction)
 	AfterInnerUnlink func()
+	// BeforeRemoveOutput runs inside the dying handshake, after the drain,
+	// right before an output's removal is tried.
+	BeforeRemoveOutput func(id [32]byte)
 }
 
 // Eviction describes one removal, for tests and the log.
@@ -205,6 +217,10 @@ func (c Config) withDefaultsNoCache() (Config, error) {
 	// a 15 minute cycle loses nothing; each pass costs about 100k lstats.
 	def(&c.RestatCycle, 15*time.Minute)
 	def(&c.PressureRestat, 30*time.Second)
+	def(&c.PinExpiry, DefaultPinExpiry)
+	if c.PinCap == 0 {
+		c.PinCap = DefaultPinCap
+	}
 	defInt(&c.BatchUnits, 256)
 	defInt(&c.CrashLimit, 5)
 	if c.LogMax == 0 {

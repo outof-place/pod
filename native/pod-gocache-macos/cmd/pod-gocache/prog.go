@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/livestate"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/protocol"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/store"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/trace"
@@ -27,20 +28,43 @@ func runProg() int {
 	w.Flush()
 
 	st := store.Open(storeDir())
-	var tr *trace.Recorder
+	var (
+		tr   *trace.Recorder
+		live *livestate.Client
+	)
 	if !killSwitch() {
 		tr = openTrace()
+		live = openLive(st.Dir())
+		st.SetLive(live)
 	}
 	closed := serve(os.Stdin, w, st, tr)
 
 	// go waits for stdout to close, not for exit: release it before cleanup.
 	os.Stdout.Close()
+	if live != nil {
+		l := trace.LiveCounts(live.Fast, live.Disk, live.Stale, live.DyingMisses, live.DyingPuts)
+		l.Index, l.Pins, l.Overflow = uint8(live.Index), uint8(live.Pins), live.Overflowed()
+		tr.RecordLive(l)
+		live.Close()
+	}
 	end := trace.OpEOF
 	if closed {
 		end = trace.OpClose
 	}
 	tr.Close(end)
 	return 0
+}
+
+// openLive maps the daemon's shared state for the store directory. With
+// POD_GOCACHE_LIVE=off the client runs as S1 did, on the cache files alone.
+func openLive(dir string) *livestate.Client {
+	switch {
+	case dir == "":
+		return livestate.Disabled(livestate.ReasonNoCache)
+	case os.Getenv("POD_GOCACHE_LIVE") == "off":
+		return livestate.Disabled(livestate.ReasonOff)
+	}
+	return livestate.OpenClient(dir, os.Getppid())
 }
 
 // storeDir resolves the store like cmd/go/internal/cache.DefaultDir. go sets
@@ -106,7 +130,11 @@ func serve(in io.Reader, w *protocol.Writer, st *store.Store, tr *trace.Recorder
 		case protocol.CmdGet:
 			if req.HasActionID && st.Get(&req.ActionID, &hit) {
 				w.Hit(req.ID, &hit.OutputID, hit.Size, hit.Time, hit.DiskPath())
-				tr.Record(trace.OpGetHit, &req.ActionID, &hit.OutputID, hit.Size, time.Since(start))
+				op := trace.OpGetHit
+				if hit.Fast {
+					op = trace.OpGetFast
+				}
+				tr.Record(op, &req.ActionID, &hit.OutputID, hit.Size, time.Since(start))
 			} else {
 				w.Miss(req.ID)
 				tr.Record(trace.OpGetMiss, &req.ActionID, nil, 0, time.Since(start))

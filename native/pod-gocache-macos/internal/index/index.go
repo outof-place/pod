@@ -31,6 +31,10 @@ type aRec struct {
 	hasOut bool
 	gen    uint32
 	stuck  int64 // wall ns until which a refused removal is not retried
+	// The entry as go would accept it, set only when the file kept st's
+	// inode and ctime across the read: then st identifies exactly this content.
+	size, time int64
+	exact      bool
 }
 
 type dRec struct {
@@ -120,11 +124,14 @@ type Index struct {
 	// removing them (go clean -cache, another deleter).
 	Vanished int64
 	Counters Counters
+	// changed holds -a IDs whose record changed or went away since the last
+	// TakeChanged (the shared index follows it).
+	changed map[ID]struct{}
 }
 
 // New returns an empty index over fsys.
 func New(fsys cachefs.FS) *Index {
-	x := &Index{fs: fsys}
+	x := &Index{fs: fsys, changed: map[ID]struct{}{}}
 	x.resetBuckets()
 	return x
 }
@@ -428,12 +435,14 @@ func (x *Index) seeAction(bk *bucket, id ID, rel string, gen uint32, restat bool
 		x.noteUnmanaged(bk, rel, rel[3:], gen, true)
 		return
 	}
-	if r != nil && r.st.Ino == st.Ino && r.st.Mtime == st.Mtime && r.st.Size == st.Size {
+	if r != nil && r.st.Ino == st.Ino && r.st.Mtime == st.Mtime && r.st.Size == st.Size && r.st.Ctime == st.Ctime {
 		x.size += st.Alloc - r.st.Alloc
 		r.st, r.gen = st, gen
 		return
 	}
-	out, hasOut := x.readRef(rel)
+	ref := x.readAction(rel, id, st)
+	out, hasOut := ref.out, ref.hasOut
+	x.changed[id] = struct{}{}
 	if r == nil {
 		r = &aRec{}
 		bk.a[id] = r
@@ -448,6 +457,7 @@ func (x *Index) seeAction(bk *bucket, id ID, rel string, gen uint32, restat bool
 		}
 	}
 	r.st, r.out, r.hasOut, r.gen, r.stuck = st, out, hasOut, gen, 0
+	r.size, r.time, r.exact = ref.size, ref.time, ref.exact
 	x.size += st.Alloc
 	if hasOut {
 		x.bucketOf(out).refs[out]++
@@ -520,14 +530,34 @@ func (x *Index) unmanagedOutput(bk *bucket, id ID, rel string, gen uint32) {
 	x.noteUnmanaged(bk, rel, rel[3:], gen, true)
 }
 
-// readRef extracts the output ID an -a file references. It is deliberately
-// lenient (only the header and the output hex must parse): treating a file go
-// would reject as a reference protects its output longer, never shorter.
-func (x *Index) readRef(rel string) (ID, bool) {
-	var buf [entryLen + 1]byte
+type actionRef struct {
+	out        ID
+	hasOut     bool
+	size, time int64
+	exact      bool
+}
+
+// readAction reads an -a file. The output reference is deliberately lenient
+// (only the header and the output hex must parse): treating a file go would
+// reject as a reference protects its output longer, never shorter. exact
+// means go would accept the entry and a second lstat still shows st's inode,
+// ctime and size, so nothing rewrote the file around the read.
+func (x *Index) readAction(rel string, id ID, st cachefs.Stat) actionRef {
+	var buf [store.EntryReadSize]byte
 	n, _ := x.fs.ReadPrefix(rel, buf[:])
 	x.Counters.Reads++
-	return parseRef(buf[:n])
+	var ref actionRef
+	ref.out, ref.hasOut = parseRef(buf[:n])
+	out, size, unixNano, ok := store.ParseEntry(buf[:n], &id)
+	if !ok {
+		return ref
+	}
+	after, err := x.fs.Lstat(rel)
+	x.Counters.Lstats++
+	if err == nil && after.Type == cachefs.Regular && after.Ino == st.Ino && after.Ctime == st.Ctime && after.Size == st.Size {
+		ref.out, ref.size, ref.time, ref.exact = out, size, unixNano, true
+	}
+	return ref
 }
 
 // entryLen is cache.go's entrySize: "v1 <64> <64> <20> <20>\n".
@@ -567,6 +597,7 @@ func (x *Index) dropAction(id ID) {
 	if r == nil {
 		return
 	}
+	x.changed[id] = struct{}{}
 	if r.hasOut {
 		x.unref(r.out)
 	}

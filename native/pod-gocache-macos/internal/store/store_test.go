@@ -41,7 +41,7 @@ func (b *bytesBody) Discard() error {
 
 func (b *bytesBody) consumed() bool { return b.discarded || b.r.Len() == 0 }
 
-func newStore(t *testing.T) (*Store, string) {
+func newStore(t testing.TB) (*Store, string) {
 	t.Helper()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -50,7 +50,7 @@ func newStore(t *testing.T) (*Store, string) {
 	return Open(dir), dir
 }
 
-func put(t *testing.T, s *Store, id [hashSize]byte, data []byte) PutResult {
+func put(t testing.TB, s *Store, id [hashSize]byte, data []byte) PutResult {
 	t.Helper()
 	out := sha256.Sum256(data)
 	var res PutResult

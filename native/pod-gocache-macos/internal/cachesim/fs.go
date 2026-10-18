@@ -26,6 +26,7 @@ type file struct {
 	useMono   time.Duration // awake time of the last use by a go process
 	recMono   time.Duration // awake time its visible recency (mtime, atime) was last set
 	ino       uint64
+	ctime     int64 // moves on every write or time change, never repeats
 	// -a files
 	out     [32]byte
 	content []byte // nil: a valid entry is formatted on read
@@ -75,6 +76,7 @@ type fsState struct {
 	rootIno     uint64
 	b           [256]bucket
 	nextIno     uint64
+	ctime       int64 // the last ctime handed out
 	trim        int64
 	strays      map[string]int64 // root-level names that are not buckets
 }
@@ -126,12 +128,25 @@ func (w *World) lookup(id [32]byte, kind byte) *file {
 }
 
 // markUsed is cmd/go's: refresh mtime and atime when mtime is an hour old.
-func (w *World) markUsed(f *file) {
+func (w *World) markUsed(f *file) { w.markUsedReport(f) }
+
+// markUsedReport is markUsed reporting whether it refreshed.
+func (w *World) markUsedReport(f *file) bool {
 	now := w.WallNs()
 	f.useMono = w.mono
 	if now-f.mtime >= hourNs {
 		f.mtime, f.atime, f.recMono = now, now, w.mono
+		w.changed(f)
+		return true
 	}
+	return false
+}
+
+// changed moves f's ctime, as any write or utimes does on APFS (nanosecond
+// clock: two changes never share a ctime).
+func (w *World) changed(f *file) {
+	w.fs.ctime = max(w.WallNs(), w.fs.ctime+1)
+	f.ctime = w.fs.ctime
 }
 
 // read is a read(2): APFS bumps atime only when it is older than mtime.
@@ -170,7 +185,7 @@ func notExist(rel string) error {
 }
 
 func statOf(f *file) cachefs.Stat {
-	st := cachefs.Stat{Type: cachefs.Regular, Size: f.size, Alloc: f.alloc, Mtime: f.mtime, Atime: f.atime, Ino: f.ino}
+	st := cachefs.Stat{Type: cachefs.Regular, Size: f.size, Alloc: f.alloc, Mtime: f.mtime, Atime: f.atime, Ctime: f.ctime, Ino: f.ino}
 	if f.dir {
 		st.Type = cachefs.Dir
 	}
@@ -323,6 +338,7 @@ func (w *World) RemoveIfIdle(rel string, ino uint64, cutoff int64) (cachefs.Outc
 		return cachefs.Refused, st, &fs.PathError{Op: "unlink", Path: rel, Err: syscall.EPERM}
 	}
 	w.checkRemoval(rel, f, in)
+	w.checkPinned(rel)
 	w.d4Removed(rel, target, target.alloc)
 	if in != nil {
 		f.inner, f.innerName = nil, ""
@@ -379,6 +395,7 @@ func (w *World) SetTimes(rel string, ns int64) error {
 		f = in
 	}
 	f.mtime, f.atime, f.recMono = ns, ns, w.mono
+	w.changed(f)
 	w.Mutations++
 	return nil
 }
@@ -397,6 +414,7 @@ func (w *World) Arm(rel string, atime int64) error {
 		w.violate("arm of %s erased read evidence", rel)
 	}
 	f.atime = atime
+	w.changed(f)
 	w.Mutations++
 	return nil
 }

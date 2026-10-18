@@ -16,6 +16,7 @@ import (
 
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/evict"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/ownerstate"
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/realhome"
 )
 
 // The test binary doubles as a daemon process (POD_GOCACHE_HELPER), so tests
@@ -34,9 +35,10 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	os.Setenv("POD_GOCACHE_REAL_HOME", os.Getenv("HOME")) // read-only: the go1.24 toolchain lookup
+	realHome := os.Getenv("HOME")
+	os.Setenv("POD_GOCACHE_REAL_HOME", realHome) // read-only: the go1.24 toolchain lookup
 	os.Setenv("HOME", home)
-	code := m.Run()
+	code := realhome.Run(m, realHome)
 	os.RemoveAll(home)
 	os.Exit(code)
 }
@@ -52,6 +54,8 @@ type helperCfg struct {
 	EvictPause         time.Duration // each removal takes this long
 	MarkOutput         string        // created at the first output removal (inside removePending)
 	MarkAction         string        // created at the first -a removal (inside the plan loop)
+	LiveRoot           string
+	Observe            bool
 }
 
 func helperDaemon() int {
@@ -67,7 +71,7 @@ func helperDaemon() int {
 		CacheDir: h.CacheDir, StateDir: h.StateDir, Version: "test", Limits: l,
 		Tick: tick, HeartbeatEvery: 10 * tick, ModeEvery: 5 * tick, IdleRelist: 5 * tick, PressureRelist: 5 * tick,
 		PlanEvery: 5 * tick, ProcEvery: 5 * tick, OutputSettle: 5 * tick, LogMax: h.LogMax,
-		Disk: newDisk(h.Free), Procs: noProcs{},
+		Disk: newDisk(h.Free), Procs: noProcs{}, LiveRoot: h.LiveRoot, ObserveOnly: h.Observe,
 	}
 	cfg.FullBatchTime = h.FullBatch
 	if h.EvictPause > 0 || h.MarkOutput != "" || h.MarkAction != "" {

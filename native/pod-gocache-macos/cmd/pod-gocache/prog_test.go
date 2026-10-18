@@ -21,6 +21,7 @@ import (
 
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/fakego"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/protocol"
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/realhome"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/store"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/trace"
 )
@@ -39,7 +40,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "build:", err)
 		os.Exit(1)
 	}
-	code := m.Run()
+	code := realhome.Run(m, os.Getenv("HOME"))
 	os.RemoveAll(dir)
 	os.Exit(code)
 }

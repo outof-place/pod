@@ -91,6 +91,13 @@ func Run(ctx context.Context, cfg Config) int {
 			cfg.OwnerLock = func() (func(), bool, error) { return cachefs.LockDir(dir) }
 		}
 	}
+	if cfg.Shared == nil {
+		if _, real := cfg.FS.(*cachefs.OS); real {
+			if root, ok := liveRoot(cfg); ok {
+				cfg.Shared = newFileShared(root, cfg.CacheDir)
+			}
+		}
+	}
 	runtime.LockOSThread() // the loop's thread is the one whose priority drops
 	defer runtime.UnlockOSThread()
 	if _, isNo := cfg.Prio.(noPriority); isNo {
@@ -144,7 +151,8 @@ func disown(cfg Config, now time.Time) {
 }
 
 // shutdown says observe in owner.json, so the old trimmers resume at once
-// rather than up to 120 s later, and writes a last state.json.
+// rather than up to 120 s later, writes a last state.json and lets go of the
+// shared state, so the next daemon publishes at once, in this process too.
 func (c *core) shutdown() {
 	c.wall, c.mono = c.cfg.Clock.Wall(), c.cfg.Clock.Mono()
 	c.releaseOwner()
@@ -157,6 +165,7 @@ func (c *core) shutdown() {
 		c.log.Printf("state.json not written: %v", err)
 	}
 	c.log.Printf("stop evicted=%d bytes=%s", c.evictions.Count, gb(c.evictions.Bytes))
+	c.live.close()
 }
 
 // tripBreaker stops a crash loop: one line, owner.json in observe mode,

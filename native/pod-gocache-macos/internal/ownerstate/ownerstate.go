@@ -126,6 +126,27 @@ type Extra struct {
 	LastWallNs  int64 `json:"lastWallNs,omitempty"`
 	LastAwakeNs int64 `json:"lastAwakeNs,omitempty"`
 	BootTimeUs  int64 `json:"bootTimeUs,omitempty"`
+	// Live is the state shared with GOCACHEPROG clients (S9).
+	Live *Live `json:"live,omitempty"`
+}
+
+// Live describes the state the daemon shares with its clients.
+type Live struct {
+	Dir       string `json:"dir,omitempty"`
+	Reason    string `json:"reason,omitempty"` // why nothing is shared now
+	Entries   int    `json:"entries"`          // -a entries published
+	Slots     int    `json:"slots"`            // index table size
+	Refused   int    `json:"refused,omitempty"`
+	Clients   int    `json:"clients"` // live client sessions
+	Pinning   int    `json:"pinningProcesses"`
+	Overflow  int    `json:"overflowedClients,omitempty"`
+	Pinned    int64  `json:"pinnedBytes"`
+	OverCap   int64  `json:"pinnedOverCapBytes,omitempty"`
+	GaveWay   int64  `json:"pinnedGaveWayBytes,omitempty"`
+	Kept      uint64 `json:"pinnedKept"` // removals skipped for a pin since start
+	Records   uint64 `json:"records"`
+	Rereads   uint64 `json:"rereads"`
+	Handshake uint64 `json:"dyingBatches"`
 }
 
 // Episode is a low-disk episode in progress.

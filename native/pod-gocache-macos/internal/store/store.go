@@ -12,6 +12,8 @@ import (
 	"time"
 	"unicode/utf8"
 	"unsafe"
+
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/livestate"
 )
 
 // maxPath is PATH_MAX on darwin; paths are built in fixed arrays of this size.
@@ -23,10 +25,11 @@ const mtimeInterval = time.Hour
 // Store is one client's view of a GOCACHE directory. Get is safe for
 // concurrent use; Put is called by one goroutine at a time.
 type Store struct {
-	dir string // absolute GOCACHE, or "" when there is no usable store
-	pid int
-	seq atomic.Uint64
-	buf []byte // put streaming buffer, owned by the Put caller
+	dir  string // absolute GOCACHE, or "" when there is no usable store
+	pid  int
+	seq  atomic.Uint64
+	buf  []byte            // put streaming buffer, owned by the Put caller
+	live *livestate.Client // the daemon's shared state; nil: S1 standalone
 }
 
 // Open returns a store on dir. A dir that is empty, not absolute, too long or
@@ -42,6 +45,10 @@ func Open(dir string) *Store {
 
 // Dir is the store directory, "" when there is none.
 func (s *Store) Dir() string { return s.dir }
+
+// SetLive makes gets and puts use the daemon's shared state. Call before the
+// first request.
+func (s *Store) SetLive(c *livestate.Client) { s.live = c }
 
 // pathBuf holds one path built without allocating.
 type pathBuf struct {
@@ -86,6 +93,7 @@ type Hit struct {
 	OutputID [hashSize]byte
 	Size     int64
 	Time     int64 // unix nanoseconds, from the index entry
+	Fast     bool  // the entry came from the daemon's shared index
 	path     pathBuf
 }
 
@@ -101,22 +109,32 @@ func (s *Store) Get(id *[hashSize]byte, h *Hit) bool {
 	}
 	var ap pathBuf
 	apath := s.entryPath(&ap, id, 'a')
-	fd, err := openRetry(apath, syscall.O_RDONLY|syscall.O_CLOEXEC, 0)
-	if err != nil {
+	var e entry
+	var amtime syscall.Timespec
+	kind, src := s.fromIndex(id, apath, &e, &amtime)
+	switch src {
+	case srcGone:
 		return false
-	}
-	var ast syscall.Stat_t
-	statErr := fstatRetry(fd, &ast)
-	var buf [entrySize + 1]byte
-	n := readFull(fd, buf[:])
-	syscall.Close(fd)
-	e, ok := parseEntry(buf[:n], id)
-	if !ok {
-		return false
+	case srcDisk, srcStale:
+		// A stale entry already has the -a file's stat (for markUsed, as the
+		// built-in cache stats by path), so the read skips its fstat.
+		ok, mtimeOK := readEntry(apath, id, &e, &amtime, src == srcStale)
+		if !ok {
+			return false
+		}
+		if !mtimeOK {
+			amtime = syscall.NsecToTimespec(time.Now().UnixNano()) // fstat failed: S1 skips markUsed
+		}
 	}
 	now := time.Now()
-	if statErr == nil {
-		markUsed(apath, ast.Mtimespec, now)
+	if markUsed(apath, amtime, now) {
+		kind |= livestate.RecordRefreshed
+	}
+	// Pin before the -d is looked at: the daemon either sees the pin before it
+	// deletes the output, or the output shows up here as dying.
+	if s.live != nil && s.live.Pin(&e.out, id, kind, e.size) {
+		s.live.DyingMisses++
+		return false
 	}
 	dpath := s.entryPath(&h.path, &e.out, 'd')
 	var dst syscall.Stat_t
@@ -136,8 +154,78 @@ func (s *Store) Get(id *[hashSize]byte, h *Hit) bool {
 	default:
 		return false
 	}
-	h.OutputID, h.Size, h.Time = e.out, e.size, e.time
+	h.OutputID, h.Size, h.Time, h.Fast = e.out, e.size, e.time, src == srcIndex
+	if s.live != nil {
+		if h.Fast {
+			s.live.Fast++
+		} else {
+			s.live.Disk++
+		}
+	}
 	return true
+}
+
+// Where an entry came from.
+const (
+	srcDisk  = iota // read the -a file
+	srcIndex        // the shared index, confirmed by a stat of the -a file
+	srcGone         // the index had it and the -a file is gone: a miss
+	srcStale        // read the -a file, whose stat (in amtime) did not match the index
+)
+
+// fromIndex serves id from the shared index when a stat shows the -a file is
+// still the inode, ctime and size the daemon read: then its content is what
+// the daemon parsed, and reading the file would return the same entry.
+// Anything else sends the get to the -a file.
+func (s *Store) fromIndex(id *[hashSize]byte, apath string, e *entry, amtime *syscall.Timespec) (kind uint64, src int) {
+	if s.live == nil {
+		return livestate.KindHitDisk, srcDisk
+	}
+	var le livestate.Entry
+	if !s.live.Lookup(id, &le) {
+		// Not published (yet): the daemon finds new -a files on its own.
+		return livestate.KindHitDisk, srcDisk
+	}
+	var st syscall.Stat_t
+	if err := statRetry(apath, &st); err != nil {
+		if err == syscall.ENOENT {
+			return 0, srcGone
+		}
+		return livestate.KindHitDisk, srcDisk
+	}
+	if st.Mode&syscall.S_IFMT != syscall.S_IFREG || st.Ino != le.Ino || st.Ctimespec.Nano() != le.Ctime || st.Size != entrySize {
+		s.live.Stale++
+		*amtime = st.Mtimespec
+		return livestate.KindHitDisk | livestate.RecordStale, srcStale
+	}
+	e.out, e.size, e.time = le.Output, le.Size, le.Time
+	*amtime = st.Mtimespec
+	return livestate.KindHitFast, srcIndex
+}
+
+// readEntry reads id's -a file like (*DiskCache).get. With known, mtime
+// already holds the file's mtime; otherwise it comes from an fstat, and
+// mtimeOK is false when that failed (then markUsed is skipped).
+func readEntry(apath string, id *[hashSize]byte, e *entry, mtime *syscall.Timespec, known bool) (ok, mtimeOK bool) {
+	fd, err := openRetry(apath, syscall.O_RDONLY|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		return false, false
+	}
+	var ast syscall.Stat_t
+	var statErr error
+	if !known {
+		statErr = fstatRetry(fd, &ast)
+	}
+	var buf [entrySize + 1]byte
+	n := readFull(fd, buf[:])
+	syscall.Close(fd)
+	if *e, ok = parseEntry(buf[:n], id); !ok {
+		return false, false
+	}
+	if !known {
+		*mtime = ast.Mtimespec
+	}
+	return true, statErr == nil
 }
 
 // executablePath resolves an executable entry (a -d directory holding one
@@ -161,13 +249,15 @@ func executablePath(p *pathBuf, size int64) bool {
 }
 
 // markUsed mirrors (*DiskCache).markUsed: refresh mtime when it is an hour old,
-// so built-in trims in other go processes see the entry as used.
-func markUsed(path string, mtime syscall.Timespec, now time.Time) {
+// so built-in trims in other go processes see the entry as used. It reports
+// whether it refreshed.
+func markUsed(path string, mtime syscall.Timespec, now time.Time) bool {
 	if now.Sub(time.Unix(mtime.Unix())) < mtimeInterval {
-		return
+		return false
 	}
 	ts := syscall.NsecToTimespec(now.UnixNano())
 	syscall.UtimesNano(path, []syscall.Timespec{ts, ts})
+	return true
 }
 
 func openRetry(path string, mode int, perm uint32) (int, error) {

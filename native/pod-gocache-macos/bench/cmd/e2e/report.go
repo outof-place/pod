@@ -25,6 +25,10 @@ type clientStats struct {
 	StartupMS float64 `json:"startup_ms"` // main() -> capabilities written, first process
 	Big       *bigPut `json:"big,omitempty"`
 	Errors    int     `json:"errors"`
+	// pod-gocache modes
+	Fast        int     `json:"fast,omitempty"` // hits served from the shared index
+	RSSMB       float64 `json:"rss_mb,omitempty"`
+	FootprintMB float64 `json:"footprint_mb,omitempty"`
 }
 
 // bigPut is the largest put of a run, split at the moments the client can observe.
@@ -173,7 +177,7 @@ func report(w io.Writer, scenario string, modes []string, all []runRecord) {
 				ph(func(p *phases) float64 { return p.LinkS }), ph(func(p *phases) float64 { return p.AfterLinkS }), d)
 		}
 	}
-	fmt.Fprintf(w, "\nClient-side view (medians over runs):\n\n| mode | gets | hits | puts | put MB | get p50 us | get p99 us | get max us | sum of gets ms | client CPU ms | startup ms |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
+	fmt.Fprintf(w, "\nClient-side view (medians over runs):\n\n| mode | gets | hits | fast | puts | put MB | get p50 us | get p99 us | get max us | sum of gets ms | client CPU ms | startup ms | client RSS / footprint MB |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, m := range modes {
 		rs := byMode[m]
 		if len(rs) == 0 || rs[0].Client == nil {
@@ -182,9 +186,10 @@ func report(w io.Writer, scenario string, modes []string, all []runRecord) {
 		med := func(f func(*clientStats) float64) float64 {
 			return stats.Summarize(pick(rs, func(r runRecord) float64 { return f(r.Client) })).Median
 		}
-		fmt.Fprintf(w, "| %s | %.0f | %.0f | %.0f | %.1f | %.1f | %.1f | %.0f | %.1f | %.1f | %.2f |\n", m,
+		fmt.Fprintf(w, "| %s | %.0f | %.0f | %.0f | %.0f | %.1f | %.1f | %.1f | %.0f | %.1f | %.1f | %.2f | %.1f / %.1f |\n", m,
 			med(func(c *clientStats) float64 { return float64(c.Gets) }),
 			med(func(c *clientStats) float64 { return float64(c.Hits) }),
+			med(func(c *clientStats) float64 { return float64(c.Fast) }),
 			med(func(c *clientStats) float64 { return float64(c.Puts) }),
 			med(func(c *clientStats) float64 { return float64(c.PutBytes) / 1e6 }),
 			med(func(c *clientStats) float64 { return c.GetP50US }),
@@ -192,7 +197,9 @@ func report(w io.Writer, scenario string, modes []string, all []runRecord) {
 			med(func(c *clientStats) float64 { return c.GetMaxUS }),
 			med(func(c *clientStats) float64 { return c.GetSumMS }),
 			med(func(c *clientStats) float64 { return 1e3 * (c.UserS + c.SysS) }),
-			med(func(c *clientStats) float64 { return c.StartupMS }))
+			med(func(c *clientStats) float64 { return c.StartupMS }),
+			med(func(c *clientStats) float64 { return c.RSSMB }),
+			med(func(c *clientStats) float64 { return c.FootprintMB }))
 	}
 	if scenario == "put" {
 		fmt.Fprintf(w, "\nLargest put per run (the handlers archive). stream = go's base64 encode + pipe as the client sees it; tail = client work after go finished sending:\n\n| mode | n | size MB | stream ms | stream MB/s | tail ms | header ms | reads |\n|---|---|---|---|---|---|---|---|\n")

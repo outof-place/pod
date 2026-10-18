@@ -61,24 +61,22 @@ func requireWarm(t *testing.T, ws workspace, ce cacheEnv, wantCachedExe bool) {
 }
 
 // TestCrossReadBuiltinToClient: entries the built-in cache wrote are hits for
-// the client, including the built-in's go run executable directories.
+// the client, including the built-in's go run executable directories, and
+// with a daemon publishing them most hits come from the shared index.
 func TestCrossReadBuiltinToClient(t *testing.T) {
 	requireRealGo(t)
 	ws := newWorkspace(t)
 	ce := newCache(t, false)
+	pub := startPublisher(t, ce)
 	populate(t, ws, ce)
+	pub.sync(t, ce)
 	requireWarm(t, ws, ce.withProg(true), true)
+	requireFast(t, ce, 50, 0.8)
 	checkStore(t, ce.gocache)
 	counts := traceCounts(t, ce.trace)
 	t.Logf("client trace: %v", counts)
-	if counts[trace.OpGetHit] == 0 || counts[trace.OpPutStored] != 0 {
+	if counts[trace.OpGetHit]+counts[trace.OpGetFast] == 0 || counts[trace.OpPutStored] != 0 {
 		t.Errorf("client should only read the built-in's entries: %v", counts)
-		recs, _ := trace.ReadDir(ce.trace)
-		for _, r := range recs {
-			if r.Op != trace.OpGetHit {
-				t.Logf("DEBUG %+v", r)
-			}
-		}
 	}
 }
 
@@ -89,7 +87,10 @@ func TestCrossReadClientToBuiltin(t *testing.T) {
 	requireRealGo(t)
 	ws := newWorkspace(t)
 	ce := newCache(t, true)
+	pub := startPublisher(t, ce)
 	populate(t, ws, ce)
+	pub.sync(t, ce)
+	requireFast(t, ce, 20, 0.3)
 	counts := traceCounts(t, ce.trace)
 	if counts[trace.OpPutStored] == 0 {
 		t.Fatalf("client stored nothing: %v", counts)

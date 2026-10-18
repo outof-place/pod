@@ -27,10 +27,15 @@ func TestClientHitsKeepEntriesAliveAgainstBuiltinTrim(t *testing.T) {
 		t.Fatal("no entries to age")
 	}
 
-	// The warm build reads every entry it needs through the client.
+	// The warm build reads every entry it needs through the client, from the
+	// shared index of a daemon that published the aged entries (B3: the client
+	// still refreshes the mtimes itself).
+	startPublisher(t, ce).sync(t, ce)
+	os.RemoveAll(ce.trace)
 	if r := runGo(t, ws, ce, "build", "-x", "./..."); r.code != 0 || compileRE.MatchString(r.stderr) {
 		t.Fatalf("warm build recompiled (exit %d):\n%s", r.code, joinMatches(r.stderr))
 	}
+	requireFast(t, ce, 20, 0.9)
 
 	// A built-in go command trims once a day: make it due, then run one that
 	// shares no entries with the fixture except the runtime's.

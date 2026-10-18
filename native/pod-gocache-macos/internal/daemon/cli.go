@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"path/filepath"
 	"time"
 )
 
@@ -17,6 +18,7 @@ func DaemonMain(ctx context.Context, args []string, stderr io.Writer, version st
 	cacheDir := fs.String("cache-dir", "", "absolute GOCACHE directory (default: os.UserCacheDir()/go-build)")
 	stateDir := fs.String("state-dir", "", "absolute state directory (default: ~/.pod/gocache)")
 	mode := fs.String("mode", "", `"observe" forces observe mode (read-only)`)
+	liveDir := fs.String("live-dir", "", `absolute root of the state shared with clients, or "off" (default: $POD_GOCACHE_LIVE_DIR, else <state-dir>/live for a non-default --state-dir, else ~/Library/Caches/pod-gocache/live)`)
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
 		return ExitUsage
 	}
@@ -24,7 +26,11 @@ func DaemonMain(ctx context.Context, args []string, stderr io.Writer, version st
 		fmt.Fprintf(stderr, "pod-gocache daemon: --mode accepts only \"observe\"; owner mode is switched by the mode file\n")
 		return ExitUsage
 	}
-	return Run(ctx, Config{CacheDir: *cacheDir, StateDir: *stateDir, Version: version, ObserveOnly: *mode == "observe"})
+	if *liveDir != "" && *liveDir != "off" && !filepath.IsAbs(*liveDir) {
+		fmt.Fprintf(stderr, "pod-gocache daemon: --live-dir %v, got %q\n", ErrRelative, *liveDir)
+		return ExitUsage
+	}
+	return Run(ctx, Config{CacheDir: *cacheDir, StateDir: *stateDir, Version: version, ObserveOnly: *mode == "observe", LiveRoot: *liveDir})
 }
 
 // StatusMain is `pod-gocache status [--json] [--state-dir <abs>]`. It reads

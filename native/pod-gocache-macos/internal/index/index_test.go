@@ -186,6 +186,31 @@ func TestActionRewrittenInPlace(t *testing.T) {
 	}
 }
 
+// An -a rewritten in place, seen by the removal path (RefreshAction), is read
+// again: the index never pairs the new file's stat with the old content, which
+// would let a client serve the old output (S9).
+func TestRefreshedActionIsRead(t *testing.T) {
+	f := newFixture(t)
+	o1, o2 := f.id(), f.id()
+	f.output(o1, 1000)
+	f.output(o2, 1000)
+	a := f.id()
+	p := f.action(a, o1, 1000)
+	x := full(t, f.dir)
+	f.action(a, o2, 1000) // same inode, new content and ctime
+	st, err := cachefs.NewOS(f.dir).Lstat(cachefs.EntryRel(a, cachefs.KindAction))
+	if err != nil {
+		t.Fatal(err)
+	}
+	x.RefreshAction(a, st)
+	x.EachExact(func(id ID, e Exact) {
+		if id == a && (e.Out != o2 || e.Ctime != st.Ctime) {
+			t.Errorf("exact entry %x with ctime %d, file holds %x with ctime %d", e.Out[:4], e.Ctime, o2[:4], st.Ctime)
+		}
+	})
+	_ = p
+}
+
 // S18d and S4b: malformed entries never break the index. Unparseable -a
 // files are evictable on their own; lenient parses keep protecting outputs;
 // odd shapes are unmanaged and never touched.

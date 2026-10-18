@@ -1,6 +1,7 @@
 package realgo
 
 import (
+	"os"
 	"sync"
 	"testing"
 
@@ -15,6 +16,7 @@ func TestConcurrentProcessesShareOneCache(t *testing.T) {
 	requireRealGo(t)
 	ws := newWorkspace(t)
 	ce := newCache(t, true)
+	pub := startPublisher(t, ce)
 
 	modes := []bool{true, true, false}
 	results := make([]result, len(modes))
@@ -48,11 +50,14 @@ func TestConcurrentProcessesShareOneCache(t *testing.T) {
 		t.Errorf("%d puts failed under concurrency: %v", counts[trace.OpPutFailed], counts)
 	}
 
+	pub.sync(t, ce)
+	os.RemoveAll(ce.trace)
 	for _, prog := range []bool{true, false} {
 		r := runGo(t, ws, ce.withProg(prog), "build", "-x", "./...")
 		if r.code != 0 || compileRE.MatchString(r.stderr) {
 			t.Errorf("warm build (client=%v) recompiled (exit %d):\n%s", prog, r.code, joinMatches(r.stderr))
 		}
 	}
+	requireFast(t, ce, 20, 0.9) // the client's warm build, from what the daemon published
 	checkStore(t, ce.gocache)
 }

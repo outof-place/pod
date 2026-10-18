@@ -11,6 +11,7 @@ import (
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/cachefs"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/evict"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/index"
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/livestate"
 	"github.com/outof-place/pod/native/pod-gocache-macos/internal/ownerstate"
 )
 
@@ -30,6 +31,9 @@ func (c *core) execute(full bool) (more bool) {
 	}
 	if c.plan.Bytes == 0 && len(c.pending) == 0 {
 		return false
+	}
+	if c.live.other {
+		return false // the publishing daemon's clients pin what this one cannot see
 	}
 	c.refreshProcs(false)
 	c.prio(!full)
@@ -149,12 +153,16 @@ func (c *core) stageWindow(p evict.Stage, planned time.Duration) time.Duration {
 
 func (c *core) evictUnit(u *evict.Planned, b *batch) {
 	b.done[u.ID] = true
+	if c.live.unitKept(u) {
+		c.live.skipped++
+		return // pinned since the plan: a live go process holds its output
+	}
 	window := c.stageWindow(u.Stage, u.Window)
 	cut := c.cutoff(window, u.Recency)
 	if u.Orphan {
 		ov, ok := c.idx.Output(u.ID)
 		if ok && ov.Refs == 0 && ov.Recency < cut {
-			c.queueOutput(u.ID, window, u.Stage)
+			c.queueOutput(u.ID, window, u.Stage, u.GaveWay)
 		}
 		return
 	}
@@ -175,7 +183,7 @@ func (c *core) evictUnit(u *evict.Planned, b *batch) {
 		c.record(av.Rel, st.Mtime, st.Alloc, window, u.Stage, b)
 		if av.HasOut && c.idx.Refs(av.Out) == 0 {
 			if _, ok := c.idx.Output(av.Out); ok {
-				c.queueOutput(av.Out, window, u.Stage)
+				c.queueOutput(av.Out, window, u.Stage, u.GaveWay)
 			}
 		}
 	case cachefs.Fresh:
@@ -210,9 +218,9 @@ func (c *core) outputIdleOnDisk(id index.ID, ov index.OutputView, cut int64) boo
 
 // queueOutput schedules an output for removal after OutputSettle and arms
 // its atime, so any read meanwhile shows up as use and keeps it.
-func (c *core) queueOutput(id index.ID, window time.Duration, stage evict.Stage) {
+func (c *core) queueOutput(id index.ID, window time.Duration, stage evict.Stage, gaveWay bool) {
 	if p, ok := c.pending[id]; ok {
-		p.window, p.stage = max(window, p.window), stage
+		p.window, p.stage, p.gaveWay = max(window, p.window), stage, p.gaveWay && gaveWay
 		c.pending[id] = p
 		return
 	}
@@ -240,7 +248,7 @@ func (c *core) queueOutput(id index.ID, window time.Duration, stage evict.Stage)
 			c.fs.Arm(rel, st.Mtime-int64(time.Second))
 		}
 	}
-	c.pending[id] = pendingOut{since: c.mono, window: window, stage: stage, bytes: ov.Bytes}
+	c.pending[id] = pendingOut{since: c.mono, window: window, stage: stage, bytes: ov.Bytes, gaveWay: gaveWay}
 	c.pendingBytes += ov.Bytes
 }
 
@@ -257,7 +265,9 @@ func (c *core) clearPending() {
 }
 
 // removePending removes queued outputs that settled. It returns true when
-// the deadline or a stop cut it short.
+// the deadline or a stop cut it short. Each chunk runs the dying handshake with the
+// clients: published as dying first, then the pins drained, so an output a
+// client handed to go is either seen pinned here or answered as a miss.
 func (c *core) removePending(b *batch, deadline time.Duration) bool {
 	if len(c.pending) == 0 {
 		return false
@@ -269,22 +279,53 @@ func (c *core) removePending(b *batch, deadline time.Duration) bool {
 		}
 	}
 	slices.SortFunc(ids, func(a, b index.ID) int { return bytes.Compare(a[:], b[:]) })
-	for _, id := range ids {
+	for len(ids) > 0 {
+		chunk := ids[:min(len(ids), livestate.MaxDying)]
+		ids = ids[len(chunk):]
+		if !c.beginDying(chunk) {
+			return false
+		}
+		cut, stop := c.removeChunk(chunk, b, deadline)
+		c.endDying()
+		if cut || stop {
+			return cut
+		}
+	}
+	return false
+}
+
+func (c *core) removeChunk(chunk []index.ID, b *batch, deadline time.Duration) (cut, stop bool) {
+	for _, id := range chunk {
 		if c.cfg.Clock.Mono() >= deadline || c.stopping() {
-			return true
+			return true, false
 		}
 		if !c.clockSteady() {
-			return false
+			return false, true
 		}
 		p := c.unqueue(id)
 		ov, ok := c.idx.Output(id)
 		if !ok || ov.Refs > 0 {
 			continue // gone, or an -a references it again
 		}
+		// A quick drain right before the unlink: a put that found the output
+		// dying and is writing it again has pinned it by now.
+		if c.live.open && !c.live.drain(c, c.cfg.Clock.Mono(), false) {
+			return false, true
+		}
+		if !p.gaveWay && c.live.keeps(id) {
+			c.live.skipped++
+			continue
+		}
+		if c.cfg.BeforeRemoveOutput != nil {
+			c.cfg.BeforeRemoveOutput(id)
+		}
+		if !c.live.batchFresh(c.cfg.Clock.Mono()) {
+			return true, false // stopped or starved mid-batch: the output is planned again
+		}
 		window := c.stageWindow(p.stage, p.window)
 		c.removeOutput(id, ov, window, p.stage, b)
 	}
-	return false
+	return false, false
 }
 
 func (c *core) removeOutput(id index.ID, ov index.OutputView, window time.Duration, stage evict.Stage, b *batch) {

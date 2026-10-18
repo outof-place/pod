@@ -2,6 +2,7 @@ package realgo
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -105,10 +106,13 @@ var phases = []struct {
 	steps []step
 }{{"cold", matrix}, {"warm", matrix}, {"final", final}}
 
-func runMatrix(t *testing.T, ws workspace, ce cacheEnv) map[string]outcome {
+func runMatrix(t *testing.T, ws workspace, ce cacheEnv, pub *publisher) map[string]outcome {
 	t.Helper()
 	got := map[string]outcome{}
 	for _, ph := range phases {
+		if pub != nil {
+			pub.sync(t, ce) // the phase starts with every entry published
+		}
 		for _, s := range ph.steps {
 			key := ph.name + "/" + s.name
 			resetDir(t, ws.out)
@@ -125,18 +129,33 @@ func runMatrix(t *testing.T, ws workspace, ce cacheEnv) map[string]outcome {
 
 // TestMatrix runs every step cold, warm and after go clean -testcache with the
 // built-in cache and with the client, each on its own fresh GOCACHE, and
-// requires identical results.
+// requires identical results. A daemon publishes shared state for the
+// client's cache (B4), and most client hits must come from it (G1).
 func TestMatrix(t *testing.T) {
 	requireRealGo(t)
 	ws := newWorkspace(t)
-	builtin := runMatrix(t, ws, newCache(t, false))
+	builtin := runMatrix(t, ws, newCache(t, false), nil)
 	cc := newCache(t, true)
-	client := runMatrix(t, ws, cc)
+	// S14 skew: POD_GOCACHE_DAEMON_BIN runs another daemon build (S2's) beside
+	// the client instead of this one; POD_GOCACHE_CLIENT_BIN, another client.
+	var pub *publisher
+	if bin := os.Getenv("POD_GOCACHE_DAEMON_BIN"); bin != "" {
+		startDaemonBin(t, bin, cc)
+	} else {
+		pub = startPublisher(t, cc)
+	}
+	client := runMatrix(t, ws, cc, pub)
+	if skewed() {
+		_, l, reasons := liveSessions(t, cc.trace)
+		t.Logf("skew run: sessions by index reason %v, fast hits %d", reasons, l.Fast)
+	} else {
+		requireFast(t, cc, 300, 0.6)
+	}
 	be, bo := checkStore(t, cc.gocache)
 	t.Logf("client store: %d index entries, %d outputs, all consistent", be, bo)
 	counts := traceCounts(t, cc.trace)
 	t.Logf("client trace: %v", counts)
-	if counts[trace.OpPutStored] == 0 || counts[trace.OpGetHit] == 0 || counts[trace.OpClose] == 0 {
+	if counts[trace.OpPutStored] == 0 || counts[trace.OpGetHit]+counts[trace.OpGetFast] == 0 || counts[trace.OpClose] == 0 {
 		t.Errorf("the client was not exercised: %v", counts)
 	}
 	if counts[trace.OpPutFailed] != 0 {

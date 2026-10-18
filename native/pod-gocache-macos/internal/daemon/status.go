@@ -131,6 +131,7 @@ func (c *core) stateFile() ownerstate.State {
 		x.SleepCredits = append(x.SleepCredits, [2]int64{j.Boundary, j.Credit})
 	}
 	x.LastWallNs, x.LastAwakeNs = c.wall.UnixNano(), int64(c.mono)
+	x.Live = c.liveStatus()
 	x.Reasons = c.reasons()
 	s.Extra = x
 	return s
@@ -164,6 +165,12 @@ func (c *core) reasons() []string {
 	if left := c.need.Total() - c.plan.Bytes; left > 0 && !c.plan.Capped {
 		add("cannot keep up: %s more needed, nothing else is outside the %s window (%s used within the %s normal window)",
 			gb(left), c.tierWindow().Round(time.Second), gb(c.plan.Protected), c.window.Round(time.Minute))
+		if c.plan.Pinned > 0 {
+			add("cannot keep up: %s pinned by %d live go processes", gb(c.plan.Pinned), c.live.pinning)
+		}
+	}
+	if c.live.sh != nil && !c.live.open {
+		add("shared state with clients off: %s", c.live.reason)
 	}
 	if c.plan.Capped && c.episode.Active {
 		add("low-disk episode cap: evicted %s for disk, allowance %s (the largest deficit to %s free plus %s whose removal showed up as free disk)",
@@ -297,4 +304,20 @@ func deref(p *int64) int64 {
 		return 0
 	}
 	return *p
+}
+
+func (c *core) liveStatus() *ownerstate.Live {
+	l := c.live
+	if l.sh == nil {
+		return nil
+	}
+	st := &ownerstate.Live{Reason: l.reason, Kept: l.skipped, Records: l.records, Rereads: l.rereads, Handshake: l.batches}
+	if !l.open {
+		return st
+	}
+	st.Dir = l.sh.Where()
+	st.Entries, st.Slots, st.Refused = l.sh.IndexStats()
+	st.Clients, st.Pinning, st.Overflow = l.clients, l.pinning, l.overflowed
+	st.Pinned, st.OverCap, st.GaveWay = l.pinnedBytes, l.overCap, c.plan.GaveWay
+	return st
 }

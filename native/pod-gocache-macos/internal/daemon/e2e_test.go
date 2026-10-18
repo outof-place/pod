@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -45,6 +46,9 @@ type e2e struct {
 	evs   []Eviction
 	evAt  []time.Time
 	stop  func() int
+	// S9: the daemon publishes under live; with client set, go runs through
+	// that pod-gocache binary and its trace lands in trace.
+	live, trace, client string
 }
 
 // guardFS lstat's every file itself just before the daemon's guarded unlink
@@ -117,6 +121,7 @@ func newE2E(t *testing.T, free int64) *e2e {
 	}
 	e := &e2e{t: t, root: tempDir(t), goBin: goBin, disk: newDisk(free)}
 	e.cache, e.mod = filepath.Join(e.root, "gocache"), filepath.Join(e.root, "mod")
+	e.live, e.trace = filepath.Join(e.root, "live"), filepath.Join(e.root, "trace")
 	os.MkdirAll(e.mod, 0o777)
 	if isRealCache(e.cache) {
 		t.Fatal("refusing to run against the real cache")
@@ -127,13 +132,17 @@ func newE2E(t *testing.T, free int64) *e2e {
 func (e *e2e) env() []string {
 	var env []string
 	for _, kv := range os.Environ() {
-		if k, _, _ := strings.Cut(kv, "="); strings.HasPrefix(k, "GO") || k == "CGO_ENABLED" {
+		if k, _, _ := strings.Cut(kv, "="); strings.HasPrefix(k, "GO") || k == "CGO_ENABLED" || strings.HasPrefix(k, "POD_GOCACHE_") {
 			continue
 		}
 		env = append(env, kv)
 	}
-	return append(env, "GOCACHE="+e.cache, "GOENV=off", "GOTOOLCHAIN=local", "GOFLAGS=", "GOPROXY=off",
+	env = append(env, "GOCACHE="+e.cache, "GOENV=off", "GOTOOLCHAIN=local", "GOFLAGS=", "GOPROXY=off",
 		"GOWORK=off", "CGO_ENABLED=0", "GOPATH="+filepath.Join(e.root, "gopath"), "GOTELEMETRY=off")
+	if e.client != "" {
+		env = append(env, "GOCACHEPROG="+e.client+" prog", "POD_GOCACHE_LIVE_DIR="+e.live, "POD_GOCACHE_TRACE_DIR="+e.trace)
+	}
+	return env
 }
 
 func (e *e2e) write(files map[string]string) {
@@ -167,6 +176,9 @@ func (e *e2e) startDaemon(tweak func(*Config)) {
 	cfg.Disk = e.disk
 	e.guard = &guardFS{FS: cachefs.NewOS(e.cache), root: e.cache}
 	cfg.FS = e.guard
+	// Every e2e daemon publishes, so go's built-in cache (which, like an S1
+	// client, never reads the shared state) runs beside a publishing daemon.
+	cfg.LiveRoot, cfg.Shared = e.live, newFileShared(e.live, e.cache)
 	cfg.OnEvict = func(ev Eviction) {
 		e.mu.Lock()
 		e.evs = append(e.evs, ev)
@@ -359,6 +371,15 @@ func fixture220(e *e2e) {
 // go list exits, and at least a tenth of the aged entries goes meanwhile.
 func TestE2ES2RevivalRace(t *testing.T) {
 	e := newE2E(t, 6_000_000_000)
+	aged := e.revivalSetup()
+	r := e.revivalRace(e2eRounds(6))
+	e.stop()
+	e.revivalChecks(aged, r, true)
+}
+
+// revivalSetup warms the 220-package fixture, ages every entry 3 h and
+// starts the daemon with minute-scale windows; it returns the aged entries.
+func (e *e2e) revivalSetup() map[string]bool {
 	fixture220(e)
 	e.run("build", "./...")
 	e.run("vet", "./...")
@@ -372,22 +393,40 @@ func TestE2ES2RevivalRace(t *testing.T) {
 		c.Limits.Window, c.Limits.HardWindow, c.Limits.EmergencyWindow = 4*time.Minute, 2*time.Minute, time.Minute
 		c.Procs = descendants{}
 	})
+	return aged
+}
+
+// raceResult is what the revival loops saw.
+type raceResult struct {
+	goFailures []string
+	reads      int
+	rereads    []rereadFail // export files gone 30 s after their go list exited
+}
+
+type rereadFail struct {
+	path     string
+	listExit time.Time
+	err      error
+}
+
+// revivalRace runs ten loops of rounds go commands each, re-reading every
+// Export path 30 s after its go list exits.
+func (e *e2e) revivalRace(rounds int) raceResult {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	var failures []string
-	var reads, readFails int
-	loopsEnd := make(chan struct{})
+	var r raceResult
 	cmds := [][]string{{"build", "./..."}, {"vet", "./..."}, {"test", "-count=1", "./..."}, {"list", "-export", "-deps", "-json", "./..."}}
 	for loop := 0; loop < 10; loop++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for round := 0; round < 6; round++ {
+			for round := 0; round < rounds; round++ {
 				args := cmds[(loop+round)%len(cmds)]
 				out, err := e.cmd(e.goBin, args...).CombinedOutput()
+				exit := time.Now()
 				if f := failed(string(out)); err != nil || f != "" {
 					mu.Lock()
-					failures = append(failures, fmt.Sprintf("go %s: %v %s\n%s", strings.Join(args, " "), err, f, out[:min(len(out), 600)]))
+					r.goFailures = append(r.goFailures, fmt.Sprintf("go %s: %v %s\n%s", strings.Join(args, " "), err, f, out[:min(len(out), 600)]))
 					mu.Unlock()
 					continue
 				}
@@ -406,10 +445,9 @@ func TestE2ES2RevivalRace(t *testing.T) {
 							f.Close()
 						}
 						mu.Lock()
-						reads++
+						r.reads++
 						if err != nil {
-							readFails++
-							failures = append(failures, "export reread: "+err.Error())
+							r.rereads = append(r.rereads, rereadFail{p, exit, err})
 						}
 						mu.Unlock()
 					}
@@ -417,11 +455,61 @@ func TestE2ES2RevivalRace(t *testing.T) {
 			}
 		}()
 	}
-	go func() { wg.Wait(); close(loopsEnd) }()
-	<-loopsEnd
-	e.stop()
-	for _, f := range failures[:min(5, len(failures))] {
+	wg.Wait()
+	return r
+}
+
+// lastEviction is the daemon's last removal of path.
+func (e *e2e) lastEviction(path string) (Eviction, bool) {
+	rel, _ := filepath.Rel(e.cache, path)
+	var last Eviction
+	found := false
+	for _, ev := range e.evictions() {
+		if ev.Rel == rel {
+			last, found = ev, true
+		}
+	}
+	return last, found
+}
+
+// e2eRounds is POD_GOCACHE_E2E_ROUNDS, else def.
+func e2eRounds(def int) int {
+	if n, err := strconv.Atoi(os.Getenv("POD_GOCACHE_E2E_ROUNDS")); err == nil && n > 0 {
+		return n
+	}
+	return def
+}
+
+// revivalChecks fails on any go failure and, with strict, on any export file
+// gone at its reread. Without strict, an export file may be gone if the
+// daemon removed it after its go list exited (then nothing pinned it: the
+// emergency tier ignores processes); removed earlier, or by someone else, is
+// a failure.
+func (e *e2e) revivalChecks(aged map[string]bool, r raceResult, strict bool) {
+	t := e.t
+	t.Helper()
+	for _, f := range r.goFailures[:min(5, len(r.goFailures))] {
 		t.Error(f)
+	}
+	bad, late := 0, 0
+	for _, f := range r.rereads {
+		ev, ok := e.lastEviction(f.path)
+		why := ""
+		switch {
+		case strict:
+			why = "gone"
+		case !ok:
+			why = "gone, not removed by the daemon"
+		case time.Unix(0, ev.Wall).Before(f.listExit.Add(-time.Second)):
+			why = fmt.Sprintf("removed %s before its go list exited (idle %s, window %s, %s tier)",
+				f.listExit.Sub(time.Unix(0, ev.Wall)).Round(time.Millisecond), ev.Age.Round(time.Millisecond), ev.Window, ev.Tier)
+		default:
+			late++
+			continue
+		}
+		if bad++; bad <= 5 {
+			t.Errorf("export reread: %v: %s", f.err, why)
+		}
 	}
 	e.windowsRespected()
 	evicted := 0
@@ -435,7 +523,8 @@ func TestE2ES2RevivalRace(t *testing.T) {
 	if evicted*10 < len(aged) {
 		t.Errorf("only %d of %d aged entries evicted while the loops ran", evicted, len(aged))
 	}
-	t.Logf("%d aged entries, %d evicted during the loops, %d export rereads (%d failed), %d go failures", len(aged), evicted, reads, readFails, len(failures))
+	t.Logf("%d aged entries, %d evicted during the loops, %d export rereads (%d gone: %d removed after their go list exited, %d failures), %d go failures",
+		len(aged), evicted, r.reads, len(r.rereads), late, bad, len(r.goFailures))
 }
 
 func exportPaths(out []byte) []string {

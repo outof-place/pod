@@ -16,12 +16,13 @@ import (
 // core is the daemon's state machine. tick does one bounded round of work;
 // tests drive it directly with simulated clocks, disk and filesystem.
 type core struct {
-	cfg Config
-	log *Logger
-	fs  cachefs.FS // cfg.FS, pulsing the heartbeat on every call
-	idx *index.Index
-	pid int
-	bg  bool // the loop's thread is in the background band now
+	cfg  Config
+	log  *Logger
+	fs   cachefs.FS // cfg.FS, pulsing the heartbeat on every call
+	idx  *index.Index
+	live *live // state shared with clients (S9)
+	pid  int
+	bg   bool // the loop's thread is in the background band now
 
 	startWall time.Time
 	startMono time.Duration
@@ -59,6 +60,7 @@ type core struct {
 	planAt     time.Duration
 	planWin    time.Duration
 	sorted     []evict.Candidate
+	pinMarked  uint64 // live.version+1 when sorted was last marked (0: never)
 	plan       evict.Plan
 	need       evict.Need
 	needOK     bool // need computed from a complete index
@@ -99,10 +101,11 @@ type core struct {
 }
 
 type pendingOut struct {
-	since  time.Duration
-	window time.Duration
-	stage  evict.Stage
-	bytes  int64
+	since   time.Duration
+	window  time.Duration
+	stage   evict.Stage
+	bytes   int64
+	gaveWay bool // planned although pinned (emergency give-way)
 }
 
 func newCore(cfg Config, log *Logger) *core {
@@ -120,6 +123,7 @@ func newCore(cfg Config, log *Logger) *core {
 	}
 	c.fs = pacedFS{FS: cfg.FS, pulse: c.pulse}
 	c.idx = index.New(c.fs)
+	c.live = newLive(cfg.Shared, cfg.PinExpiry, cfg.PinCap)
 	c.startWall, c.startMono = cfg.Clock.Wall(), cfg.Clock.Mono()
 	c.wall, c.mono = c.startWall, c.startMono
 	c.boot = cfg.Clock.Boot()
@@ -219,6 +223,7 @@ func (c *core) tick() time.Duration {
 	full := c.tier.FullSpeed()
 	indexed := c.indexWork(full)
 	c.followRoot()
+	c.liveStep()
 	if c.idx.Complete() {
 		if c.episode.Update(c.tier, c.free, c.limits()) {
 			c.logEpisode()
@@ -418,6 +423,11 @@ func (c *core) refreshPlan(force bool) {
 		}
 		evict.Sort(c.sorted, c.cfg.Policy, c.window)
 		c.planAt, c.planWin = c.mono, c.window
+		c.pinMarked = 0
+	}
+	if c.pinMarked != c.live.version+1 {
+		c.markPinned(c.sorted)
+		c.pinMarked = c.live.version + 1
 	}
 	c.need, c.needOK = c.needs(), true
 	c.plan = evict.Assign(c.sorted, c.need, c.windows(), c.room())

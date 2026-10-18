@@ -291,3 +291,77 @@ From this directory. Throwaway state lives in `$WORK` (default `/tmp/podgc-s0`);
 | real 252 MB puts | `WARMUP=0 ./run.sh e2e put builtin,dedupe,neon-pwrite,neon-mmap,stdlib-pwrite 3` |
 | get replay | `./run.sh getrtt <a passprog .prog.jsonl from a warm run>` |
 | remove everything | `./run.sh clean` |
+
+# S9: gets from the daemon's shared index
+
+All runs on 2026-10-18, Apple M4 Pro (14 cores), macOS 27.0.1, go 1.27.2, Portivo 904a73dd95. pod-gocache built
+from this tree; the daemon publishing for the clone ran in observe mode with its own state and live directories
+(`./run.sh daemon start`). Load averages are the 1-minute value taken before every replay or run.
+
+## 1. Get round trip, replayed one at a time (`./run.sh getrtt`, `SIDES=builtin,echo,s1,s9,s9-stale`)
+
+Nine rounds after a warm-up, the sides interleaved and rotated within each round. "S9 stale": the daemon is
+stopped (SIGSTOP) and every replayed `-a` file is rewritten in place first, so every lookup finds its index entry
+stale and reads the file: S9's worst case. Sums are per replay, in ms.
+
+| list, load1 | built-in in process: p50 us, sum | echo floor: p50, sum | S1: p50, sum | S9: p50, sum | S9 stale: p50, sum |
+|---|---|---|---|---|---|
+| warm build, 4,432 gets, 20.7..29.8 | 25.8, 129.2 | 12.7, 72.7 | 48.0, 261.2 | **23.3, 112.8** | 47.1, 238.6 |
+| warm test, 10,492 gets, 24.8..32.8 | 26.6, 312.4 | 15.2, 194.1 | 47.8, 631.7 | **24.5, 278.1** | 48.6, 544.6 |
+| warm test, 10,492 gets, 17.8..27.5 | 25.4, 276.2 | 12.8, 157.5 | 42.6, 474.3 | **21.3, 253.7** | 45.7, 494.6 |
+| warm test, 10,492 gets, 38.3..68.2 with 28 CPU burners | 25.0, 389.3 | 21.0, 314.3 | 76.5, 1187.8 | 59.6, 936.4 | 82.3, 1485.1 |
+
+Paired per replay (same round), S9 minus built-in: -0.0 ms (IQR -27.6..+9.1), +4.0 ms (IQR -18.9..+20.6),
+-22.5 ms (IQR -141.4..+8.8), and with the burners +541.5 ms (IQR +197.1..+1296.7). S9 minus S1: -139.1, -315.0,
+-234.8 and -218.8 ms.
+
+- Below load 35, a get through the client costs what the built-in lookup costs in go's own process, pipe round trip
+  included: S9's own work (a hash lookup, a stat of the `-a`, a stat of the `-d`, one log record) fits inside the
+  open, read and close it replaces.
+- With the CPU saturated, the round trip is the cost: the echo floor is close to the built-in lookup, and every get
+  waits for two wakeups. S9 still saves about a quarter against S1, but it is 2.4 times the built-in lookup.
+- Stale entries cost what S1 costs (the lookup and the stat that found it stale come on top of S1's read; the read
+  then skips its fstat). They last until the daemon re-reads the entry, about one tick after a client reports it.
+
+In process, without the pipe (`go test -bench BenchmarkGetPaths ./internal/store`, 5 runs of 20,000 gets, load1 40):
+S1 18.4..23.4 µs per get, S9 fast path 4.0..6.7 µs, S9 stale 20.2..23.7 µs.
+
+## 2. Warm `go test` of a cached package, end to end (`./run.sh e2e warm-test builtin,pgc-s1,pgc-s9 30`)
+
+`go test -p=2 -run '^$' ./internal/handlers`, result cached, 10,492 gets, every one served from the index in S9.
+The client runs under `/usr/bin/time -l` in both client modes (a few ms of exec each).
+
+| run | rounds, load1 | built-in wall s | S1 paired diff s | S9 paired diff s | client CPU ms S1 / S9 |
+|---|---|---|---|---|---|
+| A | 10, 33.5..39.1 | 1.55 | +0.75 (IQR +0.41..+1.02) | +0.45 (IQR -0.09..+1.19) | 555 / 220 |
+| B | 30, 32.0..68.7 | 1.40 | +0.43 (IQR +0.16..+0.85) | -0.06 (IQR -0.16..+0.66) | 530 / 185 |
+| B, rounds at load 40..60 | 15 | 1.36 | +0.41 (IQR +0.18..+0.85) | **+0.05 (IQR -0.10..+0.65)** | 490 / 180 |
+
+Client view (run B, medians): get p50 inside the client 9.0 µs for S9 against 34.5 µs for S1; sum of gets 123 ms
+against 524 ms; client RSS 12.9 MB and physical footprint 6.4 MB (S1: 8.4 and 6.3 MB).
+
+- In 16 of the 30 rounds S9 took 1.03 to 1.40 s, at most 0.11 s more than the built-in and often less. In rounds
+  19 to 27 the machine was busier: S9's own get time doubled (188 to 236 ms) and S1 slowed as much.
+- B5's stop rule asks for the median paired difference with an IQR under 10%. The median at load 40 to 60 is +4%,
+  but the IQR spans -7% to +48% of the built-in time, so this machine's load swings (32 to 69 within the run) did
+  not allow that precision in 30 rounds. What holds in every round is the comparison with S1: S9 removes the
+  client's share of the cost (client CPU 180 against 490 ms) and leaves go's own wait on the pipe.
+
+## 3. Warm charter-service build
+
+Not measured end to end. A clone holding the real archives of a warm build is over the 3 GB scratch limit, and a
+clone with sparse archives cannot stand in: go reads the build ID out of every cached archive before it trusts
+it, so a zeroed archive makes it rebuild. The replay above (warm build list, load 21 to 30) puts S9 at the
+built-in lookup's cost: -0.0 ms per 4,432 gets.
+
+## Re-running (S9)
+
+From this directory, with `WORK` pointing at throwaway space:
+
+| step | command |
+|---|---|
+| snapshot, clone, tools, warm-up | `./run.sh setup` |
+| get lists and a clone pruned to them | `./run.sh lists` |
+| publishing daemon on the clone | `./run.sh daemon start` (and `stop`) |
+| replays | `SIDES=builtin,echo,s1,s9,s9-stale REPS=9 ./run.sh getrtt $WORK/lists/logs/<warm-test or warm-build>-*.prog.jsonl` |
+| warm test, S1 and S9 | `./run.sh e2e warm-test builtin,pgc-s1,pgc-s9 30` |

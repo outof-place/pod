@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/outof-place/pod/native/pod-gocache-macos/internal/livestate"
 )
 
 // Body is a put body: decoded bytes, exactly the announced size, then io.EOF.
@@ -99,34 +101,51 @@ func (s *Store) Put(id, out *[hashSize]byte, valid bool, size int64, body Body, 
 	s.entryPath(&res.path, out, 'd')
 	dpath := string(res.path.bytes()) // a copy: os.Open keeps the name
 	var st syscall.Stat_t
+	dying := false
 	if statRetry(dpath, &st) == nil {
 		switch st.Mode & syscall.S_IFMT {
 		case syscall.S_IFREG:
+			// Pin before deciding about an existing output: either the daemon
+			// sees the pin, or the output shows up here as dying and is written
+			// again instead of reused.
+			dying = s.live != nil && s.live.Pin(out, id, livestate.KindPutPin, size)
 			// copyFile's rule: reuse an existing output only after its hash
 			// checks out; the built-in writes -d in place, so a size match alone
 			// can be a half-written file.
-			if st.Size == size && s.fileHashIs(dpath, size, out) {
+			if !dying && st.Size == size && s.fileHashIs(dpath, size, out) {
 				if err := body.Discard(); err != nil {
 					return err
 				}
 				res.Outcome = Existing
-				return s.writeEntry(id, out, size, time.Now().UnixNano())
+				return s.entryWritten(id, out, size, livestate.KindPutExisting)
 			}
 		default:
 			body.Discard()
 			return errNotFile
 		}
 	}
-	if err := s.writeOutput(out, size, body, dpath); err != nil {
+	if err := s.writeOutput(out, size, body, dpath, dying); err != nil {
 		return err
 	}
 	res.Outcome = Stored
-	return s.writeEntry(id, out, size, time.Now().UnixNano())
+	return s.entryWritten(id, out, size, livestate.KindPutStored)
+}
+
+// entryWritten writes the index entry and then tells the daemon, which
+// re-reads the -a file.
+func (s *Store) entryWritten(id, out *[hashSize]byte, size int64, kind uint64) error {
+	if err := s.writeEntry(id, out, size, time.Now().UnixNano()); err != nil {
+		return err
+	}
+	if s.live != nil {
+		s.live.Pin(out, id, kind, size)
+	}
+	return nil
 }
 
 // writeOutput streams the body into a temp file next to dpath, checks its
-// hash and renames it to dpath.
-func (s *Store) writeOutput(out *[hashSize]byte, size int64, body Body, dpath string) error {
+// hash and puts it in place.
+func (s *Store) writeOutput(out *[hashSize]byte, size int64, body Body, dpath string, dying bool) error {
 	var tp pathBuf
 	fd, err := s.createTemp(&tp, out)
 	if err != nil {
@@ -173,10 +192,34 @@ func (s *Store) writeOutput(out *[hashSize]byte, size int64, body Body, dpath st
 	if err != nil {
 		return fail(pathErr("close", dpath, err))
 	}
+	if dying {
+		s.live.DyingPuts++
+		if s.placeBesideDying(tmp, dpath, out) {
+			return nil
+		}
+	}
 	if err := syscall.Rename(tmp, dpath); err != nil {
 		return fail(pathErr("rename", dpath, err))
 	}
 	return nil
+}
+
+// placeBesideDying puts tmp at dpath while the daemon may be deleting the old
+// output there. A rename could land between the daemon's last check of the
+// old file and its unlink, so link (create only if absent) is tried until the
+// daemon's unlink is done or its batch ends, within the session's wait
+// budget. It reports false when the caller should rename after all.
+func (s *Store) placeBesideDying(tmp, dpath string, out *[hashSize]byte) bool {
+	for {
+		err := syscall.Link(tmp, dpath)
+		if err == nil {
+			syscall.Unlink(tmp)
+			return true
+		}
+		if err != syscall.EEXIST || !s.live.Dying(out) || !s.live.Nap(200*time.Microsecond) {
+			return false
+		}
+	}
 }
 
 // createTemp opens a new temp file in out's bucket, creating the bucket if a

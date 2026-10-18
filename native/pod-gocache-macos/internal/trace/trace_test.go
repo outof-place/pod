@@ -127,7 +127,7 @@ func TestDecodeRejectsUnknown(t *testing.T) {
 	if _, ok := Decode(b[:]); ok {
 		t.Fatal("unknown version accepted")
 	}
-	b[39], b[38] = Version, byte(OpEOF)+1
+	b[39], b[38] = Version, byte(opLast)+1
 	if _, ok := Decode(b[:]); ok {
 		t.Fatal("unknown op accepted")
 	}
