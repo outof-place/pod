@@ -14,10 +14,10 @@ export const AGENT_BROWSER_EXIT_DRAIN_MS = 500
 // Why separate from EXEC_TIMEOUT_MS: a close is a member of the 20s will-quit barrier and must finish well inside it.
 export const AGENT_BROWSER_CLEANUP_TIMEOUT_MS = 5_000
 export const AGENT_BROWSER_CLEANUP_CONCURRENCY = 4
-// Why 2 minutes: an idle daemon costs 7 to 47 MB and 20 wakeups a second, and its refs outlive an
-// agent's usual pause between two browser steps. The daemon's own 10 minutes stay the bound for a
-// runtime that dies; this one runs only between commands.
-export const AGENT_BROWSER_IDLE_RETIRE_MS = 2 * 60 * 1000
+// Why 5 minutes: an idle daemon costs 7 to 47 MB and 20 wakeups a second, but its refs die with it,
+// and an agent thinking at high effort pauses past 2 minutes between two browser steps. The daemon's
+// own 10 minutes stay the bound for a runtime that dies; this one runs only between commands.
+export const AGENT_BROWSER_IDLE_RETIRE_MS = 5 * 60 * 1000
 export const EMBEDDED_NAVIGATION_TIMEOUT_MS = 30_000
 export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
 export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES

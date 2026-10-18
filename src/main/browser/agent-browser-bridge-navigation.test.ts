@@ -116,12 +116,12 @@ describe('AgentBrowserBridge', () => {
       })
       expect(wc.removeListener).toHaveBeenCalledWith('did-finish-load', finishListener)
       expect(wc.removeListener).toHaveBeenCalledWith('did-fail-load', failListener)
-      // What remains is the idle daemon's retirement, two minutes out: the fallback timer is gone.
-      expect(vi.getTimerCount()).toBe(1)
+      // No daemon started (a reload goes to the page itself), so no retirement waits either.
+      expect(vi.getTimerCount()).toBe(0)
 
       await vi.advanceTimersByTimeAsync(10_000)
       expect(wc.removeListener).toHaveBeenCalledTimes(2)
-      expect(vi.getTimerCount()).toBe(1)
+      expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()
     }

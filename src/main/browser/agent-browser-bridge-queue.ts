@@ -5,9 +5,12 @@ import { AgentBrowserBridgeShutdown } from './agent-browser-bridge-shutdown'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { podGuestPageSleep } from '../pod/headless-host/guest-page-sleep'
 import {
+  AGENT_BROWSER_CLEANUP_TIMEOUT_MS,
   AGENT_BROWSER_IDLE_RETIRE_MS,
   type EnqueueTargetedCommandOptions,
-  type ResolvedBrowserCommandTarget
+  type QueuedCommand,
+  type ResolvedBrowserCommandTarget,
+  type SessionState
 } from './agent-browser-bridge-types'
 
 export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown {
@@ -133,7 +136,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
   // what an agent set up in it (network routes, a HAR capture) stays for its own idle timeout.
   private scheduleIdleRetirement(sessionName: string): void {
     this.cancelIdleRetirement(sessionName)
-    if (!this.sessions.has(sessionName) || this.shutdownStarted) {
+    if (!this.sessions.get(sessionName)?.initialized || this.shutdownStarted) {
       return
     }
     const timer = setTimeout(() => {
@@ -148,10 +151,35 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
       ) {
         return
       }
-      void this.destroySession(sessionName).catch(() => {})
+      this.retireIdleDaemon(sessionName, session)
     }, AGENT_BROWSER_IDLE_RETIRE_MS)
     timer.unref?.()
     this.idleRetirements.set(sessionName, timer)
+  }
+
+  // Why only the daemon: the CDP proxy's debugger lease carries the page's emulation and overrides
+  // (viewport, media, offline, headers), and Chromium drops them all on detach.
+  // Why queued: a command arriving meanwhile starts the next daemon only once this one is closed.
+  private retireIdleDaemon(sessionName: string, session: SessionState): void {
+    const queue: QueuedCommand[] = []
+    this.commandQueues.set(sessionName, queue)
+    queue.push({
+      execute: async () => {
+        try {
+          await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'], {
+            timeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS
+          })
+        } catch {
+          // The daemon may already be gone.
+        }
+        if (this.sessions.get(sessionName) === session) {
+          this.markDaemonReplaced(sessionName, session)
+        }
+      },
+      resolve: () => {},
+      reject: () => {}
+    })
+    void this.processQueue(sessionName)
   }
 
   private cancelIdleRetirement(sessionName: string): void {
