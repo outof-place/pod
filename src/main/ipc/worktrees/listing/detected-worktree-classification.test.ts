@@ -48,6 +48,7 @@ const { readWorktreeMetaForHost } =
   await import('../../../persistence/host-qualified-worktree-meta')
 const { getRepoOwnedWorktreeMeta } = await import('../../../worktree-metadata-ownership')
 const { getRepoExecutionHostId } = await import('../../../../shared/execution-host')
+const { readRepoCheckoutRealPath } = await import('../../../repo-checkout-real-path')
 
 const repo: Repo = {
   id: 'repo-1',
@@ -237,7 +238,7 @@ describe('buildDetectedGitWorktrees classification passes', () => {
 })
 
 describe('buildDetectedGitWorktrees for a repo added through a symlink', () => {
-  it('shows the checkout Git lists by its real path', () => {
+  it('shows the checkout Git lists by its real path', async () => {
     const base = realpathSync(mkdtempSync(join(tmpdir(), 'pod-checkout-symlink-')))
     try {
       mkdirSync(join(base, 'real', 'app'), { recursive: true })
@@ -250,11 +251,15 @@ describe('buildDetectedGitWorktrees for a repo added through a symlink', () => {
       }
       const checkout = { ...gitWorktree(join(base, 'real', 'app')), isMainWorktree: true }
 
-      const detected = buildDetectedGitWorktrees(createStore({}, [linked]), linked, [checkout], {})
+      const store = createStore({}, [linked])
+      const repoCheckoutPath = await readRepoCheckoutRealPath(linked)
 
-      expect(detected).toMatchObject([
-        { path: checkout.path, selectedCheckout: true, visible: true }
+      expect(buildDetectedGitWorktrees(store, linked, [checkout], {})).toMatchObject([
+        { selectedCheckout: false, visible: false }
       ])
+      expect(
+        buildDetectedGitWorktrees(store, linked, [checkout], {}, repoCheckoutPath)
+      ).toMatchObject([{ path: checkout.path, selectedCheckout: true, visible: true }])
     } finally {
       rmSync(base, { recursive: true, force: true })
     }

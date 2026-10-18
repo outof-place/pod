@@ -48,6 +48,7 @@ import {
 import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
 import { scanUntilNotOvertaken } from './overtaken-scan-rerun'
+import { readRepoCheckoutRealPath } from '../../../repo-checkout-real-path'
 
 // Why here: an SSH listing bypasses the scan cache, so nothing else witnesses a mutation overtaking
 // it. The generation is the one the cache compares, bumped by every worktree change invalidator.
@@ -153,6 +154,7 @@ export async function listDetectedWorktreesForCapturedRepo(
     const localRows = connectionId
       ? gitWorktrees
       : await withUnregisteredRemovalCheckouts(repo.id, gitWorktrees)
+    const repoCheckoutPath = connectionId ? undefined : await readRepoCheckoutRealPath(repo)
     const aborted = abortedResult()
     if (aborted) {
       return aborted
@@ -197,7 +199,7 @@ export async function listDetectedWorktreesForCapturedRepo(
         ? buildDetectedGitWorktrees(store, repo, gitWorktrees, allMeta)
         : // Why always marked: the desktop renderer ships with this main process.
           projectPendingWorktreeRemovals(
-            buildDetectedGitWorktrees(store, repo, localRows, allMeta),
+            buildDetectedGitWorktrees(store, repo, localRows, allMeta, repoCheckoutPath),
             (worktree) => worktree.id,
             true,
             pendingAtScan

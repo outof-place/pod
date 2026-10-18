@@ -34,7 +34,11 @@ import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/configured-worktree-base-path'
 import { getRetiredNameRegistryForRepo } from '../worktree-name-retirement'
-import { readRepoCheckoutRealPath } from '../repo-checkout-real-path'
+import {
+  readRepoCheckoutRealPaths,
+  repoCheckoutRealPathIn,
+  type RepoCheckoutRealPaths
+} from '../repo-checkout-real-path'
 
 type Dependencies = {
   getStore(): RuntimeStore | null
@@ -59,27 +63,18 @@ export class RuntimeManagedWorktreeQueries {
     }
     const resolved = await this.deps.listResolved()
     const scopedRepo = repoSelector ? await this.deps.resolveRepo(repoSelector) : null
-    const pathsByRepo = new Map<string, string[]>()
-    for (const worktree of resolved) {
-      const paths = pathsByRepo.get(worktree.repoId) ?? []
-      paths.push(worktree.path)
-      pathsByRepo.set(worktree.repoId, paths)
-    }
-    const visibilityDefaults = this.visibilityDefaults(sourceDefaultsSupported)
-    const matchers = new Map(
-      (this.deps.getStore()?.getRepos() ?? []).map((repo) => [
-        repo.id,
-        createWorktreeVisibilitySourceMatcher(
-          [repo.path, ...(pathsByRepo.get(repo.id) ?? [])],
-          resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
-          resolveConfiguredWorktreeBasePaths(repo)
-        )
-      ])
-    )
+    const matchers = this.buildVisibilityMatchers(resolved, sourceDefaultsSupported)
+    const checkoutPaths = await this.readCheckoutPaths(resolved)
     const worktrees = resolved.filter(
       (worktree) =>
         (!scopedRepo || worktree.repoId === scopedRepo.id) &&
-        this.isVisible(worktree, matchers.get(worktree.repoId), sourceDefaultsSupported)
+        this.isVisible(
+          worktree,
+          matchers.get(worktree.repoId),
+          sourceDefaultsSupported,
+          undefined,
+          checkoutPaths
+        )
     )
     // See `listingKnownHostIds`: a scoped listing must still name the host it was asked about.
     const knownHostIds = listingKnownHostIds(scopedRepo, () => this.deps.listKnownHostIds())
@@ -168,6 +163,7 @@ export class RuntimeManagedWorktreeQueries {
     const expectedHostId = getRepoExecutionHostId(repo)
     const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
     const metaById = store.getAllWorktreeMeta()
+    const checkoutPaths = await readRepoCheckoutRealPaths([repo])
     const detected = scan.worktrees.map((gitWorktree) => {
       const id = `${repo.id}::${gitWorktree.path}`
       const meta =
@@ -183,7 +179,8 @@ export class RuntimeManagedWorktreeQueries {
         matcher,
         sourceDefaultsSupported,
         visibilitySettings,
-        meta ?? null
+        meta ?? null,
+        checkoutPaths
       )
       return scan.ok ? result : applyMetadataFallbackVisibility(result)
     })
@@ -201,12 +198,28 @@ export class RuntimeManagedWorktreeQueries {
     worktree: Worktree,
     matcher?: WorktreeVisibilitySourceMatcher,
     sourceDefaultsSupported = true,
-    providedSettings?: ReturnType<RuntimeStore['getSettings']>
+    providedSettings?: ReturnType<RuntimeStore['getSettings']>,
+    checkoutPaths?: RepoCheckoutRealPaths
   ): boolean {
     const repo = this.deps.getStore()?.getRepo(worktree.repoId)
     return repo
-      ? this.toDetected(repo, worktree, matcher, sourceDefaultsSupported, providedSettings).visible
+      ? this.toDetected(
+          repo,
+          worktree,
+          matcher,
+          sourceDefaultsSupported,
+          providedSettings,
+          undefined,
+          checkoutPaths
+        ).visible
       : true
+  }
+
+  /** The real paths `isVisible` needs for these rows, read before a synchronous filter over them. */
+  readCheckoutPaths(worktrees: readonly Worktree[]): Promise<RepoCheckoutRealPaths> {
+    const repoIds = new Set(worktrees.map((worktree) => worktree.repoId))
+    const repos = this.deps.getStore()?.getRepos() ?? []
+    return readRepoCheckoutRealPaths(repos.filter((repo) => repoIds.has(repo.id)))
   }
 
   buildVisibilityMatchers(
@@ -241,7 +254,8 @@ export class RuntimeManagedWorktreeQueries {
     matcher?: WorktreeVisibilitySourceMatcher,
     sourceDefaultsSupported = true,
     providedSettings?: ReturnType<RuntimeStore['getSettings']>,
-    providedMeta?: WorktreeMeta | null
+    providedMeta?: WorktreeMeta | null,
+    checkoutPaths?: RepoCheckoutRealPaths
   ) {
     const store = this.deps.getStore()
     const settings = providedSettings ?? store?.getSettings()
@@ -265,7 +279,7 @@ export class RuntimeManagedWorktreeQueries {
       knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),
       isLegacyRepoForVisibility: isLegacyRepoForExternalWorktreeVisibility(repo),
       worktreeVisibilitySourceMatcher: matcher,
-      repoCheckoutPath: readRepoCheckoutRealPath(repo)
+      repoCheckoutPath: repoCheckoutRealPathIn(repo, checkoutPaths)
     })
   }
 

@@ -69,12 +69,16 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
       sourceDefaultsSupported,
       visibilitySettings
     )
+    const checkoutPaths = await this.readRuntimeRepoCheckoutRealPaths(
+      resolvedWorktreeSnapshot.worktrees
+    )
     const resolvedWorktrees = resolvedWorktreeSnapshot.worktrees.filter((worktree) =>
       this.isRuntimeWorktreeVisible(
         worktree,
         visibilitySourceMatchersByRepoId.get(worktree.repoId),
         sourceDefaultsSupported,
-        visibilitySettings
+        visibilitySettings,
+        checkoutPaths
       )
     )
     // Why: worktree.ps backs the mobile sidebar, so it must use the same

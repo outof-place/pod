@@ -1,5 +1,4 @@
 import { preserveFolderUpgradeWorktreePath } from '../../../folder-upgrade-worktree-path'
-import { readRepoCheckoutRealPath } from '../../../repo-checkout-real-path'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { parseWorktreeId, areWorktreePathsEqual, mergeWorktree } from '../../worktree-logic'
 import {
@@ -139,7 +138,9 @@ export function buildDetectedGitWorktrees(
   store: Store,
   repo: Repo,
   gitWorktrees: GitWorktreeInfo[],
-  allMetaOverride?: Record<string, WorktreeMeta>
+  allMetaOverride?: Record<string, WorktreeMeta>,
+  /** From `readRepoCheckoutRealPath`; an SSH repo's listing passes none. */
+  repoCheckoutPath?: string
 ): DetectedWorktree[] {
   const settings = store.getSettings()
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
@@ -157,7 +158,6 @@ export function buildDetectedGitWorktrees(
   )
   const allMeta = allMetaOverride ?? store.getAllWorktreeMeta?.()
   const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
-  const repoCheckoutPath = readRepoCheckoutRealPath(repo)
   const detected = liveWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
     // Why: the locator-keyed row is only a stand-in for a missing host snapshot, so don't read it when we have one.

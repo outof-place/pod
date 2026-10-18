@@ -27,7 +27,8 @@ import {
   getLocalWorktreeScanGeneration,
   resetLocalWorktreeScanGenerationsForTests
 } from '../local-worktree-scan-generation'
-import { mkdirSync, symlinkSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { listWorktreesStrict } from '../git/worktree'
 import { mergeWorktree } from '../ipc/worktree-logic'
@@ -438,6 +439,57 @@ describe('RuntimeManagedWorktreeQueries with a repo registered through a symlink
       ])
     } finally {
       fixture.dispose()
+    }
+  })
+
+  it('never resolves an SSH repo path locally, even where that path is a local symlink', async () => {
+    const base = realpathSync(mkdtempSync(join(tmpdir(), 'pod-ssh-checkout-symlink-')))
+    try {
+      const realCheckout = join(base, 'real', 'app')
+      mkdirSync(realCheckout, { recursive: true })
+      symlinkSync(join(base, 'real'), join(base, 'link'))
+      const repo = folderRepo({
+        kind: 'git',
+        connectionId: 'build-box',
+        path: join(base, 'link', 'app'),
+        externalWorktreeVisibilityLegacy: false
+      })
+      const row: GitWorktreeInfo = {
+        path: realCheckout,
+        head: '',
+        branch: '',
+        isBare: false,
+        isMainWorktree: true
+      }
+      const store = {
+        getRepos: () => [repo],
+        getRepo: () => repo,
+        getAllWorktreeMeta: () => ({}),
+        getWorktreeMeta: () => undefined,
+        setWorktreeMeta: vi.fn(),
+        getAllWorktreeLineage: () => ({}),
+        getSettings: () => settings
+      } as unknown as RuntimeStore
+      const subject = queries(store, {
+        listResolved: async () => [
+          {
+            ...mergeWorktree(repo.id, row, undefined, repo.displayName),
+            hostId: 'ssh:build-box' as const,
+            parentWorktreeId: null,
+            childWorktreeIds: [],
+            lineage: null,
+            git: row
+          }
+        ],
+        scanRepo: async () => ({ ok: true, worktrees: [row] })
+      })
+
+      expect((await subject.list(undefined, 50)).worktrees).toEqual([])
+      expect((await subject.listDetected(repo)).worktrees).toMatchObject([
+        { path: realCheckout, selectedCheckout: false, visible: false }
+      ])
+    } finally {
+      rmSync(base, { recursive: true, force: true })
     }
   })
 })

@@ -40,6 +40,7 @@ import {
   type PendingWorktreeRemovals
 } from '../../../worktree-removal-listing'
 import { getLocalWorktreeScanGeneration } from '../../../local-worktree-scan-generation'
+import { readRepoCheckoutRealPath } from '../../../repo-checkout-real-path'
 import { getRegisteredWorktreeRootsRevision } from '../../registered-worktree-roots-cache'
 
 const WORKTREE_LIST_ALL_CONCURRENCY = 8
@@ -171,7 +172,8 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
         const rows = connectionId
           ? gitWorktrees
           : await withUnregisteredRemovalCheckouts(repo.id, gitWorktrees)
-        const worktrees = buildDetectedGitWorktrees(store, repo, rows, metadata)
+        const repoCheckoutPath = connectionId ? undefined : await readRepoCheckoutRealPath(repo)
+        const worktrees = buildDetectedGitWorktrees(store, repo, rows, metadata, repoCheckoutPath)
           .filter((worktree) => worktree.visible)
           .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree, metadata))
         return connectionId ? worktrees : markLocalWorktreesUnderRemoval(worktrees, pendingAtScan)
@@ -268,7 +270,8 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
       const rows = connectionId
         ? gitWorktrees
         : await withUnregisteredRemovalCheckouts(repo.id, gitWorktrees)
-      const worktrees = buildDetectedGitWorktrees(store, repo, rows, metadata)
+      const repoCheckoutPath = connectionId ? undefined : await readRepoCheckoutRealPath(repo)
+      const worktrees = buildDetectedGitWorktrees(store, repo, rows, metadata, repoCheckoutPath)
         .filter((worktree) => worktree.visible)
         .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree, metadata))
       return connectionId ? worktrees : markLocalWorktreesUnderRemoval(worktrees, pendingAtScan)

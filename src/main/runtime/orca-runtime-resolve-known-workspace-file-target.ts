@@ -29,11 +29,15 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
     const resolvedWorktrees = await this.listResolvedWorktrees()
     const visibilitySourceMatchersByRepoId =
       this.buildRuntimeVisibilitySourceMatchersByRepoId(resolvedWorktrees)
+    const checkoutPaths = await this.readRuntimeRepoCheckoutRealPaths(resolvedWorktrees)
     for (const worktree of resolvedWorktrees) {
       if (
         !this.isRuntimeWorktreeVisible(
           worktree,
-          visibilitySourceMatchersByRepoId.get(worktree.repoId)
+          visibilitySourceMatchersByRepoId.get(worktree.repoId),
+          undefined,
+          undefined,
+          checkoutPaths
         )
       ) {
         continue

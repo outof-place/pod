@@ -7,6 +7,7 @@ import type { Repo } from '../../shared/repo-types'
 import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconciliation'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type { WorktreeVisibilitySourceMatcher } from '../../shared/worktree/visibility-sources'
+import type { RepoCheckoutRealPaths } from '../repo-checkout-real-path'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type {
@@ -93,14 +94,22 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
     worktree: Worktree,
     worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher,
     sourceDefaultsSupported = true,
-    providedSettings?: ReturnType<RuntimeStore['getSettings']>
+    providedSettings?: ReturnType<RuntimeStore['getSettings']>,
+    checkoutPaths?: RepoCheckoutRealPaths
   ): boolean {
     return this.managedWorktreeQueries.isVisible(
       worktree,
       worktreeVisibilitySourceMatcher,
       sourceDefaultsSupported,
-      providedSettings
+      providedSettings,
+      checkoutPaths
     )
+  }
+
+  protected readRuntimeRepoCheckoutRealPaths(
+    worktrees: readonly Worktree[]
+  ): Promise<RepoCheckoutRealPaths> {
+    return this.managedWorktreeQueries.readCheckoutPaths(worktrees)
   }
 
   protected buildRuntimeVisibilitySourceMatchersByRepoId(
