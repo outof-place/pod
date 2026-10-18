@@ -98,7 +98,7 @@ describe('captureScreenshot', () => {
     expect(webContents.capturePage).not.toHaveBeenCalled()
   })
 
-  it('never repeats the full capture while a slow one is in flight', async () => {
+  it('never repeats or probes a slow capture beyond the viewport: it only asks the page to draw', async () => {
     vi.useFakeTimers()
     let resolveCapture: ((value: unknown) => void) | null = null
     const webContents = createMockWebContents()
@@ -118,9 +118,9 @@ describe('captureScreenshot', () => {
 
     await expect(capture).resolves.toEqual({ data: 'slow-png' })
     expect(webContents.debugger.sendCommand.mock.calls).toEqual([
-      ['Page.captureScreenshot', fullPage],
-      ['Page.captureScreenshot', PROBE]
+      ['Page.captureScreenshot', fullPage]
     ])
+    expect(webContents.invalidate).toHaveBeenCalledTimes(2)
   })
 
   it('stops probing at the deadline', async () => {

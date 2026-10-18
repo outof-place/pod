@@ -53,16 +53,35 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserScreenshotResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
-      const wc = this.requireTargetWebContents(target)
-      try {
-        return await captureFullPageScreenshot(wc, format === 'jpeg' ? 'jpeg' : 'png', () =>
-          this.browserManager.holdPaintForCapture(target.webContentsId)
-        )
-      } catch (error) {
-        throw new BrowserError('browser_error', (error as Error).message)
-      }
-    })
+    // Why no helper session: like the viewport shot, this is CDP on the page's own webContents.
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        const wc = this.requireTargetWebContents(target)
+        notePodAgentBrowserCommand(target.webContentsId)
+        let releaseDebugger = (): void => {}
+        try {
+          releaseDebugger = acquireElectronDebugger(wc).release
+          return await captureFullPageScreenshot(wc, format === 'jpeg' ? 'jpeg' : 'png', () =>
+            this.browserManager.holdPaintForCapture(target.webContentsId)
+          )
+        } catch (error) {
+          if (!this.getWebContents(target.webContentsId)) {
+            throw this.createPageUnavailableError(
+              `${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`
+            )
+          }
+          throw new BrowserError(
+            'browser_error',
+            error instanceof Error ? error.message : String(error)
+          )
+        } finally {
+          releaseDebugger()
+        }
+      },
+      { ensureSession: false }
+    )
   }
 
   async evaluate(

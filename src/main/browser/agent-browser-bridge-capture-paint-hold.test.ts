@@ -164,6 +164,40 @@ describe('AgentBrowserBridge', () => {
     expect(screenshotCall).toBeUndefined()
   })
 
+  it('takes a full-page capture without a helper session: no CDP proxy, no agent-browser process', async () => {
+    const wc = mockWebContents(100)
+    let attached = false
+    wc.debugger.isAttached.mockImplementation(() => attached)
+    wc.debugger.attach.mockImplementation(() => {
+      attached = true
+    })
+    wc.debugger.detach.mockImplementation(() => {
+      attached = false
+    })
+    wc.debugger.sendCommand.mockImplementation((method: string) =>
+      Promise.resolve(
+        method === 'Page.getLayoutMetrics'
+          ? { cssContentSize: { width: 800, height: 2400 } }
+          : method === 'Page.captureScreenshot'
+            ? { data: 'full' }
+            : {}
+      )
+    )
+    webContentsFromIdMock.mockReturnValue(wc)
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(undefined, undefined, { holdPaintForCapture: vi.fn(() => () => {}) })
+    )
+    b.setActiveTab(100)
+
+    await expect(b.fullPageScreenshot('png')).resolves.toEqual({ data: 'full', format: 'png' })
+
+    expect(CdpWsProxyMock).not.toHaveBeenCalled()
+    expect(execFileMock).not.toHaveBeenCalled()
+    // Attached only for the capture, as the viewport shot does.
+    expect(wc.debugger.attach).toHaveBeenCalledTimes(1)
+    expect(wc.debugger.detach).toHaveBeenCalledTimes(1)
+  })
+
   it('captures a viewport screenshot in the runtime: no helper, the format asked for, one paint hold', async () => {
     const wc = mockWebContents(100)
     wc.debugger.sendCommand.mockImplementation((method: string) =>

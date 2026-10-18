@@ -1,4 +1,6 @@
 import type { WebContents } from 'electron'
+import { holdPodPaneFramesForCapture } from '../pod/browser-pane/pod-browser-pane-hooks'
+import { keepCaptureUntilSettled, waitForSettledCaptures } from './cdp-capture-settle'
 
 /** Draws a hidden guest for the duration of a capture; returns its release. */
 export type CapturePaintHold = () => () => void
@@ -136,12 +138,20 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
 // Why: a request made before the held page is drawn never resolves, and an offscreen drawn page can
 // skip one; a later request makes the page produce a frame, which answers every pending request.
 // So the capture is sent once and cheap probes follow until it answers. Resolves null when no frame
-// arrives by the deadline; a CDP error is an answer. Unanswered probes settle on the next frame or
-// reject on detach.
+// arrives by the deadline; a CDP error is an answer. Requests still unanswered then keep the page
+// attached until they answer (cdp-capture-settle.ts).
 function captureUntilDrawn(
   webContents: WebContents,
   params: Record<string, unknown>
 ): Promise<{ data: string } | null> {
+  // Why no probes beyond the viewport: a probe sent while the page is at its full height takes that
+  // size for the page's own and restores it after the capture. Its own resize draws a frame anyway.
+  const beyondViewport = params.captureBeyondViewport === true
+  // Fork-only (Pod): the pane keeps its last frame while the page is drawn at its full height.
+  const releasePaneFrames = beyondViewport
+    ? holdPodPaneFramesForCapture(webContents.id)
+    : () => {}
+  const unanswered = new Set<Promise<unknown>>()
   return new Promise((resolve, reject) => {
     let settled = false
     const finish = (settle: () => void): void => {
@@ -151,10 +161,12 @@ function captureUntilDrawn(
       settled = true
       clearTimeout(deadline)
       probes.forEach(clearTimeout)
+      keepCaptureUntilSettled(webContents, [...unanswered], releasePaneFrames)
       settle()
     }
+    // A null request only asks the page to draw.
     const send = (
-      requestParams: Record<string, unknown>
+      requestParams: Record<string, unknown> | null
     ): Promise<{ data?: string } | undefined> | null => {
       if (webContents.isDestroyed()) {
         finish(() => reject(new Error('WebContents destroyed')))
@@ -169,11 +181,22 @@ function captureUntilDrawn(
       } catch {
         // Some guest teardown paths reject repaint requests. Fall through to CDP.
       }
-      return webContents.debugger.sendCommand('Page.captureScreenshot', requestParams)
+      if (requestParams === null) {
+        return null
+      }
+      const request: Promise<{ data?: string } | undefined> = Promise.resolve(
+        webContents.debugger.sendCommand('Page.captureScreenshot', requestParams)
+      )
+      unanswered.add(request)
+      const answered = (): void => {
+        unanswered.delete(request)
+      }
+      request.then(answered, answered)
+      return request
     }
     const deadline = setTimeout(() => finish(() => resolve(null)), SCREENSHOT_TIMEOUT_MS)
     const probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) =>
-      setTimeout(() => send(FRAME_PROBE_PARAMS)?.catch(() => {}), offsetMs)
+      setTimeout(() => send(beyondViewport ? null : FRAME_PROBE_PARAMS)?.catch(() => {}), offsetMs)
     )
     send(params)?.then(
       (result) => finish(() => resolve(result?.data ? { data: result.data } : null)),
@@ -197,6 +220,7 @@ export async function captureFullPageScreenshot(
 
   const release = holdPaint()
   try {
+    await waitForSettledCaptures(webContents)
     // Why: layout works on an undrawn page, so only the pixel capture waits for a frame.
     const layoutMetrics: Promise<Parameters<typeof getLayoutClip>[0]> =
       webContents.debugger.sendCommand('Page.getLayoutMetrics', {})
@@ -260,6 +284,7 @@ export async function captureScreenshot(
 
   const release = holdPaint()
   try {
+    await waitForSettledCaptures(webContents)
     const frame = await captureUntilDrawn(webContents, screenshotParams)
     if (frame) {
       return frame
