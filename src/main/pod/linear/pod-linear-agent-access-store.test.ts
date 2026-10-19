@@ -65,4 +65,29 @@ describe('sealed agent access', () => {
     expect(() => access.writePodLinearAgentAccess(true)).toThrow()
     expect(access.isPodLinearAgentAccessOn()).toBe(false)
   })
+
+  it.each([
+    [
+      'a backend with a protection gap',
+      () => setSecretStore(fakeKeychain({ describeProtectionGap: () => 'built-in key' }))
+    ],
+    ['the test keychain', () => process.argv.push('--use-mock-keychain')]
+  ])(
+    'reads a valid sealed "on" as off under %s, and refuses to turn it on',
+    async (_what, weaken) => {
+      const { store } = await freshAccess()
+      store.writeSealedLinearAgentAccess(true)
+      const argv = [...process.argv]
+      weaken()
+      try {
+        const fresh = (await freshAccess()).store
+        expect(fresh.readSealedLinearAgentAccess()).toBe(false)
+        expect(() => fresh.writeSealedLinearAgentAccess(true)).toThrow(
+          fresh.POD_LINEAR_AGENT_ACCESS_FORGEABLE_MESSAGE
+        )
+      } finally {
+        process.argv.splice(0, process.argv.length, ...argv)
+      }
+    }
+  )
 })
