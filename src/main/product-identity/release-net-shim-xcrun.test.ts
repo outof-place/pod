@@ -118,6 +118,23 @@ describe.skipIf(process.platform === 'win32')('release net shim: xcrun notarytoo
     expect(JSON.parse(result.stdout)).toEqual(JSON.parse(invalid))
   })
 
+  it('submits again when notarytool crashed before its upload finished', () => {
+    // notarytool 1.1.3 died this way on the rc6 DMG: SIGBUS mid-upload, after the id.
+    const result = submit([
+      {
+        stdout: '',
+        stderr: `Conducting pre-submission checks for Pod.zip...\nSubmission ID received\n  id: ${ID}\n`,
+        code: 138
+      },
+      { stdout: `${accepted}\n`, code: 0 }
+    ])
+
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual(JSON.parse(accepted))
+    expect(result.calls).toHaveLength(2)
+    expect(result.stderr).toContain('submitting again (attempt 1)')
+  })
+
   it('fails a non-network error at once with that attempt as it was', () => {
     const refused = '{"message":"Invalid credentials"}\n'
     const result = submit([{ stdout: refused, stderr: 'Error: HTTP status code: 401', code: 69 }])

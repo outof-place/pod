@@ -1,5 +1,5 @@
 #!/bin/bash
-# Pod release net shim: retries notarytool submit and stapler on network errors, else plain xcrun.
+# Pod release net shim: retries notarytool submit (network errors, crashes) and stapler, else plain xcrun.
 # stdout stays notarytool's own (release-app.sh parses its --output-format json); notes go to stderr.
 # Tests point POD_NET_SHIM_REAL_XCRUN at a fake.
 real=${POD_NET_SHIM_REAL_XCRUN:-/usr/bin/xcrun}
@@ -18,7 +18,8 @@ if [ "${1:-}" = notarytool ] && [ "${2:-}" = submit ]; then
     id=$(cat "$last" "$err" | grep -Eo '(id: |"id" *: *")[0-9a-f-]{36}' | head -1 | grep -Eo '[0-9a-f-]{36}')
     both=$(cat "$last" "$err"); rm -f "$err"
     if [ "$status" = 0 ]; then cat "$last"; exit 0; fi
-    if ! echo "$both" | grep -Eq "$net_error"; then cat "$last"; exit "$status"; fi
+    # A status past 128 is notarytool killed by a signal (rc6: SIGBUS mid-upload): retried like the network.
+    if [ "$status" -lt 128 ] && ! echo "$both" | grep -Eq "$net_error"; then cat "$last"; exit "$status"; fi
     # An upload that never finished leaves a submission with no file: send it again instead.
     echo "$both" | grep -q "Successfully uploaded file" || id=""
     if [ -n "$id" ]; then
