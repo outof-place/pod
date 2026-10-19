@@ -86,7 +86,7 @@ export const ptySessionControlApi = {
     id: string,
     data: string,
     inputKind: TerminalInputKind,
-    options?: { requireWriteSettlement?: true }
+    options?: { requireWriteSettlement?: true; requireAgentForeground?: true }
   ): Promise<boolean> =>
     ipcRenderer.invoke('pty:writeAccepted', { id, data, inputKind, ...options }),
   onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {

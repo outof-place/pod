@@ -83,8 +83,14 @@ describe('OrcaRuntimeService', () => {
         worktreeId: result.worktree.id
       })
     )
+    // Fork-only (Pod): pasted, then Enter as its own write.
     await vi.waitFor(() => {
-      expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r', 'launch')
+      expect(write).toHaveBeenCalledWith(
+        'pty-cli-aider-startup',
+        '\x1b[200~fix it\x1b[201~',
+        'launch'
+      )
+      expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', '\r', 'launch')
     })
   })
 

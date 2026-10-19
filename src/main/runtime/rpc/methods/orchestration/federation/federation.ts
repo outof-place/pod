@@ -197,7 +197,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           kind: 'terminal',
           runtime,
           handle: terminalHandle,
-          ...(briefGuard ? { beforeWrite: briefGuard.beforeWrite } : {}),
+          ...(briefGuard
+            ? { beforeWrite: briefGuard.beforeWrite, assertBeforeWrite: briefGuard.assertBeforeWrite }
+            : {}),
           turn: {
             purpose: 'dispatch-preamble',
             operationId: orchestrationMutation.requestId,

@@ -45,9 +45,12 @@ describe('terminal agent prompt send RPC', () => {
 
     expect(response.ok).toBe(true)
     expect(runtime.isTerminalRunningSettledPromptAgent).toHaveBeenCalledWith('terminal-1')
+    // Fork-only (Pod): an agent prompt is written only while an agent's foreground group holds
+    // the terminal (pod-terminal-send-foreground-gate).
     expect(sendTerminalAgentPrompt).toHaveBeenCalledWith('terminal-1', 'review this change', {
       inputKind: 'driving',
-      beforeWrite: undefined,
+      beforeWrite: expect.any(Function),
+      assertBeforeWrite: expect.any(Function),
       signal: undefined
     })
     expect(sendTerminal).not.toHaveBeenCalled()
@@ -83,7 +86,13 @@ describe('terminal agent prompt send RPC', () => {
     expect(sendTerminal).toHaveBeenCalledWith(
       'terminal-1',
       { text: 'echo x', enter: true, interrupt: false },
-      { inputKind: 'driving', beforeWrite: undefined, signal: undefined }
+      // Fork-only (Pod): the foreground group gate, as above.
+      {
+        inputKind: 'driving',
+        beforeWrite: expect.any(Function),
+        assertBeforeWrite: expect.any(Function),
+        signal: undefined
+      }
     )
     expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })

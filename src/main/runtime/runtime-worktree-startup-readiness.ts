@@ -10,6 +10,11 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import { wrapTerminalBracketedPasteText } from '../../shared/terminal-bracketed-paste-text'
 import { neutralizePastedControls } from '../../shared/agent-prompt-needs-paste'
+import {
+  pasteThenSubmitWhileGroupHolds,
+  writeWhileGroupHolds,
+  type ForegroundGroupWriteGate
+} from './pod-foreground-group-write-gate'
 import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup
@@ -22,6 +27,8 @@ const DECRST_BRACKETED_PASTE = '\x1b[?2004l'
 // Why: the deadline's last settle check is one foreground read, which over SSH could otherwise hold
 // a past-due wait for the channel's 30 s timeout.
 const DEADLINE_SETTLE_CHECK_MS = 2_000
+// Fork-only (Pod): 30 s at 150 ms for a follow-up to find its agent's foreground group.
+const FOLLOWUP_FOREGROUND_GROUP_ATTEMPTS = 200
 
 export type WorktreeStartupReadinessHost = {
   getPtyId: (handle: string) => string | null
@@ -30,6 +37,9 @@ export type WorktreeStartupReadinessHost = {
   subscribeToData: (ptyId: string, listener: (data: string) => void) => () => void
   readRecentOutput: (ptyId: string) => string | undefined
   write: (ptyId: string, data: string, inputKind: TerminalInputKind) => void
+  /** Fork-only (Pod): proves the agent's foreground group before a paste and reads it again in
+   *  each write's own synchronous block (pod-foreground-group-write-gate). */
+  foregroundGate?: ForegroundGroupWriteGate
 }
 
 export function pasteWorktreeStartupDraftWhenReady(
@@ -37,13 +47,28 @@ export function pasteWorktreeStartupDraftWhenReady(
   handle: string,
   draft: WorktreeStartupDraftPaste
 ): void {
-  void waitForWorktreeStartupDraft(host, handle, draft.agent)
-    .then((ptyId) => {
+  const gate = host.foregroundGate
+  const readPtyId = host.getPtyId(handle)
+  const gated = gate && readPtyId && gate.reads(readPtyId) ? gate : undefined
+  void waitForWorktreeStartupDraft(
+    host,
+    handle,
+    draft.agent,
+    gated ? { isShellInFront: async (id: string) => (await gated.prove(id)) === 'shell' } : {}
+  )
+    .then(async (ptyId) => {
       if (!ptyId) {
         console.warn('[worktree-create] agent did not become ready for draft paste')
         return
       }
-      host.write(ptyId, startupDraftPasteBytes(draft.content), 'launch')
+      if (
+        (gated && (await gated.prove(ptyId)) !== 'agent') ||
+        !writeWhileGroupHolds(gate, ptyId, () =>
+          host.write(ptyId, startupDraftPasteBytes(draft.content), 'launch')
+        )
+      ) {
+        console.warn('[worktree-create] agent was not in front; startup draft not pasted')
+      }
     })
     .catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
 }
@@ -73,8 +98,18 @@ export async function deliverWorktreeStartupFollowup(
       console.warn('[worktree-create] agent did not become ready for follow-up prompt')
       return false
     }
-    host.write(ptyId, `${followup.prompt}\r`, 'launch')
-    return true
+    // Fork-only (Pod): pasted as a draft is, so no byte of it acts as a key, and Enter is its own
+    // write; each one only while the agent's foreground group still holds the terminal.
+    const refused = await pasteThenSubmitWhileGroupHolds(
+      host.foregroundGate,
+      ptyId,
+      startupDraftPasteBytes(followup.prompt),
+      (data) => host.write(ptyId, data, 'launch')
+    )
+    if (refused) {
+      console.warn(`[worktree-create] agent left the front before the follow-up ${refused}`)
+    }
+    return !refused
   } catch (error) {
     console.warn('[worktree-create] failed to send startup follow-up prompt:', error)
     return false
@@ -90,11 +125,21 @@ export async function waitForWorktreeStartupFollowup(
   if (!ptyId) {
     return null
   }
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  // Fork-only (Pod): where the host reads the foreground group, the agent itself decides, never the
+  // tracker's 5 s startup bootstrap, so a slow start is waited for instead of typed into its shell.
+  const attempts = host.foregroundGate ? FOLLOWUP_FOREGROUND_GROUP_ATTEMPTS : 30
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (attempt > 0) {
       await new Promise((resolve) => setTimeout(resolve, 150))
     }
     try {
+      const verdict = await host.foregroundGate?.prove(ptyId)
+      if (verdict === 'agent') {
+        return ptyId
+      }
+      if (verdict !== undefined && verdict !== 'unsupported') {
+        continue
+      }
       const foregroundProcess = await host.getForegroundProcess(ptyId)
       if (isExpectedAgentProcess(foregroundProcess, expectedProcess)) {
         return ptyId

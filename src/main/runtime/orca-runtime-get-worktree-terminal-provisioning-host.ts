@@ -1,6 +1,8 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithActivateManagedWorktree } from './orca-runtime-activate-managed-worktree'
 import type { WorktreeTerminalProvisioningHost } from './runtime-worktree-terminal-provisioning'
+import type { RuntimePtyController } from './runtime-pty-controller-contract'
+import { createForegroundGroupWriteGate } from './pod-foreground-group-write-gate'
 import type { WorktreeStartupReadinessHost } from './runtime-worktree-startup-readiness'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { prepareWorktreeCreateForRepo } from '../worktree-create-preparation'
@@ -62,6 +64,19 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
     return { worktreeId: leaf.worktreeId, tabId: leaf.tabId }
   }
 
+  /** Fork-only (Pod): the controller the write-time foreground check reads a pane through
+   *  (pod-foreground-group-write-gate); null for an SSH or Windows pane, or a controller that
+   *  can't list a pane's processes, which it can't read. */
+  foregroundGroupController(ptyId: string): RuntimePtyController | null {
+    const pty = this.ptysById.get(ptyId)
+    return pty &&
+      !pty.connectionId &&
+      process.platform !== 'win32' &&
+      this.ptyController?.listProcesses
+      ? this.ptyController
+      : null
+  }
+
   protected getWorktreeStartupReadinessHost(): WorktreeStartupReadinessHost {
     return {
       getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId ?? null,
@@ -70,7 +85,8 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
         this.ptyController!.hasChildProcesses?.(ptyId) ?? Promise.resolve(false),
       subscribeToData: (ptyId, listener) => this.subscribeToTerminalData(ptyId, listener),
       readRecentOutput: (ptyId) => this.recentPtyOutputById.get(ptyId)?.read(),
-      write: (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind)
+      write: (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind),
+      foregroundGate: createForegroundGroupWriteGate(this, null)
     }
   }
 

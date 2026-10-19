@@ -160,3 +160,44 @@ describe('requested terminal write settlement', () => {
     expect(settled).not.toHaveBeenCalled()
   })
 })
+
+// Fork-only (Pod): the write-time foreground check runs in each write's own synchronous block.
+describe('assertBeforeWrite', () => {
+  it('runs right before every write, with nothing awaited between it and the write', async () => {
+    const order: string[] = []
+    const writer = new RuntimeTerminalWriter((_id, data) => {
+      order.push(`write ${JSON.stringify(data)}`)
+      return true
+    })
+    const text = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES + 1)
+    await writer.writeAction('pty', { text }, text, {
+      inputKind: 'driving',
+      beforeWrite: async () => {
+        order.push('beforeWrite')
+      },
+      assertBeforeWrite: () => {
+        order.push('assert')
+      }
+    })
+    expect(order.filter((step) => step !== 'beforeWrite')).toEqual([
+      'assert',
+      `write ${JSON.stringify('x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES))}`,
+      'assert',
+      'write "x"'
+    ])
+  })
+
+  it('refuses the write it throws for', async () => {
+    const raw = vi.fn(() => true)
+    const writer = new RuntimeTerminalWriter(raw)
+    await expect(
+      writer.writeAction('pty', { enter: true }, '\r', {
+        inputKind: 'driving',
+        assertBeforeWrite: () => {
+          throw new Error('terminal_guard_no_agent')
+        }
+      })
+    ).rejects.toThrow('terminal_guard_no_agent')
+    expect(raw).not.toHaveBeenCalled()
+  })
+})

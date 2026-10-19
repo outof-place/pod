@@ -104,3 +104,19 @@ describe('local verified input', () => {
     expect(localWrite).not.toHaveBeenCalled()
   })
 })
+
+// Fork-only (Pod): an agent write main refuses (no agent holds the terminal) never falls back.
+describe('local verified input that requires the agent in front', () => {
+  it('asks main to check, and writes nothing more when main refuses', async () => {
+    localWriteAccepted.mockRejectedValue(new Error('agent_not_in_foreground'))
+    await expect(
+      sendRuntimePtyInputVerified(null, 'local-pty', 'x', 'launch', {
+        requireAgentForeground: true
+      })
+    ).rejects.toThrow('agent_not_in_foreground')
+    expect(localWriteAccepted).toHaveBeenCalledWith('local-pty', 'x', 'launch', {
+      requireAgentForeground: true
+    })
+    expect(localWrite).not.toHaveBeenCalled()
+  })
+})

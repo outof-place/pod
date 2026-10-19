@@ -221,6 +221,26 @@ describe('sendAgentTurn to a terminal', () => {
     )
   })
 
+  // Fork-only (Pod): the worker brief guard's write-time check reaches the writer.
+  it('passes the brief guard on, the write-time check included', async () => {
+    const runtime = { sendTerminalAgentPrompt: vi.fn(async () => ({ accepted: true })) }
+    const beforeWrite = vi.fn(async () => {})
+    const assertBeforeWrite = vi.fn()
+    await sendAgentTurn({
+      kind: 'terminal',
+      runtime,
+      handle: 'term_1',
+      beforeWrite,
+      assertBeforeWrite,
+      turn: { purpose: 'dispatch-preamble', body: 'hello', operationId: 'req-1' }
+    })
+    expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith('term_1', 'hello', {
+      ...dispatchPreambleSendOptions('req-1'),
+      beforeWrite,
+      assertBeforeWrite
+    })
+  })
+
   it('propagates a failed write as the primitive threw it', async () => {
     const failure = new Error('terminal_not_writable')
     const runtime = {

@@ -22,7 +22,9 @@ export async function sendRuntimePtyInputVerified(
   ptyId: string,
   data: string,
   inputKind: TerminalInputKind,
-  options?: { requireWriteSettlement?: true }
+  /** Fork-only (Pod): `requireAgentForeground` lands a local write only while an agent's foreground
+   *  process group holds the terminal; main rejects it otherwise, and nothing falls back. */
+  options?: { requireWriteSettlement?: true; requireAgentForeground?: true }
 ): Promise<boolean> {
   const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
   if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
@@ -42,7 +44,9 @@ export async function sendRuntimePtyInputVerified(
       }
       return accepted
     }
-    const accepted = await window.api.pty.writeAccepted(ptyId, data, inputKind)
+    const accepted = await (options?.requireAgentForeground
+      ? window.api.pty.writeAccepted(ptyId, data, inputKind, { requireAgentForeground: true })
+      : window.api.pty.writeAccepted(ptyId, data, inputKind))
     if (!accepted) {
       window.api.pty.write(ptyId, data, inputKind)
       // Why: SSH/local fallback writes are fire-and-forget. Callers use this

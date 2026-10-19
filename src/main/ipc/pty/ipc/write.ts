@@ -3,6 +3,7 @@ import { getPtyIpc } from '../../pty-host-bindings'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { createPtyWriteInput } from './write-input'
 import { noteRendererPtyInput, noteRendererViewportClaim } from '../renderer-query-responder'
+import { writeWhileAgentInFront } from './pod-agent-foreground-write'
 
 export function installPtyWriteIpcHandlers(deps: {
   mainWindow?: PtyRendererDelivery
@@ -38,9 +39,12 @@ export function installPtyWriteIpcHandlers(deps: {
     }
     noteRendererPtyInput(args.id, args.data)
     const claimTail = hostViewportClaimTails.get(args.id)
-    return claimTail
-      ? claimTail.then((claimed) => (claimed ? writePtyInputAccepted(args) : false))
-      : writePtyInputAccepted(args)
+    // Fork-only (Pod): an agent write lands only while an agent holds the terminal.
+    const accept = (): boolean | Promise<boolean> =>
+      args.requireAgentForeground === true
+        ? writeWhileAgentInFront(runtime, args.id, () => writePtyInputAccepted(args))
+        : writePtyInputAccepted(args)
+    return claimTail ? claimTail.then((claimed) => (claimed ? accept() : false)) : accept()
   })
 
   ipcMain.removeAllListeners('pty:claimViewport')

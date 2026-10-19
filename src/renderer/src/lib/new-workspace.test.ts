@@ -73,6 +73,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+  // Fork-only (Pod): the follow-up's fresh scan; null is no new evidence.
+  confirmRuntimeTerminalForegroundProcess: async () => null,
   inspectRuntimeTerminalProcess: mockInspectRuntimeTerminalProcess,
   sendRuntimePtyInputVerified: mockSendRuntimePtyInputVerified
 }))
@@ -293,11 +295,16 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       }
     })
 
+    // Fork-only (Pod): pasted, then Enter as its own write, each checked by main.
+    expect(mockSendRuntimePtyInputVerified).toHaveBeenCalledWith({}, 'pty-1', '\r', 'launch', {
+      requireAgentForeground: true
+    })
     expect(mockSendRuntimePtyInputVerified).toHaveBeenCalledWith(
       {},
       'pty-1',
-      'fix the spinner\r',
-      'launch'
+      '\x1b[200~fix the spinner\x1b[201~',
+      'launch',
+      { requireAgentForeground: true }
     )
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })

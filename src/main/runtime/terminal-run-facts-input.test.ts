@@ -246,8 +246,9 @@ describe('run facts: a created worktree’s startup writes', () => {
     })
     await vi.runAllTimersAsync()
 
-    expect(run.kinds).toEqual(['launch', 'launch'])
-    expect(run.writes).toHaveLength(2)
+    // Fork-only (Pod): the follow-up is a paste, then Enter as its own write.
+    expect(run.kinds).toEqual(['launch', 'launch', 'launch'])
+    expect(run.writes).toHaveLength(3)
     expect(run.firstUserInputAt()).toBeNull()
   })
 })

@@ -105,11 +105,13 @@ describe('post-paste submit retry Enter', () => {
 
     await expect(promise).resolves.toBe(true)
     expect(enterWrites()).toHaveLength(2)
+    // Fork-only (Pod): an agent write asks main to check the agent holds the terminal.
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(
       {},
       'pty-1',
       '\r',
-      'launch'
+      'launch',
+      { requireAgentForeground: true }
     )
     expect(vi.getTimerCount()).toBe(0)
   })

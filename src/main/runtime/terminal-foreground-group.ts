@@ -33,7 +33,7 @@ async function ps(args: readonly string[]): Promise<string | null> {
   }
 }
 
-async function terminalOf(rootPid: number): Promise<string | null> {
+export async function terminalOf(rootPid: number): Promise<string | null> {
   const cached = ttyByRootPid.get(rootPid)
   if (cached) {
     return cached
@@ -131,7 +131,8 @@ function isShellCommand(command: string): boolean {
 export function judgeTerminalForeground(
   rows: readonly ProcessTableRow[],
   rootPid: number,
-  agent: TuiAgent
+  /** Fork-only (Pod): null takes any recognized agent, for a write that names none. */
+  agent: TuiAgent | null
 ): 'agent' | 'shell' | 'unknown' {
   const root = rows.find((row) => row.pid === rootPid)
   const foregroundGroup = root?.tpgid
@@ -142,11 +143,10 @@ export function judgeTerminalForeground(
   if (front.length === 0) {
     return 'unknown'
   }
-  return front.some(
-    (row) =>
-      recognizeAgentProcessFromCommandLine(row.command)?.agent === agent ||
-      !isShellCommand(row.command)
-  )
+  return front.some((row) => {
+    const recognized = recognizeAgentProcessFromCommandLine(row.command)
+    return (agent ? recognized?.agent === agent : Boolean(recognized)) || !isShellCommand(row.command)
+  })
     ? 'agent'
     : 'shell'
 }

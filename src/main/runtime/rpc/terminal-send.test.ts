@@ -655,7 +655,12 @@ describe('terminal send RPC', () => {
         enter: true,
         interrupt: false
       },
-      { inputKind: 'driving', beforeWrite: expect.any(Function) }
+      // Fork-only (Pod): pod-terminal-send-foreground-gate's write-time check.
+      {
+        inputKind: 'driving',
+        beforeWrite: expect.any(Function),
+        assertBeforeWrite: expect.any(Function)
+      }
     )
   })
 

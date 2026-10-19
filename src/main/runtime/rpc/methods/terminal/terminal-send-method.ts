@@ -19,6 +19,7 @@ import {
   ensureUnsupportedTerminalPromptReceipt,
   observeReplayedTerminalPrompt
 } from './terminal-prompt-receipt'
+import { createTerminalSendForegroundGate } from './pod-terminal-send-foreground-gate'
 
 export const TERMINAL_SEND_METHODS = [
   defineMethod({
@@ -183,13 +184,18 @@ export const TERMINAL_SEND_METHODS = [
       }
       const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
       const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
-      const beforeWrite =
+      const foregroundGate =
+        params.requireAgentStatus === 'sendable' || params.agentPrompt === true
+          ? createTerminalSendForegroundGate(runtime)
+          : null
+      const unprovenBeforeWrite =
         orchestrationMutation && params.agentPrompt === true
           ? async (ptyId?: string): Promise<void> => {
               await assertSendPreconditions?.(ptyId)
               markMutationEffectPossible?.()
             }
           : assertSendPreconditions
+      const beforeWrite = foregroundGate?.withProof(unprovenBeforeWrite) ?? unprovenBeforeWrite
       const useSettledAgentPrompt =
         params.agentPrompt === true &&
         hasText &&
@@ -214,6 +220,7 @@ export const TERMINAL_SEND_METHODS = [
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
               inputKind: 'driving',
               beforeWrite,
+              assertBeforeWrite: foregroundGate?.assertBeforeWrite,
               signal,
               ...(orchestrationMutation
                 ? {
@@ -236,6 +243,7 @@ export const TERMINAL_SEND_METHODS = [
               },
               {
                 beforeWrite,
+                assertBeforeWrite: foregroundGate?.assertBeforeWrite,
                 signal,
                 // Why: a wire write carries no provenance beyond a client's own query reply.
                 inputKind: params.inputKind === 'query-reply' ? 'query-reply' : 'driving',

@@ -22,6 +22,16 @@ import {
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import {
+  createForegroundGroupWriteGate,
+  type ForegroundGroupWriteGate
+} from './pod-foreground-group-write-gate'
+
+function assertAgentGroupHolds(group: ForegroundGroupWriteGate, ptyId: string): void {
+  if (!group.holds(ptyId)) {
+    throw new Error('agent_not_in_foreground')
+  }
+}
 
 export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
   protected async writeTerminalAgentPrompt(
@@ -29,8 +39,16 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     ptyId: string,
     generation: number,
     pastePayload: string,
-    options: RuntimeAgentPromptWriteOptions
+    callerOptions: RuntimeAgentPromptWriteOptions
   ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }> {
+    // Fork-only (Pod): a caller without its own write-time check (a dispatch inject, a coordinator
+    // task dispatch) gets the foreground group gate; see pod-foreground-group-write-gate.
+    const group = callerOptions.assertBeforeWrite
+      ? null
+      : createForegroundGroupWriteGate(this, null)
+    const options: RuntimeAgentPromptWriteOptions = group
+      ? { ...callerOptions, assertBeforeWrite: (id) => assertAgentGroupHolds(group, id) }
+      : callerOptions
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
@@ -58,6 +76,9 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       assertAgentPromptRequestActive(options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
       await options.beforeWrite?.(ptyId)
+      if (group && !['agent', 'unsupported'].includes(await group.prove(ptyId))) {
+        throw new Error('agent_not_in_foreground')
+      }
       assertAgentPromptRequestActive(options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
       this.assertAgentPromptPermissionSafe(
@@ -68,6 +89,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       // beginning when a large frame is split into independently processed chunks.
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
+      options.assertBeforeWrite?.(ptyId)
       if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
         throw new Error('terminal_not_writable')
       }
@@ -114,6 +136,14 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
     this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
     if (!submitWithPaste) {
+      try {
+        options.assertBeforeWrite?.(ptyId)
+      } catch (error) {
+        if (options.suffixFailureError) {
+          throw new Error(options.suffixFailureError)
+        }
+        throw error
+      }
       if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
@@ -229,6 +259,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       await waitForAgentPromptDelay(retryDelayMs, options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
       await options.beforeWrite?.(ptyId)
+      options.assertBeforeWrite?.(ptyId)
       return this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind) ? 1 : 0
     } catch {
       return 0

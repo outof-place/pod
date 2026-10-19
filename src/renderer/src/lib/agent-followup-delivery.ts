@@ -1,7 +1,14 @@
 import {
-  inspectRuntimeTerminalProcess,
-  sendRuntimePtyInputVerified
+  confirmRuntimeTerminalForegroundProcess,
+  inspectRuntimeTerminalProcess
 } from '@/runtime/runtime-terminal-inspection'
+import { sendAgentForegroundInput } from './pod-agent-foreground-input'
+import { neutralizePastedControls } from '../../../shared/agent-prompt-needs-paste'
+import {
+  AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS,
+  AGENT_PROMPT_SUBMIT
+} from '../../../shared/agent-prompt-injection'
+import { wrapTerminalBracketedPasteText } from '../../../shared/terminal-bracketed-paste-text'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess
@@ -22,10 +29,33 @@ export async function sendFollowupPromptWhenAgentReady(args: {
     return false
   }
   try {
-    return await sendRuntimePtyInputVerified(settings, ptyId, `${prompt}\r`, 'launch')
+    // Fork-only (Pod): pasted as a draft is, so no byte of it acts as a key; Enter is its own write,
+    // after a fresh scan still finds no shell in front.
+    const pasted = wrapTerminalBracketedPasteText(neutralizePastedControls(prompt))
+    if (!(await sendAgentForegroundInput(settings, ptyId, pasted, 'launch'))) {
+      return false
+    }
+    await new Promise((resolve) =>
+      globalThis.setTimeout(resolve, AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS)
+    )
+    if (await freshScanFindsShell(settings, ptyId)) {
+      return false
+    }
+    return await sendAgentForegroundInput(settings, ptyId, AGENT_PROMPT_SUBMIT, 'launch')
   } catch {
     return false
   }
+}
+
+/** Fork-only (Pod): the inspection can carry the terminal daemon's 5 s startup bootstrap, which
+ *  names the launch's agent while its shell still holds the terminal; a fresh scan does not. Null
+ *  (a remote pane, no fresh-scan RPC) is no new evidence, never a shell. */
+async function freshScanFindsShell(
+  settings: RuntimeOwnerSettings,
+  ptyId: string
+): Promise<boolean> {
+  const confirmed = await confirmRuntimeTerminalForegroundProcess(settings, ptyId)
+  return confirmed !== null && isShellProcess(confirmed.replace(/^-/, ''))
 }
 
 // Why: delayed follow-ups must not type into an arbitrary shell. Require a
@@ -43,6 +73,9 @@ async function waitForAgentForeground(
       const process = await inspectRuntimeTerminalProcess(settings, ptyId)
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
       if (isExpectedAgentProcess(foreground, expectedProcess)) {
+        if (await freshScanFindsShell(settings, ptyId)) {
+          continue
+        }
         return true
       }
       // Why: interpreter-wrapped agents (aider, mistral-vibe are pip console
@@ -55,7 +88,8 @@ async function waitForAgentForeground(
         attempt >= 4 &&
         isAgentForegroundWrapperProcess(foreground) &&
         !isShellProcess(foreground) &&
-        process.hasChildProcesses
+        process.hasChildProcesses &&
+        !(await freshScanFindsShell(settings, ptyId))
       ) {
         return true
       }

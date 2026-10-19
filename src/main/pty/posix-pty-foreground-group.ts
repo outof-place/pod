@@ -140,6 +140,20 @@ export function getPosixPtyForegroundGroup(
   return root.tpgid > 1 ? root.tpgid : null
 }
 
+/** Fork-only (Pod): the PTY's foreground group read now, in the caller's synchronous block
+ *  (proc_info, else `ps`); null when it cannot be established for this terminal. */
+export function readPosixPtyForegroundGroup(rootPid: number, ptsName: string): number | null {
+  try {
+    return getPosixPtyForegroundGroup(
+      readForegroundGroupTable(rootPid, process.pid, ptsName),
+      rootPid,
+      ptsName
+    )
+  } catch {
+    return null
+  }
+}
+
 /**
  * Sends `signal` to the PTY's foreground process group, falling back to the
  * supplied root-pid delivery when the group cannot be established safely.

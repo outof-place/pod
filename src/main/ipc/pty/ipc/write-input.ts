@@ -34,6 +34,8 @@ export type PtyWritePayload = {
   inputKind: TerminalInputKind
   /** Accepted-write callers only: wait for the provider's settlement, on any provider. */
   requireWriteSettlement?: true
+  /** Fork-only (Pod): accepted-write callers only; see pod-agent-foreground-write. */
+  requireAgentForeground?: true
 }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 

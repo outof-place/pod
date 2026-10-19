@@ -2,6 +2,10 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { LaunchedAgentForeground } from './launched-agent-foreground'
+import {
+  createForegroundGroupWriteGate,
+  type ForegroundGroupHost
+} from './pod-foreground-group-write-gate'
 
 /** A shell back at its prompt turns bracketed paste on, and Orca's shell integration marks it. */
 const SHELL_RETURN_MARKERS = ['\x1b[?2004', '\x1b]133;'] as const
@@ -11,10 +15,13 @@ export type LaunchedAgentWriteGuardRuntime = Pick<
   OrcaRuntimeService,
   'readLaunchedAgentForeground' | 'subscribeToTerminalData'
 > &
-  Partial<Pick<OrcaRuntimeService, 'launchedAgentHostProvesAgent'>>
+  Partial<Pick<OrcaRuntimeService, 'launchedAgentHostProvesAgent'>> &
+  ForegroundGroupHost
 
 export type LaunchedAgentWriteGuard = {
   beforeWrite: (ptyId: string) => Promise<void>
+  /** Fork-only (Pod): in each write's own synchronous block, after `beforeWrite`. */
+  assertBeforeWrite: (ptyId: string) => void
   dispose: () => void
 }
 
@@ -24,6 +31,8 @@ export type LaunchedAgentWriteGuard = {
  * refuses it, since a ready signal alone can come from a shell back at its prompt. Once a read finds
  * the agent, later writes reuse it until the terminal shows a shell coming back to its prompt, so
  * Enter follows the paste on the desktop's timing instead of waiting out another process read.
+ * Fork-only (Pod): on a local macOS or Linux pane that read is the foreground group's, and every
+ * write first reads the group again in its own synchronous block (`assertBeforeWrite`).
  */
 export function createLaunchedAgentWriteGuard(
   runtime: LaunchedAgentWriteGuardRuntime,
@@ -34,6 +43,7 @@ export function createLaunchedAgentWriteGuard(
 ): LaunchedAgentWriteGuard {
   let cleared: { ptyId: string; shellMayHaveReturned: boolean; unsubscribe: () => void } | null =
     null
+  const group = createForegroundGroupWriteGate(runtime, agent)
   const dispose = (): void => {
     cleared?.unsubscribe()
     cleared = null
@@ -55,7 +65,9 @@ export function createLaunchedAgentWriteGuard(
     })
     let foreground: LaunchedAgentForeground
     try {
-      foreground = await runtime.readLaunchedAgentForeground(ptyId, agent)
+      const proven = await group.prove(ptyId)
+      foreground =
+        proven === 'unsupported' ? await runtime.readLaunchedAgentForeground(ptyId, agent) : proven
     } catch (error) {
       watch.unsubscribe()
       throw error
@@ -73,7 +85,13 @@ export function createLaunchedAgentWriteGuard(
       throw new Error('agent_not_in_foreground')
     }
   }
-  return { beforeWrite, dispose }
+  const assertBeforeWrite = (ptyId: string): void => {
+    if (!group.holds(ptyId)) {
+      dispose()
+      throw new Error('agent_not_in_foreground')
+    }
+  }
+  return { beforeWrite, assertBeforeWrite, dispose }
 }
 
 /**

@@ -13,6 +13,9 @@ export type RuntimeTerminalWriteOptions = {
   inputKind: TerminalInputKind
   signal?: AbortSignal
   beforeWrite?: (ptyId: string) => void | Promise<void>
+  /** Fork-only (Pod): runs in each write's own synchronous block, with no await before the write;
+   *  throwing refuses it (pod-foreground-group-write-gate). */
+  assertBeforeWrite?: (ptyId: string) => void
   reserveWrite?: (ptyId: string) => void
   afterWrite?: (ptyId: string) => void | Promise<void>
   suffixFailureError?: string
@@ -148,6 +151,7 @@ export class RuntimeTerminalWriter {
     data: string,
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined> {
+    options.assertBeforeWrite?.(ptyId)
     if (!options.requireWriteSettlement) {
       if (!this.write(ptyId, data, options.inputKind)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
