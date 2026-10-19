@@ -4,8 +4,12 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { LINEAR_AGENT_ACCESS_METHODS } from '../runtime/rpc/methods/linear-agent-access'
 import { dispatchRemoteLinearRelationWrite } from './ssh-remote-linear-relation-write'
+import { withLinearAgentAccessOn } from '../pod/linear/pod-linear-access.test-support'
 
 describe('SSH remote Linear relation writes', () => {
+  // Fork-only (Pod): agents' linear.* methods answer only with agent access on.
+  withLinearAgentAccessOn()
+
   it('maps blocked-by from the current issue perspective', async () => {
     const linearIssueRelationWrite = vi.fn().mockResolvedValue({ ok: true })
     const runtime = {

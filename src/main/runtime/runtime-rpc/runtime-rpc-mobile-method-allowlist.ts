@@ -157,7 +157,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'linear.issueContext',
   'linear.resolveCurrentIssue',
   'linear.addIssueComment',
-  'linear.connect',
+  // Fork-only (Pod): no linear.connect or linear.selectWorkspace from a phone (pod-linear-access.ts).
   'linear.createIssue',
   'linear.createProject',
   'linear.issueComments',
@@ -172,7 +172,6 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'linear.teamMembers',
   'linear.listTeams',
   'linear.searchIssues',
-  'linear.selectWorkspace',
   'linear.status',
   'linear.teamStates',
   'linear.updateIssue',

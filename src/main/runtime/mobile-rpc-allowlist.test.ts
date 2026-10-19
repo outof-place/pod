@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ALL_RPC_METHODS } from './rpc/methods'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-method-allowlist'
+import { POD_LINEAR_ADMIN_METHODS } from '../pod/linear/pod-linear-access'
 
 const MOBILE_DYNAMIC_RPC_METHODS = [
   // Why: computed sendRequest method names do not appear as literals in the
@@ -114,7 +115,10 @@ describe('mobile RPC allowlist', () => {
     // Why: mobile-scoped runtime tokens are checked before dispatch. A mobile
     // feature can compile and still fail at runtime if its method is missing here.
     const allowed = mobileRpcAllowlist()
-    const missing = mobileRpcMethods().filter((method) => !allowed.has(method))
+    // Fork-only (Pod): Linear's key and workspace choice stay off phones (pod-linear-access.ts).
+    const missing = mobileRpcMethods().filter(
+      (method) => !allowed.has(method) && !POD_LINEAR_ADMIN_METHODS.has(method)
+    )
 
     expect(missing).toEqual([])
   })

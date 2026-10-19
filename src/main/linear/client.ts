@@ -29,6 +29,7 @@ import {
   isLinearKeyRejected,
   linearKeyRejectedMessage
 } from '../pod/linear/pod-linear-key-rejections'
+import { isPodLinearAgentAccessOn } from '../pod/linear/pod-linear-access'
 import { CredentialDecryptionError } from '../integration-credential-file'
 import type {
   LinearConnectionStatus,
@@ -219,7 +220,9 @@ export function getStatus(): LinearConnectionStatus {
     activeWorkspaceId: state.activeWorkspaceId,
     selectedWorkspaceId: state.selectedWorkspaceId,
     ...(credentialError ? { credentialError } : {}),
-    credentialProtection
+    credentialProtection,
+    // Fork-only (Pod)
+    agentAccess: isPodLinearAgentAccessOn()
   }
 }
 
