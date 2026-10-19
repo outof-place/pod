@@ -13,6 +13,7 @@ const APP_METHODS = [
   'linear.createProject',
   'linear.getCustomView',
   'linear.getIssue',
+  'linear.getIssues',
   'linear.getProject',
   'linear.issueComments',
   'linear.listCustomViewIssues',
