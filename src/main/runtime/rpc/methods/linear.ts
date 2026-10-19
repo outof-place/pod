@@ -1,6 +1,7 @@
 import { defineMethod } from '../core'
 import { LINEAR_PROJECT_CREATE_METHOD } from './linear-project-create'
 import { LINEAR_ISSUE_LIST_METHOD, LINEAR_MCP_ISSUE_LIST_METHOD } from './linear-issue-list-method'
+import { withLinearIssueNames } from '../../../pod/linear/pod-linear-issue-names'
 import {
   Connect,
   CreateIssue,
@@ -55,8 +56,11 @@ export const LINEAR_METHODS = [
     name: 'linear.searchIssues',
     permission: 'workspace',
     params: SearchIssues,
+    // Fork-only (Pod): each row carries its worktree name and usable branch.
     handler: async (params, { runtime }) =>
-      runtime.linearSearchIssues(params.query, params.limit, params.workspaceId)
+      (await runtime.linearSearchIssues(params.query, params.limit, params.workspaceId)).map(
+        withLinearIssueNames
+      )
   }),
   LINEAR_ISSUE_LIST_METHOD,
   LINEAR_MCP_ISSUE_LIST_METHOD,
@@ -84,8 +88,11 @@ export const LINEAR_METHODS = [
     name: 'linear.getIssue',
     permission: 'workspace',
     params: IssueId,
-    handler: async (params, { runtime }) =>
-      runtime.linearGetIssue(params.id.trim(), params.workspaceId)
+    // Fork-only (Pod): with its worktree name and usable branch.
+    handler: async (params, { runtime }) => {
+      const issue = await runtime.linearGetIssue(params.id.trim(), params.workspaceId)
+      return issue ? withLinearIssueNames(issue) : issue
+    }
   }),
   defineMethod({
     name: 'linear.updateIssue',
