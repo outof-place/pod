@@ -1,27 +1,27 @@
-import { existsSync, mkdirSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { ensurePodLinearDir, podLinearStoreDir } from '../pod/linear/pod-linear-key-store'
 
 export const LEGACY_WORKSPACE_ID = 'legacy'
 
-function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+// Fork-only (Pod): Linear's files live in Pod's userData, never in ~/.orca, which Orca.app owns.
+function getLinearStoreDir(): string {
+  return podLinearStoreDir()
 }
 
 function getLegacyTokenPath(): string {
-  return join(getOrcaDir(), 'linear-token.enc')
+  return join(getLinearStoreDir(), 'linear-token.enc')
 }
 
 export function getLegacyViewerPath(): string {
-  return join(getOrcaDir(), 'linear-viewer.json')
+  return join(getLinearStoreDir(), 'linear-viewer.json')
 }
 
 export function getWorkspaceFilePath(): string {
-  return join(getOrcaDir(), 'linear-workspaces.json')
+  return join(getLinearStoreDir(), 'linear-workspaces.json')
 }
 
 function getWorkspaceTokenDir(): string {
-  return join(getOrcaDir(), 'linear-tokens')
+  return join(getLinearStoreDir(), 'linear-tokens')
 }
 
 export function getWorkspaceTokenPath(workspaceId: string): string {
@@ -31,16 +31,11 @@ export function getWorkspaceTokenPath(workspaceId: string): string {
   return join(getWorkspaceTokenDir(), `${Buffer.from(workspaceId).toString('base64url')}.enc`)
 }
 
+// Fork-only (Pod): both directories are owner-only (0700).
 export function ensureOrcaDir(): void {
-  const dir = getOrcaDir()
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
+  ensurePodLinearDir(getLinearStoreDir())
 }
 
 export function ensureWorkspaceTokenDir(): void {
-  const dir = getWorkspaceTokenDir()
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
+  ensurePodLinearDir(getWorkspaceTokenDir())
 }
