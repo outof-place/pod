@@ -21,6 +21,11 @@ const APPLIED_FOR_PODNATIVE = [
   'computerAwakeMode',
   'skipDeleteWorktreeConfirm',
   'skipCloseTerminalWithRunningProcessConfirm',
+  // PodNative's ⌃⇥ switcher and pinned tabs (pn-acc's PN branch, landed in a pair)
+  'ctrlTabOrderMode',
+  'confirmClosePinnedTab',
+  // The runtime publishes it; PodNative only edits it
+  'machineName',
   'editorWordWrap',
   'editorAutoSave',
   'editorAutoSaveDelayMs',
@@ -128,8 +133,6 @@ describe('podSettings pages', () => {
 
   it('keeps the settings nobody applies yet hidden as later', () => {
     for (const key of [
-      'ctrlTabOrderMode',
-      'confirmClosePinnedTab',
       'skipDeleteAutomationConfirm',
       'skipDeleteArtifactConfirm',
       'skipCodexRateLimitResetConfirm',

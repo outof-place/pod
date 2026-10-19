@@ -52,6 +52,8 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
           'skipCloseTerminalWithRunningProcessConfirm'
         ]
       },
+      { title: 'Tabs', keys: ['ctrlTabOrderMode', 'confirmClosePinnedTab'] },
+      { title: 'This Mac', keys: ['machineName'] },
       {
         title: 'Editor',
         keys: ['editorWordWrap', 'editorAutoSave', 'editorAutoSaveDelayMs', 'editorFontFamily']
