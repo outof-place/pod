@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setSecretStore } from '../../../shared/secret-store'
 import { fakeKeychain, setTestUserData } from './pod-linear-key-store.test-support'
+import { turnLinearOnInFreshModules } from './pod-linear-access.test-support'
 import {
   defaultLinearMockReply,
   guardFetchToLoopback,
@@ -47,6 +48,7 @@ describe('a key Linear rejects', () => {
 
   async function freshClient() {
     vi.resetModules()
+    await turnLinearOnInFreshModules()
     return import('../../linear/client')
   }
 

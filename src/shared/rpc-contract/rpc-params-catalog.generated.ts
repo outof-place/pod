@@ -437,7 +437,7 @@ import { AiVaultDeleteSessionParams } from './pod-ai-vault-params'
 import { PodTerminalOpenedBeforeClaudeAccountsParams } from './pod-claude-old-terminal-params'
 import { PodClientEventsSubscribeParams } from './pod-client-events-params'
 import { PodComputerActionsUnsubscribeParams } from './pod-computer-actions-params'
-import { PodLinearSetAgentAccessParams } from './pod-linear-params'
+import { PodLinearSetAgentAccessParams, PodLinearSetEnabledParams } from './pod-linear-params'
 import {
   PodOrbstackAgentSandboxParams,
   PodOrbstackCreateParams,
@@ -1100,6 +1100,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'linear.searchIssues': SearchIssuesOfLinearParams,
   'linear.selectWorkspace': SelectWorkspace,
   'linear.setAgentAccess': PodLinearSetAgentAccessParams,
+  'linear.setEnabled': PodLinearSetEnabledParams,
   'linear.status': null,
   'linear.teamLabels': TeamId,
   'linear.teamMembers': TeamId,

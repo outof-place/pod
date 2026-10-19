@@ -5,14 +5,24 @@
 // the user has turned on podLinearAgentAccess, which only those same two callers can change.
 import type { RpcCallerIdentity } from '../../runtime/rpc/rpc-caller-identity'
 import type { RpcCallerScope } from '../../runtime/rpc/rpc-caller-scope'
+import { podLinearAvailability, podLinearUnavailableMessage } from './pod-linear-availability'
 
 export const POD_LINEAR_SET_AGENT_ACCESS = 'linear.setAgentAccess'
+export const POD_LINEAR_SET_ENABLED = 'linear.setEnabled'
 
-/** Methods that set or remove a key, pick the workspace, or let agents in. */
+/** Methods that set or remove a key, pick the workspace, turn Linear on, or let agents in. */
 export const POD_LINEAR_ADMIN_METHODS: ReadonlySet<string> = new Set([
   'linear.connect',
   'linear.disconnect',
   'linear.selectWorkspace',
+  POD_LINEAR_SET_ENABLED,
+  POD_LINEAR_SET_AGENT_ACCESS
+])
+
+/** What still answers while Linear is off: the status that says so, and the two switches. */
+const POD_LINEAR_ALWAYS_ANSWERS: ReadonlySet<string> = new Set([
+  'linear.status',
+  POD_LINEAR_SET_ENABLED,
   POD_LINEAR_SET_AGENT_ACCESS
 ])
 
@@ -83,6 +93,15 @@ export function podLinearRpcRefusal(
     return {
       code: 'forbidden',
       message: `${method} is available only in Pod's own window or PodNative on this Mac.`
+    }
+  }
+  if (method.startsWith('linear.') && !POD_LINEAR_ALWAYS_ANSWERS.has(method)) {
+    const availability = podLinearAvailability()
+    if (!availability.available) {
+      return {
+        code: 'linear_unavailable',
+        message: podLinearUnavailableMessage(availability.reason)
+      }
     }
   }
   if (POD_LINEAR_AGENT_METHODS.has(method) && !isPodLinearAgentAccessOn()) {
