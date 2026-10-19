@@ -21,11 +21,11 @@ import {
   clearTokenFile,
   loadToken,
   removeToken,
-  replaceLegacyWorkspace,
   saveWorkspaceToken,
   getWorkspaceTokenProtection
 } from './linear-token-store'
 import {
+  clearLinearKeyRejection,
   isLinearKeyRejected,
   linearKeyRejectedMessage
 } from '../pod/linear/pod-linear-key-rejections'
@@ -264,12 +264,9 @@ export async function testConnection(
     const me = await client.viewer
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
-    if (resolvedWorkspaceId === LEGACY_WORKSPACE_ID) {
-      replaceLegacyWorkspace(workspace, token)
-    } else {
-      saveWorkspaceToken(workspace.id, token)
-      upsertWorkspace(workspace, { select: true })
-    }
+    // Fork-only (Pod): a Test only reads. It neither stores the key again nor moves the selection
+    // (upstream selects the tested workspace); only the "needs a new key" mark follows the answer.
+    clearLinearKeyRejection(resolvedWorkspaceId)
     return { ok: true, viewer: workspace, workspace }
   } catch (error) {
     if (isAuthError(error)) {
