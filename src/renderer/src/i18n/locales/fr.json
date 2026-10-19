@@ -1258,12 +1258,6 @@
       "useInstalledAgentSkills": {
         "unreadableSkillSource": "Un dossier de skill n'a pas répondu ; cet état peut donc être incomplet."
       },
-      "useMacosTccPromptNotice": {
-        "title": "Vous voyez des invites « Orca souhaite accéder à… » ?",
-        "description": "Des messages d'autorisation macOS peuvent apparaître quand un agent ou un outil de terminal exécuté dans Orca tente d'accéder à des fichiers protégés. Accordez l'Accès complet au disque dans les paramètres pour réduire ces invites.",
-        "openSettings": "Ouvrir les paramètres",
-        "dismiss": "Ne plus afficher"
-      },
       "useMacTccAttributionSeveredNotice": {
         "title": "Les autorisations macOS peuvent ne pas s'appliquer aux terminaux Orca",
         "description": "Les terminaux Orca en cours d'exécution sont hébergés par un daemon démarré par une installation précédente d'Orca. macOS peut ne pas leur appliquer les autorisations Accessibilité, Automatisation ou fichiers protégés d'Orca. Redémarrez le daemon depuis Gérer les sessions pour restaurer l'accès. Cela fermera tous les terminaux Orca en cours d'exécution.",

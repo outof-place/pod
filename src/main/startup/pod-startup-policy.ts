@@ -1,9 +1,5 @@
 // Fork-only (Pod): startup work the Pod build profile defers or skips (src/shared/product/features.ts).
-import {
-  POD_STARTUP_BROWSER_SWEEP,
-  POD_STARTUP_HANG_WATCHDOG,
-  POD_TCC_PROMPT_WATCH
-} from '../../shared/product/features'
+import { POD_STARTUP_BROWSER_SWEEP, POD_STARTUP_HANG_WATCHDOG } from '../../shared/product/features'
 import { runAfterFirstWindowShown } from './first-window-deferral'
 
 const DEFERRED_HANG_WATCHDOG_FALLBACK_MS = 15_000
@@ -22,12 +18,6 @@ export function deferMainThreadHangWatchdog(install: () => unknown): boolean {
     install()
   }, DEFERRED_HANG_WATCHDOG_FALLBACK_MS)
   return true
-}
-
-export function startTccPromptNotice(init: () => void): void {
-  if (POD_TCC_PROMPT_WATCH) {
-    init()
-  }
 }
 
 type AgentBrowserOrphanSweeper = { sweepOrphanedSessions(): Promise<unknown> }

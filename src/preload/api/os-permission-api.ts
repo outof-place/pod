@@ -41,15 +41,6 @@ export type NotificationsApi = {
   playSound: (options?: { force?: boolean; volume?: number }) => Promise<NotificationSoundResult>
 }
 
-export type MacosTccPromptsApi = {
-  /** Fires once macOS has raised its Nth consent dialog naming Orca (#9756). */
-  onThreshold: (callback: (payload: { promptCount: number }) => void) => () => void
-  consumePending: () => Promise<{ claimId: number; promptCount: number } | null>
-  acknowledgePending: (claimId: number) => Promise<void>
-  releasePending: (claimId: number) => Promise<void>
-  dismiss: () => Promise<void>
-}
-
 export type DeveloperPermissionsApi = {
   getStatus: () => Promise<DeveloperPermissionState[]>
   request: (args: { id: DeveloperPermissionId }) => Promise<DeveloperPermissionRequestResult>

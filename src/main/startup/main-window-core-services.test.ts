@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   attachMainWindowServicesMock,
-  initTccPromptNoticeMock,
   preserveAgentAuthBeforeRestartMock,
   registerCoreHandlersMock,
   state,
@@ -15,7 +14,6 @@ const {
   }
   return {
     attachMainWindowServicesMock: vi.fn(),
-    initTccPromptNoticeMock: vi.fn(),
     preserveAgentAuthBeforeRestartMock: vi.fn(() => Promise.resolve()),
     registerCoreHandlersMock: vi.fn(),
     state: {
@@ -53,7 +51,6 @@ vi.mock('../ipc/register-core-handlers/register-core-handlers', () => ({
 vi.mock('../window/attach-main-window-services', () => ({
   attachMainWindowServices: attachMainWindowServicesMock
 }))
-vi.mock('../macos-tcc-prompt-notice', () => ({ initTccPromptNotice: initTccPromptNoticeMock }))
 vi.mock('../updater', () => ({ resolveUpdateInstallMode: vi.fn(() => 'interactive') }))
 vi.mock('./main-process-state', () => ({ mainProcessState: state }))
 vi.mock('../agent-auth-restart-preservation', () => ({

@@ -82,7 +82,6 @@ src/main/ipc/wsl-watcher-process-exit.ts
 src/main/local-builds/local-build-candidate.ts
 src/main/macos-keychain/generic-password.ts
 src/main/macos-system-sleep-assertion.ts
-src/main/macos-tcc-prompt-watch.ts
 src/main/memory/collector.ts
 src/main/native-chat/wsl-transcript-fs-process-slot.ts
 src/main/native-chat/wsl-transcript-fs-process-spawn.ts

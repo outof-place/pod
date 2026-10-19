@@ -200,13 +200,7 @@
       "id": "orca-docs-site",
       "category": "docs",
       "reason": "Orca's documentation website (onorca.dev/docs, Next.js on Vercel), built only by Orca's docs workflow and outside the pnpm workspace",
-      "paths": ["docs/site/**"],
-      "allowReferrers": [
-        {
-          "glob": "config/scripts/pod-font-swaps.test.ts",
-          "reason": "src/assets/fonts/Geist-Variable.woff2 there is a made-up Vite manifest key"
-        }
-      ]
+      "paths": ["docs/site/**"]
     },
     {
       "id": "orca-docs-records",
@@ -458,6 +452,33 @@
           "glob": ".github/actions/install-node-dependencies/action.yml",
           "reason": "a cache condition on the caller's lockfile list; no Pod workflow passes mobile/pnpm-lock.yaml"
         }
+      ]
+    },
+    {
+      "id": "orca-tcc-prompt-watch",
+      "category": "feature",
+      "reason": "The `log stream` watch that counts macOS consent prompts naming the app, and the Full Disk Access hint it raises: Pod never started it (tccPromptWatch was cut)",
+      "paths": [
+        "src/main/macos-tcc-prompt-notice.ts",
+        "src/main/macos-tcc-prompt-notice.test.ts",
+        "src/main/macos-tcc-prompt-watch.ts",
+        "src/main/macos-tcc-prompt-watch.test.ts",
+        "src/preload/api/macos-tcc-prompts-bridge.ts",
+        "src/renderer/src/hooks/useMacosTccPromptNotice.ts",
+        "src/renderer/src/hooks/useMacosTccPromptNotice.test.tsx",
+        "src/renderer/src/hooks/macos-tcc-prompt-notice-subscription.ts",
+        "src/renderer/src/hooks/macos-tcc-prompt-notice-subscription.test.ts",
+        "src/renderer/src/web/preload-api/web-macos-tcc-api.ts"
+      ]
+    },
+    {
+      "id": "orca-geist-font",
+      "category": "feature",
+      "reason": "The bundled Geist face and the build step that swapped it for the system font: Pod draws its UI in system-ui (geistFont was cut)",
+      "paths": [
+        "src/renderer/src/assets/fonts/Geist-Variable.woff2",
+        "config/scripts/pod-font-swaps.test.ts",
+        "src/renderer/src/lib/pod-app-font-family.test.ts"
       ]
     }
   ]

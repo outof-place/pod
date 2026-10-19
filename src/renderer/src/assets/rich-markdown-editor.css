@@ -1434,7 +1434,7 @@
   --epr-search-input-border-color: var(--border);
   --epr-hover-bg-color: var(--accent);
   border: none;
-  font-family: Geist, sans-serif;
+  font-family: system-ui, sans-serif;
 }
 
 .rich-markdown-doc-link-menu {

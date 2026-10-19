@@ -26,7 +26,6 @@ import { shutdownTelemetry } from '../telemetry/client'
 import { shutdownObservability } from '../observability'
 import { isQuittingForUpdate } from '../updater'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
-import { stopTccPromptNotice } from '../macos-tcc-prompt-notice'
 import { cancelHistoryGc } from '../terminal-history-gc'
 import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
 import { mainProcessState as state } from './main-process-state'
@@ -115,8 +114,6 @@ function installWillQuitHandler(): void {
     state.desktopPushService?.stop()
     state.unsubscribeSystemResumeBroadcast?.()
     state.unsubscribeSystemResumeBroadcast = null
-    // Why: renderer guards can still cancel before this committed phase; `log stream` must survive those vetoes.
-    stopTccPromptNotice()
     const updateQuitInProgress = isQuittingForUpdate()
     if (updateQuitInProgress) {
       recordUpdaterLifecycle(
@@ -310,8 +307,6 @@ function installWindowAllClosedHandler(): void {
 
 /** Installs the process-level shutdown listeners once during bootstrap. */
 export function installMainProcessQuitHandlers(): void {
-  // Why: app.exit() skips Electron quit events, so keep its log child from surviving forced exits.
-  process.once('exit', stopTccPromptNotice)
   installBeforeQuitHandler()
   installWillQuitHandler()
   installWindowAllClosedHandler()

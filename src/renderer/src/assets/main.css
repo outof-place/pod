@@ -8,14 +8,6 @@
 @import './mobile-page.css';
 
 @font-face {
-  font-family: 'Geist';
-  src: url('./fonts/Geist-Variable.woff2') format('woff2');
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
   font-family: 'Orca Nerd Font Symbols';
   src: url('./fonts/SymbolsNerdFontMono-Regular.woff2') format('woff2');
   font-weight: 400;
@@ -150,7 +142,7 @@
 /* ── Light Mode ──────────────────────────────────────── */
 
 :root {
-  --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --app-font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);
   --font-mono:
     'SF Mono', SFMono-Regular, ui-monospace, 'Cascadia Code', Menlo, Consolas, 'Liberation Mono',
@@ -629,7 +621,7 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
     height: 100dvh;
     font-family: var(
       --app-font-family,
-      'Geist',
+      system-ui,
       -apple-system,
       BlinkMacSystemFont,
       'Segoe UI',

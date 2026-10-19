@@ -35,7 +35,6 @@ const dependencyExports: [string, string[]][] = [
   ['../observability', ['shutdownObservability']],
   ['../updater', ['isQuittingForUpdate']],
   ['../updater-lifecycle-diagnostics', ['recordUpdaterLifecycle']],
-  ['../macos-tcc-prompt-notice', ['stopTccPromptNotice']],
   ['../terminal-history-gc', ['cancelHistoryGc']],
   ['./window-all-closed-quit-policy', ['shouldQuitWhenAllWindowsClosed']],
   ['./configure-process', ['isDevParentShutdownRequested']],

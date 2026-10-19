@@ -1164,7 +1164,7 @@
   background: var(--m-bg-base);
   color: var(--m-text-primary);
   font-family:
-    'Geist',
+    system-ui,
     -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',

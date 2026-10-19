@@ -45,7 +45,6 @@ import type { OrcaProfileApi } from './api/orca-profile-api'
 import type {
   ComputerUsePermissionsApi,
   DeveloperPermissionsApi,
-  MacosTccPromptsApi,
   NotificationsApi
 } from './api/os-permission-api'
 import type { PetApi } from './api/pet-api'
@@ -119,7 +118,6 @@ export type PreloadApi = {
   onboarding: OnboardingApi
   dashboard: DashboardApi
   terminalPreview: TerminalPreviewApi
-  macosTccPrompts: MacosTccPromptsApi
   developerPermissions: DeveloperPermissionsApi
   computerUsePermissions: ComputerUsePermissionsApi
   shell: ShellApi

@@ -5,10 +5,6 @@ import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
 const LOCALES = ['es', 'ja', 'ko', 'zh']
 const KEYS = [
-  'auto.hooks.useMacosTccPromptNotice.title',
-  'auto.hooks.useMacosTccPromptNotice.description',
-  'auto.hooks.useMacosTccPromptNotice.openSettings',
-  'auto.hooks.useMacosTccPromptNotice.dismiss',
   'auto.components.settings.DeveloperPermissionsPane.7ca17b62c8',
   'auto.components.settings.DeveloperPermissionsPane.c566bca278'
 ]

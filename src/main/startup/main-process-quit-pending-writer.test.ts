@@ -39,7 +39,6 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../observability': { shutdownObservability: settled() },
   '../updater': { isQuittingForUpdate: vi.fn(() => false) },
   '../updater-lifecycle-diagnostics': { recordUpdaterLifecycle: idle() },
-  '../macos-tcc-prompt-notice': { stopTccPromptNotice: idle() },
   '../terminal-history-gc': { cancelHistoryGc: idle() },
   './window-all-closed-quit-policy': { shouldQuitWhenAllWindowsClosed: vi.fn(() => false) },
   './configure-process': { isDevParentShutdownRequested: vi.fn(() => false) },

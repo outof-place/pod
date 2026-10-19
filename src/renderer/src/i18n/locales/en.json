@@ -1325,12 +1325,6 @@
       "useInstalledAgentSkills": {
         "unreadableSkillSource": "A skill folder did not respond, so this status may be incomplete."
       },
-      "useMacosTccPromptNotice": {
-        "title": "Seeing “Orca would like to access…” prompts?",
-        "description": "Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.",
-        "openSettings": "Open Settings",
-        "dismiss": "Don't show again"
-      },
       "useMacTccAttributionSeveredNotice": {
         "title": "macOS permissions may not reach Orca terminals",
         "description": "Running Orca terminals are hosted by a daemon started by a previous Orca installation. macOS may not apply Orca’s Accessibility, Automation, or protected-file permissions to them. Restart the daemon from Manage Sessions to restore access. This will close all running Orca terminals.",

@@ -1,8 +1,6 @@
 import type { BrowserWindow } from 'electron'
-import { startTccPromptNotice } from './pod-startup-policy'
 import { registerCoreHandlers } from '../ipc/register-core-handlers/register-core-handlers'
 import { attachMainWindowServices } from '../window/attach-main-window-services'
-import { initTccPromptNotice } from '../macos-tcc-prompt-notice'
 import { resolveUpdateInstallMode } from '../updater'
 import { mainProcessState as state } from './main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
@@ -144,8 +142,6 @@ export function attachMainWindowCoreServices(
       }
     }
   )
-  // Why: attach the durable renderer pull now, but launch the diagnostic process after first paint.
-  startTccPromptNotice(() => initTccPromptNotice(window, { deferWatchUntilReadyToShow: true }))
   rateLimits.attach(window)
   // Why: quota probes spawn CLIs and hit network, so don't fetch immediately and compete with first paint; show/focus listeners refresh later.
   rateLimits.start({ fetchImmediately: false })

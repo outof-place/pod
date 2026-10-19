@@ -75,7 +75,7 @@ describe('Store', () => {
     expect(settings.sourceControlGroupOrder).toBe('changes-first')
     expect(settings.theme).toBe('system')
     expect(settings.appIcon).toBe('classic')
-    expect(settings.appFontFamily).toBe('Geist')
+    expect(settings.appFontFamily).toBe('system-ui')
     expect(settings.editorAutoSave).toBe(false)
     expect(settings.editorAutoSaveDelayMs).toBe(1000)
     expect(settings.terminalFontSize).toBe(14)

@@ -29,7 +29,6 @@ import {
   createSkillsApi
 } from './preload-api/web-host-capability-api'
 import { createWebKeybindingsApi } from './preload-api/web-keybindings-api'
-import { createMacosTccPromptsApi } from './preload-api/web-macos-tcc-api'
 import { createEmptyMemorySnapshot } from './preload-api/web-memory-api'
 import { createWebMobileApi } from './preload-api/web-mobile-api'
 import { createWebNativeChatApi } from './preload-api/web-native-chat-api'
@@ -118,7 +117,6 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     codexAccounts: createCodexAccountsApi(),
     claudeAccounts: createClaudeAccountsApi(),
     cli: createCliApi(),
-    macosTccPrompts: createMacosTccPromptsApi(),
     codexConfigSync: {
       status: () =>
         Promise.resolve({ state: 'synced', reason: null, systemConfigPath: '' } as const)

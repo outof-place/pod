@@ -78,10 +78,6 @@ vi.mock('@/i18n/i18n', () => ({
 
 vi.mock('@/lib/telemetry', () => ({ track: trackTelemetry }))
 
-vi.mock('./useMacosTccPromptNotice', () => ({
-  useMacosTccPromptNotice: vi.fn()
-}))
-
 describe('useMacTccAttributionSeveredNotice', () => {
   beforeEach(() => {
     macTccAttribution.mockReset()

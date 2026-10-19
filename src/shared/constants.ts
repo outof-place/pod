@@ -1,5 +1,4 @@
 import type { GlobalSettings } from './global-settings-types'
-import { POD_GEIST_FONT } from './product/features'
 import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { PersistedState } from './persisted-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
@@ -37,7 +36,7 @@ export {
 } from './worktree/card-properties'
 
 export const SCHEMA_VERSION = 1
-export const DEFAULT_APP_FONT_FAMILY = POD_GEIST_FONT ? 'Geist' : 'system-ui'
+export const DEFAULT_APP_FONT_FAMILY = 'system-ui'
 export const DEFAULT_SHOW_SLEEPING_WORKSPACES = true
 export const DEFAULT_HIDE_SLEEPING_WORKSPACES = false
 export const DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE: AgentActivityDisplayMode = 'compact'

@@ -62,7 +62,6 @@ describe('web preload API composition', () => {
       'codexAccounts',
       'claudeAccounts',
       'cli',
-      'macosTccPrompts',
       'codexConfigSync',
       'developerPermissions',
       'computerUsePermissions',

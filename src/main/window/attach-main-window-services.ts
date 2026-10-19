@@ -1,12 +1,6 @@
 import { ipcMain, nativeTheme } from 'electron'
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
-import {
-  acknowledgePendingTccPromptNotice,
-  consumePendingTccPromptNotice,
-  dismissTccPromptNotice,
-  releasePendingTccPromptNotice
-} from '../macos-tcc-prompt-notice'
 import { registerRepoHandlers } from '../ipc/repos'
 import { setRepoRemoteClientNotifier } from '../ipc/repos/repos-changed-notification'
 import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
@@ -46,8 +40,6 @@ export { ensureAutoUpdaterConfigured, registerUpdaterHandlers } from './main-win
 
 let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null
-let tccPromptHandlerTokenCounter = 0
-let activeTccPromptHandlerToken: number | null = null
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -131,7 +123,6 @@ export function attachMainWindowServices(
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow, runtime)
   registerDroppedPathPreparation(mainWindow)
-  registerTccPromptNoticeHandlers(mainWindow)
   scheduleMainWindowAutoUpdaterSetup(mainWindow, store, options)
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
@@ -160,63 +151,6 @@ export function attachMainWindowServices(
   mainWindow.on('closed', () => {
     // Why: clear main-owned guest registrations on close so stale tab→webContents ids don't leak across relaunch/hot-reload.
     browserManager.unregisterAll()
-  })
-}
-
-function registerTccPromptNoticeHandlers(mainWindow: BrowserWindow): void {
-  const handlerToken = ++tccPromptHandlerTokenCounter
-  if (activeTccPromptHandlerToken !== null) {
-    releasePendingTccPromptNotice(activeTccPromptHandlerToken)
-  }
-  activeTccPromptHandlerToken = handlerToken
-  const consumeChannel = 'macosTccPrompts:consumePending'
-  const acknowledgeChannel = 'macosTccPrompts:acknowledgePending'
-  const releaseChannel = 'macosTccPrompts:releasePending'
-  const dismissChannel = 'macosTccPrompts:dismiss'
-  ipcMain.removeHandler(consumeChannel)
-  ipcMain.removeHandler(acknowledgeChannel)
-  ipcMain.removeHandler(releaseChannel)
-  ipcMain.removeHandler(dismissChannel)
-  const mainWebContents = mainWindow.webContents
-  const releaseOwnerClaim = (): void => releasePendingTccPromptNotice(handlerToken)
-  // Why: a renderer reload/crash destroys its claim callbacks without closing the BrowserWindow.
-  mainWebContents.on('did-start-loading', () => {
-    if (mainWebContents.isLoadingMainFrame()) {
-      releaseOwnerClaim()
-    }
-  })
-  mainWebContents.on('render-process-gone', releaseOwnerClaim)
-  const ownsNotice = (event: IpcMainInvokeEvent): boolean =>
-    !mainWindow.isDestroyed() && !mainWebContents.isDestroyed() && event.sender === mainWebContents
-  ipcMain.handle(consumeChannel, (event) =>
-    ownsNotice(event) ? consumePendingTccPromptNotice(handlerToken) : null
-  )
-  ipcMain.handle(acknowledgeChannel, (event, claimId: number) => {
-    if (ownsNotice(event) && Number.isSafeInteger(claimId)) {
-      acknowledgePendingTccPromptNotice(handlerToken, claimId)
-    }
-  })
-  ipcMain.handle(releaseChannel, (event, claimId: number) => {
-    if (ownsNotice(event) && Number.isSafeInteger(claimId)) {
-      releasePendingTccPromptNotice(handlerToken, claimId)
-    }
-  })
-  ipcMain.handle(dismissChannel, (event) => {
-    if (ownsNotice(event)) {
-      dismissTccPromptNotice()
-    }
-  })
-  // Why: macOS can stay windowless; drop stale closures without letting an old close clear newer handlers.
-  mainWindow.on('closed', () => {
-    if (activeTccPromptHandlerToken !== handlerToken) {
-      return
-    }
-    releaseOwnerClaim()
-    ipcMain.removeHandler(consumeChannel)
-    ipcMain.removeHandler(acknowledgeChannel)
-    ipcMain.removeHandler(releaseChannel)
-    ipcMain.removeHandler(dismissChannel)
-    activeTccPromptHandlerToken = null
   })
 }
 
