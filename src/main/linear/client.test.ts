@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -240,7 +240,8 @@ describe('Linear client workspace storage', () => {
     expect(linearClientMock).not.toHaveBeenCalled()
   })
 
-  it('migrates legacy token storage to a real workspace id when explicitly tested', async () => {
+  // Fork-only (Pod): a Test only reads; upstream migrates the legacy token and selects the workspace.
+  it('tests a legacy token without migrating it or moving the selection', async () => {
     writeLegacyLinearFiles('token-alpha', {
       displayName: 'Ada',
       email: 'ada@example.com',
@@ -253,17 +254,13 @@ describe('Linear client workspace storage', () => {
       workspace: { id: 'org-alpha', organizationName: 'Alpha' }
     })
 
-    const status = linear.getStatus()
-    expect(status).toMatchObject({
+    expect(linear.getStatus()).toMatchObject({
       connected: true,
-      selectedWorkspaceId: 'org-alpha',
-      workspaces: [{ id: 'org-alpha', organizationName: 'Alpha' }]
+      selectedWorkspaceId: 'legacy',
+      workspaces: [{ id: 'legacy', isLegacy: true }]
     })
-    expect(status.workspaces?.some((workspace) => workspace.id === 'legacy')).toBe(false)
-    expect(existsSync(join(linearStoreDir(), 'linear-token.enc'))).toBe(false)
-    expect(readFileSync(join(linearStoreDir(), 'linear-workspaces.json'), 'utf-8')).toContain(
-      'org-alpha'
-    )
+    expect(existsSync(join(linearStoreDir(), 'linear-token.enc'))).toBe(true)
+    expect(existsSync(join(linearStoreDir(), 'linear-workspaces.json'))).toBe(false)
   })
 
   // Fork-only (Pod): no plain-text fallback; upstream reads the token as plain text here.
