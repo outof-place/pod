@@ -120,6 +120,23 @@ describe('a key Linear rejects', () => {
     expect(guard?.blocked).toEqual([])
   })
 
+  it('marks the key when listing teams gets a 401, for one workspace and for all', async () => {
+    const linear = await freshClient()
+    await linear.connect(KEY)
+    const teams = await import('../../linear/teams')
+    reply = linearMockAuthErrorReply
+
+    await expect(teams.listTeams(ORG)).rejects.toThrow()
+    expect(linear.getStatus().workspaces?.[0]).toMatchObject({ id: ORG, needsNewKey: true })
+
+    reply = defaultLinearMockReply
+    expect(await linear.testConnection(ORG)).toMatchObject({ ok: true })
+    reply = linearMockAuthErrorReply
+
+    expect(await teams.listTeams('all')).toEqual([])
+    expect(linear.getStatus().workspaces?.[0]).toMatchObject({ id: ORG, needsNewKey: true })
+  })
+
   it('clears the mark when a test passes with the kept key', async () => {
     const linear = await freshClient()
     await linear.connect(KEY)

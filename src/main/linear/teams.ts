@@ -29,7 +29,8 @@ export async function listTeams(
     entries.map(async (entry) => {
       await acquire()
       try {
-        return fetchAllTeamsForWorkspace(entry)
+        // Fork-only (Pod): awaited, so a 401 reaches the catch and marks the key.
+        return await fetchAllTeamsForWorkspace(entry)
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
