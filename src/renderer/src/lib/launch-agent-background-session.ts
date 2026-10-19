@@ -8,6 +8,7 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { scheduleAgentBackgroundDraft } from '@/lib/agent-background-draft-delivery'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
+import { startupPromptNeedsPaste } from '../../../shared/startup-line-prompt-carry'
 import { requireTuiAgentConfig } from '../../../shared/require-tui-agent-config'
 import { resolveAgentBackgroundLaunchHost } from '@/lib/agent-background-session-launch-host'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -74,7 +75,10 @@ export async function launchAgentBackgroundSession(
   })
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = requireTuiAgentConfig(agent).promptInjectionMode === 'stdin-after-start'
+  const isFollowupPath =
+    requireTuiAgentConfig(agent).promptInjectionMode === 'stdin-after-start' ||
+    // Fork-only (Pod): a prompt the typed line can't carry is pasted after start, as a followup is.
+    (hasPrompt && startupPromptNeedsPaste(planInputs, trimmedPrompt))
 
   const pasteDraftAfterLaunch = hasPrompt && isFollowupPath ? trimmedPrompt : null
   const startupPlan = buildAgentStartupPlan({

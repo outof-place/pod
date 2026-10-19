@@ -18,6 +18,11 @@ import type { TuiAgent } from './tui-agent'
 import type { SessionOptionValue } from './native-chat-session-options'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 import { appliedSessionOptionProps, buildFlagPromptStartupPlan } from './flag-prompt-startup'
+import {
+  assertTypedLineCarries,
+  typedLineRefusal,
+  type TypedLineRefusal
+} from './agent-prompt-needs-paste'
 
 export { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
 
@@ -50,6 +55,9 @@ export function buildAgentStartupPlan(args: {
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must be skipped for remote launches. */
   isRemote?: boolean
+  /** Fork-only (Pod): a prompt on the typed line may hold newlines; only where the caller has
+   *  checked the shell reads a multi-line line whole (planStartupWithPromptCandidate's zsh). */
+  typedLineMultiLine?: boolean
 }): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
   const shell = resolveStartupShell(platform, args.shell)
@@ -94,10 +102,17 @@ export function buildAgentStartupPlan(args: {
   }
 
   const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
+  // Fork-only (Pod): every plan below types the prompt into the shell; refused unless it can ride.
+  const typed = (plan: AgentStartupPlan): AgentStartupPlan => {
+    assertTypedLineCarries(plan.launchCommand, {
+      multiLine: args.typedLineMultiLine === true
+    })
+    return plan
+  }
 
   if (config.promptInjectionMode === 'argv') {
     const promptSeparator = config.argvPromptSeparator ? ` ${config.argvPromptSeparator}` : ''
-    return {
+    return typed({
       agent,
       launchCommand:
         agent === 'omp'
@@ -109,20 +124,22 @@ export function buildAgentStartupPlan(args: {
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-    }
+    })
   }
 
   if (config.promptInjectionMode === 'flag-prompt') {
-    return buildFlagPromptStartupPlan({
-      agent,
-      launchCommand,
-      quotedPrompt,
-      prompt: trimmedPrompt,
-      shell,
-      launchConfig,
-      sessionOptions: baseCommand.appliedSessionOptions,
-      agentEnv: args.agentEnv
-    })
+    return typed(
+      buildFlagPromptStartupPlan({
+        agent,
+        launchCommand,
+        quotedPrompt,
+        prompt: trimmedPrompt,
+        shell,
+        launchConfig,
+        sessionOptions: baseCommand.appliedSessionOptions,
+        agentEnv: args.agentEnv
+      })
+    )
   }
 
   if (config.promptInjectionMode === 'hermes-query') {
@@ -152,7 +169,7 @@ export function buildAgentStartupPlan(args: {
   }
 
   if (config.promptInjectionMode === 'flag-prompt-interactive') {
-    return {
+    return typed({
       agent,
       launchCommand: `${launchCommand} --prompt-interactive ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
@@ -160,11 +177,11 @@ export function buildAgentStartupPlan(args: {
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-    }
+    })
   }
 
   if (config.promptInjectionMode === 'flag-interactive') {
-    return {
+    return typed({
       agent,
       launchCommand: `${launchCommand} -i ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
@@ -172,7 +189,7 @@ export function buildAgentStartupPlan(args: {
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-    }
+    })
   }
 
   return {
@@ -224,6 +241,8 @@ export function buildAgentDraftLaunchPlan(args: {
   sessionOptionsOverrideAgentArgs?: boolean
   /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
   isRemote?: boolean
+  /** Fork-only (Pod): told why a draft the typed line refused came back null. */
+  onTypedLineRefusal?: (reason: TypedLineRefusal) => void
 }): AgentDraftLaunchPlan | null {
   const { agent, draft, cmdOverrides, platform } = args
   const shell = resolveStartupShell(platform, args.shell)
@@ -255,9 +274,17 @@ export function buildAgentDraftLaunchPlan(args: {
   let plan: AgentDraftLaunchPlan | null = null
   if (config.draftPromptFlag) {
     const quoted = quoteStartupArg(trimmed, shell)
+    const line = `${launchCommand} ${config.draftPromptFlag} ${quoted}`
+    // Fork-only (Pod): the draft rides the typed line here (the env-var form doesn't); a line
+    // that can't carry it takes the null path, so the caller pastes the draft after ready.
+    const refusal = typedLineRefusal(line, { multiLine: false })
+    if (refusal) {
+      args.onTypedLineRefusal?.(refusal)
+      return null
+    }
     plan = {
       agent,
-      launchCommand: `${launchCommand} ${config.draftPromptFlag} ${quoted}`,
+      launchCommand: line,
       expectedProcess: config.expectedProcess,
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),

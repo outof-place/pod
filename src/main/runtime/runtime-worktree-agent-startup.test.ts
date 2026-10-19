@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import { tuiAgentToAgentKind } from '../../shared/agent-kind'
 import { getDefaultSettings } from '../../shared/constants'
+import { AGENT_PROMPT_NEEDS_PASTE_CODE } from '../../shared/agent-prompt-needs-paste'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 
 const mocks = vi.hoisted(() => ({
@@ -143,9 +144,10 @@ describe('buildWorktreeStartupForAgent prompt carry', () => {
     expect(onPromptCarry).toHaveBeenCalledWith(true)
   })
 
-  it('keeps folding the prompt for a caller that delivers nothing afterwards', () => {
-    // `orca worktree create --prompt` has no post-start paste of its own for an argv agent.
-    expect(build().startup.command).toContain('summarize the diff')
+  it('refuses a prompt the line cannot carry for a caller that delivers nothing afterwards', () => {
+    // `orca worktree create --prompt` has no post-start paste of its own for an argv agent; a
+    // multi-line prompt typed into its shell is refused, with nothing typed (Fork-only, Pod).
+    expect(() => build()).toThrow(AGENT_PROMPT_NEEDS_PASTE_CODE)
   })
 })
 

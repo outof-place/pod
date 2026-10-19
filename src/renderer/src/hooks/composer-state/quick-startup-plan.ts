@@ -4,7 +4,8 @@ import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-she
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { buildAgentDraftLaunchPlan } from '@/lib/tui-agent-startup'
+import { buildAgentStartupPlanOrDraftPaste } from '@/lib/pod-startup-plan-draft-paste'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -57,7 +58,7 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
       ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
     }
   } else if (agent !== null) {
-    startupPlan = buildAgentStartupPlan({
+    startupPlan = buildAgentStartupPlanOrDraftPaste({
       agent,
       prompt,
       cmdOverrides: settings?.agentCmdOverrides ?? {},

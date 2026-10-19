@@ -19,10 +19,13 @@
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { buildAgentStartupPlan, type AgentStartupPlan } from './tui-agent-startup'
 import type { TuiAgent } from './tui-agent'
+import {
+  isAgentPromptNeedsPasteError,
+  TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES,
+  type TypedLineRefusal
+} from './agent-prompt-needs-paste'
 
-/** Half of macOS MAX_CANON: a single typed line this long survived every canonical-mode write
- *  measured, and 1 KiB did not. Also the cap on each line of a multi-line one. */
-export const TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES = 512
+export { TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES }
 
 /** A multi-line line typed into zsh: the largest measured intact behind a late write (8 KiB). */
 export const ZSH_MULTI_LINE_STARTUP_LINE_BUDGET_BYTES = 8192
@@ -46,7 +49,8 @@ export function startupLineCarriesPrompt(args: {
     return false
   }
   // Where nothing can prove the agent took the terminal, a paste could land in the shell of an
-  // agent that exited, so the line carries the prompt at any size, as it always did.
+  // agent that exited, so the line carries the prompt. Fork-only (Pod): only text the gate in
+  // buildAgentStartupPlan let onto the line; the rest was refused with `agent_prompt_needs_paste`.
   if (!args.hostProvesAgentInFront) {
     return true
   }
@@ -94,6 +98,20 @@ type StartupPlanInputs = Omit<
   'prompt' | 'allowEmptyPromptLaunch'
 >
 
+/** Fork-only (Pod): whether the typed line refuses `prompt` (`agent_prompt_needs_paste`), for a
+ *  caller that then launches clean and pastes the prompt once the agent is ready. */
+export function startupPromptNeedsPaste(inputs: StartupPlanInputs, prompt: string): boolean {
+  try {
+    buildAgentStartupPlan({ ...inputs, prompt, allowEmptyPromptLaunch: true })
+    return false
+  } catch (error) {
+    if (isAgentPromptNeedsPasteError(error)) {
+      return true
+    }
+    throw error
+  }
+}
+
 /**
  * The startup plan for a launch that offers a prompt: the prompted plan when its typed line can
  * carry the text, else the clean plan, with which one it was.
@@ -102,9 +120,26 @@ export function planStartupWithPromptCandidate(
   inputs: StartupPlanInputs,
   prompt: string,
   host: { shellName?: string; provesAgentInFront: boolean }
-): { plan: AgentStartupPlan | null; promptCarried: boolean } {
+): { plan: AgentStartupPlan | null; promptCarried: boolean; refusal?: TypedLineRefusal } {
+  let refusal: TypedLineRefusal | undefined
   if (prompt.trim()) {
-    const withPrompt = buildAgentStartupPlan({ ...inputs, prompt, allowEmptyPromptLaunch: true })
+    let withPrompt: AgentStartupPlan | null = null
+    try {
+      withPrompt = buildAgentStartupPlan({
+        ...inputs,
+        prompt,
+        allowEmptyPromptLaunch: true,
+        // Fork-only (Pod): newlines only where zshReadsMultiLineWhole checks the line below.
+        typedLineMultiLine: host.provesAgentInFront && host.shellName === 'zsh'
+      })
+    } catch (error) {
+      // Fork-only (Pod): text the line can't carry is pasted once the agent holds the terminal;
+      // a host that can't prove that gets the refusal, with nothing typed.
+      if (!isAgentPromptNeedsPasteError(error) || !host.provesAgentInFront) {
+        throw error
+      }
+      refusal = error.reason
+    }
     if (
       startupLineCarriesPrompt({
         agent: inputs.agent,
@@ -118,6 +153,7 @@ export function planStartupWithPromptCandidate(
   }
   return {
     plan: buildAgentStartupPlan({ ...inputs, prompt: '', allowEmptyPromptLaunch: true }),
-    promptCarried: false
+    promptCarried: false,
+    ...(refusal ? { refusal } : {})
   }
 }

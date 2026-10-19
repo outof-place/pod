@@ -5,6 +5,10 @@ import {
   type AgentStartupPlan
 } from '../../shared/tui-agent-startup'
 import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt-carry'
+import {
+  AgentPromptNeedsPasteError,
+  type TypedLineRefusal
+} from '../../shared/agent-prompt-needs-paste'
 import { buildSleepingAgentLaunchConfig } from '../../shared/sleeping-agent-launch-config'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -152,14 +156,24 @@ export async function buildExecutionHostAgentStartupPlan(
   if (prepared.launchConfig && options.promptDelivery === 'draft') {
     refuseModel()
   }
+  let draftRefusal: TypedLineRefusal | undefined
   const plan =
     options.promptDelivery === 'draft'
-      ? buildAgentDraftLaunchPlan({ ...prepared.inputs, draft: options.prompt })
+      ? buildAgentDraftLaunchPlan({
+          ...prepared.inputs,
+          draft: options.prompt,
+          onTypedLineRefusal: (reason) => (draftRefusal = reason)
+        })
       : buildAgentStartupPlan({
           ...prepared.inputs,
           prompt: options.prompt,
           allowEmptyPromptLaunch: true
         })
+  // Fork-only (Pod): this create pastes nothing later, so a draft the typed line refused is the
+  // caller's to paste; the auto-submit build above throws the same error itself.
+  if (draftRefusal) {
+    throw new AgentPromptNeedsPasteError(draftRefusal)
+  }
   if (plan && prepared.launchConfig) {
     plan.launchConfig = prepared.launchConfig
     plan.sessionOptions = { ...options.inputs.sessionOptions }

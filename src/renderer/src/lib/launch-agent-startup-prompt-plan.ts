@@ -3,6 +3,7 @@ import {
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
+import { startupPromptNeedsPaste } from '../../../shared/startup-line-prompt-carry'
 
 type StartupPlanBase = Omit<
   Parameters<typeof buildAgentStartupPlan>[0],
@@ -68,6 +69,10 @@ export function planLaunchAgentStartupPrompt(args: {
   }
   if (hasPrompt && isFollowupPath) {
     return pasteAfterReady(false)
+  }
+  if (hasPrompt && startupPromptNeedsPaste(base, prompt)) {
+    // Fork-only (Pod): text the typed line can't carry is pasted and submitted once the TUI is ready.
+    return pasteAfterReady(true)
   }
   return {
     startupPlan: buildAgentStartupPlan({

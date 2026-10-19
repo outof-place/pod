@@ -38,6 +38,7 @@ import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-c
 import { AGENT_LAUNCH_TARGET_FORBIDDEN_CODE } from '../../../shared/agent-launch-target-forbidden'
 import { POD_CLAUDE_ACCOUNTS_MANAGED_CODE } from '../../../shared/pod-claude-accounts-managed'
 import { POD_SSH_NOT_CONNECTED_CODE } from '../../../shared/pod-ssh-port-events'
+import { AGENT_PROMPT_NEEDS_PASTE_CODE } from '../../../shared/agent-prompt-needs-paste'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -172,7 +173,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   // Fork-only (Pod): Pod's Claude account RPCs refuse; claude-acc owns the accounts.
   POD_CLAUDE_ACCOUNTS_MANAGED_CODE,
   // Fork-only (Pod): a port forward call on an SSH host that is not connected.
-  POD_SSH_NOT_CONNECTED_CODE
+  POD_SSH_NOT_CONNECTED_CODE,
+  // Fork-only (Pod): a launch prompt that typing into the shell can't carry; nothing was typed.
+  AGENT_PROMPT_NEEDS_PASTE_CODE
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {

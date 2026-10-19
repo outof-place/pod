@@ -14,7 +14,9 @@ describe('native OpenCode startup submission intent', () => {
       agent: 'opencode',
       prompt: '  task\nwith unicode é  ',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
+      // Fork-only (Pod): a newline rides the typed line only where the caller checked the shell.
+      typedLineMultiLine: true
     })
     expect(plan?.env).toEqual({
       [OPENCODE_STARTUP_PROMPT_SHA256_ENV]: createHash('sha256')

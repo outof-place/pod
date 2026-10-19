@@ -1,7 +1,7 @@
 import { ensureAgentStartupInTerminal, type LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { buildAgentStartupPlanOrDraftPaste } from '@/lib/pod-startup-plan-draft-paste'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { activateAndRevealFolderWorkspace } from '@/lib/worktree-activation'
 import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
@@ -110,7 +110,7 @@ export async function submitFolderWorkspaceCreate({
           isRemote: launchIsRemote
         })
       : quickAgent
-        ? buildAgentStartupPlan({
+        ? buildAgentStartupPlanOrDraftPaste({
             agent: quickAgent,
             prompt: note,
             cmdOverrides: agentCmdOverrides ?? {},

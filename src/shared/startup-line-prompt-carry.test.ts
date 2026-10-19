@@ -8,6 +8,7 @@ import {
 import type { TuiAgent } from './tui-agent'
 import { RUNTIME_CAPABILITIES } from './protocol-version'
 import { AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY } from './agent-launch-runtime-capability'
+import { AGENT_PROMPT_NEEDS_PASTE_CODE } from './agent-prompt-needs-paste'
 
 function offer(
   agent: TuiAgent,
@@ -195,15 +196,22 @@ describe('on a host that cannot prove the launched agent is in front', () => {
     ['a long single line', 'x'.repeat(TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES * 4)],
     // Over the typed budget even as PowerShell's one-line form, so the control still pastes it.
     ['a long multi-line prompt', linesOf(20, 40)]
-  ])('carries %s on the launch line', (_label, prompt) => {
-    const { plan, promptCarried } = offer('claude', prompt, {
+  ])('refuses %s with nothing typed', (_label, prompt) => {
+    // Fork-only (Pod): such a host has no safe paste, and the line can't carry the text.
+    expect(() => offer('claude', prompt, { platform: 'win32', provesAgentInFront: false })).toThrow(
+      AGENT_PROMPT_NEEDS_PASTE_CODE
+    )
+    // Control: the same prompt is pasted where the host can prove the agent.
+    expect(offer('claude', prompt, { platform: 'darwin' }).promptCarried).toBe(false)
+  })
+
+  it('still carries a short single line', () => {
+    const { plan, promptCarried } = offer('claude', 'explain this repo', {
       platform: 'win32',
       provesAgentInFront: false
     })
     expect(promptCarried).toBe(true)
-    expect(plan?.launchCommand).toContain(prompt.split('\n')[0])
-    // Control: the same prompt is pasted where the host can prove the agent.
-    expect(offer('claude', prompt, { platform: 'darwin' }).promptCarried).toBe(false)
+    expect(plan?.launchCommand).toContain('explain this repo')
   })
 })
 

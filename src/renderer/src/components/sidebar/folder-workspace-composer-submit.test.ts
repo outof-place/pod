@@ -388,7 +388,9 @@ describe('submitFolderWorkspaceCreate', () => {
     })
   })
 
-  it('uses native draft launch for linked agents with prefill support', async () => {
+  // Fork-only (Pod): a note-plus-link draft spans lines, which the typed launch line refuses
+  // (`agent_prompt_needs_paste`), so it is pasted once the agent is ready instead of --prefill.
+  it('pastes a linked draft the typed line refuses instead of using --prefill', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
     const linkedWorkItem = {
       provider: 'gitlab' as const,
@@ -413,13 +415,18 @@ describe('submitFolderWorkspaceCreate', () => {
     })
 
     const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
-    expect(startup?.command).toContain('claude --prefill')
-    expect(startup?.command).toContain('Check the migration path')
-    expect(startup?.command).toContain(linkedWorkItem.url)
-    expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
+    expect(startup?.command).toBe('claude')
+    expect(mocks.ensureAgentStartupInTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startup: expect.objectContaining({
+          draftPrompt: `Check the migration path\n\n${linkedWorkItem.url}`
+        })
+      })
+    )
   })
 
-  it('uses native prefill for link-only Linear folder workspace drafts', async () => {
+  // Fork-only (Pod): pasted for the same reason as the linked draft above.
+  it('pastes link-only Linear folder workspace drafts the typed line refuses', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
     const linkedWorkItem = {
       provider: 'linear' as const,
@@ -469,16 +476,14 @@ describe('submitFolderWorkspaceCreate', () => {
       createdWithAgent: 'claude'
     })
     const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
-    expect(startup?.command).toContain('claude --prefill')
-    expect(startup?.command).toContain('User note stays above source')
-    expect(startup?.command).toContain('Linked Linear issue: ENG-77')
-    expect(startup?.command).toContain(
-      'https://linear.app/acme/issue/ENG-77/ship-linear-source-drafts'
-    )
-    expect(startup?.command).not.toContain('Distinctive folder Linear body.')
-    expect(startup?.command).not.toContain('--- BEGIN LINKED WORK ITEM CONTEXT ---')
-    expect(startup?.command).not.toContain('orca linear')
-    expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
+    expect(startup?.command).toBe('claude')
+    const draft = mocks.ensureAgentStartupInTerminal.mock.calls[0]?.[0]?.startup?.draftPrompt
+    expect(draft).toContain('User note stays above source')
+    expect(draft).toContain('Linked Linear issue: ENG-77')
+    expect(draft).toContain('https://linear.app/acme/issue/ENG-77/ship-linear-source-drafts')
+    expect(draft).not.toContain('Distinctive folder Linear body.')
+    expect(draft).not.toContain('--- BEGIN LINKED WORK ITEM CONTEXT ---')
+    expect(draft).not.toContain('orca linear')
   })
 
   it('keeps explicit blank linked folder creates free of agent startup and draft paste', async () => {
