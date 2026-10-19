@@ -2,6 +2,7 @@ import type { PtyRendererDelivery } from '../session'
 import { getPtyIpc } from '../../pty-host-bindings'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { createPtyWriteInput } from './write-input'
+import { notTakenWrite } from '../../../pod/terminal/pod-agent-foreground-ipc-write'
 import { noteRendererPtyInput, noteRendererViewportClaim } from '../renderer-query-responder'
 
 export function installPtyWriteIpcHandlers(deps: {
@@ -36,10 +37,14 @@ export function installPtyWriteIpcHandlers(deps: {
     if (!isPtyWriteEventFromMainWindow(event) || !isPtyWritePayload(args)) {
       return false
     }
+    // Fork-only (Pod): before a guarded write's proof too; it marks the window driving the pane.
     noteRendererPtyInput(args.id, args.data)
     const claimTail = hostViewportClaimTails.get(args.id)
+    // Fork-only (Pod): a guarded write the failed claim discards is refused, not answered false.
     return claimTail
-      ? claimTail.then((claimed) => (claimed ? writePtyInputAccepted(args) : false))
+      ? claimTail.then((claimed) =>
+          claimed ? writePtyInputAccepted(args) : notTakenWrite(args, 'viewport_claim_failed')
+        )
       : writePtyInputAccepted(args)
   })
 

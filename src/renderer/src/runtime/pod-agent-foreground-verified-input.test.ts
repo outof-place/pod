@@ -24,18 +24,21 @@ describe('a guarded verified write', () => {
     })
   })
 
-  it('rejects on a refusal and writes nothing else', async () => {
-    writeAccepted.mockRejectedValue(
-      new Error(
-        "Error invoking remote method 'pty:writeAccepted': Error: agent_not_in_foreground: shell"
+  it.each(['shell', 'no_pty', 'write_not_accepted'])(
+    'rejects on a refusal (%s) and writes nothing else',
+    async (reason) => {
+      writeAccepted.mockRejectedValue(
+        new Error(
+          `Error invoking remote method 'pty:writeAccepted': Error: agent_not_in_foreground: ${reason}`
+        )
       )
-    )
 
-    await expect(
-      sendRuntimePtyInputVerified(null, 'pty-1', 'fix it', 'launch', AGENT_FOREGROUND_WRITE)
-    ).rejects.toThrow('agent_not_in_foreground: shell')
-    expect(write).not.toHaveBeenCalled()
-  })
+      await expect(
+        sendRuntimePtyInputVerified(null, 'pty-1', 'fix it', 'launch', AGENT_FOREGROUND_WRITE)
+      ).rejects.toThrow(`agent_not_in_foreground: ${reason}`)
+      expect(write).not.toHaveBeenCalled()
+    }
+  )
 
   it('keeps a settled write’s guard with its settlement', async () => {
     writeAccepted.mockResolvedValue(true)

@@ -2,13 +2,18 @@
 // requireAgentForeground: a shell in front gets no byte, the agent does, a group that changes between
 // chunks stops the rest, and an SSH pane's relay refuses a shell it names.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WRITE_ACCEPTED, type WriteSettlement } from '../../../shared/pty-write-settlement'
+import {
+  WRITE_ACCEPTED,
+  writeRefused,
+  type WriteSettlement
+} from '../../../shared/pty-write-settlement'
 import { TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../../shared/terminal-input'
 import { ptyOwnership } from '../../ipc/pty/provider/ownership-state'
 import { createPtyWriteInput } from '../../ipc/pty/ipc/write-input'
 import type { PtyRendererDelivery } from '../../ipc/pty/session'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { TerminalAgentForegroundProof } from './pod-terminal-foreground-fence'
+import { notTakenWrite } from './pod-agent-foreground-ipc-write'
 
 const fence = vi.hoisted((): { groupNow: number | null } => ({ groupNow: null }))
 const mocks = vi.hoisted(() => ({
@@ -139,11 +144,38 @@ describe('agent text on a local pane', () => {
     expect(runtime.proveTerminalAgentForegroundFence).not.toHaveBeenCalled()
   })
 
-  it('keeps the mobile lock first', async () => {
+  it('keeps the mobile lock first, as a refusal rather than a false', async () => {
     runtime.getDriver.mockReturnValue({ kind: 'mobile' })
 
-    await expect(Promise.resolve(agentWrite('\r'))).resolves.toBe(false)
+    await expect(agentWrite('\r')).rejects.toThrow('agent_not_in_foreground: mobile_driver')
     expect(runtime.proveTerminalAgentForegroundFence).not.toHaveBeenCalled()
+  })
+
+  // A local false would let the renderer fall back to a plain write of the same bytes.
+  it('refuses, never answers false, for a pane with no PTY', async () => {
+    mocks.provider.hasPty.mockReturnValue(false)
+
+    await expect(agentWrite('\r')).rejects.toThrow('agent_not_in_foreground: no_pty')
+    expect(runtime.proveTerminalAgentForegroundFence).not.toHaveBeenCalled()
+    expect(mocks.provider.write).not.toHaveBeenCalled()
+  })
+
+  it('refuses a write the provider didn’t take', async () => {
+    runtime.proveTerminalAgentForegroundFence.mockResolvedValue(AGENT_PROOF)
+    fence.groupNow = AGENT_GROUP
+    mocks.provider.write.mockReturnValue(false)
+
+    await expect(agentWrite('\r')).rejects.toThrow('agent_not_in_foreground: write_not_accepted')
+  })
+
+  it('refuses a settled write the provider refused', async () => {
+    runtime.proveTerminalAgentForegroundFence.mockResolvedValue(AGENT_PROOF)
+    fence.groupNow = AGENT_GROUP
+    mocks.provider.writeWithSettlement.mockReturnValue(writeRefused('endpoint_disconnected'))
+
+    await expect(agentWrite('\r', { requireWriteSettlement: true })).rejects.toThrow(
+      'agent_not_in_foreground: write_not_accepted'
+    )
   })
 })
 
@@ -172,5 +204,33 @@ describe('agent text on an SSH pane', () => {
 
     await expect(agentWrite('\r', { requireWriteSettlement: true })).resolves.toBe(true)
     expect(mocks.provider.writeWithSettlement).toHaveBeenCalledExactlyOnceWith(id, '\r')
+  })
+})
+
+describe('guarded payloads elsewhere on the IPC path', () => {
+  it('rejects a payload whose guard flag isn’t exactly true', () => {
+    const { isPtyWritePayload } = input()
+
+    expect(isPtyWritePayload({ id, data: 'x', requireAgentForeground: true })).toBe(true)
+    expect(isPtyWritePayload({ id, data: 'x' })).toBe(true)
+    for (const flag of ['true', 1, false, null]) {
+      expect(isPtyWritePayload({ id, data: 'x', requireAgentForeground: flag })).toBe(false)
+    }
+  })
+
+  it('writes nothing for a guarded payload on the plain pty:write path', () => {
+    ptyOwnership.set(id, 'local')
+
+    expect(
+      input().writePtyInput({ id, data: '\r', inputKind: 'driving', requireAgentForeground: true })
+    ).toBe(false)
+    expect(mocks.provider.write).not.toHaveBeenCalled()
+  })
+
+  it('refuses a guarded write the path didn’t take, and answers an unguarded one false', async () => {
+    await expect(
+      notTakenWrite({ requireAgentForeground: true }, 'viewport_claim_failed')
+    ).rejects.toThrow('agent_not_in_foreground: viewport_claim_failed')
+    expect(notTakenWrite({}, 'viewport_claim_failed')).toBe(false)
   })
 })

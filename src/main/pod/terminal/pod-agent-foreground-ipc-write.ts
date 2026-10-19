@@ -19,6 +19,28 @@ import {
 
 const UNKNOWN: TerminalAgentForegroundProof = { verdict: 'unknown' }
 
+function refusal(reason: string): Error {
+  return new Error(`${AGENT_NOT_IN_FOREGROUND}: ${reason}`)
+}
+
+/** A payload's guard flag is absent or exactly true; anything else would quietly turn it off. */
+export function hasValidAgentForegroundFlag(payload: object): boolean {
+  const flag: unknown = Reflect.get(payload, 'requireAgentForeground')
+  return flag === undefined || flag === true
+}
+
+/**
+ * A write the IPC path didn't take (the mobile lock, a viewport claim that failed): false for an
+ * unguarded write, as upstream answers, but a refusal for a guarded one, so the renderer can't fall
+ * back to a plain write of agent text.
+ */
+export function notTakenWrite(
+  args: { requireAgentForeground?: true },
+  reason: string
+): false | Promise<never> {
+  return args.requireAgentForeground === true ? Promise.reject(refusal(reason)) : false
+}
+
 /** The provider as the write path sees it, with each of its writes behind the check. */
 function behindCheck(
   provider: IPtyProvider,
@@ -51,35 +73,43 @@ export async function writeAgentForegroundIpcInput(
 ): Promise<boolean> {
   const provider = ptyOwnership.has(args.id) ? tryGetProviderForPty(args.id) : undefined
   const local = ptyOwnership.get(args.id) === LOCAL_EXECUTION_HOST_ID
-  if (!provider || (local && !provider.hasPty?.(args.id))) {
+  // A local pane never answers false: the renderer falls back to a plain write on false.
+  if (local && !provider?.hasPty?.(args.id)) {
+    throw refusal('no_pty')
+  }
+  if (!provider) {
     return false
   }
   const proof = local
     ? ((await runtime?.proveTerminalAgentForegroundFence(args.id, null)) ?? UNKNOWN)
     : await proveRelayShellInFront(provider, args.id)
   if (proof && proof.verdict !== 'agent') {
-    throw new Error(`${AGENT_NOT_IN_FOREGROUND}: ${proof.verdict}`)
+    throw refusal(proof.verdict)
   }
   const verify = args.requireWriteSettlement === true
   if (!local && !verify) {
     return false
   }
   const fence = proof?.verdict === 'agent' ? proof.fence : null
-  let refusal: unknown = null
+  let fenceRefusal: unknown = null
   const check = fence
     ? (): void => {
         try {
           assertTerminalForegroundFence(fence)
         } catch (error) {
-          refusal = error
+          fenceRefusal = error
           throw error
         }
       }
     : undefined
   const accepted = await write(behindCheck(provider, check), verify)
   // The write path turns a throwing write into false; the fence's refusal still rejects.
-  if (refusal) {
-    throw refusal
+  if (fenceRefusal) {
+    throw fenceRefusal
+  }
+  // Too large, a provider that took nothing, an unavailable PTY: on a local pane, a refusal too.
+  if (!accepted && local) {
+    throw refusal('write_not_accepted')
   }
   return accepted
 }

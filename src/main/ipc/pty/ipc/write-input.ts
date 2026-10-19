@@ -13,7 +13,11 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
 import { isSettledWrite, type WriteSettlement } from '../../../../shared/pty-write-settlement'
-import { writeAgentForegroundIpcInput } from '../../../pod/terminal/pod-agent-foreground-ipc-write'
+import {
+  hasValidAgentForegroundFlag,
+  notTakenWrite,
+  writeAgentForegroundIpcInput
+} from '../../../pod/terminal/pod-agent-foreground-ipc-write'
 
 export function isMainWindowPtyIpcEvent(
   event: IpcMainEvent | IpcMainInvokeEvent,
@@ -235,7 +239,8 @@ export function createPtyWriteInput(deps: {
 
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
-    if (runtime?.getDriver(args.id).kind === 'mobile') {
+    // Fork-only (Pod): guarded text goes only through pty:writeAccepted, never a plain write.
+    if (runtime?.getDriver(args.id).kind === 'mobile' || args.requireAgentForeground === true) {
       return false
     }
     const provider = ptyOwnership.has(args.id) ? tryGetProviderForPty(args.id) : undefined
@@ -264,7 +269,7 @@ export function createPtyWriteInput(deps: {
 
   const writePtyInputAccepted = (args: PtyWritePayload): boolean | Promise<boolean> => {
     if (runtime?.getDriver(args.id).kind === 'mobile') {
-      return false
+      return notTakenWrite(args, 'mobile_driver')
     }
     // Fork-only (Pod): the proof and its fence come first (pod-agent-foreground-ipc-write.ts).
     if (args.requireAgentForeground === true) {
@@ -295,7 +300,9 @@ export function createPtyWriteInput(deps: {
   return {
     writePtyInput,
     writePtyInputAccepted,
-    isPtyWritePayload,
+    // Fork-only (Pod): a guard flag that isn't exactly true must not quietly turn the guard off.
+    isPtyWritePayload: (value: unknown): value is PtyWritePayload =>
+      isPtyWritePayload(value) && hasValidAgentForegroundFlag(value),
     isPtyViewportClaimPayload,
     isPtyWriteEventFromMainWindow
   }
