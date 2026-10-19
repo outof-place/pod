@@ -10,6 +10,7 @@ import {
   appsFor,
   BUNDLE,
   DEVICE,
+  eventually,
   fakeBuildCommand,
   fakeDevice,
   freeBase,
@@ -87,6 +88,11 @@ describe.skipIf(process.platform !== 'darwin')('files a newer Pod wrote too', ()
     // The newer record's port is taken: this worktree gets the next one.
     expect(answer.ok && answer.metro?.port).toBe(base + 301)
     expect(answer.ok && answer.metroProblem).toBeUndefined()
+    // The build's last write is checked too, and nothing writes into the sandbox after the test.
+    await eventually(
+      async () => finished,
+      (list) => list.length === 1
+    )
 
     const builds = z
       .object({ builds: z.array(z.looseObject({ bundleId: z.string() })) })
