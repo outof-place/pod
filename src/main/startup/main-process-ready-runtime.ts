@@ -84,7 +84,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   installMcpLazy(store)
   // Fork-only (Pod): GOCACHEPROG from the first spawn; the helper installs after the first window.
   installPodGoCache(store)
-  // Fork-only (Pod): podLinearAgentAccess for the RPC admission check; reads the setting per call.
+  // Fork-only (Pod): podLinear and agent access for the RPC admission check, read per call.
   installPodLinear(store)
   // Fork-only (Pod): keybindings.effective on KeybindingService's file; watches only while a client opts in.
   const podKeybindingsPath = (): string =>

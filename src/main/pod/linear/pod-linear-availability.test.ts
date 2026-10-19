@@ -81,7 +81,7 @@ describe('while Linear is off', () => {
   })
 
   it('turns on through linear.setEnabled from PodNative, and then answers', async () => {
-    let settings: { podLinear?: boolean; podLinearAgentAccess?: boolean } = {}
+    let settings: { podLinear?: boolean } = {}
     installPodLinear({
       getSettings: () => settings,
       updateSettings: (updates) => {
