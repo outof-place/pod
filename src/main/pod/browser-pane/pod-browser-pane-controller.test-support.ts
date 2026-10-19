@@ -1,7 +1,7 @@
 // The pane controller's test page: a fake offscreen WebContents and its window, a frame sender, and
 // a controller tracking one page (pod-browser-pane.test.ts, pod-browser-pane-cobrowse-capture.test.ts).
 import { EventEmitter } from 'node:events'
-import { vi } from 'vitest'
+import { type Mock, vi } from 'vitest'
 import { PodBrowserPaneController } from './pod-browser-pane'
 import type { PodBrowserFrames } from './pod-browser-pane-frames'
 import type { PodBrowserPaneServerMessage } from './pod-browser-pane-protocol'
@@ -37,17 +37,17 @@ export class FakeWebContents extends EventEmitter {
   stopPainting = () => {
     this.painting = false
   }
-  setFrameRate = vi.fn()
-  invalidate = vi.fn()
+  setFrameRate: Mock = vi.fn()
+  invalidate: Mock = vi.fn()
   sendInputEvent = (input: unknown) => this.inputs.push(input)
   insertText = vi.fn(async () => {})
   copy = () => this.calls.push('copy')
   reload = () => this.calls.push('reload')
   stop = () => this.calls.push('stop')
   loadURL = vi.fn(async () => {})
-  findInPage = vi.fn()
-  stopFindInPage = vi.fn()
-  focus = vi.fn()
+  findInPage: Mock = vi.fn()
+  stopFindInPage: Mock = vi.fn()
+  focus: Mock = vi.fn()
   // The page's debugger as co-browse reaches it: `cdp` answers each method (a test sets it).
   cdp: (method: string, params: Record<string, unknown>) => unknown = () => ({})
   debuggerAttached = false
@@ -82,7 +82,7 @@ export function setup(
   mainDisplayScale?: () => number
 ) {
   const sent: PodBrowserPaneServerMessage[] = []
-  const devTools = vi.fn()
+  const devTools: Mock = vi.fn()
   const panes = new PodBrowserPaneController({
     frames,
     send: (message) => {
@@ -109,8 +109,9 @@ export function fakeFrames(): PodBrowserFrames {
 }
 
 export function texture(widgetType: 'frame' | 'popup' = 'frame') {
+  const release: Mock = vi.fn()
   return {
-    release: vi.fn(),
+    release,
     textureInfo: {
       widgetType,
       contentRect: { x: 30.4, y: 40.6, width: 100, height: 50 },
