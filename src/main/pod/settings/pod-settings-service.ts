@@ -18,6 +18,7 @@ import {
   projectPodSettingsReadOnly,
   type PodSettingsReadOnly
 } from '../../../shared/pod-settings-read-only'
+import { clearOverridesOnThemePick } from './pod-settings-theme-pick'
 
 export type PodSettingsStore = {
   getSettings(): GlobalSettings
@@ -152,6 +153,7 @@ export class PodSettingsService {
       // The renderer reads 'actions' as 'none' while the old popover switch is off.
       update.terminalLinkActionPopoverEnabled = update.terminalLinkClickBehavior !== 'none'
     }
+    clearOverridesOnThemePick(update, settings)
     await this.write(update)
     return { ok: true, ...this.get() }
   }

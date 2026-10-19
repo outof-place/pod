@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../../shared/constants'
+import { getDefaultPersistedState, getDefaultSettings } from '../../../shared/constants'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import {
   POD_SETTINGS_HIDDEN,
   POD_SETTINGS_SECRET_KEYS
 } from '../../../shared/pod-settings-classification'
 import { POD_SETTINGS_FIELDS } from '../../../shared/pod-settings-schema'
+import { updateSettings } from '../../persistence/applying-settings/settings-update'
 import { PROTECTED_SECRET_SLOT } from '../../protected-secret-persistence'
 import {
   POD_SETTINGS_COALESCE_MS,
@@ -304,6 +305,63 @@ describe('PodSettingsService fields that were Electron-only', () => {
       terminalLinkActionPopoverEnabled: true
     })
     expect(service.get().values.terminalLinkClickBehavior).toBe('actions')
+  })
+
+  it('clears the color overrides when a dark or light theme is picked, as the picker does', async () => {
+    for (const key of ['terminalThemeDark', 'terminalThemeLight'] as const) {
+      const { service, store, write } = setup()
+      store.update({ terminalColorOverrides: { background: '#101010' } })
+      await service.set({ [key]: 'Dracula' }, service.get().revision)
+      expect(write, key).toHaveBeenLastCalledWith({
+        [key]: 'Dracula',
+        terminalColorOverrides: undefined
+      })
+      expect(store.getSettings().terminalColorOverrides, key).toBeUndefined()
+    }
+  })
+
+  it('writes no overrides key when there are none, or for a write that picks no theme', async () => {
+    const none = setup()
+    await none.service.set({ terminalThemeDark: 'Dracula' }, none.service.get().revision)
+    expect(none.write).toHaveBeenLastCalledWith({ terminalThemeDark: 'Dracula' })
+    const other = setup()
+    other.store.update({ terminalColorOverrides: { background: '#101010' } })
+    await other.service.set({ terminalFontSize: 15 }, other.service.get().revision)
+    expect(other.write).toHaveBeenLastCalledWith({ terminalFontSize: 15 })
+    expect(other.store.getSettings().terminalColorOverrides).toEqual({ background: '#101010' })
+  })
+
+  it('drops the overrides from what the store keeps and saves, through its own update', async () => {
+    const state = getDefaultPersistedState('/Users/e2e')
+    state.settings = {
+      ...state.settings,
+      terminalColorOverrides: { background: '#101010', red: '#ff0000' }
+    }
+    const operations = {
+      state,
+      bumpLocalWorktreeScanGeneration: vi.fn(),
+      removeRetainedBlob: vi.fn(),
+      scheduleSave: vi.fn(),
+      notifySettingsChanged: vi.fn()
+    }
+    const store = {
+      getSettings: () => operations.state.settings,
+      onSettingsChanged: () => () => {}
+    }
+    const service = new PodSettingsService(store, async (values) =>
+      updateSettings(operations, values, { notifyListeners: true })
+    )
+    await service.set({ terminalThemeDark: 'Dracula' }, service.get().revision)
+    expect(operations.state.settings.terminalThemeDark).toBe('Dracula')
+    expect(operations.state.settings.terminalColorOverrides).toBeUndefined()
+    // What the profile saves: JSON, which leaves the key out.
+    expect('terminalColorOverrides' in JSON.parse(JSON.stringify(operations.state.settings))).toBe(
+      false
+    )
+    expect(operations.scheduleSave).toHaveBeenCalled()
+    // The runtime's terminal theme hears of it (RUNTIME_TERMINAL_THEME_SETTING_KEYS).
+    const [changed] = operations.notifySettingsChanged.mock.lastCall ?? []
+    expect('terminalColorOverrides' in (changed ?? {})).toBe(true)
   })
 
   it("refuses values the desktop's own controls can't produce", async () => {
