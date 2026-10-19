@@ -2,7 +2,8 @@
 // transport. The key and the workspace choice change only from Pod's own window or from PodNative,
 // verified by its audit token: not from a paired device, a phone, an SSH host, or the owner token
 // alone, which the CLI and so every agent in a Pod terminal holds. Agents' methods answer only while
-// the user has turned on podLinearAgentAccess, which only those same two callers can change.
+// the user has turned on agent access, which only those same two callers can change, sealed by the
+// keychain (pod-linear-agent-access-store.ts).
 import type { RpcCallerIdentity } from '../../runtime/rpc/rpc-caller-identity'
 import type { RpcCallerScope } from '../../runtime/rpc/rpc-caller-scope'
 import { podLinearAvailability, podLinearUnavailableMessage } from './pod-linear-availability'
