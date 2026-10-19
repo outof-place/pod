@@ -216,4 +216,27 @@ describe('a key Linear rejects', () => {
     })
     expect(storeBytes(storeDir)).toEqual(before)
   })
+
+  it('fails a Test whose key now answers for another organization, and keeps the mark', async () => {
+    const other = {
+      ...LINEAR_MOCK_ORGANIZATION,
+      id: 'org-mock-9',
+      name: 'Moved Co',
+      urlKey: 'moved'
+    }
+    const linear = await freshClient()
+    await linear.connect(KEY)
+    reply = linearMockAuthErrorReply
+    await linear.testConnection(ORG)
+    reply = (request) =>
+      /\borganization\b/.test(request.query)
+        ? { body: { data: { organization: other } } }
+        : defaultLinearMockReply(request)
+
+    expect(await linear.testConnection(ORG)).toEqual({
+      ok: false,
+      error: 'This key now answers for Moved Co, not for the workspace it was saved for.'
+    })
+    expect(linear.getStatus().workspaces?.[0]).toMatchObject({ id: ORG, needsNewKey: true })
+  })
 })
