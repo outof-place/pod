@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from './single-instance-lock'
+import { withHiddenDockProbeEnv } from '../browser/electron-probe-hidden-dock-env'
 
 // Why: `app.quit()` is deferred before Electron `ready`, so fatal startup gates must use the
 // synchronous `app.exit()`. Run their shipped termination statements under the real binary.
@@ -83,7 +84,7 @@ function runPreReadyGate(termination: string): FixtureRun {
   const result = spawnSync(electronBinary, [dir, '--no-sandbox'], {
     stdio: 'ignore',
     timeout: 60_000,
-    env: { ...process.env, [MARKER_ENV]: marker }
+    env: withHiddenDockProbeEnv({ ...process.env, [MARKER_ENV]: marker })
   })
   expect(result.error).toBeUndefined()
 

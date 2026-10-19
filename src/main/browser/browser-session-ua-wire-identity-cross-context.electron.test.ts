@@ -17,6 +17,7 @@ import {
   type WireProbeJavaScriptIdentity,
   type WireProbeReceipt
 } from './browser-session-ua-wire-probe-server'
+import { withHiddenDockProbeEnv } from './electron-probe-hidden-dock-env'
 
 // This file is deliberately independent from the broad identity test.  Its two arms make the
 // pre-ready fallback itself the control variable for the cross-site and dedicated-worker probes.
@@ -181,7 +182,7 @@ function launchFixture(fixturePath: string, root: string, cdpPort: number): Chil
     process.platform === 'linux' ? 'xvfb-run' : electronBinary,
     process.platform === 'linux' ? ['--auto-servernum', electronBinary, ...args] : args,
     {
-      env: { ...env, ORCA_BACKGROUND_LAUNCH: '1' },
+      env: withHiddenDockProbeEnv({ ...env, ORCA_BACKGROUND_LAUNCH: '1' }),
       stdio: ['ignore', 'pipe', 'pipe']
     }
   )

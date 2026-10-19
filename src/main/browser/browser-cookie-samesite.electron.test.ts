@@ -7,6 +7,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
+import { withHiddenDockProbeEnv } from './electron-probe-hidden-dock-env'
 
 type CookieSameSite = 'unspecified' | 'no_restriction' | 'lax' | 'strict'
 
@@ -214,7 +215,7 @@ async function runFixture(): Promise<{
       : electronArgs
   const run = spawnSync(executable, args, {
     encoding: 'utf8',
-    env: { ...env, ORCA_BACKGROUND_LAUNCH: '1' },
+    env: withHiddenDockProbeEnv({ ...env, ORCA_BACKGROUND_LAUNCH: '1' }),
     timeout: 90_000
   })
   const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
