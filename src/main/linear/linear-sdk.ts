@@ -1,5 +1,6 @@
 import type { LinearClient } from '@linear/sdk'
 import { createRequire } from 'node:module'
+import { podLinearSdk } from '../pod/linear/pod-linear-api-url'
 
 // The subset of @linear/sdk that client.ts constructs / type-checks. Declared
 // structurally (not `typeof import('@linear/sdk')`) so this loader never forces
@@ -9,6 +10,7 @@ export type LinearSdkModule = {
     apiKey: string
     headers?: Record<string, string>
     signal?: AbortSignal
+    apiUrl?: string
   }) => LinearClient
   AuthenticationLinearError: new (...args: never[]) => Error
 }
@@ -27,6 +29,7 @@ const requireFromMain = createRequire(__filename)
 let cached: LinearSdkModule | null = null
 
 export function loadLinearSdk(): LinearSdkModule {
-  cached ??= requireFromMain('@linear/sdk') as LinearSdkModule
+  // Fork-only (Pod): every client on POD_LINEAR_API_URL's mock server, when a test run sets it.
+  cached ??= podLinearSdk(requireFromMain('@linear/sdk'))
   return cached
 }
