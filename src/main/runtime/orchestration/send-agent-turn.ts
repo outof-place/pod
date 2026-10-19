@@ -82,6 +82,8 @@ export type TerminalTurnSend<TReceipt> = {
   turn: TerminalTurn
   /** Runs before each PTY write; throwing refuses it (`createWorkerBriefWriteGuard`). */
   beforeWrite?: DispatchPreambleSendOptions['beforeWrite']
+  // Fork-only (Pod): the same guard's synchronous check, in the block of each write.
+  atWrite?: DispatchPreambleSendOptions['atWrite']
 }
 
 /**
@@ -108,7 +110,8 @@ export function sendAgentTurn<TReceipt>(
       // Not async: the caller awaits the runtime's own promise.
       return send.runtime.sendTerminalAgentPrompt(send.handle, send.turn.body, {
         ...terminalTurnOptions(send.turn),
-        ...(send.beforeWrite ? { beforeWrite: send.beforeWrite } : {})
+        ...(send.beforeWrite ? { beforeWrite: send.beforeWrite } : {}),
+        ...(send.atWrite ? { atWrite: send.atWrite } : {})
       })
   }
 }

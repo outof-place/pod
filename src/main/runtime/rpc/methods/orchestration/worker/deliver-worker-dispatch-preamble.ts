@@ -108,7 +108,7 @@ export async function deliverWorkerDispatchPreamble(args: {
       kind: 'terminal',
       runtime,
       handle: terminalHandle,
-      ...(briefGuard ? { beforeWrite: briefGuard.beforeWrite } : {}),
+      ...(briefGuard ? { beforeWrite: briefGuard.beforeWrite, atWrite: briefGuard.atWrite } : {}),
       turn: { purpose: 'dispatch-preamble', body: preamble, operationId: args.requestId }
     })
     return { prompt: sent.prompt }

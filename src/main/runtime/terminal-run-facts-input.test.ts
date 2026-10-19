@@ -12,7 +12,7 @@ import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import {
   pasteWorktreeStartupDraftWhenReady,
   sendWorktreeStartupFollowupWhenReady,
-  type WorktreeStartupReadinessHost
+  type WorktreeStartupWriteHost
 } from './runtime-worktree-startup-readiness'
 
 vi.mock('../git/worktree', () => {
@@ -223,14 +223,16 @@ describe('run facts: the controller write funnel', () => {
 })
 
 describe('run facts: a created worktree’s startup writes', () => {
-  function readinessHost(run: FreshRun): WorktreeStartupReadinessHost {
+  function readinessHost(run: FreshRun): WorktreeStartupWriteHost {
     return {
       getPtyId: () => PTY_ID,
       getForegroundProcess: async () => 'aider',
       subscribeToData: () => () => {},
       // Why: bracketed paste enabled, then quiet, is the default draft-ready signal.
       readRecentOutput: () => '\x1b[?2004h',
-      write: (ptyId, data, inputKind) => run.controller.write(ptyId, data, inputKind)
+      write: (ptyId, data, inputKind) => run.controller.write(ptyId, data, inputKind),
+      // Fork-only (Pod): a host with no proof writes as an SSH pane does.
+      proveTerminalAgentForegroundFence: async () => null
     }
   }
 
@@ -246,8 +248,9 @@ describe('run facts: a created worktree’s startup writes', () => {
     })
     await vi.runAllTimersAsync()
 
-    expect(run.kinds).toEqual(['launch', 'launch'])
-    expect(run.writes).toHaveLength(2)
+    // Fork-only (Pod): the follow-up's Enter is a write of its own.
+    expect(run.kinds).toEqual(['launch', 'launch', 'launch'])
+    expect(run.writes).toHaveLength(3)
     expect(run.firstUserInputAt()).toBeNull()
   })
 })

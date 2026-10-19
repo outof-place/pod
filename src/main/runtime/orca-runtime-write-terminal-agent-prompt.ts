@@ -68,6 +68,8 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       // beginning when a large frame is split into independently processed chunks.
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
+      // Fork-only (Pod): the guard's synchronous re-check, in the same block as the write.
+      options.atWrite?.(ptyId)
       if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
         throw new Error('terminal_not_writable')
       }
@@ -114,6 +116,11 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
     this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
     if (!submitWithPaste) {
+      try {
+        options.atWrite?.(ptyId)
+      } catch (error) {
+        throw options.suffixFailureError ? new Error(options.suffixFailureError) : error
+      }
       if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
@@ -229,6 +236,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       await waitForAgentPromptDelay(retryDelayMs, options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
       await options.beforeWrite?.(ptyId)
+      options.atWrite?.(ptyId)
       return this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind) ? 1 : 0
     } catch {
       return 0

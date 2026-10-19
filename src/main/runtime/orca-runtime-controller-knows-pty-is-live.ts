@@ -102,6 +102,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
     options: {
       signal?: AbortSignal
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      atWrite?: (ptyId: string) => void
       reserveWrite?: (ptyId: string) => void
       afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string

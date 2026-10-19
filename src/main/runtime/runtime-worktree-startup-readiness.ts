@@ -12,9 +12,14 @@ import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup
 } from './runtime-worktree-agent-startup'
+import type { TerminalForegroundProver } from '../pod/terminal/pod-terminal-foreground-fence'
+import {
+  buildStartupPaste,
+  isStartupShellInFront,
+  writeStartupFollowupGuarded,
+  writeStartupInputGuarded
+} from '../pod/terminal/pod-startup-input-write'
 
-const BRACKETED_PASTE_BEGIN = '\x1b[200~'
-const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 // Why: an interactive shell turns bracketed paste on at its prompt and off when it runs the typed
 // command (`zsh-prompt-runs-command.txt`), so a 2004 before the last `?2004l` is the shell's.
@@ -32,52 +37,66 @@ export type WorktreeStartupReadinessHost = {
   write: (ptyId: string, data: string, inputKind: TerminalInputKind) => void
 }
 
+// Fork-only (Pod): a host that writes startup input proves the agent first (pod-startup-input-write.ts).
+export type WorktreeStartupWriteHost = WorktreeStartupReadinessHost & TerminalForegroundProver
+
 export function pasteWorktreeStartupDraftWhenReady(
-  host: WorktreeStartupReadinessHost,
+  host: WorktreeStartupWriteHost,
   handle: string,
   draft: WorktreeStartupDraftPaste
 ): void {
-  void waitForWorktreeStartupDraft(host, handle, draft.agent)
-    .then((ptyId) => {
+  // Fork-only (Pod): no ready signal while a shell holds the terminal; the draft goes in sanitized,
+  // as one guarded write.
+  const isShellInFront = (ptyId: string): Promise<boolean> =>
+    isStartupShellInFront(host, ptyId, draft.agent)
+  void waitForWorktreeStartupDraft(host, handle, draft.agent, { isShellInFront })
+    .then(async (ptyId) => {
       if (!ptyId) {
         console.warn('[worktree-create] agent did not become ready for draft paste')
         return
       }
-      host.write(ptyId, `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}`, 'launch')
+      await writeStartupInputGuarded(host, ptyId, draft.agent, buildStartupPaste(draft.content))
     })
     .catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
 }
 
 export function sendWorktreeStartupFollowupWhenReady(
-  host: WorktreeStartupReadinessHost,
+  host: WorktreeStartupWriteHost,
   handle: string,
   followup: WorktreeStartupFollowup
 ): void {
-  void deliverWorktreeStartupFollowup(host, handle, followup)
+  void deliverWorktreeStartupFollowup(host, handle, followup).catch((error) =>
+    console.warn('[worktree-create] startup follow-up prompt refused:', error)
+  )
 }
 
-/** Types the follow-up once the agent process is in front; true when it was written. */
+/**
+ * Types the follow-up once the agent process is in front; true when it was written, false when the
+ * agent never came to the front. Fork-only (Pod): pasted, then submitted, as two guarded writes; a
+ * write the guard refuses throws `agent_not_in_foreground` to the caller.
+ */
 export async function deliverWorktreeStartupFollowup(
-  host: WorktreeStartupReadinessHost,
+  host: WorktreeStartupWriteHost,
   handle: string,
   followup: WorktreeStartupFollowup
 ): Promise<boolean> {
+  let ptyId: string | null
   try {
-    const ptyId = await waitForWorktreeStartupFollowup(host, handle, followup.expectedProcess)
-    if (!ptyId) {
-      console.warn('[worktree-create] agent did not become ready for follow-up prompt')
-      return false
-    }
-    host.write(ptyId, `${followup.prompt}\r`, 'launch')
-    return true
+    ptyId = await waitForWorktreeStartupFollowup(host, handle, followup.expectedProcess)
   } catch (error) {
     console.warn('[worktree-create] failed to send startup follow-up prompt:', error)
     return false
   }
+  if (!ptyId) {
+    console.warn('[worktree-create] agent did not become ready for follow-up prompt')
+    return false
+  }
+  await writeStartupFollowupGuarded(host, ptyId, followup.prompt)
+  return true
 }
 
 export async function waitForWorktreeStartupFollowup(
-  host: WorktreeStartupReadinessHost,
+  host: WorktreeStartupWriteHost,
   handle: string,
   expectedProcess: string
 ): Promise<string | null> {
@@ -90,6 +109,15 @@ export async function waitForWorktreeStartupFollowup(
       await new Promise((resolve) => setTimeout(resolve, 150))
     }
     try {
+      // Fork-only (Pod): a local pane's foreground group decides, never the tracker's 5 s guess
+      // that a just-launched agent is in front; an SSH or Windows pane reads as before.
+      const proof = await host.proveTerminalAgentForegroundFence(ptyId, null)
+      if (proof) {
+        if (proof.verdict === 'agent') {
+          return ptyId
+        }
+        continue
+      }
       const foregroundProcess = await host.getForegroundProcess(ptyId)
       if (isExpectedAgentProcess(foregroundProcess, expectedProcess)) {
         return ptyId

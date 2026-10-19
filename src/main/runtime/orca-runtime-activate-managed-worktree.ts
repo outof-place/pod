@@ -43,6 +43,7 @@ import {
   readLaunchedAgentForeground,
   type LaunchedAgentForeground
 } from './launched-agent-foreground'
+import { proveTerminalAgentForegroundOnHost } from '../pod/terminal/pod-terminal-foreground-fence'
 
 export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListManagedWorktrees {
   async activateManagedWorktree(
@@ -288,6 +289,13 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
       ptyId,
       agent
     )
+  }
+
+  // Fork-only (Pod): the proof a guarded write keeps for its synchronous re-check; null on an SSH or
+  // Windows pane, whose async guard stays as it was (pod-terminal-foreground-fence.ts).
+  proveTerminalAgentForegroundFence(ptyId: string, agent: TuiAgent | null) {
+    const host = this.launchedAgentHost(ptyId)
+    return proveTerminalAgentForegroundOnHost(this.ptyController, host, ptyId, agent)
   }
 
   /** Whether the pane's execution host can find a launched agent in front: a Windows one cannot. */

@@ -1,7 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithActivateManagedWorktree } from './orca-runtime-activate-managed-worktree'
 import type { WorktreeTerminalProvisioningHost } from './runtime-worktree-terminal-provisioning'
-import type { WorktreeStartupReadinessHost } from './runtime-worktree-startup-readiness'
+import type { WorktreeStartupWriteHost } from './runtime-worktree-startup-readiness'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { prepareWorktreeCreateForRepo } from '../worktree-create-preparation'
 import { getWorktreeCreatePrefetchGitOptions } from '../project-runtime-git-options'
@@ -62,7 +62,7 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
     return { worktreeId: leaf.worktreeId, tabId: leaf.tabId }
   }
 
-  protected getWorktreeStartupReadinessHost(): WorktreeStartupReadinessHost {
+  protected getWorktreeStartupReadinessHost(): WorktreeStartupWriteHost {
     return {
       getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId ?? null,
       getForegroundProcess: (ptyId) => this.ptyController!.getForegroundProcess(ptyId),
@@ -70,7 +70,10 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
         this.ptyController!.hasChildProcesses?.(ptyId) ?? Promise.resolve(false),
       subscribeToData: (ptyId, listener) => this.subscribeToTerminalData(ptyId, listener),
       readRecentOutput: (ptyId) => this.recentPtyOutputById.get(ptyId)?.read(),
-      write: (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind)
+      write: (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind),
+      // Fork-only (Pod): guards the startup draft and follow-up (pod-startup-input-write.ts).
+      proveTerminalAgentForegroundFence: (ptyId, agent) =>
+        this.proveTerminalAgentForegroundFence(ptyId, agent)
     }
   }
 

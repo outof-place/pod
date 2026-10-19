@@ -15,8 +15,11 @@ import {
 } from '../../../shared/terminal-input'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial runtime; each test overrides the members terminal.send reaches.
   return {
     getRuntimeId: () => 'test-runtime',
+    // Fork-only (Pod): a stub pane no proof covers; the fence is tested on its own.
+    proveTerminalAgentForegroundFence: async () => null,
     beginMobileInputFloor: vi.fn((ptyId: string, clientId: string) => ({
       commit: async () => {
         await overrides.mobileTookFloor?.(ptyId, clientId)
@@ -655,7 +658,8 @@ describe('terminal send RPC', () => {
         enter: true,
         interrupt: false
       },
-      { inputKind: 'driving', beforeWrite: expect.any(Function) }
+      // Fork-only (Pod): atWrite is the foreground check in each write's block.
+      { inputKind: 'driving', beforeWrite: expect.any(Function), atWrite: expect.any(Function) }
     )
   })
 

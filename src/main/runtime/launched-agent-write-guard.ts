@@ -2,6 +2,10 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { LaunchedAgentForeground } from './launched-agent-foreground'
+import {
+  assertTerminalForegroundFence,
+  type TerminalForegroundFence
+} from '../pod/terminal/pod-terminal-foreground-fence'
 
 /** A shell back at its prompt turns bracketed paste on, and Orca's shell integration marks it. */
 const SHELL_RETURN_MARKERS = ['\x1b[?2004', '\x1b]133;'] as const
@@ -11,10 +15,15 @@ export type LaunchedAgentWriteGuardRuntime = Pick<
   OrcaRuntimeService,
   'readLaunchedAgentForeground' | 'subscribeToTerminalData'
 > &
-  Partial<Pick<OrcaRuntimeService, 'launchedAgentHostProvesAgent'>>
+  Partial<
+    Pick<OrcaRuntimeService, 'launchedAgentHostProvesAgent' | 'proveTerminalAgentForegroundFence'>
+  >
 
 export type LaunchedAgentWriteGuard = {
   beforeWrite: (ptyId: string) => Promise<void>
+  // Fork-only (Pod): right before each write, synchronously: the agent's foreground group is still
+  // in front (pod-terminal-foreground-fence.ts).
+  atWrite: (ptyId: string) => void
   dispose: () => void
 }
 
@@ -34,9 +43,12 @@ export function createLaunchedAgentWriteGuard(
 ): LaunchedAgentWriteGuard {
   let cleared: { ptyId: string; shellMayHaveReturned: boolean; unsubscribe: () => void } | null =
     null
+  // Fork-only (Pod): what the last proof found on a local pane; null where only the async read runs.
+  let fence: { ptyId: string; fence: TerminalForegroundFence | null } | null = null
   const dispose = (): void => {
     cleared?.unsubscribe()
     cleared = null
+    fence = null
   }
   const beforeWrite = async (ptyId: string): Promise<void> => {
     if (cleared?.ptyId === ptyId && !cleared.shellMayHaveReturned) {
@@ -55,7 +67,10 @@ export function createLaunchedAgentWriteGuard(
     })
     let foreground: LaunchedAgentForeground
     try {
-      foreground = await runtime.readLaunchedAgentForeground(ptyId, agent)
+      // Fork-only (Pod): a local pane's proof keeps the group for atWrite; others read as before.
+      const proof = await runtime.proveTerminalAgentForegroundFence?.(ptyId, agent)
+      foreground = proof ? proof.verdict : await runtime.readLaunchedAgentForeground(ptyId, agent)
+      fence = { ptyId, fence: proof?.verdict === 'agent' ? proof.fence : null }
     } catch (error) {
       watch.unsubscribe()
       throw error
@@ -73,7 +88,15 @@ export function createLaunchedAgentWriteGuard(
       throw new Error('agent_not_in_foreground')
     }
   }
-  return { beforeWrite, dispose }
+  const atWrite = (ptyId: string): void => {
+    if (fence?.ptyId !== ptyId) {
+      throw new Error('agent_not_in_foreground')
+    }
+    if (fence.fence) {
+      assertTerminalForegroundFence(fence.fence)
+    }
+  }
+  return { beforeWrite, atWrite, dispose }
 }
 
 /**

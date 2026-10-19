@@ -6,8 +6,11 @@ import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial runtime; each test overrides the members terminal.send reaches.
   return {
     getRuntimeId: () => 'test-runtime',
+    // Fork-only (Pod): a stub pane no proof covers; the fence is tested on its own.
+    proveTerminalAgentForegroundFence: async () => null,
     ...overrides
   } as OrcaRuntimeService
 }

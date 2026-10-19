@@ -166,7 +166,9 @@ ${params.taskSpec}`
 export type DispatchPreambleSendOptions = Pick<
   RuntimeAgentPromptWriteOptions,
   'leadLine' | 'acceptQueued' | 'observationTimeoutMs' | 'requestId' | 'inputKind' | 'beforeWrite'
->
+> &
+  // Fork-only (Pod): the guard's synchronous check at each write.
+  Pick<RuntimeAgentPromptWriteOptions, 'atWrite'>
 
 export function dispatchPreambleSendOptions(requestId: string): DispatchPreambleSendOptions {
   // Why: a delayed provider hook must not revoke an accepted Dispatch.

@@ -14,6 +14,9 @@ describe('a worker start writes its brief only into the agent it launched', () =
     h.setup()
     const writes: string[] = []
     vi.spyOn(h.runtime, 'readLaunchedAgentForeground').mockResolvedValue(foreground)
+    // Fork-only (Pod): no real terminal to prove here, so the guard reads as on a host it can't fence
+    // (pod-terminal-foreground-fence.ts, tested there).
+    vi.spyOn(h.runtime, 'proveTerminalAgentForegroundFence').mockResolvedValue(null)
     vi.spyOn(h.runtime, 'launchedAgentHostProvesAgent').mockReturnValue(true)
     vi.spyOn(h.runtime, 'subscribeToTerminalData').mockReturnValue(() => {})
     vi.mocked(h.runtime.sendTerminalAgentPrompt).mockImplementation(

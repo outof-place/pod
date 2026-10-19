@@ -27,5 +27,8 @@ export async function createAgentPromptSubmissionRuntime(
   })
   // The pane holds a live agent, which its host would find in front of its terminal.
   vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')
+  // Fork-only (Pod): no real terminal to prove here, so the guard reads as on a host it can't fence
+  // (pod-terminal-foreground-fence.ts, tested there).
+  vi.spyOn(runtime, 'proveTerminalAgentForegroundFence').mockResolvedValue(null)
   return { runtime, handle: terminal.handle, writes }
 }

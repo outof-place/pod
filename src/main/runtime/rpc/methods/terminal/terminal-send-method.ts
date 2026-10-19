@@ -19,6 +19,7 @@ import {
   ensureUnsupportedTerminalPromptReceipt,
   observeReplayedTerminalPrompt
 } from './terminal-prompt-receipt'
+import { createSendableForegroundFence } from '../../../../pod/terminal/pod-terminal-foreground-fence'
 
 export const TERMINAL_SEND_METHODS = [
   defineMethod({
@@ -138,6 +139,12 @@ export const TERMINAL_SEND_METHODS = [
           }
         }
       }
+      // Fork-only (Pod): a local pane's foreground group, proven before each write and re-read in
+      // the write's own block (pod-terminal-foreground-fence.ts).
+      const foregroundFence =
+        params.requireAgentStatus === 'sendable'
+          ? createSendableForegroundFence(runtime)
+          : undefined
       // Why: recheck permission/no-agent state immediately before accepting the PTY write.
       const assertSendPreconditions =
         params.requireAgentStatus === 'sendable'
@@ -152,6 +159,7 @@ export const TERMINAL_SEND_METHODS = [
                   }
                 }
               })
+              await foregroundFence?.prove(ptyId)
             }
           : undefined
       if (params.requireAgentStatus === 'sendable') {
@@ -214,6 +222,7 @@ export const TERMINAL_SEND_METHODS = [
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
               inputKind: 'driving',
               beforeWrite,
+              ...(foregroundFence ? { atWrite: foregroundFence.atWrite } : {}),
               signal,
               ...(orchestrationMutation
                 ? {
@@ -236,6 +245,7 @@ export const TERMINAL_SEND_METHODS = [
               },
               {
                 beforeWrite,
+                ...(foregroundFence ? { atWrite: foregroundFence.atWrite } : {}),
                 signal,
                 // Why: a wire write carries no provenance beyond a client's own query reply.
                 inputKind: params.inputKind === 'query-reply' ? 'query-reply' : 'driving',

@@ -27,6 +27,9 @@ describe('a paired-server worker start writes its brief only into the agent it l
     configureFederationWorkerRuntime(runtime)
     const writes: string[] = []
     vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue(foreground)
+    // Fork-only (Pod): no real terminal to prove here, so the guard reads as on a host it can't fence
+    // (pod-terminal-foreground-fence.ts, tested there).
+    vi.spyOn(runtime, 'proveTerminalAgentForegroundFence').mockResolvedValue(null)
     vi.spyOn(runtime, 'launchedAgentHostProvesAgent').mockReturnValue(provesAgent)
     vi.spyOn(runtime, 'subscribeToTerminalData').mockReturnValue(() => {})
     vi.mocked(runtime.sendTerminalAgentPrompt).mockImplementation(async (handle, text, options) => {

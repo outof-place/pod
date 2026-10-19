@@ -33,7 +33,8 @@ async function ps(args: readonly string[]): Promise<string | null> {
   }
 }
 
-async function terminalOf(rootPid: number): Promise<string | null> {
+// Fork-only (Pod): exported for the guarded write's synchronous re-read (pod-terminal-foreground-fence.ts).
+export async function terminalOf(rootPid: number): Promise<string | null> {
   const cached = ttyByRootPid.get(rootPid)
   if (cached) {
     return cached
