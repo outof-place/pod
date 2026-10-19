@@ -1,6 +1,7 @@
 // Fork-only (Pod): marks the RPC calls agents make (POD_LINEAR_AGENT_METHODS), so the Linear client
 // holds them to the workspaces agent access names (pod-linear-agent-scope.ts). Pod's window and
-// PodNative call other methods and see every workspace.
+// PodNative call other methods and see every workspace. Outside the scope a call sees every
+// workspace, so any new way into the agent methods must go through invokeDispatcherUnaryMethod.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { POD_LINEAR_AGENT_METHODS } from './pod-linear-access'
 
