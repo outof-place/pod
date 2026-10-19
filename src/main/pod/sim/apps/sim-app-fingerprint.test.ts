@@ -193,6 +193,24 @@ describe('a worktree app’s fingerprint, kept against what it hashed', () => {
     expect(runs).toHaveLength(2)
   })
 
+  it('sees a change made while it ran when the file system stamps it behind the clock', async () => {
+    // Linux stamps from a clock up to a tick behind Date.now; HFS+ keeps whole seconds.
+    const startedAt = Date.now()
+    const { shell: inner, runs } = counting(['during', 'after'])
+    const shell: SimShell = async (command, options) => {
+      const lock = join(root, 'pnpm-lock.yaml')
+      await writeFile(lock, `lockfileVersion: 9\n# ${runs.length}`)
+      const stamped = new Date(startedAt - 999)
+      await utimes(lock, stamped, stamped)
+      return inner(command, options)
+    }
+    const fingerprints = createSimFingerprints({ shell, now: () => startedAt })
+    const input = { worktreeRoot: root, appId: 'app', app: APP }
+    await fingerprints.of(input)
+    await fingerprints.of(input)
+    expect(runs).toHaveLength(2)
+  })
+
   it('says why when the command fails or prints no hash', async () => {
     const failing = createSimFingerprints({
       shell: async () => ({

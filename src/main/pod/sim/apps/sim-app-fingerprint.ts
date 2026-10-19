@@ -197,10 +197,13 @@ async function unchanged(guard: ReadonlyMap<string, Stamp>): Promise<boolean> {
   return paths.every((path, index) => guard.get(path) === now[index])
 }
 
+// File systems stamp behind Date.now: Linux by a clock tick, HFS+ to the whole second, FAT to two.
+const FS_STAMP_LAG_MS = 2_000
+
 function changedSince(guard: ReadonlyMap<string, Stamp>, sinceMs: number): boolean {
   for (const stamp of guard.values()) {
     const mtime = /^[df]:/.test(stamp) ? Number(stamp.split(':')[2]) : Number.NaN
-    if (Number.isFinite(mtime) && mtime >= sinceMs) {
+    if (Number.isFinite(mtime) && mtime >= sinceMs - FS_STAMP_LAG_MS) {
       return true
     }
   }
