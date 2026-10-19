@@ -59,8 +59,9 @@ describe('Pod release packaging (electron-builder.pod.cjs)', () => {
     expect(pod.platformSections).toEqual([])
   })
 
-  it('keeps every Chromium locale pak', () => {
-    expect(inspectReleaseConfig('pod').electronLanguages).toBeNull()
+  it('keeps the en Chromium locale pak only', () => {
+    expect(inspectReleaseConfig('pod').electronLanguages).toEqual(['en'])
+    expect(inspectReleaseConfig('orca').electronLanguages).toBeNull()
   })
 
   it('ships @linear/sdk whatever the linear flag says', () => {

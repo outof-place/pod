@@ -71,8 +71,10 @@ export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
   uiLocales: {
     pod: false,
     reason: 'Pod is English-only: no es/fr/ja/ko/zh catalogs, no language picker, en at startup',
-    // Why no electronLanguages cut: macOS picks the app locale among the shipped .lproj, and a
-    // browser pane's navigator.languages and Accept-Language come from it.
+    // Why en only: the runtime's main bundle has no .lproj of its own, so its app locale is en-US
+    // whatever the Mac's languages are; Chromium then loads only en.lproj, and a browser pane's
+    // Accept-Language comes from that locale, not from the other paks.
+    packaging: { electronLanguages: ['en'] },
     stubModules: [/\/src\/renderer\/src\/i18n\/locales\/(?:es|fr|ja|ko|zh)\.json$/]
   },
   mobileWebClient: {
