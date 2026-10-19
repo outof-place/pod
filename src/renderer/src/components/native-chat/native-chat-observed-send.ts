@@ -1,4 +1,5 @@
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
+import { readAgentForegroundRefusal } from '../../../../shared/pod-agent-foreground-refusal'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import { enqueueNativeChatPtySend } from './native-chat-pty-send-queue'
 import {
@@ -12,13 +13,18 @@ import {
 export function sendNativeChatObservedWrites(
   settings: ReturnType<typeof getSettingsForAgentTabRuntimeOwner>,
   ptyId: string,
-  writes: readonly { data: string; delayBeforeMs: number }[],
+  // Fork-only (Pod): `agentText` guards one write (an answer's text or its Enter) on its own.
+  writes: readonly { data: string; delayBeforeMs: number; agentText?: true }[],
   options: NativeChatSendOptions & { stopOnUnconfirmed?: boolean; settleDelayMs?: number }
 ) {
   // Why: only an answer that dismisses its card needs the provider's acknowledgment.
-  const writeOptions = options.onDeliverySettled
+  const settlement = options.onDeliverySettled
     ? ({ requireWriteSettlement: true } as const)
     : undefined
+  const optionsFor = (write: { agentText?: true }) =>
+    write.agentText || options.requireAgentForeground
+      ? { ...settlement, requireAgentForeground: true as const }
+      : settlement
   return enqueueNativeChatPtySend(
     ptyId,
     writes.reduce((total, write) => total + write.delayBeforeMs, 0) +
@@ -48,7 +54,13 @@ export function sendNativeChatObservedWrites(
           if (isCancelled()) {
             return
           }
-          void sendRuntimePtyInputVerified(settings, ptyId, write.data, 'driving', writeOptions)
+          void sendRuntimePtyInputVerified(
+            settings,
+            ptyId,
+            write.data,
+            'driving',
+            optionsFor(write)
+          )
             .then((accepted) => {
               if (isCancelled()) {
                 return
@@ -63,8 +75,20 @@ export function sendNativeChatObservedWrites(
             })
             // A lost acknowledgment is not a refusal: never re-send these bytes, but still submit
             // a body that may have landed, as the unobserved path does.
-            .catch(() => {
+            .catch((error: unknown) => {
               if (isCancelled()) {
+                return
+              }
+              // Fork-only (Pod): a guarded write main refused wrote nothing; stop, and say why.
+              const refusal = readAgentForegroundRefusal(error)
+              if (refusal) {
+                if (options.onAgentNotInForeground) {
+                  options.onAgentNotInForeground(refusal)
+                } else {
+                  options.onWriteRejected?.()
+                }
+                options.onDeliverySettled?.(false)
+                markSubmitted()
                 return
               }
               acknowledged = false

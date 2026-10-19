@@ -1,6 +1,7 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { subscribeToPtyData } from '../terminal-pane/pty-data-sidecar-subscriptions'
-import { isRemoteRuntimePtyId, sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { sendAgentForegroundInput } from '@/runtime/pod-agent-foreground-write'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
 import { NATIVE_CHAT_SUBMIT } from './native-chat-send'
 import { stripScrollbackAnsi } from './native-chat-scrape-fallback'
@@ -145,12 +146,20 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
       try {
         // Why: the picker selection already expresses consent to switch; this
         // exact Claude warning defaults to “Yes” and needs only one Enter.
-        const accepted = args.submitConfirmation
-          ? args.submitConfirmation() !== false
-          : sendRuntimePtyInput(args.settings, args.ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-        if (!accepted) {
-          finish('unknown')
-          return
+        if (args.submitConfirmation) {
+          if (args.submitConfirmation() === false) {
+            finish('unknown')
+            return
+          }
+        } else {
+          // Fork-only (Pod): an Enter the user didn't press is a guarded write.
+          void sendAgentForegroundInput(args.settings, args.ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+            .then((accepted) => {
+              if (!accepted) {
+                finish('unknown')
+              }
+            })
+            .catch(() => finish('unknown'))
         }
         scheduleTimeout()
       } catch {

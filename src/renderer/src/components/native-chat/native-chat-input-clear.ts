@@ -34,6 +34,10 @@ export type NativeChatSendOptions = {
    * pasting on top of residue.
    */
   confirmCleared?: () => boolean
+  /** Fork-only (Pod): the body and its Enter go only while an agent holds the terminal. */
+  requireAgentForeground?: true
+  /** Fork-only (Pod): main refused a guarded write, no agent in front; nothing after it was sent. */
+  onAgentNotInForeground?: (reason: string) => void
 }
 
 type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>

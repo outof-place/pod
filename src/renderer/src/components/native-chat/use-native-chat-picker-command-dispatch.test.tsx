@@ -60,7 +60,13 @@ describe('useNativeChatPickerCommandDispatch', () => {
     const hook = renderDispatch('codex', onSubmitted)
     act(() => hook.result.current(COMMAND))
 
-    expect(sendNativeChatTypedCommand).toHaveBeenCalledWith({}, 'pty-1', '/status')
+    // Fork-only (Pod): a picked command is a guarded write that reports a refusal.
+    expect(sendNativeChatTypedCommand).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      '/status',
+      expect.any(Function)
+    )
     expect(sendNativeChatMessage).not.toHaveBeenCalled()
     expect(onSubmitted).toHaveBeenCalledOnce()
   })
@@ -69,7 +75,10 @@ describe('useNativeChatPickerCommandDispatch', () => {
     const hook = renderDispatch(agent)
     act(() => hook.result.current(COMMAND))
 
-    expect(sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/status')
+    expect(sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/status', {
+      requireAgentForeground: true,
+      onAgentNotInForeground: expect.any(Function)
+    })
     expect(sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 })

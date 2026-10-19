@@ -192,11 +192,13 @@ describe('sendNativeChatMessageVerified', () => {
     await vi.waitFor(() => {
       expect(sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
     })
+    // Fork-only (Pod): the command and its Enter are guarded writes.
     expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(
       SETTINGS,
       PTY,
       buildNativeChatPasteBytes('/model sonnet'),
-      'driving'
+      'driving',
+      { requireAgentForeground: true }
     )
 
     await vi.advanceTimersByTimeAsync(NATIVE_CHAT_SUBMIT_DELAY_MS)
@@ -206,7 +208,8 @@ describe('sendNativeChatMessageVerified', () => {
       SETTINGS,
       PTY,
       NATIVE_CHAT_SUBMIT,
-      'driving'
+      'driving',
+      { requireAgentForeground: true }
     )
     expect(
       sendRuntimePtyInputVerified.mock.calls.some(
@@ -245,7 +248,8 @@ describe('sendNativeChatMessageVerified', () => {
       SETTINGS,
       PTY,
       NATIVE_CHAT_SUBMIT,
-      'driving'
+      'driving',
+      { requireAgentForeground: true }
     )
   })
 
@@ -489,10 +493,18 @@ describe('empty prompt submit', () => {
     sendRuntimePtyInput.mockClear()
   })
 
+  // Fork-only (Pod): the bare Enter is a guarded write.
   it('submits an empty prompt with a bare Enter', () => {
+    sendRuntimePtyInputVerified.mockResolvedValue(true)
     submitNativeChatPrompt(SETTINGS, PTY)
-    expect(sendRuntimePtyInput).toHaveBeenCalledOnce()
-    expect(sendRuntimePtyInput).toHaveBeenCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT, 'driving')
+    expect(sendRuntimePtyInput).not.toHaveBeenCalled()
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      SETTINGS,
+      PTY,
+      NATIVE_CHAT_SUBMIT,
+      'driving',
+      { requireAgentForeground: true }
+    )
   })
 })
 
@@ -545,12 +557,13 @@ describe('sendNativeChatAskAnswer', () => {
     )
 
     await vi.advanceTimersByTimeAsync(NATIVE_CHAT_QUESTION_STEP_MS)
+    // Fork-only (Pod): an answer's text is a guarded write; bare keys aren't.
     expect(sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(
       SETTINGS,
       PTY,
       buildNativeChatPasteBytes('custom answer'),
       'driving',
-      undefined
+      { requireAgentForeground: true }
     )
   })
 

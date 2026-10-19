@@ -11,6 +11,7 @@ import {
 import type { NativeChatSendHandle } from './native-chat-runtime-send'
 import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
+import { nativeChatAgentNotInForegroundNotice } from './native-chat-agent-foreground-notice'
 import { nativeChatComposerTargetIsRemote } from './native-chat-composer-target'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-commands'
@@ -73,10 +74,23 @@ export function useNativeChatPtyComposerSend(args: {
       readScreen: () => args.readTerminalScreen?.()
     })
     let pendingId: string | undefined
+    // Fork-only (Pod): main refused the send, no agent in front: the text comes back with the reason.
+    const onAgentNotInForeground = (reason: string): void => {
+      if (pendingId) {
+        args.optimisticSendOutcome?.reject(pendingId)
+      }
+      args.setDraft(text)
+      args.setNotice(nativeChatAgentNotInForegroundNotice(reason))
+    }
+    const guardedOptions = {
+      ...launchSendOptions,
+      requireAgentForeground: true as const,
+      onAgentNotInForeground
+    }
     const sendOptions =
       args.agent === 'claude' && classification === 'chat'
         ? {
-            ...launchSendOptions,
+            ...guardedOptions,
             onWriteRejected: () => {
               if (pendingId) {
                 args.optimisticSendOutcome?.reject(pendingId)
@@ -88,13 +102,13 @@ export function useNativeChatPtyComposerSend(args: {
               }
             }
           }
-        : launchSendOptions
+        : guardedOptions
     let pendingHandle: NativeChatSendHandle | null = null
     // Why: slash-like text must not silently drop its attached images.
     if (classification !== 'chat' && imagePaths.length === 0) {
       pendingHandle =
         args.agent === 'codex' && isSlashCommandDraft(text)
-          ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
+          ? sendNativeChatTypedCommand(target.settings, target.ptyId, text, onAgentNotInForeground)
           : sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
     } else if (imagePaths.length > 0) {
       pendingHandle = sendNativeChatMessageWithImageAttachments(
@@ -108,7 +122,7 @@ export function useNativeChatPtyComposerSend(args: {
     } else if (text.trim().length > 0) {
       pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
     } else {
-      submitNativeChatPrompt(target.settings, target.ptyId)
+      submitNativeChatPrompt(target.settings, target.ptyId, onAgentNotInForeground)
     }
     if (classification !== 'chat') {
       if (pendingHandle) {

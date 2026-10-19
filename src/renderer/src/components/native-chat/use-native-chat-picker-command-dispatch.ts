@@ -17,6 +17,7 @@ import {
   answerNativeChatCommandInComposer,
   type NativeChatLocalCommandAnswer
 } from './use-native-chat-local-command-answer'
+import { nativeChatAgentNotInForegroundNotice } from './native-chat-agent-foreground-notice'
 
 export function useNativeChatPickerCommandDispatch(args: {
   agent: AgentType
@@ -77,10 +78,16 @@ export function useNativeChatPickerCommandDispatch(args: {
         setActiveSuggestion(0)
         return
       }
+      // Fork-only (Pod): a picked command is a guarded write; a refusal says why.
+      const onAgentNotInForeground = (reason: string): void =>
+        setNotice(nativeChatAgentNotInForegroundNotice(reason))
       trackPendingSend(
         agent === 'codex'
-          ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
-          : sendNativeChatMessage(target.settings, target.ptyId, text)
+          ? sendNativeChatTypedCommand(target.settings, target.ptyId, text, onAgentNotInForeground)
+          : sendNativeChatMessage(target.settings, target.ptyId, text, {
+              requireAgentForeground: true,
+              onAgentNotInForeground
+            })
       )
       emitNativeChatPickerItemAccepted({ agent, itemKind: 'command' })
       // Why: picker dispatch is a catalog-verified command send; it must leave

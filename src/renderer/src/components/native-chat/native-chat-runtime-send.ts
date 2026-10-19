@@ -3,11 +3,10 @@
 // byte builders in native-chat-send.ts so those stay IO-free and unit-testable.
 
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
-import {
-  sendRuntimePtyInput,
-  sendRuntimePtyInputVerified
-} from '@/runtime/runtime-terminal-inspection'
+import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
+import { sendAgentForegroundInput } from '@/runtime/pod-agent-foreground-write'
+import { readAgentForegroundRefusal } from '../../../../shared/pod-agent-foreground-refusal'
 import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
 import {
   clearConfirmDurationMs,
@@ -61,7 +60,7 @@ export function sendNativeChatMessage(
   text: string,
   options?: NativeChatSendOptions
 ): NativeChatSendHandle {
-  if (options?.onWriteRejected || options?.onDeliverySettled) {
+  if (options?.onWriteRejected || options?.onDeliverySettled || options?.requireAgentForeground) {
     return sendNativeChatObservedWrites(
       settings,
       ptyId,
@@ -143,7 +142,8 @@ export async function sendNativeChatMessageVerified(
 
   // Why: option commands await remote/SSH acceptance so the Enter cannot race
   // ahead of the body while a model-change observer is already armed.
-  const bodyAccepted = await sendRuntimePtyInputVerified(
+  // Fork-only (Pod): the command and its Enter are guarded writes; a refusal rejects.
+  const bodyAccepted = await sendAgentForegroundInput(
     settings,
     ptyId,
     buildNativeChatPasteBytes(text),
@@ -152,7 +152,7 @@ export async function sendNativeChatMessageVerified(
   if (!bodyAccepted || signal?.aborted || !(await waitForNativeChatSubmit(signal))) {
     return false
   }
-  return sendRuntimePtyInputVerified(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+  return sendAgentForegroundInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
 }
 
 /** Types a slash command as individual keys so Codex opens its command palette. */
@@ -167,8 +167,9 @@ export async function typeNativeChatCommand(
   const outcome = await typeAgentTuiCommand({
     command,
     signal,
+    // Fork-only (Pod): each key of the command is a guarded write.
     write: async (key) =>
-      (await sendRuntimePtyInputVerified(settings, ptyId, key, 'driving')) ? 'accepted' : 'rejected'
+      (await sendAgentForegroundInput(settings, ptyId, key, 'driving')) ? 'accepted' : 'rejected'
   })
   return outcome === 'accepted'
 }
@@ -177,7 +178,8 @@ export async function typeNativeChatCommand(
 export function sendNativeChatTypedCommand(
   settings: RuntimeSettings,
   ptyId: string,
-  command: string
+  command: string,
+  onAgentNotInForeground?: (reason: string) => void
 ): NativeChatSendHandle {
   const controller = new AbortController()
   return enqueueNativeChatPtySend(
@@ -197,11 +199,18 @@ export function sendNativeChatTypedCommand(
           if (isCancelled()) {
             return 'rejected'
           }
-          return (await sendRuntimePtyInputVerified(settings, ptyId, key, 'driving'))
+          return (await sendAgentForegroundInput(settings, ptyId, key, 'driving'))
             ? 'accepted'
             : 'rejected'
         }
-      }).then(finish, () => finish('rejected'))
+      }).then(finish, (error: unknown) => {
+        // Fork-only (Pod): say why when main refused a key, no agent in front.
+        const refusal = readAgentForegroundRefusal(error)
+        if (refusal && !isCancelled()) {
+          onAgentNotInForeground?.(refusal)
+        }
+        finish('rejected')
+      })
     },
     {
       onCancelUnsubmitted: () => {
@@ -214,8 +223,20 @@ export function sendNativeChatTypedCommand(
 
 /** Submit a TUI prompt with no body (Enter only) — e.g. a plain submit when the
  *  composer is empty. */
-export function submitNativeChatPrompt(settings: RuntimeSettings, ptyId: string): void {
-  sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+export function submitNativeChatPrompt(
+  settings: RuntimeSettings,
+  ptyId: string,
+  onAgentNotInForeground?: (reason: string) => void
+): void {
+  // Fork-only (Pod): an Enter is a guarded write, so a shell in front doesn't run its line.
+  void sendAgentForegroundInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving').catch(
+    (error: unknown) => {
+      const refusal = readAgentForegroundRefusal(error)
+      if (refusal) {
+        onAgentNotInForeground?.(refusal)
+      }
+    }
+  )
 }
 
 /**
@@ -237,7 +258,11 @@ export function sendNativeChatAskAnswer(
     ptyId,
     groups.map((group, index) => ({
       data: 'raw' in group ? group.raw : buildNativeChatPasteBytes(group.text),
-      delayBeforeMs: index === 0 ? 0 : NATIVE_CHAT_QUESTION_STEP_MS
+      delayBeforeMs: index === 0 ? 0 : NATIVE_CHAT_QUESTION_STEP_MS,
+      // Fork-only (Pod): an answer's text and any Enter are guarded; bare keys answer visible UI.
+      ...('raw' in group && !group.raw.includes(NATIVE_CHAT_SUBMIT)
+        ? {}
+        : { agentText: true as const })
     })),
     {
       clearInput: '',
