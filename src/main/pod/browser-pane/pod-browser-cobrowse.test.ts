@@ -2,6 +2,17 @@ import { describe, expect, it, vi } from 'vitest'
 import { FORM, MARK_ID, READ_ONLY, SAVE, settle, setup } from './pod-browser-cobrowse.test-support'
 
 describe('co-browse marks', () => {
+  it("a click's mark never shows as a region while its element is still being read", async () => {
+    const { page, cobrowse, sent } = setup([FORM, SAVE])
+    page.scrollY = 800
+    const labels = () =>
+      sent.flatMap((m) => (m.type === 'browserCobrowseState' ? m.marks.map((x) => x.label) : []))
+    await cobrowse.addMark(MARK_ID, 120, 110, 0, 0)
+    await settle()
+    expect(labels()).not.toContain('region')
+    expect(labels().at(-1)).toBe('button "Save"')
+  })
+
   it('a mark on an element stays on it while the page scrolls, and its locator names that element', async () => {
     const { page, cobrowse, state } = setup([FORM, SAVE])
     page.scrollY = 800

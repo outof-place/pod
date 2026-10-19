@@ -298,7 +298,8 @@ export function stateMessage(
       note: mark.note,
       state,
       kind: mark.kind,
-      label: cobrowseElementLabel(mark.element),
+      // A click's element is named once read (describeMark); until then no name, not "region".
+      label: mark.kind === 'element' && !mark.element ? '' : cobrowseElementLabel(mark.element),
       // A taken mark is no longer tracked: its ring goes, the tray keeps it.
       rect: state === 'taken' ? null : anchor.rect,
       ...(state === 'taken' ? {} : sight(anchor))
