@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { turnLinearOnInFreshModules } from '../pod/linear/pod-linear-access.test-support'
 
 type ViewerFixture = {
   displayName: string
@@ -126,6 +127,8 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
       LinearClient: linearClientMock
     })
   }))
+  // Fork-only (Pod): status reads nothing while the podLinear setting is off.
+  await turnLinearOnInFreshModules()
 
   return import('./client')
 }

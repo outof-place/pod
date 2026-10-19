@@ -47,7 +47,14 @@ export type LinearConnectionStatus = {
   credentialProtection?: SecretAtRestProtection | null
   // Fork-only (Pod): whether agents' linear.* methods answer (podLinearAgentAccess).
   agentAccess?: boolean
+  // Fork-only (Pod): false while every other linear.* method answers linear_unavailable; absent
+  // from an older host, which a client reads as unavailable.
+  available?: boolean
+  reason?: LinearUnavailableReason
 }
+
+/** Fork-only (Pod): why Linear is off: compiled out, the podLinear setting off, or no SDK packaged. */
+export type LinearUnavailableReason = 'feature-off' | 'setting-off' | 'sdk-missing'
 
 /**
  * Stable dependency key for Linear reads: only the fields that change what a read returns.

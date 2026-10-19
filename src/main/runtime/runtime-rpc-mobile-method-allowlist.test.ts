@@ -6,8 +6,12 @@ import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { remoteRpcContentBudget } from '../../shared/remote-rpc-content-budget'
 import { DeviceRegistry } from './device-registry'
 import { createMobileRpcSurfaceRuntime } from './runtime-rpc-mobile-method-allowlist-fixtures'
+import { withLinearOn } from '../pod/linear/pod-linear-access.test-support'
 
 describe('OrcaRuntimeRpcServer', () => {
+  // Fork-only (Pod): linear.* methods answer only while the podLinear setting is on. Pod refuses
+  // linear.selectWorkspace to phones, so it left this list of what a phone may call.
+  withLinearOn()
   it('limits mobile-scoped WebSocket tokens to the mobile RPC surface', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const { runtime, mocks, expectedCodexResetScope } = createMobileRpcSurfaceRuntime()
@@ -329,12 +333,6 @@ describe('OrcaRuntimeRpcServer', () => {
       params: { query: 'auth', limit: 10, workspaceId: 'workspace-1' }
     })
     await dispatch({
-      id: 'req_linear_select_workspace',
-      method: 'linear.selectWorkspace',
-      deviceToken: mobile.token,
-      params: { workspaceId: 'workspace-1' }
-    })
-    await dispatch({
       id: 'req_linear_team_labels',
       method: 'linear.teamLabels',
       deviceToken: mobile.token,
@@ -561,10 +559,6 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_gitlab_merge_mr', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_linear_search', ok: true }))
-    // Fork-only (Pod): a phone may not pick the Linear workspace (pod-linear-access.ts).
-    expect(replies).toContainEqual(
-      expect.objectContaining({ id: 'req_linear_select_workspace', ok: false })
-    )
     expect(replies).toContainEqual(
       expect.objectContaining({ id: 'req_linear_team_labels', ok: true })
     )
@@ -796,7 +790,6 @@ describe('OrcaRuntimeRpcServer', () => {
       fieldId: 'field-1'
     })
     expect(mocks.linearSearchIssues).toHaveBeenCalledWith('auth', 10, 'workspace-1')
-    expect(mocks.linearSelectWorkspace).not.toHaveBeenCalled()
     expect(mocks.linearTeamLabels).toHaveBeenCalledWith('team-1', 'workspace-1')
     expect(mocks.linearTeamMembers).toHaveBeenCalledWith('team-1', 'workspace-1')
     expect(mocks.linearAddIssueComment).toHaveBeenCalledWith('issue-1', 'done', 'workspace-1')

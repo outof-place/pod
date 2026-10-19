@@ -30,6 +30,7 @@ import {
   linearKeyRejectedMessage
 } from '../pod/linear/pod-linear-key-rejections'
 import { isPodLinearAgentAccessOn } from '../pod/linear/pod-linear-access'
+import { podLinearAvailability } from '../pod/linear/pod-linear-availability'
 import { CredentialDecryptionError } from '../integration-credential-file'
 import type {
   LinearConnectionStatus,
@@ -184,6 +185,17 @@ export function selectWorkspace(workspaceId: LinearWorkspaceSelection): LinearCo
 }
 
 export function getStatus(): LinearConnectionStatus {
+  // Fork-only (Pod): while Linear is off, status says why and reads no Linear file.
+  const availability = podLinearAvailability()
+  if (!availability.available) {
+    return {
+      connected: false,
+      viewer: null,
+      available: false,
+      reason: availability.reason,
+      agentAccess: isPodLinearAgentAccessOn()
+    }
+  }
   const state = getWorkspaceState()
   const selectedWorkspace =
     state.selectedWorkspaceId && state.selectedWorkspaceId !== 'all'
@@ -222,7 +234,8 @@ export function getStatus(): LinearConnectionStatus {
     ...(credentialError ? { credentialError } : {}),
     credentialProtection,
     // Fork-only (Pod)
-    agentAccess: isPodLinearAgentAccessOn()
+    agentAccess: isPodLinearAgentAccessOn(),
+    available: true
   }
 }
 

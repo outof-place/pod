@@ -1,7 +1,7 @@
 // Fork-only (Pod): Linear's admin methods answer only Pod's window and PodNative; agents' methods
 // answer only while the user has turned agent access on.
 import '../../runtime/rpc/unused-default-rpc-methods.test-fixture'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import type { RpcRequest } from '../../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -17,6 +17,7 @@ import {
   type PodLinearAccessCaller
 } from './pod-linear-access'
 import { installPodLinear } from './install-pod-linear'
+import { setPodLinearEnabledSetting } from './pod-linear-availability'
 import { POD_LINEAR_METHODS } from './pod-linear-rpc-methods'
 
 const PAIRED: RpcCallerScope = { kind: 'runtime-paired', grants: ['desktop-control'] }
@@ -26,7 +27,12 @@ function caller(overrides: Partial<PodLinearAccessCaller> = {}): PodLinearAccess
   return { scope: OWNER_RPC_CALLER_SCOPE, identity: LOCAL_CLI_RPC_CALLER, ...overrides }
 }
 
-afterEach(() => setPodLinearAgentAccessSetting(null))
+// Linear itself on: what it does while off is pod-linear-availability.test.ts's part.
+beforeEach(() => setPodLinearEnabledSetting({ read: () => true, write: () => {} }))
+afterEach(() => {
+  setPodLinearAgentAccessSetting(null)
+  setPodLinearEnabledSetting(null)
+})
 
 describe('podLinearRpcRefusal', () => {
   it.each([
@@ -70,11 +76,11 @@ describe('podLinearRpcRefusal', () => {
 
 describe('Linear access through the dispatcher', () => {
   function setup() {
-    let agentAccess: boolean | undefined
+    let settings: { podLinear?: boolean; podLinearAgentAccess?: boolean } = { podLinear: true }
     installPodLinear({
-      getSettings: () => ({ podLinearAgentAccess: agentAccess }),
+      getSettings: () => settings,
       updateSettings: (updates) => {
-        agentAccess = updates.podLinearAgentAccess
+        settings = { ...settings, ...updates }
       }
     })
     const runtime = {
