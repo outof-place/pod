@@ -16,6 +16,7 @@ import {
 import { acquire, release } from '../../linear/linear-request-concurrency'
 import { clearToken } from '../../linear/linear-token-store'
 import { linearRateLimitFrom, throwIfLinearRateLimited } from './pod-linear-rate-limit'
+import { withLinearIssueNames } from './pod-linear-issue-names'
 
 const ISSUES_BY_IDS_QUERY = `
   query PodLinearIssuesByIds($ids: [ID!], $first: Int) {
@@ -88,7 +89,10 @@ export async function getLinearIssuesByIds(
     throwIfLinearRateLimited(rateLimited)
   }
   return {
-    issues: ids.flatMap((id) => found.get(id) ?? []),
+    issues: ids.flatMap((id) => {
+      const issue = found.get(id)
+      return issue ? [withLinearIssueNames(issue)] : []
+    }),
     missing: ids.filter((id) => !found.has(id))
   }
 }

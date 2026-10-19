@@ -33,6 +33,10 @@ export type LinearIssue = {
   priority: number
   dueDate?: string | null
   updatedAt: string
+  // Fork-only (Pod): set on linear.getIssue, searchIssues and getIssues answers: the worktree name
+  // and the branch New Worktree takes (getLinearIssueWorkspaceName, getUsableLinearBranchName).
+  suggestedWorktreeName?: string
+  usableBranchName?: string
 }
 
 export type LinearIssueChildSummary = {
