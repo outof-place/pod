@@ -4,12 +4,17 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { LINEAR_METHODS } from './linear'
+import { DESKTOP_RPC_CALLER } from '../rpc-caller-identity'
+import { withLinearAgentAccessOn } from '../../../pod/linear/pod-linear-access.test-support'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
 describe('linear RPC methods', () => {
+  // Fork-only (Pod): linear.mcpListIssues is an agent method, and agents need access turned on.
+  withLinearAgentAccessOn()
+
   it('routes Linear account methods to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -23,9 +28,14 @@ describe('linear RPC methods', () => {
 
     await dispatcher.dispatch(makeRequest('linear.status'))
     await dispatcher.dispatch(makeRequest('linear.testConnection'))
-    await dispatcher.dispatch(makeRequest('linear.connect', { apiKey: 'lin_api_key' }))
-    await dispatcher.dispatch(makeRequest('linear.selectWorkspace', { workspaceId: 'workspace-1' }))
-    await dispatcher.dispatch(makeRequest('linear.disconnect'))
+    // Fork-only (Pod): Linear's admin methods answer Pod's own window (pod-linear-access.ts).
+    const desktop = { caller: DESKTOP_RPC_CALLER }
+    await dispatcher.dispatch(makeRequest('linear.connect', { apiKey: 'lin_api_key' }), desktop)
+    await dispatcher.dispatch(
+      makeRequest('linear.selectWorkspace', { workspaceId: 'workspace-1' }),
+      desktop
+    )
+    await dispatcher.dispatch(makeRequest('linear.disconnect'), desktop)
 
     expect(runtime.linearStatus).toHaveBeenCalled()
     expect(runtime.linearTestConnection).toHaveBeenCalled()

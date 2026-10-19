@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isLinearProjectListResult } from './ssh-remote-linear-result-guards'
 import { runControlGrantedRemoteOrcaCli as runRemoteOrcaCli } from './ssh-bridge-caller-scope.test-fixture'
+import { withLinearAgentAccessOn } from '../pod/linear/pod-linear-access.test-support'
 
 function createRuntime() {
   const runtime = {
@@ -193,6 +194,9 @@ function createRuntime() {
 }
 
 describe('runRemoteOrcaCli Linear commands', () => {
+  // Fork-only (Pod): agents' linear.* methods answer only with agent access on.
+  withLinearAgentAccessOn()
+
   it('dispatches Linear issue reads through the remote runtime with SSH context hints', async () => {
     const runtime = createRuntime()
 

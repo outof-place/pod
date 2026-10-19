@@ -6,12 +6,16 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { LinearWriteFailure } from '../../../linear/linear-issue-write-support'
 import { sanitizeLinearErrorMessage } from '../../../linear/issue-context-errors'
 import { LINEAR_AGENT_ACCESS_METHODS } from './linear-agent-access'
+import { withLinearAgentAccessOn } from '../../../pod/linear/pod-linear-access.test-support'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
 describe('Linear agent access RPC methods', () => {
+  // Fork-only (Pod): agents' linear.* methods answer only with agent access on.
+  withLinearAgentAccessOn()
+
   it('defaults activity off for clients using the pre-activity issue request shape', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

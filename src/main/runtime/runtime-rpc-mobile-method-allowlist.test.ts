@@ -561,8 +561,9 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_gitlab_merge_mr', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_linear_search', ok: true }))
+    // Fork-only (Pod): a phone may not pick the Linear workspace (pod-linear-access.ts).
     expect(replies).toContainEqual(
-      expect.objectContaining({ id: 'req_linear_select_workspace', ok: true })
+      expect.objectContaining({ id: 'req_linear_select_workspace', ok: false })
     )
     expect(replies).toContainEqual(
       expect.objectContaining({ id: 'req_linear_team_labels', ok: true })
@@ -795,7 +796,7 @@ describe('OrcaRuntimeRpcServer', () => {
       fieldId: 'field-1'
     })
     expect(mocks.linearSearchIssues).toHaveBeenCalledWith('auth', 10, 'workspace-1')
-    expect(mocks.linearSelectWorkspace).toHaveBeenCalledWith('workspace-1')
+    expect(mocks.linearSelectWorkspace).not.toHaveBeenCalled()
     expect(mocks.linearTeamLabels).toHaveBeenCalledWith('team-1', 'workspace-1')
     expect(mocks.linearTeamMembers).toHaveBeenCalledWith('team-1', 'workspace-1')
     expect(mocks.linearAddIssueComment).toHaveBeenCalledWith('issue-1', 'done', 'workspace-1')
