@@ -36,7 +36,27 @@ export function defaultLinearMockReply(request: LinearMockRequest): LinearMockRe
     return { body: { data: { organization: LINEAR_MOCK_ORGANIZATION } } }
   }
   return {
-    body: { data: null, errors: [{ message: 'not mocked', extensions: { code: 'INVALID_INPUT' } }] }
+    body: {
+      data: null,
+      errors: [
+        { message: 'not mocked', extensions: { type: 'invalid input', code: 'INVALID_INPUT' } }
+      ]
+    }
+  }
+}
+
+/** Linear's answer to a key it doesn't accept; the SDK maps it to AuthenticationLinearError. */
+export function linearMockAuthErrorReply(): LinearMockReply {
+  return {
+    status: 401,
+    body: {
+      errors: [
+        {
+          message: 'Authentication required, not authenticated',
+          extensions: { type: 'authentication error', code: 'AUTHENTICATION_ERROR' }
+        }
+      ]
+    }
   }
 }
 
@@ -49,7 +69,11 @@ export function linearMockRateLimitedReply(resetAtMs: number): LinearMockReply {
       'X-RateLimit-Requests-Remaining': '0',
       'X-RateLimit-Requests-Reset': String(resetAtMs)
     },
-    body: { errors: [{ message: 'Rate limit exceeded', extensions: { code: 'RATELIMITED' } }] }
+    body: {
+      errors: [
+        { message: 'Rate limit exceeded', extensions: { type: 'ratelimited', code: 'RATELIMITED' } }
+      ]
+    }
   }
 }
 

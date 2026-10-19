@@ -27,6 +27,10 @@ import {
 } from './linear-workspace-registry'
 import { CredentialDecryptionError } from '../integration-credential-file'
 import { readPodLinearKey, writePodLinearKey } from '../pod/linear/pod-linear-key-store'
+import {
+  clearLinearKeyRejection,
+  markLinearKeyRejected
+} from '../pod/linear/pod-linear-key-rejections'
 import type { LinearWorkspace } from '../../shared/linear/workspace-types'
 import { readCredentialFileProtection } from '../credential-file-protection'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
@@ -45,6 +49,8 @@ export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
   writeEncryptedToken(tokenPath, apiKey)
   cacheToken(workspaceId, apiKey)
   clearCredentialError(workspaceId)
+  // Fork-only (Pod): a new key, or a kept one that passed a test, no longer needs replacing.
+  clearLinearKeyRejection(workspaceId)
 }
 
 // Backward-compatible export for the legacy single-workspace storage path.
@@ -98,9 +104,22 @@ export function clearTokenFile(workspaceId: string): void {
   } catch {
     // File may not exist — safe to ignore.
   }
+  clearLinearKeyRejection(workspaceId)
 }
 
+// Fork-only (Pod): every Linear call that gets an auth error lands here. Upstream deletes the key;
+// Pod keeps it and marks the workspace "needs a new key". Disconnect deletes, with removeToken.
 export function clearToken(workspaceId?: string): void {
+  const workspaceIds = workspaceId
+    ? [workspaceId]
+    : getWorkspaceState().workspaces.map((workspace) => workspace.id)
+  for (const id of workspaceIds) {
+    forgetCachedToken(id)
+    markLinearKeyRejected(id)
+  }
+}
+
+export function removeToken(workspaceId?: string): void {
   if (!workspaceId) {
     const state = getWorkspaceState()
     for (const workspace of state.workspaces) {
