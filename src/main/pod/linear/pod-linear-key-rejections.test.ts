@@ -145,4 +145,37 @@ describe('a key Linear rejects', () => {
     )
     expect(rejections).toEqual({ version: 1, workspaceIds: [] })
   })
+
+  it('marks only the workspace whose key was refused, and none without a workspace', async () => {
+    const second = {
+      ...LINEAR_MOCK_ORGANIZATION,
+      id: 'org-mock-2',
+      name: 'Other Co',
+      urlKey: 'other'
+    }
+    const reachable = new Set([KEY, NEW_KEY])
+    reply = (request) => {
+      if (!reachable.has(request.authorization ?? '')) {
+        return linearMockAuthErrorReply()
+      }
+      const answer = defaultLinearMockReply(request)
+      return request.authorization === NEW_KEY && /\borganization\b/.test(request.query)
+        ? { body: { data: { organization: second } } }
+        : answer
+    }
+    const linear = await freshClient()
+    await linear.connect(KEY)
+    await linear.connect(NEW_KEY)
+    reachable.delete(KEY)
+
+    await linear.testConnection(ORG)
+
+    expect(linear.getStatus().workspaces).toEqual([
+      expect.objectContaining({ id: ORG, needsNewKey: true }),
+      expect.not.objectContaining({ needsNewKey: true })
+    ])
+    const tokens = await import('../../linear/linear-token-store')
+    tokens.clearToken()
+    expect(linear.getStatus().workspaces?.[1]).not.toHaveProperty('needsNewKey')
+  })
 })
