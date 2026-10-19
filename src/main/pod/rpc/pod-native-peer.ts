@@ -1,7 +1,7 @@
 // Fork-only (Pod): which runtime connections PodNative holds, by the kernel's audit token.
+import { statSync } from 'node:fs'
 import type { Socket } from 'node:net'
 import { homedir, userInfo } from 'node:os'
-import { resolve } from 'node:path'
 import { getProductIdentity } from '../../product-identity/product-identity'
 import {
   POD_UI_PEER_REQUIREMENT,
@@ -23,17 +23,41 @@ function accountHome(): string | null {
   }
 }
 
+// Set by installPodNativePeerCheck from app.isPackaged; never set (orcad, a test) reads as packaged.
+let unpackagedApp = false
+
+export function setPodNativePeerUnpackagedApp(unpackaged: boolean): void {
+  unpackagedApp = unpackaged
+}
+
+/** Two paths for different directories; any stat failure counts as the same one. */
+function isOtherDirectory(home: string, account: string): boolean {
+  try {
+    // By dev and inode: a symlink, another letter case or `..` still names the account's home.
+    const homeStat = statSync(home, { bigint: true })
+    const accountStat = statSync(account, { bigint: true })
+    return homeStat.dev !== accountStat.dev || homeStat.ino !== accountStat.ino
+  } catch {
+    return false
+  }
+}
+
 /**
- * An E2E run: an isolated profile (ORCA_E2E_USER_DATA_DIR) and a HOME that isn't the account's own.
- * Only there does a checkout runtime without product identity check PodNative, measure build included.
+ * An E2E run: an unpackaged app, an isolated profile (ORCA_E2E_USER_DATA_DIR) and a HOME that isn't
+ * the account's own directory. Only there does a checkout runtime without product identity check
+ * PodNative, measure build included; a shipped Pod.app never does, whatever its env says.
  */
 export function isPodNativePeerE2ERun(
   env: NodeJS.ProcessEnv = process.env,
   home: string = homedir(),
-  account: string | null = accountHome()
+  account: string | null = accountHome(),
+  unpackaged: boolean = unpackagedApp
 ): boolean {
   return (
-    Boolean(env.ORCA_E2E_USER_DATA_DIR) && account !== null && resolve(home) !== resolve(account)
+    unpackaged &&
+    Boolean(env.ORCA_E2E_USER_DATA_DIR) &&
+    account !== null &&
+    isOtherDirectory(home, account)
   )
 }
 
