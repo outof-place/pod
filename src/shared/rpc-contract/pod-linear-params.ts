@@ -5,7 +5,8 @@ export const PodLinearSetEnabledParams = z.object({ enabled: z.boolean() }).stri
 
 export const PodLinearSetAgentAccessParams = z.object({ enabled: z.boolean() }).strict()
 
-// Why 50: one card list's worth; the runtime asks Linear for exactly these ids in one request.
+// Linear issue UUIDs (LinearIssue.id) or identifiers like ENG-9, mixed freely. Why 50: one card
+// list's worth; the runtime asks Linear for exactly these in one request per workspace.
 export const PodLinearGetIssuesParams = z
   .object({
     ids: z.array(z.string().trim().min(1).max(128)).min(1).max(50),
