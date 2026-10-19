@@ -246,12 +246,14 @@ export async function describeMark(
   zoom: number,
   capture: (clip: NonNullable<ReturnType<typeof screenshotClip>>) => Promise<string | null>
 ): Promise<void> {
-  // Why the capture first: the clip is where the box was at the mark, and the user may scroll on.
+  // Why the capture starts first: its pixels are the page at the mark, though the user scrolls on
+  // while it waits for its turn; the element is read meanwhile.
   const clip = screenshotClip(mark.box, viewport, zoom)
-  const data = clip ? await capture(clip).catch(() => null) : null
+  const shot = clip ? capture(clip).catch(() => null) : Promise.resolve(null)
   if (node !== null) {
     mark.element = await readElement(cdp, node)
   }
+  const data = await shot
   if (clip && data && data.length * 0.75 <= COBROWSE_LIMITS.screenshotBytes) {
     mark.screenshot = pngShot(data, clip)
   }

@@ -13,17 +13,24 @@ describe('co-browse marks', () => {
     expect(labels().at(-1)).toBe('button "Save"')
   })
 
-  it("a mark's screenshot is the page as marked, though the user scrolls while its element is read", async () => {
+  it("a mark's screenshot is the page as marked, its element read while the capture waits its turn", async () => {
     const { page, cobrowse, capture } = setup([FORM, SAVE])
     page.scrollY = 800
     const read = page.cdp
+    let elementRead = false
     page.cdp = async (method, params) => {
       if (method === 'Accessibility.getPartialAXTree') {
         page.scrollY = 850
+        elementRead = true
       }
       return read(method, params)
     }
-    capture.mockImplementation(async () => (page.scrollY === 800 ? 'bWFya2Vk' : 'c2Nyb2xsZWQ='))
+    capture.mockImplementation(async () => {
+      const marked = page.scrollY === 800
+      // Another capture holds the page's turn until the element was read.
+      await vi.waitFor(() => expect(elementRead).toBe(true))
+      return marked ? 'bWFya2Vk' : 'c2Nyb2xsZWQ='
+    })
     await cobrowse.addMark(MARK_ID, 120, 110, 0, 0)
     await settle()
     const [mark] = (await cobrowse.takeMarks({ wait: false, timeoutMs: 1, peek: true })).marks
