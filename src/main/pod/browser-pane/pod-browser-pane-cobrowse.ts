@@ -5,6 +5,7 @@ import { acquireElectronDebugger } from '../../browser/electron-debugger-lease'
 import { sendGuestCdpCommand } from '../../browser/guest-cdp-command'
 import { captureScreenshot } from '../../browser/cdp-screenshot'
 import { PaneCobrowse } from './pod-browser-cobrowse'
+import { holdPaneFrames, type PaneFrameTarget } from './pod-browser-pane-frames'
 import type { PointRequest } from './pod-browser-cobrowse-anchors'
 import type { CobrowseCdp } from './pod-browser-cobrowse-cdp'
 import {
@@ -20,14 +21,12 @@ export function paneCobrowse(pageId: string): PaneCobrowse | null {
   return pages.get(pageId) ?? null
 }
 
-type PaneSide = { token: number | null; visible: boolean }
-
 /** Co-browse on a page the pane controller tracks, from now until its WebContents is destroyed. */
 export function newPaneCobrowse(
   pageId: string,
   wc: WebContents,
   send: (message: PodBrowserCobrowseServerMessage) => boolean,
-  pane: () => PaneSide,
+  pane: () => PaneFrameTarget,
   log: (message: string) => void
 ): PaneCobrowse {
   // The page's debugger lease: taken on first use, released when nothing is tracked.
@@ -46,10 +45,16 @@ export function newPaneCobrowse(
       lease?.release()
       lease = null
     },
-    // A clip inside the viewport: nothing resizes, so the pane needs no frame hold.
+    // Why the hold: Chromium draws the page once at the clip's size for the capture, and the pane
+    // would show that frame as the whole page, shrunk and centered (_evidence/cobrowse/capture-probe).
     capture: async (clip) => {
       const options = { format: 'png', clip, optimizeForSpeed: true }
-      return (await captureScreenshot(wc, options, () => () => {})).data
+      const release = holdPaneFrames(pane(), () => pane().visible && wc.invalidate())
+      try {
+        return (await captureScreenshot(wc, options, () => () => {})).data
+      } finally {
+        release()
+      }
     },
     send: (message) => {
       if (pane().token !== null) {

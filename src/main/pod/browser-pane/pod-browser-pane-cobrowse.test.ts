@@ -64,7 +64,7 @@ describe('co-browse on a pane page shares its debugger', () => {
         `page-${cobrowseFirst}`,
         wc,
         () => true,
-        () => ({ token: 1, visible: true }),
+        () => ({ token: 1, visible: true, seq: 0, scale: 2, captureFrameHolds: 0 }),
         vi.fn()
       )
       cobrowse.setWatching(true)
