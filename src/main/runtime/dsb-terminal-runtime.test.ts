@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { buildAgentPromptPasteBytes } from '../../shared/agent-prompt-injection'
 import type { RuntimeTerminalSummary } from '../../shared/runtime-terminal-contracts'
 import type { TerminalAgent } from '../../shared/terminal-agent'
@@ -27,6 +27,14 @@ vi.mock('../git/worktree', () => ({
     }
   ])
 }))
+
+// Fork-only (Pod): these panes have no real terminal, so the agent-prompt gate reads them as a host
+// it can't fence, like an SSH pane (pod-terminal-foreground-fence.ts, tested there).
+beforeEach(() => {
+  vi.spyOn(OrcaRuntimeService.prototype, 'proveTerminalAgentForegroundFence').mockResolvedValue(
+    null
+  )
+})
 
 describe('manually started DeepSeek Build terminals', () => {
   afterEach(() => vi.useRealTimers())

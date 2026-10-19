@@ -4,6 +4,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../../shared/agent-prompt-injection'
 import { createAgentPromptSubmissionRuntime } from '../../runtime/agent-prompt-submission-runtime-test-fixture'
+import type { TerminalAgentForegroundProof } from './pod-terminal-foreground-fence'
+
+const fence = vi.hoisted((): { groupNow: number | null } => ({ groupNow: null }))
+vi.mock('./pod-terminal-foreground-read', () => ({
+  readTerminalForegroundGroupNow: () =>
+    fence.groupNow === null
+      ? { ok: false, reason: 'read_failed' }
+      : { ok: true, group: fence.groupNow }
+}))
+
+const AGENT_GROUP = 200
+const AGENT_PROOF: TerminalAgentForegroundProof = {
+  verdict: 'agent',
+  fence: { rootPid: 100, tty: 'ttys007', foregroundGroup: AGENT_GROUP }
+}
 
 vi.mock('../../git/worktree', () => {
   const worktree = {
@@ -19,7 +34,10 @@ vi.mock('../../git/worktree', () => {
   }
 })
 
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  fence.groupNow = null
+})
 
 /** A pane whose agent turns to work at its Enter, and the writes the guard's check saw before. */
 async function promptPane(agent: 'codex' | 'omp') {
@@ -96,5 +114,61 @@ describe('a guarded prompt', () => {
 
     expect(pane.writes).toHaveLength(1)
     expect(pane.writes[0]).toContain(AGENT_PROMPT_BRACKETED_PASTE_END)
+  })
+})
+
+// A prompt from a caller with no guard of its own: dispatch --inject, a coordinator's task, the CLI.
+describe('the default gate of an unguarded agent prompt', () => {
+  it('lets the paste and its Enter through while a recognized agent holds the terminal', async () => {
+    vi.useFakeTimers()
+    const pane = await promptPane('codex')
+    vi.mocked(pane.runtime.proveTerminalAgentForegroundFence).mockResolvedValue(AGENT_PROOF)
+    fence.groupNow = AGENT_GROUP
+
+    const sent = pane.runtime.sendTerminalAgentPrompt(pane.handle, 'review this', {
+      inputKind: 'driving'
+    })
+    await vi.runAllTimersAsync()
+    await sent
+
+    expect(pane.writes[0]).toContain(AGENT_PROMPT_BRACKETED_PASTE_END)
+    expect(pane.writes).toContain('\r')
+  })
+
+  it.each(['shell', 'not_agent', 'unknown'] as const)(
+    'writes nothing when the proof finds %s',
+    async (verdict) => {
+      vi.useFakeTimers()
+      const pane = await promptPane('codex')
+      vi.mocked(pane.runtime.proveTerminalAgentForegroundFence).mockResolvedValue({ verdict })
+
+      const sent = pane.runtime.sendTerminalAgentPrompt(pane.handle, 'review this', {
+        inputKind: 'driving'
+      })
+      const refused = expect(sent).rejects.toThrow(`agent_not_in_foreground: ${verdict}`)
+      await vi.runAllTimersAsync()
+      await refused
+
+      expect(pane.writes).toEqual([])
+    }
+  )
+
+  it('writes no Enter once the agent left after the paste', async () => {
+    vi.useFakeTimers()
+    const pane = await promptPane('codex')
+    vi.mocked(pane.runtime.proveTerminalAgentForegroundFence).mockResolvedValue(AGENT_PROOF)
+    fence.groupNow = AGENT_GROUP
+    const sent = pane.runtime.sendTerminalAgentPrompt(pane.handle, 'review this', {
+      inputKind: 'driving'
+    })
+    const refused = expect(sent).rejects.toThrow('agent_not_in_foreground: group_changed')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(pane.writes).toHaveLength(1)
+
+    fence.groupNow = 101
+    await vi.runAllTimersAsync()
+    await refused
+
+    expect(pane.writes).toHaveLength(1)
   })
 })

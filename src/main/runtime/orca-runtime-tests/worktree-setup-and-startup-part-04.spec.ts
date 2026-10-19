@@ -83,9 +83,16 @@ describe('OrcaRuntimeService', () => {
         worktreeId: result.worktree.id
       })
     )
+    // Fork-only (Pod): the follow-up is a guarded paste, then its Enter as a second write.
     await vi.waitFor(() => {
-      expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r', 'launch')
+      expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', '\r', 'launch')
     })
+    expect(write).toHaveBeenNthCalledWith(
+      1,
+      'pty-cli-aider-startup',
+      '\x1b[200~fix it\x1b[201~',
+      'launch'
+    )
   })
 
   it('does not send stdin-after-start prompts into a shell when the agent never starts', async () => {

@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithResolveTerminalPane } from './orca-runtime-resolve-terminal-pane'
+import { withAgentForegroundGate } from '../pod/terminal/pod-terminal-foreground-fence'
 import { wrapTerminalBracketedPasteText } from '../../shared/terminal-bracketed-paste-text'
 import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from './orca-runtime-core'
 import { pruneExpiredProvenAbsentLeafPtyVerdicts } from './proven-absent-leaf-pty-verdicts'
@@ -200,7 +201,8 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
           this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
           this.assertAgentPromptGeneration(pty.pty.ptyId, generation)
           return await this.writeTerminalAgentPrompt(handle, pty.pty.ptyId, generation, payload, {
-            ...options,
+            // Fork-only (Pod): the default proof and fence for a caller with no guard of its own.
+            ...withAgentForegroundGate(this, options, null),
             promptForSchedule: prompt
           })
         }
@@ -230,7 +232,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
       this.assertAgentPromptGeneration(leaf.ptyId!, generation)
       return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, {
-        ...options,
+        ...withAgentForegroundGate(this, options, null),
         promptForSchedule: prompt
       })
     })

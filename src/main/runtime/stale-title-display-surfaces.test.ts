@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
 import './orca-runtime-test-lifecycle.spec'
 import { assertTerminalAgentSendable } from './rpc/terminal-agent-send-guard'
@@ -16,6 +16,14 @@ async function psStatus(runtime: OrcaRuntimeService): Promise<string | undefined
 
 // Synthetic titles: display surfaces must show what the tab shows once the stale-working timer
 // clears a title, although the runtime keeps the agent's own title as evidence.
+// Fork-only (Pod): these panes have no real terminal, so the agent-prompt gate reads them as a host
+// it can't fence, like an SSH pane (pod-terminal-foreground-fence.ts, tested there).
+beforeEach(() => {
+  vi.spyOn(OrcaRuntimeService.prototype, 'proveTerminalAgentForegroundFence').mockResolvedValue(
+    null
+  )
+})
+
 describe('display surfaces after the stale-working title clear', () => {
   it('worktree ps and the phone show the cleared status for a terminal with no renderer pane', async () => {
     vi.useFakeTimers()

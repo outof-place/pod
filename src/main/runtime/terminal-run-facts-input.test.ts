@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import { writePtyFromRuntimeController } from '../ipc/pty/runtime/operations'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../ipc/pty/provider/registry'
@@ -87,6 +87,14 @@ async function createFreshRun(): Promise<FreshRun> {
 afterEach(() => {
   vi.useRealTimers()
   setLocalPtyProvider(priorProvider)
+})
+
+// Fork-only (Pod): these panes have no real terminal, so the agent-prompt gate reads them as a host
+// it can't fence, like an SSH pane (pod-terminal-foreground-fence.ts, tested there).
+beforeEach(() => {
+  vi.spyOn(OrcaRuntimeService.prototype, 'proveTerminalAgentForegroundFence').mockResolvedValue(
+    null
+  )
 })
 
 describe('run facts: the controller write funnel', () => {

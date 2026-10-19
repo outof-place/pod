@@ -341,7 +341,17 @@ function resetRuntimeTestMocks(): void {
   getIssueMock.mockResolvedValue(null)
 }
 
+// Fork-only (Pod): these panes have no real terminal, so the agent-prompt gate reads them as a host
+// it can't fence, like an SSH pane (pod-terminal-foreground-fence.ts, tested there).
+function allowUnfencedAgentPrompts(): void {
+  vi.spyOn(
+    mocks.OrcaRuntimeService.prototype,
+    'proveTerminalAgentForegroundFence'
+  ).mockResolvedValue(null)
+}
+
 beforeEach(resetRuntimeTestMocks)
+beforeEach(allowUnfencedAgentPrompts)
 afterEach(resetRuntimeTestMocks)
 
 export { resetRuntimeTestMocks }

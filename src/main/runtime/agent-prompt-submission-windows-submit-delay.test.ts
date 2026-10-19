@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildAgentPromptPasteBytes,
   getAgentPromptSubmitDelayMs,
@@ -98,6 +98,14 @@ function submitDelayFor(prompt: string, platform: NodeJS.Platform): number {
     Buffer.byteLength(buildAgentPromptPasteBytes(prompt), 'utf8')
   )
 }
+
+// Fork-only (Pod): these panes have no real terminal, so the agent-prompt gate reads them as a host
+// it can't fence, like an SSH pane (pod-terminal-foreground-fence.ts, tested there).
+beforeEach(() => {
+  vi.spyOn(OrcaRuntimeService.prototype, 'proveTerminalAgentForegroundFence').mockResolvedValue(
+    null
+  )
+})
 
 describe('agent prompt submit delay on a ConPTY host', () => {
   afterEach(() => {

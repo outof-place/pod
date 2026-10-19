@@ -69,7 +69,8 @@ export function createLaunchedAgentWriteGuard(
     try {
       // Fork-only (Pod): a local pane's proof keeps the group for atWrite; others read as before.
       const proof = await runtime.proveTerminalAgentForegroundFence?.(ptyId, agent)
-      foreground = proof ? proof.verdict : await runtime.readLaunchedAgentForeground(ptyId, agent)
+      const proven = proof?.verdict === 'not_agent' ? 'shell' : proof?.verdict
+      foreground = proven ?? (await runtime.readLaunchedAgentForeground(ptyId, agent))
       fence = { ptyId, fence: proof?.verdict === 'agent' ? proof.fence : null }
     } catch (error) {
       watch.unsubscribe()

@@ -579,14 +579,14 @@ describe('OrcaRuntimeService', () => {
     expect(write).not.toHaveBeenCalled()
 
     runtime.onPtyData('pty-startup-draft', '›', Date.now())
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(write).toHaveBeenCalledWith(
-      'pty-startup-draft',
-      `\x1b[200~${draftUrl}\x1b[201~`,
-      'launch'
-    )
+    // Fork-only (Pod): the guarded paste proves the foreground first, so it lands a few ticks later.
+    await vi.waitFor(() => {
+      expect(write).toHaveBeenCalledWith(
+        'pty-startup-draft',
+        `\x1b[200~${draftUrl}\x1b[201~`,
+        'launch'
+      )
+    })
   })
 
   it('keeps the 8s main-runtime startup readiness budget for agents without an override', async () => {
@@ -719,14 +719,14 @@ describe('OrcaRuntimeService', () => {
     // Past the old 8s default, where readiness would previously have been abandoned.
     await vi.advanceTimersByTimeAsync(10_000)
     runtime.onPtyData('pty-opencode-draft-budget', '\x1b[?2004h\x1b[?25h', Date.now())
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(write).toHaveBeenCalledWith(
-      'pty-opencode-draft-budget',
-      `\x1b[200~${draftUrl}\x1b[201~`,
-      'launch'
-    )
+    // Fork-only (Pod): the guarded paste proves the foreground first, so it lands a few ticks later.
+    await vi.waitFor(() => {
+      expect(write).toHaveBeenCalledWith(
+        'pty-opencode-draft-budget',
+        `\x1b[200~${draftUrl}\x1b[201~`,
+        'launch'
+      )
+    })
   })
 
   it('rejects explicit startup commands for disabled selected agents', async () => {

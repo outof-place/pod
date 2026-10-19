@@ -98,6 +98,55 @@ describe('proveTerminalAgentForeground', () => {
     })
   })
 
+  // Not a shell, and not an agent either: a note or Enter there runs as a command.
+  it.each([
+    ['ssh to another host', ['ssh build-host']],
+    ['sudo -s with its root shell', ['sudo -s', '/bin/bash']],
+    ['a Python REPL', ['python3']],
+    ['psql', ['psql app']],
+    ['another agent than the one named', ['codex']]
+  ])('refuses when %s holds the terminal', async (_what, commands) => {
+    mocks.rows = [
+      ...terminal(SHELL).slice(0, 2),
+      ...commands.map((command, index) => ({
+        pid: 300 + index,
+        ppid: SHELL,
+        pgid: 300,
+        tpgid: 300,
+        stat: 'S+',
+        command
+      }))
+    ].map((row) => ({ ...row, tpgid: 300 }))
+
+    expect(await proveTerminalAgentForeground(controller, 'pty-1', 'claude')).toEqual({
+      verdict: 'not_agent'
+    })
+    if (commands[0] !== 'codex') {
+      expect(await proveTerminalAgentForeground(controller, 'pty-1', null)).toEqual({
+        verdict: 'not_agent'
+      })
+    }
+  })
+
+  it('finds the agent behind an interpreter and by name when none is named', async () => {
+    mocks.rows = [
+      ...terminal(SHELL).slice(0, 2),
+      {
+        pid: 400,
+        ppid: SHELL,
+        pgid: 400,
+        tpgid: 400,
+        stat: 'S+',
+        command: '/bin/sh /tmp/x/bin/claude'
+      }
+    ].map((row) => ({ ...row, tpgid: 400 }))
+
+    expect((await proveTerminalAgentForeground(controller, 'pty-1', null)).verdict).toBe('agent')
+    expect((await proveTerminalAgentForeground(controller, 'pty-1', 'claude')).verdict).toBe(
+      'agent'
+    )
+  })
+
   it.each([
     ['the pane is not listed', () => ({ listProcesses: async () => [] })],
     ['the terminal is gone', () => ((mocks.tty = null), controller)],
@@ -164,12 +213,12 @@ describe("terminal.send's sendable fence", () => {
     expect(() => send.atWrite('pty-1')).toThrow('terminal_guard_no_agent')
   })
 
-  it.each(['shell', 'unknown'] as const)(
-    'refuses before any write when the proof finds %s',
+  it.each(['shell', 'not_agent', 'unknown'] as const)(
+    'refuses before any write when the proof finds %s, and says so',
     async (verdict) => {
       const send = createSendableForegroundFence(prover({ verdict }))
 
-      await expect(send.prove('pty-1')).rejects.toThrow('terminal_guard_no_agent')
+      await expect(send.prove('pty-1')).rejects.toThrow(`terminal_guard_no_agent: ${verdict}`)
       expect(() => send.atWrite('pty-1')).toThrow('terminal_guard_no_agent')
     }
   )

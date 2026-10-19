@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-prompt-injection'
 import {
   AGENT_PROMPT_TEST_WORKTREE_PATH,
@@ -29,6 +29,14 @@ vi.mock('../git/worktree', () => ({
     }
   ])
 }))
+
+// Fork-only (Pod): these panes have no real terminal, so the agent-prompt gate reads them as a host
+// it can't fence, like an SSH pane (pod-terminal-foreground-fence.ts, tested there).
+beforeEach(() => {
+  vi.spyOn(OrcaRuntimeService.prototype, 'proveTerminalAgentForegroundFence').mockResolvedValue(
+    null
+  )
+})
 
 describe('agent prompt submission runtime', () => {
   afterEach(() => vi.useRealTimers())
