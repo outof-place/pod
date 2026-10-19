@@ -163,70 +163,60 @@ describe('max-lines repository coverage', () => {
     )
   })
 
-  it.each(['.oxlintrc.json', 'mobile/.oxlintrc.json'])(
-    'enforces exact budgets with installed oxlint and %s',
-    (config) => {
-      rmSync(scratch, { recursive: true, force: true })
-      scratch = mkdtempSync(join(dirname(join(repoRoot, config)), '.max-lines-test-'))
-      const initialized = runProcessSync({
-        program: 'git',
-        args: ['init', '--quiet'],
-        cwd: scratch
-      })
-      expect(initialized.code, initialized.stderr).toBe(0)
-      const budgets = [
-        ['ts', 300],
-        ['mts', 300],
-        ['cts', 300],
-        ['tsx', 400],
-        ['mjs', 600],
-        ...['ts', 'tsx', 'mts', 'cts'].flatMap((ext) => [
-          [`test.${ext}`, 800],
-          [`spec.${ext}`, 800]
-        ])
-      ]
-      const expected = []
-      for (const [ext, limit] of budgets) {
-        for (const extra of [0, 1]) {
-          const file = `nested/module-${extra}.${ext}`
-          write(
-            file,
-            `// Comments and blank lines do not count.\n\n${Array.from(
-              { length: limit + extra },
-              (_, index) => `export const value${index} = ${index}\n`
-            ).join('')}`
-          )
-          if (extra) {
-            expected.push(file)
-          }
+  it.each(['.oxlintrc.json'])('enforces exact budgets with installed oxlint and %s', (config) => {
+    rmSync(scratch, { recursive: true, force: true })
+    scratch = mkdtempSync(join(dirname(join(repoRoot, config)), '.max-lines-test-'))
+    const initialized = runProcessSync({
+      program: 'git',
+      args: ['init', '--quiet'],
+      cwd: scratch
+    })
+    expect(initialized.code, initialized.stderr).toBe(0)
+    const budgets = [
+      ['ts', 300],
+      ['mts', 300],
+      ['cts', 300],
+      ['tsx', 400],
+      ['mjs', 600],
+      ...['ts', 'tsx', 'mts', 'cts'].flatMap((ext) => [
+        [`test.${ext}`, 800],
+        [`spec.${ext}`, 800]
+      ])
+    ]
+    const expected = []
+    for (const [ext, limit] of budgets) {
+      for (const extra of [0, 1]) {
+        const file = `nested/module-${extra}.${ext}`
+        write(
+          file,
+          `// Comments and blank lines do not count.\n\n${Array.from(
+            { length: limit + extra },
+            (_, index) => `export const value${index} = ${index}\n`
+          ).join('')}`
+        )
+        if (extra) {
+          expected.push(file)
         }
       }
-      const invocation = resolveOxlintInvocation(repoRoot)
-      const tracked = runProcessSync({ program: 'git', args: ['add', '.'], cwd: scratch })
-      expect(tracked.code, tracked.stderr).toBe(0)
-      const result = runProcessSync({
-        program: invocation.command,
-        args: [
-          ...invocation.prefixArgs,
-          '--config',
-          join(repoRoot, config),
-          '--format',
-          'json',
-          '.'
-        ],
-        cwd: scratch
-      })
-      expect(result.code, result.stderr).toBe(1)
-      const output = JSON.parse(result.stdout)
-      expect(output.number_of_files).toBe(budgets.length * 2)
-      expect(
-        output.diagnostics.every((diagnostic) => diagnostic.code === 'eslint(max-lines)')
-      ).toBe(true)
-      expect(
-        output.diagnostics.map((diagnostic) => diagnostic.filename.replaceAll('\\', '/')).sort()
-      ).toEqual(expected.sort())
     }
-  )
+    const invocation = resolveOxlintInvocation(repoRoot)
+    const tracked = runProcessSync({ program: 'git', args: ['add', '.'], cwd: scratch })
+    expect(tracked.code, tracked.stderr).toBe(0)
+    const result = runProcessSync({
+      program: invocation.command,
+      args: [...invocation.prefixArgs, '--config', join(repoRoot, config), '--format', 'json', '.'],
+      cwd: scratch
+    })
+    expect(result.code, result.stderr).toBe(1)
+    const output = JSON.parse(result.stdout)
+    expect(output.number_of_files).toBe(budgets.length * 2)
+    expect(output.diagnostics.every((diagnostic) => diagnostic.code === 'eslint(max-lines)')).toBe(
+      true
+    )
+    expect(
+      output.diagnostics.map((diagnostic) => diagnostic.filename.replaceAll('\\', '/')).sort()
+    ).toEqual(expected.sort())
+  })
 })
 
 describe('parseBaseline', () => {

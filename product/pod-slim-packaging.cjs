@@ -43,13 +43,6 @@ function preparePodSlimPackaging(profile = readPodBuildProfile()) {
   removeListedItems(runtime.PACKAGED_RUNTIME_PACKAGE_ROOTS, runtimeRoots, 'runtime package roots')
   const ripgrep = require('../config/bundled-ripgrep-resources.cjs')
   removeListedItems(ripgrep.BUNDLED_RIPGREP_PLATFORMS, ripgrepPlatforms, 'ripgrep platforms')
-  if (cuts.some((cut) => cut.skipMobileWebBundleAssert)) {
-    const mobileWeb = require('../config/scripts/verify-packaged-mobile-web-bundle.cjs')
-    if (typeof mobileWeb.assertMobileWebBundleBuilt !== 'function') {
-      throw new Error('pod-slim: upstream no longer exports assertMobileWebBundleBuilt')
-    }
-    mobileWeb.assertMobileWebBundleBuilt = () => null
-  }
 }
 
 function applyPodSlimPackaging(base, profile = readPodBuildProfile()) {

@@ -149,7 +149,6 @@ jobs:
         with:
           native-runtime: node
           node-version: '24'
-      - uses: ./.github/actions/install-mobile-dependencies
       - name: Build
         env:
           ORCA_BACKGROUND_LAUNCH: '1'

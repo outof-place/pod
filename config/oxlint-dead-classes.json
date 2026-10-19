@@ -72,5 +72,5 @@
       }
     }
   ],
-  "ignorePatterns": ["**/node_modules", "**/dist", "**/out", "mobile/**"]
+  "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
 }

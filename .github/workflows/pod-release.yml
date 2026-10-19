@@ -55,9 +55,7 @@ jobs:
         with:
           node-version-file: package.json
           cache: pnpm
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            mobile/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       # afterPack builds pod-gocache with this Go (native/pod-gocache-macos/scripts/build.sh pins it).
       - uses: actions/setup-go@v7

@@ -1,11 +1,6 @@
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  createSshDelivery,
-  createPairedRuntime,
-  sendMobilePermissionResponse,
-  io
-} from './__mocks__/native-chat-ssh-delivery'
+import { createSshDelivery, createPairedRuntime, io } from './__mocks__/native-chat-ssh-delivery'
 import {
   sendNativeChatAskAnswer,
   sendNativeChatMessage,
@@ -17,7 +12,6 @@ import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspecti
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
 import { sendAgentDraftPasteContentNow } from '../../src/renderer/src/lib/agent-draft-paste-content'
-import type { RpcClient } from '../../mobile/src/transport/rpc-client'
 
 let close: (() => void) | undefined
 afterEach(() => {
@@ -202,47 +196,6 @@ describe('prompt delivery through production IPC, provider and paired host', () 
       expect.anything()
     )
   })
-
-  it.each(['accepted', 'lost', 'older-host'] as const)(
-    'mobile permission send reads the actual paired %s verdict',
-    async (mode) => {
-      const ssh = createSshDelivery(mode === 'lost' ? 'lost' : 'accepted')
-      close = ssh.close
-      const { runtime, handle } = await createPairedRuntime(ssh)
-      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
-      const client: RpcClient = {
-        sendRequest: (method, params) =>
-          dispatcher.dispatch({
-            id: 'mobile',
-            authToken: 'token',
-            method,
-            // An older host's schema strips the optional requirement.
-            params:
-              mode === 'older-host' && typeof params === 'object' && params !== null
-                ? { ...params, requireWriteSettlement: undefined }
-                : params
-          }),
-        subscribe: () => () => {},
-        updateTerminalSubscriptionViewport: () => {},
-        getState: () => 'connected',
-        getReconnectAttempt: () => 0,
-        getLastConnectedAt: () => null,
-        onStateChange: () => () => {},
-        notifyForeground: () => {},
-        close: () => {}
-      }
-      await expect(
-        sendMobilePermissionResponse({
-          client,
-          terminal: handle,
-          deviceToken: null,
-          text: '\x1b'
-        })
-      ).resolves.toBe(mode === 'lost' ? 'unknown' : 'accepted')
-      expect(ssh.settlement).toHaveBeenCalledTimes(mode === 'older-host' ? 0 : 1)
-      expect(ssh.bytes).toEqual(['\x1b'])
-    }
-  )
 
   it('finishes every older-host selector group once and settles the answer as delivered', async () => {
     vi.useFakeTimers()

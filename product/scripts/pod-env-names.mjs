@@ -12,9 +12,9 @@ const repoRoot = join(import.meta.dirname, '..', '..')
 const KEEP_MARKER = 'pod-decouple:keep'
 
 // What the app, its CLI, its relay, its helpers and its bundled skills are built from.
-// mobile/ is another product; docs/ and .github/ do not ship. product/agent-launcher
-// is the `claude` launcher Pod ships, which reads the pane's env names; e2e.yml sets the app's
-// names for the E2E jobs, and a unit test reads them back.
+// docs/ and .github/ do not ship. product/agent-launcher is the `claude` launcher Pod ships,
+// which reads the pane's env names; e2e.yml sets the app's names for the E2E jobs, and a unit
+// test reads them back.
 // bench/ stays out: it launches Orca next to Pod and must keep Orca's ORCA_ names.
 const SCOPES = [
   'src/',

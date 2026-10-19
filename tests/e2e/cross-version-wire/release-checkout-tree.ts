@@ -14,7 +14,6 @@ const CHECKOUT_MAX_OUTPUT_BYTES = 1024 * 1024
 // Why: the wire endpoints only need the runtime RPC host, the renderer client, and
 // the shared codec, plus the relay an app update leaves running. Skipping cli keeps a cold CI
 // extraction a few seconds.
-// The phone's `worktree ps` row reader is one self-contained file, so it rides along alone.
 // Workspace packages the release declares are added per release (releaseWorkspaceArchivePaths).
 const ARCHIVE_PATHS = [
   'src/main',
@@ -22,8 +21,7 @@ const ARCHIVE_PATHS = [
   'src/preload',
   'src/relay',
   'src/renderer',
-  'src/types',
-  'mobile/src/worktree/agent-row-display.ts'
+  'src/types'
 ]
 
 const WORKSPACE_POLICY = 'pnpm-workspace.yaml'

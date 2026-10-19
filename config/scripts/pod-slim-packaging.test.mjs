@@ -21,8 +21,7 @@ function inspectSlimConfig(profile) {
       ripgrepFilter: slim.mac.extraResources.find((entry) => entry.to === 'ripgrep').filter,
       ripgrepPlatforms: ripgrep.BUNDLED_RIPGREP_PLATFORMS,
       electronLanguages: slim.electronLanguages ?? null,
-      sameAfterPack: slim.afterPack === upstream.afterPack,
-      mobileWebGuard: require('./config/scripts/verify-packaged-mobile-web-bundle.cjs').assertMobileWebBundleBuilt.name
+      sameAfterPack: slim.afterPack === upstream.afterPack
     }))
   `
   return JSON.parse(
@@ -101,12 +100,10 @@ describe('Pod slim packaging', () => {
     expect(pod.ripgrepFilter.some((pattern) => pattern.startsWith('win32-'))).toBe(false)
     expect(pod.electronLanguages).toEqual(['en'])
     expect(pod.sameAfterPack).toBe(true)
-    expect(pod.mobileWebGuard).toBe('')
 
     const orca = inspectSlimConfig('orca')
     expect(orca.targets).toContain('node_modules/@linear/sdk')
     expect(orca.ripgrepPlatforms).toContain('win32-x64')
     expect(orca.electronLanguages).toBeNull()
-    expect(orca.mobileWebGuard).toBe('assertMobileWebBundleBuilt')
   })
 })

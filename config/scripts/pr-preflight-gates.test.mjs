@@ -230,12 +230,6 @@ it('pins every foreground and background step to its selected phase', () => {
 it.each([
   { changed: ['README.md'], static_analysis: false, typecheck: false, mobile_dependencies: false },
   {
-    changed: ['mobile/src/App.tsx'],
-    static_analysis: true,
-    typecheck: false,
-    mobile_dependencies: true
-  },
-  {
     changed: ['src/main/index.ts'],
     static_analysis: true,
     typecheck: true,

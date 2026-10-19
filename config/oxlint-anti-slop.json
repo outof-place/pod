@@ -84,15 +84,6 @@
     //
     // In the screenshot annotator a "shape" is the drawn geometry -- pen, arrow, rect,
     // ellipse, highlight. A domain noun, and it pervades every symbol in the module.
-    // In mobile/src/test-support/rpc-recording a "shape" is the container a recorded value is
-    // interned as (list, map or whole) and the structure a recorder fixture must match -- a
-    // domain noun across the engine, as in the annotator.
-    {
-      "files": ["**/test-support/rpc-recording/**"],
-      "rules": {
-        "anti-slop/no-shape-in-symbol-names": "off"
-      }
-    },
     {
       "files": [
         "**/browser-pane/annotate/**",
@@ -111,12 +102,11 @@
       }
     },
     // lucide exports the icon component as `Shapes`, and the matching REPO_LUCIDE_ICONS key
-    // is the persisted icon name shared by the desktop picker and mobile.
+    // is the persisted icon name of the desktop picker.
     {
       "files": [
         "**/components/repo/repo-icon.tsx",
-        "**/worktree-list/rows/repo-header-project-actions.tsx",
-        "**/components/MobileRepoIcon.tsx"
+        "**/worktree-list/rows/repo-header-project-actions.tsx"
       ],
       "rules": {
         "anti-slop/no-shape-in-symbol-names": "off"

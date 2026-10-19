@@ -8,7 +8,6 @@
     ".github/actions/install-node-dependencies/**",
     ".github/actions/restore-pnpm-verification/**",
     ".github/actions/prepare-native-runtime/**",
-    ".github/actions/install-mobile-dependencies/**",
     "scripts/pod-*",
     "product/**",
     "src/shared/product/**",
@@ -379,6 +378,85 @@
         {
           "glob": "tests/e2e/helpers/golden-source-control.ts",
           "reason": "a generic fixture path (src/index.ts, src/config.ts, src/app.ts) that matches cloud's apps by suffix"
+        }
+      ]
+    },
+    {
+      "id": "orca-mobile-app",
+      "category": "feature",
+      "reason": "Orca Mobile (Expo/React Native), its CI install action, the out/mobile-web bundle built from it, its benchmarks and the phone relay bench: Pod is a macOS desktop app and pairs no phones (mobileWebClient is cut)",
+      "paths": [
+        "mobile/**",
+        ".github/actions/install-mobile-dependencies/**",
+        "config/scripts/build-mobile-web-app-bundle.mjs",
+        "config/scripts/build-mobile-web-app-bundle.test.mjs",
+        "config/scripts/verify-mobile-web-app-bundle.mjs",
+        "config/scripts/verify-packaged-mobile-web-bundle.cjs",
+        "config/scripts/verify-packaged-mobile-web-bundle.test.mjs",
+        "config/scripts/mobile-web-bundle-manifest.mjs",
+        "config/scripts/mobile-web-bundle-manifest.test.mjs",
+        "config/scripts/mobile-web-bundle-fixture-tree.mjs",
+        "config/scripts/mobile-web-page-routes.mjs",
+        "config/scripts/mobile-web-page-routes.test.mjs",
+        "config/scripts/mobile-web-source-line-endings.mjs",
+        "config/scripts/mobile-web-source-line-endings.test.mjs",
+        "config/scripts/mobile-web-app-*",
+        "config/scripts/run-mobile-web-app-checks.mjs",
+        "config/scripts/mobile-entry-static-closure-work-budget.test.mjs",
+        "config/scripts/mobile-app-navigation-targets.mjs",
+        "config/scripts/mobile-process-host-tooling.test.mjs",
+        "config/scripts/mobile-{backspace,diagnostics-prefix,file-ranking,history-scope-paths,linear-group-sorted,linear-sort,log-revisions,markdown-placeholder,source-control-collation,task-sort}-benchmark.mjs",
+        "tests/tools/relay-bench/**",
+        "tests/e2e/cross-version-wire/cross-version-worktree-ps-verdict.unit.test.ts"
+      ],
+      "allowReferrers": [
+        {
+          "glob": "**/*.{test,spec,test-fixture}.{ts,tsx,mts,mjs,cjs,js}",
+          "reason": "a test's generic fixture path (src/index.ts, src/App.tsx) matches mobile's sources by suffix; the tests that import mobile/ are pruned with it or no longer import it"
+        },
+        {
+          "glob": "tests/e2e/helpers/golden-source-control.ts",
+          "reason": "a generic fixture path (src/index.ts) that matches mobile's modules and packages by suffix"
+        },
+        {
+          "glob": "src/renderer/src/components/right-sidebar/file-explorer-tree-node-test-fixtures.ts",
+          "reason": "a generic fixture path (src/index.ts) that matches mobile's modules and packages by suffix"
+        },
+        {
+          "glob": "src/renderer/src/components/dashboard/DashboardAgentRow.tsx",
+          "reason": "names the renderer's own hooks/use-now.ts, which matches mobile's by suffix"
+        },
+        {
+          "glob": "src/renderer/src/components/mobile/slides/TerminalSlide.tsx",
+          "reason": "sample terminal text in the desktop pairing slides lists test file names; the pairing UI goes in a later cut"
+        },
+        {
+          "glob": "src/renderer/src/i18n/locales/*.json",
+          "reason": "the catalogs carry the same sample terminal text as the pairing slides"
+        },
+        {
+          "glob": "src/renderer/src/assets/mobile-page.css",
+          "reason": "a comment names the mobile theme the desktop pairing page was ported from; the page goes in a later cut"
+        },
+        {
+          "glob": "src/main/runtime/orca-runtime-apply-tracked-pty-title.ts",
+          "reason": "prose (`ps`/mobile tabs), not a path"
+        },
+        {
+          "glob": "config/scripts/check-changed-code-quality.mjs",
+          "reason": "comments on why two oxlint flags exist; nothing reads mobile/"
+        },
+        {
+          "glob": "config/scripts/check-max-lines-ratchet.mjs",
+          "reason": "reads mobile/.oxlintrc.json only when it exists"
+        },
+        {
+          "glob": "config/update-translation.txt",
+          "reason": "prose note for translators"
+        },
+        {
+          "glob": ".github/actions/install-node-dependencies/action.yml",
+          "reason": "a cache condition on the caller's lockfile list; no Pod workflow passes mobile/pnpm-lock.yaml"
         }
       ]
     }

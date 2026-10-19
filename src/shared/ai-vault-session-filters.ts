@@ -1,6 +1,5 @@
 // Why: this is the pure filter/group/query core for Agent Session History.
-// It lives in /shared (not renderer) so the mobile package can reuse it —
-// Metro only watches mobile/ + repo-root src/shared, never src/renderer.
+// It lives in /shared (not renderer) so a non-renderer client can reuse it.
 // INVARIANT: /shared is a leaf — this module must NOT import from src/renderer.
 import {
   createNormalizedPathInsideOrEqualMatcher,

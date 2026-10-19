@@ -32,7 +32,7 @@ function fingerprint(files) {
   return hash.digest('hex')
 }
 const results = []
-for (const directory of ['src', 'mobile/src']) {
+for (const directory of ['src']) {
   const root = resolve(directory)
   const original = implementations.before(root)
   const expected = fingerprint(original)

@@ -110,10 +110,8 @@
       "oracle": "After acknowledged phone replies with stale host status, the exact card disappears and Send is enabled; unknown, refused or unverifiable-settlement replies retain enabled choices, while an older host's accepted reply dismisses like an acknowledged one; a same-occurrence view toggle retains pending acknowledgment and real replacements discard it. A slow 32 KiB SSH answer completes all chunks before Enter; cancellation preserves issued bytes but omits remaining groups. Paired settlement invokes the actual provider and lost callbacks remain unknown; older hosts deliver ordinary messages, launch and selector groups once and their accepted answers dismiss as before. An answered card stays hidden across a view remount; a collapsed card is a strip that frees the composer and expands back; an identical question in a new wait shows again; a composer send caught by a new card keeps its bubble without submitting or clearing the line under it.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/native-chat/NativeChatInteractiveCard.test.tsx src/renderer/src/components/native-chat/use-native-chat-interactive-send.test.tsx src/renderer/src/components/native-chat/native-chat-observed-send.test.ts src/renderer/src/components/native-chat/native-chat-runtime-send.test.ts src/renderer/src/components/native-chat/native-chat-runtime-send-launch-draft.test.ts src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-input.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-composer.test.tsx src/renderer/src/components/native-chat/use-native-chat-prompt-card-presentation.test.ts src/renderer/src/runtime/runtime-terminal-verified-input.test.ts src/renderer/src/components/native-chat/NativeChatComposer.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx src/renderer/src/components/native-chat/NativeChatApprovalCard.test.tsx src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/lib/agent-paste-draft.test.ts src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts src/renderer/src/lib/agent-followup-delivery.test.ts src/main/ipc/pty/ipc/write-input-acceptance.test.ts src/main/ipc/pty/ipc/write-input-user-input.test.ts src/main/ipc/pty/ipc/write-input-chunk-yield.test.ts src/main/ipc/pty-write-ipc-validation.test.ts src/main/providers/ssh-pty-write.test.ts src/main/daemon/daemon-pty-write-settlement-recovery.test.ts src/main/runtime/runtime-terminal-writer.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/rpc/terminal-send-launch-draft-resolution.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/renderer/src/lib/agent-paste-draft-readiness-budget.test.ts tests/e2e/native-chat-ssh-delivery.unit.test.ts --maxWorkers=2",
-        "ORCA_BACKGROUND_LAUNCH=1 mobile/node_modules/.bin/vitest run --config mobile/vitest.config.ts mobile/src/session/MobileNativeChatView.prompt-presentation.test.ts mobile/src/session/use-mobile-native-chat-controller.test.ts mobile/src/session/use-mobile-native-chat-ask-dismiss.test.ts mobile/src/session/MobileNativeChatView.test.ts mobile/src/session/mobile-prompt-controller.test.ts mobile/src/session/mobile-native-chat-permission-send.test.ts mobile/src/session/use-mobile-native-chat-cancel-ask.test.ts mobile/src/session/use-mobile-native-chat-answer-send.test.ts mobile/src/session/use-mobile-native-chat-message-send.test.ts mobile/src/session/mobile-native-chat-send.test.ts mobile/src/session/MobileNativeChatCardHeaderAction.test.tsx mobile/src/session/MobileNativeChatPromptCard.test.tsx --maxWorkers=2",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts --maxWorkers=1",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/native-chat/NativeChatInteractiveCard.test.tsx src/renderer/src/components/native-chat/use-native-chat-interactive-send.test.tsx src/renderer/src/components/native-chat/native-chat-observed-send.test.ts src/renderer/src/components/native-chat/native-chat-runtime-send.test.ts src/renderer/src/components/native-chat/native-chat-runtime-send-launch-draft.test.ts src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-input.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx src/renderer/src/components/native-chat/NativeChatApprovalCard.test.tsx src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/lib/agent-paste-draft.test.ts src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts src/renderer/src/lib/agent-followup-delivery.test.ts src/main/ipc/pty/ipc/write-input-acceptance.test.ts src/main/ipc/pty/ipc/write-input-user-input.test.ts src/main/ipc/pty/ipc/write-input-chunk-yield.test.ts src/main/ipc/pty-write-ipc-validation.test.ts src/main/providers/ssh-pty-write.test.ts src/main/daemon/daemon-pty-write-settlement-recovery.test.ts --maxWorkers=2",
-        "ORCA_BACKGROUND_LAUNCH=1 mobile/node_modules/.bin/vitest run --config mobile/vitest.config.ts mobile/src/session/MobileNativeChatView.prompt-presentation.test.ts mobile/src/session/use-mobile-native-chat-controller.test.ts mobile/src/session/use-mobile-native-chat-ask-dismiss.test.ts mobile/src/session/MobileNativeChatView.test.ts --maxWorkers=2"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/native-chat/NativeChatInteractiveCard.test.tsx src/renderer/src/components/native-chat/use-native-chat-interactive-send.test.tsx src/renderer/src/components/native-chat/native-chat-observed-send.test.ts src/renderer/src/components/native-chat/native-chat-runtime-send.test.ts src/renderer/src/components/native-chat/native-chat-runtime-send-launch-draft.test.ts src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-input.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx src/renderer/src/components/native-chat/NativeChatApprovalCard.test.tsx src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/lib/agent-paste-draft.test.ts src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts src/renderer/src/lib/agent-followup-delivery.test.ts src/main/ipc/pty/ipc/write-input-acceptance.test.ts src/main/ipc/pty/ipc/write-input-user-input.test.ts src/main/ipc/pty/ipc/write-input-chunk-yield.test.ts src/main/ipc/pty-write-ipc-validation.test.ts src/main/providers/ssh-pty-write.test.ts src/main/daemon/daemon-pty-write-settlement-recovery.test.ts --maxWorkers=2"
       ],
       "testFiles": [
         "src/renderer/src/components/native-chat/NativeChatInteractiveCard.test.tsx",
@@ -145,18 +143,6 @@
         "src/main/runtime/terminal-send-stale-leaf-liveness.test.ts",
         "src/renderer/src/lib/agent-paste-draft-readiness-budget.test.ts",
         "tests/e2e/native-chat-ssh-delivery.unit.test.ts",
-        "mobile/src/session/MobileNativeChatView.prompt-presentation.test.ts",
-        "mobile/src/session/use-mobile-native-chat-controller.test.ts",
-        "mobile/src/session/use-mobile-native-chat-ask-dismiss.test.ts",
-        "mobile/src/session/MobileNativeChatView.test.ts",
-        "mobile/src/session/mobile-prompt-controller.test.ts",
-        "mobile/src/session/mobile-native-chat-permission-send.test.ts",
-        "mobile/src/session/use-mobile-native-chat-cancel-ask.test.ts",
-        "mobile/src/session/use-mobile-native-chat-answer-send.test.ts",
-        "mobile/src/session/use-mobile-native-chat-message-send.test.ts",
-        "mobile/src/session/mobile-native-chat-send.test.ts",
-        "mobile/src/session/MobileNativeChatCardHeaderAction.test.tsx",
-        "mobile/src/session/MobileNativeChatPromptCard.test.tsx",
         "tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts"
       ],
       "assertionRefs": [
@@ -169,33 +155,11 @@
           ]
         },
         {
-          "file": "mobile/src/session/MobileNativeChatView.prompt-presentation.test.ts",
-          "assertions": [
-            "accepted Deny hides exactly that occurrence and restores Send across reconnect",
-            "a late answer cannot reshow an answered replacement occurrence",
-            "a late answer cannot dismiss a replacement session"
-          ]
-        },
-        {
           "file": "src/main/ipc/pty/ipc/write-input-acceptance.test.ts",
           "assertions": [
             "reports proven refusal and unknown acknowledgment separately",
             "waits for each chunk and stops a paste after refusal",
             "asks a pane awaiting daemon recovery to remount on either route"
-          ]
-        },
-        {
-          "file": "mobile/src/session/mobile-prompt-controller.test.ts",
-          "assertions": [
-            "keeps a question actionable after lost or unverifiable acknowledgment",
-            "acknowledges the same pending permission or Ask after a view-only toggle",
-            "keeps an acknowledged Deny hidden after the chat screen remounts on a lingering status",
-            "drops an accepted result after real prompt/session/PTY/tab/clear replacement",
-            "finishes an older-host selector once and dismisses it like an acknowledged answer",
-            "dismisses older-host approval choices like an acknowledged answer and restores Send",
-            "collapses a permission to a strip without writing, and expands it back",
-            "shows an identical heuristic question again after a new wait in terminal view",
-            "collapses an ask without writing and hides the heuristic card read from the same wait"
           ]
         },
         {
@@ -247,15 +211,6 @@
           "summary": "257 tests passed across 19 explicit files, covering production cards, observed sends, existing launch/paste callers, IPC validation, SSH acknowledgment and daemon settlement recovery."
         },
         {
-          "date": "2026-10-05",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 mobile/node_modules/.bin/vitest run --config mobile/vitest.config.ts mobile/src/session/MobileNativeChatView.prompt-presentation.test.ts mobile/src/session/use-mobile-native-chat-controller.test.ts mobile/src/session/use-mobile-native-chat-ask-dismiss.test.ts mobile/src/session/MobileNativeChatView.test.ts --maxWorkers=2",
-          "result": "passed",
-          "durationSeconds": 10.32,
-          "summary": "73 tests passed across four explicit files after the controller extraction, covering the production view/card/composer, occurrence dismissal, controller session scoping, unknown/refused replies and stopping active dictation."
-        },
-        {
           "date": "2026-10-06",
           "runner": "local",
           "platform": "macos",
@@ -263,15 +218,6 @@
           "result": "passed",
           "durationSeconds": 14.53,
           "summary": "391 tests passed across 29 explicit files after the round-4 review fix, including older-host acceptance, the inert hidden composer, collapse that keeps a partial answer and returns focus to the composer, pane-scoped card focus, wait-start occurrence identity and the pane remount signal."
-        },
-        {
-          "date": "2026-10-06",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 mobile/node_modules/.bin/vitest run --config mobile/vitest.config.ts mobile/src/session/MobileNativeChatView.prompt-presentation.test.ts mobile/src/session/use-mobile-native-chat-controller.test.ts mobile/src/session/use-mobile-native-chat-ask-dismiss.test.ts mobile/src/session/MobileNativeChatView.test.ts mobile/src/session/mobile-prompt-controller.test.ts mobile/src/session/mobile-native-chat-permission-send.test.ts mobile/src/session/use-mobile-native-chat-cancel-ask.test.ts mobile/src/session/use-mobile-native-chat-answer-send.test.ts mobile/src/session/use-mobile-native-chat-message-send.test.ts mobile/src/session/mobile-native-chat-send.test.ts mobile/src/session/MobileNativeChatCardHeaderAction.test.tsx mobile/src/session/MobileNativeChatPromptCard.test.tsx --maxWorkers=2",
-          "result": "passed",
-          "durationSeconds": 1.19,
-          "summary": "186 tests passed across 12 explicit files after the round-3 review fixes, including older-host answers dismissing like acknowledged ones, collapse that keeps the card mounted, one card per occurrence, wait-start question identity and only Send blocked."
         },
         {
           "date": "2026-10-06",
@@ -1457,8 +1403,7 @@
       "invariant": "One structured-send operation id causes at most one provider dispatch. Each user Send on phone or desktop is a new action with a fresh id and one request; neither automatically resends an ambiguous action. The host retains the original action's outcome, and a later phone Send remains possible with equal text, after remount, or when phone storage fails. Repeated transmission of the same operation remains protected by host deduplication.",
       "oracle": "Inject adapter/RPC acknowledgement loss, caller replacement, logical-client close after response, auth recovery with a written request, missing host submissions, legacy pending rows, stale fences, expiry, mobile remount, and phone storage refusal. Assert at most one dispatch for repeated transmission of one operation. For a later phone Send, assert a fresh id and second delivery while the original host entry remains unknown; equal images use current uploaded paths and delivery fields follow current host capabilities.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-structured-send-new-action.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-background-tasks.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-newer-approval-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-read-failure.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-prompt-cancel.test.tsx ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/use-mobile-structured-native-chat-send-bridge.test.ts ../mobile/src/mobile-web-shell/page-storage-keys.test.ts ../mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts ../mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx ../mobile/src/mobile-web-shell/bridge-host-init.test.ts ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts --maxWorkers=2"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts"
       ],
       "testFiles": [
         "src/shared/agent-session-operation-ledger.test.ts",
@@ -1471,26 +1416,7 @@
         "src/main/runtime/orchestration/structured-pointer-operation-id.test.ts",
         "src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
         "src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx",
-        "src/renderer/src/lib/launch-structured-agent-session.test.ts",
-        "mobile/src/session/mobile-native-chat-image-attachment.test.ts",
-        "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
-        "mobile/src/session/mobile-structured-send-new-action.test.ts",
-        "mobile/src/session/mobile-structured-send-delivery.test.ts",
-        "mobile/src/session/use-mobile-structured-agent-session-send.test.tsx",
-        "mobile/src/session/use-mobile-structured-agent-session.test.tsx",
-        "mobile/src/transport/mobile-relay-rpc-session.test.ts",
-        "mobile/src/transport/rpc-client-delivery-ambiguity.test.ts",
-        "mobile/src/transport/stable-logical-rpc-client.test.ts",
-        "mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx",
-        "mobile/src/session/use-mobile-structured-agent-session-background-tasks.test.tsx",
-        "mobile/src/session/use-mobile-structured-agent-session-newer-approval-send.test.tsx",
-        "mobile/src/session/use-mobile-structured-agent-session-read-failure.test.tsx",
-        "mobile/src/session/use-mobile-structured-agent-session-prompt-cancel.test.tsx",
-        "mobile/src/session/use-mobile-structured-native-chat-send-bridge.test.ts",
-        "mobile/src/mobile-web-shell/page-storage-keys.test.ts",
-        "mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts",
-        "mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx",
-        "mobile/src/mobile-web-shell/bridge-host-init.test.ts"
+        "src/renderer/src/lib/launch-structured-agent-session.test.ts"
       ],
       "assertionRefs": [
         {
@@ -1508,16 +1434,6 @@
           "assertions": ["replays the original row after the caller identity changes"]
         },
         {
-          "file": "mobile/src/session/use-mobile-structured-agent-session-send.test.tsx",
-          "assertions": [
-            "a later Send owns a new id even when the earlier host answer was %s",
-            "keeps the original unknown host row while allowing another Send",
-            "does not replay an old action after remount",
-            "uses newly uploaded attachment paths for a new action with the same image",
-            "never reads an old phone journal, even when storage is full or unreadable"
-          ]
-        },
-        {
           "file": "src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx",
           "assertions": ["reuses an option operation after a pending admission refusal"]
         },
@@ -1530,20 +1446,6 @@
           "assertions": ["never re-mints an ambiguous batch after the host replay window expires"]
         },
         {
-          "file": "mobile/src/transport/rpc-client-delivery-ambiguity.test.ts",
-          "assertions": [
-            "marks a written request unknown when another request triggers auth recovery"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
-          "assertions": ["preserves a committed response when logical close wins the callback race"]
-        },
-        {
-          "file": "mobile/src/transport/mobile-relay-rpc-session.test.ts",
-          "assertions": ["keeps a synchronous pre-write relay failure definite"]
-        },
-        {
           "file": "src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
           "assertions": [
             "gives back at once, as unconfirmed, a send whose request threw, and never sends it again"
@@ -1551,15 +1453,6 @@
         }
       ],
       "evidenceRuns": [
-        {
-          "date": "2026-10-07",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-structured-send-new-action.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-background-tasks.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-newer-approval-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-read-failure.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-prompt-cancel.test.tsx ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/use-mobile-structured-native-chat-send-bridge.test.ts ../mobile/src/mobile-web-shell/page-storage-keys.test.ts ../mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts ../mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx ../mobile/src/mobile-web-shell/bridge-host-init.test.ts ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts --maxWorkers=2",
-          "result": "passed",
-          "durationSeconds": 5.42,
-          "summary": "Nineteen focused mobile files passed 241 tests for fresh Send identity, remount, attachment paths, storage refusal, mixed host capabilities, queued cards, and written-request ambiguity."
-        },
         {
           "date": "2026-10-06",
           "runner": "local",
@@ -3985,86 +3878,6 @@
       "demotionRule": "Demote or quarantine if cancellation creates the shared install lock before transfer settlement, a split-SFTP transfer loses identity proof, recovery deletes a replacement/symlink/reparse/foreign stage, fixed-path work exceeds its eight-slot bound, cancellation leaks a local descriptor, or the focused gate flakes without a product or harness bug."
     },
     {
-      "id": "mobile-ui.drawer-close-continuity",
-      "title": "Mobile drawers finish closing despite parent rerenders",
-      "maturity": "experimental",
-      "protection": "partial",
-      "owner": "mobile-ui",
-      "layer": "react-native-modal-lifecycle",
-      "surfaces": [
-        "host action sheet",
-        "host rename navigation",
-        "host removal confirmation",
-        "shared mobile bottom drawers"
-      ],
-      "platforms": ["ios", "android", "macos"],
-      "providers": ["provider-independent"],
-      "coveredPlatforms": ["ios", "macos"],
-      "coveredProviders": ["provider-independent"],
-      "coverageNotes": "A deterministic React lifecycle test proves callback churn cannot restart an in-flight drawer close, and an iOS 26.5 simulator run covers Edit Host plus confirmed host removal. Android native-modal behavior remains a live-test gap.",
-      "motivatingLinks": ["https://github.com/stablyai/orca/issues/8791"],
-      "invariant": "Once a bottom drawer begins closing, unrelated parent rerenders must not replace its completion callback or restart the native hide animation. The drawer must unmount once and deliver the latest after-close action exactly once.",
-      "oracle": "Render one drawer, begin closing it, rerender with new parent callbacks before completion, and require every MountedBottomDrawer frame to retain one onHidden identity. Trigger that completion barrier repeatedly, then require the drawer's null render to commit before only the latest after-close callback runs exactly once.",
-      "commands": [
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/components/bottom-drawer-close-lifecycle.test.ts",
-        "Manual iOS 26.5 simulator: long-press paired host; open Edit host; return; long-press host; Remove; confirm Remove; assert host disappears"
-      ],
-      "testFiles": ["mobile/src/components/bottom-drawer-close-lifecycle.test.ts"],
-      "assertionRefs": [
-        {
-          "file": "mobile/src/components/bottom-drawer-close-lifecycle.test.ts",
-          "assertions": ["keeps close stable and delivers the latest action once after unmount"]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-07-28",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/components/bottom-drawer-close-lifecycle.test.ts",
-          "result": "passed",
-          "durationSeconds": 0.18,
-          "summary": "The focused lifecycle harness passed with stable completion identity, latest-callback delivery, and drawer unmount assertions."
-        },
-        {
-          "date": "2026-07-28",
-          "runner": "manual",
-          "platform": "ios",
-          "command": "Manual iOS 26.5 simulator: long-press paired host; open Edit host; return; long-press host; Remove; confirm Remove; assert host disappears",
-          "result": "passed",
-          "durationSeconds": 37,
-          "summary": "Edit host opened responsively after the drawer closed; returning and confirming Remove deleted the host without freezing."
-        }
-      ],
-      "runtimeBudget": {
-        "p95Seconds": 5,
-        "scope": "focused React lifecycle contract test"
-      },
-      "flakeHistory": {
-        "status": "unknown",
-        "evidence": "One deterministic local contract run and one iOS simulator flow exist; CI and soak history are not yet available."
-      },
-      "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "On current main, the harness failed because each parent render created a different onHidden callback. The stable completion callback fix passes the byte-identical oracle; restoring the inline callback reproduces the failure."
-      },
-      "performanceBudget": {
-        "required": true,
-        "evidence": "Any number of parent rerenders retains one close-completion identity, so they add zero hide-animation restarts, timers, listeners, or after-close deliveries."
-      },
-      "promotionCriteria": [
-        "Collect 100 consecutive CI passes or 14 days of soak history.",
-        "Run the host Edit and Remove flows on a physical iOS device and an Android emulator or device.",
-        "Keep the callback-identity and exactly-once delivery assertions intact for every shared drawer lifecycle change."
-      ],
-      "knownGaps": [
-        "Android native-modal behavior has no live evidence.",
-        "The simulator run used an unreachable stored host rather than a connected multi-worktree host.",
-        "The contract test injects the hide-completion barrier instead of running Reanimated."
-      ],
-      "demotionRule": "Keep experimental or demote if parent rerenders can restart drawer hiding, after-close delivery duplicates or goes stale, the focused contract flakes, or either mobile platform retains a touch-blocking modal."
-    },
-    {
       "id": "mobile-relay.endpoint-recovery",
       "title": "Mobile relay recovery retries offline hosts and races direct endpoints",
       "maturity": "experimental",
@@ -4090,135 +3903,16 @@
       "invariant": "A foregrounded paired phone must recover from relay HOST_OFFLINE without a foreground or network-change signal, while direct recovery must select the first authenticated configured LAN or Tailscale endpoint without serial timeout delays. Relay recovery presentation starts only for a failed active Relay or a dial backed by an eligible credential, remains pending through a genuine failed-dial cooldown, and exposes the supervisor's consecutive failed-dial count so a continuous outage escalates to unreachable. A relay credential the desktop keeps refusing escalates to re-pair once its transient-rejection budget is spent, and only an authenticated session clears that verdict. A healthy Relay survives backgrounding for at most 30 seconds and is reused on a quick foreground without redial; expiry, transport failure, direct success, or stop cancels the grace safely, late confirmation bookkeeping preserves lease rotation for a retained live Relay, and losing probes or replacements close without affecting the winner.",
       "oracle": "Inject deterministic relay close codes, missing and expired credentials, delayed credential reads, random bytes, fake timers, suspended timers, stale callbacks, and independently controlled direct clients. Require HOST_OFFLINE to replace any faster transport timer with one 5-15 second retry, require no retry before the selected delay, keep Relay presentation absent when no socket can open, clear it across lifecycle races, retain it through real dial cooldowns, retain one healthy Relay through 29,999 milliseconds of background time without a new dial, close it exactly once at 30 seconds or on a later foreground when the timer was suspended, reject a stale expiry after foreground, recover a retained Relay transport failure only after foreground, resume a lease rotation that came due during the grace, arm a lease whose confirmation persistence finishes during the grace, and leave healthy direct sessions unchanged. Establish Relay through the supervisor and require its active close plus 11 failed replacements to publish reconnect attempt 12 and a Relay-unreachable verdict, race all unique non-relay endpoints, select the first authenticated path, close every loser exactly once, and retain no retry after direct connectivity wins. Drive a supervisor-established Relay through four simulated hours of E2EE rejections and require the re-pair verdict, require it to survive a background/foreground cycle, require two rejections followed by acceptance to never latch it, and require a plain transport outage to still read Relay-unreachable.",
       "commands": [
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-background-grace.test.ts mobile/src/transport/mobile-relay-background-lifecycle.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-endpoint-supervisor-nudge.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/mobile-relay-close-codes.test.ts --reporter=dot"
       ],
-      "testFiles": [
-        "mobile/src/transport/mobile-direct-endpoint-probe.test.ts",
-        "mobile/src/transport/mobile-relay-background-grace.test.ts",
-        "mobile/src/transport/mobile-relay-background-lifecycle.test.ts",
-        "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
-        "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
-        "mobile/src/transport/mobile-endpoint-supervisor-nudge.test.ts",
-        "mobile/src/transport/mobile-relay-outage-escalation.test.ts",
-        "mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts",
-        "mobile/src/transport/stable-logical-rpc-client.test.ts",
-        "mobile/src/transport/mobile-relay-runtime-failover.test.ts",
-        "mobile/src/transport/connection-health.test.ts",
-        "src/shared/mobile-relay-close-codes.test.ts"
-      ],
+      "testFiles": ["src/shared/mobile-relay-close-codes.test.ts"],
       "assertionRefs": [
-        {
-          "file": "mobile/src/transport/mobile-direct-endpoint-probe.test.ts",
-          "assertions": [
-            "a reachable Tailscale endpoint authenticates without waiting for a stale primary LAN timeout",
-            "the stale direct candidate closes while the authenticated winner stays open"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/mobile-relay-background-grace.test.ts",
-          "assertions": [
-            "the grace expires exactly once at 30 seconds",
-            "foreground deadline checks enforce expiry when the OS suspended the timer",
-            "a stale expiry callback cannot close a foreground connection"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/mobile-relay-background-lifecycle.test.ts",
-          "assertions": [
-            "a quick background round trip reuses Relay without a new dial",
-            "Relay closes exactly once at grace expiry and recovers only after foreground",
-            "foreground enforces an overdue grace when the OS suspended its timer",
-            "a retained Relay transport failure suspends without a background redial and recovers on foreground",
-            "a healthy direct connection is unchanged by the Relay-only grace",
-            "a lease rotation that becomes due during the grace starts promptly on foreground",
-            "lease rotation remains armed when confirmation persistence finishes during the grace"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
-          "assertions": [
-            "HOST_OFFLINE replaces a pending capacity retry with the bounded host-offline delay",
-            "direct connectivity cancels the pending relay retry"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
-          "assertions": [
-            "a foregrounded supervisor retries HOST_OFFLINE without an external lifecycle signal",
-            "a missing or expired credential never presents a Relay connection that cannot start",
-            "backgrounding during credential selection cannot publish a stale Relay recovery path",
-            "a genuine failed Relay dial remains pending through its retry cooldown"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/mobile-endpoint-supervisor-nudge.test.ts",
-          "assertions": [
-            "a replacement Relay that authenticates after backgrounding withdraws without replacing the retained session"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/mobile-relay-outage-escalation.test.ts",
-          "assertions": [
-            "a supervisor-established Relay close plus 11 failed replacements publish reconnect attempt 12",
-            "the existing connection classifier escalates the continuous outage to Can't connect via Relay"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts",
-          "assertions": [
-            "a persistent E2EE rejection escalates to Pairing invalid — re-pair with your desktop",
-            "the re-pair verdict survives a background/foreground cycle",
-            "rejections inside the transient budget followed by acceptance never latch it",
-            "a plain transport outage still reads Can't connect via Relay"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/connection-health.test.ts",
-          "assertions": [
-            "a rejected pairing outranks a pending Relay recovery",
-            "a rejected pairing never overrides a live connection"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
-          "assertions": [
-            "supervisor Relay attempts overlay but never replace a larger active-session retry count",
-            "count-only changes notify connection-path subscribers and clearing recovery restores the physical count"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/mobile-relay-runtime-failover.test.ts",
-          "assertions": [
-            "a fresh credential starts Relay presentation with the controller's current count",
-            "missing or expired credentials never open a Relay socket"
-          ]
-        },
         {
           "file": "src/shared/mobile-relay-close-codes.test.ts",
           "assertions": ["HOST_OFFLINE maps to self-healing full-jitter recovery"]
         }
       ],
       "evidenceRuns": [
-        {
-          "date": "2026-08-26",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-background-grace.test.ts mobile/src/transport/mobile-relay-background-lifecycle.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-endpoint-supervisor-nudge.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
-          "result": "passed",
-          "durationSeconds": 1.15,
-          "summary": "Eleven focused mobile transport files passed with 135 assertions, including 30-second Relay retention, supervisor-level timer-suspension recovery, mid-grace transport failure, late-persistence lease rotation, manual retry, and direct-path non-regression."
-        },
-        {
-          "date": "2026-08-18",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
-          "result": "passed",
-          "durationSeconds": 1.25,
-          "summary": "Eight focused mobile transport files passed with 109 assertions, including production-lifecycle outage escalation, persistent pairing-rejection escalation, and logical count publication."
-        },
         {
           "date": "2026-08-16",
           "runner": "local",
@@ -4257,158 +3951,6 @@
         "Background-to-foreground recovery remains covered by supervisor tests but lacks a physical sleep/wake run."
       ],
       "demotionRule": "Keep experimental or demote if focused tests flake, HOST_OFFLINE can park indefinitely, direct probes serialize configured endpoints, loser cleanup leaks clients, or physical-device radio cost exceeds the measured budget."
-    },
-    {
-      "id": "mobile-transport.lifecycle-liveness",
-      "title": "Wanted mobile hosts self-heal without false physical-session death",
-      "maturity": "experimental",
-      "protection": "partial",
-      "owner": "mobile-runtime",
-      "layer": "mobile-provider-and-physical-session-contract",
-      "surfaces": [
-        "mobile host acquisition",
-        "Keychain and Keystore catalog reads",
-        "direct LAN and Tailscale RPC",
-        "cloud relay RPC",
-        "foreground and network revival"
-      ],
-      "platforms": ["ios", "android", "macos", "linux", "windows"],
-      "providers": ["lan", "tailscale", "cloud-relay"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["lan", "tailscale", "cloud-relay"],
-      "coverageNotes": "Deterministic React/provider tests cover catalog, missing-host, construction, cancellation, release, forget, refresh, backoff, stale-generation outcomes, and path-aware recovery presentation. Direct sessions cover idle probing and three fair misses. Relay sessions cover zero idle polling, rate-limited foreground probes, two fair misses, authenticated activity before semantic decoding, delivery ambiguity, scheduler stalls, and write failure. Physical iOS/Android sleep, carrier/Tailscale loss, and production relay paths remain live-test gaps.",
-      "motivatingLinks": [
-        "https://linear.app/stably/issue/STA-4153/mobile-app-disconnects-frequently"
-      ],
-      "invariant": "A provider-wanted host without a logical client retries every current-generation pre-client failure until success or explicit cancellation, while release, disconnect, forget, refresh, and stale async continuations preserve their distinct resurrection policies. Direct sessions probe after authenticated silence and terminate after three fair misses. Relay sessions emit no periodic idle or demand-driven probes, use rate-limited foreground probes, and terminate after two fair misses. Authenticated traffic, scheduler stalls, and replacement identities cannot manufacture death. Relay recovery must notify presentation independently of transport-state changes, must not inherit a failed direct path's Tailscale hint, and must retain long-outage escalation.",
-      "oracle": "Inject rejected and never-settling catalog reads, missing profiles, synchronous construction failure, release, refresh, forget, revival, and stale completion under fake time. Require bounded 1s through 60s retry, exact current-generation publication, and no zero-owner or forgotten-client resurrection. Inject direct and relay authenticated text/binary traffic, silent probe windows, stalled clocks, replacement identities, and failed writes. Require direct three-miss tolerance; Relay zero idle and demand-driven liveness traffic, one foreground probe sequence, two fair 4s misses, a 10s voluntary rate limit, no old-session network-change probe, and delivery-unknown mutations without replay. Start and clear Relay recovery without changing transport state and require observers to rerender. Project five failed Tailscale attempts into a neutral Relay-specific verdict, then require twelve attempts to produce a Relay-specific unreachable verdict with no Tailscale hint.",
-      "commands": [
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/connection-health.test.ts"
-      ],
-      "testFiles": [
-        "mobile/src/transport/client-context.test.ts",
-        "mobile/src/transport/host-open-recovery.test.tsx",
-        "mobile/src/transport/host-open-retry-scheduler.test.ts",
-        "mobile/src/transport/rpc-session-liveness-watchdog.test.ts",
-        "mobile/src/transport/rpc-session-liveness-integration.test.ts",
-        "mobile/src/transport/mobile-relay-rpc-session.test.ts",
-        "mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts",
-        "mobile/src/transport/mobile-endpoint-nudge-router.test.ts",
-        "mobile/src/transport/mobile-relay-e2ee-link.test.ts",
-        "mobile/src/transport/stable-logical-rpc-client.test.ts",
-        "mobile/src/transport/connection-health.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "mobile/src/transport/client-context.test.ts",
-          "assertions": [
-            "a retired close-on-release owner closes an ownerless manual reconnect",
-            "a Relay recovery path change rerenders observers without a transport-state change"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/host-open-recovery.test.tsx",
-          "assertions": [
-            "catalog, missing-host, and construction failures retry without remounting",
-            "final release and forget prevent later client publication",
-            "refresh bypasses a never-settling stale open and stale failure cannot clobber its replacement",
-            "revival expedites recovery without resetting the failure tier",
-            "a retired owner's release cannot cancel a newer owner's open",
-            "explicit reconnect demand survives a pre-client failure"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/rpc-session-liveness-watchdog.test.ts",
-          "assertions": [
-            "authenticated traffic resets the idle and missed-probe clocks",
-            "two fair misses are tolerated and the third terminates exactly once",
-            "scheduler stalls and replacement identities cannot terminate the current session",
-            "continuous authenticated traffic does not churn idle timers per frame"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/rpc-session-liveness-integration.test.ts",
-          "assertions": [
-            "direct handshake and probe write exceptions recover without escaping",
-            "one silent foreground window preserves the connected direct socket",
-            "authenticated terminal binary output restores direct-session liveness",
-            "a replay write failure retains every queued stream for the replacement session",
-            "liveness probe replies cannot consume the authentication retry budget"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/mobile-relay-rpc-session.test.ts",
-          "assertions": [
-            "written Relay requests retain delivery-unknown failures",
-            "resume confirmation and stream routing remain authenticated"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts",
-          "assertions": [
-            "an idle Relay emits zero periodic traffic",
-            "RPCs and subscriptions after prolonged silence emit no liveness probe",
-            "foreground Relay liveness uses two fair 4-second misses and a 10-second sequence rate limit",
-            "network change does not probe the replaced Relay",
-            "a failed foreground probe write disconnects immediately"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
-          "assertions": [
-            "a delivery-unknown mutation is not replayed onto a replacement Relay",
-            "Relay recovery path changes publish and remain pending between failed dials",
-            "a connected path clears recovery state before any later disconnect"
-          ]
-        },
-        {
-          "file": "mobile/src/transport/connection-health.test.ts",
-          "assertions": [
-            "a Relay fallback pending over five failed Tailscale attempts remains neutral and omits the Tailscale hint",
-            "a prolonged Relay recovery escalates without reviving the Tailscale hint"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-08-16",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/connection-health.test.ts",
-          "result": "passed",
-          "durationSeconds": 0.77,
-          "summary": "Eleven focused files passed 85 deterministic provider lifecycle, path presentation, direct/Relay liveness, traffic, and delivery-ambiguity tests."
-        }
-      ],
-      "runtimeBudget": {
-        "p95Seconds": 5,
-        "scope": "focused mobile provider and transport unit tests"
-      },
-      "flakeHistory": {
-        "status": "unknown",
-        "evidence": "One deterministic local focused run exists; CI and soak history are not yet available."
-      },
-      "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "Current main failed six deterministic assertions: terminal catalog failure, zero-owner publication, stale failure clobber, initial direct handshake write throw, one-window direct death, and foreground probe write throw. The candidate passes the same assertions and adds relay parity, backoff, cancellation, and scheduler-fairness coverage."
-      },
-      "performanceBudget": {
-        "required": true,
-        "evidence": "Each wanted clientless host owns at most one open and one retry timer with a 60-second capped tail. Direct sessions own one idle or probe timer. Idle Relay sessions own no liveness timer and emit no periodic or demand-driven liveness traffic; foreground sequences start at most once per 10 seconds. No subprocess, wire opcode, or server-side work is introduced."
-      },
-      "promotionCriteria": [
-        "Collect 100 consecutive CI passes or 14 days of soak history.",
-        "Capture the existing final-timeout log immediately before an affected-device drop.",
-        "Run physical iOS and Android direct LAN, Tailscale, relay, background/resume, and network-handoff journeys.",
-        "Measure reconnect radio and battery impact during the 60-second catalog retry tail, direct 44-second idle liveness budget, and Relay foreground probes."
-      ],
-      "knownGaps": [
-        "No physical iOS or Android device was exercised.",
-        "No affected-device log yet proves the old one-window watchdog caused the reported live-session drop.",
-        "Carrier NAT, production Tailscale, production relay cells, and real scheduler suspension remain unmeasured.",
-        "Persistent pre-client failure metadata is not yet exposed in Home UI."
-      ],
-      "demotionRule": "Keep experimental or demote if a wanted host can park without retry, stale work can publish or notify, disconnect or forget resurrects a host, direct closes before three fair misses, Relay polls while idle or on demand, survives two fair foreground misses, authenticated traffic fails to restore health, timers leak across identity replacement, mutations replay after ambiguous delivery, or physical-device radio cost exceeds the measured budget."
     },
     {
       "id": "desktop-relay.assignment-backpressure",
@@ -16667,7 +16209,6 @@
       "oracle": "Record release intent for a settled owner, attempt exact reuse before close, and require worker-start to fail with terminal_release_in_progress while the terminal stays open; then release the original owner exactly once. Race retain and real user input against a controlled archive promise and require no committed archive or close. Rebase a closed web-terminal host partition without terminalLayoutsByTabId and require the persistence write to complete while preserving host-authoritative membership; replay a valid legacy retirement under the same omission and require exact membership removal plus revision advancement. For retained external, user-owned, transferred, stopped, and abandoned resources, run one fresh inventory against the exact local/WSL or SSH provider: an exact live incarnation and every unknown inventory shape stay retained, while positive absence atomically sets ownership_state and release_state to released with processAction none and zero closeTerminal calls. Change host or process identity and inject duplicate resource evidence to require retention. Freeze a structured transcript, delete its source file, and require archived worker-read to return the same bounded redacted messages. Restart a pending mutation, reset orchestration state, and create 50 resources while asserting replay convergence, zero orphan rows, two-query worker listing, and no unrelated close.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-mobile-report.test.ts src/main/runtime/orca-runtime-terminal-handle-incarnation.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 mobile/node_modules/.bin/vitest run --config mobile/vitest.config.ts mobile/src/session/mobile-worker-takeover-send-sites.test.ts mobile/src/terminal/worker-terminal-takeover-report.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/pty-inventory-liveness-verdict.test.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/mobile-session-terminal-persistence-retirement.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/mobile-session-terminal-persistence-retirement.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
@@ -16677,8 +16218,6 @@
       ],
       "testFiles": [
         "src/main/runtime/rpc/methods/orchestration/worker/worker-release-mobile-report.test.ts",
-        "mobile/src/session/mobile-worker-takeover-send-sites.test.ts",
-        "mobile/src/terminal/worker-terminal-takeover-report.test.ts",
         "src/main/runtime/pty-inventory-liveness-verdict.test.ts",
         "src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts",
         "src/main/runtime/mobile-session-terminal-persistence-retirement.test.ts",
@@ -16696,13 +16235,6 @@
           "assertions": [
             "a handle-addressed phone report fences %s worker release",
             "mobile %s bytes do no orchestration database work"
-          ]
-        },
-        {
-          "file": "mobile/src/session/mobile-worker-takeover-send-sites.test.ts",
-          "assertions": [
-            "%s reports on its send target once per handle per 30 seconds",
-            "%s never reports takeover"
           ]
         },
         {
@@ -17687,14 +17219,10 @@
       "invariant": "Snapshot and replacement-terminal replay answer no terminal queries; every live query delivered to subscribed mobile views has at most one current responder; a live query queued behind replay is answered after the replay boundary; terminal-generated replies never transfer the user-input floor.",
       "oracle": "The injected gate emits zero replies during replay, exactly one after its live boundary, and ignores a superseded generation; native routing rejects ordinary input; the sender rejects disconnected or unsubscribed handles; runtime election accepts only the earliest active mobile subscriber and promotes its survivor; terminal.send writes only validated query grammar without mobileTookFloor; legacy binary subscribe captures a query while phone-fit is still pending and emits it after the snapshot.",
       "commands": [
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/terminal/terminal-webview-query-reply.test.ts mobile/src/terminal/terminal-webview-query-reply-routing.test.ts mobile/src/terminal/mobile-terminal-query-reply.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/mobile-presence-lock.test.ts src/shared/terminal-query-reply.test.ts src/shared/terminal-reply-query-scan.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-terminal-input-gating.test.ts"
       ],
       "testFiles": [
-        "mobile/src/terminal/terminal-webview-query-reply.test.ts",
-        "mobile/src/terminal/terminal-webview-query-reply-routing.test.ts",
-        "mobile/src/terminal/mobile-terminal-query-reply.test.ts",
         "src/main/runtime/rpc/terminal-send.test.ts",
         "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
         "src/main/runtime/mobile-presence-lock.test.ts",
@@ -17703,15 +17231,6 @@
         "src/renderer/src/components/terminal-pane/pty-connection-terminal-input-gating.test.ts"
       ],
       "assertionRefs": [
-        {
-          "file": "mobile/src/terminal/terminal-webview-query-reply.test.ts",
-          "assertions": [
-            "snapshot replay emits no terminal-data message before the replay boundary",
-            "a live query after the boundary emits exactly one terminal-data message",
-            "a superseded terminal generation cannot regain reply authority",
-            "xterm parser replies remain enabled while its DOM textarea and hardware-key path stay inert"
-          ]
-        },
         {
           "file": "src/main/runtime/rpc/terminal-send.test.ts",
           "assertions": [
@@ -17736,15 +17255,6 @@
         }
       ],
       "evidenceRuns": [
-        {
-          "date": "2026-07-10",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/terminal/terminal-webview-query-reply.test.ts mobile/src/terminal/terminal-webview-query-reply-routing.test.ts mobile/src/terminal/mobile-terminal-query-reply.test.ts",
-          "result": "passed",
-          "durationSeconds": 1,
-          "summary": "10 mobile bridge, routing, replay/generation, and stale-subscription tests passed. Before implementation, the WebView listener, native route, and sender tests failed."
-        },
         {
           "date": "2026-07-10",
           "runner": "local",
@@ -17825,9 +17335,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-ack-output-budget.test.ts src/main/runtime/rpc/terminal-multiplex-ack-overflow-recovery.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-multiplex-output-pause-and-viewport.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-ack-output-budget.test.ts src/main/runtime/rpc/terminal-multiplex-ack-overflow-recovery.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-multiplex-output-pause-and-viewport.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-ack-output-budget.test.ts src/main/runtime/rpc/terminal-multiplex-ack-overflow-recovery.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-multiplex-output-pause-and-viewport.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/components/terminal-pane/terminal-pty-ack-gate.test.ts src/renderer/src/lib/pane-manager/terminal-delivery-credit.test.ts src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts src/renderer/src/runtime/runtime-terminal-stream.test.ts --maxWorkers=1",
-        "ORCA_TERMINAL_PERF_BENCH=1 pnpm exec vitest run --config config/vitest.config.ts --disableConsoleIntercept src/main/runtime/rpc/terminal-multiplex-flow-control.bench.test.ts",
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts"
+        "ORCA_TERMINAL_PERF_BENCH=1 pnpm exec vitest run --config config/vitest.config.ts --disableConsoleIntercept src/main/runtime/rpc/terminal-multiplex-flow-control.bench.test.ts"
       ],
       "testFiles": [
         "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
@@ -17843,9 +17351,7 @@
         "src/renderer/src/components/terminal-pane/terminal-pty-ack-gate.test.ts",
         "src/renderer/src/lib/pane-manager/terminal-delivery-credit.test.ts",
         "src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts",
-        "src/renderer/src/runtime/runtime-terminal-stream.test.ts",
-        "mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
-        "mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts"
+        "src/renderer/src/runtime/runtime-terminal-stream.test.ts"
       ],
       "assertionRefs": [
         {
@@ -17939,21 +17445,6 @@
             "the 100 ms RTT model sustains more than 7 MiB/s per viewer with less than 200 ms fairness spread",
             "the opt-in benchmark reports RTT throughput, scheduler CPU time, exact protocol frame allocations, completion spread, and measured @xterm/headless parser CPU and retained heap"
           ]
-        },
-        {
-          "file": "mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
-          "assertions": [
-            "an active terminal stream pauses while native chat covers its WebView",
-            "the stream resumes only for the ready active terminal after chat closes",
-            "non-terminal and already-settled stream states perform no lifecycle work"
-          ]
-        },
-        {
-          "file": "mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts",
-          "assertions": [
-            "a late WebView-ready transition converts a cold-start lease-only stream back to output",
-            "ordinary WebView readiness does not rerender the mobile session route"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -17965,15 +17456,6 @@
           "result": "passed",
           "durationSeconds": 3.8,
           "summary": "3 test file(s) passed, 28 tests passed on main@1282f5c2d in a clean checkout."
-        },
-        {
-          "date": "2026-07-12",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
-          "result": "passed",
-          "durationSeconds": 0.2,
-          "summary": "The focused mobile native-chat suite passed with 3 terminal-stream lifecycle assertions in the staged PR #5824 worktree."
         },
         {
           "date": "2026-07-22",

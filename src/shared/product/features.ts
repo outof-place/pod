@@ -51,8 +51,6 @@ type PodPackagingCut = {
   readonly dropRipgrepPlatforms?: readonly string[]
   /** Electron (Chromium) locales the app keeps. */
   readonly electronLanguages?: readonly string[]
-  /** The app ships no mobile web bundle, so packaging does not require one to be built. */
-  readonly skipMobileWebBundleAssert?: boolean
 }
 
 type PodFeature = {
@@ -87,10 +85,7 @@ export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
     pod: false,
     reason:
       "Orca Mobile and the browser web client pair through Stably's apps; desktops pair over WebSocket",
-    packaging: {
-      excludeFiles: ['!out/web{,/**/*}', '!out/mobile-web{,/**/*}'],
-      skipMobileWebBundleAssert: true
-    },
+    packaging: { excludeFiles: ['!out/web{,/**/*}', '!out/mobile-web{,/**/*}'] },
     settingsSections: ['mobile']
   },
   runtimeWebSocket: {

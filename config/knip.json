@@ -39,7 +39,7 @@
     "config/scripts/**/*.{mjs,cjs,js,ts}",
     "config/build-plugins/**/*.ts"
   ],
-  "ignore": ["mobile/**", "out/**", "dist/**", "node_modules/**", "resources/**"],
+  "ignore": ["out/**", "dist/**", "node_modules/**", "resources/**"],
   "ignoreDependencies": ["electron", "@types/*"],
   "ignoreExportsUsedInFile": true,
   "includeEntryExports": false

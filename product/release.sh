@@ -135,8 +135,7 @@ export CSC_NAME="${sign_identity#Developer ID Application: }"
 if [ "$skip_build" -eq 0 ]; then
   log "install dependencies"
   pnpm install --frozen-lockfile
-  (cd mobile && pnpm install --frozen-lockfile)
-  log "build JavaScript, relay, CLI, web and mobile bundles"
+  log "build JavaScript, relay, CLI and web bundles"
   pnpm run build:desktop
   log "build native helpers with the product's identifiers"
   ORCA_COMPUTER_MACOS_BUNDLE_ID="$app_id.computer-use" pnpm run build:computer-macos

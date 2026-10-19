@@ -1,7 +1,4 @@
-# The desktop host and internal packages share an install. `mobile/` is a separate workspace
-# with its own pnpm-workspace.yaml and lockfile, so keep it out of the root
-# package graph. Without this file `pnpm -r` auto-discovers mobile/ and its
-# nested package, and the root's patchedDependencies fail as ERR_PNPM_UNUSED_PATCH.
+# The desktop host and internal packages share an install.
 #
 # native/windows-registry is listed explicitly rather than reached by a glob: as a `file:`
 # dependency pnpm re-linked it on every install (including --frozen-lockfile), and that
