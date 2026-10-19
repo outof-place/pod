@@ -1,6 +1,9 @@
 // Fork-only (Pod): Linear's admin methods answer only Pod's window and PodNative; agents' methods
 // answer only while the user has turned agent access on.
 import '../../runtime/rpc/unused-default-rpc-methods.test-fixture'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import type { RpcRequest } from '../../runtime/rpc/core'
@@ -17,6 +20,8 @@ import {
   type PodLinearAccessCaller
 } from './pod-linear-access'
 import { installPodLinear } from './install-pod-linear'
+import { fakeKeychain, setTestUserData } from './pod-linear-key-store.test-support'
+import { setSecretStore } from '../../../shared/secret-store'
 import { setPodLinearEnabledSetting } from './pod-linear-availability'
 import { POD_LINEAR_METHODS } from './pod-linear-rpc-methods'
 
@@ -76,7 +81,9 @@ describe('podLinearRpcRefusal', () => {
 
 describe('Linear access through the dispatcher', () => {
   function setup() {
-    let settings: { podLinear?: boolean; podLinearAgentAccess?: boolean } = { podLinear: true }
+    setTestUserData(mkdtempSync(join(tmpdir(), 'pod-linear-access-')))
+    setSecretStore(fakeKeychain())
+    let settings: { podLinear?: boolean } = { podLinear: true }
     installPodLinear({
       getSettings: () => settings,
       updateSettings: (updates) => {

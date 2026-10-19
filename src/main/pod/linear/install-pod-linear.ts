@@ -1,12 +1,16 @@
-// Fork-only (Pod): podLinear and podLinearAgentAccess over the settings store, for the RPC
-// admission check and linear.status.
+// Fork-only (Pod): podLinear over the settings store and agent access over its sealed file, for the
+// RPC admission check and linear.status.
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { setPodLinearAgentAccessSetting } from './pod-linear-access'
+import {
+  readSealedLinearAgentAccess,
+  writeSealedLinearAgentAccess
+} from './pod-linear-agent-access-store'
 import { setPodLinearEnabledSetting } from './pod-linear-availability'
 
 export function installPodLinear(store: {
-  getSettings(): Pick<GlobalSettings, 'podLinear' | 'podLinearAgentAccess'>
-  updateSettings(updates: Pick<GlobalSettings, 'podLinear' | 'podLinearAgentAccess'>): unknown
+  getSettings(): Pick<GlobalSettings, 'podLinear'>
+  updateSettings(updates: Pick<GlobalSettings, 'podLinear'>): unknown
 }): void {
   setPodLinearEnabledSetting({
     // Absent means off: turning Linear on for users is its own decision.
@@ -15,11 +19,9 @@ export function installPodLinear(store: {
       store.updateSettings({ podLinear: enabled })
     }
   })
+  // Not a settings key: an agent can edit the settings file (pod-linear-agent-access-store.ts).
   setPodLinearAgentAccessSetting({
-    // Absent means off: agents reach Linear only after the user turns it on.
-    read: () => store.getSettings().podLinearAgentAccess === true,
-    write: (enabled) => {
-      store.updateSettings({ podLinearAgentAccess: enabled })
-    }
+    read: readSealedLinearAgentAccess,
+    write: writeSealedLinearAgentAccess
   })
 }
