@@ -17,6 +17,7 @@ import {
   type WireProbeJavaScriptIdentity,
   type WireProbeReceipt
 } from './browser-session-ua-wire-probe-server'
+import { withHiddenDockProbeEnv } from './electron-probe-hidden-dock-env'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
@@ -282,7 +283,7 @@ function launchFixture(fixturePath: string, root: string, cdpPort: number): Chil
           `--remote-debugging-port=${cdpPort}`
         ],
     {
-      env: { ...env, ORCA_BACKGROUND_LAUNCH: '1' },
+      env: withHiddenDockProbeEnv({ ...env, ORCA_BACKGROUND_LAUNCH: '1' }),
       stdio: ['ignore', 'pipe', 'pipe']
     }
   )

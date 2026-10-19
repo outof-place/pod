@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { resolveElectronProbeLaunch } from '../../browser/electron-probe-display-launch'
+import { withHiddenDockProbeEnv } from '../../browser/electron-probe-hidden-dock-env'
 
 const root = mkdtempSync(join(tmpdir(), 'orca-writer-electron-'))
 const entry = join(root, 'main.cjs')
@@ -69,7 +70,7 @@ it(
     const processResult = await runProcess({
       program: launch.executable,
       args: launch.args,
-      env,
+      env: withHiddenDockProbeEnv(env),
       timeoutMs: processTimeoutMs
     })
     expect(processResult.timedOut, processResult.stderr).toBe(false)

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
+import { withHiddenDockProbeEnv } from './electron-probe-hidden-dock-env'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
@@ -204,7 +205,7 @@ async function runFixture(): Promise<FixtureResult> {
       process.platform === 'linux'
         ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
         : electronArgs,
-      { encoding: 'utf8', env, timeout: 60_000 }
+      { encoding: 'utf8', env: withHiddenDockProbeEnv(env), timeout: 60_000 }
     )
     const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
     if (attempt < FIXTURE_LAUNCH_ATTEMPTS && neverReachedElectronReady(fixtureResult)) {

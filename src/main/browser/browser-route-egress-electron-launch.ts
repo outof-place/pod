@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
+import { withHiddenDockProbeEnv } from './electron-probe-hidden-dock-env'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 
@@ -30,7 +31,7 @@ export async function runBrowserRouteEgressElectron(
   })
   const child = spawn(executable, args, {
     detached: true,
-    env,
+    env: withHiddenDockProbeEnv(env),
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true
   })
