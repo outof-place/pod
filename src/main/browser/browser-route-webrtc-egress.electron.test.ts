@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
+import { withHiddenDockProbeEnv } from './electron-probe-hidden-dock-env'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
@@ -172,7 +173,11 @@ function runProbe(protectedGuest: boolean): ProbeResult {
     platform: process.platform,
     display: env.DISPLAY
   })
-  const run = spawnSync(executable, args, { encoding: 'utf8', env, timeout: 30_000 })
+  const run = spawnSync(executable, args, {
+    encoding: 'utf8',
+    env: withHiddenDockProbeEnv(env),
+    timeout: 30_000
+  })
   const rawResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
   expect(run.error).toBeUndefined()
   expect(run.status, `${rawResult}\n${run.stdout}\n${run.stderr}`).toBe(0)

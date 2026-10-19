@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
+import { withHiddenDockProbeEnv } from './electron-probe-hidden-dock-env'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
@@ -189,7 +190,11 @@ async function runFixture(): Promise<FixtureResult> {
     process.platform === 'linux'
       ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
       : electronArgs
-  const run = spawnSync(executable, args, { encoding: 'utf8', env, timeout: 90_000 })
+  const run = spawnSync(executable, args, {
+    encoding: 'utf8',
+    env: withHiddenDockProbeEnv(env),
+    timeout: 90_000
+  })
   const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
   expect(run.error).toBeUndefined()
   expect(run.status, `${fixtureResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
