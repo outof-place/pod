@@ -122,7 +122,11 @@ describe('computer.permissionsReset', () => {
   it('refuses any params: nothing a caller sends reaches tccutil', async () => {
     expectStubbed()
     for (const params of [{ x: 1 }, { bundleId: 'com.apple.Terminal' }, { service: 'All' }]) {
-      await expect(dispatch(params), JSON.stringify(params)).resolves.toMatchObject({ ok: false })
+      // The schema's refusal, not any other.
+      await expect(dispatch(params), JSON.stringify(params)).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument' }
+      })
     }
     expect(resetComputerUsePermissions).not.toHaveBeenCalled()
     expect(resetMacosTccPermission).not.toHaveBeenCalled()
