@@ -3,13 +3,13 @@ import { useAppStore } from '@/store'
 import type { SessionRestoredBannerReason } from '../session-restored-banner-pane-state'
 import { hasPtySerializer } from '../pty-buffer-serializer'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { sendAgentForegroundInput } from '@/runtime/pod-agent-foreground-write'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { isExpectedAgentProcess } from '../../../../../shared/agent-process-recognition'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../shared/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../../../../shared/draft-paste-ready-scanner'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
-import { writeTerminalPastePtyInput } from '../terminal-pty-paste-writer'
 import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
 
 import { STARTUP_DRAFT_PASTE_QUIET_MS } from './pty-connect-limits'
@@ -121,15 +121,18 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
       useAppStore.getState(),
       session.deps.worktreeId
     )
-    // Why: xterm focus reports share this transport queue. Bypassing it can
-    // race CSI I against the draft on ConPTY and expose a literal `[I` prefix.
+    // Fork-only (Pod): the draft is agent text, so each frame goes as a guarded write that main
+    // proves (pod-agent-foreground-ipc-write.ts). It leaves the transport queue, kept upstream so
+    // ConPTY's focus reports can't race the draft: Pod is macOS-only.
     void sendAgentDraftPasteContent(
       settings,
       ptyId,
       session.startupDraftPrompt,
       'launch',
       async (data) => {
-        const accepted = await writeTerminalPastePtyInput(session.transport, data, 'launch')
+        const accepted = session.transport
+          ? await sendAgentForegroundInput(settings, ptyId, data, 'launch')
+          : false
         if (accepted && !startupDraftInputRecorded) {
           // Why: this transport write bypasses xterm's user-input signal; keep
           // the composed draft from being discarded by later hibernation.

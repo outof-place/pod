@@ -85,12 +85,15 @@ export type PtyApi = {
     shellReadyArmed?: boolean
   }>
   write: (id: string, data: string, inputKind: TerminalInputKind) => void
-  /** `requireWriteSettlement` waits for the provider's acknowledgment on any provider. */
+  /**
+   * `requireWriteSettlement` waits for the provider's acknowledgment on any provider. Fork-only
+   * (Pod): `requireAgentForeground` rejects unless an agent holds the terminal at the write.
+   */
   writeAccepted: (
     id: string,
     data: string,
     inputKind: TerminalInputKind,
-    options?: { requireWriteSettlement?: true }
+    options?: { requireWriteSettlement?: true; requireAgentForeground?: true }
   ) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   /** Whether this window answers a PTY's terminal queries; another view may be elected. */

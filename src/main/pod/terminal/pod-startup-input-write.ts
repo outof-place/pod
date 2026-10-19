@@ -4,11 +4,10 @@
 // and fenced (pod-terminal-foreground-fence.ts), and the follow-up's Enter is a write of its own.
 // A refusal throws to the caller; nothing of a refused write reaches the terminal.
 import {
-  AGENT_PROMPT_BRACKETED_PASTE_END,
-  AGENT_PROMPT_BRACKETED_PASTE_START,
   AGENT_PROMPT_SUBMIT,
   resolveAgentPromptSubmitDelayForAgent
 } from '../../../shared/agent-prompt-injection'
+import { buildStartupPaste } from '../../../shared/pod-agent-paste-text'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
@@ -22,18 +21,7 @@ export type StartupInputHost = TerminalForegroundProver & {
   write: (ptyId: string, data: string, inputKind: TerminalInputKind) => void
 }
 
-/**
- * The same bytes as PodNative's AgentPromptText.sanitized: a newline stays, a tab becomes a space,
- * and every other C0 control (CR and ESC included), DEL and C1 go.
- */
-export function sanitizeStartupPasteText(text: string): string {
-  // oxlint-disable-next-line no-control-regex -- the controls are what this removes.
-  return text.replace(/\t/g, ' ').replace(/[\x00-\x09\x0b-\x1f\x7f-\x9f]/g, '')
-}
-
-export function buildStartupPaste(text: string): string {
-  return `${AGENT_PROMPT_BRACKETED_PASTE_START}${sanitizeStartupPasteText(text)}${AGENT_PROMPT_BRACKETED_PASTE_END}`
-}
+export { buildStartupPaste, sanitizeStartupPasteText } from '../../../shared/pod-agent-paste-text'
 
 /** True only when a proof finds a shell in the pane's foreground group. */
 export async function isStartupShellInFront(

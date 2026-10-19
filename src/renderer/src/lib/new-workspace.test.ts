@@ -293,12 +293,17 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       }
     })
 
-    expect(mockSendRuntimePtyInputVerified).toHaveBeenCalledWith(
-      {},
-      'pty-1',
-      'fix the spinner\r',
-      'launch'
-    )
+    // Fork-only (Pod): a filtered paste, then its own Enter, each a guarded write.
+    expect(mockSendRuntimePtyInputVerified.mock.calls).toEqual([
+      [
+        {},
+        'pty-1',
+        '\x1b[200~fix the spinner\x1b[201~',
+        'launch',
+        { requireAgentForeground: true }
+      ],
+      [{}, 'pty-1', '\r', 'launch', { requireAgentForeground: true }]
+    ])
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
 

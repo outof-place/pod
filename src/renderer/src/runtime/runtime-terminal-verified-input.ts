@@ -15,14 +15,16 @@ const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
 
 /**
  * True means accepted, false means refusal. `requireWriteSettlement` asks the local provider or a
- * current host for its acknowledgment; a lost one rejects.
+ * current host for its acknowledgment; a lost one rejects. Fork-only (Pod): with
+ * `requireAgentForeground`, main rejects unless an agent holds the terminal, and a rejection never
+ * falls back to a plain write.
  */
 export async function sendRuntimePtyInputVerified(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   data: string,
   inputKind: TerminalInputKind,
-  options?: { requireWriteSettlement?: true }
+  options?: { requireWriteSettlement?: true; requireAgentForeground?: true }
 ): Promise<boolean> {
   const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
   if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
@@ -42,7 +44,10 @@ export async function sendRuntimePtyInputVerified(
       }
       return accepted
     }
-    const accepted = await window.api.pty.writeAccepted(ptyId, data, inputKind)
+    // A refusal rejects here, so only a plain false (an SSH pane, a write main didn't take) falls back.
+    const accepted = options?.requireAgentForeground
+      ? await window.api.pty.writeAccepted(ptyId, data, inputKind, { requireAgentForeground: true })
+      : await window.api.pty.writeAccepted(ptyId, data, inputKind)
     if (!accepted) {
       window.api.pty.write(ptyId, data, inputKind)
       // Why: SSH/local fallback writes are fire-and-forget. Callers use this

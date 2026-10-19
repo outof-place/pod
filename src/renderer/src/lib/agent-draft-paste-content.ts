@@ -11,7 +11,7 @@ import {
   wrapTerminalBracketedPasteText
 } from '@/components/terminal-pane/terminal-bracketed-paste'
 import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
+import { sendAgentForegroundInput } from '@/runtime/pod-agent-foreground-write'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 
 // Why: bracketed paste markers let supported TUIs treat generated prompt text
@@ -204,9 +204,10 @@ async function writeAgentDraftPtyInput(
   inputKind: TerminalInputKind,
   writePty?: AgentDraftPtyInputWriter
 ): Promise<boolean> {
+  // Fork-only (Pod): every frame of an agent draft goes only while an agent holds the terminal.
   return writePty
     ? await writePty(data)
-    : await sendRuntimePtyInputVerified(settings, ptyId, data, inputKind)
+    : await sendAgentForegroundInput(settings, ptyId, data, inputKind)
 }
 
 async function closeAgentDraftBracketedPaste(

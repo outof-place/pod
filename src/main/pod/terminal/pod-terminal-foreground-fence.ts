@@ -25,7 +25,9 @@ import {
 import type { RuntimePtyController } from '../../runtime/runtime-pty-controller-contract'
 import { readTerminalProcessRows, terminalOf } from '../../runtime/terminal-foreground-group'
 
-export const AGENT_NOT_IN_FOREGROUND = 'agent_not_in_foreground'
+import { AGENT_NOT_IN_FOREGROUND } from '../../../shared/pod-agent-foreground-refusal'
+
+export { AGENT_NOT_IN_FOREGROUND }
 
 /** The pane's root process, its terminal, and the foreground group the proof found the agent in. */
 export type TerminalForegroundFence = { rootPid: number; tty: string; foregroundGroup: number }

@@ -34,12 +34,19 @@ vi.mock('./agent-draft-readiness', () => ({
 const DRAFT = 'plan the migration'
 const originalApi = window.api
 
+// Fork-only (Pod): each write's options too, so the agent-foreground guard can be checked.
+const writeOptions: unknown[] = []
+
 function stubPtyApi(): { kinds: TerminalInputKind[] } {
   const kinds: TerminalInputKind[] = []
-  const writeAccepted = vi.fn(async (_id: string, _data: string, inputKind: TerminalInputKind) => {
-    kinds.push(inputKind)
-    return true
-  })
+  writeOptions.length = 0
+  const writeAccepted = vi.fn(
+    async (_id: string, _data: string, inputKind: TerminalInputKind, options?: unknown) => {
+      kinds.push(inputKind)
+      writeOptions.push(options)
+      return true
+    }
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both routes reach only pty.writeAccepted.
   window.api = { pty: { writeAccepted, write: vi.fn() } } as unknown as typeof window.api
   return { kinds }
@@ -114,6 +121,17 @@ describe('a created worktree’s startup draft', () => {
     expect(paneKinds.length).toBeGreaterThan(0)
     expect(new Set(paneKinds)).toEqual(new Set(['launch']))
     expect(new Set(helperKinds)).toEqual(new Set(paneKinds))
+  })
+
+  // Fork-only (Pod): agent text the user didn't type, so main proves the agent for every write.
+  it('asks main to prove the agent for every write on both routes', async () => {
+    await paneRouteKinds()
+    const paneOptions = [...writeOptions]
+    await helperRouteKinds()
+
+    expect(paneOptions.length).toBeGreaterThan(0)
+    expect(paneOptions).toEqual(paneOptions.map(() => ({ requireAgentForeground: true })))
+    expect(writeOptions).toEqual(writeOptions.map(() => ({ requireAgentForeground: true })))
   })
 
   it('differs from a prompt submitted to an agent that is already running', async () => {

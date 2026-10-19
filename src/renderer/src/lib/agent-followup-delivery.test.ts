@@ -5,11 +5,20 @@ import {
   sendRuntimePtyInputVerified
 } from '@/runtime/runtime-terminal-inspection'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-prompt-injection'
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: vi.fn(),
   sendRuntimePtyInputVerified: vi.fn()
 }))
+
+// Fork-only (Pod): the follow-up is a filtered paste and its own Enter, each a guarded write.
+function expectGuardedPasteAndEnter(): void {
+  expect(vi.mocked(sendRuntimePtyInputVerified).mock.calls).toEqual([
+    [null, 'pty-1', '\x1b[200~ship it\x1b[201~', 'launch', { requireAgentForeground: true }],
+    [null, 'pty-1', '\r', 'launch', { requireAgentForeground: true }]
+  ])
+}
 
 // The interpreter-wrapped agents that deliver their prompt over stdin after the
 // process starts. These are pip console-scripts, so the PTY foreground comm is
@@ -48,11 +57,11 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
         settings: null
       })
 
-      await vi.advanceTimersByTimeAsync(4 * 150)
+      await vi.advanceTimersByTimeAsync(4 * 150 + AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS)
       const delivered = await delivery
 
       expect(delivered).toBe(true)
-      expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(null, 'pty-1', 'ship it\r', 'launch')
+      expectGuardedPasteAndEnter()
     })
 
     it(`still refuses to type into a bare ${agent} shell foreground`, async () => {
@@ -106,14 +115,98 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
       hasChildProcesses: true
     })
 
-    const delivered = await sendFollowupPromptWhenAgentReady({
+    const delivery = sendFollowupPromptWhenAgentReady({
       ptyId: 'pty-1',
       expectedProcess: 'aider',
       prompt: 'ship it',
       settings: null
     })
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS)
 
-    expect(delivered).toBe(true)
-    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(null, 'pty-1', 'ship it\r', 'launch')
+    expect(await delivery).toBe(true)
+    expectGuardedPasteAndEnter()
+  })
+})
+
+// Fork-only (Pod): main refuses a paste the agent isn't in front for, with no byte written.
+describe('sendFollowupPromptWhenAgentReady — guarded writes', () => {
+  const refusal = (reason: string) =>
+    new Error(
+      `Error invoking remote method 'pty:writeAccepted': Error: agent_not_in_foreground: ${reason}`
+    )
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+      foregroundProcess: 'aider',
+      hasChildProcesses: true
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function deliver() {
+    return sendFollowupPromptWhenAgentReady({
+      ptyId: 'pty-1',
+      expectedProcess: 'aider',
+      prompt: 'ship it',
+      settings: null
+    })
+  }
+
+  it('tries the paste again while the shell still holds the terminal, then sends its Enter', async () => {
+    vi.mocked(sendRuntimePtyInputVerified)
+      .mockRejectedValueOnce(refusal('shell'))
+      .mockRejectedValueOnce(refusal('not_agent'))
+      .mockResolvedValue(true)
+
+    const delivery = deliver()
+    await vi.advanceTimersByTimeAsync(2 * 250 + AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS)
+
+    expect(await delivery).toBe(true)
+    const writes = vi.mocked(sendRuntimePtyInputVerified).mock.calls.map((call) => call[2])
+    expect(writes).toEqual([
+      '\x1b[200~ship it\x1b[201~',
+      '\x1b[200~ship it\x1b[201~',
+      '\x1b[200~ship it\x1b[201~',
+      '\r'
+    ])
+  })
+
+  it('gives up after a few seconds of a shell in front, with no Enter', async () => {
+    vi.mocked(sendRuntimePtyInputVerified).mockRejectedValue(refusal('shell'))
+
+    const delivery = deliver()
+    await vi.advanceTimersByTimeAsync(21 * 250)
+
+    expect(await delivery).toBe(false)
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledTimes(21)
+    expect(
+      vi.mocked(sendRuntimePtyInputVerified).mock.calls.every((call) => call[2] !== '\r')
+    ).toBe(true)
+  })
+
+  it('does not paste again after a refusal that can follow a written chunk', async () => {
+    vi.mocked(sendRuntimePtyInputVerified).mockRejectedValueOnce(refusal('group_changed'))
+
+    const delivery = deliver()
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(await delivery).toBe(false)
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledOnce()
+  })
+
+  it('reports no delivery when the Enter is refused after the paste', async () => {
+    vi.mocked(sendRuntimePtyInputVerified)
+      .mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(refusal('group_changed'))
+
+    const delivery = deliver()
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS)
+
+    expect(await delivery).toBe(false)
   })
 })

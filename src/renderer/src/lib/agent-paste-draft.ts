@@ -6,10 +6,8 @@ import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-p
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
 import { resolvePasteReadySignal } from '../../../shared/draft-paste-ready-scanner'
 import { useAppStore } from '@/store'
-import {
-  inspectRuntimeTerminalProcess,
-  sendRuntimePtyInputVerified
-} from '@/runtime/runtime-terminal-inspection'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { sendAgentForegroundInput } from '@/runtime/pod-agent-foreground-write'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START
@@ -253,14 +251,15 @@ async function sendBracketedPasteToAgent(args: {
       // Enter arrive in the same PTY write. Split the submit into the next turn so
       // the TUI processes bracketed-paste termination before handling Enter.
       await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
-      const submitted = await sendRuntimePtyInputVerified(settings, ptyId, '\r', inputKind)
+      // Fork-only (Pod): the Enter and its retry too, so neither lands in a shell back in front.
+      const submitted = await sendAgentForegroundInput(settings, ptyId, '\r', inputKind)
 
       if (submitRetryDelayMs !== undefined) {
         // Why: agents that render their composer before Enter is live silently eat
         // the first Enter; the retry is best-effort and never downgrades `submitted`.
         await new Promise<void>((resolve) => window.setTimeout(resolve, submitRetryDelayMs))
         try {
-          await sendRuntimePtyInputVerified(settings, ptyId, '\r', inputKind)
+          await sendAgentForegroundInput(settings, ptyId, '\r', inputKind)
         } catch {
           // Why: a rejected retry leaves the first Enter's verdict untouched.
         }
