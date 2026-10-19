@@ -695,13 +695,6 @@
               "173553f73a": "VS Code"
             }
           }
-        },
-        "mobile": {
-          "emulator": {
-            "tab": {
-              "bf4f2a8a72": "无法启动模拟器。请检查 iOS 或 Android 模拟器设置，然后尝试其他设备。"
-            }
-          }
         }
       },
       "orchestration": {
@@ -1092,7 +1085,6 @@
         "2d0659f6f0": "全局终端、浏览器和 Markdown 选项卡。",
         "65b19f5bde": "浮动工作区",
         "3d65d3f1b9": "配置对 Orca 和编码智能体的手机模拟器支持。",
-        "1e761cff2b": "手机模拟器",
         "e815fd01bd": "主页、链接路由和会话 cookie。",
         "8c197f74a1": "浏览器",
         "42ae40842f": "保存的终端命令，范围全局或每个项目。",
@@ -7587,43 +7579,14 @@
         },
         "MobileEmulatorAgentControlRow": {
           "1861982430": "无法加载 CLI 状态。",
-          "8af7a8bc38": "命令针对当前工作树的活动模拟器。坐标从 0..1 标准化。",
-          "c7f3fe0a6e": "常用模拟器命令",
-          "d94ca6a623": "使智能体能够使用 Orca CLI 命令，包括手机模拟器控制。",
-          "67e19ee03c": "Orca CLI 技能",
-          "ff4b7e65d6": "让编码智能体使用 Orca CLI 命令控制活动手机模拟器。",
-          "2a674aa810": "智能体手机模拟器控制",
           "cdeaed9e37": "在 PATH 中注册 Orca CLI。"
         },
         "MobileEmulatorExamples": {
-          "edf13dd03b": "复制",
-          "c12b253997": "复制示例提示",
-          "d151e25078": "”",
-          "b525ff2b12": "“",
-          "4daa95f25a": "将其中任何内容粘贴到安装了 Orca CLI 技能的项目中的 Claude Code、Codex 或其他智能体中。",
-          "0820b3f84f": "尝试一下 - 示例提示",
-          "1f608e7d60": "复制提示失败。",
-          "2b077b5544": "已复制提示。"
+          "4daa95f25a": "将其中任何内容粘贴到安装了 Orca CLI 技能的项目中的 Claude Code、Codex 或其他智能体中。"
         },
         "MobileEmulatorSettingsPane": {
-          "19d39113b6": "让编码智能体使用 Orca CLI 命令控制活动手机模拟器。",
-          "f2f8d97bb6": "智能体手机模拟器控制",
-          "143961d031": "默认设备",
-          "8aec2f99a0": "刷新模拟器可用性",
           "ae1612c58c": "可用性",
-          "f9af91ea26": "显示“新建手机模拟器”操作并允许智能体连接到活动模拟器。",
-          "700ddbf9b1": "启用手机模拟器",
-          "bc39d0f115": "配置对 Orca 和编码智能体的手机模拟器支持。",
-          "6593c9ddd3": "手机模拟器",
-          "a4f1c82d90": "已禁用",
-          "b5e2d93e01": "检查中...",
-          "c6f3ea4f12": "就绪",
-          "d704fb5023": "需要设置",
-          "06b06429c6": "正在检查 Android SDK 和 iOS 模拟器支持。",
-          "6d1483d4a0": "检测到 1 个模拟器设备。",
-          "0a452d4d3b": "检测到 {{value0}} 个模拟器设备。",
-          "f62a1bb759": "检测到设备后，Orca 会自动选择一个模拟器设备。",
-          "b2fd62ea75": "新模拟器标签页和智能体附加命令使用的默认设备。自动选择会优先使用已在运行的设备。"
+          "a4f1c82d90": "已禁用"
         },
         "MobileNetworkInterfaceSection": {
           "63d5e4ae1e": "重新生成二维码并从 Orca 手机应用程序扫描。",
@@ -8293,8 +8256,6 @@
           "2b4474780a": "外观",
           "3d9adfe6a5": "全局终端、浏览器和 Markdown 选项卡。",
           "3eb22a3ada": "浮动工作区",
-          "01f9d36292": "配置对 Orca 和编码智能体的手机模拟器支持。",
-          "f75daf1002": "手机模拟器",
           "ad9788036f": "主页、链接路由和会话 cookie。",
           "c46215ea03": "浏览器",
           "6742c7932c": "保存的终端命令，范围全局或每个项目。",
@@ -10024,42 +9985,15 @@
         "mobile": {
           "emulator": {
             "search": {
-              "2348045036": "选择 Orca 默认打开的模拟器设备。",
-              "2bb2e09225": "手机技能",
-              "bbe4267416": "模拟器类型",
-              "64494f03c3": "模拟器附加",
-              "6f728f1456": "模拟器抽头",
-              "f8b871d655": "智能体客户端",
-              "2e0b45b2ba": "使用 Orca CLI 命令列出、附加、点击和输入手机模拟器。",
-              "ea3eac39bb": "智能体 CLI 控制",
               "8ef0f08d36": "运行时",
               "27397fe8e9": "xcode 命令行工具",
-              "7650063d17": "模拟控制",
               "3211e7acf9": "xcrun",
               "42bfab45d8": "可用性",
               "ea1f51b980": "检查Xcode、simctl、serve-sim和模拟器设备是否准备就绪。",
-              "0b95dfd5b3": "模拟器可用性",
-              "04c5f5d901": "设备",
               "25d7bfbcd4": "乌迪德",
-              "ec3c4043fd": "默认ipad",
-              "1dc8c52ffa": "默认 iPhone",
-              "ab4814f3c5": "默认模拟器",
-              "54184cb9c5": "默认模拟器设备",
-              "b8ddd13195": "智能体模拟器",
-              "1ad6fb6230": "默认设备",
-              "ac0a985873": "模拟器技能",
-              "9353854ff3": "Orca 模拟器",
               "d4b7833894": "Orca CLI",
               "84e5706975": "serve-sim",
-              "7c5a8a2bee": "Xcode",
-              "bec7231663": "平板电脑",
-              "49727355a3": "iPhone",
-              "6b6407dc1f": "模拟器",
-              "2d67f708ce": "模拟器",
-              "c5eca29310": "ios模拟器",
-              "25159de808": "手机模拟器",
-              "9595354cff": "配置对 Orca 和编码智能体的手机模拟器支持。",
-              "cdd3c31918": "手机模拟器"
+              "7c5a8a2bee": "Xcode"
             }
           },
           "pane": {
@@ -11186,18 +11120,7 @@
         },
         "MobileEmulatorSdkStatus": {
           "536026130e": "模拟器 SDK",
-          "dde0ec1cd8": "Orca 用于运行模拟器的工具链。Android 可通过 Android SDK 在任何系统上运行；iOS 模拟器需要 macOS 上的 Xcode。",
-          "027cbf668a": "Android SDK",
-          "f6d080d128": "正在使用配置的路径",
-          "7fe4bd5907": "检测位置",
-          "2784f0b22d": "未找到。请安装 Android Studio，然后创建虚拟设备。",
-          "b94ff260e6": "下载 Android Studio",
-          "18925b082d": "定位 SDK 文件夹",
-          "8c52684db8": "清除",
-          "76eb88b88e": "iOS 模拟器 (Xcode)",
-          "c6f3ea4f12": "已就绪",
-          "e4f14b50d7": "请安装 Xcode 并添加 iOS 模拟器运行时。",
-          "63fe73a1ea": "无法更新 Android SDK 文件夹。"
+          "dde0ec1cd8": "Orca 用于运行模拟器的工具链。Android 可通过 Android SDK 在任何系统上运行；iOS 模拟器需要 macOS 上的 Xcode。"
         },
         "AppearanceAdvancedDisclosure": {
           "advanced": "高级"
@@ -15029,35 +14952,15 @@
       },
       "emulator": {
         "pane": {
-          "EmulatorPane": {
-            "59b08fa031": "没有连接模拟器"
-          },
           "emulator": {
             "device": {
               "frame": {
-                "9406c15775": "模拟器屏幕",
-                "8f25ffaf8a": "模拟器屏幕，键盘捕获。按 Esc 键释放。",
                 "0022420df0": "手机"
               }
             },
             "pane": {
               "toolbar": {
-                "06e10d7356": "关闭模拟器",
-                "e7a0d1897e": "家",
-                "6bd8dff42a": "旋转",
-                "3d836b879c": "选择模拟器",
-                "81b3571a07": "连接",
                 "868c0f2938": "处理中…"
-              }
-            },
-            "screen": {
-              "stream": {
-                "content": {
-                  "8b1a0d8694": "模拟器预览",
-                  "36841af608": "流已断开连接",
-                  "5f818f12ab": "正在连接模拟器...",
-                  "5ee64cd44e": "模拟器屏幕"
-                }
               }
             },
             "unavailable": {
@@ -15067,73 +14970,9 @@
               }
             }
           },
-          "use": {
-            "emulator": {
-              "frame": {
-                "stream": {
-                  "f1c0179002": "流不生成帧。"
-                }
-              }
-            },
-            "mobile": {
-              "emulator": {
-                "agent": {
-                  "setup": {
-                    "state": {
-                      "35dea1ae12": "智能体控制已就绪。",
-                      "c94ff11e91": "无法重新检查设置状态。",
-                      "skillNotInstalled": "Orca CLI 技能尚未安装。"
-                    }
-                  }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "无法隐藏移动模拟器。"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "MobileEmulatorAgentSetupGuide": {
-            "2fda9ff015": "设置智能体控制",
-            "0ac0fef514": "智能体控制已就绪。",
-            "2bdfff8763": "智能体控制（可选）。",
-            "d10ae98046": "完成",
-            "3756cbeca7": "暂不",
-            "6d950431d2": "隐藏",
-            "ebceac65a4": "设置",
-            "3f003507f4": "在设置中打开完整设置",
-            "installSkillPrompt": "如需让智能体操作此模拟器，请安装 Orca CLI 技能。"
-          },
           "MobileEmulatorAgentSetupGuideSteps": {
-            "21f5687c07": "Orca CLI 技能",
-            "64fb057667": "教授智能体此工作区的 orca 模拟器命令。",
             "5c59ea96ca": "移动端模拟器 Orca CLI 技能设置",
             "bff5341ac3": "移动端模拟器 Orca CLI 技能安装终端"
-          },
-          "MobileEmulatorTabIntroCallout": {
-            "1924982130": "关闭",
-            "5789936d9a": "在智能体控制屏幕时预览 iOS 模拟器。",
-            "8014b4b80b": "保留",
-            "6e051a40b7": "隐藏"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "移动模拟器已隐藏",
-                  "c46c979c1d": "随时重新启用移动模拟器",
-                  "600f9a745a": "设置 › 移动模拟器"
-                }
-              }
-            }
-          },
-          "useEmulatorScreenKeyboard": {
-            "pasteTooLarge": "模拟器键盘输入的粘贴内容过大。",
-            "unsupportedPasteText": "模拟器键盘粘贴仅支持美式键盘文本。",
-            "pasteTargetUnavailable": "模拟器键盘粘贴失败，因为设备尚未就绪。"
           }
         }
       },

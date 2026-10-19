@@ -182,31 +182,6 @@ describe('ensureSimulatorTab', () => {
     expect(ensureSimulatorTab('folder:shared')).toBe('sim-remote')
   })
 
-  it('cancels pending managed shutdown when surfacing a simulator tab', async () => {
-    vi.useFakeTimers()
-    let cancelPendingSimulatorPaneShutdown: ((worktreeId: string) => void) | null = null
-    try {
-      const shutdownManagedSimulator = vi.fn()
-      const scheduler = await import('./simulator-pane-shutdown-scheduler')
-      cancelPendingSimulatorPaneShutdown = scheduler.cancelPendingSimulatorPaneShutdown
-      scheduler.scheduleSimulatorPaneManagedShutdown('wt-1', 'sim-old', {
-        delayMs: 100,
-        getTabsForWorktree: () => [{ id: 'terminal-1', contentType: 'terminal' }],
-        shutdownManagedSimulator
-      })
-
-      const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
-
-      expect(ensureSimulatorTab('wt-1')).toBe('sim-1')
-
-      await vi.advanceTimersByTimeAsync(100)
-      expect(shutdownManagedSimulator).not.toHaveBeenCalled()
-    } finally {
-      cancelPendingSimulatorPaneShutdown?.('wt-1')
-      vi.useRealTimers()
-    }
-  })
-
   it('creates a simulator tab in a new right split when requested', async () => {
     mockStoreState.unifiedTabsByWorktree = { 'wt-1': [] }
     mockStoreState.createUnifiedTabInSplit.mockReturnValue({

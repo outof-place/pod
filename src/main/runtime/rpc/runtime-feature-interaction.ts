@@ -22,9 +22,6 @@ export function getRuntimeFeatureInteractionId(
   if (method.startsWith('browser.') && !method.startsWith('browser.profile')) {
     return 'agent-browser-use'
   }
-  if (method.startsWith('emulator.')) {
-    return null
-  }
   if (method === 'computer.permissions') {
     return 'computer-use-setup'
   }

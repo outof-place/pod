@@ -695,13 +695,6 @@
               "173553f73a": "VS Code"
             }
           }
-        },
-        "mobile": {
-          "emulator": {
-            "tab": {
-              "bf4f2a8a72": "No se pudo iniciar el emulador. Revisa la configuración del emulador de iOS o Android y prueba con otro dispositivo."
-            }
-          }
         }
       },
       "orchestration": {
@@ -1092,7 +1085,6 @@
         "2d0659f6f0": "Terminal global, navegador y pestañas Markdown.",
         "65b19f5bde": "Espacio de trabajo flotante",
         "3d65d3f1b9": "Configura la compatibilidad del emulador móvil para Orca y coding agents.",
-        "1e761cff2b": "Emulador móvil",
         "e815fd01bd": "Página de inicio, enrutamiento de enlaces y cookies de sesión.",
         "8c197f74a1": "Navegador",
         "42ae40842f": "Comandos de terminal guardados, con alcance global o por proyecto.",
@@ -7602,43 +7594,14 @@
         },
         "MobileEmulatorAgentControlRow": {
           "1861982430": "No se pudo cargar el estado de CLI.",
-          "8af7a8bc38": "Los comandos apuntan al emulador activo del worktree actual. Las coordenadas están normalizadas de 0 a 1.",
-          "c7f3fe0a6e": "Comandos comunes del emulador",
-          "d94ca6a623": "Permite a los agentes usar comandos de la CLI de Orca, incluido el control del emulador móvil.",
-          "67e19ee03c": "Skill Orca CLI",
-          "ff4b7e65d6": "Permite que los agentes de codificación controlen el emulador móvil activo con comandos de la CLI de Orca.",
-          "2a674aa810": "Control del emulador móvil para agentes",
           "cdeaed9e37": "Registré Orca CLI en PATH."
         },
         "MobileEmulatorExamples": {
-          "edf13dd03b": "Copiar",
-          "c12b253997": "Copiar prompt de ejemplo",
-          "d151e25078": "\"",
-          "b525ff2b12": "\"",
-          "4daa95f25a": "Pega cualquiera de estos en Claude Code, Codex u otro agente en un proyecto donde esté instalado el skill Orca CLI.",
-          "0820b3f84f": "Pruébalo: prompts de ejemplo",
-          "1f608e7d60": "No se pudo copiar el prompt.",
-          "2b077b5544": "Prompt copiado."
+          "4daa95f25a": "Pega cualquiera de estos en Claude Code, Codex u otro agente en un proyecto donde esté instalado el skill Orca CLI."
         },
         "MobileEmulatorSettingsPane": {
-          "19d39113b6": "Permite que los agentes de codificación controlen el emulador móvil activo con comandos de la CLI de Orca.",
-          "f2f8d97bb6": "Control del emulador móvil para agentes",
-          "143961d031": "Dispositivo predeterminado",
-          "8aec2f99a0": "Actualizar la disponibilidad del emulador",
           "ae1612c58c": "Disponibilidad",
-          "f9af91ea26": "Muestra la acción Nuevo emulador móvil y permite que los agentes se conecten al emulador activo.",
-          "700ddbf9b1": "Habilitar emulador móvil",
-          "bc39d0f115": "Configura la compatibilidad con el emulador móvil para Orca y agentes de codificación.",
-          "6593c9ddd3": "Emulador móvil",
-          "a4f1c82d90": "Desactivado",
-          "b5e2d93e01": "Comprobando...",
-          "c6f3ea4f12": "Listo",
-          "d704fb5023": "Necesita configuración",
-          "06b06429c6": "Comprobando la compatibilidad con el SDK de Android y el simulador de iOS.",
-          "6d1483d4a0": "1 dispositivo emulador detectado.",
-          "0a452d4d3b": "{{value0}} dispositivos emuladores detectados.",
-          "f62a1bb759": "Orca seleccionará automáticamente un dispositivo emulador después de que se detecten los dispositivos.",
-          "b2fd62ea75": "Dispositivo predeterminado para nuevas pestañas del emulador y comandos de conexión de agentes. La selección automática prefiere un dispositivo que ya esté en ejecución."
+          "a4f1c82d90": "Desactivado"
         },
         "MobileNetworkInterfaceSection": {
           "63d5e4ae1e": "Regenera el código QR y escanéalo desde la aplicación móvil de Orca.",
@@ -8308,8 +8271,6 @@
           "2b4474780a": "Apariencia",
           "3d9adfe6a5": "Pestañas globales de terminal, navegador y Markdown.",
           "3eb22a3ada": "Espacio de trabajo flotante",
-          "01f9d36292": "Configura la compatibilidad con el emulador móvil para Orca y agentes de codificación.",
-          "f75daf1002": "Emulador móvil",
           "ad9788036f": "Página de inicio, enrutamiento de enlaces y cookies de sesión.",
           "c46215ea03": "Navegador",
           "6742c7932c": "Comandos de terminal guardados, con alcance global o por proyecto.",
@@ -10039,42 +10000,15 @@
         "mobile": {
           "emulator": {
             "search": {
-              "2348045036": "Elija qué dispositivo emulador abre Orca de forma predeterminada.",
-              "2bb2e09225": "skill móvil",
-              "bbe4267416": "tipo de emulador",
-              "64494f03c3": "adjuntar emulador",
-              "6f728f1456": "tap del emulador",
-              "f8b871d655": "CLI de agente",
-              "2e0b45b2ba": "Usa comandos de Orca CLI para listar, adjuntar, tocar y escribir en un emulador móvil.",
-              "ea3eac39bb": "Control por CLI de Agent",
               "8ef0f08d36": "runtime",
               "27397fe8e9": "herramientas de línea de comandos de Xcode",
-              "7650063d17": "simctl",
               "3211e7acf9": "xcrun",
               "42bfab45d8": "disponibilidad",
               "ea1f51b980": "Comprueba si Xcode, simctl, serve-sim y los dispositivos emuladores están listos.",
-              "0b95dfd5b3": "Disponibilidad del emulador",
-              "04c5f5d901": "dispositivo",
               "25d7bfbcd4": "UDID",
-              "ec3c4043fd": "iPad predeterminado",
-              "1dc8c52ffa": "iPhone predeterminado",
-              "ab4814f3c5": "simulador predeterminado",
-              "54184cb9c5": "Dispositivo emulador predeterminado",
-              "b8ddd13195": "emulador de agente",
-              "1ad6fb6230": "dispositivo predeterminado",
-              "ac0a985873": "skill del emulador",
-              "9353854ff3": "emulador de Orca",
               "d4b7833894": "Orca CLI",
               "84e5706975": "serve-sim",
-              "7c5a8a2bee": "Xcode",
-              "bec7231663": "iPad",
-              "49727355a3": "iPhone",
-              "6b6407dc1f": "emulador",
-              "2d67f708ce": "simulador",
-              "c5eca29310": "simulador de iOS",
-              "25159de808": "emulador móvil",
-              "9595354cff": "Configura la compatibilidad con el emulador móvil para Orca y agentes de codificación.",
-              "cdd3c31918": "Emulador móvil"
+              "7c5a8a2bee": "Xcode"
             }
           },
           "pane": {
@@ -11186,18 +11120,7 @@
         },
         "MobileEmulatorSdkStatus": {
           "536026130e": "SDK de emulador",
-          "dde0ec1cd8": "Cadenas de herramientas que Orca utiliza para ejecutar emuladores. Android funciona en cualquier sistema operativo a través del SDK de Android; Los simuladores de iOS necesitan Xcode en macOS.",
-          "027cbf668a": "Android SDK",
-          "f6d080d128": "Usando ruta configurada",
-          "7fe4bd5907": "Detectado en",
-          "2784f0b22d": "No encontrado. Instala Android Studio y luego crea un dispositivo virtual.",
-          "b94ff260e6": "Descargar Android Studio",
-          "18925b082d": "Ubicar carpeta del SDK",
-          "8c52684db8": "Borrar",
-          "76eb88b88e": "iOS Simulator (Xcode)",
-          "c6f3ea4f12": "Listo",
-          "e4f14b50d7": "Instala Xcode y agrega un runtime de iOS Simulator.",
-          "63fe73a1ea": "No se pudo actualizar la carpeta SDK de Android."
+          "dde0ec1cd8": "Cadenas de herramientas que Orca utiliza para ejecutar emuladores. Android funciona en cualquier sistema operativo a través del SDK de Android; Los simuladores de iOS necesitan Xcode en macOS."
         },
         "AppearanceAdvancedDisclosure": {
           "advanced": "Avanzado"
@@ -15029,35 +14952,15 @@
       },
       "emulator": {
         "pane": {
-          "EmulatorPane": {
-            "59b08fa031": "Ningún emulador conectado"
-          },
           "emulator": {
             "device": {
               "frame": {
-                "9406c15775": "Pantalla del emulador",
-                "8f25ffaf8a": "Pantalla del emulador, teclado capturado. Presiona Escape para liberar.",
                 "0022420df0": "teléfono"
               }
             },
             "pane": {
               "toolbar": {
-                "06e10d7356": "Apagar el emulador",
-                "e7a0d1897e": "Inicio",
-                "6bd8dff42a": "Girar",
-                "3d836b879c": "Elegir emulador",
-                "81b3571a07": "Conectar",
                 "868c0f2938": "Procesando…"
-              }
-            },
-            "screen": {
-              "stream": {
-                "content": {
-                  "8b1a0d8694": "Vista previa del emulador",
-                  "36841af608": "Transmisión desconectada",
-                  "5f818f12ab": "Conectando el emulador…",
-                  "5ee64cd44e": "Pantalla del emulador"
-                }
               }
             },
             "unavailable": {
@@ -15067,73 +14970,9 @@
               }
             }
           },
-          "use": {
-            "emulator": {
-              "frame": {
-                "stream": {
-                  "f1c0179002": "La transmisión no produce fotogramas."
-                }
-              }
-            },
-            "mobile": {
-              "emulator": {
-                "agent": {
-                  "setup": {
-                    "state": {
-                      "35dea1ae12": "El control de agentes está listo.",
-                      "c94ff11e91": "No se pudo volver a verificar el estado de la configuración.",
-                      "skillNotInstalled": "La skill de Orca CLI aún no está instalada."
-                    }
-                  }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "No se pudo ocultar el Emulador Móvil."
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "MobileEmulatorAgentSetupGuide": {
-            "2fda9ff015": "Configurar control de agentes",
-            "0ac0fef514": "El control de agentes está listo.",
-            "2bdfff8763": "Control de agentes (opcional).",
-            "d10ae98046": "Listo",
-            "3756cbeca7": "Ahora no",
-            "6d950431d2": "Ocultar",
-            "ebceac65a4": "Configurar",
-            "3f003507f4": "Abrir configuración completa en Ajustes",
-            "installSkillPrompt": "Instala la skill de Orca CLI cuando quieras que los agentes controlen este simulador."
-          },
           "MobileEmulatorAgentSetupGuideSteps": {
-            "21f5687c07": "Skill del CLI de Orca",
-            "64fb057667": "Enseña a los agentes los comandos orca del emulador para este worktree.",
             "5c59ea96ca": "Configuración de la skill de Orca CLI para Mobile Emulator",
             "bff5341ac3": "Terminal de instalación de la skill de Orca CLI para Mobile Emulator"
-          },
-          "MobileEmulatorTabIntroCallout": {
-            "1924982130": "Descartar",
-            "5789936d9a": "Vista previa de simuladores de iOS mientras los agentes controlan la pantalla.",
-            "8014b4b80b": "Mantener",
-            "6e051a40b7": "Ocultar"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "Mobile Emulator oculto",
-                  "c46c979c1d": "Vuelve a habilitar Mobile Emulator en cualquier momento en",
-                  "600f9a745a": "Ajustes › Mobile Emulator"
-                }
-              }
-            }
-          },
-          "useEmulatorScreenKeyboard": {
-            "pasteTooLarge": "El texto pegado es demasiado grande para la entrada de teclado del emulador.",
-            "unsupportedPasteText": "Pegar en el teclado del emulador solo admite texto de teclado de EE. UU.",
-            "pasteTargetUnavailable": "No se pudo pegar en el teclado del emulador porque el dispositivo no está listo."
           }
         }
       },

@@ -70,15 +70,7 @@ export class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitOverrideLi
       notifyRemoteViewersChanged: (browserPageId, hasRemoteViewers) =>
         this.notifier?.browserRemoteViewersChanged?.(browserPageId, hasRemoteViewers)
     },
-    getBrowserCommands: () => this.browserCommands,
-    emulatorHost: {
-      getEmulatorBridge: () => this.emulatorBridge,
-      resolveEmulatorWorkspaceId: (selector) => this.resolveEmulatorWorkspaceId(selector),
-      resolveEmulatorCleanupWorkspaceId: (selector) =>
-        this.resolveEmulatorCleanupWorkspaceId(selector),
-      getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
-      getSettings: () => this.requireStore().getSettings()
-    }
+    getBrowserCommands: () => this.browserCommands
   })
 
   // Why: tests and diagnostic seams replace only screencast startup; ordinary edge methods stay pre-bound.

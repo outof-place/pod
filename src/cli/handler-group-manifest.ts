@@ -144,28 +144,6 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/orchestration.js')).ORCHESTRATION_HANDLERS
   },
   {
-    name: 'emulator',
-    keys: [
-      'emulator list',
-      'emulator devices',
-      'emulator attach',
-      'emulator tap',
-      'emulator type',
-      'emulator gesture',
-      'emulator button',
-      'emulator rotate',
-      'emulator exec',
-      'emulator kill',
-      'emulator shutdown',
-      'emulator install',
-      'emulator launch',
-      'emulator permissions',
-      'emulator ax',
-      'emulator logcat'
-    ],
-    load: async () => (await import('./handlers/emulator.js')).EMULATOR_HANDLERS
-  },
-  {
     name: 'computer',
     keys: [
       'computer capabilities',

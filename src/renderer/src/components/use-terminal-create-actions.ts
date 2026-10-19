@@ -8,7 +8,7 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
-import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
+import { openMobileEmulatorTab } from '@/pod/emulator/open-mobile-emulator-tab-unavailable'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'

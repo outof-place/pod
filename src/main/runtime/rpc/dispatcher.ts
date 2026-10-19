@@ -12,7 +12,6 @@ import {
 
 import { successResponse, errorResponse } from './errors'
 import { ALL_RPC_METHODS } from './methods'
-import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import {
   getOrchestrationMutationExecutor,
@@ -79,9 +78,6 @@ export class RpcDispatcher {
       return admission.rejected
     }
 
-    if (request.method.startsWith('emulator.')) {
-      emulatorProbe(`rpc ${request.method}`, request.params)
-    }
     try {
       const result = await invokeDispatcherUnaryMethod({
         runtime: this.runtime,
@@ -106,11 +102,6 @@ export class RpcDispatcher {
       }
       return successResponse(request.id, meta, filtered.result)
     } catch (error) {
-      if (request.method.startsWith('emulator.')) {
-        emulatorProbeError(`rpc ${request.method}`, error, {
-          params: request.params
-        })
-      }
       return mapDispatcherError(request, meta, error)
     }
   }

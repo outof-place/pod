@@ -16,8 +16,6 @@ const CANONICAL_GUIDE_NAMES = [
   'computer-use',
   'linear-tickets',
   'orca-cli',
-  'orca-emulator',
-  'orca-emulator-android',
   'orca-linear',
   'orca-per-workspace-env',
   'orchestration'
@@ -29,8 +27,6 @@ const GUIDE_ALIASES = {
   'computer-use': [],
   'linear-tickets': [],
   'orca-cli': [],
-  'orca-emulator': [],
-  'orca-emulator-android': [],
   'orca-linear': [],
   'orca-per-workspace-env': [],
   orchestration: []
@@ -45,8 +41,6 @@ const STUB_TOPICS = [
   'computer-use',
   'linear-tickets',
   'orca-cli',
-  'orca-emulator',
-  'orca-emulator-android',
   'orca-linear',
   'orca-per-workspace-env',
   'orchestration'

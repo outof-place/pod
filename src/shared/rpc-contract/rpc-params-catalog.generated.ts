@@ -158,26 +158,6 @@ import {
   TypeText
 } from './computer-schemas-params'
 import {
-  AttachParams as AttachParamsOfEmulatorParams,
-  AxParams,
-  ButtonParams,
-  EmulatorAvailabilityParams,
-  EmulatorListDevicesParams,
-  EmulatorListSimulatorsParams,
-  EmulatorUnregisterActiveParams,
-  ExecParams,
-  GestureParams,
-  KillParams,
-  LaunchParams,
-  ListParams,
-  LogcatParams,
-  PermissionsParams,
-  RotateParams,
-  ShutdownParams,
-  TapParams,
-  TypeParams
-} from './emulator-params'
-import {
   FileCommitUpload,
   FileCopy,
   FileDelete,
@@ -867,24 +847,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.typeText': TypeText,
   'computer.unsubscribeActions': PodComputerActionsUnsubscribeParams,
   'diagnostics.memory': null,
-  'emulator.attach': AttachParamsOfEmulatorParams,
-  'emulator.availability': EmulatorAvailabilityParams,
-  'emulator.ax': AxParams,
-  'emulator.button': ButtonParams,
-  'emulator.exec': ExecParams,
-  'emulator.gesture': GestureParams,
-  'emulator.kill': KillParams,
-  'emulator.launch': LaunchParams,
-  'emulator.list': ListParams,
-  'emulator.listDevices': EmulatorListDevicesParams,
-  'emulator.listSimulators': EmulatorListSimulatorsParams,
-  'emulator.logcat': LogcatParams,
-  'emulator.permissions': PermissionsParams,
-  'emulator.rotate': RotateParams,
-  'emulator.shutdown': ShutdownParams,
-  'emulator.tap': TapParams,
-  'emulator.type': TypeParams,
-  'emulator.unregisterActive': EmulatorUnregisterActiveParams,
   'files.browseServerDir': ServerDirectoryBrowse,
   'files.commitUpload': FileCommitUpload,
   'files.copy': FileCopy,
@@ -1415,7 +1377,6 @@ export const RPC_PARAMS_BY_METHOD = {
 // Why: these methods bind a schema the shared contract cannot hold because its value
 // graph reaches into src/main. Listing them keeps the gap visible instead of absent.
 export const RPC_METHODS_WITHOUT_SHARED_PARAMS: readonly string[] = [
-  'emulator.install',
   'orchestration.send',
   'orchestration.taskUpdate'
 ]

@@ -13,7 +13,7 @@ import {
 import { createWebAgentStatusApi } from './preload-api/web-agent-status-api'
 import { createWebAiVaultApi } from './preload-api/web-ai-vault-api'
 import { createWebAppApi } from './preload-api/web-app-api'
-import { createBrowserApi, createEmulatorApi } from './preload-api/web-browser-api'
+import { createBrowserApi } from './preload-api/web-browser-api'
 import { createCliApi } from './preload-api/web-cli-api'
 import { createWebDiagnosticsApi } from './preload-api/web-diagnostics-api'
 import { withFallback } from './preload-api/web-fallback-api'
@@ -87,7 +87,6 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     fs: createFileApi(),
     git: createGitApi(),
     browser: createBrowserApi(),
-    emulator: createEmulatorApi(),
     gh: createGitHubApi(),
     gl: createGitLabApi(),
     hostedReview: createRuntimeNamespaceApi('hostedReview'),

@@ -19,7 +19,6 @@ import type {
 } from './orca-runtime-core'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
-import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RuntimeResolvedWorktreeCache } from './runtime-resolved-worktree-cache'
 import { RuntimeWorktreeLineageController } from './runtime-worktree-lineage-controller'
 import { RuntimeAgentOrchestrationProjection } from './runtime-agent-orchestration-projection'
@@ -84,8 +83,6 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
   protected agentBrowserBridge: AgentBrowserBridge | null = null
 
   protected offscreenBrowserBackend: BrowserBackend | null = null
-
-  protected emulatorBridge: EmulatorBridge | null = null
 
   protected readonly resolvedWorktrees = new RuntimeResolvedWorktreeCache()
 

@@ -1,16 +1,10 @@
-import { ensureSimulatorTab } from '@/lib/ensure-simulator-tab'
-import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
-import {
-  isManualSimulatorLaunchPending,
-  rememberPrelaunchedSimulatorSession
-} from '@/lib/simulator-launch-coordination'
+import { openMobileEmulatorTab } from '@/pod/emulator/open-mobile-emulator-tab-unavailable'
 import {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
   isFloatingWorkspacePanelFocused
 } from '@/lib/floating-workspace-terminal-actions'
 import { translate } from '@/i18n/i18n'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 
@@ -86,47 +80,6 @@ export function registerContentCreationIpcBridge(
   })
   if (unsubscribeNewSimulatorTab) {
     unsubs.push(unsubscribeNewSimulatorTab)
-  }
-
-  const unsubscribeEmulatorAutoAttach = window.api.emulator?.onAutoAttach(
-    ({ worktreeId, info }) => {
-      if (isRuntimeEnvironmentActive()) {
-        return
-      }
-      if (isManualSimulatorLaunchPending(worktreeId)) {
-        // Why: manual launches pre-attach so the ready pane opens in the right split, not as a hidden tab in this group.
-        rememberPrelaunchedSimulatorSession(worktreeId, info)
-        return
-      }
-      ensureSimulatorTab(worktreeId, {
-        surfacePane: false,
-        executionHostId: LOCAL_EXECUTION_HOST_ID
-      })
-      // Why: watcher may detect a helper while a simulator tab is already mounted; push stream info so the pane updates without re-attach.
-      window.setTimeout(() => {
-        window.dispatchEvent(
-          new CustomEvent('orca:emulator-auto-attach', {
-            detail: { worktreeId, info }
-          })
-        )
-      }, 0)
-    }
-  )
-  if (unsubscribeEmulatorAutoAttach) {
-    unsubs.push(unsubscribeEmulatorAutoAttach)
-  }
-
-  const unsubscribeEmulatorPaneFocus = window.api.emulator?.onPaneFocus(({ worktreeId }) => {
-    if (isRuntimeEnvironmentActive()) {
-      return
-    }
-    ensureSimulatorTab(worktreeId, {
-      surfacePane: true,
-      executionHostId: LOCAL_EXECUTION_HOST_ID
-    })
-  })
-  if (unsubscribeEmulatorPaneFocus) {
-    unsubs.push(unsubscribeEmulatorPaneFocus)
   }
 
   // Why: reply with the page ID so main can await registerGuest before returning to the CLI.

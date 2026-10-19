@@ -38,7 +38,7 @@ vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionTerminal: vi.fn(),
   isWebRuntimeSessionActive: () => false
 }))
-vi.mock('@/lib/open-mobile-emulator-tab', () => ({
+vi.mock('@/pod/emulator/open-mobile-emulator-tab-unavailable', () => ({
   openMobileEmulatorTab: (...args: unknown[]) => mocks.openMobileEmulatorTab(...args)
 }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: vi.fn() }))

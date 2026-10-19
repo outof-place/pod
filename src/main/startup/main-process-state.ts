@@ -26,7 +26,6 @@ import type { PluginMarketplaceInstaller } from '../plugins/plugin-marketplace-i
 import type { KeybindingService } from '../keybindings/keybinding-service'
 import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
-import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-fallback-marker'
 import type { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
 import type { getDevInstanceIdentity } from './dev-instance-identity'
@@ -155,7 +154,6 @@ export const mainProcessState = {
   serveOptions: null as ServeOptions | null,
   desktopWindow: null as BrowserWindow | null,
   agentBrowserBridge: null as AgentBrowserBridge | null,
-  emulatorBridge: null as EmulatorBridge | null,
   tray: null as Tray | null
 }
 

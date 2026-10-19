@@ -427,10 +427,19 @@
       },
       "emulator": {
         "pane": {
+          "MobileEmulatorAgentSetupGuideSteps": {
+            "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
+            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal"
+          },
           "emulator": {
             "device": {
               "frame": {
                 "0022420df0": "phone"
+              }
+            },
+            "pane": {
+              "toolbar": {
+                "868c0f2938": "Working…"
               }
             },
             "unavailable": {
@@ -1333,9 +1342,16 @@
           "1861982430": "Failed to load CLI status.",
           "cdeaed9e37": "Registered the Orca CLI in PATH."
         },
+        "MobileEmulatorExamples": {
+          "4daa95f25a": "Paste any of these into Claude Code, Codex, or another agent in a project where the Orca CLI skill is installed."
+        },
         "MobileEmulatorSdkStatus": {
           "536026130e": "Emulator SDKs",
           "dde0ec1cd8": "Toolchains Orca uses to run emulators. Android works on any OS via the Android SDK; iOS Simulators need Xcode on macOS."
+        },
+        "MobileEmulatorSettingsPane": {
+          "a4f1c82d90": "Disabled",
+          "ae1612c58c": "Availability"
         },
         "MobileNetworkInterfaceSection": {
           "1dc87a7fbc": "Tailscale",
@@ -1770,6 +1786,19 @@
           }
         },
         "mobile": {
+          "emulator": {
+            "search": {
+              "25d7bfbcd4": "udid",
+              "27397fe8e9": "xcode command line tools",
+              "3211e7acf9": "xcrun",
+              "42bfab45d8": "availability",
+              "7c5a8a2bee": "xcode",
+              "84e5706975": "serve-sim",
+              "8ef0f08d36": "runtime",
+              "d4b7833894": "orca cli",
+              "ea1f51b980": "Check whether Xcode, simctl, serve-sim, and emulator devices are ready."
+            }
+          },
           "settings": {
             "search": {
               "b730ff7049": "experimental"
@@ -2698,6 +2727,7 @@
         "f6300deb8b": "New Browser Tab"
       },
       "useSettingsNavigationMetadata": {
+        "3d65d3f1b9": "Configure mobile emulator support for Orca and coding agents.",
         "5235c215ca": "Choose which task providers appear in the Tasks page and sidebar."
       }
     },

@@ -528,6 +528,60 @@
           "reason": "a comment naming the speech worker beside the now-unused sherpa-onnx exemption; the file gates SSH-host orcad slots and stays as is"
         }
       ]
+    },
+    {
+      "id": "orca-emulator",
+      "category": "feature",
+      "reason": "Orca's mobile emulator: serve-sim (iOS simulator) and scrcpy/adb (Android), its IPC, RPC, CLI, preload API, settings pane, skills and the emulator pane. Pod's own simulator is pod-sim (kept); the 'simulator' tab type and its tab-system plumbing stay until wave 3",
+      "paths": [
+        "src/main/emulator/**",
+        "src/main/ipc/emulator-frame-stream.ts",
+        "src/main/ipc/emulator-video-stream.ts",
+        "src/main/ipc/emulator-frame-stream-socket-lifetime.test.ts",
+        "src/main/ipc/emulator-renderer-lifetime.test.ts",
+        "src/main/ipc/emulator-stream-listener-cleanup.test.ts",
+        "src/main/runtime/orca-runtime-emulator.ts",
+        "src/main/runtime/orca-runtime-emulator-folder-workspace.test.ts",
+        "src/main/runtime/rpc/methods/emulator.ts",
+        "src/preload/api/emulator-api.ts",
+        "src/preload/api/emulator-bridge.ts",
+        "src/cli/emulator-logcat-format.ts",
+        "src/cli/emulator-logcat-format.test.ts",
+        "src/cli/emulator-permissions-args.ts",
+        "src/cli/handlers/emulator.ts",
+        "src/cli/handlers/emulator.test.ts",
+        "src/cli/specs/emulator.ts",
+        "src/renderer/src/components/emulator-pane/**",
+        "src/renderer/src/components/settings/MobileEmulatorAgentControlRow.tsx",
+        "src/renderer/src/components/settings/MobileEmulatorAgentControlRow.test.tsx",
+        "src/renderer/src/components/settings/MobileEmulatorAvailabilityDetails.tsx",
+        "src/renderer/src/components/settings/MobileEmulatorExamples.tsx",
+        "src/renderer/src/components/settings/MobileEmulatorSettingsPane.tsx",
+        "src/renderer/src/components/settings/mobile-emulator-search.ts",
+        "src/renderer/src/lib/open-mobile-emulator-tab.ts",
+        "src/renderer/src/lib/open-mobile-emulator-tab.test.ts",
+        "src/renderer/src/lib/simulator-launch-coordination.ts",
+        "src/renderer/src/lib/simulator-launch-coordination.test.ts",
+        "src/renderer/src/lib/simulator-pane-shutdown-scheduler.ts",
+        "src/renderer/src/lib/simulator-pane-shutdown-scheduler.test.ts",
+        "src/shared/emulator-keyboard-frame.ts",
+        "src/shared/emulator-keyboard-frame.test.ts",
+        "src/shared/emulator-touch-frame.ts",
+        "src/shared/emulator-touch-frame.test.ts",
+        "src/shared/rpc-contract/emulator-params.ts",
+        "skills/orca-emulator/**",
+        "skills/orca-emulator-android/**",
+        "skill-guides/orca-emulator.md",
+        "skill-guides/orca-emulator-android.md",
+        "skill-stubs/orca-emulator.md",
+        "skill-stubs/orca-emulator-android.md",
+        "tests/e2e/floating-mobile-emulator-tab.spec.ts",
+        "config/scripts/scrcpy-frame-buffering-benchmark.mjs"
+      ],
+      "except": [
+        "src/renderer/src/components/emulator-pane/mobile-emulator-tab-intro-visibility.ts",
+        "src/renderer/src/components/emulator-pane/mobile-emulator-tab-intro-visibility.test.ts"
+      ]
     }
   ]
 }

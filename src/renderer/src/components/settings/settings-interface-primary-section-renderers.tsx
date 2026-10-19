@@ -1,6 +1,5 @@
 import { BrowserPane } from './BrowserPane'
 import { FloatingWorkspacePane } from './FloatingWorkspacePane'
-import { MobileEmulatorSettingsPane } from './MobileEmulatorSettingsPane'
 import { QuickCommandsPane } from './QuickCommandsPane'
 import { TerminalPane } from './TerminalPane'
 import { SettingsSection } from './SettingsSection'
@@ -80,30 +79,6 @@ export function renderBrowserSettingsSection(
           settings={model.settings}
           updateSettings={model.updateSettings}
           onOpenComputerUse={actions.openComputerUseFromBrowser}
-        />
-      ) : null}
-    </SettingsSection>
-  ) : null
-}
-
-export function renderMobileEmulatorSettingsSection(
-  context: SettingsRenderContext
-): React.JSX.Element | null {
-  const { model, navigation, view } = context
-  return model.showDesktopOnlySettings ? (
-    <SettingsSection
-      id="mobile-emulator"
-      title={translate('auto.components.settings.Settings.f75daf1002', 'Mobile Emulator')}
-      description={translate(
-        'auto.components.settings.Settings.01f9d36292',
-        'Configure mobile emulator support for Orca and coding agents.'
-      )}
-      searchEntries={navigation.getSectionSearchEntries('mobile-emulator')}
-    >
-      {view.isSectionMounted('mobile-emulator') ? (
-        <MobileEmulatorSettingsPane
-          settings={model.settings}
-          updateSettings={model.updateSettings}
         />
       ) : null}
     </SettingsSection>

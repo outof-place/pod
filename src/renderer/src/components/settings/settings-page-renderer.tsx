@@ -30,7 +30,6 @@ import {
 import {
   renderBrowserSettingsSection,
   renderFloatingWorkspaceSettingsSection,
-  renderMobileEmulatorSettingsSection,
   renderQuickCommandsSettingsSection,
   renderTerminalSettingsSection
 } from './settings-interface-primary-section-renderers'
@@ -138,7 +137,6 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
                 {renderTerminalSettingsSection(context)}
                 {renderQuickCommandsSettingsSection(context)}
                 {renderBrowserSettingsSection(context)}
-                {renderMobileEmulatorSettingsSection(context)}
                 {renderFloatingWorkspaceSettingsSection(context)}
                 {renderAppearanceSettingsSection(context)}
                 {renderChatSettingsSection(context)}

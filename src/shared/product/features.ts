@@ -102,8 +102,7 @@ export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
   emulator: {
     pod: false,
     reason: 'No iOS simulator panes; drops serve-sim',
-    packaging: { dropExtraResourcesTo: ['node_modules/serve-sim', 'node_modules/sonner'] },
-    settingsSections: ['mobile-emulator']
+    packaging: { dropExtraResourcesTo: ['node_modules/serve-sim', 'node_modules/sonner'] }
   },
   linear: {
     pod: true,

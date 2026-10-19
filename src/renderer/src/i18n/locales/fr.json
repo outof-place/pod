@@ -796,13 +796,6 @@
               "173553f73a": "VS Code"
             }
           }
-        },
-        "mobile": {
-          "emulator": {
-            "tab": {
-              "bf4f2a8a72": "Impossible de démarrer l'émulateur. Vérifiez la configuration de l'émulateur iOS ou Android et essayez un autre appareil."
-            }
-          }
         }
       },
       "orchestration": {
@@ -1193,7 +1186,6 @@
         "2d0659f6f0": "Onglets globaux de terminal, de navigateur et de markdown.",
         "65b19f5bde": "Espace de travail flottant",
         "3d65d3f1b9": "Configurez la prise en charge des émulateurs mobiles pour Orca et les agents de codage.",
-        "1e761cff2b": "Émulateur mobile",
         "e815fd01bd": "Page d'accueil, routage des liens et cookies de session.",
         "8c197f74a1": "Navigateur",
         "42ae40842f": "Commandes de terminal enregistrées, globales ou par projet.",
@@ -7740,43 +7732,14 @@
         },
         "MobileEmulatorAgentControlRow": {
           "1861982430": "Échec du chargement de l'état de la CLI.",
-          "8af7a8bc38": "Les commandes ciblent l'émulateur actif du worktree courant. Les coordonnées sont normalisées entre 0 et 1.",
-          "c7f3fe0a6e": "Commandes d'émulateur courantes",
-          "d94ca6a623": "Permet aux agents d'utiliser les commandes CLI d'Orca, y compris le contrôle de l'émulateur mobile.",
-          "67e19ee03c": "Compétence CLI Orca",
-          "ff4b7e65d6": "Laisser les agents de codage contrôler l'émulateur mobile actif avec des commandes CLI Orca.",
-          "2a674aa810": "Contrôle de l'émulateur mobile par les agents",
           "cdeaed9e37": "Orca CLI enregistré dans PATH."
         },
         "MobileEmulatorExamples": {
-          "edf13dd03b": "Copier",
-          "c12b253997": "Copier l'exemple de prompt",
-          "d151e25078": "\"",
-          "b525ff2b12": "\"",
-          "4daa95f25a": "Collez l'un de ces prompts dans Claude Code, Codex ou un autre agent, dans un projet où le skill CLI Orca est installé.",
-          "0820b3f84f": "Essayez — exemples de prompts",
-          "1f608e7d60": "Échec de la copie du prompt.",
-          "2b077b5544": "Prompt copié."
+          "4daa95f25a": "Collez l'un de ces prompts dans Claude Code, Codex ou un autre agent, dans un projet où le skill CLI Orca est installé."
         },
         "MobileEmulatorSettingsPane": {
-          "19d39113b6": "Laisser les agents de codage contrôler l'émulateur mobile actif avec des commandes CLI Orca.",
-          "f2f8d97bb6": "Contrôle de l'émulateur mobile par les agents",
-          "143961d031": "Appareil par défaut",
-          "8aec2f99a0": "Actualiser la disponibilité des émulateurs",
           "ae1612c58c": "Disponibilité",
-          "f9af91ea26": "Affiche l'action Nouvel émulateur mobile et permet aux agents de se rattacher à l'émulateur actif.",
-          "700ddbf9b1": "Activer l'émulateur mobile",
-          "bc39d0f115": "Configurez la prise en charge des émulateurs mobiles pour Orca et les agents de codage.",
-          "6593c9ddd3": "Émulateur mobile",
-          "a4f1c82d90": "Désactivé",
-          "b5e2d93e01": "Vérification...",
-          "c6f3ea4f12": "Prêt",
-          "d704fb5023": "Configuration requise",
-          "06b06429c6": "Vérification de la prise en charge du SDK Android et du simulateur iOS.",
-          "6d1483d4a0": "1 appareil émulateur détecté.",
-          "0a452d4d3b": "{{value0}} appareils émulateur détectés.",
-          "f62a1bb759": "Orca sélectionnera automatiquement un appareil émulateur une fois les appareils détectés.",
-          "b2fd62ea75": "Appareil par défaut pour les nouveaux onglets d'émulateur et les commandes d'attachement des agents. La sélection automatique privilégie un appareil déjà démarré."
+          "a4f1c82d90": "Désactivé"
         },
         "MobileNetworkInterfaceSection": {
           "63d5e4ae1e": "Régénérez le QR code et scannez-le depuis l'app mobile Orca.",
@@ -8452,8 +8415,6 @@
           "2b4474780a": "Apparence",
           "3d9adfe6a5": "Onglets globaux de terminal, de navigateur et de markdown.",
           "3eb22a3ada": "Espace de travail flottant",
-          "01f9d36292": "Configurez la prise en charge des émulateurs mobiles pour Orca et les agents de codage.",
-          "f75daf1002": "Émulateur mobile",
           "ad9788036f": "Page d'accueil, routage des liens et cookies de session.",
           "c46215ea03": "Navigateur",
           "6742c7932c": "Commandes de terminal enregistrées, globales ou par projet.",
@@ -10187,42 +10148,15 @@
         "mobile": {
           "emulator": {
             "search": {
-              "2348045036": "Choisissez l'appareil émulateur qu'Orca ouvre par défaut.",
-              "2bb2e09225": "skill mobile",
-              "bbe4267416": "type d'émulateur",
-              "64494f03c3": "attach de l'émulateur",
-              "6f728f1456": "tap de l'émulateur",
-              "f8b871d655": "CLI de l'agent",
-              "2e0b45b2ba": "Utilisez les commandes CLI d'Orca pour lister, attacher, taper et saisir du texte dans un émulateur mobile.",
-              "ea3eac39bb": "Contrôle par CLI d'agent",
               "8ef0f08d36": "runtime",
               "27397fe8e9": "outils de ligne de commande Xcode",
-              "7650063d17": "simctl",
               "3211e7acf9": "xcrun",
               "42bfab45d8": "disponibilité",
               "ea1f51b980": "Vérifiez que Xcode, simctl, serve-sim et les appareils émulateurs sont prêts.",
-              "0b95dfd5b3": "Disponibilité de l'émulateur",
-              "04c5f5d901": "appareil",
               "25d7bfbcd4": "udid",
-              "ec3c4043fd": "iPad par défaut",
-              "1dc8c52ffa": "iPhone par défaut",
-              "ab4814f3c5": "simulateur par défaut",
-              "54184cb9c5": "Appareil émulateur par défaut",
-              "b8ddd13195": "émulateur de l'agent",
-              "1ad6fb6230": "appareil par défaut",
-              "ac0a985873": "skill émulateur",
-              "9353854ff3": "émulateur Orca",
               "d4b7833894": "CLI Orca",
               "84e5706975": "serve-sim",
-              "7c5a8a2bee": "xcode",
-              "bec7231663": "iPad",
-              "49727355a3": "iPhone",
-              "6b6407dc1f": "émulateur",
-              "2d67f708ce": "simulateur",
-              "c5eca29310": "simulateur iOS",
-              "25159de808": "émulateur mobile",
-              "9595354cff": "Configurez la prise en charge des émulateurs mobiles pour Orca et les agents de codage.",
-              "cdd3c31918": "Émulateur mobile"
+              "7c5a8a2bee": "xcode"
             }
           },
           "pane": {
@@ -11270,18 +11204,7 @@
         },
         "MobileEmulatorSdkStatus": {
           "536026130e": "SDK d'émulateurs",
-          "dde0ec1cd8": "Chaînes d'outils qu'Orca utilise pour exécuter des émulateurs. Android fonctionne sur tout OS via le SDK Android ; les simulateurs iOS nécessitent Xcode sur macOS.",
-          "027cbf668a": "Android SDK",
-          "f6d080d128": "Utilise le chemin configuré",
-          "7fe4bd5907": "Détecté à",
-          "2784f0b22d": "Introuvable. Installez Android Studio, puis créez un Virtual Device.",
-          "b94ff260e6": "Télécharger Android Studio",
-          "18925b082d": "Localiser le dossier du SDK",
-          "8c52684db8": "Effacer",
-          "76eb88b88e": "Simulateur iOS (Xcode)",
-          "c6f3ea4f12": "Prêt",
-          "e4f14b50d7": "Installez Xcode et ajoutez un runtime de simulateur iOS.",
-          "63fe73a1ea": "Impossible de mettre à jour le dossier du SDK Android."
+          "dde0ec1cd8": "Chaînes d'outils qu'Orca utilise pour exécuter des émulateurs. Android fonctionne sur tout OS via le SDK Android ; les simulateurs iOS nécessitent Xcode sur macOS."
         },
         "AppearanceAdvancedDisclosure": {
           "advanced": "Avancé"
@@ -15135,35 +15058,15 @@
       },
       "emulator": {
         "pane": {
-          "EmulatorPane": {
-            "59b08fa031": "Aucun émulateur connecté"
-          },
           "emulator": {
             "device": {
               "frame": {
-                "9406c15775": "Écran de l'émulateur",
-                "8f25ffaf8a": "Écran de l'émulateur, clavier capturé. Appuyez sur Échap pour le libérer.",
                 "0022420df0": "téléphone"
               }
             },
             "pane": {
               "toolbar": {
-                "06e10d7356": "Éteindre l'émulateur",
-                "e7a0d1897e": "Home",
-                "6bd8dff42a": "Pivoter",
-                "3d836b879c": "Choisir un émulateur",
-                "81b3571a07": "Se connecter",
                 "868c0f2938": "Traitement…"
-              }
-            },
-            "screen": {
-              "stream": {
-                "content": {
-                  "8b1a0d8694": "Aperçu de l'émulateur",
-                  "36841af608": "Flux déconnecté",
-                  "5f818f12ab": "Connexion à l'émulateur…",
-                  "5ee64cd44e": "Écran de l'émulateur"
-                }
               }
             },
             "unavailable": {
@@ -15173,73 +15076,9 @@
               }
             }
           },
-          "use": {
-            "emulator": {
-              "frame": {
-                "stream": {
-                  "f1c0179002": "Le flux ne produit aucune image."
-                }
-              }
-            },
-            "mobile": {
-              "emulator": {
-                "agent": {
-                  "setup": {
-                    "state": {
-                      "35dea1ae12": "Le contrôle des agents est prêt.",
-                      "c94ff11e91": "Impossible de revérifier l'état de la configuration.",
-                      "skillNotInstalled": "La skill Orca CLI n'est pas encore installée."
-                    }
-                  }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "Impossible de masquer l'émulateur mobile."
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "MobileEmulatorAgentSetupGuide": {
-            "2fda9ff015": "Configurer le contrôle des agents",
-            "0ac0fef514": "Le contrôle des agents est prêt.",
-            "2bdfff8763": "Contrôle des agents (facultatif).",
-            "d10ae98046": "Terminé",
-            "3756cbeca7": "Pas maintenant",
-            "6d950431d2": "Masquer",
-            "ebceac65a4": "Configurer",
-            "3f003507f4": "Ouvrir la configuration complète dans les paramètres",
-            "installSkillPrompt": "Installez la skill Orca CLI lorsque vous voulez que les agents pilotent ce simulateur."
-          },
           "MobileEmulatorAgentSetupGuideSteps": {
-            "21f5687c07": "Compétence CLI Orca",
-            "64fb057667": "Apprend aux agents les commandes orca de l'émulateur pour ce worktree.",
             "5c59ea96ca": "Configuration de la skill Orca CLI de l'émulateur mobile",
             "bff5341ac3": "Terminal d'installation de la skill Orca CLI de l'émulateur mobile"
-          },
-          "MobileEmulatorTabIntroCallout": {
-            "1924982130": "Ignorer",
-            "5789936d9a": "Prévisualisez les simulateurs iOS pendant que des agents pilotent l'écran.",
-            "8014b4b80b": "Conserver",
-            "6e051a40b7": "Masquer"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "Émulateur mobile masqué",
-                  "c46c979c1d": "Réactivez l'émulateur mobile à tout moment dans",
-                  "600f9a745a": "Paramètres › Émulateur mobile"
-                }
-              }
-            }
-          },
-          "useEmulatorScreenKeyboard": {
-            "pasteTooLarge": "Le collage est trop volumineux pour la saisie clavier de l'émulateur.",
-            "unsupportedPasteText": "Le collage via le clavier de l'émulateur prend uniquement en charge le texte de clavier US.",
-            "pasteTargetUnavailable": "Le collage via le clavier de l'émulateur a échoué car l'appareil n'est pas prêt."
           }
         }
       },

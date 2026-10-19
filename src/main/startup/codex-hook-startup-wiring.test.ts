@@ -27,14 +27,12 @@ vi.mock('./main-process-state', () => ({
 }))
 vi.mock('./main-process-runtime-service', () => ({
   initializeMainProcessRuntime: () => ({
-    setAgentBrowserBridge: vi.fn(),
-    setEmulatorBridge: vi.fn()
+    setAgentBrowserBridge: vi.fn()
   }),
   configureRuntimeServices: vi.fn()
 }))
 vi.mock('../star-nag/service')
 vi.mock('../browser/agent-browser-bridge')
-vi.mock('../emulator/emulator-bridge')
 vi.mock('../runtime/rpc/dispatcher')
 vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
 vi.mock('../browser/browser-client-page-automation-runtime')

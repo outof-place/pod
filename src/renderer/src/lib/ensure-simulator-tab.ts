@@ -1,6 +1,5 @@
 import { useAppStore } from '@/store'
 import { findReusableRightSplitGroupId } from './emulator-right-split-target'
-import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-scheduler'
 import { shouldShutdownSimulatorForPaneUnmountFromTabs } from './simulator-tab-shutdown'
 import { translate } from '@/i18n/i18n'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
@@ -102,8 +101,6 @@ export function ensureSimulatorTab(
   if (!sourceGroupId) {
     return null
   }
-  cancelPendingSimulatorPaneShutdown(worktreeId)
-
   const executionHostId = resolveSimulatorExecutionHostId(
     store,
     worktreeId,

@@ -132,13 +132,6 @@ export class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRun
     return workspace
   }
 
-  protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {
-    const folderWorkspace = this.resolveFolderWorkspaceSelector(selector)
-    return folderWorkspace
-      ? folderWorkspaceKey(folderWorkspace.id)
-      : (await this.resolveWorktreeSelector(selector)).id
-  }
-
   protected async resolveBrowserWorkspace(selector: string): Promise<ResolvedWorktree> {
     const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector)
     return folderScope?.folderWorkspace

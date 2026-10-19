@@ -3,7 +3,7 @@ import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-re
 import { translate } from '@/i18n/i18n'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { MobileEmulatorTabIntroCallout } from '../emulator-pane/MobileEmulatorTabIntroCallout'
+import { MobileEmulatorTabIntroCallout } from '../../pod/emulator/NoMobileEmulatorTabIntroCallout'
 import { ShellIcon } from './shell-icons'
 import type { WindowsShellMenuEntry } from './tab-bar-windows-shell-options'
 import {

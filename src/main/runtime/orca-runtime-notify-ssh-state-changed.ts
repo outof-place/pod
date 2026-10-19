@@ -10,7 +10,6 @@ import { navigationTargetsClients, navigationTargetsHost } from '../../shared/ru
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
-import type { EmulatorBridge } from '../emulator/emulator-bridge'
 
 export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStatus {
   private static readonly MAX_SSH_RELAY_RECOVERY_GENERATIONS = 512
@@ -218,13 +217,5 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
 
   getOffscreenBrowserBackend(): BrowserBackend | null {
     return this.offscreenBrowserBackend
-  }
-
-  setEmulatorBridge(bridge: EmulatorBridge | null): void {
-    this.emulatorBridge = bridge
-  }
-
-  getEmulatorBridge(): EmulatorBridge | null {
-    return this.emulatorBridge
   }
 }

@@ -1,6 +1,5 @@
 import type { BrowserScreencastResult } from '../../shared/runtime-types'
 import type { RuntimeBrowserCommands, RuntimeBrowserCommandHost } from './orca-runtime-browser'
-import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import { RuntimeBrowserScreencastController } from './runtime-browser-screencast-controller'
 import { createRuntimeBrowserCommands } from './runtime-browser-commands-factory'
 import { RuntimeJiraCommands } from './runtime-jira-commands'
@@ -20,12 +19,9 @@ type BrowserSurface = Omit<PublicMethods<RuntimeBrowserCommands>, 'browserScreen
   ): Promise<void>
 }
 
-export type RuntimeEdgeCommandSurface = BrowserSurface &
-  PublicMethods<RuntimeJiraCommands> &
-  PublicMethods<RuntimeEmulatorCommands>
+export type RuntimeEdgeCommandSurface = BrowserSurface & PublicMethods<RuntimeJiraCommands>
 
 type ScreencastDependencies = ConstructorParameters<typeof RuntimeBrowserScreencastController>[0]
-type EmulatorHost = ConstructorParameters<typeof RuntimeEmulatorCommands>[0]
 
 const BROWSER_COMMAND_NAMES = [
   'browserSnapshot',
@@ -141,13 +137,11 @@ export class RuntimeEdgeCommandController {
   private readonly jira = new RuntimeJiraCommands()
   private readonly browser: RuntimeBrowserCommands
   private readonly screencasts: RuntimeBrowserScreencastController
-  private readonly emulator: RuntimeEmulatorCommands
   readonly surface: RuntimeEdgeCommandSurface
 
   constructor(args: {
     browserHost: RuntimeBrowserCommandHost
     screencast: Omit<ScreencastDependencies, 'getCommands'>
-    emulatorHost: EmulatorHost
     getBrowserCommands?: () => RuntimeBrowserCommands
   }) {
     this.browser = createRuntimeBrowserCommands(args.browserHost)
@@ -155,11 +149,9 @@ export class RuntimeEdgeCommandController {
       ...args.screencast,
       getCommands: () => args.getBrowserCommands?.() ?? this.browser
     })
-    this.emulator = new RuntimeEmulatorCommands(args.emulatorHost)
     this.surface = {
       ...bindPrefixedMethods(this.jira, 'jira'),
       ...bindNamedMethods(this.browser, BROWSER_COMMAND_NAMES),
-      ...bindPrefixedMethods(this.emulator, 'emulator'),
       browserScreencast: (params, options) => this.screencasts.start(params, options)
     } as RuntimeEdgeCommandSurface
   }
