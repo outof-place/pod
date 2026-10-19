@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setSecretStore } from '../../../shared/secret-store'
 import { POD_LINEAR_UNSEALED_MESSAGE } from './pod-linear-key-store'
 import { fakeKeychain, setTestUserData } from './pod-linear-key-store.test-support'
+import { turnLinearOnInFreshModules } from './pod-linear-access.test-support'
 import {
   guardFetchToLoopback,
   LINEAR_MOCK_ORGANIZATION,
@@ -118,6 +119,7 @@ describe('Linear keys in Pod’s own store', () => {
     process.env.POD_LINEAR_API_URL = server.apiUrl
     process.env.ORCA_E2E_USER_DATA_DIR = userData
     guard = guardFetchToLoopback()
+    await turnLinearOnInFreshModules()
   })
 
   afterEach(async () => {
