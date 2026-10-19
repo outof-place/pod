@@ -206,8 +206,7 @@ describe('tab selection and hydration ownership', () => {
   )
 
   it('hydrates unified selection without allowing conflicting legacy memories to choose it', () => {
-    // Why not a simulator tab: Pod's hydration drops those (the emulator pane is cut).
-    const tab = selectedTab('agent-session')
+    const tab = selectedTab('simulator')
     const state = selectionState(tab)
     const session = {
       activeRepoId: null,
@@ -223,7 +222,7 @@ describe('tab selection and hydration ownership', () => {
     }
     const before = structuredClone(session)
     const hydrated = buildHydratedTabState(session, new Set([workspace]))
-    expect(activate({ ...state, ...hydrated }).activeTabType).toBe('agent-session')
+    expect(activate({ ...state, ...hydrated }).activeTabType).toBe('simulator')
     expect(session).toEqual(before)
   })
 })

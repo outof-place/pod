@@ -96,7 +96,6 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/filesystem-watcher-ignore-real.test.ts',
   'src/main/ipc/runtime-environment-preference.test.ts',
   'src/main/ipc/runtime-environment-transport-routing-tailscale-hint.test.ts',
-  'src/renderer/src/components/emulator-pane/emulator-device-frame-visibility.test.tsx',
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/profile-state-worker-smoke.test.mjs',
   'config/scripts/process-host-dev-rebuild.test.ts',

@@ -152,7 +152,6 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
       'file',
       'orchestration',
       'computer',
-      'emulator',
       'note',
       'diagnostics',
       'linear',

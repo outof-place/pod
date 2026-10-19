@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
 import { buildHydratedTabState } from './tabs-hydration'
 
 vi.stubGlobal('crypto', { randomUUID: () => `uuid-${Math.random().toString(36).slice(2, 8)}` })
@@ -198,9 +197,7 @@ describe('buildHydratedTabState – unified format', () => {
     expect(result.layoutByWorktree.w1).toEqual({ type: 'leaf', groupId: 'g2' })
   })
 
-  // Why: Pod cut the emulator pane but keeps the 'simulator' tab type, so sessions written before
-  // the cut still parse; hydration drops the tab and the split group it leaves empty.
-  it('drops restored simulator tabs and the split groups they leave empty', () => {
+  it('keeps restored simulator tabs while pruning unrelated empty split groups', () => {
     const session: WorkspaceSessionState = {
       ...makeBaseSession(),
       unifiedTabs: {
@@ -256,12 +253,11 @@ describe('buildHydratedTabState – unified format', () => {
       activeGroupIdByWorktree: { w1: 'g2' }
     }
 
-    const parsed = parseWorkspaceSession(structuredClone(session))
-    expect(parsed.ok).toBe(true)
-    const result = buildHydratedTabState(parsed.ok ? parsed.value : session, new Set(['w1']))
+    const result = buildHydratedTabState(session, new Set(['w1']))
 
     expect(result.unifiedTabsByWorktree.w1).toEqual([
-      expect.objectContaining({ id: 'terminal-1', contentType: 'terminal', groupId: 'g1' })
+      expect.objectContaining({ id: 'terminal-1', contentType: 'terminal', groupId: 'g1' }),
+      expect.objectContaining({ id: 'simulator-1', contentType: 'simulator', groupId: 'g2' })
     ])
     expect(result.groupsByWorktree.w1).toEqual([
       {
@@ -270,10 +266,23 @@ describe('buildHydratedTabState – unified format', () => {
         activeTabId: 'terminal-1',
         tabOrder: ['terminal-1'],
         recentTabIds: ['terminal-1']
+      },
+      {
+        id: 'g2',
+        worktreeId: 'w1',
+        activeTabId: 'simulator-1',
+        tabOrder: ['simulator-1'],
+        recentTabIds: ['simulator-1']
       }
     ])
-    expect(result.activeGroupIdByWorktree.w1).toBe('g1')
-    expect(result.layoutByWorktree.w1).toEqual({ type: 'leaf', groupId: 'g1' })
+    expect(result.activeGroupIdByWorktree.w1).toBe('g2')
+    expect(result.layoutByWorktree.w1).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', groupId: 'g1' },
+      second: { type: 'leaf', groupId: 'g2' },
+      ratio: 0.5
+    })
   })
 })
 

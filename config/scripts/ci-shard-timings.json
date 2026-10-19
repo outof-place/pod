@@ -5472,7 +5472,6 @@
       "src/renderer/src/components/editor/useRichMarkdownReviewController.open-guard.test.ts": 673,
       "src/renderer/src/components/editor/useRichMarkdownSearch.reuse.test.tsx": 500,
       "src/renderer/src/components/editor/useRichMarkdownSearch.test.tsx": 1658,
-      "src/renderer/src/components/emulator-pane/mobile-emulator-agent-setup-cli-state.test.ts": 60,
       "src/renderer/src/components/emulator-pane/mobile-emulator-tab-intro-visibility.test.ts": 37,
       "src/renderer/src/components/error-boundaries/RecoverableRenderErrorBoundary.lazy-chunk.test.tsx": 1006,
       "src/renderer/src/components/error-boundaries/RecoverableRenderErrorBoundary.never-landed-reload.test.tsx": 524,

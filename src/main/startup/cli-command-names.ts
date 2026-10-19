@@ -21,7 +21,6 @@ export const CLI_COMMAND_NAMES = [
   'dialog',
   'download',
   'drag',
-  'emulator',
   'environment',
   'eval',
   'exec',

@@ -119,10 +119,6 @@ function hydrateUnifiedFormat(
         }
       })
       .filter((tab) => {
-        // Why (Pod): the emulator pane is cut, so a restored simulator tab would be an empty pane.
-        if (tab.contentType === 'simulator') {
-          return false
-        }
         if (tab.contentType === 'terminal') {
           // Why: old web-client sessions could persist host surface ids
           // containing "::"; those are invalid pane-key tab ids.
