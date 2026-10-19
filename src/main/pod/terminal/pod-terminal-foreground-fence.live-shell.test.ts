@@ -2,13 +2,15 @@
 // pane is (under `login` on macOS), with a `claude` stub: a shell in front while the tracker's 5 s
 // startup guess still names the agent refuses the write; an agent in front lets it through; an
 // agent that exits between the proof and the write refuses it, with no byte written. The fence's
-// read runs as in a development build without the addon: one /bin/ps under LC_ALL=C.
+// read runs as in a development build without the addon: one /bin/ps under LC_ALL=C. The same three
+// cases run again through the classic window's IPC write (pty:writeAccepted with
+// requireAgentForeground), which proves and fences in main.
 import { spawnSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as pty from 'node-pty'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { recognizeAgentProcess } from '../../../shared/agent-process-recognition'
 import { createPtyForegroundProcessTracker } from '../../daemon/pty-subprocess/foreground-process-tracker'
 import {
@@ -16,6 +18,11 @@ import {
   wrapShellSpawnForMacosTccAttribution
 } from '../../providers/macos-tcc-login-shell'
 import { setTestUserData } from '../linear/pod-linear-key-store.test-support'
+import { ptyOwnership } from '../../ipc/pty/provider/ownership-state'
+import { createPtyWriteInput } from '../../ipc/pty/ipc/write-input'
+import type { PtyRendererDelivery } from '../../ipc/pty/session'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import type { TerminalAgentForegroundProof } from './pod-terminal-foreground-fence'
 import { writeStartupInputGuarded } from './pod-startup-input-write'
 import {
   isTerminalForegroundFenceHeld,
@@ -23,6 +30,16 @@ import {
 } from './pod-terminal-foreground-fence'
 
 const PTY_ID = 'pty-1'
+
+// The IPC path finds its provider by the pane's id; the test hands it the pane's writer.
+const ipc = vi.hoisted(
+  (): {
+    provider: { hasPty: () => boolean; write: (id: string, data: string) => boolean } | null
+  } => ({
+    provider: null
+  })
+)
+vi.mock('../../ipc/pty/provider/registry', () => ({ tryGetProviderForPty: () => ipc.provider }))
 // A function, not a ternary: the Windows-lane registration scan reads a const assigned from a
 // platform check as a Windows-only gate, and this suite runs everywhere but Windows.
 function findZsh(): string {
@@ -167,6 +184,115 @@ describeWithZsh('the guarded write against a real pane', () => {
       const agentFence = proof.fence
       expect(isTerminalForegroundFenceHeld(agentFence)).toBe(true)
       expect(await until(async () => !isTerminalForegroundFenceHeld(agentFence), 10_000)).toBe(true)
+    } finally {
+      await p.close()
+    }
+  }, 30_000)
+})
+
+describeWithZsh('agent text through the classic window’s IPC write against a real pane', () => {
+  const mainWindow: PtyRendererDelivery = {
+    isDestroyed: () => false,
+    isFocused: () => true,
+    isVisible: () => true,
+    isMinimized: () => false,
+    webContents: {
+      id: 1,
+      isDestroyed: () => false,
+      send: vi.fn(),
+      on: vi.fn(),
+      removeListener: vi.fn()
+    }
+  }
+
+  /** pty:writeAccepted as main runs it, proving with the given proof on the pane's own terminal. */
+  function ipcWrite(
+    p: Awaited<ReturnType<typeof pane>>,
+    prove: () => Promise<TerminalAgentForegroundProof>
+  ) {
+    ipc.provider = {
+      hasPty: () => true,
+      write: (_id, data) => {
+        p.writes.push(data)
+        return true
+      }
+    }
+    ptyOwnership.set(PTY_ID, 'local')
+    const runtime = {
+      getDriver: () => ({ kind: 'idle' }),
+      proveTerminalAgentForegroundFence: prove,
+      terminalRunFacts: { recordInput: () => {} },
+      noteRemoteDesktopHostInput: () => {},
+      observeClaudeTerminalEvidence: () => {}
+    }
+    return createPtyWriteInput({
+      mainWindow,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the write path reads only the members stubbed above.
+      runtime: runtime as unknown as OrcaRuntimeService
+    }).writePtyInputAccepted({
+      id: PTY_ID,
+      data: 'x',
+      inputKind: 'driving',
+      requireAgentForeground: true
+    })
+  }
+
+  afterEach(() => {
+    ptyOwnership.delete(PTY_ID)
+    ipc.provider = null
+  })
+
+  it('refuses while the shell is in front, though the tracker’s startup guess names the agent', async () => {
+    const p = await pane(30)
+    try {
+      const proveNow = () => proveTerminalAgentForeground(p.controller, PTY_ID, null)
+      expect(await until(async () => (await proveNow()).verdict === 'shell', 10_000)).toBe(true)
+      expect(p.tracker.getForegroundProcess()).toBe('claude')
+      await expect(ipcWrite(p, proveNow)).rejects.toThrow('agent_not_in_foreground: shell')
+      expect(p.writes).toEqual([])
+    } finally {
+      await p.close()
+    }
+  }, 30_000)
+
+  it('writes while the agent is in front', async () => {
+    const p = await pane(30)
+    try {
+      p.proc.write(`'${p.stubPath}'\r`)
+      const proveNow = () => proveTerminalAgentForeground(p.controller, PTY_ID, null)
+      expect(await until(async () => (await proveNow()).verdict === 'agent', 15_000)).toBe(true)
+      await expect(ipcWrite(p, proveNow)).resolves.toBe(true)
+      expect(p.writes).toEqual(['x'])
+    } finally {
+      await p.close()
+    }
+  }, 30_000)
+
+  it('refuses once the agent exited after the proof, with no byte written', async () => {
+    const p = await pane(3)
+    try {
+      p.proc.write(`'${p.stubPath}'\r`)
+      let proof = await proveTerminalAgentForeground(p.controller, PTY_ID, null)
+      expect(
+        await until(async () => {
+          proof = await proveTerminalAgentForeground(p.controller, PTY_ID, null)
+          return proof.verdict === 'agent'
+        }, 15_000)
+      ).toBe(true)
+      if (proof.verdict !== 'agent') {
+        throw new Error('no proof')
+      }
+      const agentFence = proof.fence
+      const staleProof = proof
+      // The proof is taken while the agent holds the terminal; the write comes after it exited.
+      const proveThenWaitForExit = async (): Promise<TerminalAgentForegroundProof> => {
+        await until(async () => !isTerminalForegroundFenceHeld(agentFence), 10_000)
+        return staleProof
+      }
+      await expect(ipcWrite(p, proveThenWaitForExit)).rejects.toThrow(
+        'agent_not_in_foreground: group_changed'
+      )
+      expect(p.writes).toEqual([])
     } finally {
       await p.close()
     }
