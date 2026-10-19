@@ -8,6 +8,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type {
@@ -85,12 +86,20 @@ export function PodClaudeAccSwitcherMenu({
         setState(result.state)
       }
       if (!result.ok && !result.cancelled) {
-        toast.error('Claude account update failed.', { description: result.message })
+        toast.error(
+          translate('podClaudeAcc.switcher.updateFailed', 'Claude account update failed.'),
+          {
+            description: result.message
+          }
+        )
       }
     } catch (error) {
-      toast.error('Claude account update failed.', {
-        description: error instanceof Error ? error.message : String(error)
-      })
+      toast.error(
+        translate('podClaudeAcc.switcher.updateFailed', 'Claude account update failed.'),
+        {
+          description: error instanceof Error ? error.message : String(error)
+        }
+      )
     } finally {
       if (mountedRef.current) {
         setBusyEmail(null)
@@ -107,11 +116,16 @@ export function PodClaudeAccSwitcherMenu({
       iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
-      ariaLabel="Open Claude details and account switcher"
+      ariaLabel={translate(
+        'podClaudeAcc.switcher.ariaLabel',
+        'Open Claude details and account switcher'
+      )}
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <DropdownMenuLabel>Claude Account</DropdownMenuLabel>
+      <DropdownMenuLabel>
+        {translate('podClaudeAcc.switcher.title', 'Claude Account')}
+      </DropdownMenuLabel>
       <DropdownMenuItem
         onSelect={(event) => {
           event.preventDefault()
@@ -119,7 +133,8 @@ export function PodClaudeAccSwitcherMenu({
         }}
       >
         <span className="max-w-[180px] truncate text-[12px] text-foreground">
-          {active?.email ?? 'No claude-acc account in use'}
+          {active?.email ??
+            translate('podClaudeAcc.switcher.noneInUse', 'No claude-acc account in use')}
         </span>
         {expanded ? (
           <ChevronDown className="ml-auto size-3.5 text-muted-foreground/85" />
@@ -130,12 +145,17 @@ export function PodClaudeAccSwitcherMenu({
       {expanded ? (
         <div className="px-1 pb-1">
           <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            Switch to
+            {translate('podClaudeAcc.switcher.switchTo', 'Switch to')}
           </div>
           <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1 scrollbar-sleek">
             {rows.length === 0 ? (
               <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
-                {state?.available ? 'No accounts' : "claude-acc hasn't checked accounts yet"}
+                {state?.available
+                  ? translate('podClaudeAcc.switcher.empty', 'No accounts')
+                  : translate(
+                      'podClaudeAcc.switcher.notChecked',
+                      "claude-acc hasn't checked accounts yet"
+                    )}
               </div>
             ) : null}
             {rows.map((account) => (
@@ -154,13 +174,13 @@ export function PodClaudeAccSwitcherMenu({
                       <Loader2 className="size-3 shrink-0 animate-spin" />
                     ) : account.active ? (
                       <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
-                        Active
+                        {translate('podClaudeAcc.active', 'Active')}
                       </span>
                     ) : null}
                   </div>
                   {account.needsSignIn ? (
                     <span className="text-[10px] leading-4 text-muted-foreground">
-                      Sign in again to use this account
+                      {translate('podClaudeAcc.needsSignIn', 'Sign in again to use this account')}
                     </span>
                   ) : null}
                 </div>
@@ -168,7 +188,10 @@ export function PodClaudeAccSwitcherMenu({
             ))}
           </div>
           <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
-            claude-acc switches the Claude login your sessions use.
+            {translate(
+              'podClaudeAcc.switcher.hint',
+              'claude-acc switches the Claude login your sessions use.'
+            )}
           </div>
         </div>
       ) : null}
@@ -179,7 +202,7 @@ export function PodClaudeAccSwitcherMenu({
           openSettingsPage()
         }}
       >
-        Manage Accounts…
+        {translate('podClaudeAcc.switcher.manage', 'Manage Accounts…')}
       </DropdownMenuItem>
     </ProviderDetailsMenu>
   )

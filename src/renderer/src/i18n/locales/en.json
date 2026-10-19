@@ -20128,5 +20128,40 @@
     "integrations": {
       "description": "Connect GitHub, GitLab, and source-hosting services."
     }
+  },
+  "podClaudeAcc": {
+    "settings": {
+      "heading": "Claude",
+      "intro": "Claude accounts live in claude-acc, the same list as Pod Menu. Every account here is in auto-switch, and a switch moves the Claude login your sessions use.",
+      "title": "Claude Accounts",
+      "description": "Add, sign in again and switch Claude accounts through claude-acc.",
+      "accounts": "Accounts",
+      "addingHint": "Finish signing in in your browser.",
+      "addHint": "Add Account opens claude.ai in your browser.",
+      "add": "Add Account",
+      "cancel": "Cancel",
+      "autoSwitchPaused": "Auto-switch is paused: Pod has {{profile}} selected for new Claude sessions. Choose System default in the Claude menu of the status bar to hand switching back to claude-acc.",
+      "empty": "No Claude accounts yet. Add one, or sign in with /login in a Claude session: claude-acc takes that login over within 2 minutes.",
+      "notChecked": "claude-acc hasn't checked accounts yet. It comes with Pod and checks every 2 minutes.",
+      "podProfile": "Pod profile · usage only",
+      "switch": "Switch",
+      "signInAgain": "Sign in again"
+    },
+    "active": "Active",
+    "needsSignIn": "Sign in again to use this account",
+    "switcher": {
+      "updateFailed": "Claude account update failed.",
+      "ariaLabel": "Open Claude details and account switcher",
+      "title": "Claude Account",
+      "noneInUse": "No claude-acc account in use",
+      "switchTo": "Switch to",
+      "empty": "No accounts",
+      "notChecked": "claude-acc hasn't checked accounts yet",
+      "hint": "claude-acc switches the Claude login your sessions use.",
+      "manage": "Manage Accounts…"
+    },
+    "signIn": {
+      "failed": "Claude sign-in failed."
+    }
   }
 }

@@ -2,6 +2,7 @@
 // change runs `claude-acc`, so an account added here is switchable and in auto-switch. English only.
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowRightLeft, Loader2, Plus, RefreshCw, X } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
 import { getProductUiIdentity } from '@/lib/product-ui-identity'
 import { cn } from '@/lib/utils'
 import type {
@@ -91,27 +92,38 @@ export function PodClaudeAccAccountsSection(): React.JSX.Element {
       <div className="space-y-1">
         <h3 className="flex items-center gap-2 text-sm font-semibold">
           <ClaudeIcon size={16} />
-          Claude
+          {translate('podClaudeAcc.settings.heading', 'Claude')}
         </h3>
         <p className="text-xs text-muted-foreground">
-          Claude accounts live in claude-acc, the same list as Pod Menu. Every account here is in
-          auto-switch, and a switch moves the Claude login your sessions use.
+          {translate(
+            'podClaudeAcc.settings.intro',
+            'Claude accounts live in claude-acc, the same list as Pod Menu. Every account here is in auto-switch, and a switch moves the Claude login your sessions use.'
+          )}
         </p>
       </div>
 
       <SearchableSetting
-        title="Claude Accounts"
-        description="Add, sign in again and switch Claude accounts through claude-acc."
+        title={translate('podClaudeAcc.settings.title', 'Claude Accounts')}
+        description={translate(
+          'podClaudeAcc.settings.description',
+          'Add, sign in again and switch Claude accounts through claude-acc.'
+        )}
         keywords={['claude', 'account', 'claude-acc', 'switch', 'rate limit', 'quota']}
         className="space-y-3 py-2"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-0.5">
-            <Label>Accounts</Label>
+            <Label>{translate('podClaudeAcc.settings.accounts', 'Accounts')}</Label>
             <p className="text-xs text-muted-foreground">
               {action === 'adding'
-                ? 'Finish signing in in your browser.'
-                : 'Add Account opens claude.ai in your browser.'}
+                ? translate(
+                    'podClaudeAcc.settings.addingHint',
+                    'Finish signing in in your browser.'
+                  )
+                : translate(
+                    'podClaudeAcc.settings.addHint',
+                    'Add Account opens claude.ai in your browser.'
+                  )}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -129,7 +141,7 @@ export function PodClaudeAccAccountsSection(): React.JSX.Element {
               ) : (
                 <Plus className="size-3" />
               )}
-              Add Account
+              {translate('podClaudeAcc.settings.add', 'Add Account')}
             </Button>
             {action === 'adding' || action.startsWith('signin:') ? (
               <Button
@@ -139,7 +151,7 @@ export function PodClaudeAccAccountsSection(): React.JSX.Element {
                 className="gap-1.5 text-muted-foreground hover:text-foreground"
               >
                 <X className="size-3" />
-                Cancel
+                {translate('podClaudeAcc.settings.cancel', 'Cancel')}
               </Button>
             ) : null}
           </div>
@@ -147,9 +159,11 @@ export function PodClaudeAccAccountsSection(): React.JSX.Element {
 
         {state?.podSelected ? (
           <p className="text-xs text-muted-foreground">
-            Auto-switch is paused: Pod has {state.podSelected} selected for new Claude sessions.
-            Choose System default in the Claude menu of the status bar to hand switching back to
-            claude-acc.
+            {translate(
+              'podClaudeAcc.settings.autoSwitchPaused',
+              'Auto-switch is paused: Pod has {{profile}} selected for new Claude sessions. Choose System default in the Claude menu of the status bar to hand switching back to claude-acc.',
+              { profile: state.podSelected }
+            )}
           </p>
         ) : null}
 
@@ -163,8 +177,14 @@ export function PodClaudeAccAccountsSection(): React.JSX.Element {
           {accounts.length === 0 ? (
             <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
               {state?.available
-                ? 'No Claude accounts yet. Add one, or sign in with /login in a Claude session: claude-acc takes that login over within 2 minutes.'
-                : "claude-acc hasn't checked accounts yet. It comes with Pod and checks every 2 minutes."}
+                ? translate(
+                    'podClaudeAcc.settings.empty',
+                    'No Claude accounts yet. Add one, or sign in with /login in a Claude session: claude-acc takes that login over within 2 minutes.'
+                  )
+                : translate(
+                    'podClaudeAcc.settings.notChecked',
+                    "claude-acc hasn't checked accounts yet. It comes with Pod and checks every 2 minutes."
+                  )}
             </div>
           ) : (
             accounts.map((account) => (
@@ -180,17 +200,19 @@ export function PodClaudeAccAccountsSection(): React.JSX.Element {
                     <span className="truncate text-sm font-medium">{account.email}</span>
                     {account.active ? (
                       <Badge variant="outline" className="shrink-0">
-                        Active
+                        {translate('podClaudeAcc.active', 'Active')}
                       </Badge>
                     ) : null}
                     {account.podProfile ? (
                       <Badge variant="outline" className="shrink-0">
-                        Pod profile · usage only
+                        {translate('podClaudeAcc.settings.podProfile', 'Pod profile · usage only')}
                       </Badge>
                     ) : null}
                   </div>
                   <span className="truncate text-[11px] text-muted-foreground">
-                    {account.needsSignIn ? 'Sign in again to use this account' : usageLine(account)}
+                    {account.needsSignIn
+                      ? translate('podClaudeAcc.needsSignIn', 'Sign in again to use this account')
+                      : usageLine(account)}
                   </span>
                 </div>
                 {account.podProfile ? null : (
@@ -214,7 +236,7 @@ export function PodClaudeAccAccountsSection(): React.JSX.Element {
                         ) : (
                           <ArrowRightLeft className="size-3" />
                         )}
-                        Switch
+                        {translate('podClaudeAcc.settings.switch', 'Switch')}
                       </Button>
                     )}
                     <Button
@@ -235,7 +257,7 @@ export function PodClaudeAccAccountsSection(): React.JSX.Element {
                       ) : (
                         <RefreshCw className="size-3" />
                       )}
-                      Sign in again
+                      {translate('podClaudeAcc.settings.signInAgain', 'Sign in again')}
                     </Button>
                   </div>
                 )}
