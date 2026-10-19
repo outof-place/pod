@@ -172,6 +172,30 @@ describePosix('refusing a startup line before any tab or PTY', () => {
   })
 })
 
+describePosix('terminal.split: refused before the split pane exists', () => {
+  it('no second PTY for a multi-line command ksh cannot take', async () => {
+    const { runtime, spawn } = makeRuntime('/bin/ksh')
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {})
+    expect(spawn).toHaveBeenCalledTimes(1)
+
+    await expect(
+      runtime.splitTerminal(created.handle, { command: `echo 'one\ntwo'` })
+    ).rejects.toMatchObject(needsPaste('multi-line'))
+    expect(spawn).toHaveBeenCalledTimes(1)
+  })
+
+  it('no second PTY for an agent-less long command when the script cannot be written', async () => {
+    const { runtime, spawn } = makeRuntime('/bin/zsh')
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {})
+    chmodSync(tmp, 0o500)
+
+    await expect(
+      runtime.splitTerminal(created.handle, { command: 'a'.repeat(600) })
+    ).rejects.toMatchObject(needsPaste('line-too-long'))
+    expect(spawn).toHaveBeenCalledTimes(1)
+  })
+})
+
 describePosix('where staging works, nothing changes', () => {
   it('worktree.create in zsh: a long multi-line prompt spawns, and its host stages it', async () => {
     const { runtime, spawn } = makeRuntime('/bin/zsh')

@@ -4,6 +4,7 @@ import type { TerminalPaneSplitSource } from '../../shared/feature-education-tel
 import type { RuntimeTerminalSplit } from '../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
 import type { Worktree } from '../../shared/worktree/types'
+import { assertStartupLineTypeable } from './pod-startup-line-gate'
 
 export class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyClosedTabPtys {
   async splitTerminal(
@@ -24,10 +25,20 @@ export class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyC
   ): Promise<RuntimeTerminalSplit> {
     const livePty = this.getLivePtyForHandle(handle)
     if (livePty) {
+      if (opts.command) {
+        await this.assertSplitLineTypeable(opts, livePty.pty.connectionId)
+      }
       return await this.splitPtyBackedTerminal(livePty.pty, opts, createdWorktree)
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
+    // Why only with a command: an await here would delay every split's notifier by a tick.
+    if (opts.command) {
+      await this.assertSplitLineTypeable(
+        opts,
+        leaf.ptyId ? this.ptysById.get(leaf.ptyId)?.connectionId : null
+      )
+    }
     const direction = opts.direction ?? 'horizontal'
 
     const newLeafId = randomUUID()
@@ -48,5 +59,19 @@ export class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyC
       paneRuntimeId: leaf.paneRuntimeId,
       leafId: newLeafId
     }
+  }
+
+  // Fork-only (Pod): a split's line is refused before its pane exists (pod-startup-line-gate.ts).
+  private async assertSplitLineTypeable(
+    opts: { command?: string; env?: Record<string, string> },
+    connectionId: string | null | undefined
+  ): Promise<void> {
+    await assertStartupLineTypeable({
+      command: opts.command,
+      launchAgent: undefined,
+      connectionId,
+      defaultShellSetting: this.store?.getSettings?.().terminalDefaultShell,
+      envShell: opts.env?.SHELL
+    })
   }
 }

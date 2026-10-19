@@ -27,7 +27,7 @@ export async function assertStartupLineTypeable(args: {
   connectionId?: string | null
   shellOverride?: string
   defaultShellSetting?: string
-  /** The spawn env's SHELL, which a relay prefers over its own default shell. */
+  /** The spawn env's SHELL, which every host prefers over its own process's SHELL. */
   envShell?: string
 }): Promise<void> {
   if (!args.command) {
@@ -41,7 +41,8 @@ export async function assertStartupLineTypeable(args: {
   const shellName = nameLocalTypedLineShell({
     isRemote: false,
     ...(args.shellOverride ? { shellOverride: args.shellOverride } : {}),
-    ...(args.defaultShellSetting ? { defaultShellSetting: args.defaultShellSetting } : {})
+    ...(args.defaultShellSetting ? { defaultShellSetting: args.defaultShellSetting } : {}),
+    ...(args.envShell ? { envShell: args.envShell } : {})
   })
   if (shellName === undefined) {
     return
