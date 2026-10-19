@@ -74,10 +74,13 @@ vi.mock('./preflight', () => ({
 }))
 
 import { registerLinearHandlers } from './linear'
+import { withLinearOn } from '../pod/linear/pod-linear-access.test-support'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 describe('registerLinearHandlers', () => {
+  // Fork-only (Pod): linear:* IPC answers only while the podLinear setting is on.
+  withLinearOn()
   const handlers: HandlerMap = {}
 
   beforeEach(() => {

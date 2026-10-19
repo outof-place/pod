@@ -6,8 +6,14 @@ import { registerLinearIssueHandlers } from './linear-issue-handlers'
 import { registerLinearProjectHandlers } from './linear-project-handlers'
 import { registerLinearCustomViewHandlers } from './linear-custom-view-handlers'
 import { registerLinearTeamHandlers } from './linear-team-handlers'
+import { registerWithPodLinearIpcGate } from '../pod/linear/pod-linear-ipc-gate'
 
 export function registerLinearHandlers(): void {
+  // Fork-only (Pod): every linear:* channel but linear:status answers only while Linear is on.
+  registerWithPodLinearIpcGate(ipcMain, registerLinearChannels)
+}
+
+function registerLinearChannels(): void {
   ipcMain.handle('linear:connect', async (_event, args: { apiKey: string }) => {
     if (typeof args?.apiKey !== 'string' || !args.apiKey.trim()) {
       return { ok: false, error: 'Invalid API key' }
