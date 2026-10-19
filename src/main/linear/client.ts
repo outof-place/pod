@@ -264,6 +264,13 @@ export async function testConnection(
     const me = await client.viewer
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
+    // Fork-only (Pod): a key that now answers for another organization doesn't pass for this one.
+    if (resolvedWorkspaceId !== LEGACY_WORKSPACE_ID && workspace.id !== resolvedWorkspaceId) {
+      return {
+        ok: false,
+        error: `This key now answers for ${workspace.organizationName}, not for the workspace it was saved for.`
+      }
+    }
     // Fork-only (Pod): a Test only reads. It neither stores the key again nor moves the selection
     // (upstream selects the tested workspace); only the "needs a new key" mark follows the answer.
     clearLinearKeyRejection(resolvedWorkspaceId)
