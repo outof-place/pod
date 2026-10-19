@@ -109,14 +109,13 @@ export function clearTokenFile(workspaceId: string): void {
 
 // Fork-only (Pod): every Linear call that gets an auth error lands here. Upstream deletes the key;
 // Pod keeps it and marks the workspace "needs a new key". Disconnect deletes, with removeToken.
+// Only the workspace whose key was refused: without one, nothing is marked.
 export function clearToken(workspaceId?: string): void {
-  const workspaceIds = workspaceId
-    ? [workspaceId]
-    : getWorkspaceState().workspaces.map((workspace) => workspace.id)
-  for (const id of workspaceIds) {
-    forgetCachedToken(id)
-    markLinearKeyRejected(id)
+  if (!workspaceId) {
+    return
   }
+  forgetCachedToken(workspaceId)
+  markLinearKeyRejected(workspaceId)
 }
 
 export function removeToken(workspaceId?: string): void {
