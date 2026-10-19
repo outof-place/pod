@@ -189,26 +189,31 @@ export function activateLocalPtySession(args: {
     staging = stageStartupCommand({
       command: spawn.command,
       shellPath: plan.shellPath,
-      orcaBuiltLine: spawn.launchAgent !== undefined
+      orcaBuiltLine: spawn.launchAgent !== undefined,
+      refuseUnstaged: true
     })
     const notice = startupStagingFailureNotice(staging)
     if (notice) {
       startupIngress.accept(notice)
-      console.warn(`[pty] Could not stage startup command for ${id}; typing it in full`, {
-        reason: staging.failure
+      const typed = staging.delivery === 'refused' ? 'not typing it' : 'typing it in full'
+      console.warn(`[pty] Could not stage startup command for ${id}; ${typed}`, {
+        reason: staging.failure,
+        refusal: staging.refusal
       })
     }
-    writeStartupCommandWhenShellReady(
-      readiness.shellReadyPromise,
-      proc,
-      staging.command,
-      (cleanup) => {
-        readiness.setStartupCommandCleanup(cleanup)
-      },
-      {
-        bracketedPasteSafe
-      }
-    )
+    if (staging.delivery !== 'refused') {
+      writeStartupCommandWhenShellReady(
+        readiness.shellReadyPromise,
+        proc,
+        staging.command,
+        (cleanup) => {
+          readiness.setStartupCommandCleanup(cleanup)
+        },
+        {
+          bracketedPasteSafe
+        }
+      )
+    }
   }
 
   // Why: publish the OS pid for the memory collector; proc.pid can be briefly 0/undefined before node-pty sees the child.

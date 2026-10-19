@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -14,6 +15,8 @@ import {
   STAGED_STARTUP_COMMAND_STALE_MS,
   discardStagedStartupCommand,
   stageStartupCommand,
+  startupLineRefusal,
+  startupLineStagingReason,
   startupStagingFailureNotice,
   sweepStaleStagedStartupCommands
 } from './startup-command-staging'
@@ -25,6 +28,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  chmodSync(directory, 0o700)
   rmSync(directory, { recursive: true, force: true })
 })
 
@@ -269,6 +273,162 @@ describe('startupStagingFailureNotice', () => {
     })
     expect(notice).toBe(
       '\r\n[orca] Could not stage the launch command (EACCES: permission denied second line); typed it in full. If the shell shows quote> or waits for more input, press Ctrl-C and launch again.\r\n'
+    )
+  })
+})
+
+describe('startupLineStagingReason', () => {
+  it.each([
+    [`claude 'fix it'`, null],
+    [`claude 'fix it'\n`, null],
+    ['a'.repeat(512), null],
+    ['a'.repeat(513), 'line-too-long'],
+    [`claude 'one\ntwo'`, 'multi-line'],
+    [`claude 'one\r\ntwo'`, 'multi-line'],
+    [`claude 'a\x1bb'`, 'control-byte'],
+    [`claude 'a\tb\nc'`, 'control-byte']
+  ])('%j: %s', (command, reason) => {
+    expect(startupLineStagingReason(command)).toBe(reason)
+  })
+})
+
+// Pod: the local and daemon hosts pass `refuseUnstaged`; the relay does not.
+describe('stageStartupCommand with refuseUnstaged', () => {
+  function stageOrRefuse(command: string, shellPath: string | undefined, orcaBuiltLine = false) {
+    return stageStartupCommand({
+      command,
+      shellPath,
+      orcaBuiltLine,
+      platform: 'darwin',
+      directory,
+      refuseUnstaged: true
+    })
+  }
+
+  it.each([['/bin/ksh'], ['/usr/bin/mksh'], ['/bin/tcsh'], ['/usr/bin/nu'], [undefined]])(
+    'refuses a user command that needs staging in a shell that cannot source it (%s)',
+    (shellPath) => {
+      expect(stageOrRefuse('a'.repeat(600), shellPath)).toEqual({
+        command: '',
+        delivery: 'refused',
+        refusal: 'line-too-long'
+      })
+      expect(stageOrRefuse(`echo 'one\ntwo'`, shellPath)).toMatchObject({
+        delivery: 'refused',
+        refusal: 'multi-line'
+      })
+      expect(readdirSync(directory)).toEqual([])
+    }
+  )
+
+  it('types a short user command as is in such a shell', () => {
+    expect(stageOrRefuse(`echo 'fix it'`, '/bin/ksh')).toEqual({
+      command: `echo 'fix it'`,
+      delivery: 'typed'
+    })
+  })
+
+  it('stages exactly as before where staging works', () => {
+    const command = `claude 'one\n${'x'.repeat(600)}'`
+    expect(stageOrRefuse(command, '/bin/zsh').command).toMatch(/^\. '.*orca-launch-[0-9a-f]+\.sh'$/)
+    expect(stageOrRefuse(command, '/bin/ksh', true).command).toMatch(/^\/bin\/sh '/)
+    expect(stageOrRefuse(command, '/bin/tcsh', true).command).toMatch(/^\/bin\/sh '/)
+    for (const name of readdirSync(directory)) {
+      expect(readFileSync(join(directory, name), 'utf8')).toContain(`\n${command}\n`)
+    }
+  })
+
+  it('refuses, and types nothing, when the script cannot be written', () => {
+    chmodSync(directory, 0o500)
+    const staged = stageOrRefuse(`claude 'one\ntwo'`, '/bin/zsh', true)
+    expect(staged).toMatchObject({ command: '', delivery: 'refused', refusal: 'multi-line' })
+    expect(staged.failure).toMatch(/EACCES/)
+    expect(staged.scriptPath).toBeUndefined()
+  })
+
+  it('still types a short Orca-built line staged only for tcsh quoting when the write fails', () => {
+    chmodSync(directory, 0o500)
+    const command = `claude 'wow!! great'`
+    expect(stageOrRefuse(command, '/bin/tcsh', true)).toMatchObject({
+      command,
+      delivery: 'typed-after-stage-failed'
+    })
+  })
+
+  it('leaves Windows hosts alone', () => {
+    expect(
+      stageStartupCommand({
+        command: 'a'.repeat(600),
+        shellPath: 'C:\\Windows\\System32\\cmd.exe',
+        platform: 'win32',
+        directory,
+        refuseUnstaged: true
+      }).delivery
+    ).toBe('typed')
+  })
+})
+
+describe('startupLineRefusal', () => {
+  function refusal(command: string, shellPath: string | undefined, orcaBuiltLine = false) {
+    return startupLineRefusal({ command, shellPath, orcaBuiltLine, platform: 'darwin', directory })
+  }
+
+  it('passes what the host types or stages, and leaves no file behind', () => {
+    expect(refusal(`claude 'fix it'`, '/bin/ksh')).toBeNull()
+    expect(refusal('a'.repeat(600), '/bin/zsh')).toBeNull()
+    expect(refusal(`claude 'one\ntwo'`, '/opt/homebrew/bin/fish')).toBeNull()
+    expect(refusal(`claude 'one\ntwo'`, '/bin/ksh', true)).toBeNull()
+    expect(refusal(`claude 'one\ntwo'`, '/bin/tcsh', true)).toBeNull()
+    expect(readdirSync(directory)).toEqual([])
+  })
+
+  it('names what the host would refuse', () => {
+    expect(refusal('a'.repeat(600), '/bin/ksh')).toBe('line-too-long')
+    expect(refusal(`echo 'one\ntwo'`, '/bin/tcsh')).toBe('multi-line')
+    expect(refusal(`echo 'a\x1bb'`, undefined)).toBe('control-byte')
+  })
+
+  it('refuses when the script directory cannot be written', () => {
+    chmodSync(directory, 0o500)
+    expect(refusal(`claude 'one\ntwo'`, '/bin/zsh', true)).toBe('multi-line')
+    expect(
+      startupLineRefusal({
+        command: 'a'.repeat(600),
+        shellPath: '/bin/zsh',
+        platform: 'darwin',
+        directory: join(directory, 'missing')
+      })
+    ).toBe('line-too-long')
+  })
+
+  it('leaves Windows hosts alone', () => {
+    expect(
+      startupLineRefusal({
+        command: 'a'.repeat(600),
+        shellPath: '/bin/ksh',
+        platform: 'win32',
+        directory
+      })
+    ).toBeNull()
+  })
+})
+
+describe('startupStagingFailureNotice for a refused line', () => {
+  it('says the line was not typed, and why', () => {
+    expect(
+      startupStagingFailureNotice({ command: '', delivery: 'refused', refusal: 'multi-line' })
+    ).toBe(
+      '\r\n[orca] Did not type the launch command: it has more than one line, and this shell cannot run it staged. Paste it instead.\r\n'
+    )
+    expect(
+      startupStagingFailureNotice({
+        command: '',
+        delivery: 'refused',
+        refusal: 'line-too-long',
+        failure: 'EACCES: permission denied\nsecond line'
+      })
+    ).toBe(
+      '\r\n[orca] Did not type the launch command: it is over 512 bytes, and staging it failed (EACCES: permission denied second line). Paste it instead.\r\n'
     )
   })
 })

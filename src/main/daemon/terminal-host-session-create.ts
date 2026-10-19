@@ -210,7 +210,8 @@ async function spawnAndPublishSession(
     staging = stageStartupCommand({
       command: opts.command,
       shellPath: subprocess.shellPath,
-      orcaBuiltLine: opts.launchAgent !== undefined
+      orcaBuiltLine: opts.launchAgent !== undefined,
+      refuseUnstaged: true
     })
     const notice = startupStagingFailureNotice(staging)
     if (notice) {
@@ -218,18 +219,21 @@ async function spawnAndPublishSession(
       try {
         deps.reportReadinessEvent?.('startup-command-stage-failed', {
           sessionId: opts.sessionId,
-          reason: staging.failure
+          reason: staging.failure,
+          refusal: staging.refusal
         })
       } catch {
         // Diagnostics must never turn a live PTY into a failed create.
       }
     }
-    // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
-    session.write(
-      buildStartupCommandSubmission(staging.command, {
-        bracketedPasteSafe: shellReadySupported
-      })
-    )
+    if (staging.delivery !== 'refused') {
+      // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
+      session.write(
+        buildStartupCommandSubmission(staging.command, {
+          bracketedPasteSafe: shellReadySupported
+        })
+      )
+    }
   }
 
   return {

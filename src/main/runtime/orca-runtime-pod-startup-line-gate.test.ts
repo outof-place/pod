@@ -1,0 +1,217 @@
+import './orca-runtime-test-lifecycle.spec'
+import { chmodSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  OrcaRuntimeService,
+  addWorktree,
+  computeWorktreePathMock,
+  electronMocks,
+  ensurePathWithinWorkspaceMock,
+  listWorktrees
+} from './orca-runtime-test-mocks.spec'
+import type { WorktreeMeta } from './orca-runtime-test-mocks.spec'
+import {
+  TEST_REPO_ID,
+  TEST_WORKTREE_ID,
+  makeWorktreeMeta,
+  store
+} from './orca-runtime-test-fixtures.spec'
+import { createWorktreeWithStartupAgent } from '../agent-launch/startup-agent-worktree-create'
+import { stageStartupCommand } from '../../shared/startup-command-staging'
+
+// Pod: a startup line the PTY host will not type is refused before any tab or PTY exists
+// (`agent_prompt_needs_paste`); where staging works, nothing changes.
+
+const LONG_MULTI_LINE_PROMPT = `Review this.\n${'Check every file. '.repeat(60)}\nThen report.`
+
+let tmp: string
+
+beforeEach(() => {
+  tmp = mkdtempSync(join(tmpdir(), 'pod-line-gate-runtime-'))
+  vi.stubEnv('TMPDIR', tmp)
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
+  chmodSync(tmp, 0o700)
+  rmSync(tmp, { recursive: true, force: true })
+})
+
+function makeRuntime(terminalDefaultShell: string) {
+  const metaById: Record<string, WorktreeMeta> = {}
+  const runtime = new OrcaRuntimeService({
+    ...store,
+    getSettings: () => ({
+      ...store.getSettings(),
+      terminalDefaultShell,
+      disabledTuiAgents: [],
+      agentCmdOverrides: {},
+      agentDefaultArgs: {}
+    }),
+    getAllWorktreeMeta: () => metaById,
+    getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+    setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+      return metaById[worktreeId]
+    }
+  } as never)
+  const spawn = vi.fn().mockResolvedValue({ id: 'pty-gate' })
+  runtime.setPtyController({
+    spawn,
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null
+  })
+  return { runtime, spawn }
+}
+
+function attachWindow(runtime: InstanceType<typeof OrcaRuntimeService>) {
+  const send = vi.fn()
+  runtime.attachWindow(1)
+  runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+  electronMocks.BrowserWindow.fromId.mockReturnValue({
+    isDestroyed: () => false,
+    webContents: { send }
+  })
+  return send
+}
+
+function prepareWorktreeCreate(name: string) {
+  const path = `/tmp/workspaces/${name}`
+  computeWorktreePathMock.mockReturnValue(path)
+  ensurePathWithinWorkspaceMock.mockReturnValue(path)
+  vi.mocked(listWorktrees).mockResolvedValue([
+    { path, head: 'abc', branch: name, isBare: false, isMainWorktree: false }
+  ])
+  vi.mocked(addWorktree).mockClear()
+}
+
+const needsPaste = (reason: string) => ({
+  code: 'agent_prompt_needs_paste',
+  message: 'agent_prompt_needs_paste',
+  data: { reason }
+})
+
+const describePosix = process.platform === 'win32' ? describe.skip : describe
+
+describePosix('refusing a startup line before any tab or PTY', () => {
+  it('session.tabs.createTerminal, headless: no PTY and no tab for a multi-line command ksh cannot take', async () => {
+    const { runtime, spawn } = makeRuntime('/bin/ksh')
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await expect(
+      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        command: `echo 'one\ntwo'`
+      })
+    ).rejects.toMatchObject(needsPaste('multi-line'))
+    expect(spawn).not.toHaveBeenCalled()
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+  })
+
+  it('session.tabs.createTerminal, window: the renderer is never asked for a tab', async () => {
+    const { runtime, spawn } = makeRuntime('/bin/ksh')
+    const send = attachWindow(runtime)
+
+    await expect(
+      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        command: 'a'.repeat(600)
+      })
+    ).rejects.toMatchObject(needsPaste('line-too-long'))
+    expect(send).not.toHaveBeenCalledWith('terminal:requestTabCreate', expect.anything())
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('session.tabs.createTerminal with an agent prompt: refused when its script cannot be written', async () => {
+    const { runtime, spawn } = makeRuntime('/bin/zsh')
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    chmodSync(tmp, 0o500)
+
+    await expect(
+      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        agent: 'claude',
+        agentPrompt: 'one\ntwo'
+      })
+    ).rejects.toMatchObject(needsPaste('multi-line'))
+    expect(spawn).not.toHaveBeenCalled()
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+  })
+
+  it('terminal.create: no PTY for a long command ksh cannot take', async () => {
+    const { runtime, spawn } = makeRuntime('/bin/ksh')
+
+    await expect(
+      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, { command: 'a'.repeat(600) })
+    ).rejects.toMatchObject(needsPaste('line-too-long'))
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('worktree.create: refused before the worktree exists', async () => {
+    const { runtime, spawn } = makeRuntime('/bin/zsh')
+    prepareWorktreeCreate('pod-gate-refused')
+    chmodSync(tmp, 0o500)
+
+    await expect(
+      createWorktreeWithStartupAgent(runtime, {
+        repoSelector: `id:${TEST_REPO_ID}`,
+        name: 'pod-gate-refused',
+        startupAgent: 'claude',
+        startupPrompt: 'one\ntwo'
+      })
+    ).rejects.toMatchObject(needsPaste('multi-line'))
+    expect(addWorktree).not.toHaveBeenCalled()
+    expect(spawn).not.toHaveBeenCalled()
+  })
+})
+
+describePosix('where staging works, nothing changes', () => {
+  it('worktree.create in zsh: a long multi-line prompt spawns, and its host stages it', async () => {
+    const { runtime, spawn } = makeRuntime('/bin/zsh')
+    prepareWorktreeCreate('pod-gate-staged')
+
+    await createWorktreeWithStartupAgent(runtime, {
+      repoSelector: `id:${TEST_REPO_ID}`,
+      name: 'pod-gate-staged',
+      startupAgent: 'claude',
+      startupPrompt: LONG_MULTI_LINE_PROMPT
+    })
+
+    expect(spawn).toHaveBeenCalledTimes(1)
+    const { command, launchAgent } = spawn.mock.calls[0][0]
+    expect(command).toContain('Then report.')
+    expect(launchAgent).toBe('claude')
+    expect(readdirSync(tmp).filter((name) => name.startsWith('orca-launch-'))).toEqual([])
+    const staged = stageStartupCommand({
+      command,
+      shellPath: '/bin/zsh',
+      orcaBuiltLine: true,
+      refuseUnstaged: true,
+      directory: tmp
+    })
+    expect(staged.delivery).toBe('staged')
+    expect(readFileSync(staged.scriptPath!, 'utf8')).toContain(`\n${command}\n`)
+  })
+
+  it('an automation in an existing workspace: the same prompt spawns', async () => {
+    const { runtime, spawn } = makeRuntime('/bin/zsh')
+
+    await runtime.launchAgentTerminal(`id:${TEST_WORKTREE_ID}`, {
+      agent: 'claude',
+      prompt: LONG_MULTI_LINE_PROMPT
+    })
+
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expect(spawn.mock.calls[0][0].command).toContain('Then report.')
+  })
+
+  it('session.tabs.createTerminal in zsh: a long multi-line command spawns as is', async () => {
+    const { runtime, spawn } = makeRuntime('/bin/zsh')
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    const command = `echo '${LONG_MULTI_LINE_PROMPT}'`
+
+    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, { command })
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ command }))
+  })
+})

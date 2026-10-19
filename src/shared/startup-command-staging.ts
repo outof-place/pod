@@ -11,13 +11,14 @@ import { randomBytes } from 'node:crypto'
 import { readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { AgentPromptNeedsPasteReason } from './pod-agent-prompt-needs-paste'
 import { hasControlByte, TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES } from './startup-line-prompt-carry'
 import { quoteStartupArg } from './tui-agent-startup-shell'
 
 export const STAGED_STARTUP_COMMAND_PREFIX = 'orca-launch-'
 
 /** Which delivery ran for a spawn's typed startup line, decided by the host that owns the PTY. */
-export type StartupLineDelivery = 'typed' | 'staged' | 'typed-after-stage-failed'
+export type StartupLineDelivery = 'typed' | 'staged' | 'typed-after-stage-failed' | 'refused'
 
 /** Age past which a staged script is a crash leftover rather than another host's in-flight launch. */
 export const STAGED_STARTUP_COMMAND_STALE_MS = 60 * 60 * 1000
@@ -30,6 +31,8 @@ export type StartupCommandStaging = {
   scriptPath?: string
   /** Why staging failed, for the host's log. */
   failure?: string
+  /** Set with `refused`: why the line needed staging. The host types nothing. */
+  refusal?: AgentPromptNeedsPasteReason
 }
 
 // Why only these type any short line as is: Orca's portable quoting is verified literal in these. Any
@@ -52,6 +55,20 @@ function stripSubmitTerminator(command: string): string {
   return command.replace(/(\r\n|\r|\n)$/, '')
 }
 
+/** Why a typed line would not arrive whole, or null when it can be typed as is. */
+export function startupLineStagingReason(command: string): AgentPromptNeedsPasteReason | null {
+  const body = stripSubmitTerminator(command)
+  if (hasControlByte(body.replace(/[\r\n]/g, ''))) {
+    return 'control-byte'
+  }
+  if (/[\r\n]/.test(body)) {
+    return 'multi-line'
+  }
+  return encoder.encode(body).byteLength > TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES
+    ? 'line-too-long'
+    : null
+}
+
 export function shouldStageStartupCommand(args: {
   command: string
   shellPath: string | undefined
@@ -64,8 +81,7 @@ export function shouldStageStartupCommand(args: {
   }
   const shellName = stagingShellName(args.shellPath)
   const body = stripSubmitTerminator(args.command)
-  const needsStaging =
-    hasControlByte(body) || encoder.encode(body).byteLength > TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES
+  const needsStaging = startupLineStagingReason(args.command) !== null
   if (shellName === null) {
     // Why these characters: tcsh doubles a quoted backslash and expands `!!`, and nu cannot read
     // `'\''`. A plain line is typed so the agent is the shell's own job, where the paste guard finds it.
@@ -84,6 +100,10 @@ function stagedScriptLine(shellName: string | null, quotedPath: string): string 
     : `/bin/sh ${quotedPath}`
 }
 
+function stagedScriptPath(directory: string): string {
+  return join(directory, `${STAGED_STARTUP_COMMAND_PREFIX}${randomBytes(8).toString('hex')}.sh`)
+}
+
 let staleSweepStarted = false
 
 export function stageStartupCommand(args: {
@@ -92,10 +112,18 @@ export function stageStartupCommand(args: {
   orcaBuiltLine?: boolean
   platform?: NodeJS.Platform
   directory?: string
+  /** Fork-only (Pod): a line that needs staging and is not staged is refused, never typed. */
+  refuseUnstaged?: boolean
 }): StartupCommandStaging {
   const platform = args.platform ?? process.platform
+  const refusal =
+    args.refuseUnstaged === true && platform !== 'win32'
+      ? startupLineStagingReason(args.command)
+      : null
   if (!shouldStageStartupCommand({ ...args, platform })) {
-    return { command: args.command, delivery: 'typed' }
+    return refusal
+      ? { command: '', delivery: 'refused', refusal }
+      : { command: args.command, delivery: 'typed' }
   }
   const directory = args.directory ?? tmpdir()
   if (!staleSweepStarted) {
@@ -104,10 +132,7 @@ export function stageStartupCommand(args: {
     setTimeout(() => sweepStaleStagedStartupCommands({ directory }), 0).unref?.()
   }
   const shellName = stagingShellName(args.shellPath)
-  const scriptPath = join(
-    directory,
-    `${STAGED_STARTUP_COMMAND_PREFIX}${randomBytes(8).toString('hex')}.sh`
-  )
+  const scriptPath = stagedScriptPath(directory)
   const quotedPath = quoteStartupArg(scriptPath, 'posix')
   try {
     // Why rm first: the shell keeps reading the open file, so the prompt-bearing script is gone
@@ -118,11 +143,10 @@ export function stageStartupCommand(args: {
       { mode: 0o600, flag: 'wx' }
     )
   } catch (error) {
-    return {
-      command: args.command,
-      delivery: 'typed-after-stage-failed',
-      failure: error instanceof Error ? error.message : String(error)
-    }
+    const failure = error instanceof Error ? error.message : String(error)
+    return refusal
+      ? { command: '', delivery: 'refused', refusal, failure }
+      : { command: args.command, delivery: 'typed-after-stage-failed', failure }
   }
   return {
     command: stagedScriptLine(shellName, quotedPath),
@@ -132,17 +156,65 @@ export function stageStartupCommand(args: {
 }
 
 /**
+ * Fork-only (Pod): `stageStartupCommand`'s refusal (`refuseUnstaged`), taken before any tab or PTY
+ * exists. The script write is predicted by creating and removing an empty file the same way
+ * (0600, `wx`, same directory), so no prompt text reaches the disk here.
+ */
+export function startupLineRefusal(args: {
+  command: string
+  shellPath: string | undefined
+  orcaBuiltLine?: boolean
+  platform?: NodeJS.Platform
+  directory?: string
+}): AgentPromptNeedsPasteReason | null {
+  const platform = args.platform ?? process.platform
+  const reason = platform === 'win32' ? null : startupLineStagingReason(args.command)
+  if (reason === null) {
+    return null
+  }
+  if (!shouldStageStartupCommand({ ...args, platform })) {
+    return reason
+  }
+  const probePath = stagedScriptPath(args.directory ?? tmpdir())
+  try {
+    writeFileSync(probePath, '', { mode: 0o600, flag: 'wx' })
+  } catch {
+    return reason
+  }
+  try {
+    rmSync(probePath, { force: true })
+  } catch {
+    // The age-gated sweep is the fallback.
+  }
+  return null
+}
+
+function printable(text: string): string {
+  return [...text].map((char) => (char < ' ' || char === '\x7f' ? ' ' : char)).join('')
+}
+
+const REFUSAL_DESCRIPTIONS: Record<AgentPromptNeedsPasteReason, string> = {
+  'control-byte': 'it holds control characters',
+  'multi-line': 'it has more than one line',
+  'line-too-long': `it is over ${TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES} bytes`
+}
+
+/**
  * The line the host prints to the terminal when staging failed: the full line it types instead may
  * leave the shell waiting for more input, and nothing else would tell the user why.
  */
 export function startupStagingFailureNotice(staging: StartupCommandStaging): string | null {
+  if (staging.refusal !== undefined) {
+    const cause =
+      staging.failure === undefined
+        ? 'this shell cannot run it staged'
+        : `staging it failed (${printable(staging.failure)})`
+    return `\r\n[orca] Did not type the launch command: ${REFUSAL_DESCRIPTIONS[staging.refusal]}, and ${cause}. Paste it instead.\r\n`
+  }
   if (staging.failure === undefined) {
     return null
   }
-  const reason = [...staging.failure]
-    .map((char) => (char < ' ' || char === '\x7f' ? ' ' : char))
-    .join('')
-  return `\r\n[orca] Could not stage the launch command (${reason}); typed it in full. If the shell shows quote> or waits for more input, press Ctrl-C and launch again.\r\n`
+  return `\r\n[orca] Could not stage the launch command (${printable(staging.failure)}); typed it in full. If the shell shows quote> or waits for more input, press Ctrl-C and launch again.\r\n`
 }
 
 /** For a PTY that exited, or was never typed into, before it sourced its script. */

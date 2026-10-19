@@ -243,7 +243,8 @@ describe('LocalPtyProvider', () => {
       }
     })
 
-    it('prints a notice in the terminal when it types a line it could not stage', async () => {
+    // Pod: a line that needs staging is never typed in full.
+    it('types nothing, and says why, when it cannot stage a line that needs it', async () => {
       vi.useFakeTimers()
       try {
         process.env.SHELL = '/bin/sh'
@@ -257,10 +258,29 @@ describe('LocalPtyProvider', () => {
         await provider.spawn({ cols: 80, rows: 24, command })
 
         expect(received.join('')).toContain(
-          '[orca] Could not stage the launch command (ENOSPC: no space left on device)'
+          '[orca] Did not type the launch command: it is over 512 bytes, and staging it failed (ENOSPC: no space left on device)'
         )
         await vi.advanceTimersByTimeAsync(200)
-        expect(mockProc.write).toHaveBeenCalledWith(`${command}\r`)
+        expect(mockProc.write).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('types nothing for a multi-line command in a shell that cannot source a script', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/bin/ksh'
+        const received: string[] = []
+        provider.configure({ onData: (_id, data) => received.push(data) })
+
+        await provider.spawn({ cols: 80, rows: 24, command: `echo 'one\ntwo'` })
+
+        expect(received.join('')).toContain(
+          'it has more than one line, and this shell cannot run it staged'
+        )
+        await vi.advanceTimersByTimeAsync(200)
+        expect(mockProc.write).not.toHaveBeenCalled()
       } finally {
         vi.useRealTimers()
       }

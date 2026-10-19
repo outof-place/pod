@@ -99,25 +99,40 @@ describePosix('daemon startup command staging', () => {
     expect(sub.write).not.toHaveBeenCalled()
   })
 
-  it('prints a notice in the terminal when it types a line it could not stage', async () => {
-    vi.stubEnv('TMPDIR', join(tempDir, 'missing'))
-    const command = `claude '${'x'.repeat(600)}'`
+  // Pod: a line that needs staging is never typed in full.
+  async function createWithOutput(command: string, shellPath: string) {
     const onData = vi.fn()
-    const sub = mockSubprocess('/bin/zsh')
+    const sub = mockSubprocess(shellPath)
     const host = new TerminalHost({ spawnSubprocess: () => sub })
     await host.createOrAttach({
-      sessionId: 's-stage-failed',
+      sessionId: `s-refused-${shellPath}`,
       cols: 80,
       rows: 24,
       command,
       shellReadySupported: false,
       streamClient: { onData, onExit: vi.fn() }
     })
-    expect(sub.write).toHaveBeenCalledWith(`${command}\r`)
+    const output = () => onData.mock.calls.map(([data]) => String(data)).join('')
+    return { sub, output }
+  }
+
+  it('types nothing, and says why, when it cannot stage a line that needs it', async () => {
+    vi.stubEnv('TMPDIR', join(tempDir, 'missing'))
+    const { sub, output } = await createWithOutput(`claude '${'x'.repeat(600)}'`, '/bin/zsh')
+    expect(sub.write).not.toHaveBeenCalled()
     await vi.waitFor(() => {
-      expect(onData.mock.calls.map(([data]) => String(data)).join('')).toContain(
-        '[orca] Could not stage the launch command (ENOENT'
+      expect(output()).toContain(
+        '[orca] Did not type the launch command: it is over 512 bytes, and staging it failed (ENOENT'
       )
+    })
+  })
+
+  it('types nothing for a multi-line command in a shell that cannot source a script', async () => {
+    const { sub, output } = await createWithOutput(`echo 'one\ntwo'`, '/bin/ksh')
+    expect(sub.write).not.toHaveBeenCalled()
+    expect(readdirSync(tempDir)).toEqual([])
+    await vi.waitFor(() => {
+      expect(output()).toContain('it has more than one line, and this shell cannot run it staged')
     })
   })
 })

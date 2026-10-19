@@ -15,6 +15,7 @@ import {
 import { rendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import { podUiHostWindowStartsHidden } from '../pod/headless-host/ui-host-hidden-renderer'
 import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
+import { assertLocalStartupLineTypeable } from './pod-startup-line-gate'
 
 export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithCreateMobileSessionTerminal {
   protected async runCreateMobileSessionTerminal(
@@ -116,6 +117,13 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
     if (win.webContents.isDestroyed?.()) {
       throw new Error('runtime_unavailable')
     }
+    // Fork-only (Pod): before the renderer makes the tab; the other lanes check in createTerminal.
+    assertLocalStartupLineTypeable({
+      command: startupCommand.command,
+      launchAgent: startupCommand.launchAgent,
+      isRemote: Boolean(workspace.connectionId),
+      defaultShellSetting: this.store?.getSettings?.().terminalDefaultShell
+    })
     // Fork-only (Pod): a hidden one-app window also wakes for PodNative's (unpaired) creates.
     const releasePublicationThrottle =
       pairedCreate || podUiHostWindowStartsHidden()
