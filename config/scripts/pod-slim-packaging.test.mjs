@@ -34,6 +34,30 @@ function inspectSlimConfig(profile) {
   )
 }
 
+// Why a child process: the release config loads the upstream one, which takes its lists once.
+function inspectPodReleaseTargets() {
+  const script = `
+    const pod = require('./product/electron-builder.pod.cjs')
+    process.stdout.write(JSON.stringify(
+      pod.mac.extraResources.map((entry) => (typeof entry === 'string' ? entry : entry.to))
+    ))
+  `
+  return JSON.parse(
+    execFileSync(process.execPath, ['-e', script], {
+      cwd: projectDir,
+      encoding: 'utf8',
+      env: { ...process.env, POD_BUILD_PROFILE: 'pod' },
+      stdio: ['ignore', 'pipe', 'ignore']
+    })
+  )
+}
+
+describe('Pod release packaging (electron-builder.pod.cjs)', () => {
+  it('ships @linear/sdk, which PodNative needs from the runtime', () => {
+    expect(inspectPodReleaseTargets()).toContain('node_modules/@linear/sdk')
+  })
+})
+
 describe('Pod slim packaging', () => {
   it('removes cut packaging only from the macOS app', () => {
     const base = {
