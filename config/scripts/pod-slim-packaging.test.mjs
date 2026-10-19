@@ -34,6 +34,38 @@ function inspectSlimConfig(profile) {
   )
 }
 
+// Why a child process: as above, the cut must land before the upstream config loads.
+function inspectPodReleaseTargets(droppedRoots) {
+  const script = `
+    const roots = ${JSON.stringify(droppedRoots)}
+    if (roots) {
+      require('./product/pod-slim-packaging.cjs').preparePodRuntimePackageRoots([
+        { dropRuntimePackageRoots: roots }
+      ])
+    }
+    const pod = require('./product/electron-builder.pod.cjs')
+    process.stdout.write(JSON.stringify(
+      pod.mac.extraResources.map((entry) => (typeof entry === 'string' ? entry : entry.to))
+    ))
+  `
+  return JSON.parse(
+    execFileSync(process.execPath, ['-e', script], {
+      cwd: projectDir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    })
+  )
+}
+
+describe('Pod release packaging (electron-builder.pod.cjs)', () => {
+  it('ships @linear/sdk while the linear feature is on, and leaves it out when it is off', () => {
+    expect(inspectPodReleaseTargets(null)).toContain('node_modules/@linear/sdk')
+    const off = inspectPodReleaseTargets(['@linear/sdk'])
+    expect(off).not.toContain('node_modules/@linear/sdk')
+    expect(off).toContain('node_modules/@orca/process-host')
+  })
+})
+
 describe('Pod slim packaging', () => {
   it('removes cut packaging only from the macOS app', () => {
     const base = {
@@ -67,13 +99,11 @@ describe('Pod slim packaging', () => {
 
   it('drops cut runtime packages and win32 ripgrep before the upstream config loads', () => {
     const pod = inspectSlimConfig('pod')
-    for (const dropped of [
-      'node_modules/@linear/sdk',
-      'node_modules/serve-sim',
-      'node_modules/sonner'
-    ]) {
+    for (const dropped of ['node_modules/serve-sim', 'node_modules/sonner']) {
       expect(pod.targets).not.toContain(dropped)
     }
+    // Pod ships Linear for PodNative; the runtime gates it with the podLinear setting.
+    expect(pod.targets).toContain('node_modules/@linear/sdk')
     expect(pod.sources.some((source) => source.includes('sherpa-onnx'))).toBe(false)
     expect(pod.ripgrepPlatforms).toEqual(['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'])
     expect(pod.ripgrepFilter.some((pattern) => pattern.startsWith('win32-'))).toBe(false)

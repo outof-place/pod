@@ -30,6 +30,19 @@ function removeListedItems(list, items, label) {
 
 // Why before the upstream config loads: it derives the runtime node_modules closure and the
 // ripgrep afterPack finalize from these shared lists at require time.
+let runtimeRootsPrepared = false
+// Why on its own: product/electron-builder.pod.cjs takes only this cut, so a feature that is off
+// leaves its runtime packages out of the release app too (`linear` keeps @linear/sdk in or out).
+function preparePodRuntimePackageRoots(cuts = podPackagingCuts(readPodBuildProfile())) {
+  if (runtimeRootsPrepared) {
+    return
+  }
+  runtimeRootsPrepared = true
+  const runtimeRoots = cuts.flatMap((cut) => cut.dropRuntimePackageRoots ?? [])
+  const runtime = require('../config/packaged-runtime-node-modules.cjs')
+  removeListedItems(runtime.PACKAGED_RUNTIME_PACKAGE_ROOTS, runtimeRoots, 'runtime package roots')
+}
+
 let prepared = false
 function preparePodSlimPackaging(profile = readPodBuildProfile()) {
   if (prepared) {
@@ -37,10 +50,8 @@ function preparePodSlimPackaging(profile = readPodBuildProfile()) {
   }
   prepared = true
   const cuts = podPackagingCuts(profile)
-  const runtimeRoots = cuts.flatMap((cut) => cut.dropRuntimePackageRoots ?? [])
+  preparePodRuntimePackageRoots(cuts)
   const ripgrepPlatforms = cuts.flatMap((cut) => cut.dropRipgrepPlatforms ?? [])
-  const runtime = require('../config/packaged-runtime-node-modules.cjs')
-  removeListedItems(runtime.PACKAGED_RUNTIME_PACKAGE_ROOTS, runtimeRoots, 'runtime package roots')
   const ripgrep = require('../config/bundled-ripgrep-resources.cjs')
   removeListedItems(ripgrep.BUNDLED_RIPGREP_PLATFORMS, ripgrepPlatforms, 'ripgrep platforms')
   if (cuts.some((cut) => cut.skipMobileWebBundleAssert)) {
@@ -92,6 +103,7 @@ function applyPodSlimPackaging(base, profile = readPodBuildProfile()) {
 module.exports = {
   applyPodSlimPackaging,
   podPackagingCuts,
+  preparePodRuntimePackageRoots,
   preparePodSlimPackaging,
   readPodBuildProfile
 }

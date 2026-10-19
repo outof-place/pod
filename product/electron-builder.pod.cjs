@@ -22,6 +22,9 @@ const podGoCache = require('./gocache/install-pod-gocache.cjs')
 // Built by config/scripts/build-pod-peer-identity-macos.mjs (release.sh).
 const POD_PEER_IDENTITY_BUILD =
   'native/pod-peer-identity-macos/.build/release/pod-peer-identity.node'
+// Fork-only (Pod): a feature that is off leaves its runtime packages out (pod-slim-packaging.cjs);
+// before the upstream config loads, which derives the packaged node_modules closure at require time.
+require('./pod-slim-packaging.cjs').preparePodRuntimePackageRoots()
 // Why destructure: drop every non-mac platform and target section of the upstream config.
 const {
   win: _win,
