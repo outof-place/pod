@@ -2,10 +2,8 @@
 // RPC admission check and linear.status.
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { setPodLinearAgentAccessSetting } from './pod-linear-access'
-import {
-  readSealedLinearAgentAccess,
-  writeSealedLinearAgentAccess
-} from './pod-linear-agent-access-store'
+import { writeSealedLinearAgentAccess } from './pod-linear-agent-access-store'
+import { currentLinearConnectionIds, isLinearAgentAccessGranted } from './pod-linear-agent-scope'
 import { setPodLinearEnabledSetting } from './pod-linear-availability'
 
 export function installPodLinear(store: {
@@ -21,7 +19,9 @@ export function installPodLinear(store: {
   })
   // Not a settings key: an agent can edit the settings file (pod-linear-agent-access-store.ts).
   setPodLinearAgentAccessSetting({
-    read: readSealedLinearAgentAccess,
-    write: writeSealedLinearAgentAccess
+    read: isLinearAgentAccessGranted,
+    // A grant names the workspaces connected now; a later Connect needs a new one.
+    write: (enabled) =>
+      writeSealedLinearAgentAccess(enabled, enabled ? currentLinearConnectionIds() : [])
   })
 }

@@ -8,6 +8,7 @@ import type {
   OrchestrationMutationExecutor
 } from './orchestration-mutation-executor'
 import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
+import { runInPodLinearCallScope } from '../../pod/linear/pod-linear-call-scope'
 
 type DispatcherUnaryMethodInvocation = {
   runtime: OrcaRuntimeService
@@ -82,7 +83,8 @@ export async function invokeDispatcherUnaryMethod({
   const result = await orchestrationMutations.run(
     request,
     effectiveParams,
-    invoke,
+    // Fork-only (Pod): agents' linear.* methods see only the workspaces their grant names.
+    (mutation) => runInPodLinearCallScope(request.method, () => invoke(mutation)),
     callerFingerprint,
     context.orchestrationCaller?.orcaSessionId
   )

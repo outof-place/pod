@@ -24,6 +24,9 @@ import { fakeKeychain, setTestUserData } from './pod-linear-key-store.test-suppo
 import { setSecretStore } from '../../../shared/secret-store'
 import { setPodLinearEnabledSetting } from './pod-linear-availability'
 import { POD_LINEAR_METHODS } from './pod-linear-rpc-methods'
+import { isPodLinearAgentCall } from './pod-linear-call-scope'
+import { saveWorkspaceToken } from '../../linear/linear-token-store'
+import { upsertWorkspace } from '../../linear/linear-workspace-registry'
 
 const PAIRED: RpcCallerScope = { kind: 'runtime-paired', grants: ['desktop-control'] }
 const peer = (ok: boolean) => vi.fn(() => ({ ok, pid: 4242 }))
@@ -93,7 +96,10 @@ describe('Linear access through the dispatcher', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       linearConnect: vi.fn().mockResolvedValue({ ok: true }),
-      linearSearchForAgents: vi.fn().mockResolvedValue({ issues: [] })
+      linearSearchForAgents: vi.fn(async () => ({
+        issues: [],
+        inAgentScope: isPodLinearAgentCall()
+      }))
     }
     const dispatcher = new RpcDispatcher({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the methods under test call only these runtime members.
@@ -133,9 +139,18 @@ describe('Linear access through the dispatcher', () => {
     expect(runtime.linearConnect).toHaveBeenCalledTimes(1)
   })
 
-  it('lets agents in only after PodNative turns agent access on', async () => {
+  it('lets agents in only after PodNative turns agent access on, in the agent call scope', async () => {
     const { runtime, call } = setup()
     const search = { query: 'login' }
+    // A grant names the workspaces connected when it's made.
+    upsertWorkspace({
+      id: 'org-mock-1',
+      organizationId: 'org-mock-1',
+      organizationName: 'Mock Co',
+      displayName: 'ada',
+      email: null
+    })
+    saveWorkspaceToken('org-mock-1', 'mock-linear-key-1')
 
     expect(await call('linear.agentSearchIssues', search)).toMatchObject({
       ok: false,
@@ -153,5 +168,8 @@ describe('Linear access through the dispatcher', () => {
     })
     expect(await call('linear.agentSearchIssues', search)).toMatchObject({ ok: true })
     expect(runtime.linearSearchForAgents).toHaveBeenCalledTimes(1)
+    expect(await runtime.linearSearchForAgents.mock.results[0]?.value).toMatchObject({
+      inAgentScope: true
+    })
   })
 })
