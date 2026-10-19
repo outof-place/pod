@@ -3,15 +3,21 @@
 // foreground process group that holds the agent. Right before each write the group is read again,
 // synchronously (pod-terminal-foreground-read.ts), and the bytes go out only while the same group is
 // in front: a shell back in front, an agent that exited, or a read that fails refuses the write, with
-// no byte written. Local macOS and Linux panes only; an SSH or Windows pane keeps its async guard.
+// no byte written. Local macOS and Linux panes only; an SSH or Windows pane keeps its async guard,
+// and an unguarded agent prompt on SSH asks the pane's relay who is in front (withAgentForegroundGate).
 // Phase 1 checks in the runtime: the terminal daemon holds the PTY and gets the bytes after the
 // check, so the notify's trip to it and node-pty's write queue remain open. Every guarded writer
 // goes out through writeIfForegroundSync, and a source scan checks that none writes beside it.
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-process-recognition'
+import {
+  isExpectedAgentProcess,
+  recognizeAgentProcess,
+  recognizeAgentProcessFromCommandLine
+} from '../../../shared/agent-process-recognition'
 import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
 import { isShellProcess } from '../../../shared/shell-process-detection'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   readTerminalForegroundGroupNow,
   type ForegroundGroupRefusal
@@ -31,10 +37,32 @@ export type TerminalAgentForegroundProof =
   | { verdict: 'shell' | 'not_agent' | 'unknown' }
 
 const UNKNOWN: TerminalAgentForegroundProof = { verdict: 'unknown' }
+const SHELL: TerminalAgentForegroundProof = { verdict: 'shell' }
+
+/** A login shell is reported as `-zsh`. */
+function executableOf(command: string): string {
+  const executable = command.trim().split(/\s+/, 1)[0]?.replace(/^-/, '') ?? ''
+  return executable.split('/').pop() ?? executable
+}
 
 function isShellCommand(command: string): boolean {
-  const executable = command.trim().split(/\s+/, 1)[0]?.replace(/^-/, '') ?? ''
-  return isShellProcess(executable.split('/').pop() ?? executable)
+  return isShellProcess(executableOf(command))
+}
+
+/**
+ * The named agent, by its own name or by the process it runs as: a launch mode can run another
+ * agent's process (Agent Teams runs `claude`). Any recognized agent when none is named.
+ */
+function isAgentCommand(command: string, agent: TuiAgent | null): boolean {
+  const recognized = recognizeAgentProcessFromCommandLine(command)
+  if (agent === null || recognized?.agent === agent) {
+    return recognized !== null
+  }
+  const expected = TUI_AGENT_CONFIG[agent].expectedProcess
+  return (
+    isExpectedAgentProcess(executableOf(command), expected) ||
+    (recognized !== null && TUI_AGENT_CONFIG[recognized.agent].expectedProcess === expected)
+  )
 }
 
 /**
@@ -51,26 +79,39 @@ function judgeFrontGroup(
   if (front.length === 0) {
     return 'unknown'
   }
-  const holdsAgent = front.some((row) => {
-    const recognized = recognizeAgentProcessFromCommandLine(row.command)
-    return recognized !== null && (agent === null || recognized.agent === agent)
-  })
-  if (holdsAgent) {
+  if (front.some((row) => isAgentCommand(row.command, agent))) {
     return 'agent'
   }
   return front.every((row) => isShellCommand(row.command)) ? 'shell' : 'not_agent'
 }
 
-/** The proof on the pane's own host: null on an SSH or Windows pane, which keeps its async guard. */
-export function proveTerminalAgentForegroundOnHost(
-  controller: Pick<RuntimePtyController, 'listProcesses'> | null,
+/**
+ * The proof on the pane's own host. A Windows pane has none (null), and neither has an SSH pane,
+ * which keeps its async guard, unless `relayShell` asks its relay who is in front: a shell named
+ * there proves the shell, and anything else stays unproven (null). No fence on SSH: the read is async.
+ */
+export async function proveTerminalAgentForegroundOnHost(
+  controller: Pick<RuntimePtyController, 'listProcesses' | 'getForegroundProcess'> | null,
   host: { remote: boolean; windows: boolean },
   ptyId: string,
-  agent: TuiAgent | null
+  agent: TuiAgent | null,
+  relayShell = false
 ): Promise<TerminalAgentForegroundProof | null> {
-  return host.remote || host.windows
-    ? Promise.resolve(null)
-    : proveTerminalAgentForeground(controller, ptyId, agent)
+  if (host.windows) {
+    return null
+  }
+  if (!host.remote) {
+    return proveTerminalAgentForeground(controller, ptyId, agent)
+  }
+  if (!relayShell) {
+    return null
+  }
+  try {
+    const name = await controller?.getForegroundProcess(ptyId)
+    return name && isShellCommand(name) && !recognizeAgentProcess(name) ? SHELL : null
+  } catch {
+    return null
+  }
 }
 
 /** A fresh read of a local pane's terminal: who holds its foreground group now. */
@@ -142,7 +183,8 @@ export function writeIfForegroundSync<T>(
 export type TerminalForegroundProver = {
   proveTerminalAgentForegroundFence(
     ptyId: string,
-    agent: TuiAgent | null
+    agent: TuiAgent | null,
+    relayShell?: boolean
   ): Promise<TerminalAgentForegroundProof | null>
 }
 
@@ -156,7 +198,8 @@ export type SendableForegroundFence = {
 export function createSendableForegroundFence(
   runtime: TerminalForegroundProver,
   refusal = 'terminal_guard_no_agent',
-  agent: TuiAgent | null = null
+  agent: TuiAgent | null = null,
+  relayShell = false
 ): SendableForegroundFence {
   // A pty proven on a host that can't prove it (SSH, Windows) maps to null: its async guard decides.
   const proofs = new Map<string, TerminalForegroundFence | null>()
@@ -166,7 +209,7 @@ export function createSendableForegroundFence(
         return
       }
       proofs.delete(ptyId)
-      const proof = await runtime.proveTerminalAgentForegroundFence(ptyId, agent)
+      const proof = await runtime.proveTerminalAgentForegroundFence(ptyId, agent, relayShell)
       if (proof && proof.verdict !== 'agent') {
         throw new Error(`${refusal}: ${proof.verdict}`)
       }
@@ -192,7 +235,8 @@ type AgentWriteHooks = {
 /**
  * An agent prompt whose caller brings no guard of its own (dispatch --inject, a coordinator's task,
  * the CLI's prompt send) gets the default one: a proof before each write after the caller's own
- * beforeWrite, and its fence in the write's block. A caller with an atWrite keeps its own.
+ * beforeWrite, and its fence in the write's block. On an SSH pane the relay's read stands in for the
+ * proof, and refuses a shell it names in front. A caller with an atWrite keeps its own.
  */
 export function withAgentForegroundGate<T extends AgentWriteHooks>(
   runtime: TerminalForegroundProver,
@@ -202,7 +246,7 @@ export function withAgentForegroundGate<T extends AgentWriteHooks>(
   if (options.atWrite) {
     return options
   }
-  const gate = createSendableForegroundFence(runtime, AGENT_NOT_IN_FOREGROUND, agent)
+  const gate = createSendableForegroundFence(runtime, AGENT_NOT_IN_FOREGROUND, agent, true)
   return {
     ...options,
     beforeWrite: async (ptyId: string): Promise<void> => {

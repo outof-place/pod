@@ -40,15 +40,34 @@ afterEach(() => {
 })
 
 /** A pane whose agent turns to work at its Enter, and the writes the guard's check saw before. */
-async function promptPane(agent: 'codex' | 'omp') {
+async function promptPane(
+  agent: 'codex' | 'omp',
+  getForegroundProcess?: (ptyId: string) => Promise<string | null>
+) {
   const order: string[] = []
-  const pane = await createAgentPromptSubmissionRuntime((runtime, data) => {
-    order.push(`write:${JSON.stringify(data)}`)
-    if (data.endsWith('\r')) {
-      runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
-    }
-  }, agent)
+  const pane = await createAgentPromptSubmissionRuntime(
+    (runtime, data) => {
+      order.push(`write:${JSON.stringify(data)}`)
+      if (data.endsWith('\r')) {
+        runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+      }
+    },
+    agent,
+    getForegroundProcess
+  )
   return { ...pane, order }
+}
+
+/** The pane as an SSH host's, with the runtime's own proof: its relay names who is in front. */
+async function sshPromptPane(relayNames: () => string | null) {
+  const pane = await promptPane('codex', async () => relayNames())
+  vi.mocked(pane.runtime.proveTerminalAgentForegroundFence).mockRestore()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime keeps its pane records in ptysById; the test only marks this pane as an SSH host's.
+  const ptys = (pane.runtime as unknown as { ptysById: Map<string, object> }).ptysById
+  const record = ptys.get('pty-prompt')
+  expect(record).toBeDefined()
+  Object.assign(record ?? {}, { connectionId: 'ssh-build-host' })
+  return pane
 }
 
 describe('a guarded prompt', () => {
@@ -170,5 +189,52 @@ describe('the default gate of an unguarded agent prompt', () => {
     await refused
 
     expect(pane.writes).toHaveLength(1)
+  })
+
+  // No local proof on SSH: the relay's read stands in, and a shell it names refuses the write.
+  it('writes nothing to an SSH pane whose relay names a shell in front', async () => {
+    vi.useFakeTimers()
+    const pane = await sshPromptPane(() => '-zsh')
+
+    const sent = pane.runtime.sendTerminalAgentPrompt(pane.handle, 'review this', {
+      inputKind: 'driving'
+    })
+    const refused = expect(sent).rejects.toThrow('agent_not_in_foreground: shell')
+    await vi.runAllTimersAsync()
+    await refused
+
+    expect(pane.writes).toEqual([])
+  })
+
+  it('sends the Enter to an SSH pane only while its relay names no shell', async () => {
+    vi.useFakeTimers()
+    let front = 'codex'
+    const pane = await sshPromptPane(() => front)
+    const sent = pane.runtime.sendTerminalAgentPrompt(pane.handle, 'review this', {
+      inputKind: 'driving'
+    })
+    const refused = expect(sent).rejects.toThrow('agent_not_in_foreground: shell')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(pane.writes).toHaveLength(1)
+
+    front = '-zsh'
+    await vi.runAllTimersAsync()
+    await refused
+
+    expect(pane.writes).toHaveLength(1)
+  })
+
+  it('lets the paste and its Enter through to an SSH pane with the agent in front', async () => {
+    vi.useFakeTimers()
+    const pane = await sshPromptPane(() => 'codex')
+
+    const sent = pane.runtime.sendTerminalAgentPrompt(pane.handle, 'review this', {
+      inputKind: 'driving'
+    })
+    await vi.runAllTimersAsync()
+    await sent
+
+    expect(pane.writes[0]).toContain(AGENT_PROMPT_BRACKETED_PASTE_END)
+    expect(pane.writes).toContain('\r')
   })
 })

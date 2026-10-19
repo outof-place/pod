@@ -2,12 +2,19 @@
 // group, and goes out only while the same group is in front, read again right before it.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
+import {
+  TUI_AGENT_CONFIG,
+  getTuiAgentLaunchCommand,
+  isTuiAgent
+} from '../../../shared/tui-agent-config'
+import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
 import type * as TerminalForegroundGroup from '../../runtime/terminal-foreground-group'
 import {
   assertTerminalForegroundFence,
   createSendableForegroundFence,
   isTerminalForegroundFenceHeld,
   proveTerminalAgentForeground,
+  proveTerminalAgentForegroundOnHost,
   writeIfForegroundSync,
   type TerminalAgentForegroundProof
 } from './pod-terminal-foreground-fence'
@@ -33,6 +40,7 @@ vi.mock('./pod-terminal-foreground-read', () => ({
 }))
 
 const ROOT = 100
+const ALL_AGENTS = Object.keys(TUI_AGENT_CONFIG).filter(isTuiAgent)
 const SHELL = 101
 const AGENT = 200
 const controller = {
@@ -147,6 +155,32 @@ describe('proveTerminalAgentForeground', () => {
     )
   })
 
+  // The judge needs a recognized agent now, where a named launch once passed as anything not a
+  // shell: every agent's own launch line must still read as that agent, or its prompt never goes.
+  it.each(ALL_AGENTS)('finds %s by the launch line Pod types for it', async (agent) => {
+    const launch = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], 'darwin')
+    const yolo = YOLO_TUI_AGENT_ARGS[agent]
+    const command = yolo ? `${launch} ${yolo}` : launch
+    mocks.rows = [
+      ...terminal(SHELL).slice(0, 2),
+      { pid: 500, ppid: SHELL, pgid: 500, tpgid: 500, stat: 'S+', command }
+    ].map((row) => ({ ...row, tpgid: 500 }))
+
+    expect((await proveTerminalAgentForeground(controller, 'pty-1', agent)).verdict).toBe('agent')
+    expect((await proveTerminalAgentForeground(controller, 'pty-1', null)).verdict).toBe('agent')
+  })
+
+  // What the running agent reports as its process, where that differs from the line typed.
+  it.each(ALL_AGENTS)('finds %s by the process it runs as', async (agent) => {
+    const command = `/usr/local/bin/${TUI_AGENT_CONFIG[agent].expectedProcess}`
+    mocks.rows = [
+      ...terminal(SHELL).slice(0, 2),
+      { pid: 500, ppid: SHELL, pgid: 500, tpgid: 500, stat: 'S+', command }
+    ].map((row) => ({ ...row, tpgid: 500 }))
+
+    expect((await proveTerminalAgentForeground(controller, 'pty-1', agent)).verdict).toBe('agent')
+  })
+
   it.each([
     ['the pane is not listed', () => ({ listProcesses: async () => [] })],
     ['the terminal is gone', () => ((mocks.tty = null), controller)],
@@ -156,6 +190,58 @@ describe('proveTerminalAgentForeground', () => {
     expect(await proveTerminalAgentForeground(setup(), 'pty-1', 'claude')).toEqual({
       verdict: 'unknown'
     })
+  })
+})
+
+describe('the proof on an SSH or Windows pane', () => {
+  const SSH = { remote: true, windows: false }
+  function relay(name: string | null | Error) {
+    return {
+      getForegroundProcess: vi.fn(async () => {
+        if (name instanceof Error) {
+          throw name
+        }
+        return name
+      })
+    }
+  }
+
+  it.each(['-zsh', 'zsh', 'bash', '/bin/sh'])(
+    'proves the shell its relay names in front (%s), when asked',
+    async (name) => {
+      expect(
+        await proveTerminalAgentForegroundOnHost(relay(name), SSH, 'pty-1', null, true)
+      ).toEqual({ verdict: 'shell' })
+    }
+  )
+
+  it.each([
+    ['an agent', 'claude'],
+    ['a process that is not a shell', 'vim'],
+    ['no name', null],
+    ['a failed read', new Error('relay gone')]
+  ])('leaves %s in front unproven: the async guard decides', async (_what, name) => {
+    expect(await proveTerminalAgentForegroundOnHost(relay(name), SSH, 'pty-1', null, true)).toBe(
+      null
+    )
+  })
+
+  it('asks no relay unless asked, and never on Windows', async () => {
+    const ssh = relay('-zsh')
+    const windows = relay('-zsh')
+
+    expect(await proveTerminalAgentForegroundOnHost(ssh, SSH, 'pty-1', null)).toBe(null)
+    expect(
+      await proveTerminalAgentForegroundOnHost(
+        windows,
+        { remote: true, windows: true },
+        'pty-1',
+        null,
+        true
+      )
+    ).toBe(null)
+    expect(ssh.getForegroundProcess).not.toHaveBeenCalled()
+    expect(windows.getForegroundProcess).not.toHaveBeenCalled()
   })
 })
 

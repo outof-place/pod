@@ -292,10 +292,11 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
   }
 
   // Fork-only (Pod): the proof a guarded write keeps for its synchronous re-check; null on an SSH or
-  // Windows pane, whose async guard stays as it was (pod-terminal-foreground-fence.ts).
-  proveTerminalAgentForegroundFence(ptyId: string, agent: TuiAgent | null) {
+  // Windows pane, whose async guard stays as it was, but for a shell an SSH relay names when asked
+  // (`relayShell`, pod-terminal-foreground-fence.ts).
+  proveTerminalAgentForegroundFence(ptyId: string, agent: TuiAgent | null, relayShell = false) {
     const host = this.launchedAgentHost(ptyId)
-    return proveTerminalAgentForegroundOnHost(this.ptyController, host, ptyId, agent)
+    return proveTerminalAgentForegroundOnHost(this.ptyController, host, ptyId, agent, relayShell)
   }
 
   /** Whether the pane's execution host can find a launched agent in front: a Windows one cannot. */
