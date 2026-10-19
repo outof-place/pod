@@ -68,6 +68,7 @@ export type SimAppOpenDeps = Readonly<{
   metros: SimMetros
   now: () => number
   connectMs: number
+  bundleSilenceMs: number
 }>
 
 export function createSimAppOpen(
@@ -171,7 +172,8 @@ export function createSimAppOpen(
         args: simAppLaunchArgs(port, app.appDefaults),
         port,
         metroInput,
-        connectMs: deps.connectMs
+        connectMs: deps.connectMs,
+        bundleSilenceMs: deps.bundleSilenceMs
       }
     )
     time.hop('launchToMetro')

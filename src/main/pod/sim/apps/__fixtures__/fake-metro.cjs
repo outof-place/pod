@@ -8,7 +8,8 @@
 // A loaded Mac, on demand: FAKE_METRO_LIST_STALL_MS makes every `/json/list` in that many ms from
 // the first one answer after 2 s (past Pod's 1.5 s probe); FAKE_METRO_LIST_FLAKY answers that many
 // first `/json/list` calls with a 500 and then an unparsable body, in turn; `/fake/busy?ms=` holds
-// every `/status` unanswered for that long.
+// every `/status` unanswered for that long. FAKE_METRO_BUILD_MS makes the first bundle a cold build
+// of that many ms that every bundle request meanwhile joins in silence, as Metro's does.
 const http = require('node:http')
 const fs = require('node:fs')
 
@@ -20,6 +21,8 @@ const listStallMs = Number(process.env.FAKE_METRO_LIST_STALL_MS || 0)
 let listFlaky = Number(process.env.FAKE_METRO_LIST_FLAKY || 0)
 let firstListAt = null
 let busyUntil = 0
+const buildMs = Number(process.env.FAKE_METRO_BUILD_MS || 0)
+let built = null
 
 function list(res) {
   if (listFlaky > 0) {
@@ -52,7 +55,8 @@ http
       res.end(JSON.stringify({ launchAsset: { url: bundle } }))
     } else if (url.pathname === '/index.bundle') {
       fs.appendFileSync('bundle-requests.log', `${url.search}\n`)
-      setTimeout(() => res.end('__d(function(){})'), 50)
+      built ??= new Promise((resolve) => setTimeout(resolve, buildMs))
+      void built.then(() => setTimeout(() => res.end('__d(function(){})'), 50))
     } else if (url.pathname === '/json/list') {
       firstListAt ??= Date.now()
       if (Date.now() - firstListAt < listStallMs) {

@@ -119,6 +119,11 @@ export type FakeDevice = SimAppDevice & {
   apps: Set<string>
   // Launches that stop at the dev launcher (its manifest request timed out): no JS on Metro.
   launcherOnly: number
+  // Set: each launch on Metro also loads the bundle as React Native does, giving up on a request
+  // silent this long ("Could not connect to development server", 60 s on a device).
+  bundleTimeoutMs: number | null
+  // The latest such launch's screen once its bundle request ends.
+  loaded: Promise<'app' | 'redBox'> | null
 }
 
 export function fakeDevice(): FakeDevice {
@@ -126,6 +131,8 @@ export function fakeDevice(): FakeDevice {
   const device: FakeDevice = {
     name: 'Fake-iPhone',
     launcherOnly: 0,
+    bundleTimeoutMs: null,
+    loaded: null,
     installs: [],
     launches: [],
     running: new Set(),
@@ -150,6 +157,16 @@ export function fakeDevice(): FakeDevice {
         const connect = device.launcherOnly > 0 ? 'disconnect' : 'connect'
         device.launcherOnly = Math.max(0, device.launcherOnly - 1)
         await fetch(`${metro}/fake/${connect}?appId=${bundleId}&deviceName=${device.name}`)
+        if (connect === 'connect' && device.bundleTimeoutMs !== null) {
+          device.loaded = fetch(`${metro}/index.bundle?platform=ios&dev=true`, {
+            signal: AbortSignal.timeout(device.bundleTimeoutMs)
+          })
+            .then((res) => res.text())
+            .then(
+              () => 'app' as const,
+              () => 'redBox' as const
+            )
+        }
       }
       return ok
     },

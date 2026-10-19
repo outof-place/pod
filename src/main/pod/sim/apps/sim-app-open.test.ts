@@ -44,7 +44,8 @@ describe('opening an app whose client lookup is refused', () => {
         installed,
         metros,
         now: Date.now,
-        connectMs: 400
+        connectMs: 400,
+        bundleSilenceMs: 45_000
       })
       expect(await open({ worktreeRoot: '/w', udid: DEVICE })).toEqual({ ok: false, refusal })
       await new Promise((resolve) => setTimeout(resolve, 50))

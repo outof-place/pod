@@ -7,6 +7,13 @@
 // answers the list, plus a grace, and a launch that never reached Metro is retried once. A Metro
 // too busy to answer in time, or one bad answer (a 500 mid-reload, a cut body), is asked again; it
 // says it has no list only when it says so three times in a row.
+//
+// The inspector lists the app before its bundle arrives, so a launch is done only once the bundle is
+// built too. The app's bundle request joins the warm-up's build in silence (Metro 0.87.1 Server.js
+// hands onProgress only to the request that starts a graph), and React Native gives it up after 60 s
+// without a byte (RCTMultipartDataTask: the default NSURLSession timeoutIntervalForRequest), showing
+// "Could not connect to development server". A bundle built that long after a launch launches the app
+// once more, onto the built bundle (19.10: a cold Portivo bundle took about 4 min at load 50 to 100).
 import type { SimAppDevice } from './sim-app-device'
 import type { SimMetroInput, SimMetros } from './sim-app-metro'
 import { simAppOnMetro, type SimMetroWarm } from './sim-app-metro-http'
@@ -15,6 +22,8 @@ import { simAppOnMetro, type SimMetroWarm } from './sim-app-metro-http'
 export const SIM_APP_CONNECT_MS = 20_000
 /** How long Metro may stay too busy to answer its list at all before Pod stops asking. */
 export const SIM_APP_LIST_PATIENCE_MS = 30_000
+/** A bundle built this long after a launch may have outlasted the app's own request (60 s). */
+export const SIM_APP_BUNDLE_SILENCE_MS = 45_000
 const NO_LIST_IN_A_ROW = 3
 
 export type SimAppLaunched =
@@ -35,13 +44,14 @@ export type SimAppLaunchInput = Readonly<{
   port: number | null
   metroInput: SimMetroInput
   connectMs: number
+  bundleSilenceMs: number
 }>
 
 type Seen = Readonly<{ on: boolean | null; bundleProblem?: string }>
 
 /**
- * Polls Metro until the app is on it, or `connectMs` past both its bundle being built and Metro
- * answering the list; a Metro that never answers is given up SIM_APP_LIST_PATIENCE_MS past the bundle.
+ * Polls Metro until the app is on it and its bundle is built, or `connectMs` past both the bundle and
+ * Metro answering the list; a Metro that never answers is given up SIM_APP_LIST_PATIENCE_MS past the bundle.
  */
 async function waitOnMetro(
   port: number,
@@ -63,6 +73,8 @@ async function waitOnMetro(
   for (;;) {
     const on = await simAppOnMetro(port, bundleId, deviceName)
     if (on === true) {
+      // Settles within the warm-up's own timeout.
+      await bundle
       return { on: true }
     }
     noList = on === 'noList' ? noList + 1 : 0
@@ -91,7 +103,11 @@ export async function launchSimAppOnMetro(
   deps: Readonly<{ device: SimAppDevice; metros: SimMetros }>,
   input: SimAppLaunchInput
 ): Promise<SimAppLaunched> {
-  const launch = () => deps.device.launch(input.udid, input.bundleId, input.args)
+  let launchedAt = 0
+  const launch = () => {
+    launchedAt = performance.now()
+    return deps.device.launch(input.udid, input.bundleId, input.args)
+  }
   const first = await launch()
   if (!first.ok) {
     return first
@@ -101,11 +117,30 @@ export async function launchSimAppOnMetro(
   }
   const deviceName = await deps.device.deviceName(input.udid)
   // In flight (shared with prepare's), done, or null when this Metro process already has it.
-  const bundle = deps.metros.warm(input.metroInput).catch(() => null)
+  let bundledAt: number | null = null
+  const bundle = deps.metros
+    .warm(input.metroInput)
+    .catch(() => null)
+    .finally(() => {
+      bundledAt = performance.now()
+    })
+  let relaunchedOntoBundle = false
   for (let launches = 1; ; launches += 1) {
     const seen = await waitOnMetro(input.port, input.bundleId, deviceName, bundle, input.connectMs)
-    if (seen.on !== false) {
-      return { ok: true, connected: seen.on, launches }
+    if (seen.on === true) {
+      // 15 s under React Native's 60: the app serializes its bundle after the warm-up's.
+      if (relaunchedOntoBundle || (bundledAt ?? launchedAt) - launchedAt <= input.bundleSilenceMs) {
+        return { ok: true, connected: true, launches }
+      }
+      relaunchedOntoBundle = true
+      const again = await launch()
+      if (!again.ok) {
+        return again
+      }
+      continue
+    }
+    if (seen.on === null) {
+      return { ok: true, connected: null, launches }
     }
     if (seen.bundleProblem || launches >= 2) {
       return {

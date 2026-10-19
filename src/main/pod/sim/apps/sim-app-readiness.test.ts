@@ -514,6 +514,25 @@ describe.skipIf(process.platform !== 'darwin')('a worktree’s own Metro', () =>
     expect(device.launches).toHaveLength(5)
   }, 30_000)
 
+  it('launches again once a slow cold bundle is built, so the app does not stay on "Could not connect to development server"', async () => {
+    const base = await freeBase()
+    // A cold bundle on a loaded Mac: longer than React Native waits on its silent bundle request.
+    const a = await worktree(box, 'wt-a', { app: metroRecipe(base, 'FAKE_METRO_BUILD_MS=1500 ') })
+    await cacheClient(box)
+    device.bundleTimeoutMs = 800
+    const apps = make(scriptedFingerprints(), 0, { bundleSilenceMs: 600 })
+    const opened = await apps.open({ worktreeRoot: a, udid: DEVICE })
+    expect(opened).toMatchObject({ ok: true, launched: true, connected: true })
+    expect(await device.loaded).toBe('app')
+    expect(device.launches).toHaveLength(2)
+
+    // Built now: a relaunch loads it at once and is not launched twice.
+    const relaunched = await apps.open({ worktreeRoot: a, udid: DEVICE, relaunch: true })
+    expect(relaunched).toMatchObject({ ok: true, launched: true, connected: true })
+    expect(await device.loaded).toBe('app')
+    expect(device.launches).toHaveLength(3)
+  }, 30_000)
+
   it('starts no Metro for a queued lease, and starts it once the pool readies a device for it', async () => {
     const base = await freeBase()
     const a = await worktree(box, 'wt-a', { app: metroRecipe(base) })

@@ -29,7 +29,7 @@ import { createSimClientLookup, type SimAppClient } from './sim-app-client-looku
 import { createSimInstalledRecords, type SimAppDevice } from './sim-app-device'
 import { createSimFingerprints, type SimFingerprints } from './sim-app-fingerprint'
 import { simHopTimer, type SimAppHops } from './sim-app-hops'
-import { SIM_APP_CONNECT_MS } from './sim-app-launch'
+import { SIM_APP_BUNDLE_SILENCE_MS, SIM_APP_CONNECT_MS } from './sim-app-launch'
 import { createSimMetros, type SimMetroEnsure, type SimMetroInput } from './sim-app-metro'
 import { simMetroLeases, type SimMetroLease } from './sim-app-metro-idle'
 import { simMetroKey } from './sim-app-metro-ports'
@@ -101,6 +101,8 @@ export type SimAppsOptions = Readonly<{
   metroGraceMs?: number
   // After the bundle is built, how long a launched app may take to reach Metro.
   connectMs?: number
+  // A bundle built this long after a launch launches the app again (sim-app-launch.ts).
+  bundleSilenceMs?: number
   now?: () => number
   env?: NodeJS.ProcessEnv
 }>
@@ -153,7 +155,8 @@ export function createSimApps(options: SimAppsOptions): SimApps {
     installed,
     metros,
     now,
-    connectMs: options.connectMs ?? SIM_APP_CONNECT_MS
+    connectMs: options.connectMs ?? SIM_APP_CONNECT_MS,
+    bundleSilenceMs: options.bundleSilenceMs ?? SIM_APP_BUNDLE_SILENCE_MS
   })
 
   /** The lease's worktree and app from the registry, for the pool's app port. */
