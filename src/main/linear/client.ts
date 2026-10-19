@@ -30,6 +30,10 @@ import {
   linearKeyRejectedMessage
 } from '../pod/linear/pod-linear-key-rejections'
 import { isPodLinearAgentAccessOn } from '../pod/linear/pod-linear-access'
+import {
+  podLinearAgentMayUse,
+  podLinearAgentVisibleState
+} from '../pod/linear/pod-linear-agent-scope'
 import { podLinearAvailability } from '../pod/linear/pod-linear-availability'
 import { CredentialDecryptionError } from '../integration-credential-file'
 import type {
@@ -63,6 +67,10 @@ export function getClient(workspaceId?: string | null): LinearClient | null {
   if (!token) {
     return null
   }
+  // Fork-only (Pod): an agent's call reaches only workspaces its grant names (pod-linear-agent-scope.ts).
+  if (!podLinearAgentMayUse(resolvedWorkspaceId)) {
+    return null
+  }
   return new (loadLinearSdk().LinearClient)({ apiKey: token })
 }
 
@@ -70,7 +78,8 @@ export function getClients(
   workspaceId?: LinearWorkspaceSelection | null,
   signal?: AbortSignal
 ): LinearClientForWorkspace[] {
-  const state = getWorkspaceState()
+  // Fork-only (Pod): an agent's call sees only the workspaces its grant names.
+  const state = podLinearAgentVisibleState(getWorkspaceState())
   const isAllSelection = workspaceId === 'all'
   const selectedWorkspaces = isAllSelection
     ? state.workspaces
@@ -196,7 +205,8 @@ export function getStatus(): LinearConnectionStatus {
       agentAccess: isPodLinearAgentAccessOn()
     }
   }
-  const state = getWorkspaceState()
+  // Fork-only (Pod): an agent's call sees only the workspaces its grant names.
+  const state = podLinearAgentVisibleState(getWorkspaceState())
   const selectedWorkspace =
     state.selectedWorkspaceId && state.selectedWorkspaceId !== 'all'
       ? state.workspaces.find((workspace) => workspace.id === state.selectedWorkspaceId)

@@ -12,6 +12,7 @@ import type {
   LinearWorkspaceSelection
 } from '../../shared/linear/workspace-types'
 import { isAuthError, type LinearClientForWorkspace } from './client'
+import { isPodLinearAgentCall } from '../pod/linear/pod-linear-call-scope'
 import type {
   LinearCustomViewNode,
   LinearIssueNode,
@@ -26,7 +27,9 @@ export function clampLimit(limit = 20): number {
   return Math.min(Math.max(1, Math.floor(limit)), LINEAR_PROJECT_API_PAGE_SIZE_MAX)
 }
 
-export function coalesce<T>(key: string, load: () => Promise<T>, force = false): Promise<T> {
+export function coalesce<T>(callKey: string, load: () => Promise<T>, force = false): Promise<T> {
+  // Fork-only (Pod): an agent's call sees fewer workspaces than Pod's window; they don't share loads.
+  const key = isPodLinearAgentCall() ? `agent:${callKey}` : callKey
   const existing = inFlight.get(key) as Promise<T> | undefined
   if (existing && !force) {
     return existing

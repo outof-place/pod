@@ -28,6 +28,13 @@ import {
 import { CredentialDecryptionError } from '../integration-credential-file'
 import { readPodLinearKey, writePodLinearKey } from '../pod/linear/pod-linear-key-store'
 import {
+  decodeLinearKeyRecord,
+  encodeLinearKeyRecord,
+  forgetLinearConnectionId,
+  newLinearConnectionId,
+  rememberLinearConnectionId
+} from '../pod/linear/pod-linear-key-record'
+import {
   clearLinearKeyRejection,
   markLinearKeyRejected
 } from '../pod/linear/pod-linear-key-rejections'
@@ -46,7 +53,10 @@ export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
     ensureWorkspaceTokenDir()
   }
   const tokenPath = getWorkspaceTokenPath(workspaceId)
-  writeEncryptedToken(tokenPath, apiKey)
+  // Fork-only (Pod): sealed with a new connection id (pod-linear-key-record.ts).
+  const connectionId = newLinearConnectionId()
+  writeEncryptedToken(tokenPath, encodeLinearKeyRecord(apiKey, connectionId))
+  rememberLinearConnectionId(workspaceId, connectionId)
   cacheToken(workspaceId, apiKey)
   clearCredentialError(workspaceId)
   // Fork-only (Pod): a new key, or a kept one that passed a test, no longer needs replacing.
@@ -76,8 +86,13 @@ export function loadToken(options: { force?: boolean; workspaceId?: string } = {
   }
   try {
     const raw = readFileSync(tokenPath)
-    // Fork-only (Pod): no plain-text fallback on read either.
-    const token = readPodLinearKey(raw)
+    // Fork-only (Pod): no plain-text fallback on read either; the key comes with its connection id.
+    const stored = readPodLinearKey(raw)
+    const record = stored === null ? null : decodeLinearKeyRecord(stored)
+    if (record) {
+      rememberLinearConnectionId(workspaceId, record.connectionId)
+    }
+    const token = record?.key ?? null
     if (token) {
       cacheToken(workspaceId, token)
     }
@@ -99,6 +114,7 @@ export function getWorkspaceTokenProtection(workspaceId: string): SecretAtRestPr
 
 export function clearTokenFile(workspaceId: string): void {
   forgetCachedToken(workspaceId)
+  forgetLinearConnectionId(workspaceId)
   try {
     unlinkSync(getWorkspaceTokenPath(workspaceId))
   } catch {

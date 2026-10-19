@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setSecretStore } from '../../../shared/secret-store'
 import { fakeKeychain, setTestUserData } from './pod-linear-key-store.test-support'
 
+// A connection id as pod-linear-key-record.ts makes them: 16 random bytes, hex.
+const CONNECTION = '0123456789abcdef0123456789abcdef'
 let userData = ''
 let accessFile = ''
 
@@ -30,11 +32,34 @@ describe('sealed agent access', () => {
     const { store } = await freshAccess()
     expect(store.readSealedLinearAgentAccess()).toBe(false)
 
-    store.writeSealedLinearAgentAccess(true)
+    store.writeSealedLinearAgentAccess(true, [CONNECTION])
 
     expect(store.readSealedLinearAgentAccess()).toBe(true)
-    expect(readFileSync(accessFile, 'utf8')).not.toContain('agent-access:on')
-    expect((await freshAccess()).store.readSealedLinearAgentAccess()).toBe(true)
+    expect(readFileSync(accessFile, 'utf8')).not.toContain(CONNECTION)
+    const restarted = (await freshAccess()).store
+    expect(restarted.linearAgentAccessConnectionIds()).toEqual(new Set([CONNECTION]))
+  })
+
+  it('refuses a grant with no connection, and keeps only ids of a connection’s length', async () => {
+    const { store } = await freshAccess()
+    expect(() => store.writeSealedLinearAgentAccess(true)).toThrow(
+      store.POD_LINEAR_AGENT_ACCESS_NO_WORKSPACE_MESSAGE
+    )
+
+    store.writeSealedLinearAgentAccess(true, ['short', CONNECTION])
+
+    expect((await freshAccess()).store.linearAgentAccessConnectionIds()).toEqual(
+      new Set([CONNECTION])
+    )
+  })
+
+  it('reads a sealed grant of the format before connection ids as off', async () => {
+    const { store } = await freshAccess()
+    const keyStore = await import('./pod-linear-key-store')
+    store.writeSealedLinearAgentAccess(false)
+    keyStore.writePodLinearKey(accessFile, 'pod-linear-agent-access:on')
+
+    expect((await freshAccess()).store.readSealedLinearAgentAccess()).toBe(false)
   })
 
   it.each([
@@ -76,13 +101,13 @@ describe('sealed agent access', () => {
     'reads a valid sealed "on" as off under %s, and refuses to turn it on',
     async (_what, weaken) => {
       const { store } = await freshAccess()
-      store.writeSealedLinearAgentAccess(true)
+      store.writeSealedLinearAgentAccess(true, [CONNECTION])
       const argv = [...process.argv]
       weaken()
       try {
         const fresh = (await freshAccess()).store
         expect(fresh.readSealedLinearAgentAccess()).toBe(false)
-        expect(() => fresh.writeSealedLinearAgentAccess(true)).toThrow(
+        expect(() => fresh.writeSealedLinearAgentAccess(true, [CONNECTION])).toThrow(
           fresh.POD_LINEAR_AGENT_ACCESS_FORGEABLE_MESSAGE
         )
       } finally {

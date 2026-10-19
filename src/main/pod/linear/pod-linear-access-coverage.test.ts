@@ -48,6 +48,14 @@ describe('every linear.* method has a rule', () => {
     }
   })
 
+  // Only the unary dispatcher runs them in the agent call scope (pod-linear-call-scope.ts).
+  it('registers every agent method as one-shot, not streaming', () => {
+    const streaming = ALL_RPC_METHODS.filter(
+      (method) => POD_LINEAR_AGENT_METHODS.has(method.name) && 'streaming' in method
+    )
+    expect(streaming.map((method) => method.name)).toEqual([])
+  })
+
   it('keeps every admin method off the phone allowlist', () => {
     expect([...POD_LINEAR_ADMIN_METHODS].filter((m) => MOBILE_RPC_METHOD_ALLOWLIST.has(m))).toEqual(
       []
