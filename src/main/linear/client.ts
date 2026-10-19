@@ -20,10 +20,15 @@ import {
   clearToken,
   clearTokenFile,
   loadToken,
+  removeToken,
   replaceLegacyWorkspace,
   saveWorkspaceToken,
   getWorkspaceTokenProtection
 } from './linear-token-store'
+import {
+  isLinearKeyRejected,
+  linearKeyRejectedMessage
+} from '../pod/linear/pod-linear-key-rejections'
 import { CredentialDecryptionError } from '../integration-credential-file'
 import type {
   LinearConnectionStatus,
@@ -44,9 +49,14 @@ export const LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS = 60 * 60
 // Why: issues/teams modules call this for real Linear actions — at that point
 // decrypting the token and surfacing a keychain prompt is expected.
 export function getClient(workspaceId?: string | null): LinearClient | null {
+  const resolvedWorkspaceId = resolveWorkspaceId(workspaceId)
+  // Fork-only (Pod): no request with a key Linear rejected; only a test or a new key retries.
+  if (resolvedWorkspaceId && isLinearKeyRejected(resolvedWorkspaceId)) {
+    return null
+  }
   const token = loadToken({
     force: true,
-    workspaceId: resolveWorkspaceId(workspaceId) ?? undefined
+    workspaceId: resolvedWorkspaceId ?? undefined
   })
   if (!token) {
     return null
@@ -66,6 +76,10 @@ export function getClients(
 
   const clients: LinearClientForWorkspace[] = []
   for (const workspace of selectedWorkspaces) {
+    // Fork-only (Pod): skipped like a missing key; getStatus says it needs a new one.
+    if (isLinearKeyRejected(workspace.id)) {
+      continue
+    }
     let token: string | null
     try {
       token = loadToken({ force: true, workspaceId: workspace.id })
@@ -145,7 +159,8 @@ export async function connect(
 }
 
 export function disconnect(workspaceId?: string): void {
-  clearToken(workspaceId)
+  // Fork-only (Pod): clearToken only marks a rejected key; Disconnect deletes.
+  removeToken(workspaceId)
 }
 
 export function selectWorkspace(workspaceId: LinearWorkspaceSelection): LinearConnectionStatus {
@@ -179,9 +194,16 @@ export function getStatus(): LinearConnectionStatus {
     state.workspaces[0] ??
     null
 
-  const credentialError = state.workspaces
-    .map((workspace) => getCredentialError(workspace.id))
-    .find((message) => message !== undefined)
+  // Fork-only (Pod): a workspace whose key Linear rejected stays listed, flagged needsNewKey.
+  const workspaces = state.workspaces.map((workspace) =>
+    isLinearKeyRejected(workspace.id) ? { ...workspace, needsNewKey: true as const } : workspace
+  )
+  const rejected = workspaces.find((workspace) => workspace.needsNewKey)
+  const credentialError =
+    state.workspaces
+      .map((workspace) => getCredentialError(workspace.id))
+      .find((message) => message !== undefined) ??
+    (rejected ? linearKeyRejectedMessage(rejected.organizationName) : undefined)
   // Why any-not-active: sealing is a host-wide property, so a second workspace stored
   // while the keyring was missing is exposed even when the active one is sealed.
   const credentialProtection = state.workspaces.some(
@@ -193,7 +215,7 @@ export function getStatus(): LinearConnectionStatus {
   return {
     connected: state.workspaces.length > 0,
     viewer: activeWorkspace,
-    workspaces: state.workspaces,
+    workspaces,
     activeWorkspaceId: state.activeWorkspaceId,
     selectedWorkspaceId: state.selectedWorkspaceId,
     ...(credentialError ? { credentialError } : {}),
