@@ -56,6 +56,24 @@ export function typedLineRefusal(
   return null
 }
 
+/** Text a host pastes into an agent: line breaks become LF, and every other control byte the gate
+ *  refuses becomes its visible stand-in (U+2400 block, U+2421 for DEL, U+FFFD for C1), so no byte
+ *  of the paste but a line break can act as a key, even on a receiver outside bracketed paste. */
+export function neutralizePastedControls(text: string): string {
+  let out = ''
+  for (const char of text.replace(/\r\n?/g, '\n')) {
+    const code = char.charCodeAt(0)
+    if (code === 0x0a || !isRefusedControl(code)) {
+      out += char
+    } else if (code < 0x20) {
+      out += String.fromCharCode(0x2400 + code)
+    } else {
+      out += code === 0x7f ? '\u2421' : '\ufffd'
+    }
+  }
+  return out
+}
+
 /** Throws `agent_prompt_needs_paste` unless `line` can be typed; nothing is typed then. */
 export function assertTypedLineCarries(line: string, opts: { multiLine: boolean }): void {
   const refusal = typedLineRefusal(line, opts)

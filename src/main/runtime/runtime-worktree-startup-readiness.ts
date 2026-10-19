@@ -8,13 +8,13 @@ import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import { wrapTerminalBracketedPasteText } from '../../shared/terminal-bracketed-paste-text'
+import { neutralizePastedControls } from '../../shared/agent-prompt-needs-paste'
 import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup
 } from './runtime-worktree-agent-startup'
 
-const BRACKETED_PASTE_BEGIN = '\x1b[200~'
-const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 // Why: an interactive shell turns bracketed paste on at its prompt and off when it runs the typed
 // command (`zsh-prompt-runs-command.txt`), so a 2004 before the last `?2004l` is the shell's.
@@ -43,9 +43,14 @@ export function pasteWorktreeStartupDraftWhenReady(
         console.warn('[worktree-create] agent did not become ready for draft paste')
         return
       }
-      host.write(ptyId, `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}`, 'launch')
+      host.write(ptyId, startupDraftPasteBytes(draft.content), 'launch')
     })
     .catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
+}
+
+/** Fork-only (Pod): the renderer's paste bytes, so ESC can't close the frame, and no control byte. */
+export function startupDraftPasteBytes(content: string): string {
+  return wrapTerminalBracketedPasteText(neutralizePastedControls(content))
 }
 
 export function sendWorktreeStartupFollowupWhenReady(

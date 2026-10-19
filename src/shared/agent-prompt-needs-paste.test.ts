@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_PROMPT_NEEDS_PASTE_CODE,
   AgentPromptNeedsPasteError,
+  neutralizePastedControls,
   TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES,
   typedLineRefusal
 } from './agent-prompt-needs-paste'
@@ -166,6 +167,14 @@ describe('the typed-line gate', () => {
     }
     expect(draft('a\nb')).toBeNull()
     expect(draft('x'.repeat(TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES + 1))).toBeNull()
+  })
+
+  it('neutralizes pasted control bytes but line breaks', () => {
+    expect(neutralizePastedControls('a\r\nb\rc\nd')).toBe('a\nb\nc\nd')
+    expect(neutralizePastedControls(REFUSED.join(''))).toBe(
+      '\u2403\n\u241b\u2415\u2417\u2404\u2421\u2400\u2409\ufffd'
+    )
+    expect(neutralizePastedControls('plain — ąę 漢字 🙂')).toBe('plain — ąę 漢字 🙂')
   })
 
   it('names the refusal on the line itself', () => {
