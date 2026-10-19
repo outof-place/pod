@@ -141,24 +141,6 @@ export function getPosixPtyForegroundGroup(
 }
 
 /**
- * Fork-only (Pod): the PTY's foreground process group read now, synchronously, with the same tty pin
- * and own-terminal check as the resize signal; null when it cannot be established
- * (pod-terminal-foreground-fence.ts).
- */
-export function readPosixPtyForegroundGroup(
-  rootPid: number,
-  ptsName: string,
-  currentPid = process.pid
-): number | null {
-  try {
-    const table = readForegroundGroupTable(rootPid, currentPid, ptsName)
-    return getPosixPtyForegroundGroup(table, rootPid, ptsName, currentPid)
-  } catch {
-    return null
-  }
-}
-
-/**
  * Sends `signal` to the PTY's foreground process group, falling back to the
  * supplied root-pid delivery when the group cannot be established safely.
  *

@@ -22,6 +22,7 @@ import {
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { writeIfForegroundSync } from '../pod/terminal/pod-terminal-foreground-fence'
 
 export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
   protected async writeTerminalAgentPrompt(
@@ -68,9 +69,11 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       // beginning when a large frame is split into independently processed chunks.
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
-      // Fork-only (Pod): the guard's synchronous re-check, in the same block as the write.
-      options.atWrite?.(ptyId)
-      if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
+      // Fork-only (Pod): the guard's synchronous re-check and the write in one call.
+      const pasted = writeIfForegroundSync(options.atWrite, ptyId, () =>
+        this.ptyController?.write(ptyId, initialWrite, options.inputKind)
+      )
+      if (!pasted) {
         throw new Error('terminal_not_writable')
       }
     } catch (error) {
@@ -116,12 +119,15 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
     this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
     if (!submitWithPaste) {
+      let submitted: boolean | undefined
       try {
-        options.atWrite?.(ptyId)
+        submitted = writeIfForegroundSync(options.atWrite, ptyId, () =>
+          this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)
+        )
       } catch (error) {
         throw options.suffixFailureError ? new Error(options.suffixFailureError) : error
       }
-      if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
+      if (!submitted) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
     }
@@ -236,8 +242,10 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       await waitForAgentPromptDelay(retryDelayMs, options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
       await options.beforeWrite?.(ptyId)
-      options.atWrite?.(ptyId)
-      return this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind) ? 1 : 0
+      const resubmitted = writeIfForegroundSync(options.atWrite, ptyId, () =>
+        this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)
+      )
+      return resubmitted ? 1 : 0
     } catch {
       return 0
     }

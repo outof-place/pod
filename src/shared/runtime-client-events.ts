@@ -49,6 +49,14 @@ export type RuntimeClientEvent =
       /** Absent on older hosts; clients must not infer navigation intent from a broadcast. */
       navigation?: RuntimeNavigationTarget
     }
+  // Fork-only (Pod): a worktree's startup draft or follow-up the foreground guard refused; none of
+  // it reached the terminal (pod-startup-input-write.ts). Older clients skip an unknown type.
+  | {
+      type: 'startupInputRefused'
+      terminalHandle: string
+      input: 'draft' | 'followup'
+      reason: string
+    }
 
 export type RuntimeClientEventStreamMessage =
   | ({ type: 'ready'; subscriptionId: string } & {

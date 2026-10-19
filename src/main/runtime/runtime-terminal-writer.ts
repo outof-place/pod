@@ -8,6 +8,7 @@ import {
   writeUnverifiable,
   type WriteSettlement
 } from '../../shared/pty-write-settlement'
+import { writeIfForegroundSync } from '../pod/terminal/pod-terminal-foreground-fence'
 
 export type RuntimeTerminalWriteOptions = {
   inputKind: TerminalInputKind
@@ -151,18 +152,31 @@ export class RuntimeTerminalWriter {
     data: string,
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined> {
-    options.atWrite?.(ptyId)
+    // Fork-only (Pod): a guard's check and the write go out together (pod-terminal-foreground-fence.ts).
     if (!options.requireWriteSettlement) {
-      if (!this.write(ptyId, data, options.inputKind)) {
+      if (
+        !writeIfForegroundSync(options.atWrite, ptyId, () =>
+          this.write(ptyId, data, options.inputKind)
+        )
+      ) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
       return undefined
     }
-    if (!this.writeWithSettlement) {
+    const writeWithSettlement = this.writeWithSettlement
+    if (!writeWithSettlement) {
       return writeRefused('provider_cannot_settle')
     }
+    // A refusal throws here, before any byte; a provider that throws once handed the bytes settles below.
+    const settling = writeIfForegroundSync(options.atWrite, ptyId, () => {
+      try {
+        return Promise.resolve(writeWithSettlement(ptyId, data, options.inputKind))
+      } catch (error) {
+        return Promise.reject(error)
+      }
+    })
     try {
-      return await this.writeWithSettlement(ptyId, data, options.inputKind)
+      return await settling
     } catch {
       return writeUnverifiable('provider_threw_after_handoff', true)
     }

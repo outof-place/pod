@@ -15,8 +15,11 @@ import { TERMINAL_METHODS } from '../../runtime/rpc/methods/terminal'
 import type { TerminalAgentForegroundProof } from './pod-terminal-foreground-fence'
 
 const fence = vi.hoisted((): { groupNow: number | null } => ({ groupNow: null }))
-vi.mock('../../pty/posix-pty-foreground-group', () => ({
-  readPosixPtyForegroundGroup: () => fence.groupNow
+vi.mock('./pod-terminal-foreground-read', () => ({
+  readTerminalForegroundGroupNow: () =>
+    fence.groupNow === null
+      ? { ok: false, reason: 'read_failed' }
+      : { ok: true, group: fence.groupNow }
 }))
 
 const AGENT_GROUP = 200

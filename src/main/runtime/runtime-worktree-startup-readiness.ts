@@ -37,8 +37,22 @@ export type WorktreeStartupReadinessHost = {
   write: (ptyId: string, data: string, inputKind: TerminalInputKind) => void
 }
 
-// Fork-only (Pod): a host that writes startup input proves the agent first (pod-startup-input-write.ts).
-export type WorktreeStartupWriteHost = WorktreeStartupReadinessHost & TerminalForegroundProver
+// Fork-only (Pod): a host that writes startup input proves the agent first, and tells clients of a
+// refusal (pod-startup-input-write.ts).
+export type WorktreeStartupWriteHost = WorktreeStartupReadinessHost &
+  TerminalForegroundProver & {
+    reportStartupInputRefused: (
+      terminalHandle: string,
+      input: 'draft' | 'followup',
+      reason: string
+    ) => void
+  }
+
+const AGENT_NOT_READY = 'agent_not_ready'
+
+function refusalReason(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
 
 export function pasteWorktreeStartupDraftWhenReady(
   host: WorktreeStartupWriteHost,
@@ -53,9 +67,15 @@ export function pasteWorktreeStartupDraftWhenReady(
     .then(async (ptyId) => {
       if (!ptyId) {
         console.warn('[worktree-create] agent did not become ready for draft paste')
+        host.reportStartupInputRefused(handle, 'draft', AGENT_NOT_READY)
         return
       }
-      await writeStartupInputGuarded(host, ptyId, draft.agent, buildStartupPaste(draft.content))
+      try {
+        await writeStartupInputGuarded(host, ptyId, draft.agent, buildStartupPaste(draft.content))
+      } catch (error) {
+        host.reportStartupInputRefused(handle, 'draft', refusalReason(error))
+        throw error
+      }
     })
     .catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
 }
@@ -89,9 +109,15 @@ export async function deliverWorktreeStartupFollowup(
   }
   if (!ptyId) {
     console.warn('[worktree-create] agent did not become ready for follow-up prompt')
+    host.reportStartupInputRefused(handle, 'followup', AGENT_NOT_READY)
     return false
   }
-  await writeStartupFollowupGuarded(host, ptyId, followup.prompt)
+  try {
+    await writeStartupFollowupGuarded(host, ptyId, followup.prompt)
+  } catch (error) {
+    host.reportStartupInputRefused(handle, 'followup', refusalReason(error))
+    throw error
+  }
   return true
 }
 

@@ -4,9 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
 import type * as TerminalForegroundGroup from '../../runtime/terminal-foreground-group'
 import {
+  assertTerminalForegroundFence,
   createSendableForegroundFence,
   isTerminalForegroundFenceHeld,
   proveTerminalAgentForeground,
+  writeIfForegroundSync,
   type TerminalAgentForegroundProof
 } from './pod-terminal-foreground-fence'
 
@@ -23,8 +25,11 @@ vi.mock('../../runtime/terminal-foreground-group', async (importOriginal) => ({
   terminalOf: async () => mocks.tty,
   readTerminalProcessRows: async () => mocks.rows
 }))
-vi.mock('../../pty/posix-pty-foreground-group', () => ({
-  readPosixPtyForegroundGroup: () => mocks.groupNow
+vi.mock('./pod-terminal-foreground-read', () => ({
+  readTerminalForegroundGroupNow: () =>
+    mocks.groupNow === null
+      ? { ok: false, reason: 'read_failed' }
+      : { ok: true, group: mocks.groupNow }
 }))
 
 const ROOT = 100
@@ -49,6 +54,29 @@ beforeEach(() => {
 })
 
 describe('proveTerminalAgentForeground', () => {
+  // The local provider lists its own node-pty; the daemon's inventory lists sessions it holds, those
+  // started before Pod restarted included. Both name the root the same way.
+  it.each([
+    ['a local PTY', { id: 'pty-1', rootProcessId: ROOT, cwd: '/tmp', title: 'zsh' }],
+    [
+      'a daemon session',
+      {
+        id: 'pty-1',
+        incarnationId: 'inc-1',
+        rootProcessId: ROOT,
+        cwd: '/tmp',
+        title: 'shell',
+        worktreeId: 'wt-1'
+      }
+    ]
+  ])('proves the agent the same way for %s', async (_what, pane) => {
+    mocks.rows = terminal(AGENT)
+
+    expect(
+      await proveTerminalAgentForeground({ listProcesses: async () => [pane] }, 'pty-1', 'claude')
+    ).toMatchObject({ verdict: 'agent', fence: { foregroundGroup: AGENT } })
+  })
+
   it('keeps the agent’s foreground group, its root and its terminal', async () => {
     mocks.rows = terminal(AGENT)
 
@@ -92,6 +120,28 @@ describe('the fence', () => {
     expect(isTerminalForegroundFenceHeld(fence)).toBe(false)
     mocks.groupNow = null
     expect(isTerminalForegroundFenceHeld(fence)).toBe(false)
+  })
+
+  it('names why it refused: another group in front, or a read that failed', () => {
+    mocks.groupNow = SHELL
+    expect(() => assertTerminalForegroundFence(fence)).toThrow(
+      'agent_not_in_foreground: group_changed'
+    )
+    mocks.groupNow = null
+    expect(() => assertTerminalForegroundFence(fence)).toThrow(
+      'agent_not_in_foreground: read_failed'
+    )
+  })
+
+  it('writes only after the check passes, and not at all when it throws', () => {
+    const write = vi.fn(() => true)
+    mocks.groupNow = AGENT
+    const check = (): void => assertTerminalForegroundFence(fence)
+
+    expect(writeIfForegroundSync(check, 'pty-1', write)).toBe(true)
+    mocks.groupNow = SHELL
+    expect(() => writeIfForegroundSync(check, 'pty-1', write)).toThrow('group_changed')
+    expect(write).toHaveBeenCalledOnce()
   })
 })
 

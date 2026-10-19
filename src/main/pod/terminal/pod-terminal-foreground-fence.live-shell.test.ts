@@ -1,7 +1,8 @@
 // Fork-only (Pod): the guarded write's proof and fence against a real zsh pane, spawned the way a
 // pane is (under `login` on macOS), with a `claude` stub: a shell in front while the tracker's 5 s
 // startup guess still names the agent refuses the write; an agent in front lets it through; an
-// agent that exits between the proof and the write refuses it, with no byte written.
+// agent that exits between the proof and the write refuses it, with no byte written. The fence's
+// read runs as in a development build without the addon: one /bin/ps under LC_ALL=C.
 import { spawnSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -14,6 +15,7 @@ import {
   prepareMacosTccLoginShell,
   wrapShellSpawnForMacosTccAttribution
 } from '../../providers/macos-tcc-login-shell'
+import { setTestUserData } from '../linear/pod-linear-key-store.test-support'
 import { writeStartupInputGuarded } from './pod-startup-input-write'
 import {
   isTerminalForegroundFenceHeld,
@@ -38,6 +40,8 @@ let savedLoginOptOut: string | undefined
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'pod-foreground-fence-'))
+  // A development build with no proc-info addon at its app path: the fence reads with /bin/ps.
+  setTestUserData(home)
   savedLoginOptOut = process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
   delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
 })

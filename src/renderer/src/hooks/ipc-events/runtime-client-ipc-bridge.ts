@@ -139,6 +139,10 @@ export function registerRuntimeClientIpcBridge(
         })
       return
     }
+    // Fork-only (Pod): a refused startup input is PodNative's to show; this window shows nothing.
+    if (event.type === 'startupInputRefused') {
+      return
+    }
     // Older hosts broadcast local/CLI activation without an address; that is not this viewer's intent.
     if (!event.navigation || !navigationTargetsClients(event.navigation)) {
       return

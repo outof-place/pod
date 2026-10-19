@@ -1,17 +1,21 @@
 // Fork-only (Pod): the last check of a guarded write to an agent's terminal, in the same synchronous
 // block as the write. A proof reads the pane's terminal (terminal-foreground-group.ts) and keeps the
 // foreground process group that holds the agent. Right before each write the group is read again,
-// synchronously (posix-pty-foreground-group.ts), and the bytes go out only while the same group is
+// synchronously (pod-terminal-foreground-read.ts), and the bytes go out only while the same group is
 // in front: a shell back in front, an agent that exited, or a read that fails refuses the write, with
 // no byte written. Local macOS and Linux panes only; an SSH or Windows pane keeps its async guard.
 // Phase 1 checks in the runtime: the terminal daemon holds the PTY and gets the bytes after the
-// check, so the notify's trip to it and node-pty's write queue remain open.
+// check, so the notify's trip to it and node-pty's write queue remain open. Every guarded writer
+// goes out through writeIfForegroundSync, and a source scan checks that none writes beside it.
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-process-recognition'
 import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
 import { isShellProcess } from '../../../shared/shell-process-detection'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { readPosixPtyForegroundGroup } from '../../pty/posix-pty-foreground-group'
+import {
+  readTerminalForegroundGroupNow,
+  type ForegroundGroupRefusal
+} from './pod-terminal-foreground-read'
 import type { RuntimePtyController } from '../../runtime/runtime-pty-controller-contract'
 import {
   judgeTerminalForeground,
@@ -91,19 +95,45 @@ export async function proveTerminalAgentForeground(
   }
 }
 
-/** Synchronous: the terminal's foreground group is still the one the proof found. */
-export function isTerminalForegroundFenceHeld(fence: TerminalForegroundFence): boolean {
-  return readPosixPtyForegroundGroup(fence.rootPid, fence.tty) === fence.foregroundGroup
+export type ForegroundFenceRefusal = ForegroundGroupRefusal | 'group_changed'
+
+/** Synchronous: why the fence no longer holds, or null while the proof's group is in front. */
+export function checkTerminalForegroundFence(
+  fence: TerminalForegroundFence
+): ForegroundFenceRefusal | null {
+  const read = readTerminalForegroundGroupNow(fence.rootPid, fence.tty)
+  if (!read.ok) {
+    return read.reason
+  }
+  return read.group === fence.foregroundGroup ? null : 'group_changed'
 }
 
-/** Call right before the write, with no await in between; throws `error` when the group changed. */
+export function isTerminalForegroundFenceHeld(fence: TerminalForegroundFence): boolean {
+  return checkTerminalForegroundFence(fence) === null
+}
+
+/** Throws `<error>: <reason>` when the fence no longer holds. */
 export function assertTerminalForegroundFence(
   fence: TerminalForegroundFence,
   error = AGENT_NOT_IN_FOREGROUND
 ): void {
-  if (!isTerminalForegroundFenceHeld(fence)) {
-    throw new Error(error)
+  const refusal = checkTerminalForegroundFence(fence)
+  if (refusal) {
+    throw new Error(`${error}: ${refusal}`)
   }
+}
+
+/**
+ * The one way a guarded write goes out: the guard's synchronous check, then the write, in one call
+ * with nothing between them. A check that throws refuses the write, and no byte of it is sent.
+ */
+export function writeIfForegroundSync<T>(
+  check: ((ptyId: string) => void) | undefined,
+  ptyId: string,
+  write: () => T
+): T {
+  check?.(ptyId)
+  return write()
 }
 
 export type TerminalForegroundProver = {

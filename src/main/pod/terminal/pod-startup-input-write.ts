@@ -14,6 +14,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   AGENT_NOT_IN_FOREGROUND,
   assertTerminalForegroundFence,
+  writeIfForegroundSync,
   type TerminalForegroundProver
 } from './pod-terminal-foreground-fence'
 
@@ -21,10 +22,13 @@ export type StartupInputHost = TerminalForegroundProver & {
   write: (ptyId: string, data: string, inputKind: TerminalInputKind) => void
 }
 
-/** Tab and newline stay; a CR becomes a newline; every other C0 control, DEL and C1 goes. */
+/**
+ * The same bytes as PodNative's AgentPromptText.sanitized: a newline stays, a tab becomes a space,
+ * and every other C0 control (CR and ESC included), DEL and C1 go.
+ */
 export function sanitizeStartupPasteText(text: string): string {
   // oxlint-disable-next-line no-control-regex -- the controls are what this removes.
-  return text.replace(/\r\n?/g, '\n').replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '')
+  return text.replace(/\t/g, ' ').replace(/[\x00-\x09\x0b-\x1f\x7f-\x9f]/g, '')
 }
 
 export function buildStartupPaste(text: string): string {
@@ -52,12 +56,11 @@ export async function writeStartupInputGuarded(
 ): Promise<void> {
   const proof = await host.proveTerminalAgentForegroundFence(ptyId, agent)
   if (proof && proof.verdict !== 'agent') {
-    throw new Error(AGENT_NOT_IN_FOREGROUND)
+    throw new Error(`${AGENT_NOT_IN_FOREGROUND}: ${proof.verdict}`)
   }
-  if (proof) {
-    assertTerminalForegroundFence(proof.fence)
-  }
-  host.write(ptyId, data, 'launch')
+  const fence = proof?.fence
+  const check = fence ? (): void => assertTerminalForegroundFence(fence) : undefined
+  writeIfForegroundSync(check, ptyId, () => host.write(ptyId, data, 'launch'))
 }
 
 /** The follow-up as a paste and, after the paste's submit delay, its Enter: two guarded writes. */

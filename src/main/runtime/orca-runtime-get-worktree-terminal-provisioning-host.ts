@@ -73,7 +73,9 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
       write: (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind),
       // Fork-only (Pod): guards the startup draft and follow-up (pod-startup-input-write.ts).
       proveTerminalAgentForegroundFence: (ptyId, agent) =>
-        this.proveTerminalAgentForegroundFence(ptyId, agent)
+        this.proveTerminalAgentForegroundFence(ptyId, agent),
+      reportStartupInputRefused: (terminalHandle, input, reason) =>
+        this.emitClientEvent({ type: 'startupInputRefused', terminalHandle, input, reason })
     }
   }
 

@@ -16,8 +16,11 @@ import type { TerminalAgentForegroundProof } from '../pod/terminal/pod-terminal-
 
 // Fork-only (Pod): the follow-up and the draft are guarded writes (pod-startup-input-write.ts).
 const fence = vi.hoisted((): { groupNow: number | null } => ({ groupNow: null }))
-vi.mock('../pty/posix-pty-foreground-group', () => ({
-  readPosixPtyForegroundGroup: () => fence.groupNow
+vi.mock('../pod/terminal/pod-terminal-foreground-read', () => ({
+  readTerminalForegroundGroupNow: () =>
+    fence.groupNow === null
+      ? { ok: false, reason: 'read_failed' }
+      : { ok: true, group: fence.groupNow }
 }))
 
 const AGENT_GROUP = 200
@@ -34,6 +37,7 @@ describe('startup follow-up delivery', () => {
 
   function followupHost(foreground: string, proof: TerminalAgentForegroundProof | null) {
     const write = vi.fn()
+    const reportStartupInputRefused = vi.fn()
     const host: WorktreeStartupWriteHost = {
       getPtyId: () => 'pty-1',
       getForegroundProcess: async () => foreground,
@@ -41,9 +45,10 @@ describe('startup follow-up delivery', () => {
       subscribeToData: () => () => {},
       readRecentOutput: () => undefined,
       write,
-      proveTerminalAgentForegroundFence: async () => proof
+      proveTerminalAgentForegroundFence: async () => proof,
+      reportStartupInputRefused
     }
-    return { host, write }
+    return { host, write, reported: reportStartupInputRefused }
   }
 
   async function deliver(host: WorktreeStartupWriteHost, prompt: string) {
@@ -70,26 +75,45 @@ describe('startup follow-up delivery', () => {
   it('writes nothing while a shell holds the terminal, though the tracker’s startup guess names the agent', async () => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { host, write } = followupHost('aider', { verdict: 'shell' })
+    const { host, write, reported } = followupHost('aider', { verdict: 'shell' })
 
     await expect(deliver(host, 'fix the flaky test')).resolves.toBe(false)
     expect(write).not.toHaveBeenCalled()
+    expect(reported).toHaveBeenCalledWith('term-1', 'followup', 'agent_not_ready')
     warn.mockRestore()
   })
 
   it('refuses to the caller, with no byte written, when the agent left before the write', async () => {
     vi.useFakeTimers()
     fence.groupNow = 101
-    const { host, write } = followupHost('aider', AGENT_PROOF)
+    const { host, write, reported } = followupHost('aider', AGENT_PROOF)
 
     const delivered = deliverWorktreeStartupFollowup(host, 'term-1', {
       expectedProcess: 'aider',
       prompt: 'fix the flaky test'
     })
-    const refused = expect(delivered).rejects.toThrow('agent_not_in_foreground')
+    const refused = expect(delivered).rejects.toThrow('agent_not_in_foreground: group_changed')
     await vi.runAllTimersAsync()
     await refused
     expect(write).not.toHaveBeenCalled()
+    expect(reported).toHaveBeenCalledWith(
+      'term-1',
+      'followup',
+      'agent_not_in_foreground: group_changed'
+    )
+  })
+
+  // An SSH pane has no local terminal to prove: the remote foreground read and its wait decide.
+  it('on an SSH pane, still waits on the remote foreground and writes the filtered paste and Enter', async () => {
+    vi.useFakeTimers()
+    const { host, write, reported } = followupHost('aider', null)
+
+    await expect(deliver(host, 'fix\tthe\x1b[201~ test\r\n')).resolves.toBe(true)
+    expect(write.mock.calls).toEqual([
+      ['pty-1', '\x1b[200~fix the[201~ test\n\x1b[201~', 'launch'],
+      ['pty-1', '\r', 'launch']
+    ])
+    expect(reported).not.toHaveBeenCalled()
   })
 
   it('writes nothing and reports false when the agent never comes to the front', async () => {
@@ -145,8 +169,9 @@ describe('startup draft paste', () => {
     fence.groupNow = null
   })
 
-  function draftHost(proof: TerminalAgentForegroundProof) {
+  function draftHost(proof: TerminalAgentForegroundProof | null) {
     const write = vi.fn()
+    const reportStartupInputRefused = vi.fn()
     const host: WorktreeStartupWriteHost = {
       getPtyId: () => 'pty-1',
       getForegroundProcess: async () => 'aider',
@@ -154,9 +179,10 @@ describe('startup draft paste', () => {
       // Bracketed paste on, then quiet: the draft-ready signal.
       readRecentOutput: () => '\x1b[?2004h',
       write,
-      proveTerminalAgentForegroundFence: async () => proof
+      proveTerminalAgentForegroundFence: async () => proof,
+      reportStartupInputRefused
     }
-    return { host, write }
+    return { host, write, reported: reportStartupInputRefused }
   }
 
   it('pastes a draft that holds a paste end as text, inside one frame', async () => {
@@ -170,21 +196,31 @@ describe('startup draft paste', () => {
     })
     await vi.runAllTimersAsync()
 
-    expect(write.mock.calls).toEqual([
-      ['pty-1', '\x1b[200~plan[201~\nrm -rf ~\n\x1b[201~', 'launch']
-    ])
+    expect(write.mock.calls).toEqual([['pty-1', '\x1b[200~plan[201~rm -rf ~\x1b[201~', 'launch']])
   })
 
   it('writes no draft while a shell holds the terminal', async () => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { host, write } = draftHost({ verdict: 'shell' })
+    const { host, write, reported } = draftHost({ verdict: 'shell' })
 
     pasteWorktreeStartupDraftWhenReady(host, 'term-1', { agent: 'aider', content: 'plan it' })
     await vi.runAllTimersAsync()
 
     expect(write).not.toHaveBeenCalled()
+    expect(reported).toHaveBeenCalledWith('term-1', 'draft', 'agent_not_ready')
     warn.mockRestore()
+  })
+
+  it('on an SSH pane, pastes the filtered draft with no local proof', async () => {
+    vi.useFakeTimers()
+    const { host, write, reported } = draftHost(null)
+
+    pasteWorktreeStartupDraftWhenReady(host, 'term-1', { agent: 'aider', content: 'a\tb\x03' })
+    await vi.runAllTimersAsync()
+
+    expect(write.mock.calls).toEqual([['pty-1', '\x1b[200~a b\x1b[201~', 'launch']])
+    expect(reported).not.toHaveBeenCalled()
   })
 })
 

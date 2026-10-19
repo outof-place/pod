@@ -10,8 +10,11 @@ import {
 } from './pod-startup-input-write'
 
 const mocks = vi.hoisted((): { groupNow: number | null } => ({ groupNow: null }))
-vi.mock('../../pty/posix-pty-foreground-group', () => ({
-  readPosixPtyForegroundGroup: () => mocks.groupNow
+vi.mock('./pod-terminal-foreground-read', () => ({
+  readTerminalForegroundGroupNow: () =>
+    mocks.groupNow === null
+      ? { ok: false, reason: 'read_failed' }
+      : { ok: true, group: mocks.groupNow }
 }))
 
 const AGENT_GROUP = 200
@@ -32,16 +35,25 @@ afterEach(() => {
 })
 
 describe('the startup paste', () => {
-  it('keeps tab and newline, turns CR into newline, and drops C0, DEL and C1', () => {
-    expect(sanitizeStartupPasteText('a\tb\r\nc\rd\x00e\x07f\x1bg\x7fh\x85i\x9bj')).toBe(
-      'a\tb\nc\nd' + 'efghij'
-    )
+  // The bytes PodNative's AgentPromptText.sanitized gives for the same text.
+  it.each([
+    ['a paste end', 'a\x1b[201~b', 'a[201~b'],
+    ['Ctrl-C', 'a\x03b', 'ab'],
+    ['CR LF', 'a\r\nb', 'a\nb'],
+    ['a lone CR', 'a\rb', 'ab'],
+    ['a tab', 'a\tb', 'a b'],
+    ['DEL', 'a\x7fb', 'ab'],
+    ['C1, CSI included', 'a\x85b\x9bc', 'abc'],
+    ['other C0', 'a\x00b\x07c\x1bd', 'abcd'],
+    ['newlines and text', 'one\ntwo ✓', 'one\ntwo ✓']
+  ])('filters %s', (_what, text, filtered) => {
+    expect(sanitizeStartupPasteText(text)).toBe(filtered)
   })
 
   it('cannot be closed early by a paste end inside the text', () => {
     const paste = buildStartupPaste('plan\x1b[201~rm -rf ~\r')
 
-    expect(paste).toBe('\x1b[200~plan[201~rm -rf ~\n\x1b[201~')
+    expect(paste).toBe('\x1b[200~plan[201~rm -rf ~\x1b[201~')
     expect(paste.indexOf('\x1b[201~')).toBe(paste.length - '\x1b[201~'.length)
   })
 })
@@ -57,15 +69,16 @@ describe('a guarded startup write', () => {
   })
 
   it.each([
-    ['a shell holds the terminal', { verdict: 'shell' } as const, AGENT_GROUP],
-    ['nothing can tell', { verdict: 'unknown' } as const, AGENT_GROUP],
-    ['the agent left after the proof', AGENT, 101]
-  ])('writes nothing when %s', async (_what, proof, groupNow) => {
+    ['a shell holds the terminal', { verdict: 'shell' } as const, AGENT_GROUP, 'shell'],
+    ['nothing can tell', { verdict: 'unknown' } as const, AGENT_GROUP, 'unknown'],
+    ['the agent left after the proof', AGENT, 101, 'group_changed'],
+    ['the foreground group cannot be read', AGENT, null, 'read_failed']
+  ])('writes nothing when %s, and says why', async (_what, proof, groupNow, reason) => {
     const h = host(proof)
     mocks.groupNow = groupNow
 
     await expect(writeStartupInputGuarded(h.host, 'pty-1', 'aider', 'x')).rejects.toThrow(
-      'agent_not_in_foreground'
+      `agent_not_in_foreground: ${reason}`
     )
     expect(h.write).not.toHaveBeenCalled()
   })

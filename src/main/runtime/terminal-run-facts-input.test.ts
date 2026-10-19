@@ -232,7 +232,8 @@ describe('run facts: a created worktree’s startup writes', () => {
       readRecentOutput: () => '\x1b[?2004h',
       write: (ptyId, data, inputKind) => run.controller.write(ptyId, data, inputKind),
       // Fork-only (Pod): a host with no proof writes as an SSH pane does.
-      proveTerminalAgentForegroundFence: async () => null
+      proveTerminalAgentForegroundFence: async () => null,
+      reportStartupInputRefused: () => {}
     }
   }
 
