@@ -236,12 +236,6 @@ it.each([
     mobile_dependencies: true
   },
   {
-    changed: ['cloud/package.json'],
-    static_analysis: false,
-    typecheck: false,
-    mobile_dependencies: false
-  },
-  {
     changed: ['src/main/index.ts'],
     static_analysis: true,
     typecheck: true,

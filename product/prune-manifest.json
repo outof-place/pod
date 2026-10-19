@@ -348,6 +348,39 @@
         "config/scripts/mobile-web-bundle-serializer-parity.test.mjs",
         "config/scripts/mobile-web-terminal-engine-closure.test.mjs"
       ]
+    },
+    {
+      "id": "orca-cloud-services",
+      "category": "feature",
+      "reason": "Stably's relay, push and relay-ops services with their infra, deploy workflows and contract tests: deploy inputs of Orca's cloud, never part of the Pod app (cloudSources is cut)",
+      "paths": [
+        "cloud/**",
+        "tests/e2e/relay-region-compatibility.unit.test.ts",
+        "tests/e2e/relay-region-correction.unit.test.ts",
+        "src/main/runtime/push/push-host-proof-vector.test.ts"
+      ],
+      "allowReferrers": [
+        {
+          "glob": "**/*.{test,spec,test-fixture}.{ts,tsx,mts,mjs,cjs,js}",
+          "reason": "a test's generic fixture path (src/index.ts, src/config.ts, src/app.ts) matches cloud's apps by suffix; the only tests that import cloud/ are pruned with it"
+        },
+        {
+          "glob": "mobile/**",
+          "reason": "Orca Mobile goes in the next commit (orca-mobile-app); its generic fixture paths match cloud's apps by suffix"
+        },
+        {
+          "glob": "src/main/repo-icon-file-detection.ts",
+          "reason": "a generic fixture path (src/index.ts, src/config.ts, src/app.ts) that matches cloud's apps by suffix"
+        },
+        {
+          "glob": "src/renderer/src/components/right-sidebar/file-explorer-tree-node-test-fixtures.ts",
+          "reason": "a generic fixture path (src/index.ts, src/config.ts, src/app.ts) that matches cloud's apps by suffix"
+        },
+        {
+          "glob": "tests/e2e/helpers/golden-source-control.ts",
+          "reason": "a generic fixture path (src/index.ts, src/config.ts, src/app.ts) that matches cloud's apps by suffix"
+        }
+      ]
     }
   ]
 }

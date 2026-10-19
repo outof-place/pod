@@ -4,7 +4,7 @@
 the existing app-store and buffer-concatenation rules plus the sort-comparator
 rule. Warnings are advisory in this full inventory; tool/parser failures fail.
 New warning findings on changed lines fail `pnpm check:code-quality:changed`.
-Tests, generated files, `mobile/` and `cloud/` are outside this source audit.
+Tests, generated files and `mobile/` are outside this source audit.
 
 The sort rule detects optioned `localeCompare` and `Intl.Collator` construction
 inside inline `sort`/`toSorted` callbacks. Construct one collator outside the

@@ -9,8 +9,8 @@ export const RELAY_RENEWAL_JITTER_RATIO = 0.1
 export const RELAY_RENEWAL_SAFETY_MARGIN_MS = 90_000
 
 // Why: the relay accepts a rebind at any point in the lease and resets the full
-// TTL from it (cloud/apps/relay/src/host-session-registry.ts:736-743), so
-// renewing early is free; only renewing late is fatal (:997 drains an expired
+// TTL from it (the relay service's host session registry), so
+// renewing early is free; only renewing late is fatal (the registry drains an expired
 // lease). That asymmetry is why the base is shrunk to fit the upward jitter
 // rather than the jittered value being clipped at the margin.
 export function relayRenewalDelayMs(expiresAt: number, now: number, random: () => number): number {

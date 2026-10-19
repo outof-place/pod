@@ -107,14 +107,6 @@ describe('PR workflow parallelism', () => {
     expect(nodeNextWorkflow.jobs.test.with.runner).toBeUndefined()
     expect(nodeNextWorkflow.jobs.test_native_cache['runs-on']).toBe('ubuntu-latest')
     expect(nodeNextWorkflow.jobs.test_native_cache.strategy.matrix.node).toEqual(['24', '26'])
-    const relay = unitTestWorkflow.jobs.relay_integration
-    expect(relay.strategy.matrix.node).toBe('${{ fromJSON(inputs.node_versions) }}')
-    expect(relay['runs-on']).toBe('ubuntu-latest')
-    expect(
-      relay.steps.find((step) => step.uses === './.github/actions/install-node-dependencies').with[
-        'node-version'
-      ]
-    ).toBe('${{ matrix.node }}')
     expect(nodeNextWorkflow.on.schedule).toHaveLength(1)
     expect(nodeNextWorkflow.on.workflow_dispatch).toBeNull()
     expect(sharedTest.strategy.matrix.node).toBe('${{ fromJSON(inputs.node_versions) }}')

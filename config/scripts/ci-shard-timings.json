@@ -3537,7 +3537,6 @@
       "src/main/runtime/push/push-dispatcher.test.ts": 73,
       "src/main/runtime/push/push-gateway-client.test.ts": 230,
       "src/main/runtime/push/push-gateway-session.test.ts": 312,
-      "src/main/runtime/push/push-host-proof-vector.test.ts": 84,
       "src/main/runtime/push/push-host-proof.test.ts": 142,
       "src/main/runtime/push/push-outcome-counters.test.ts": 34,
       "src/main/runtime/push/push-policy-pipeline.integration.test.ts": 226,

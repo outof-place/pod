@@ -69,8 +69,7 @@ describe('changed-code quality line matching', () => {
     expect(scan.args[scan.args.indexOf('import/no-cycle') - 1]).toBe('--allow')
   })
 
-  it('leaves Cloud source to the independent Cloud quality checks', () => {
-    expect(isRootCodeQualityPath('cloud/apps/relay/src/index.ts')).toBe(false)
+  it('checks desktop source as root code', () => {
     expect(isRootCodeQualityPath('src/main/index.ts')).toBe(true)
   })
 

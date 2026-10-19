@@ -122,8 +122,7 @@ describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
 it.each([
   { files: ['README.md'] },
   { files: ['mobile/src/App.tsx'] },
-  { files: ['mobile/package.json'] },
-  { files: ['cloud/apps/relay/src/index.ts'] }
+  { files: ['mobile/package.json'] }
 ])('does not add preflight consumers to a no-unit diff: $files', ({ files }) => {
   const outputs = routedOutputs(files, 'false')
   expect(outputs.test).toBe('false')
