@@ -20120,5 +20120,8 @@
     "churn": {
       "warning": "Pod made {{count}} machines since OrbStack started. OrbStack keeps the address of each deleted machine for about a day, so new machines may soon get none until those expire or OrbStack is updated."
     }
+  },
+  "podTerminalSearch": {
+    "invalidRegex": "Invalid regular expression"
   }
 }

@@ -78,6 +78,8 @@ describe('an invalid terminal-search regex', () => {
     fireEvent.click(view.getByTitle('Regex'))
     expect(view.getByText('No results')).toBeTruthy()
     expect(input.getAttribute('aria-invalid')).toBe('true')
+    // The reason a screen reader hears with the invalid mark.
+    expect(input.getAttribute('title')).toBe('Invalid regular expression')
     // Typed with Regex off it was a literal search; with Regex on it is never handed to the addon.
     const regexCalls = vi
       .mocked(searchAddon.findNext)
@@ -88,6 +90,7 @@ describe('an invalid terminal-search regex', () => {
     // A valid pattern clears the mark and searches again.
     fireEvent.change(input, { target: { value: '(a)' } })
     expect(input.getAttribute('aria-invalid')).not.toBe('true')
+    expect(input.getAttribute('title')).toBeNull()
     expect(searchAddon.findNext).toHaveBeenCalledWith(
       '(a)',
       expect.objectContaining({ regex: true })

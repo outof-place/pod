@@ -162,6 +162,11 @@ export default function TerminalSearch({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         aria-invalid={invalidRegex}
+        title={
+          invalidRegex
+            ? translate('podTerminalSearch.invalidRegex', 'Invalid regular expression')
+            : undefined
+        }
         placeholder={translate('auto.components.TerminalSearch.e07012f26e', 'Search...')}
         className="min-w-0 flex-1 border-none bg-transparent text-sm text-popover-foreground outline-none placeholder:text-muted-foreground aria-invalid:text-destructive"
       />
