@@ -9,10 +9,11 @@ const SRC = join(__dirname, '../../..')
 const GUARDED_WRITERS = [
   'main/runtime/runtime-terminal-writer.ts',
   'main/runtime/orca-runtime-write-terminal-agent-prompt.ts',
-  'main/pod/terminal/pod-startup-input-write.ts'
+  'main/pod/terminal/pod-startup-input-write.ts',
+  'main/pod/terminal/pod-agent-foreground-ipc-write.ts'
 ]
 const PTY_WRITE =
-  /\b(?:this\.ptyController\?\.write|this\.write|writeWithSettlement|host\.write)\(/g
+  /\b(?:this\.ptyController\?\.write|this\.write|writeWithSettlement|host\.write|target\.write)\(/g
 
 function writeCalls(path: string): { at: number; before: string }[] {
   const source = readFileSync(join(SRC, path), 'utf8')

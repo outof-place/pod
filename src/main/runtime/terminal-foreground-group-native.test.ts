@@ -93,7 +93,8 @@ describe('readTerminalProcessRows with the native process-info addon', () => {
 
     expect(runProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        program: 'ps',
+        // Fork-only (Pod): the proof runs ps by path.
+        program: '/bin/ps',
         args: ['-o', 'pid=,ppid=,pgid=,tpgid=,stat=,command=', '-t', 'ttys003']
       })
     )
@@ -116,7 +117,8 @@ describe('readTerminalProcessRows with the native process-info addon', () => {
 
     expect(runProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        program: 'ps',
+        // Fork-only (Pod): the proof runs ps by path.
+        program: '/bin/ps',
         args: ['-o', 'pid=,ppid=,pgid=,tpgid=,stat=,command=', '-t', 'ttys003']
       })
     )

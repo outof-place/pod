@@ -21,7 +21,8 @@ const TTY_CACHE_LIMIT = 256
 async function ps(args: readonly string[]): Promise<string | null> {
   try {
     const result = await runProcess({
-      program: 'ps',
+      // Fork-only (Pod): by path, as the fence's own read is, so a `ps` earlier on PATH can't answer.
+      program: '/bin/ps',
       args,
       env: psLocaleEnvironment(),
       timeoutMs: PS_TIMEOUT_MS,

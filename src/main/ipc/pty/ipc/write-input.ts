@@ -13,6 +13,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
 import { isSettledWrite, type WriteSettlement } from '../../../../shared/pty-write-settlement'
+import { writeAgentForegroundIpcInput } from '../../../pod/terminal/pod-agent-foreground-ipc-write'
 
 export function isMainWindowPtyIpcEvent(
   event: IpcMainEvent | IpcMainInvokeEvent,
@@ -34,6 +35,8 @@ export type PtyWritePayload = {
   inputKind: TerminalInputKind
   /** Accepted-write callers only: wait for the provider's settlement, on any provider. */
   requireWriteSettlement?: true
+  /** Fork-only (Pod): agent text the user didn't type; main proves the agent holds the terminal. */
+  requireAgentForeground?: true
 }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
@@ -262,6 +265,13 @@ export function createPtyWriteInput(deps: {
   const writePtyInputAccepted = (args: PtyWritePayload): boolean | Promise<boolean> => {
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return false
+    }
+    // Fork-only (Pod): the proof and its fence come first (pod-agent-foreground-ipc-write.ts).
+    if (args.requireAgentForeground === true) {
+      return writeAgentForegroundIpcInput(args, runtime, (provider, verify) => {
+        noteRendererPtyInput(args)
+        return writeAndObserveInput(provider, args, verify)
+      })
     }
     if (args.requireWriteSettlement === true) {
       return writePtyInputSettled(args)

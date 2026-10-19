@@ -105,11 +105,16 @@ export async function proveTerminalAgentForegroundOnHost(
   if (!host.remote) {
     return proveTerminalAgentForeground(controller, ptyId, agent)
   }
-  if (!relayShell) {
-    return null
-  }
+  return relayShell ? proveRelayShellInFront(controller, ptyId) : null
+}
+
+/** An SSH pane's relay read: a shell it names in front proves the shell; anything else stays unproven. */
+export async function proveRelayShellInFront(
+  relay: { getForegroundProcess(ptyId: string): Promise<string | null> } | null,
+  ptyId: string
+): Promise<TerminalAgentForegroundProof | null> {
   try {
-    const name = await controller?.getForegroundProcess(ptyId)
+    const name = await relay?.getForegroundProcess(ptyId)
     return name && isShellCommand(name) && !recognizeAgentProcess(name) ? SHELL : null
   } catch {
     return null
