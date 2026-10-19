@@ -55,6 +55,10 @@ export const POD_SETTINGS_NETWORK_PROXY_RUNTIME_CAPABILITY =
 /** podImport.orcaDetect, orcaPreview and orcaApply: Import from Orca, for this machine's own clients. */
 export const POD_ORCA_IMPORT_RUNTIME_CAPABILITY = 'pod.orca-import.v1' as const
 
+/** computer.permissionsReset: Computer Use's Reset access, for this machine's own clients. */
+export const POD_COMPUTER_USE_PERMISSIONS_RESET_RUNTIME_CAPABILITY =
+  'pod.computer-use.permissions-reset.v1' as const
+
 /**
  * plugins.install, remove and the marketplace calls: Settings › Plugins without Pod's window. A
  * client offers them only on a host that lists this.
@@ -133,6 +137,7 @@ export const POD_RUNTIME_CAPABILITIES = [
   POD_SESSION_TABS_PANE_LAYOUT_SYNC_RUNTIME_CAPABILITY,
   POD_SESSION_TABS_CUSTOM_TITLE_RUNTIME_CAPABILITY,
   POD_ORCA_IMPORT_RUNTIME_CAPABILITY,
+  POD_COMPUTER_USE_PERMISSIONS_RESET_RUNTIME_CAPABILITY,
   POD_BROWSER_COBROWSE_RUNTIME_CAPABILITY,
   POD_BROWSER_COBROWSE_POINT_MARK_RUNTIME_CAPABILITY
 ] as const

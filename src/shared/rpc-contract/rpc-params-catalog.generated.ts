@@ -438,6 +438,7 @@ import { AiVaultDeleteSessionParams } from './pod-ai-vault-params'
 import { PodTerminalOpenedBeforeClaudeAccountsParams } from './pod-claude-old-terminal-params'
 import { PodClientEventsSubscribeParams } from './pod-client-events-params'
 import { PodComputerActionsUnsubscribeParams } from './pod-computer-actions-params'
+import { ComputerPermissionsResetParams } from './pod-computer-use-params'
 import {
   PodLinearGetIssuesParams,
   PodLinearSetAgentAccessParams,
@@ -865,6 +866,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.pasteText': PasteText,
   'computer.performSecondaryAction': PerformSecondaryAction,
   'computer.permissions': ComputerPermissions,
+  'computer.permissionsReset': ComputerPermissionsResetParams,
   'computer.permissionsStatus': ComputerPermissionsStatusParams,
   'computer.pressKey': PressKey,
   'computer.scroll': ScrollOfComputerSchemasParams,
