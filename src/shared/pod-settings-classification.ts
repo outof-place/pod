@@ -113,7 +113,6 @@ export const POD_SETTINGS_HIDDEN = {
   mobilePairingConnectionMode: 'owned',
   mobilePairingCustomAddress: 'owned',
   mobilePairingCustomAddresses: 'owned',
-  machineName: 'owned',
   activeRuntimeEnvironmentId: 'owned',
   githubProjects: 'owned',
   gitlabProjects: 'owned',
@@ -175,9 +174,6 @@ export const POD_SETTINGS_HIDDEN = {
   skipDeleteAutomationConfirm: 'later',
   skipDeleteArtifactConfirm: 'later',
   skipCodexRateLimitResetConfirm: 'later',
-  // N3 (editor and tabs): PodNative's tab strip has its own order, pinning and titles.
-  ctrlTabOrderMode: 'later',
-  confirmClosePinnedTab: 'later',
   // pod-gocache's switch; its Build speed row on a native page comes with the status it shows.
   podGoCacheEnabled: 'later',
   // Phase 6 (experiments): only Orca's renderer reads these; PodNative has no such feature yet.

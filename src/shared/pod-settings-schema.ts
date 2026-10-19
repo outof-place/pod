@@ -10,6 +10,7 @@ import {
   TERMINAL_FONT_WEIGHT_STEP
 } from './terminal-fonts'
 import { MAX_EDITOR_AUTO_SAVE_DELAY_MS, MIN_EDITOR_AUTO_SAVE_DELAY_MS } from './constants'
+import { MACHINE_NAME_MAX_LENGTH } from './machine-name'
 import { MAX_TERMINAL_LINE_HEIGHT, MIN_TERMINAL_LINE_HEIGHT } from './terminal-line-height-settings'
 import {
   MAX_TERMINAL_CONTRAST_RATIO,
@@ -122,6 +123,14 @@ export const POD_SETTINGS_FIELDS = {
   skipCloseTerminalWithRunningProcessConfirm: row(
     z.boolean(),
     'Close busy terminals without asking'
+  ),
+  ctrlTabOrderMode: row(z.enum(['mru', 'sequential']), 'Tab order for ⌃⇥', 'Recent or tab strip.'),
+  confirmClosePinnedTab: row(z.boolean(), 'Confirm before closing pinned tabs'),
+  // Published by status.get and to an SSH workspace's clients; blank: runtime-machine-name.ts.
+  machineName: row(
+    z.string().trim().max(MACHINE_NAME_MAX_LENGTH),
+    'Machine name',
+    'Other devices and hosts see this Mac under it. Leave it blank to use the computer’s own name.'
   ),
   // PodNative's file editor follows these too (⌥Z there writes the wrap).
   editorWordWrap: row(

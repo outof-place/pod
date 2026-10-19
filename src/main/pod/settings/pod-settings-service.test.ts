@@ -8,6 +8,8 @@ import {
 import { POD_SETTINGS_FIELDS } from '../../../shared/pod-settings-schema'
 import { updateSettings } from '../../persistence/applying-settings/settings-update'
 import { PROTECTED_SECRET_SLOT } from '../../protected-secret-persistence'
+import { RuntimeClientSettingsController } from '../../runtime/runtime-client-settings'
+import { SettingsUpdate } from '../../../shared/rpc-contract/client-settings-params'
 import {
   POD_SETTINGS_COALESCE_MS,
   PodSettingsRefusedError,
@@ -49,6 +51,29 @@ function setup() {
   const store = fakeStore()
   const write = vi.fn(async (values: Partial<GlobalSettings>) => store.update(values))
   return { store, write, service: new PodSettingsService(store, write) }
+}
+
+/** The store's own update path (settings-update.ts), as settings:set and settings.update reach it. */
+function realSettingsPath() {
+  const operations = {
+    state: getDefaultPersistedState('/Users/e2e'),
+    bumpLocalWorktreeScanGeneration: vi.fn(),
+    removeRetainedBlob: vi.fn(),
+    scheduleSave: vi.fn(),
+    notifySettingsChanged: vi.fn()
+  }
+  const store = {
+    getSettings: () => operations.state.settings,
+    onSettingsChanged: () => () => {},
+    updateSettings: (
+      updates: Partial<GlobalSettings>,
+      options?: { notifyListeners?: boolean; originWebContentsId?: number }
+    ) => updateSettings(operations, updates, options)
+  }
+  const service = new PodSettingsService(store, async (values) =>
+    updateSettings(operations, values, { notifyListeners: true })
+  )
+  return { operations, store, service }
 }
 
 const secretTexts = [
@@ -362,6 +387,37 @@ describe('PodSettingsService fields that were Electron-only', () => {
     // The runtime's terminal theme hears of it (RUNTIME_TERMINAL_THEME_SETTING_KEYS).
     const [changed] = operations.notifySettingsChanged.mock.lastCall ?? []
     expect('terminalColorOverrides' in (changed ?? {})).toBe(true)
+  })
+
+  it('stores a machine name trimmed, at most 255 characters, blank for the own name', async () => {
+    const { operations, service } = realSettingsPath()
+    await service.set({ machineName: '  Studio  ' }, service.get().revision)
+    expect(operations.state.settings.machineName).toBe('Studio')
+    expect(service.get().values.machineName).toBe('Studio')
+    await expect(
+      service.set({ machineName: 'x'.repeat(256) }, service.get().revision)
+    ).rejects.toThrow(PodSettingsRefusedError)
+    expect(operations.state.settings.machineName).toBe('Studio')
+    await service.set({ machineName: '' }, service.get().revision)
+    expect(operations.state.settings.machineName).toBe('')
+  })
+
+  it("stores a machine name as settings.update, the CLI's `host name --name`, does", async () => {
+    const long = 'x'.repeat(255)
+    for (const name of ['  Studio  ', '\tMac\n', long, ` ${long} `, `${long}x`, '', '   ']) {
+      const pod = realSettingsPath()
+      const viaPod = await pod.service.set({ machineName: name }, pod.service.get().revision).then(
+        () => pod.operations.state.settings.machineName,
+        () => 'refused'
+      )
+      const cli = realSettingsPath()
+      const parsed = SettingsUpdate.safeParse({ machineName: name })
+      if (parsed.success) {
+        await new RuntimeClientSettingsController(cli.store).update(parsed.data)
+      }
+      const viaCli = parsed.success ? cli.operations.state.settings.machineName : 'refused'
+      expect(viaPod, JSON.stringify(name)).toBe(viaCli)
+    }
   })
 
   it("refuses values the desktop's own controls can't produce", async () => {
