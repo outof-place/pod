@@ -30,6 +30,7 @@ import {
   type LinearCommentWriteRecord,
   type LinearIssueWriteRecord
 } from './linear-issue-write-support'
+import { throwIfLinearRateLimited } from '../pod/linear/pod-linear-rate-limit'
 
 const ISSUE_DETAIL_TIMEOUT_MS = 30_000
 
@@ -83,6 +84,10 @@ async function readIssueWithSignal(
           throw error
         }
       } else {
+        // Fork-only (Pod): one workspace's rate limit is a typed error, not a silent null.
+        if (shouldThrowAuthError(workspaceId)) {
+          throwIfLinearRateLimited(error)
+        }
         console.warn('[linear] getIssue failed:', error)
       }
     } finally {
@@ -188,6 +193,10 @@ export async function searchIssues(
             throw error
           }
         } else {
+          // Fork-only (Pod): one workspace's rate limit is a typed error, not silent empty results.
+          if (shouldThrowAuthError(workspaceId)) {
+            throwIfLinearRateLimited(error)
+          }
           console.warn('[linear] searchIssues failed:', error)
         }
         return []
