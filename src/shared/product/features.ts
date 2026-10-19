@@ -18,6 +18,7 @@ export const POD_FEATURE_IDS = [
   'usagePolling',
   'emulator',
   'linear',
+  'linearClassicUi',
   'jira',
   'tasks',
   'dashboardPopout',
@@ -123,9 +124,15 @@ export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
     settingsSections: ['mobile-emulator']
   },
   linear: {
+    pod: true,
+    reason:
+      'Linear for PodNative; the runtime answers only with the podLinear setting on. Off drops @linear/sdk',
+    packaging: { dropRuntimePackageRoots: ['@linear/sdk'] }
+  },
+  linearClassicUi: {
     pod: false,
-    reason: 'No Linear integration; drops @linear/sdk',
-    packaging: { dropRuntimePackageRoots: ['@linear/sdk'] },
+    reason:
+      "PodNative is Linear's only UI in Pod: no Linear card or settings section in the classic window",
     settingsSections: ['linear']
   },
   jira: { pod: false, reason: 'No Jira integration' },
@@ -190,6 +197,8 @@ export const POD_EMULATOR: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.emulator
 export const POD_LINEAR: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.linear
+export const POD_LINEAR_CLASSIC_UI: boolean =
+  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.linearClassicUi
 export const POD_JIRA: boolean = typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.jira
 export const POD_TASKS: boolean = typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.tasks
 export const POD_DASHBOARD_POPOUT: boolean =
@@ -215,6 +224,7 @@ export function podFeatureFlags(profile: PodBuildProfile): PodFeatureFlags {
     usagePolling: on('usagePolling'),
     emulator: on('emulator'),
     linear: on('linear'),
+    linearClassicUi: on('linearClassicUi'),
     jira: on('jira'),
     tasks: on('tasks'),
     dashboardPopout: on('dashboardPopout'),
