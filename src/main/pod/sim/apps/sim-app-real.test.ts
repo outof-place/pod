@@ -9,9 +9,10 @@
 // after. Metro runs for the worktree on its own port and is stopped through reconcile. Hops go to
 // POD_SIM_EVIDENCE (written after every case).
 //
-// "On screen" is the app's own UI: the first settle whose accessibility tree is neither the splash,
-// React Native's loading banner, nor its error screens (LogBox's "Log 1 of 73 / Uncaught Error /
-// Call Stack", the native red box), which run 1 took for the app.
+// "On screen" is the app's own UI (simAppOwnUi): the first settle whose accessibility tree is neither
+// the splash, React Native's loading banner, nor its error screens (LogBox's "Log 1 of 73 / Uncaught
+// Error / Call Stack", the red box), which run 1 took for the app, and the 19.10 run the red box's
+// "Could not connect to development server" too.
 import { runProcess } from '@orca/process-host'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -30,6 +31,7 @@ import type { SimRuntime } from '../pool/sim-pool-ports'
 import { probeSimMetro } from './sim-app-metro-http'
 import { createSimApps, type SimApps } from './sim-app-readiness'
 import { simRepoKey } from './sim-app-recipes'
+import { simAppOwnUi } from './sim-app-own-ui.test-support'
 import { thisRuntime, writeLeases } from './sim-app.test-support'
 
 const REAL = process.env.POD_SIM_REAL === '1'
@@ -39,11 +41,6 @@ const CLIENTS = process.env.POD_SIM_APPS_CLIENTS || '~/.cache/portivo-mobile/cli
 const DEVICE_TYPE = 'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro'
 const RUNTIME = 'com.apple.CoreSimulator.SimRuntime.iOS-26-5'
 const BUNDLE = 'eu.portivo.app'
-// The dev launcher's own screen, the dev menu or its onboarding, React Native's loading banner or
-// an error screen (LogBox, the native red box): not the app (yet).
-const NOT_THE_APP =
-  /Development Build|DEVELOPMENT SERVERS|Enter URL manually|developer menu|Open JS debugger|Toggle performance monitor|^(Uncaught|Render|Syntax|Console) Error$|^Log \d+ of \d+$|^Call Stack$|^Reload JS$|^(Loading|Bundling|Downloading)\b/i
-
 // Portivo's mobile app as its recipe will say it (stage 11 writes the real one into the repo).
 const recipe = (repo: string) =>
   [
@@ -182,9 +179,21 @@ describe.skipIf(!REAL || !WORKTREE)('a Portivo worktree’s app on a real booted
       settles.push({
         at,
         settle: settle.ok ? settle.value.outcome : settle,
-        labels: labels.slice(0, 20)
+        labels: labels.slice(0, 20),
+        ...(ax.ok
+          ? {
+              nodes: {
+                total: ax.value.total,
+                omitted: ax.value.omitted,
+                notVisible: ax.value.notVisible
+              }
+            }
+          : {})
       })
-      if (settle.ok && labels.length >= 2 && !labels.some((label) => NOT_THE_APP.test(label))) {
+      if (
+        settle.ok &&
+        simAppOwnUi(labels, labels.length > 0 && (await driver().appRunning(udid, BUNDLE)) === true)
+      ) {
         return { ok: true, ms: at, settles, labels }
       }
     }
