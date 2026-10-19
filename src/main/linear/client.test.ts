@@ -13,6 +13,8 @@ type ViewerFixture = {
 }
 
 let tempHome = ''
+// Fork-only (Pod): Linear's files live in Pod's userData, not in ~/.orca.
+let tempUserData = ''
 let fixtures = new Map<string, ViewerFixture>()
 let linearClientMock: ReturnType<typeof vi.fn>
 
@@ -25,8 +27,12 @@ function writeLegacyLinearFiles(token: string, viewer: Record<string, unknown>):
   writeLegacyLinearToken(token, viewer)
 }
 
+function linearStoreDir(): string {
+  return join(tempUserData, 'integrations', 'linear')
+}
+
 function writeLegacyLinearToken(token: string | Buffer, viewer: Record<string, unknown>): void {
-  const orcaDir = join(tempHome, '.orca')
+  const orcaDir = linearStoreDir()
   mkdirSync(orcaDir, { recursive: true })
   writeFileSync(join(orcaDir, 'linear-token.enc'), token)
   writeFileSync(join(orcaDir, 'linear-viewer.json'), JSON.stringify(viewer), {
@@ -36,8 +42,7 @@ function writeLegacyLinearToken(token: string | Buffer, viewer: Record<string, u
 
 function workspaceTokenPath(workspaceId: string): string {
   return join(
-    tempHome,
-    '.orca',
+    linearStoreDir(),
     'linear-tokens',
     `${Buffer.from(workspaceId).toString('base64url')}.enc`
   )
@@ -47,7 +52,7 @@ function writeMultiWorkspaceFiles(
   workspaces: { id: string; token: string | Buffer }[],
   selectedWorkspaceId: string
 ): void {
-  const orcaDir = join(tempHome, '.orca')
+  const orcaDir = linearStoreDir()
   mkdirSync(join(orcaDir, 'linear-tokens'), { recursive: true })
   writeFileSync(
     join(orcaDir, 'linear-workspaces.json'),
@@ -91,8 +96,19 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
     })
   })
   const { setSecretStore } = await import('../../shared/secret-store')
+  const { setAppEnvironment } = await import('../../shared/app-environment')
+  setAppEnvironment({
+    getPath: () => tempUserData,
+    getAppPath: () => tempUserData,
+    getVersion: () => 'test',
+    isPackaged: () => false,
+    onWillQuit: () => {},
+    exit: () => {},
+    getAppMetrics: () => []
+  })
   setSecretStore({
-    isEncryptionAvailable: () => options.encryptionAvailable ?? false,
+    // Fork-only (Pod): Pod stores keys only sealed, so the fake keychain seals by default.
+    isEncryptionAvailable: () => options.encryptionAvailable ?? true,
     encryptString: (value) => Buffer.from(value),
     decryptString: options.decryptString ?? ((value) => value.toString('utf-8')),
     describeProtectionGap: () => null
@@ -116,6 +132,7 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
 
 beforeEach(() => {
   tempHome = mkdtempLike('orca-linear-client-')
+  tempUserData = mkdtempLike('pod-linear-user-data-')
   fixtures = new Map([
     [
       'token-alpha',
@@ -240,13 +257,14 @@ describe('Linear client workspace storage', () => {
       workspaces: [{ id: 'org-alpha', organizationName: 'Alpha' }]
     })
     expect(status.workspaces?.some((workspace) => workspace.id === 'legacy')).toBe(false)
-    expect(existsSync(join(tempHome, '.orca', 'linear-token.enc'))).toBe(false)
-    expect(readFileSync(join(tempHome, '.orca', 'linear-workspaces.json'), 'utf-8')).toContain(
+    expect(existsSync(join(linearStoreDir(), 'linear-token.enc'))).toBe(false)
+    expect(readFileSync(join(linearStoreDir(), 'linear-workspaces.json'), 'utf-8')).toContain(
       'org-alpha'
     )
   })
 
-  it('preserves plaintext legacy token fallback when safeStorage cannot decrypt it', async () => {
+  // Fork-only (Pod): no plain-text fallback; upstream reads the token as plain text here.
+  it('refuses a plaintext token that safeStorage cannot decrypt', async () => {
     writeLegacyLinearFiles('token-alpha', {
       displayName: 'Ada',
       email: 'ada@example.com',
@@ -259,16 +277,17 @@ describe('Linear client workspace storage', () => {
       }
     })
 
-    await expect(linear.testConnection('legacy')).resolves.toMatchObject({
-      ok: true,
-      workspace: { id: 'org-alpha', organizationName: 'Alpha' }
+    await expect(linear.testConnection('legacy')).resolves.toEqual({
+      ok: false,
+      error:
+        'Could not decrypt saved Linear credential. Approve Keychain access or reconnect Linear.'
     })
 
-    expect(linearClientMock).toHaveBeenCalledWith({ apiKey: 'token-alpha' })
+    expect(linearClientMock).not.toHaveBeenCalled()
   })
 
   it('does not pass encrypted safeStorage bytes to the Linear SDK when encryption is unavailable', async () => {
-    const tokenPath = join(tempHome, '.orca', 'linear-token.enc')
+    const tokenPath = join(linearStoreDir(), 'linear-token.enc')
     writeLegacyLinearToken(Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]), {
       displayName: 'Ada',
       email: 'ada@example.com',
@@ -293,7 +312,7 @@ describe('Linear client workspace storage', () => {
   })
 
   it('does not clear the Linear token when safeStorage decryption fails', async () => {
-    const tokenPath = join(tempHome, '.orca', 'linear-token.enc')
+    const tokenPath = join(linearStoreDir(), 'linear-token.enc')
     writeLegacyLinearToken(Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]), {
       displayName: 'Ada',
       email: 'ada@example.com',
@@ -388,10 +407,13 @@ describe('Linear client workspace storage', () => {
     })
     const linear = await loadClientModule({
       encryptionAvailable: true,
-      // Why: the plaintext "token-good" falls back through the legacy path;
+      // Fork-only (Pod): "token-good" unseals (Pod has no plain-text fallback);
       // the binary "bad" token throws CredentialDecryptionError.
-      decryptString: () => {
-        throw new Error('userCanceledErr')
+      decryptString: (value) => {
+        if (value.includes(0xff)) {
+          throw new Error('userCanceledErr')
+        }
+        return value.toString('utf-8')
       }
     })
 

@@ -2,7 +2,7 @@
 // Why: tokens remain encrypted via safeStorage, while workspace metadata stays
 // plaintext so status checks can render connected accounts without decrypting
 // and triggering OS keychain prompts after app updates.
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import {
   LEGACY_WORKSPACE_ID,
   ensureOrcaDir,
@@ -15,7 +15,7 @@ import {
   normalizeWorkspace,
   type LinearWorkspaceFile
 } from './linear-workspace-record'
-import { credentialFileHasContent } from '../integration-credential-file'
+import { credentialFileHasContent, writeCredentialFileAtomic } from '../integration-credential-file'
 import type { LinearWorkspace } from '../../shared/linear/workspace-types'
 
 let cachedTokens = new Map<string, string>()
@@ -94,7 +94,7 @@ function readWorkspaceFileFromDisk(): LinearWorkspaceFile {
   }
   try {
     const raw = readFileSync(path, { encoding: 'utf-8' })
-    const parsed = JSON.parse(raw) as Partial<LinearWorkspaceFile>
+    const parsed: Partial<LinearWorkspaceFile> = JSON.parse(raw)
     const workspaces = Array.isArray(parsed.workspaces)
       ? parsed.workspaces
           .map((workspace) => normalizeWorkspace(workspace))
@@ -160,10 +160,11 @@ export function writeWorkspaceFile(file: LinearWorkspaceFile): void {
     workspaces: persistedWorkspaces
   }
   workspaceFileLoadedFromDisk = true
-  writeFileSync(getWorkspaceFilePath(), JSON.stringify(cachedWorkspaceFile, null, 2), {
-    encoding: 'utf-8',
-    mode: 0o600
-  })
+  // Fork-only (Pod): atomic and 0600, like the keys.
+  writeCredentialFileAtomic(
+    getWorkspaceFilePath(),
+    Buffer.from(JSON.stringify(cachedWorkspaceFile, null, 2), 'utf-8')
+  )
 }
 
 export function getLegacyWorkspace(): LinearWorkspace | null {

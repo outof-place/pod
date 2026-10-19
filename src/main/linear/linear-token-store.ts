@@ -1,5 +1,4 @@
-import { getSecretStore } from '../../shared/secret-store'
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, unlinkSync } from 'node:fs'
 import {
   LEGACY_WORKSPACE_ID,
   ensureOrcaDir,
@@ -26,23 +25,15 @@ import {
   upsertWorkspace,
   writeWorkspaceFile
 } from './linear-workspace-registry'
-import {
-  CredentialDecryptionError,
-  readStoredCredentialToken
-} from '../integration-credential-file'
+import { CredentialDecryptionError } from '../integration-credential-file'
+import { readPodLinearKey, writePodLinearKey } from '../pod/linear/pod-linear-key-store'
 import type { LinearWorkspace } from '../../shared/linear/workspace-types'
 import { readCredentialFileProtection } from '../credential-file-protection'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
+// Fork-only (Pod): sealed and written atomically, or a thrown error; never plain text.
 function writeEncryptedToken(path: string, apiKey: string): void {
-  if (getSecretStore().isEncryptionAvailable()) {
-    const encrypted = getSecretStore().encryptString(apiKey)
-    writeFileSync(path, encrypted, { mode: 0o600 })
-    return
-  }
-
-  console.warn('[linear] secret encryption unavailable — storing token in plaintext')
-  writeFileSync(path, apiKey, { encoding: 'utf-8', mode: 0o600 })
+  writePodLinearKey(path, apiKey)
 }
 
 export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
@@ -79,7 +70,8 @@ export function loadToken(options: { force?: boolean; workspaceId?: string } = {
   }
   try {
     const raw = readFileSync(tokenPath)
-    const token = readStoredCredentialToken('Linear', raw)
+    // Fork-only (Pod): no plain-text fallback on read either.
+    const token = readPodLinearKey(raw)
     if (token) {
       cacheToken(workspaceId, token)
     }
