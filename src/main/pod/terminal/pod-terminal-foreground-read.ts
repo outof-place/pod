@@ -3,7 +3,7 @@
 // device) in every build; only a development build without the addon falls back to one /bin/ps under
 // LC_ALL=C. A packaged build without the addon, a failed read, a root that's gone, a root on another
 // terminal, or no foreground group all refuse.
-import { execFileSync } from 'node:child_process'
+import { runProcessSync } from '@orca/process-host'
 import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-environment'
 import { getNativeProcessInfo } from '../../../shared/native-process-info'
 
@@ -43,13 +43,18 @@ function isDevelopmentBuild(): boolean {
 }
 
 function readWithPs(rootPid: number, tty: string): ForegroundGroupRead {
-  const output = execFileSync('/bin/ps', ['-p', String(rootPid), '-o', 'pid=,tpgid=,tty='], {
-    encoding: 'utf8',
+  const result = runProcessSync({
+    program: '/bin/ps',
+    args: ['-p', String(rootPid), '-o', 'pid=,tpgid=,tty='],
     env: { LC_ALL: 'C' },
-    timeout: PS_TIMEOUT_MS,
-    maxBuffer: PS_MAX_OUTPUT_BYTES
+    timeoutMs: PS_TIMEOUT_MS,
+    maxOutputBytes: PS_MAX_OUTPUT_BYTES
   })
-  const match = /^\s*\d+\s+(-?\d+)\s+(\S+)/m.exec(output)
+  // `ps -p` exits 1 for a pid it can't find: as a throwing read did, that is a failed read.
+  if (result.code !== 0 || result.timedOut) {
+    return { ok: false, reason: 'read_failed' }
+  }
+  const match = /^\s*\d+\s+(-?\d+)\s+(\S+)/m.exec(result.stdout)
   return fromRow(match ? { tpgid: Number(match[1]), tty: match[2] ?? '' } : null, tty)
 }
 

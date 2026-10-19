@@ -11,8 +11,8 @@ const mocks = vi.hoisted(
     native: Native | null
     packaged: boolean | null
     ps: string | Error
-    execFileSync: ReturnType<typeof vi.fn>
-  } => ({ native: null, packaged: null, ps: '', execFileSync: vi.fn() })
+    runProcessSync: ReturnType<typeof vi.fn>
+  } => ({ native: null, packaged: null, ps: '', runProcessSync: vi.fn() })
 )
 
 vi.mock('../../../shared/native-process-info', () => ({ getNativeProcessInfo: () => mocks.native }))
@@ -20,7 +20,11 @@ vi.mock('../../../shared/app-environment', () => ({
   hasAppEnvironment: () => mocks.packaged !== null,
   getAppEnvironment: () => ({ isPackaged: () => mocks.packaged === true })
 }))
-vi.mock('node:child_process', () => ({ execFileSync: mocks.execFileSync }))
+vi.mock('@orca/process-host', () => ({ runProcessSync: mocks.runProcessSync }))
+
+function psExit(stdout: string, code = 0) {
+  return { code, signal: null, stdout, stderr: '', timedOut: false }
+}
 
 function native(row: NativeProcessForegroundRow | null | Error): Native {
   return {
@@ -36,7 +40,7 @@ function native(row: NativeProcessForegroundRow | null | Error): Native {
 afterEach(() => {
   mocks.native = null
   mocks.packaged = null
-  mocks.execFileSync.mockReset()
+  mocks.runProcessSync.mockReset()
 })
 
 describe('readTerminalForegroundGroupNow', () => {
@@ -59,7 +63,7 @@ describe('readTerminalForegroundGroupNow', () => {
     mocks.packaged = true
 
     expect(readTerminalForegroundGroupNow(100, '/dev/ttys007')).toEqual(read)
-    expect(mocks.execFileSync).not.toHaveBeenCalled()
+    expect(mocks.runProcessSync).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -72,31 +76,38 @@ describe('readTerminalForegroundGroupNow', () => {
       ok: false,
       reason: 'reader_unavailable'
     })
-    expect(mocks.execFileSync).not.toHaveBeenCalled()
+    expect(mocks.runProcessSync).not.toHaveBeenCalled()
   })
 
   it('falls back to /bin/ps under LC_ALL=C in a development build without the addon', () => {
     mocks.packaged = false
-    mocks.execFileSync.mockReturnValue('  100   200 ttys007\n')
+    mocks.runProcessSync.mockReturnValue(psExit('  100   200 ttys007\n'))
 
     expect(readTerminalForegroundGroupNow(100, 'ttys007')).toEqual({ ok: true, group: 200 })
-    expect(mocks.execFileSync).toHaveBeenCalledWith(
-      '/bin/ps',
-      ['-p', '100', '-o', 'pid=,tpgid=,tty='],
-      expect.objectContaining({ env: { LC_ALL: 'C' } })
+    expect(mocks.runProcessSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: '/bin/ps',
+        args: ['-p', '100', '-o', 'pid=,tpgid=,tty='],
+        env: { LC_ALL: 'C' }
+      })
     )
   })
 
-  it('refuses when ps fails or names another terminal', () => {
+  it('refuses when ps fails, times out, can not start or names another terminal', () => {
     mocks.packaged = false
-    mocks.execFileSync.mockImplementationOnce(() => {
-      throw new Error('ps: exit 1')
-    })
-    expect(readTerminalForegroundGroupNow(100, 'ttys007')).toEqual({
-      ok: false,
-      reason: 'read_failed'
-    })
-    mocks.execFileSync.mockReturnValueOnce('  100   200 ttys009\n')
+    mocks.runProcessSync
+      .mockReturnValueOnce(psExit('', 1))
+      .mockReturnValueOnce({ ...psExit(''), code: null, signal: 'SIGTERM', timedOut: true })
+      .mockImplementationOnce(() => {
+        throw new Error('spawn ENOENT')
+      })
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect(readTerminalForegroundGroupNow(100, 'ttys007')).toEqual({
+        ok: false,
+        reason: 'read_failed'
+      })
+    }
+    mocks.runProcessSync.mockReturnValueOnce(psExit('  100   200 ttys009\n'))
     expect(readTerminalForegroundGroupNow(100, 'ttys007')).toEqual({
       ok: false,
       reason: 'other_tty'
