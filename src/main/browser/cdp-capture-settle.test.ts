@@ -137,3 +137,37 @@ describe('a capture that outlives its deadline', () => {
     lease.release()
   })
 })
+
+describe('captures at once on one page', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('sends each only once the one before answered, so none takes a clip view for the page', async () => {
+    vi.useFakeTimers()
+    const { mock, page, answerAll } = densePage()
+    const lease = acquireElectronDebugger(page)
+    const mark = { format: 'png', clip: { x: 693, y: 133, width: 176, height: 52, scale: 1 } }
+    const region = { format: 'png', clip: { x: 362, y: 302, width: 256, height: 116, scale: 1 } }
+    const sent = () => mock.debugger.sendCommand.mock.calls.map((call: unknown[]) => call[1])
+
+    const first = captureScreenshot(page, mark, noHold)
+    const second = captureScreenshot(page, { format: 'png' }, noHold)
+    const third = captureScreenshot(page, region, noHold)
+    await vi.advanceTimersByTimeAsync(100)
+    expect(sent()).toEqual([mark])
+
+    answerAll('mark')
+    await expect(first).resolves.toEqual({ data: 'mark' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sent()).toEqual([mark, { format: 'png' }])
+
+    answerAll('page')
+    await expect(second).resolves.toEqual({ data: 'page' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sent()).toEqual([mark, { format: 'png' }, region])
+    answerAll('region')
+    await expect(third).resolves.toEqual({ data: 'region' })
+    lease.release()
+  })
+})

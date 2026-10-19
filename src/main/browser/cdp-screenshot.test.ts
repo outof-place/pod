@@ -123,6 +123,30 @@ describe('captureScreenshot', () => {
     expect(webContents.invalidate).toHaveBeenCalledTimes(2)
   })
 
+  it('never probes a slow clipped capture with another capture: it only asks the page to draw', async () => {
+    // Chromium shows the page at the clip while it captures; a capture sent meanwhile would leave it there.
+    vi.useFakeTimers()
+    let resolveCapture: ((value: unknown) => void) | null = null
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveCapture = resolve
+          })
+      )
+      .mockImplementation(() => new Promise(() => {}))
+    const mark = { format: 'png', clip: { x: 693, y: 133, width: 176, height: 52, scale: 1 } }
+
+    const capture = captureScreenshot(webContents.guest, mark, noHold)
+    await vi.advanceTimersByTimeAsync(480)
+    resolveCapture!({ data: 'mark-png' })
+
+    await expect(capture).resolves.toEqual({ data: 'mark-png' })
+    expect(webContents.debugger.sendCommand.mock.calls).toEqual([['Page.captureScreenshot', mark]])
+    expect(webContents.invalidate).toHaveBeenCalledTimes(2)
+  })
+
   it('stops probing at the deadline', async () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()

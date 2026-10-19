@@ -46,7 +46,7 @@ export function newPaneCobrowse(
       lease = null
     },
     // Why the hold: Chromium draws the page once at the clip's size for the capture, and the pane
-    // would show that frame as the whole page, shrunk and centered (_evidence/cobrowse/capture-probe).
+    // would show that frame as the whole page, shrunk and centered.
     capture: async (clip) => {
       const options = { format: 'png', clip, optimizeForSpeed: true }
       const release = holdPaneFrames(pane(), () => pane().visible && wc.invalidate())

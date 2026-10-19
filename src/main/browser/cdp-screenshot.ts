@@ -1,6 +1,6 @@
 import type { WebContents } from 'electron'
 import { holdPodPaneFramesForCapture } from '../pod/browser-pane/pod-browser-pane-hooks'
-import { keepCaptureUntilSettled, waitForSettledCaptures } from './cdp-capture-settle'
+import { takeCaptureTurn, waitForSettledCaptures } from './cdp-capture-settle'
 
 /** Draws a hidden guest for the duration of a capture; returns its release. */
 export type CapturePaintHold = () => () => void
@@ -138,19 +138,20 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
 // Why: a request made before the held page is drawn never resolves, and an offscreen drawn page can
 // skip one; a later request makes the page produce a frame, which answers every pending request.
 // So the capture is sent once and cheap probes follow until it answers. Resolves null when no frame
-// arrives by the deadline; a CDP error is an answer. Requests still unanswered then keep the page
-// attached until they answer (cdp-capture-settle.ts).
-function captureUntilDrawn(
+// arrives by the deadline; a CDP error is an answer. It waits for the page's earlier captures, and
+// requests still unanswered then keep the page attached until they answer (cdp-capture-settle.ts).
+async function captureUntilDrawn(
   webContents: WebContents,
   params: Record<string, unknown>
 ): Promise<{ data: string } | null> {
-  // Why no probes beyond the viewport: a probe sent while the page is at its full height takes that
-  // size for the page's own and restores it after the capture. Its own resize draws a frame anyway.
+  // Why no probes for a clip or beyond the viewport: the page is at the clip or its full height while
+  // Chromium captures, and a probe sent then takes that view for the page's own and restores it after
+  // the capture. Its own resize draws a frame anyway.
   const beyondViewport = params.captureBeyondViewport === true
+  const changesView = beyondViewport || params.clip != null
+  const endTurn = await takeCaptureTurn(webContents)
   // Fork-only (Pod): the pane keeps its last frame while the page is drawn at its full height.
-  const releasePaneFrames = beyondViewport
-    ? holdPodPaneFramesForCapture(webContents.id)
-    : () => {}
+  const releasePaneFrames = beyondViewport ? holdPodPaneFramesForCapture(webContents.id) : () => {}
   const unanswered = new Set<Promise<unknown>>()
   return new Promise((resolve, reject) => {
     let settled = false
@@ -161,7 +162,7 @@ function captureUntilDrawn(
       settled = true
       clearTimeout(deadline)
       probes.forEach(clearTimeout)
-      keepCaptureUntilSettled(webContents, [...unanswered], releasePaneFrames)
+      endTurn([...unanswered], releasePaneFrames)
       settle()
     }
     // A null request only asks the page to draw.
@@ -196,7 +197,7 @@ function captureUntilDrawn(
     }
     const deadline = setTimeout(() => finish(() => resolve(null)), SCREENSHOT_TIMEOUT_MS)
     const probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) =>
-      setTimeout(() => send(beyondViewport ? null : FRAME_PROBE_PARAMS)?.catch(() => {}), offsetMs)
+      setTimeout(() => send(changesView ? null : FRAME_PROBE_PARAMS)?.catch(() => {}), offsetMs)
     )
     send(params)?.then(
       (result) => finish(() => resolve(result?.data ? { data: result.data } : null)),
@@ -284,7 +285,6 @@ export async function captureScreenshot(
 
   const release = holdPaint()
   try {
-    await waitForSettledCaptures(webContents)
     const frame = await captureUntilDrawn(webContents, screenshotParams)
     if (frame) {
       return frame
