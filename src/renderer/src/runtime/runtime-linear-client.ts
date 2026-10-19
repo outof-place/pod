@@ -23,6 +23,10 @@ import {
   isEmptyLinearIssueAttributeFilter
 } from '../../../shared/linear/issue-attribute-filter'
 import { LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  assertPodLinearClassicUi,
+  podLinearClassicUiOffStatus
+} from '@/pod/linear/pod-linear-classic-ui'
 
 export type RuntimeLinearSettings =
   | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
@@ -71,6 +75,8 @@ function isTaskSourceRuntimeSettings(
 export function getLinearRuntimeTarget(
   settings: RuntimeLinearSettings
 ): ReturnType<typeof getActiveRuntimeTarget> {
+  // Fork-only (Pod): every Linear call of the classic window comes through here; none in a Pod build.
+  assertPodLinearClassicUi()
   // Why: task source context makes provider ownership explicit; legacy callers
   // still pass focused runtime settings until Tasks finishes migrating.
   return getActiveRuntimeTarget(
@@ -101,6 +107,11 @@ function normalizeLinearIssueCollectionResult(
 export async function linearStatus(
   settings: RuntimeLinearSettings
 ): Promise<LinearConnectionStatus> {
+  // Fork-only (Pod): not connected and off, so the classic window offers no Linear.
+  const podOff = podLinearClassicUiOffStatus()
+  if (podOff) {
+    return podOff
+  }
   const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearConnectionStatus>(target, 'linear.status', undefined, {

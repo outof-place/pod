@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { SettingsNavIcon, SettingsNavSection } from '@/lib/settings-navigation-types'
 import type { CmdJQuickAction } from './quick-actions'
+import { withoutClassicLinearAliases } from '@/lib/pod-linear-classic-search'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import {
   cmdJPaletteTokenScore,
@@ -117,7 +118,8 @@ function keywordParts(section: SettingsNavSection): string[] {
     idWords,
     section.title,
     ...suffixed,
-    ...(SETTINGS_ALIASES[baseId] ?? []),
+    // Fork-only (Pod): no "linear" alias without the classic Linear card.
+    ...withoutClassicLinearAliases(SETTINGS_ALIASES[baseId] ?? []),
     ...paneLevelEntries.map((entry) => entry.title)
   ]
 }
