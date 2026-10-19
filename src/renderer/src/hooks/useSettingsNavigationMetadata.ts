@@ -15,6 +15,7 @@ import { getClientCreationActionPolicy } from '@/lib/client-creation-action-poli
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { withoutStablyServiceSections } from '@/lib/product-settings-sections'
+import { withoutClassicLinearSearch } from '@/lib/pod-linear-classic-search'
 import {
   isWindowsTerminalCapabilityHost,
   useWindowsTerminalCapabilities
@@ -104,13 +105,15 @@ export function buildSettingsNavigationMetadata({
   // Why: this array's order must mirror SETTINGS_NAV_GROUPS so the Settings
   // sidebar and the Cmd+J palette both read top-to-bottom in the same grouped
   // order — keep each new entry beside its group's siblings.
-  return withoutStablyServiceSections([
+  const sections = withoutStablyServiceSections([
     ...buildCapabilitySettingsSections(options),
     ...buildSetupSettingsSections(options),
     ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries),
     ...buildInterfaceSettingsSections(options),
     ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById)
   ])
+  // Fork-only (Pod): no Linear in Integrations' search without the classic Linear card.
+  return withoutClassicLinearSearch(sections)
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
