@@ -12,6 +12,8 @@ export type LinearWorkspace = LinearViewer & {
   organizationId: string
   isLegacy?: true
   credentialRevision?: number
+  // Fork-only (Pod): Linear rejected the stored key; Pod keeps it until the user enters a new one.
+  needsNewKey?: true
 }
 
 export type LinearWorkspaceSelection = (string & {}) | 'all'
