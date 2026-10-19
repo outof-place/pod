@@ -27,6 +27,15 @@ export function ensurePodLinearDir(dir: string): void {
   }
 }
 
+/**
+ * Whether anyone could forge what this process seals: a backend with a protection gap (a built-in
+ * key), or the test keychain (`--use-mock-keychain`), which seals with a fixed password. Harmless
+ * for an API key, which a forger would have to know anyway; not for a switch like agent access.
+ */
+export function isPodLinearSealForgeable(argv: readonly string[] = process.argv): boolean {
+  return argv.includes('--use-mock-keychain') || getSecretStore().describeProtectionGap() !== null
+}
+
 /** Seals the key and writes it atomically with 0600; throws, writing nothing, if it can't seal. */
 export function writePodLinearKey(path: string, apiKey: string): void {
   const store = getSecretStore()
