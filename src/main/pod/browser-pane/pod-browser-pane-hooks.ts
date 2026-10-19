@@ -129,8 +129,8 @@ export function pickPodPanePasskey(
 }
 
 /**
- * A capture beyond the viewport resizes the page's view while it runs: its pane keeps the last frame
- * meanwhile instead of showing the tall one. A no-op outside one-app.
+ * A capture at a clip or beyond the viewport resizes the page's view while it runs: its pane keeps
+ * the last frame meanwhile instead of showing the clip or the tall one. A no-op outside one-app.
  */
 export function holdPodPaneFramesForCapture(webContentsId: number): () => void {
   return captureFrameHoldSink?.(webContentsId) ?? (() => {})

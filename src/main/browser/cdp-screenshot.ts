@@ -146,12 +146,13 @@ async function captureUntilDrawn(
 ): Promise<{ data: string } | null> {
   // Why no probes for a clip or beyond the viewport: the page is at the clip or its full height while
   // Chromium captures, and a probe sent then takes that view for the page's own and restores it after
-  // the capture. Its own resize draws a frame anyway.
-  const beyondViewport = params.captureBeyondViewport === true
-  const changesView = beyondViewport || params.clip != null
+  // the capture. Its own resize draws a frame anyway, on an undrawn page too (Electron 45, with the
+  // invalidate nudges).
+  const changesView = params.captureBeyondViewport === true || params.clip != null
   const endTurn = await takeCaptureTurn(webContents)
-  // Fork-only (Pod): the pane keeps its last frame while the page is drawn at its full height.
-  const releasePaneFrames = beyondViewport ? holdPodPaneFramesForCapture(webContents.id) : () => {}
+  // Fork-only (Pod): the pane keeps its last frame while the page is drawn at a clip or its full
+  // height; taken only with the turn, so a capture waiting for one leaves the pane live.
+  const releasePaneFrames = changesView ? holdPodPaneFramesForCapture(webContents.id) : () => {}
   const unanswered = new Set<Promise<unknown>>()
   return new Promise((resolve, reject) => {
     let settled = false
@@ -162,8 +163,11 @@ async function captureUntilDrawn(
       settled = true
       clearTimeout(deadline)
       probes.forEach(clearTimeout)
-      endTurn([...unanswered], releasePaneFrames)
-      settle()
+      try {
+        endTurn([...unanswered], releasePaneFrames)
+      } finally {
+        settle()
+      }
     }
     // A null request only asks the page to draw.
     const send = (

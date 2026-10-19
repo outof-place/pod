@@ -16,7 +16,7 @@ const noHold = (): (() => void) => () => {}
 // A page whose debugger attaches and detaches for real, and whose captures answer only when told to.
 function densePage() {
   let attached = false
-  const answers: ((value: unknown) => void)[] = []
+  const answers: { resolve: (value: unknown) => void; reject: (error: Error) => void }[] = []
   const mock = {
     id: 100,
     isDestroyed: vi.fn(() => false),
@@ -32,8 +32,8 @@ function densePage() {
       }),
       sendCommand: vi.fn(
         () =>
-          new Promise((resolve) => {
-            answers.push(resolve)
+          new Promise((resolve, reject) => {
+            answers.push({ resolve, reject })
           })
       )
     }
@@ -42,7 +42,9 @@ function densePage() {
     mock,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the capture calls.
     page: mock as unknown as WebContents,
-    answerAll: (data: string) => answers.splice(0).forEach((answer) => answer({ data }))
+    answerAll: (data: string) => answers.splice(0).forEach((answer) => answer.resolve({ data })),
+    failAll: (message: string) =>
+      answers.splice(0).forEach((answer) => answer.reject(new Error(message)))
   }
 }
 
@@ -168,6 +170,81 @@ describe('captures at once on one page', () => {
     expect(sent()).toEqual([mark, { format: 'png' }, region])
     answerAll('region')
     await expect(third).resolves.toEqual({ data: 'region' })
+    lease.release()
+  })
+})
+
+describe("a capture's turn on its page", () => {
+  afterEach(() => {
+    setPodBrowserPaneHooks(null)
+    vi.useRealTimers()
+  })
+
+  it('passes to the next capture at once when Chromium answers with an error', async () => {
+    vi.useFakeTimers()
+    const { mock, page, answerAll, failAll } = densePage()
+    const lease = acquireElectronDebugger(page)
+
+    const first = captureScreenshot(page, { format: 'png' }, noHold)
+    const second = captureScreenshot(page, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mock.debugger.sendCommand).toHaveBeenCalledTimes(1)
+    const failed = expect(first).rejects.toThrow('Target closed')
+    failAll('Target closed')
+    await failed
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mock.debugger.sendCommand).toHaveBeenCalledTimes(2)
+    answerAll('second')
+    await expect(second).resolves.toEqual({ data: 'second' })
+    lease.release()
+  })
+
+  it("is the page's own: another page's capture is answered while one here is pending", async () => {
+    vi.useFakeTimers()
+    const pending = densePage()
+    const other = densePage()
+    const leases = [acquireElectronDebugger(pending.page), acquireElectronDebugger(other.page)]
+
+    const slow = captureScreenshot(pending.page, { format: 'png' }, noHold)
+    const quick = captureScreenshot(other.page, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(other.mock.debugger.sendCommand).toHaveBeenCalledTimes(1)
+    other.answerAll('other')
+    await expect(quick).resolves.toEqual({ data: 'other' })
+
+    pending.answerAll('slow')
+    await expect(slow).resolves.toEqual({ data: 'slow' })
+    leases.forEach((lease) => lease.release())
+  })
+
+  it('still ends, and the caller still gets its answer, when releasing the pane throws', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    setPodBrowserPaneHooks({
+      agentCommand: vi.fn(),
+      download: vi.fn(),
+      openLink: vi.fn(() => false),
+      passkey: vi.fn(() => null),
+      holdFramesForCapture: () => () => {
+        throw new Error('pane gone')
+      }
+    })
+    const { mock, page, answerAll } = densePage()
+    const lease = acquireElectronDebugger(page)
+    const mark = { format: 'png', clip: { x: 693, y: 133, width: 176, height: 52, scale: 1 } }
+
+    const first = captureScreenshot(page, mark, noHold)
+    await vi.advanceTimersByTimeAsync(0)
+    answerAll('mark')
+    await expect(first).resolves.toEqual({ data: 'mark' })
+
+    const next = captureScreenshot(page, { format: 'png' }, noHold)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mock.debugger.sendCommand).toHaveBeenCalledTimes(2)
+    answerAll('next')
+    await expect(next).resolves.toEqual({ data: 'next' })
+    expect(warn).toHaveBeenCalledWith('[cdp-capture]', 'pane gone')
+    warn.mockRestore()
     lease.release()
   })
 })

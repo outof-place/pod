@@ -33,12 +33,15 @@ export type PaneFrameTarget = {
   visible: boolean
   seq: number
   scale: number
-  // Captures beyond the viewport running now: their tall frames stay off the pane.
+  // Captures at a clip or beyond the viewport running now: their frames stay off the pane.
   captureFrameHolds: number
 }
 
-/** Keeps `target`'s frames off its pane until the release, which asks for a fresh one. */
-export function holdPaneFrames(target: PaneFrameTarget, repaint: () => void): () => void {
+/** Keeps `target`'s frames off its pane until the release, which asks `page` for a fresh one. */
+export function holdPaneFrames(
+  target: PaneFrameTarget,
+  page: Pick<Electron.WebContents, 'isDestroyed' | 'invalidate'>
+): () => void {
   target.captureFrameHolds += 1
   let released = false
   return () => {
@@ -48,8 +51,8 @@ export function holdPaneFrames(target: PaneFrameTarget, repaint: () => void): ()
     released = true
     target.captureFrameHolds -= 1
     // Why: the frame Chromium drew back at the page's own size may have come while held.
-    if (target.captureFrameHolds === 0) {
-      repaint()
+    if (target.captureFrameHolds === 0 && target.visible && !page.isDestroyed()) {
+      page.invalidate()
     }
   }
 }

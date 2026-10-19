@@ -5,7 +5,7 @@ import { acquireElectronDebugger } from '../../browser/electron-debugger-lease'
 import { sendGuestCdpCommand } from '../../browser/guest-cdp-command'
 import { captureScreenshot } from '../../browser/cdp-screenshot'
 import { PaneCobrowse } from './pod-browser-cobrowse'
-import { holdPaneFrames, type PaneFrameTarget } from './pod-browser-pane-frames'
+import type { PaneFrameTarget } from './pod-browser-pane-frames'
 import type { PointRequest } from './pod-browser-cobrowse-anchors'
 import type { CobrowseCdp } from './pod-browser-cobrowse-cdp'
 import {
@@ -45,17 +45,10 @@ export function newPaneCobrowse(
       lease?.release()
       lease = null
     },
-    // Why the hold: Chromium draws the page once at the clip's size for the capture, and the pane
-    // would show that frame as the whole page, shrunk and centered.
-    capture: async (clip) => {
-      const options = { format: 'png', clip, optimizeForSpeed: true }
-      const release = holdPaneFrames(pane(), () => pane().visible && wc.invalidate())
-      try {
-        return (await captureScreenshot(wc, options, () => () => {})).data
-      } finally {
-        release()
-      }
-    },
+    // The clipped capture holds the pane's frames itself, once its turn on the page comes.
+    capture: async (clip) =>
+      (await captureScreenshot(wc, { format: 'png', clip, optimizeForSpeed: true }, () => () => {}))
+        .data,
     send: (message) => {
       if (pane().token !== null) {
         send(message)

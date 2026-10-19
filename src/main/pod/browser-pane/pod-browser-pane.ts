@@ -165,10 +165,10 @@ export class PodBrowserPaneController {
     return null
   }
 
-  /** A capture beyond the viewport on this WebContents: its pane keeps its last frame until the release. */
+  /** A capture at a clip or beyond the viewport on this WebContents: its pane keeps its last frame until the release. */
   holdFramesForCapture(webContentsId: number): () => void {
     const [, page] = this.pageEntry(webContentsId) ?? []
-    return page ? holdPaneFrames(page, () => page.visible && page.wc.invalidate()) : () => {}
+    return page ? holdPaneFrames(page, page.wc) : () => {}
   }
 
   /** A download of one of these pages: PodNative's list follows it. */

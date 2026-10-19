@@ -4,10 +4,10 @@ import { acquireElectronDebugger } from './electron-debugger-lease'
 // Why: Chromium puts a capture's temporary view size, emulation and web prefs back only when it
 // answers the capture. A detach before that drops the answer, so the page keeps them for good; a
 // capture or emulation change sent before it takes the temporary state for the page's own, and its
-// own answer later puts it back. An offscreen page shows a clipped capture's clip as its view, so
-// even two quick clips leave it showing the first. So captures on a page take turns, each waiting
-// until every request of the one before answered; unanswered requests keep the debugger attached,
-// and a viewport change waits for them too.
+// own answer later puts it back. Fork-only (Pod): an offscreen page shows a clipped capture's clip
+// as its view, so even two quick clips leave it showing the first. So captures on a page take turns,
+// each waiting until every request of the one before answered; unanswered requests keep the
+// debugger attached, and a viewport change waits for them too.
 const captureTurns = new WeakMap<WebContents, Promise<void>>()
 
 // While waiting, the page is asked to draw: an undrawn page answers only with a new frame.
@@ -60,12 +60,18 @@ export async function takeCaptureTurn(
   return (requests, onSettled) => {
     const lease = requests.length > 0 ? leaseWhileAttached(webContents) : null
     const settle = (): void => {
-      lease?.release()
-      onSettled()
-      if (captureTurns.get(webContents) === turn) {
-        captureTurns.delete(webContents)
+      try {
+        lease?.release()
+        onSettled()
+      } catch (error) {
+        // Why not rethrow: callers end turns from timers, where a throw is fatal to main.
+        console.warn('[cdp-capture]', error instanceof Error ? error.message : String(error))
+      } finally {
+        if (captureTurns.get(webContents) === turn) {
+          captureTurns.delete(webContents)
+        }
+        handOn()
       }
-      handOn()
     }
     if (requests.length === 0) {
       settle()
