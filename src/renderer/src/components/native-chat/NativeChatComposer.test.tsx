@@ -159,6 +159,10 @@ vi.mock('./use-native-chat-send-lifecycle', () => ({
 import { NativeChatComposer } from './NativeChatComposer'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 
+// Fork-only (Pod): composer sends carry the agent-foreground guard, or its refusal callback.
+const GUARDED_SEND = expect.objectContaining({ requireAgentForeground: true })
+const REFUSED = expect.any(Function)
+
 describe('NativeChatComposer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -454,7 +458,7 @@ describe('NativeChatComposer', () => {
       'pty-1',
       'hello',
       ['/tmp/pasted.png'],
-      undefined
+      GUARDED_SEND
     )
   })
 
@@ -471,7 +475,7 @@ describe('NativeChatComposer', () => {
 
     act(() => mocks.fieldProps?.onSend?.())
 
-    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith({}, 'pty-1', '/status')
+    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith({}, 'pty-1', '/status', REFUSED)
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
@@ -488,7 +492,7 @@ describe('NativeChatComposer', () => {
 
     act(() => mocks.fieldProps?.onSend?.())
 
-    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '$ref-oss', undefined)
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '$ref-oss', GUARDED_SEND)
     expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 
@@ -505,7 +509,7 @@ describe('NativeChatComposer', () => {
 
     act(() => mocks.fieldProps?.onSend?.())
 
-    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/clear', undefined)
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith({}, 'pty-1', '/clear', GUARDED_SEND)
     expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 

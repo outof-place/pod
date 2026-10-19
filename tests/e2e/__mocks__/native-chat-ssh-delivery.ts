@@ -82,6 +82,9 @@ export function createSshDelivery(mode: 'accepted' | 'lost' | 'slow' = 'accepted
   })
   const provider = new SshPtyProvider('connection', mux)
   vi.spyOn(provider, 'hasPty').mockReturnValue(true)
+  // Fork-only (Pod): a guarded write asks the relay who is in front first; this transport carries
+  // only pty.data, so the relay's answer is stubbed: null names no shell, and the write goes on.
+  const foreground = vi.spyOn(provider, 'getForegroundProcess').mockResolvedValue(null)
   const settlement = vi.spyOn(provider, 'writeWithSettlement')
   io.getProvider = () => provider
   const input = createPtyWriteInput({})
@@ -106,6 +109,7 @@ export function createSshDelivery(mode: 'accepted' | 'lost' | 'slow' = 'accepted
     bytes,
     provider,
     settlement,
+    foreground,
     close: () => {
       ptyOwnership.delete(id)
       provider.dispose()

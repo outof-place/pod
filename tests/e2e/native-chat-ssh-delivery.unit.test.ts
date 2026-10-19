@@ -73,6 +73,20 @@ describe('prompt delivery through production IPC, provider and paired host', () 
     expect(onSettled).not.toHaveBeenCalled()
   })
 
+  // Fork-only (Pod): the SSH refusal end to end, through production IPC and the real SSH provider.
+  it('refuses an answer while the relay names a shell in front, with no byte written', async () => {
+    vi.useFakeTimers()
+    const ssh = createSshDelivery()
+    close = ssh.close
+    ssh.foreground.mockResolvedValue('zsh')
+    const onSettled = vi.fn()
+    sendNativeChatAskAnswer(null, ssh.id, [{ text: 'yes' }, { raw: '\r' }], onSettled)
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(ssh.foreground).toHaveBeenCalledWith(ssh.id)
+    expect(ssh.bytes).toEqual([])
+    expect(onSettled).toHaveBeenCalledExactlyOnceWith(false)
+  })
+
   it('keeps ordinary healthy SSH body and Enter complete', async () => {
     vi.useFakeTimers()
     const ssh = createSshDelivery()

@@ -122,8 +122,9 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
       session.deps.worktreeId
     )
     // Fork-only (Pod): the draft is agent text, so each frame goes as a guarded write that main
-    // proves (pod-agent-foreground-ipc-write.ts). It leaves the transport queue, kept upstream so
-    // ConPTY's focus reports can't race the draft: Pod is macOS-only.
+    // proves (pod-agent-foreground-ipc-write.ts). It bypasses the transport queue so the write can
+    // carry requireAgentForeground, so a frame can overtake input still queued there (a focus
+    // report, keys typed in those few ms). Known for 1.0.
     void sendAgentDraftPasteContent(
       settings,
       ptyId,

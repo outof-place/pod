@@ -14,6 +14,7 @@ import {
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import { AGENT_FOREGROUND_WRITE } from '@/runtime/pod-agent-foreground-write'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -216,16 +217,19 @@ describe('connectPanePty', () => {
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()
     await vi.advanceTimersByTimeAsync(7900)
-    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
+    expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(100)
     await flushAsyncTicks()
 
     expect(createdTransportOptions[0]?.commandDelivery).toBe('provider')
     expect(transport.sendInput).not.toHaveBeenCalledWith('droid\r')
-    expect(transport.sendInputAccepted).toHaveBeenCalledWith(
+    expect(window.api.pty.writeAccepted).toHaveBeenCalledExactlyOnceWith(
+      'pty-droid',
       `\x1b[200~${prompt}\x1b[201~`,
-      'launch'
+      'launch',
+      AGENT_FOREGROUND_WRITE
     )
+    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
   })
 
   it.each([10_000, 20_000])('keeps Codex draft delivery bounded after %d ms', async (waitMs) => {
@@ -267,7 +271,8 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     expect(capturedDataCallback.current).not.toBeNull()
 
-    // A focused xterm emits CSI I after Codex enables focus reporting; the startup draft must reuse the same transport instead of racing a direct IPC.
+    // A focused xterm emits CSI I after Codex enables focus reporting. Fork-only (Pod): the draft
+    // goes as main's guarded write, not through the transport, and still after the keys before it.
     ;(
       pane.terminal.onData as unknown as {
         mock: { calls: [(data: string) => void][] }
@@ -280,12 +285,12 @@ describe('connectPanePty', () => {
     ).mock.calls[0]?.[0]('USER_DRAFT')
     ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
     await vi.advanceTimersByTimeAsync(waitMs)
-    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
+    expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
     capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
     await flushAsyncTicks()
 
     if (waitMs === 20_000) {
-      expect(transport.sendInputAccepted).not.toHaveBeenCalled()
+      expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
       expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual(['\x1b[I', 'USER_DRAFT'])
       binding.dispose()
       expect(
@@ -298,16 +303,17 @@ describe('connectPanePty', () => {
       return
     }
 
-    expect(transport.sendInputAccepted).toHaveBeenCalledWith(
+    expect(window.api.pty.writeAccepted).toHaveBeenCalledExactlyOnceWith(
+      'pty-codex',
       '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~',
-      'launch'
+      'launch',
+      AGENT_FOREGROUND_WRITE
     )
-    expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual([
-      '\x1b[I',
-      'USER_DRAFT',
-      '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~'
-    ])
-    expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
+    expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual(['\x1b[I', 'USER_DRAFT'])
+    expect(vi.mocked(window.api.pty.writeAccepted).mock.invocationCallOrder[0]).toBeGreaterThan(
+      transport.sendInput.mock.invocationCallOrder[1] ?? Infinity
+    )
+    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
     expect(mockStoreState.recordTerminalInput).toHaveBeenCalledOnce()
     expect(mockStoreState.recordTerminalInput).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
   })
@@ -368,15 +374,16 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     expect(capturedDataCallback.current).not.toBeNull()
     capturedDataCallback.current?.('\x1b[?2004hWaiting for setup to finish...')
-    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
+    expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
 
     capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
     await flushAsyncTicks()
 
-    expect(transport.sendInputAccepted).toHaveBeenCalledTimes(1)
-    expect(transport.sendInputAccepted).toHaveBeenCalledWith(
+    expect(window.api.pty.writeAccepted).toHaveBeenCalledExactlyOnceWith(
+      'pty-codex',
       '\x1b[200~Linked Linear issue: STA-905\x1b[201~',
-      'launch'
+      'launch',
+      AGENT_FOREGROUND_WRITE
     )
   })
 
