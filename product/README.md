@@ -30,7 +30,7 @@ Changing a name is a one-line edit here; nothing else in the repo hard-codes the
 
 ## How the identity reaches the app
 
-- **Packaging:** `product/electron-builder.pod.cjs` wraps `config/electron-builder.config.cjs`, macOS only (the Windows and Linux sections are dropped).
+- **Packaging:** `product/electron-builder.pod.cjs` wraps `product/electron-builder.slim.cjs` (Orca's `config/electron-builder.config.cjs` with the Pod profile's packaging cuts from `src/shared/product/features.ts`), macOS only (the Windows and Linux sections are dropped).
   - It sets `appId`, `productName`, `protocols`, `copyright`, the artifact names, and the usage strings macOS shows in permission prompts.
   - It sets `extraMetadata.name` to `packageName`, and keeps `orcaOfficialUpdates: false`.
   - It sets the `github` publish provider, which writes `app-update.yml` and `latest-mac.yml`.

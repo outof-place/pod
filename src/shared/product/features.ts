@@ -71,7 +71,8 @@ export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
   uiLocales: {
     pod: false,
     reason: 'Pod is English-only: no es/fr/ja/ko/zh catalogs, no language picker, en at startup',
-    packaging: { electronLanguages: ['en'] },
+    // Why no electronLanguages cut: macOS picks the app locale among the shipped .lproj, and a
+    // browser pane's navigator.languages and Accept-Language come from it.
     stubModules: [/\/src\/renderer\/src\/i18n\/locales\/(?:es|fr|ja|ko|zh)\.json$/]
   },
   mobileWebClient: {
