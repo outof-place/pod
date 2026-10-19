@@ -11,9 +11,10 @@ import { setSecretStore } from '../../../shared/secret-store'
 import { turnLinearOnInFreshModules } from './pod-linear-access.test-support'
 import { fakeKeychain, setTestUserData } from './pod-linear-key-store.test-support'
 import {
-  defaultLinearMockReply,
   guardFetchToLoopback,
   LINEAR_MOCK_ORGANIZATION,
+  linearMockIssueNode,
+  linearMockIssuesReply,
   linearMockRateLimitedReply,
   startLinearMockServer,
   type LinearMockReply,
@@ -39,32 +40,13 @@ function restoreEnv(
   }
 }
 
-function issueNode(id: string, identifier: string) {
-  return {
-    id,
-    identifier,
-    title: `Fix ${identifier}`,
-    url: `https://linear.app/mock-co/issue/${identifier}`,
-    priority: 0,
-    updatedAt: '2026-10-19T00:00:00.000Z',
-    state: { name: 'Todo', type: 'unstarted', color: '#999999' },
-    team: { id: 'team-1', name: 'Engineering', key: 'ENG' },
-    labels: { nodes: [] }
-  }
-}
-
-const KNOWN = [issueNode('issue-9', 'ENG-9'), issueNode('issue-12', 'ENG-12')]
-
-function issuesReply(request: LinearMockRequest): LinearMockReply {
-  if (request.query.includes('PodLinearIssuesByIds')) {
-    const variables = request.variables
-    const ids =
-      typeof variables === 'object' && variables !== null ? Reflect.get(variables, 'ids') : []
-    const wanted = Array.isArray(ids) ? ids : []
-    return { body: { data: { issues: { nodes: KNOWN.filter((n) => wanted.includes(n.id)) } } } }
-  }
-  return defaultLinearMockReply(request)
-}
+const UUID_9 = '9a1b2c3d-0000-4000-8000-000000000009'
+const UUID_12 = '9a1b2c3d-0000-4000-8000-000000000012'
+const issuesReply = linearMockIssuesReply([
+  linearMockIssueNode(UUID_9, 'ENG-9'),
+  linearMockIssueNode(UUID_12, 'ENG-12'),
+  linearMockIssueNode('9a1b2c3d-0000-4000-8000-000000000101', 'OPS-1')
+])
 
 describe('Linear issue batch and rate limits', () => {
   let server: LinearMockServer | null = null
@@ -110,22 +92,62 @@ describe('Linear issue batch and rate limits', () => {
     vi.restoreAllMocks()
   })
 
-  it('reads many issues in one request, in the order asked, and names the missing', async () => {
+  it('reads many issues by UUID in one request, in the order asked, and names the missing', async () => {
+    const { batch } = await connected()
+    const before = server?.requests.length ?? 0
+    const unknown = '9a1b2c3d-0000-4000-8000-000000000404'
+
+    const result = await batch.getLinearIssuesByIds([UUID_12, unknown, UUID_9, UUID_12], ORG)
+
+    expect(result.issues.map((issue) => issue.identifier)).toEqual(['ENG-12', 'ENG-9'])
+    expect(result.issues[0]?.suggestedWorktreeName).toBe('eng-12-fix-eng-12')
+    expect(result.missing).toEqual([unknown])
+    const sent = server?.requests.slice(before) ?? []
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.variables).toEqual({
+      filter: { or: [{ id: { in: [UUID_12, unknown, UUID_9] } }] },
+      first: 3
+    })
+    expect(guard?.blocked).toEqual([])
+  })
+
+  it('reads identifiers by team key and number, mixed with UUIDs, still in one request', async () => {
     const { batch } = await connected()
     const before = server?.requests.length ?? 0
 
     const result = await batch.getLinearIssuesByIds(
-      ['issue-12', 'issue-404', 'issue-9', 'issue-12'],
+      ['eng-12', UUID_9, 'OPS-1', 'ENG-9', 'ENG-404', 'not an id'],
       ORG
     )
 
-    expect(result.issues.map((issue) => issue.identifier)).toEqual(['ENG-12', 'ENG-9'])
-    expect(result.issues[0]?.suggestedWorktreeName).toBe('eng-12-fix-eng-12')
-    expect(result.missing).toEqual(['issue-404'])
+    expect(result.issues.map((issue) => issue.identifier)).toEqual(['ENG-12', 'ENG-9', 'OPS-1'])
+    expect(result.missing).toEqual(['ENG-404', 'not an id'])
     const sent = server?.requests.slice(before) ?? []
     expect(sent).toHaveLength(1)
-    expect(sent[0]?.variables).toEqual({ ids: ['issue-12', 'issue-404', 'issue-9'], first: 3 })
-    expect(guard?.blocked).toEqual([])
+    expect(sent[0]?.variables).toEqual({
+      filter: {
+        or: [
+          { id: { in: [UUID_9] } },
+          { team: { key: { eq: 'ENG' } }, number: { in: [12, 9, 404] } },
+          { team: { key: { eq: 'OPS' } }, number: { in: [1] } }
+        ]
+      },
+      first: 5
+    })
+  })
+
+  it('finds nothing for an identifier sent as an id, as the mock models the API', async () => {
+    const { batch } = await connected()
+    reply = (request) =>
+      issuesReply({
+        ...request,
+        variables: { filter: { or: [{ id: { in: ['ENG-9'] } }] } }
+      })
+
+    expect(await batch.getLinearIssuesByIds(['ENG-9'], ORG)).toEqual({
+      issues: [],
+      missing: ['ENG-9']
+    })
   })
 
   it('types a rate limit for one workspace in getIssues, getIssue and searchIssues', async () => {
@@ -133,7 +155,7 @@ describe('Linear issue batch and rate limits', () => {
     reply = () => linearMockRateLimitedReply(RESET_AT)
     const limited = { code: 'linear_rate_limited', data: { resetAt: RESET_AT } }
 
-    await expect(batch.getLinearIssuesByIds(['issue-9'], ORG)).rejects.toMatchObject(limited)
+    await expect(batch.getLinearIssuesByIds([UUID_9], ORG)).rejects.toMatchObject(limited)
     await expect(lookups.getIssue('issue-9', ORG)).rejects.toMatchObject(limited)
     await expect(lookups.searchIssues('login', 10, ORG)).rejects.toMatchObject(limited)
   })
@@ -143,7 +165,7 @@ describe('Linear issue batch and rate limits', () => {
     reply = () => linearMockRateLimitedReply(RESET_AT)
 
     expect(await lookups.searchIssues('login', 10, 'all')).toEqual([])
-    await expect(batch.getLinearIssuesByIds(['issue-9'], 'all')).rejects.toMatchObject({
+    await expect(batch.getLinearIssuesByIds(['ENG-9'], 'all')).rejects.toMatchObject({
       code: 'linear_rate_limited'
     })
   })
@@ -163,7 +185,7 @@ describe('Linear issue batch and rate limits', () => {
       id: 'req-1',
       authToken: 'tok',
       method: 'linear.getIssues',
-      params: { ids: ['issue-9'], workspaceId: ORG }
+      params: { ids: ['ENG-9'], workspaceId: ORG }
     })
 
     expect(response).toMatchObject({
