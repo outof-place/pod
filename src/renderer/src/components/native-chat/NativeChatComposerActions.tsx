@@ -1,4 +1,4 @@
-import { ArrowUp, CircleAlert, Mic, Play, Plus, Square } from 'lucide-react'
+import { ArrowUp, CircleAlert, Play, Plus, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -15,7 +15,6 @@ import type { NativeChatComposerPrimaryAction } from './native-chat-composer-pri
 
 export type NativeChatComposerActionsProps = {
   attachDisabled: boolean
-  dictationDisabled: boolean
   sendDisabled: boolean
   /** What the primary button does (`nativeChatComposerPrimaryAction`). */
   primaryAction: NativeChatComposerPrimaryAction
@@ -26,12 +25,7 @@ export type NativeChatComposerActionsProps = {
   isWorking: boolean
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */
   isStopping?: boolean
-  isDictating: boolean
-  isDictationHoldMode: boolean
   onAttach: () => void
-  onDictationToggle: () => void
-  onDictationHoldStart: () => void
-  onDictationHoldEnd: () => void
   onSend: () => void
   onStop?: () => void
   /** Releases the held queue when the primary action is Resume. */
@@ -48,19 +42,13 @@ export type NativeChatComposerActionsProps = {
 
 export function NativeChatComposerActions({
   attachDisabled,
-  dictationDisabled,
   sendDisabled,
   primaryAction,
   sendBlockedReason,
   draftNotSaved,
   isWorking,
   isStopping = false,
-  isDictating,
-  isDictationHoldMode,
   onAttach,
-  onDictationToggle,
-  onDictationHoldStart,
-  onDictationHoldEnd,
   onSend,
   onStop,
   onResume,
@@ -87,9 +75,6 @@ export function NativeChatComposerActions({
       onSend()
     }
   }
-  const dictationLabel = isDictating
-    ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
-    : translate('components.native-chat.composer.startDictation', 'Start dictation')
   const sendReason = stops || resumes ? null : (sendBlockedReason ?? null)
   const sendButton = (
     <Button
@@ -144,8 +129,7 @@ export function NativeChatComposerActions({
         {onExitGoalMode ? <NativeChatComposerGoalChip onExit={onExitGoalMode} /> : null}
       </div>
       <div className="ml-auto flex items-center gap-1.5">
-        {/* Why: keep session controls beside the actions they affect; the
-        model trigger is ordered last so only the context ring separates it from dictation. */}
+        {/* Why: keep session controls beside the actions they affect. */}
         <NativeChatSessionOptionPickers
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
@@ -154,50 +138,6 @@ export function NativeChatComposerActions({
           focusComposer={focusComposer}
         />
         {contextUsage ? <NativeChatContextUsageRing usage={contextUsage} /> : null}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant={isDictating ? 'secondary' : 'ghost'}
-              size="icon-sm"
-              aria-label={dictationLabel}
-              disabled={dictationDisabled}
-              onClick={isDictationHoldMode ? undefined : onDictationToggle}
-              onPointerDown={(event) => {
-                if (!isDictationHoldMode || dictationDisabled) {
-                  return
-                }
-                event.preventDefault()
-                onDictationHoldStart()
-              }}
-              onPointerUp={() => {
-                if (isDictationHoldMode && !dictationDisabled) {
-                  onDictationHoldEnd()
-                }
-              }}
-              onPointerCancel={() => {
-                if (isDictationHoldMode && !dictationDisabled) {
-                  onDictationHoldEnd()
-                }
-              }}
-              onPointerLeave={(event) => {
-                if (isDictationHoldMode && event.buttons === 1 && !dictationDisabled) {
-                  onDictationHoldEnd()
-                }
-              }}
-              className="pointer-coarse:size-11"
-            >
-              {isDictating ? (
-                <Square className="size-3.5 fill-current" />
-              ) : (
-                <Mic className="size-4" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {dictationLabel}
-          </TooltipContent>
-        </Tooltip>
         <DraftNotSavedIcon shown={draftNotSaved === true} />
         {sendReason ? (
           <Tooltip>

@@ -186,11 +186,6 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('ui:editableContextPaste', listener)
     return () => ipcRenderer.removeListener('ui:editableContextPaste', listener)
   },
-  onDictationKeyDown: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
-    ipcRenderer.on('ui:dictationKeyDown', listener)
-    return () => ipcRenderer.removeListener('ui:dictationKeyDown', listener)
-  },
   onActivateWorktree: (
     callback: (data: {
       repoId: string

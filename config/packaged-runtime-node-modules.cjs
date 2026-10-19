@@ -67,7 +67,6 @@ const PACKAGED_MAIN_REQUIRED_FILES = [
 const PACKAGED_MAIN_SOURCE_RE = /^out\/main\/.+\.js$/
 const TYPE_DECLARATION_ARTIFACT_RE = /\.d\.(?:c|m)?ts(?:\.map)?$/
 const JS_SOURCE_MAP_ARTIFACT_RE = /\.(?:c|m)?js\.map$/
-const VERSIONED_ONNXRUNTIME_DYLIB_RE = /^libonnxruntime\.\d[\d.]*\.dylib$/
 
 const NODE_BUILTINS = new Set([
   ...builtinModules,
@@ -539,31 +538,6 @@ function prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir) {
   pruneMatchingFiles(nodeModulesDir, isPrunableTypeOrSourceMapArtifact)
 }
 
-function prunePackagedSherpaOnnx(resourcesDir, electronPlatformName) {
-  if (electronPlatformName !== 'darwin') {
-    return
-  }
-  const nodeModulesDir = join(resourcesDir, 'node_modules')
-  if (!existsSync(nodeModulesDir)) {
-    return
-  }
-  for (const entry of readdirSync(nodeModulesDir, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !entry.name.startsWith('sherpa-onnx-darwin-')) {
-      continue
-    }
-    const packageDir = join(nodeModulesDir, entry.name)
-    const packageEntries = readdirSync(packageDir)
-    const hasVersionedOnnxRuntime = packageEntries.some((filename) =>
-      VERSIONED_ONNXRUNTIME_DYLIB_RE.test(filename)
-    )
-    if (hasVersionedOnnxRuntime) {
-      // Why: darwin sherpa-onnx binaries link to the versioned ONNX Runtime
-      // install name; the unversioned dylib is a duplicate fallback copy.
-      rmSync(join(packageDir, 'libonnxruntime.dylib'), { force: true })
-    }
-  }
-}
-
 function prunePackagedZodSources(resourcesDir) {
   // Why: Zod's src tree is TypeScript source only selected by the @zod/source
   // condition; packaged runtime import/require paths resolve to built JS.
@@ -577,18 +551,6 @@ function assertPackagedNativeVariantsInstalled(electronPlatformName, electronArc
   const nodeModulesDir = join(projectDir, 'node_modules')
   const isInstalled = (name) => existsSync(join(nodeModulesDir, name, 'package.json'))
   const missing = []
-
-  const rootOptionalDependencies =
-    JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8')).optionalDependencies ?? {}
-  // Why win32 is always x64: winSpeechNativeResource packages sherpa-onnx-win-x64 for every
-  // Windows target (there is no sherpa-onnx-win-arm64; it runs under emulation).
-  const sherpaName =
-    electronPlatformName === 'win32'
-      ? 'sherpa-onnx-win-x64'
-      : `sherpa-onnx-${electronPlatformName}-${architecture}`
-  if (sherpaName in rootOptionalDependencies && !isInstalled(sherpaName)) {
-    missing.push(sherpaName)
-  }
 
   // Why prefix, not equality: linux variants carry a libc suffix (watcher-linux-x64-glibc),
   // mirroring what prunePackagedParcelWatcher keeps.
@@ -646,7 +608,6 @@ function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, ele
   // Why before the filename walk: zod/src is deleted wholesale, so walking it first is wasted work.
   prunePackagedZodSources(resourcesDir)
   prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir)
-  prunePackagedSherpaOnnx(resourcesDir, electronPlatformName)
 }
 
 function pruneMatchingFiles(directory, shouldPrune) {
@@ -673,7 +634,6 @@ module.exports = {
   prunePackagedParcelWatcher,
   prunePackagedRuntimeNodeModules,
   prunePackagedRuntimeTypeAndSourceMapArtifacts,
-  prunePackagedSherpaOnnx,
   prunePackagedZodSources,
   verifyPackagedMainRuntimeDeps
 }

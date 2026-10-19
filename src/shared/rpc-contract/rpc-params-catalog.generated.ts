@@ -557,13 +557,6 @@ import {
   SkillsDiscoverParams,
   SkillsGetInstallProgressParams
 } from './skills-params'
-import {
-  DictationChunk,
-  DictationHandle,
-  DictationSetup,
-  DictationStart,
-  SpeechModelAction
-} from './speech-params'
 import { SshTarget } from './ssh-params'
 import { ContinueInterruptedParams } from './structured-agent-session-continue-params'
 import {
@@ -1328,14 +1321,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'skills.removeInstall': SkillRemoveRequestSchema,
   'skills.share': AgentSkillShareRequestSchema,
   'skills.uploadChunk': SkillUploadChunkRequestSchema,
-  'speech.dictation.cancel': DictationHandle,
-  'speech.dictation.chunk': DictationChunk,
-  'speech.dictation.finish': DictationHandle,
-  'speech.dictation.setup': DictationSetup,
-  'speech.dictation.start': DictationStart,
-  'speech.models.delete': SpeechModelAction,
-  'speech.models.download': SpeechModelAction,
-  'speech.models.list': null,
   'ssh.addPortForward': SshAddPortForwardParams,
   'ssh.addTarget': SshAddTargetParams,
   'ssh.browseDir': SshBrowseDirParams,

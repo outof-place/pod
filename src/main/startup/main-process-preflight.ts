@@ -67,8 +67,6 @@ import { setRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
 import { installElectronBrowserCommands } from '../host/electron-browser-commands'
 import { electronHttpClient } from '../host/electron-http-client'
 import { setMainHttpClient } from '../network/http-client'
-import { electronSpeechServiceFactories } from '../host/electron-speech-services'
-import { setSpeechServiceFactories } from '../speech/speech-runtime-service'
 import { setWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem-watcher'
 import { setDefaultProxySessionResolver } from '../network/proxy-settings'
@@ -320,9 +318,6 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // falls back to the platform default, which is a real behavioural difference (proxy
   // read from the environment, Node's user agent) rather than a transparent swap.
   setMainHttpClient(electronHttpClient)
-  // Why here: constructing the speech services is what pulls Electron's streaming net
-  // request in. A host without them rejects speech calls rather than pretending.
-  setSpeechServiceFactories(electronSpeechServiceFactories)
   setWorktreeWatcherRemoval(desktopWorktreeWatcherRemoval)
   // Why: couple to dev-parent only for electron-vite desktop runs; `orca serve`'s parent (CLI shim/background shell) isn't the intended server lifetime.
   const shouldCoupleToDevParent = isDev && !state.isServeMode

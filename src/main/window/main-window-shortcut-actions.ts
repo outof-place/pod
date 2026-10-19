@@ -7,10 +7,6 @@ export function sendResolvedWindowShortcutAction(
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
 ): void {
   switch (action.type) {
-    // The renderer's DictationController re-checks enabled/sttModel and ignores hold mode, so this path needs no voice guards.
-    case 'dictationKeyDown':
-      mainWindow.webContents.send('ui:dictationKeyDown')
-      return
     case 'zoom':
       mainWindow.webContents.send('terminal:zoom', action.direction)
       return

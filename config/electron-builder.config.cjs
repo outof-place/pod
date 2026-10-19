@@ -136,20 +136,6 @@ const commonExtraResources = [
   nativeChatVisualsResource,
   emojiShortcodeDatasetResource
 ]
-// Why: native speech addons must be real files outside app.asar; copy only the
-// package matching the artifact target instead of every optional variant.
-const macSpeechNativeResource = {
-  from: 'node_modules/sherpa-onnx-darwin-${arch}',
-  to: 'node_modules/sherpa-onnx-darwin-${arch}'
-}
-const linuxSpeechNativeResource = {
-  from: 'node_modules/sherpa-onnx-linux-${arch}',
-  to: 'node_modules/sherpa-onnx-linux-${arch}'
-}
-const winSpeechNativeResource = {
-  from: 'node_modules/sherpa-onnx-win-x64',
-  to: 'node_modules/sherpa-onnx-win-x64'
-}
 // electron-builder replaces these defaults when `depends` is configured; retain
 // Electron's loader requirements alongside Orca's headless-host dependencies.
 const debElectronRuntimeDependencies = [
@@ -270,10 +256,6 @@ module.exports = {
     // Why: bundled plugins ship via extraResources to resources/plugins/launch;
     // packing the source tree into app.asar would duplicate those exact bytes.
     '!resources/plugins/launch/**',
-    // Why: speech packages are copied selectively through the platform
-    // extraResources entry below; keeping them in app.asar would ship every
-    // native variant (and duplicate the selected one).
-    '!node_modules/sherpa-onnx*{,/**/*}',
     // Why: the Windows CLI shim ships via extraResources to resources/bin/orca.cmd
     // (beside the native resources/bin/orca.exe). Packing the source tree into
     // app.asar too lets asarUnpack:['resources/**'] extract a second copy at
@@ -492,7 +474,6 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...windowsRuntimeResources,
-      winSpeechNativeResource,
       {
         from: 'resources/win32/bin/orca.cmd',
         to: 'bin/orca.cmd'
@@ -585,7 +566,6 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('darwin'),
-      macSpeechNativeResource,
       procInfoMacExtraResource,
       {
         from: 'resources/darwin/bin/orca',
@@ -658,7 +638,6 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('linux'),
-      linuxSpeechNativeResource,
       {
         from: 'resources/linux/bin/orca-ide',
         to: 'bin/orca-ide'

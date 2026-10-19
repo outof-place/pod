@@ -8,14 +8,12 @@ import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
 import type { BrowserFindTarget } from '../../shared/browser-find-source'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
 
-export type ShouldForwardDictationShortcut = () => boolean
 export type IsMobileEmulatorEnabled = () => boolean
 export type GuestShortcutInput = WindowShortcutInput & { isAutoRepeat?: boolean }
 
 export type GuestShortcutForwardContext = {
   browserTabId: string
   resolveRenderer: ResolveRenderer
-  shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
   isMobileEmulatorEnabled?: IsMobileEmulatorEnabled
   getKeybindings?: () => KeybindingOverrides | undefined
   resolveWorktreeId?: (browserTabId: string) => string | null
@@ -32,7 +30,6 @@ export function forwardGuestShortcutInput(
   const {
     browserTabId,
     resolveRenderer,
-    shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
     resolveWorktreeId,
@@ -46,10 +43,7 @@ export function forwardGuestShortcutInput(
     return true
   }
   if (input.isAutoRepeat) {
-    if (
-      (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
-      action?.type === 'deleteCurrentWorkspace'
-    ) {
+    if (action?.type === 'deleteCurrentWorkspace') {
       event.preventDefault()
       return true
     }
@@ -211,11 +205,6 @@ export function forwardGuestShortcutInput(
     } else {
       renderer.send('ui:jumpToTabIndex', action.index)
     }
-  } else if (action?.type === 'dictationKeyDown') {
-    if (!shouldForwardDictationShortcut?.()) {
-      return false
-    }
-    renderer.send('ui:dictationKeyDown')
   } else {
     return false
   }

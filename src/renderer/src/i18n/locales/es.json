@@ -1113,8 +1113,6 @@
         "17005c73d4": "Abre la lista de configuración inicial para ver pasos de setup e hitos.",
         "ded9e9032f": "Lista de configuración inicial",
         "5f32ac08f3": "Completa la lista de configuración inicial para los flujos de trabajo principales de Orca.",
-        "8ac3de82f5": "Dictado local de voz a texto con modelos en el dispositivo.",
-        "6a50cdcd7c": "Voz",
         "0059bd17f3": "Permite que los agentes controlen cualquier app en tu computadora.",
         "b35e92364b": "Computer Use",
         "cd50cec5d7": "Coordina múltiples coding agents a través de Orca.",
@@ -8328,8 +8326,6 @@
           "7807c11c4d": "General",
           "6855b0f77d": "Termina los flujos de trabajo principales que hacen que Orca sea útil para el trabajo de agentes en paralelo.",
           "6d119427ef": "Lista de verificación de incorporación",
-          "eb1176a14e": "Dictado local de voz a texto con modelos en el dispositivo.",
-          "5063bb47a5": "Voz",
           "7118953f14": "Permite que los agentes controlen cualquier app en tu computadora.",
           "c9841721cb": "Computer Use",
           "475980f53d": "Coordina varios agentes de codificación a través de Orca.",
@@ -8914,37 +8910,8 @@
           "c2c64b24d0": "Restablecer"
         },
         "VoicePane": {
-          "68de13f72c": "No se pudo eliminar el modelo.",
-          "1ba81c0ff0": "recomendado",
-          "cfde55c7b0": "No se pudo descargar el modelo.",
-          "43fd4f454b": "Modelo de voz",
-          "7cf715f891": "se mantiene presionado.",
-          "295d84b849": "una vez para empezar y otra para parar. Mantener: dicta mientras",
-          "ff9a680010": "Alternar: pulsa",
-          "ba4a900d1d": "Modo de dictado",
-          "0121960365": "Habilitar dictado de voz",
-          "366e1b4f36": "para dictar texto en cualquier panel con foco.",
-          "4465596675": "Pulsa",
-          "62d2a84d31": "No se pudo borrar la clave API de OpenAI",
-          "37aba8bb63": "Clave API de OpenAI borrada",
-          "8572bbb537": "No se pudo guardar la clave API de OpenAI",
-          "506df81ba6": "Clave API de OpenAI guardada",
-          "91980ce124": "{{value0}} MB",
-          "61a16c8141": "Extrayendo...",
           "b6536a1d12": "extrayendo",
-          "8f4d2a51d7": "sin conexión",
-          "d504ab05f0": "streaming",
-          "fbe5990716": "Seleccionar modelo",
-          "e24f7d43d2": "Selecciona un modelo de voz. Los modelos locales funcionan sin conexión; los modelos en la nube requieren una clave API.",
-          "174da92062": "Mantener",
-          "118b3c2dee": "Alternar",
-          "901985625d": "alternar",
-          "ad5d036ecc": "No se pudo solicitar permiso para el micrófono. El dictado de voz no se habilitó.",
-          "f9a9cf6928": "Se requiere permiso del micrófono antes de habilitar el dictado de voz.",
-          "1eac933202": "Se abrió Privacidad y seguridad de macOS. Vuelve a habilitar el dictado después de otorgar acceso.",
-          "cd9fe37556": "Permiso de micrófono concedido",
-          "6fa734ed95": "Eliminar {{value0}}",
-          "openAiKeyName": "Su clave de transcripción OpenAI"
+          "901985625d": "alternar"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Quitar {{value0}}",
@@ -10836,41 +10803,6 @@
             }
           }
         },
-        "voice": {
-          "pane": {
-            "search": {
-              "f6e0dfa61c": "nube",
-              "2d206de105": "clave API",
-              "04c25a6fb0": "openai",
-              "b9dee49cd7": "descargar",
-              "10d45a9fce": "stt",
-              "3d8b853963": "voz",
-              "080202facb": "modelo",
-              "7640ed9848": "voz",
-              "56defcd6c3": "Selecciona un modelo de voz a texto local o en la nube para usarlo en el dictado.",
-              "7e62cd7c41": "Modelo de voz",
-              "931b1a9e53": "pulsar para hablar",
-              "064a9bd94a": "mantener pulsado",
-              "6fa48bcd41": "alternar",
-              "d86f5600da": "modo",
-              "089d31a45b": "dictado",
-              "748b33e531": "Alterna el dictado o mantén pulsado para hablar.",
-              "6a3abb4338": "Modo de dictado",
-              "e360027a65": "micrófono",
-              "698376a38d": "Interruptor principal para las funciones de dictado por voz.",
-              "20574cbc72": "Habilitar dictado de voz",
-              "322d457a0d": "transcripción",
-              "dcc7846641": "Configure la clave API de OpenAI utilizada para los modelos de voz a texto en la nube.",
-              "ebfd0b32e5": "Transcripción OpenAI",
-              "microphoneTitle": "Micrófono",
-              "microphoneDescription": "Elija qué dispositivo de entrada utiliza el dictado de voz.",
-              "micInput": "aporte",
-              "micDevice": "dispositivo",
-              "micAirpods": "airpods",
-              "micDefault": "valor predeterminado del sistema"
-            }
-          }
-        },
         "source": {
           "control": {
             "action": {
@@ -12261,19 +12193,6 @@
           "hostOnly": "Cambie el sitio del plan y la clave API en la aplicación de escritorio de la computadora que ejecuta Orca.",
           "detailsUnavailable": "Los detalles de las credenciales del plan solo se pueden leer en la computadora que ejecuta Orca.",
           "siteUnavailable": "El sitio del plan de host no está disponible"
-        },
-        "VoiceMicrophoneSetting": {
-          "label": "Micrófono",
-          "systemDefault": "Valor predeterminado del sistema",
-          "unavailable": "indisponible",
-          "description": "Dispositivo de entrada utilizado para dictado de voz. La configuración predeterminada del sistema sigue la configuración del micrófono del sistema operativo.",
-          "accessHint": "Permitir el acceso al micrófono para enumerar los dispositivos de entrada.",
-          "allowAccess": "Permitir acceso",
-          "noMicrophoneFound": "No se encontró ningún micrófono. Conecte uno y vuelva a intentarlo.",
-          "openFailedDetail": "No se pudo abrir el micrófono. {{value0}}",
-          "openFailed": "No se pudo abrir el micrófono.",
-          "openedSystemSettings": "Se abrió Privacidad y seguridad de macOS. Concede acceso al micrófono y vuelve a intentarlo.",
-          "permissionDenied": "El acceso al micrófono está bloqueado. Concédelo en la configuración de tu sistema y vuelve a intentarlo."
         },
         "EphemeralVmCleanupStopDialog": {
           "stopping": "Parada…",
@@ -15978,26 +15897,6 @@
           }
         }
       },
-      "dictation": {
-        "DictationController": {
-          "de136f1199": "Error de voz: {{value0}}",
-          "7afff43472": "El dictado finalizó, pero no se centró ningún campo de texto.",
-          "55127a3706": "Dictado fallido: {{value0}}",
-          "bb7f599ee7": "Abrir configuración",
-          "2d5b9fabf9": "Acceso al micrófono denegado. Conceda acceso en la configuración del sistema, luego reinicie Orca.",
-          "5d2c3e7ae3": "No se detectó ninguna voz.",
-          "micFallback": "Micrófono seleccionado no disponible. Se usará el predeterminado del sistema.",
-          "micDisconnected": "Micrófono desconectado. Dictado detenido."
-        },
-        "DictationIndicator": {
-          "335e1bc6cb": "Detener dictado",
-          "7f3660a7ba": "Iniciando micrófono…",
-          "f082d0cb9d": "Procesando…",
-          "3de5a129e7": "Escuchando",
-          "4977162383": "Volumen demasiado alto",
-          "25f2b7a6a5": "Hablando"
-        }
-      },
       "dashboard": {
         "DashboardAgentChildDisclosure": {
           "1b57ce9fa4": "{{value0}} {{value1}} niño {{value2}}"
@@ -18046,8 +17945,6 @@
         "noFiles": "No hay archivos coincidentes",
         "filesLoadFailed": "No se pudieron cargar los archivos",
         "attach": "Adjuntar archivo",
-        "startDictation": "Iniciar dictado",
-        "stopDictation": "Detener dictado",
         "noSkills": "Sin habilidades coincidentes",
         "localAttachmentUnsupported": "Los archivos adjuntos locales no están disponibles para sesiones remotas.",
         "attachFailed": "No se pudo adjuntar {{files}}.",
@@ -19298,18 +19195,6 @@
       "recent3Title": "Borrador de notas de la versión",
       "settingsLink": "Ajustes → Búsqueda de sesiones de agentes",
       "startSearching": "Empezar a buscar"
-    },
-    "voice": {
-      "demoPrompt": "Revisa este diff en busca de casos límite y agrega pruebas para lo que encuentres.",
-      "startDictation": "Iniciar dictado",
-      "agentPromptTitle": "Prompt del agente",
-      "listening": "Escuchando...",
-      "focusPaneInstruction": "Enfoca un terminal, editor o prompt del agente, luego presiona",
-      "startInstruction": "para iniciar el dictado por voz. Presiona",
-      "stopInstruction": "de nuevo para detener.",
-      "unassignedInstruction": "Asigna un atajo de dictado antes de iniciar el dictado por voz en un panel enfocado.",
-      "settingsInstruction": "Cambia el modelo, el modo de dictado o el atajo en cualquier momento en",
-      "settingsLink": "Ajustes → Voz"
     }
   },
   "fileExplorer": {

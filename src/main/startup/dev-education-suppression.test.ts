@@ -117,7 +117,7 @@ describe('suppressDevEducationForStore', () => {
         lastCompletedStep: 1
       },
       ui: {
-        featureTipsSeenIds: ['voice-dictation'],
+        featureTipsSeenIds: ['cmd-j-palette'],
         contextualToursSeenIds: ['tasks'],
         featureInteractions: {
           tasks: { firstInteractedAt: 77, interactionCount: 3 }
@@ -134,11 +134,10 @@ describe('suppressDevEducationForStore', () => {
       lastCompletedStep: 1
     })
     expect(state.ui.featureTipsSeenIds).toEqual([
-      'voice-dictation',
+      'cmd-j-palette',
       'native-chat-upgrade',
       'agent-session-search',
-      'orca-cli',
-      'cmd-j-palette'
+      'orca-cli'
     ])
     expect(state.ui.contextualToursSeenIds).toEqual([
       'tasks',

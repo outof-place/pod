@@ -16,8 +16,7 @@ import {
   forwardGuestShortcutInput,
   type GuestShortcutForwardContext,
   type GuestShortcutInput,
-  type IsMobileEmulatorEnabled,
-  type ShouldForwardDictationShortcut
+  type IsMobileEmulatorEnabled
 } from './browser-guest-shortcut-dispatch'
 
 // Why: a focused webview guest is its own Chromium process whose key events never reach the renderer; forward shortcuts from here.
@@ -25,7 +24,6 @@ export function setupGuestShortcutForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
-  shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
   isMobileEmulatorEnabled?: IsMobileEmulatorEnabled
   getKeybindings?: () => KeybindingOverrides | undefined
   // Why: a floating-panel guest owns a distinct workspace; its close/index chords must route to the panel, not the main tab strip.
@@ -36,7 +34,6 @@ export function setupGuestShortcutForwarding(args: {
     browserTabId,
     guest,
     resolveRenderer,
-    shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
     resolveWorktreeId,
@@ -58,7 +55,6 @@ export function setupGuestShortcutForwarding(args: {
   const forwardContext: GuestShortcutForwardContext = {
     browserTabId,
     resolveRenderer,
-    shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
     resolveWorktreeId,

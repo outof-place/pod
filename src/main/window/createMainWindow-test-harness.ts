@@ -62,7 +62,6 @@ export type ElectronModuleMock = {
 export type BrowserManagerModuleMock = {
   browserManager: {
     attachGuestPolicies: MainWindowSpy
-    setDictationShortcutForwardingPredicate: MainWindowSpy
   }
 }
 
@@ -106,8 +105,7 @@ export function appIconMock() {
 export function browserManagerMock(): BrowserManagerModuleMock {
   return {
     browserManager: {
-      attachGuestPolicies: attachGuestPoliciesMock,
-      setDictationShortcutForwardingPredicate: vi.fn()
+      attachGuestPolicies: attachGuestPoliciesMock
     }
   }
 }

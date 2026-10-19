@@ -14,7 +14,7 @@ const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
 /** Past this the window is nearly spent; the ring turns destructive to say so. */
 const CRITICAL_PERCENTAGE = 90
-/** Long enough that a pointer crossing the ring toward dictation doesn't flash the card. */
+/** Long enough that a pointer crossing the ring doesn't flash the card. */
 const HOVER_OPEN_DELAY_MS = 150
 /** Long enough for the pointer to cross the gap between the ring and the card. */
 const HOVER_CLOSE_DELAY_MS = 100

@@ -40,7 +40,6 @@ import { POD_SSH_CREDENTIAL_METHODS } from './pod-ssh-credentials'
 import { POD_SSH_PORT_FORWARD_METHODS } from './pod-ssh-port-forwards'
 import { POD_SSH_REMOTE_PROJECT_METHODS } from './pod-ssh-remote-projects'
 import { MANAGED_SERVER_METHODS } from './managed-server'
-import { SPEECH_METHODS } from './speech'
 import { CLIENT_UI_METHODS } from './client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events'
 import { WORKSPACE_PORT_METHODS } from './workspace-ports'
@@ -154,7 +153,6 @@ export const ALL_RPC_METHODS = [
   // Fork-only (Pod): SSH port forwarding and the ports a host's relay detects.
   ...POD_SSH_PORT_FORWARD_METHODS,
   ...MANAGED_SERVER_METHODS,
-  ...SPEECH_METHODS,
   ...WORKSPACE_PORT_METHODS,
   ...PLUGIN_METHODS,
   // Fork-only (Pod): plugin install, remove and marketplace, which the desktop did over IPC only.

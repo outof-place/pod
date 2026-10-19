@@ -9,7 +9,6 @@ import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile
 import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/orca-account-settings-search'
 import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
 import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration-search'
-import { getVoicePaneSearchEntries } from '@/components/settings/voice-pane-search'
 import { translate } from '@/i18n/i18n'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import { buildPodWorkspaceSettingsSections } from '@/pod/workspace/pod-workspace-settings-nav'
@@ -17,7 +16,6 @@ import {
   Blocks,
   Bot,
   CircleUserRound,
-  Mic,
   MousePointerClick,
   Network,
   SlidersHorizontal,
@@ -105,17 +103,6 @@ export function buildCapabilitySettingsSections({
             ),
             icon: MousePointerClick,
             searchEntries: getComputerUsePaneSearchEntries(),
-            group: 'capabilities'
-          },
-          {
-            id: 'voice',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.6a50cdcd7c', 'Voice'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.8ac3de82f5',
-              'Local speech-to-text dictation with on-device models.'
-            ),
-            icon: Mic,
-            searchEntries: getVoicePaneSearchEntries(),
             group: 'capabilities'
           }
         ]

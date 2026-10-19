@@ -2843,27 +2843,6 @@
   "auto.components.settings.TerminalWindowSection.e56e7d6ea0": {
     "ko": "밝은 마젠타"
   },
-  "auto.components.settings.VoicePane.118b3c2dee": {
-    "ko": "토글"
-  },
-  "auto.components.settings.VoicePane.174da92062": {
-    "ko": "길게 누르기"
-  },
-  "auto.components.settings.VoicePane.295d84b849": {
-    "ko": "한 번 누르면 시작, 다시 누르면 중지. 길게 누르기: 누르고 있는 동안 받아쓰기"
-  },
-  "auto.components.settings.VoicePane.366e1b4f36": {
-    "ko": "포커스된 창에 텍스트를 받아쓰기합니다."
-  },
-  "auto.components.settings.VoicePane.4465596675": {
-    "ko": "누르기"
-  },
-  "auto.components.settings.VoicePane.61a16c8141": {
-    "ko": "추출 중..."
-  },
-  "auto.components.settings.VoicePane.7cf715f891": {
-    "ko": "누르고 있는 동안"
-  },
   "auto.components.settings.VoicePane.901985625d": {
     "ko": "토글"
   },
@@ -4054,27 +4033,6 @@
   },
   "auto.components.settings.useWarpThemeImport.unknown_error": {
     "ko": "알 수 없는 오류"
-  },
-  "auto.components.settings.voice.pane.search.04c25a6fb0": {
-    "ko": "openai"
-  },
-  "auto.components.settings.voice.pane.search.064a9bd94a": {
-    "ko": "길게 누르기"
-  },
-  "auto.components.settings.voice.pane.search.3d8b853963": {
-    "ko": "음성"
-  },
-  "auto.components.settings.voice.pane.search.6fa48bcd41": {
-    "ko": "토글"
-  },
-  "auto.components.settings.voice.pane.search.d86f5600da": {
-    "ko": "모드"
-  },
-  "auto.components.settings.voice.pane.search.e360027a65": {
-    "ko": "마이크"
-  },
-  "auto.components.settings.voice.pane.search.f6e0dfa61c": {
-    "ko": "클라우드"
   },
   "auto.components.setup.guide.SetupGuideProgressRing.dac3a4724a": {
     "ko": "설정 단계 {{value1}}개 중 {{value0}}개 완료"

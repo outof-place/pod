@@ -13,7 +13,6 @@ export const POD_FEATURE_IDS = [
   'uiLocales',
   'mobileWebClient',
   'runtimeWebSocket',
-  'dictation',
   'windowsSshHosts',
   'usagePolling',
   'emulator',
@@ -86,12 +85,6 @@ export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
     pod: false,
     reason:
       'The desktop app opens no runtime WebSocket listener: no phone, browser or other desktop pairs into Pod, and the CLI uses the unix socket. Explicit `serve` keeps it, pinned to loopback, and the headless host has none'
-  },
-  dictation: {
-    pod: false,
-    reason: 'claude-acc owns dictation; drops the sherpa-onnx speech runtime',
-    packaging: { dropExtraResources: ['node_modules/sherpa-onnx-darwin-${arch}'] },
-    settingsSections: ['voice']
   },
   windowsSshHosts: {
     pod: false,
@@ -167,8 +160,6 @@ export const POD_UI_LOCALES: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.uiLocales
 export const POD_RUNTIME_WEBSOCKET: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.runtimeWebSocket
-export const POD_DICTATION: boolean =
-  typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.dictation
 export const POD_WINDOWS_SSH_HOSTS: boolean =
   typeof __POD_FEATURES__ === 'undefined' || __POD_FEATURES__.windowsSshHosts
 export const POD_USAGE_POLLING: boolean =
@@ -195,7 +186,6 @@ export function podFeatureFlags(profile: PodBuildProfile): PodFeatureFlags {
     uiLocales: on('uiLocales'),
     mobileWebClient: on('mobileWebClient'),
     runtimeWebSocket: on('runtimeWebSocket'),
-    dictation: on('dictation'),
     windowsSshHosts: on('windowsSshHosts'),
     usagePolling: on('usagePolling'),
     emulator: on('emulator'),

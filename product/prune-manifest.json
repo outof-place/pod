@@ -480,6 +480,54 @@
         "config/scripts/pod-font-swaps.test.ts",
         "src/renderer/src/lib/pod-app-font-family.test.ts"
       ]
+    },
+    {
+      "id": "orca-dictation",
+      "category": "feature",
+      "reason": "Voice dictation: the sherpa-onnx/OpenAI speech runtime, its STT worker, IPC, RPC and settings, the dictation overlay and the mic button. claude-acc owns dictation in Pod (dictation was cut)",
+      "paths": [
+        "src/main/speech/**",
+        "src/renderer/src/components/dictation/**",
+        "src/main/host/electron-speech-services.ts",
+        "src/main/ipc/speech.ts",
+        "src/main/ipc/speech.test.ts",
+        "src/main/ipc/speech-worker-exit-lifetime.test.ts",
+        "src/main/runtime/rpc/methods/speech.ts",
+        "src/main/runtime/rpc/methods/speech.test.ts",
+        "src/main/runtime/runtime-mobile-dictation-controller.ts",
+        "src/main/runtime/runtime-mobile-speech-catalog.ts",
+        "src/preload/api/speech-api.ts",
+        "src/preload/api/speech-bridge.ts",
+        "src/preload/api/speech-bridge.test.ts",
+        "src/renderer/src/components/feature-tips/VoiceDictationFeatureTipVisual.tsx",
+        "src/renderer/src/components/feature-tips/VoiceDictationFeatureTipVisual.test.tsx",
+        "src/renderer/src/components/feature-tips/VoiceDictationTipDialog.tsx",
+        "src/renderer/src/components/feature-tips/VoiceDictationTipDialog.test.tsx",
+        "src/renderer/src/components/native-chat/use-native-chat-dictation.ts",
+        "src/renderer/src/components/settings/VoiceDictationSettingsSection.tsx",
+        "src/renderer/src/components/settings/VoiceMicrophoneSetting.tsx",
+        "src/renderer/src/components/settings/VoiceMicrophoneSetting.test.tsx",
+        "src/renderer/src/components/settings/VoicePane.tsx",
+        "src/renderer/src/components/settings/VoicePane.test.tsx",
+        "src/renderer/src/components/settings/VoiceSpeechModelSection.tsx",
+        "src/renderer/src/components/settings/VoiceSpeechModelSection.test.tsx",
+        "src/renderer/src/components/settings/voice-dictation-toggle.ts",
+        "src/renderer/src/components/settings/voice-pane-search.ts",
+        "src/renderer/src/hooks/use-audio-capture.ts",
+        "src/renderer/src/hooks/use-audio-capture.capture-loss.test.ts",
+        "src/renderer/src/store/slices/dictation.ts",
+        "src/renderer/src/store/slices/dictation-model-state-stabilisation.test.ts",
+        "src/shared/rpc-contract/speech-params.ts",
+        "tests/e2e/dictation-indicator.spec.ts",
+        "tests/e2e/voice-microphone-selection.spec.ts",
+        "config/scripts/electron-builder-speech-config.test.mjs"
+      ],
+      "allowReferrers": [
+        {
+          "glob": "config/scripts/verify-linux-glibc-floor.cjs",
+          "reason": "a comment naming the speech worker beside the now-unused sherpa-onnx exemption; the file gates SSH-host orcad slots and stays as is"
+        }
+      ]
     }
   ]
 }

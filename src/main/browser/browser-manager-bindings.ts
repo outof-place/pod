@@ -53,7 +53,6 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
         guest,
         resolveRenderer: (tabId) =>
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
-        shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
         isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
         getKeybindings: () => this.settingsResolver?.().keybindings,
         resolveWorktreeId: (tabId) => this.worktreeIdByTabId.get(tabId) ?? null,

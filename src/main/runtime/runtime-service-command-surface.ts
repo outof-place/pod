@@ -3,9 +3,7 @@ import type { RuntimeAiVaultCommands } from './runtime-ai-vault-commands'
 import type { RuntimeBrowserDriverController } from './runtime-browser-driver-controller'
 import type { RuntimeClientEventBus } from './runtime-client-event-bus'
 import type { RuntimeMessageWaiters } from './runtime-message-waiters'
-import type { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
 import type { RuntimeMobileNotificationController } from './runtime-mobile-notification-controller'
-import type { RuntimeMobileSpeechCatalog } from './runtime-mobile-speech-catalog'
 import type { RuntimeNativeChatDraftResolutions } from './runtime-native-chat-draft-resolutions'
 import type { RuntimeSessionSearchSettingsController } from './runtime-session-search-settings'
 import type { RuntimeSubscriptionRegistry } from './runtime-subscription-registry'
@@ -63,15 +61,6 @@ export type RuntimeServiceCommandSurface = {
   selectDataAccount: RuntimeAccountController['selectData']
   removeDataAccount: RuntimeAccountController['removeData']
   onAccountsChanged: RuntimeAccountController['onChanged']
-  listMobileSpeechModels: RuntimeMobileSpeechCatalog['list']
-  downloadMobileSpeechModel: RuntimeMobileSpeechCatalog['download']
-  deleteMobileSpeechModel: RuntimeMobileSpeechCatalog['delete']
-  configureMobileDictation: RuntimeMobileSpeechCatalog['configure']
-  startMobileDictation: RuntimeMobileDictationController['start']
-  feedMobileDictation: RuntimeMobileDictationController['feed']
-  finishMobileDictation: RuntimeMobileDictationController['finish']
-  cancelMobileDictation: RuntimeMobileDictationController['cancel']
-  cancelMobileDictationForConnection: RuntimeMobileDictationController['cancelForConnection']
   getAllBrowserDrivers: RuntimeBrowserDriverController['getAll']
   reclaimBrowserForDesktop: RuntimeBrowserDriverController['reclaimForDesktop']
   notifyMessageArrived(handle: string, messageType?: string): void
@@ -87,8 +76,6 @@ type RuntimeServiceCommandOwners = {
   subscriptions: RuntimeSubscriptionRegistry
   mobileNotifications: RuntimeMobileNotificationController
   accounts: RuntimeAccountController
-  mobileSpeech: RuntimeMobileSpeechCatalog
-  mobileDictation: RuntimeMobileDictationController
   browserDrivers: RuntimeBrowserDriverController
   messageWaiters: RuntimeMessageWaiters
 }
@@ -104,8 +91,6 @@ export function installRuntimeServiceCommandSurface(
   const subscriptions = owners.subscriptions
   const notifications = owners.mobileNotifications
   const accounts = owners.accounts
-  const speech = owners.mobileSpeech
-  const dictation = owners.mobileDictation
   const browsers = owners.browserDrivers
   const waiters = owners.messageWaiters
   Object.assign(target, {
@@ -165,15 +150,6 @@ export function installRuntimeServiceCommandSurface(
     selectDataAccount: accounts.selectData.bind(accounts),
     removeDataAccount: accounts.removeData.bind(accounts),
     onAccountsChanged: accounts.onChanged.bind(accounts),
-    listMobileSpeechModels: speech.list.bind(speech),
-    downloadMobileSpeechModel: speech.download.bind(speech),
-    deleteMobileSpeechModel: speech.delete.bind(speech),
-    configureMobileDictation: speech.configure.bind(speech),
-    startMobileDictation: dictation.start.bind(dictation),
-    feedMobileDictation: dictation.feed.bind(dictation),
-    finishMobileDictation: dictation.finish.bind(dictation),
-    cancelMobileDictation: dictation.cancel.bind(dictation),
-    cancelMobileDictationForConnection: dictation.cancelForConnection.bind(dictation),
     getAllBrowserDrivers: browsers.getAll.bind(browsers),
     reclaimBrowserForDesktop: browsers.reclaimForDesktop.bind(browsers),
     waitForMessage: waiters.wait.bind(waiters),

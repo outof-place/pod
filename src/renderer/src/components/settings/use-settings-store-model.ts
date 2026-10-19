@@ -56,8 +56,6 @@ export function useSettingsStoreModel() {
   const setSettingsProjectHostSelection = useAppStore((s) => s.setSettingsProjectHostSelection)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
-  const modelStates = useAppStore((s) => s.modelStates)
-  const refreshModelStates = useAppStore((s) => s.refreshModelStates)
 
   const projectHostSetupProjection = useProjectHostSetupProjection()
   // Why: same inputs as nav metadata so both lists agree — the source of truth for the pane list.
@@ -112,7 +110,6 @@ export function useSettingsStoreModel() {
   })
   const skillFreshnessApplies = activeSkillRuntime.canUseLocalSkillFreshness
   const { inventory: skillFreshnessInventory } = useSkillFreshness(skillFreshnessApplies)
-  const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
   // Why: trim platform-only Terminal entries from the shared search index so search never reveals hidden controls.
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
   const [prevScrollbackRows, setPrevScrollbackRows] = useState(settings?.terminalScrollbackRows)
@@ -166,8 +163,6 @@ export function useSettingsStoreModel() {
     setSettingsProjectHostSelection,
     settingsSearchQuery,
     setSettingsSearchQuery,
-    modelStates,
-    refreshModelStates,
     settingsProjectList,
     repoIdToRepresentative,
     repoIdToHostSelection,
@@ -185,8 +180,6 @@ export function useSettingsStoreModel() {
     computerUseSkill,
     skillFreshnessApplies,
     skillFreshnessInventory,
-    voiceModelStatesLoading,
-    setVoiceModelStatesLoading,
     scrollbackMode,
     setScrollbackMode,
     prevScrollbackRows,

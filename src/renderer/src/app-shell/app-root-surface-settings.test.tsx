@@ -7,11 +7,10 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import {
   selectAppRootSurfacePetEnabled,
-  selectAppRootSurfaceTelemetryOptedIn,
-  selectAppRootSurfaceVoiceEnabled
+  selectAppRootSurfaceTelemetryOptedIn
 } from './app-root-surface-settings'
 
-type SurfaceState = Parameters<typeof selectAppRootSurfaceVoiceEnabled>[0]
+type SurfaceState = Parameters<typeof selectAppRootSurfacePetEnabled>[0]
 
 describe('app root surface settings selectors', () => {
   it('does not rerender for an unrelated settings replacement', () => {
@@ -20,7 +19,6 @@ describe('app root surface settings selectors', () => {
     const view = renderHook(() => {
       renderCount += 1
       return {
-        voiceEnabled: useStore(store, selectAppRootSurfaceVoiceEnabled),
         petEnabled: useStore(store, selectAppRootSurfacePetEnabled),
         telemetryOptedIn: useStore(store, selectAppRootSurfaceTelemetryOptedIn)
       }
@@ -33,7 +31,6 @@ describe('app root surface settings selectors', () => {
     })
 
     expect(renderCount).toBe(1)
-    expect(view.result.current.voiceEnabled).toBe(false)
     expect(view.result.current.petEnabled).toBe(false)
     expect(view.result.current.telemetryOptedIn).toBe('unknown')
     view.unmount()
@@ -44,12 +41,12 @@ describe('app root surface settings selectors', () => {
     let renderCount = 0
     const view = renderHook(() => {
       renderCount += 1
-      return useStore(store, selectAppRootSurfaceVoiceEnabled)
+      return useStore(store, selectAppRootSurfacePetEnabled)
     })
 
     act(() => {
       const settings = store.getState().settings!
-      store.setState({ settings: { ...settings, voice: { ...settings.voice!, enabled: true } } })
+      store.setState({ settings: { ...settings, experimentalPet: true } })
     })
 
     expect(renderCount).toBe(2)

@@ -204,7 +204,6 @@
     "qrcode": "^1.5.4",
     "react-i18next": "17.0.15",
     "serve-sim": "0.1.47",
-    "sherpa-onnx": "1.12.37",
     "smol-toml": "1.8.0",
     "ssh2": "^1.17.0",
     "stream-chain": "4.2.6",
@@ -339,12 +338,7 @@
   },
   "optionalDependencies": {
     "@orca/windows-registry": "workspace:*",
-    "@vscode/windows-process-tree": "0.8.0",
-    "sherpa-onnx-darwin-arm64": "1.12.37",
-    "sherpa-onnx-darwin-x64": "1.12.37",
-    "sherpa-onnx-linux-arm64": "1.12.37",
-    "sherpa-onnx-linux-x64": "1.12.37",
-    "sherpa-onnx-win-x64": "1.12.37"
+    "@vscode/windows-process-tree": "0.8.0"
   },
   "lint-staged": {
     "{*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}}": [

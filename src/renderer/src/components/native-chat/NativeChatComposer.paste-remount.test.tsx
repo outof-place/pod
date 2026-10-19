@@ -39,7 +39,6 @@ vi.mock('../../store', () => {
     tabsByWorktree: {},
     worktrees: [],
     repos: [],
-    dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
     agentStatusByPaneKey: {},
     updateSettings: vi.fn(),

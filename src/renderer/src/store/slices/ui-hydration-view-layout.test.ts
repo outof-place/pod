@@ -568,7 +568,7 @@ describe('createUISlice hydratePersistedUI', () => {
   it('does not churn persisted UI references when hydration is identical by value', () => {
     const store = createUIStore()
     const persistedUI = makePersistedUI({
-      featureTipsSeenIds: ['voice-dictation'],
+      featureTipsSeenIds: ['orca-cli'],
       contextualToursSeenIds: ['tasks'],
       showDotfilesByWorktree: { 'repo-1::/repo': false },
       collapsedGroups: ['repo:one'],

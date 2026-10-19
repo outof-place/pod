@@ -48,7 +48,6 @@ it(
       getRuntimeId: () => 'close-intent-runtime-test',
       getStartedAt: () => 1,
       cleanupSubscriptionsForConnection: () => {},
-      cancelMobileDictationForConnection: () => {},
       onClientDisconnected: () => {},
       listMobileSessionTabs,
       refuseUnattributedMobileSessionTabClose,

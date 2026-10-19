@@ -163,14 +163,6 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+1'])
   },
   {
-    id: 'voice.dictation',
-    title: 'Dictation',
-    group: 'Global',
-    scope: 'global',
-    searchKeywords: ['shortcut', 'dictation', 'voice', 'speech', 'microphone'],
-    defaultBindings: platformBindings(['Mod+E'])
-  },
-  {
     id: 'view.tasks',
     title: 'Open Tasks',
     group: 'Global',

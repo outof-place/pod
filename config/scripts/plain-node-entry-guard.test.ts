@@ -137,13 +137,13 @@ describe('guarded entry names', () => {
   it('rejects a guarded name that is no longer a rollup input', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
     const input = Object.fromEntries(
-      GUARDED_ENTRY_NAMES.filter((name) => name !== 'stt-worker').map((name) => [
+      GUARDED_ENTRY_NAMES.filter((name) => name !== 'foreign-sqlite-reader-entry').map((name) => [
         name,
         `${name}.ts`
       ])
     )
 
-    expect(() => runBuildStart(plugin, input)).toThrow('"stt-worker"')
+    expect(() => runBuildStart(plugin, input)).toThrow('"foreign-sqlite-reader-entry"')
   })
 
   it('passes when every guarded name is a rollup input', () => {
@@ -231,7 +231,7 @@ describe('CLI and worker thread entry guard', () => {
 
   it('does not retain a successful scan across output bundles', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
-    const entry = entryChunk('stt-worker', 'require("node:fs")')
+    const entry = entryChunk('foreign-sqlite-reader-entry', 'require("node:fs")')
     const bundle: Rollup.OutputBundle = { [entry.fileName]: entry }
     const scans = countElectronRequireScans(() => {
       runEntryWriteBundle(plugin, bundle)
@@ -241,12 +241,12 @@ describe('CLI and worker thread entry guard', () => {
 
     entry.code = 'require("electron/main")'
     expect(() => runEntryWriteBundle(plugin, bundle)).toThrow(
-      '[plain-node-entry-guard] "stt-worker" reaches chunk "stt-worker.js" that requires electron. '
+      '[plain-node-entry-guard] "foreign-sqlite-reader-entry" reaches chunk "foreign-sqlite-reader-entry.js" that requires electron. '
     )
   })
 
   it('still reads changed code on the same chunk within one bundle scan', () => {
-    const first = entryChunk('stt-worker', 'require("node:fs")')
+    const first = entryChunk('foreign-sqlite-reader-entry', 'require("node:fs")')
     const second = entryChunk('warp-theme-parser-worker', 'require("node:fs")')
     const shared = entryChunk('shared', '')
     shared.isEntry = false
@@ -263,13 +263,13 @@ describe('CLI and worker thread entry guard', () => {
     }
 
     expect(() => runEntryWriteBundle(createPlainNodeEntryGuardPlugin(), bundle)).toThrow(
-      '[plain-node-entry-guard] "warp-theme-parser-worker" reaches chunk "shared.js"'
+      '[plain-node-entry-guard] "foreign-sqlite-reader-entry" reaches chunk "shared.js"'
     )
     expect(reads).toBe(2)
   })
 
   it('keeps watch mode free of entry scanning', () => {
-    const entry = entryChunk('stt-worker', 'require("electron")')
+    const entry = entryChunk('foreign-sqlite-reader-entry', 'require("electron")')
     const bundle: Rollup.OutputBundle = { [entry.fileName]: entry }
     const scans = countElectronRequireScans(() => {
       runEntryWriteBundle(createPlainNodeEntryGuardPlugin(), bundle, true)
@@ -313,7 +313,10 @@ describe('CLI and worker thread entry guard', () => {
   it('names the worker-thread runtime so the failure is actionable', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
     const bundle: Rollup.OutputBundle = {
-      'stt-worker.js': entryChunk('stt-worker', 'require("electron")')
+      'foreign-sqlite-reader-entry.js': entryChunk(
+        'foreign-sqlite-reader-entry',
+        'require("electron")'
+      )
     }
 
     expect(() => runEntryWriteBundle(plugin, bundle)).toThrow('runs as a worker thread')

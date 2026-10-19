@@ -1113,8 +1113,6 @@
         "17005c73d4": "打开入门清单以了解设置和里程碑步骤。",
         "ded9e9032f": "入门清单",
         "5f32ac08f3": "完成 Orca 核心工作流程的入门清单。",
-        "8ac3de82f5": "使用设备端模型进行本地语音转文字听写。",
-        "6a50cdcd7c": "语音",
         "0059bd17f3": "使智能体能够控制您计算机上的任何应用程序。",
         "b35e92364b": "计算机控制",
         "cd50cec5d7": "通过 Orca 协调多个编码智能体。",
@@ -8313,8 +8311,6 @@
           "7807c11c4d": "通用",
           "6855b0f77d": "完成使 Orca 对于并行智能体工作有用的核心工作流程。",
           "6d119427ef": "入门清单",
-          "eb1176a14e": "使用设备上模型进行本地语音到文本听写。",
-          "5063bb47a5": "语音",
           "7118953f14": "使智能体能够控制您计算机上的任何应用程序。",
           "c9841721cb": "计算机控制",
           "475980f53d": "通过 Orca 协调多个编码智能体。",
@@ -8899,37 +8895,8 @@
           "c2c64b24d0": "重置"
         },
         "VoicePane": {
-          "68de13f72c": "删除模型失败。",
-          "1ba81c0ff0": "受到推崇的",
-          "cfde55c7b0": "下载模型失败。",
-          "43fd4f454b": "语音模型",
-          "7cf715f891": "举行。",
-          "295d84b849": "一次开始，再次停止。按住：指示同时",
-          "ff9a680010": "切换：按下",
-          "ba4a900d1d": "听写模式",
-          "0121960365": "启用语音听写",
-          "366e1b4f36": "将文本听写到任何焦点窗格中。",
-          "4465596675": "按",
-          "62d2a84d31": "无法清除 OpenAI API 密钥",
-          "37aba8bb63": "OpenAI API 密钥已清除",
-          "8572bbb537": "无法保存 OpenAI API 密钥",
-          "506df81ba6": "OpenAI API 密钥已保存",
-          "91980ce124": "{{value0}} MB",
-          "61a16c8141": "正在提取...",
           "b6536a1d12": "提取",
-          "8f4d2a51d7": "离线",
-          "d504ab05f0": "流媒体",
-          "fbe5990716": "选择型号",
-          "e24f7d43d2": "选择语音模型，本地模型离线运行；云模型需要 API 密钥。",
-          "174da92062": "抓住",
-          "118b3c2dee": "切换",
-          "901985625d": "切换",
-          "ad5d036ecc": "无法请求麦克风权限。未启用语音听写。",
-          "f9a9cf6928": "启用语音听写之前需要麦克风许可。",
-          "1eac933202": "打开 macOS 隐私和安全。授予访问权限后再次启用听写。",
-          "cd9fe37556": "已授予麦克风权限",
-          "6fa734ed95": "删除 {{value0}}",
-          "openAiKeyName": "您的 OpenAI 转录密钥"
+          "901985625d": "切换"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "删除 {{value0}}",
@@ -10821,41 +10788,6 @@
             }
           }
         },
-        "voice": {
-          "pane": {
-            "search": {
-              "f6e0dfa61c": "云",
-              "2d206de105": "API密钥",
-              "04c25a6fb0": "开放伊",
-              "b9dee49cd7": "下载",
-              "10d45a9fce": "时间",
-              "3d8b853963": "演讲",
-              "080202facb": "模型",
-              "7640ed9848": "语音",
-              "56defcd6c3": "选择用于听写的本地或云语音转文本模型。",
-              "7e62cd7c41": "语音模型",
-              "931b1a9e53": "即按即说",
-              "064a9bd94a": "抓住",
-              "6fa48bcd41": "切换",
-              "d86f5600da": "模式",
-              "089d31a45b": "听写",
-              "748b33e531": "切换或按住说话听写行为。",
-              "6a3abb4338": "听写模式",
-              "e360027a65": "麦克风",
-              "698376a38d": "语音听写功能的主开关。",
-              "20574cbc72": "启用语音听写",
-              "322d457a0d": "转录",
-              "dcc7846641": "配置用于云语音转文本模型的 OpenAI API 密钥。",
-              "ebfd0b32e5": "OpenAI 转录",
-              "microphoneTitle": "麦克风",
-              "microphoneDescription": "选择语音听写使用的输入设备。",
-              "micInput": "输入",
-              "micDevice": "设备",
-              "micAirpods": "耳机",
-              "micDefault": "系统默认"
-            }
-          }
-        },
         "source": {
           "control": {
             "action": {
@@ -11969,19 +11901,6 @@
           "setupRecipe": "为你的云提供商设置环境模板。",
           "createWorkspace": "创建工作区，并在“运行于”中选择该模板。",
           "openSetup": "设置环境模板"
-        },
-        "VoiceMicrophoneSetting": {
-          "systemDefault": "系统默认",
-          "unavailable": "不可用",
-          "label": "麦克风",
-          "description": "用于语音听写的输入设备，系统默认会跟随操作系统的麦克风设置。",
-          "accessHint": "允许麦克风访问以列出输入设备。",
-          "allowAccess": "允许访问",
-          "noMicrophoneFound": "没有找到麦克风。连接一个，然后重试。",
-          "openFailedDetail": "无法打开麦克风。 {{value0}}",
-          "openFailed": "无法打开麦克风。",
-          "openedSystemSettings": "打开 macOS 隐私和安全。授予麦克风访问权限，然后重试。",
-          "permissionDenied": "麦克风访问被阻止。在您的系统设置中授予它，然后重试。"
         },
         "GlobalWorktreeVisibilitySourcesSetting": {
           "saveFailed": "无法保存可见性默认设置。",
@@ -15978,26 +15897,6 @@
           }
         }
       },
-      "dictation": {
-        "DictationController": {
-          "de136f1199": "语音错误：{{value0}}",
-          "7afff43472": "听写完成，但没有聚焦文本字段。",
-          "55127a3706": "听写失败：{{value0}}",
-          "bb7f599ee7": "打开设置",
-          "2d5b9fabf9": "麦克风访问被拒绝。在系统设置中授予访问权限，然后重新启动 Orca。",
-          "5d2c3e7ae3": "未检测到语音。",
-          "micFallback": "所选麦克风不可用。使用系统默认值。",
-          "micDisconnected": "麦克风已断开。听写停止了。"
-        },
-        "DictationIndicator": {
-          "335e1bc6cb": "停止听写",
-          "7f3660a7ba": "正在启动麦克风…",
-          "f082d0cb9d": "正在处理…",
-          "3de5a129e7": "正在聆听",
-          "4977162383": "音量过大",
-          "25f2b7a6a5": "正在说话"
-        }
-      },
       "dashboard": {
         "DashboardAgentChildDisclosure": {
           "1b57ce9fa4": "{{value0}} {{value1}} 子 {{value2}}"
@@ -18046,8 +17945,6 @@
         "noFiles": "没有匹配的文件",
         "filesLoadFailed": "无法加载文件",
         "attach": "附加文件",
-        "startDictation": "开始听写",
-        "stopDictation": "停止听写",
         "noSkills": "没有匹配的技能",
         "localAttachmentUnsupported": "远程会话不支持本地附件。",
         "attachFailed": "无法附加 {{files}}。",
@@ -19280,18 +19177,6 @@
       "settingsInstruction": "可在以下位置管理 Chat UI：",
       "settingsLink": "设置 → 实验性",
       "gotIt": "知道了"
-    },
-    "voice": {
-      "demoPrompt": "查看此差异以了解边缘情况，并为您发现的任何内容添加测试。",
-      "startDictation": "开始听写",
-      "agentPromptTitle": "智能体提示",
-      "listening": "听...",
-      "focusPaneInstruction": "聚焦终端、编辑器或智能体提示符，然后按",
-      "startInstruction": "开始语音听写。按",
-      "stopInstruction": "再次停止。",
-      "unassignedInstruction": "在焦点窗格中开始语音听写之前指定听写快捷方式。",
-      "settingsInstruction": "随时更改模型、听写模式或快捷方式",
-      "settingsLink": "设置 → 语音"
     },
     "sessionSearch": {
       "ageHours": "2小时",

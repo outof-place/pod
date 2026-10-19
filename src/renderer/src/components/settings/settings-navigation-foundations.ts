@@ -1,9 +1,7 @@
 import type { MutableRefObject } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { SpeechModelState } from '../../../../shared/speech-types'
 import type { SourceControlAiSettings } from '../../../../shared/source-control-ai-types'
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control-ai'
-import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import type { SettingsNavSection, SettingsNavTarget } from '@/lib/settings-navigation-types'
 import type { SettingsDeepLinkTargetWatch } from './settings-deep-link-target-watcher'
 
@@ -93,20 +91,6 @@ export function getSettingsNavGroupDefinitionsForSearch(
     seenGroupIds.add(section.group)
     return [group]
   })
-}
-
-export function hasReadyVoiceModel(
-  settings: GlobalSettings,
-  modelStates: readonly SpeechModelState[]
-): boolean {
-  const voiceSettings = settings.voice ?? getDefaultVoiceSettings()
-  if (
-    voiceSettings.sttModel !== '' &&
-    modelStates.some((state) => state.id === voiceSettings.sttModel && state.status === 'ready')
-  ) {
-    return true
-  }
-  return modelStates.some((state) => state.status === 'ready')
 }
 
 export function getSettingsScrollTarget(

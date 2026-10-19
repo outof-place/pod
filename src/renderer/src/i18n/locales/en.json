@@ -1281,8 +1281,6 @@
         "17005c73d4": "Open the onboarding checklist for setup and milestone steps.",
         "ded9e9032f": "Onboarding checklist",
         "5f32ac08f3": "Finish the onboarding checklist for core Orca workflows.",
-        "8ac3de82f5": "Local speech-to-text dictation with on-device models.",
-        "6a50cdcd7c": "Voice",
         "0059bd17f3": "Enable agents to control any app on your computer.",
         "b35e92364b": "Computer Use",
         "cd50cec5d7": "Coordinate multiple coding agents through Orca.",
@@ -8610,8 +8608,6 @@
           "7807c11c4d": "General",
           "6855b0f77d": "Finish the core workflows that make Orca useful for parallel agent work.",
           "6d119427ef": "Onboarding checklist",
-          "eb1176a14e": "Local speech-to-text dictation with on-device models.",
-          "5063bb47a5": "Voice",
           "7118953f14": "Enable agents to control any app on your computer.",
           "c9841721cb": "Computer Use",
           "475980f53d": "Coordinate multiple coding agents through Orca.",
@@ -9204,37 +9200,8 @@
           "c2c64b24d0": "Reset"
         },
         "VoicePane": {
-          "6fa734ed95": "Delete {{value0}}",
-          "68de13f72c": "Failed to delete model.",
-          "1ba81c0ff0": "recommended",
-          "cfde55c7b0": "Failed to download model.",
-          "43fd4f454b": "Speech Model",
-          "7cf715f891": "is held.",
-          "295d84b849": "once to start, again to stop. Hold: dictate while",
-          "ff9a680010": "Toggle: press",
-          "ba4a900d1d": "Dictation Mode",
-          "0121960365": "Enable Voice Dictation",
-          "366e1b4f36": "to dictate text into any focused pane.",
-          "4465596675": "Press",
-          "62d2a84d31": "Failed to clear OpenAI API key",
-          "37aba8bb63": "OpenAI API key cleared",
-          "8572bbb537": "Failed to save OpenAI API key",
-          "506df81ba6": "OpenAI API key saved",
-          "91980ce124": "{{value0}} MB",
-          "61a16c8141": "Extracting...",
           "b6536a1d12": "extracting",
-          "8f4d2a51d7": "offline",
-          "d504ab05f0": "streaming",
-          "fbe5990716": "Select Model",
-          "e24f7d43d2": "Select a speech model. Local models run offline; cloud models require an API key.",
-          "174da92062": "Hold",
-          "118b3c2dee": "Toggle",
-          "901985625d": "toggle",
-          "ad5d036ecc": "Could not request microphone permission. Voice dictation was not enabled.",
-          "f9a9cf6928": "Microphone permission is required before enabling voice dictation.",
-          "1eac933202": "Opened macOS Privacy & Security. Enable dictation again after granting access.",
-          "cd9fe37556": "Microphone permission granted",
-          "openAiKeyName": "Your OpenAI transcription key"
+          "901985625d": "toggle"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -11124,41 +11091,6 @@
             }
           }
         },
-        "voice": {
-          "pane": {
-            "search": {
-              "f6e0dfa61c": "cloud",
-              "2d206de105": "api key",
-              "04c25a6fb0": "openai",
-              "b9dee49cd7": "download",
-              "10d45a9fce": "stt",
-              "3d8b853963": "speech",
-              "080202facb": "model",
-              "7640ed9848": "voice",
-              "56defcd6c3": "Select a local or cloud speech-to-text model to use for dictation.",
-              "7e62cd7c41": "Speech Model",
-              "931b1a9e53": "push to talk",
-              "064a9bd94a": "hold",
-              "6fa48bcd41": "toggle",
-              "d86f5600da": "mode",
-              "089d31a45b": "dictation",
-              "748b33e531": "Toggle or hold-to-talk dictation behavior.",
-              "6a3abb4338": "Dictation Mode",
-              "e360027a65": "microphone",
-              "698376a38d": "Master toggle for voice dictation features.",
-              "20574cbc72": "Enable Voice Dictation",
-              "322d457a0d": "transcription",
-              "dcc7846641": "Configure the OpenAI API key used for cloud speech-to-text models.",
-              "ebfd0b32e5": "OpenAI Transcription",
-              "microphoneTitle": "Microphone",
-              "microphoneDescription": "Choose which input device voice dictation uses.",
-              "micInput": "input",
-              "micDevice": "device",
-              "micAirpods": "airpods",
-              "micDefault": "system default"
-            }
-          }
-        },
         "source": {
           "control": {
             "action": {
@@ -12232,19 +12164,6 @@
           "devChannelUnsupported": "{{value0}} builds are produced only for {{value1}}. Linux stays on Stable or RC.",
           "downloadInstaller": "Download installer",
           "manualInstallHint": "{{value0}} builds are unsigned on Windows, so the in-app updater cannot install one over a signed build. Run the downloaded installer once — Windows will warn about an unknown publisher — and every later switch, including back to Stable, works from here."
-        },
-        "VoiceMicrophoneSetting": {
-          "systemDefault": "System default",
-          "unavailable": "unavailable",
-          "label": "Microphone",
-          "description": "Input device used for voice dictation. System default follows the OS microphone setting.",
-          "accessHint": "Allow microphone access to list input devices.",
-          "allowAccess": "Allow access",
-          "noMicrophoneFound": "No microphone was found. Connect one, then try again.",
-          "openFailedDetail": "Could not open the microphone. {{value0}}",
-          "openFailed": "Could not open the microphone.",
-          "openedSystemSettings": "Opened macOS Privacy & Security. Grant microphone access, then try again.",
-          "permissionDenied": "Microphone access is blocked. Grant it in your system settings, then try again."
         },
         "TerminalTccAttributionNotice": {
           "body": "The terminal daemon was started by an Orca install that no longer exists, so macOS can’t attribute its commands to Orca — Accessibility and Automation grants are silently ignored (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.",
@@ -16223,26 +16142,6 @@
           }
         }
       },
-      "dictation": {
-        "DictationController": {
-          "de136f1199": "Speech error: {{value0}}",
-          "7afff43472": "Dictation finished, but no text field was focused.",
-          "55127a3706": "Dictation failed: {{value0}}",
-          "bb7f599ee7": "Open Settings",
-          "2d5b9fabf9": "Microphone access denied. Grant access in system settings, then restart Orca.",
-          "5d2c3e7ae3": "No speech detected.",
-          "micFallback": "Selected microphone unavailable. Using system default.",
-          "micDisconnected": "Microphone disconnected. Dictation stopped."
-        },
-        "DictationIndicator": {
-          "335e1bc6cb": "Stop dictation",
-          "7f3660a7ba": "Starting mic…",
-          "f082d0cb9d": "Processing…",
-          "3de5a129e7": "Listening",
-          "4977162383": "Too loud",
-          "25f2b7a6a5": "Speaking"
-        }
-      },
       "dashboard": {
         "DashboardAgentChildDisclosure": {
           "1b57ce9fa4": "{{value0}} {{value1}} child {{value2}}"
@@ -18331,8 +18230,6 @@
         "noFiles": "No matching files",
         "filesLoadFailed": "Couldn't load files",
         "attach": "Attach file",
-        "startDictation": "Start dictation",
-        "stopDictation": "Stop dictation",
         "noSkills": "No matching skills",
         "noCommandsOrSkills": "No matching commands or skills",
         "noCommands": "No matching commands",
@@ -19308,18 +19205,6 @@
       "settingsInstruction": "Manage Chat UI in",
       "settingsLink": "Settings → Experimental",
       "gotIt": "Got it"
-    },
-    "voice": {
-      "demoPrompt": "Review this diff for edge cases and add tests for anything you find.",
-      "startDictation": "Start dictation",
-      "agentPromptTitle": "Agent prompt",
-      "listening": "Listening...",
-      "focusPaneInstruction": "Focus a terminal, editor, or agent prompt, then press",
-      "startInstruction": "to start voice dictation. Press",
-      "stopInstruction": "again to stop.",
-      "unassignedInstruction": "Assign a dictation shortcut before starting voice dictation in a focused pane.",
-      "settingsInstruction": "Change the model, dictation mode, or shortcut anytime in",
-      "settingsLink": "Settings → Voice"
     },
     "sessionSearch": {
       "enableFailed": "Could not turn on session search. Try again.",

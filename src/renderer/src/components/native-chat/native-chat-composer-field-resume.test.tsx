@@ -84,9 +84,6 @@ function TestField({
       sendButtonDisabled={disabled || (!isWorking && draft === '' && imageAttachments.length === 0)}
       isWorking={isWorking}
       attachDisabled={false}
-      dictationDisabled={false}
-      isDictating={false}
-      isDictationHoldMode={false}
       imeEnterGesture={imeEnterGesture}
       onDraftChange={vi.fn()}
       onTextareaSelect={vi.fn()}
@@ -100,9 +97,6 @@ function TestField({
       mentionFiles={{ files: [], loading: false, failed: false }}
       onRemoveImageAttachment={vi.fn()}
       onAttach={vi.fn()}
-      onDictationToggle={vi.fn()}
-      onDictationHoldStart={vi.fn()}
-      onDictationHoldEnd={vi.fn()}
       onSend={onSend}
       onStop={vi.fn()}
       queueResume={queueResume}

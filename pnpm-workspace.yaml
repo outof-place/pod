@@ -70,7 +70,6 @@ allowBuilds:
   esbuild: true
   msw: false
   node-pty: true
-  sherpa-onnx: true
   ssh2: false
   '@orca/windows-registry': false
 

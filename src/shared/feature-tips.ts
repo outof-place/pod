@@ -6,7 +6,6 @@ import {
 
 export type FeatureTipId =
   | 'native-chat-upgrade'
-  | 'voice-dictation'
   | 'orca-cli'
   | 'cmd-j-palette'
   | 'agent-session-search'
@@ -15,7 +14,6 @@ export type FeatureTipPriority = 'new' | 'unseen'
 
 export type FeatureTipAction =
   | 'learn-native-chat-upgrade'
-  | 'enable-voice'
   | 'setup-cli'
   | 'learn-cmd-j-palette'
   | 'enable-session-search'
@@ -34,7 +32,6 @@ export type FeatureTip = {
 
 export type CompletedFeatureTipState = {
   cliInstalled: boolean
-  voiceDictationEnabled: boolean
   /** Search is on, or this client cannot turn it on. */
   sessionSearchTipCompleted: boolean
   /** Main's once-decided record; only profiles with Chat UI on before the chat upgrade are in it. */
@@ -88,16 +85,6 @@ export const FEATURE_TIPS = [
     action: 'learn-cmd-j-palette',
     ctaLabel: 'Got it',
     completedByFeatureInteractions: []
-  },
-  {
-    id: 'voice-dictation',
-    priority: 'unseen',
-    eyebrow: 'Tip',
-    title: 'Dictate into any pane',
-    description: 'Start voice dictation in any focused pane, then use the shortcut again to stop.',
-    action: 'enable-voice',
-    ctaLabel: 'Set up voice dictation',
-    completedByFeatureInteractions: ['voice-dictation']
   }
 ] as const satisfies readonly FeatureTip[]
 
@@ -125,9 +112,6 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
   const completedIds = new Set<FeatureTipId>()
   if (state.cliInstalled) {
     completedIds.add('orca-cli')
-  }
-  if (state.voiceDictationEnabled) {
-    completedIds.add('voice-dictation')
   }
   if (state.sessionSearchTipCompleted) {
     completedIds.add('agent-session-search')

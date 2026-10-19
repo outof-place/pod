@@ -3,7 +3,6 @@ import { AgentsPane } from './AgentsPane'
 import { ComputerUsePane } from './ComputerUsePane'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
 import { OrchestrationPane } from './OrchestrationPane'
-import { VoicePane } from './VoicePane'
 import { SettingsSection } from './SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { SettingsRenderContext } from './settings-render-context'
@@ -107,32 +106,16 @@ export function renderDesktopCapabilitySettingsSections(
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
   return model.showDesktopOnlySettings ? (
-    <>
-      <SettingsSection
-        id="computer-use"
-        title={translate('auto.components.settings.Settings.c9841721cb', 'Computer Use')}
-        description={translate(
-          'auto.components.settings.Settings.7118953f14',
-          'Enable agents to control any app on your computer.'
-        )}
-        searchEntries={navigation.getSectionSearchEntries('computer-use')}
-      >
-        {view.isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
-      </SettingsSection>
-
-      <SettingsSection
-        id="voice"
-        title={translate('auto.components.settings.Settings.5063bb47a5', 'Voice')}
-        description={translate(
-          'auto.components.settings.Settings.eb1176a14e',
-          'Local speech-to-text dictation with on-device models.'
-        )}
-        searchEntries={navigation.getSectionSearchEntries('voice')}
-      >
-        {view.isSectionMounted('voice') ? (
-          <VoicePane settings={model.settings} updateSettings={model.updateSettings} />
-        ) : null}
-      </SettingsSection>
-    </>
+    <SettingsSection
+      id="computer-use"
+      title={translate('auto.components.settings.Settings.c9841721cb', 'Computer Use')}
+      description={translate(
+        'auto.components.settings.Settings.7118953f14',
+        'Enable agents to control any app on your computer.'
+      )}
+      searchEntries={navigation.getSectionSearchEntries('computer-use')}
+    >
+      {view.isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
+    </SettingsSection>
   ) : null
 }

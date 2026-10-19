@@ -31,7 +31,6 @@ vi.mock('./NativeChatAutocompleteMenus', () => ({
 }))
 vi.mock('../../store', () => {
   const state = {
-    dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
     agentStatusByPaneKey: {},
     updateSettings: vi.fn(),
@@ -75,10 +74,6 @@ vi.mock('@/lib/native-chat-telemetry', () => ({
 vi.mock('./use-native-chat-skills', () => ({
   useNativeChatSkills: () => ({ status: 'ready', skills: [], error: null, retry: () => {} })
 }))
-vi.mock('../dictation/dictation-control-events', () => ({
-  dispatchDictationControl: vi.fn()
-}))
-
 import { NativeChatComposer } from './NativeChatComposer'
 
 const PASS_THROUGH = { handled: false, accepted: false, error: null }

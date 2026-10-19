@@ -56,11 +56,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '移动端',
     ja: 'モバイル'
   },
-  'auto.hooks.useSettingsNavigationMetadata.6a50cdcd7c': {
-    ko: '음성',
-    zh: '语音',
-    ja: '音声'
-  },
   'auto.hooks.useSettingsNavigationMetadata.580a04cd81': {
     ko: '고급',
     zh: '高级',

@@ -34,7 +34,6 @@ import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
 import { createRuntimeDetectedAgentsSlice } from './runtime-detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
-import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
 import { createWorkspaceCleanupBrowseSlice } from './workspace-cleanup-browse'
 import { createRuntimeStatusSlice } from './runtime-status'
@@ -93,7 +92,6 @@ export function createTestStore() {
     ...createDetectedAgentsSlice(...a),
     ...createRuntimeDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
-    ...createDictationSlice(...a),
     ...createWorkspaceCleanupSlice(...a),
     ...createWorkspaceCleanupBrowseSlice(...a),
     ...createRuntimeStatusSlice(...a),

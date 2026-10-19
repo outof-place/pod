@@ -1214,8 +1214,6 @@
         "17005c73d4": "Ouvrez la checklist d'intégration pour les étapes de configuration et les jalons.",
         "ded9e9032f": "Checklist d'intégration",
         "5f32ac08f3": "Terminez la checklist d'intégration pour les workflows essentiels d'Orca.",
-        "8ac3de82f5": "Dictée vocale locale avec modèles embarqués sur l'appareil.",
-        "6a50cdcd7c": "Voix",
         "0059bd17f3": "Permettez aux agents de contrôler n'importe quelle app de votre ordinateur.",
         "b35e92364b": "Computer Use",
         "cd50cec5d7": "Coordonnez plusieurs agents de codage via Orca.",
@@ -8472,8 +8470,6 @@
           "7807c11c4d": "Général",
           "6855b0f77d": "Terminez les workflows essentiels qui rendent Orca utile au travail parallèle avec des agents.",
           "6d119427ef": "Checklist d'intégration",
-          "eb1176a14e": "Dictée vocale locale avec modèles embarqués sur l'appareil.",
-          "5063bb47a5": "Voix",
           "7118953f14": "Permettez aux agents de contrôler n'importe quelle app de votre ordinateur.",
           "c9841721cb": "Computer Use",
           "475980f53d": "Coordonnez plusieurs agents de codage via Orca.",
@@ -9062,37 +9058,8 @@
           "c2c64b24d0": "Réinitialiser"
         },
         "VoicePane": {
-          "6fa734ed95": "Supprimer {{value0}}",
-          "68de13f72c": "Échec de la suppression du modèle.",
-          "1ba81c0ff0": "recommandé",
-          "cfde55c7b0": "Échec du téléchargement du modèle.",
-          "43fd4f454b": "Modèle vocal",
-          "7cf715f891": "est maintenu.",
-          "295d84b849": "une fois pour démarrer, à nouveau pour arrêter. Maintien : dictez tant que",
-          "ff9a680010": "Bascule : appuyez",
-          "ba4a900d1d": "Mode de dictée",
-          "0121960365": "Activer la dictée vocale",
-          "366e1b4f36": "pour dicter du texte dans n'importe quel volet actif.",
-          "4465596675": "Appuyez",
-          "62d2a84d31": "Échec de l'effacement de la clé API OpenAI",
-          "37aba8bb63": "Clé API OpenAI effacée",
-          "8572bbb537": "Échec de l'enregistrement de la clé API OpenAI",
-          "506df81ba6": "Clé API OpenAI enregistrée",
-          "91980ce124": "{{value0}} Mo",
-          "61a16c8141": "Extraction...",
           "b6536a1d12": "extraction",
-          "8f4d2a51d7": "hors ligne",
-          "d504ab05f0": "streaming",
-          "fbe5990716": "Sélectionner un modèle",
-          "e24f7d43d2": "Sélectionnez un modèle vocal. Les modèles locaux fonctionnent hors ligne ; les modèles cloud nécessitent une clé API.",
-          "174da92062": "Maintien",
-          "118b3c2dee": "Bascule",
-          "901985625d": "bascule",
-          "ad5d036ecc": "Impossible de demander l'autorisation d'accès au micro. La dictée vocale n'a pas été activée.",
-          "f9a9cf6928": "L'autorisation d'accès au micro est requise avant d'activer la dictée vocale.",
-          "1eac933202": "Panneau Confidentialité et sécurité de macOS ouvert. Réactivez la dictée après avoir accordé l'accès.",
-          "cd9fe37556": "Autorisation d'accès au micro accordée",
-          "openAiKeyName": "Votre clé de transcription OpenAI"
+          "901985625d": "bascule"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Supprimer {{value0}}",
@@ -10981,41 +10948,6 @@
             }
           }
         },
-        "voice": {
-          "pane": {
-            "search": {
-              "f6e0dfa61c": "cloud",
-              "2d206de105": "clé API",
-              "04c25a6fb0": "openai",
-              "b9dee49cd7": "téléchargement",
-              "10d45a9fce": "STT",
-              "3d8b853963": "parole",
-              "080202facb": "model",
-              "7640ed9848": "voix",
-              "56defcd6c3": "Sélectionnez un modèle de reconnaissance vocale local ou cloud à utiliser pour la dictée.",
-              "7e62cd7c41": "Modèle vocal",
-              "931b1a9e53": "push-to-talk",
-              "064a9bd94a": "conserver",
-              "6fa48bcd41": "bascule",
-              "d86f5600da": "mode",
-              "089d31a45b": "dictée",
-              "748b33e531": "Comportement de dictée : bascule ou maintien pour parler.",
-              "6a3abb4338": "Mode de dictée",
-              "e360027a65": "micro",
-              "698376a38d": "Interrupteur principal des fonctions de dictée vocale.",
-              "20574cbc72": "Activer la dictée vocale",
-              "322d457a0d": "transcription",
-              "dcc7846641": "Configurez la clé d'API OpenAI utilisée pour les modèles de reconnaissance vocale dans le cloud.",
-              "ebfd0b32e5": "Transcription OpenAI",
-              "microphoneTitle": "Microphone",
-              "microphoneDescription": "Choisissez le périphérique d'entrée utilisé par la dictée vocale.",
-              "micInput": "entrée",
-              "micDevice": "appareil",
-              "micAirpods": "airpods",
-              "micDefault": "système par défaut"
-            }
-          }
-        },
         "source": {
           "control": {
             "action": {
@@ -12089,19 +12021,6 @@
           "downloadInstaller": "Télécharger l'installateur",
           "manualInstallHint": "Les builds {{value0}} ne sont pas signés sous Windows ; la mise à jour intégrée ne peut donc pas installer l'un d'eux par-dessus un build signé. Exécutez une fois l'installateur téléchargé — Windows avertira d'un éditeur inconnu — puis tous les changements ultérieurs, y compris le retour à Stable, fonctionnent depuis ici.",
           "cacheHint": "Les listes de build sont mises en cache pendant 5 minutes. Actualisez pour vérifier les nouvelles versions."
-        },
-        "VoiceMicrophoneSetting": {
-          "systemDefault": "Valeur par défaut du système",
-          "unavailable": "indisponible",
-          "label": "Microphone",
-          "description": "Périphérique d'entrée utilisé pour la dictée vocale. Le défaut système suit le réglage du micro de l'OS.",
-          "accessHint": "Autorisez l'accès au microphone pour lister les périphériques d'entrée.",
-          "allowAccess": "Autoriser l'accès",
-          "noMicrophoneFound": "Aucun microphone n'a été trouvé. Connectez-en un, puis réessayez.",
-          "openFailedDetail": "Impossible d'ouvrir le micro. {{value0}}",
-          "openFailed": "Impossible d'ouvrir le micro.",
-          "openedSystemSettings": "Ouverture de la confidentialité et de la sécurité de macOS. Accordez l’accès au microphone, puis réessayez.",
-          "permissionDenied": "L'accès au microphone est bloqué. Accordez-le dans les paramètres de votre système, puis réessayez."
         },
         "TerminalTccAttributionNotice": {
           "body": "Le daemon du terminal a été démarré par une installation d'Orca qui n'existe plus, donc macOS ne peut pas attribuer ses commandes à Orca — les autorisations Accessibilité et Automatisation sont ignorées silencieusement (osascript échoue avec l'erreur -25211). Redémarrer le daemon corrige le problème ; les sessions de terminal en cours seront fermées.",
@@ -16084,26 +16003,6 @@
           }
         }
       },
-      "dictation": {
-        "DictationController": {
-          "de136f1199": "Erreur vocale : {{value0}}",
-          "7afff43472": "La dictée est terminée, mais aucun champ de texte n'avait le focus.",
-          "55127a3706": "Échec de la dictée : {{value0}}",
-          "bb7f599ee7": "Ouvrir les paramètres",
-          "2d5b9fabf9": "Accès au micro refusé. Accordez l'autorisation dans les réglages système, puis redémarrez Orca.",
-          "5d2c3e7ae3": "Aucune parole détectée.",
-          "micFallback": "Micro sélectionné indisponible. Utilisation du micro par défaut du système.",
-          "micDisconnected": "Micro déconnecté. Dictée arrêtée."
-        },
-        "DictationIndicator": {
-          "335e1bc6cb": "Arrêter la dictée",
-          "7f3660a7ba": "Démarrage du micro…",
-          "f082d0cb9d": "Traitement…",
-          "3de5a129e7": "Écoute en cours",
-          "4977162383": "Trop fort",
-          "25f2b7a6a5": "Vous parlez"
-        }
-      },
       "dashboard": {
         "DashboardAgentChildDisclosure": {
           "1b57ce9fa4": "{{value0}} {{value1}} enfant {{value2}}"
@@ -18148,8 +18047,6 @@
         "noFiles": "Aucun fichier correspondant",
         "filesLoadFailed": "Impossible de charger les fichiers",
         "attach": "Joindre un fichier",
-        "startDictation": "Démarrer la dictée",
-        "stopDictation": "Arrêter la dictée",
         "noSkills": "Aucune skill correspondante",
         "noCommandsOrSkills": "Aucune commande ou skill correspondante",
         "noCommands": "Aucune commande correspondante",
@@ -19204,18 +19101,6 @@
       "settingsInstruction": "Gérez Chat UI dans",
       "settingsLink": "Paramètres → Expérimental",
       "gotIt": "Compris"
-    },
-    "voice": {
-      "demoPrompt": "Relisez ce diff à la recherche de cas limites et ajoutez des tests pour tout ce que vous trouvez.",
-      "startDictation": "Démarrer la dictée",
-      "agentPromptTitle": "Prompt d'agent",
-      "listening": "Écoute...",
-      "focusPaneInstruction": "Placez le focus sur un terminal, un éditeur ou un prompt d'agent, puis appuyez sur",
-      "startInstruction": "pour lancer la dictée vocale. Appuyez de nouveau sur",
-      "stopInstruction": "pour arrêter.",
-      "unassignedInstruction": "Assignez un raccourci de dictée avant de lancer la dictée vocale dans un volet actif.",
-      "settingsInstruction": "Modifiez le modèle, le mode de dictée ou le raccourci à tout moment dans",
-      "settingsLink": "Paramètres → Voix"
     },
     "sessionSearch": {
       "ageHours": "2 h",

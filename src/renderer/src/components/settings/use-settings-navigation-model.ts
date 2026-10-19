@@ -16,7 +16,6 @@ import { deriveNeededSectionIds } from './settings-load-performance'
 import { SCROLLBACK_PRESETS_ROWS } from './SettingsConstants'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
-import { hasReadyVoiceModel } from './settings-navigation-foundations'
 
 export function useSettingsNavigationModel(
   model: SettingsStoreModel,
@@ -87,16 +86,6 @@ export function useSettingsNavigationModel(
           inventory: applicableFreshnessInventory
         })
       )
-      if (model.settings) {
-        next.set(
-          'voice',
-          model.voiceModelStatesLoading
-            ? 'checking'
-            : hasReadyVoiceModel(model.settings, model.modelStates)
-              ? 'installed'
-              : 'install'
-        )
-      }
     }
     return next
   }, [
@@ -106,12 +95,9 @@ export function useSettingsNavigationModel(
     linearSkillLoading,
     linearSkills,
     model.linearConnected,
-    model.modelStates,
-    model.settings,
     model.showDesktopOnlySettings,
     model.skillFreshnessApplies,
     model.skillFreshnessInventory,
-    model.voiceModelStatesLoading,
     orchestrationSkillInstalled,
     orchestrationSkillLoading
   ])

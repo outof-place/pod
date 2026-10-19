@@ -75,12 +75,11 @@ describe('settings navigation metadata', () => {
   })
 
   it('puts AI capability panes at the top on desktop', () => {
-    expect(ids().slice(0, 10)).toEqual([
+    expect(ids().slice(0, 9)).toEqual([
       'agents',
       'accounts',
       'orchestration',
       'computer-use',
-      'voice',
       'orca-account',
       'setup-guide',
       'general',

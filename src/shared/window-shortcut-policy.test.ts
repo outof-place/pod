@@ -25,19 +25,13 @@ describe('resolveWindowShortcutAction', () => {
     const nonMacCases: WindowShortcutInput[] = [
       { code: 'KeyR', key: 'r', meta: false, control: true, alt: false, shift: false },
       { code: 'KeyU', key: 'u', meta: false, control: true, alt: false, shift: false },
-      { code: 'KeyJ', key: 'j', meta: false, control: true, alt: false, shift: false }
+      { code: 'KeyJ', key: 'j', meta: false, control: true, alt: false, shift: false },
+      { code: 'KeyE', key: 'e', meta: false, control: true, alt: false, shift: false }
     ]
 
     for (const input of nonMacCases) {
       expect(resolveWindowShortcutAction(input, 'linux')).toBeNull()
     }
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyE', key: 'e', meta: false, control: true, alt: false, shift: false },
-        'linux'
-      )
-    ).toEqual({ type: 'dictationKeyDown' })
   })
 
   it.each(['darwin', 'linux', 'win32'] as const)(
@@ -316,40 +310,6 @@ describe('resolveWindowShortcutAction', () => {
         'win32'
       )
     ).toEqual({ type: 'toggleWorktreePalette' })
-  })
-
-  it('resolves dictation using the layout-aware key value', () => {
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyD', key: 'e', meta: true, control: false, alt: false, shift: false },
-        'darwin'
-      )
-    ).toEqual({ type: 'dictationKeyDown' })
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyE', key: 'd', meta: true, control: false, alt: false, shift: false },
-        'darwin'
-      )
-    ).toBeNull()
-  })
-
-  it('applies custom keybinding overrides to dictation and main-process shortcuts', () => {
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyE', key: 'e', meta: false, control: true, alt: false, shift: false },
-        'linux',
-        { 'voice.dictation': [] }
-      )
-    ).toBeNull()
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyY', key: 'y', meta: false, control: true, alt: false, shift: true },
-        'linux',
-        { 'voice.dictation': ['Mod+Shift+Y'] }
-      )
-    ).toEqual({ type: 'dictationKeyDown' })
   })
 
   it('applies custom keybinding overrides to main-process shortcuts', () => {

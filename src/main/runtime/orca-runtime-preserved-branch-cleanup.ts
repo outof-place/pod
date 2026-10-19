@@ -28,8 +28,6 @@ import { RuntimeLegacyWorkerTerminalRecoveryController } from './runtime-legacy-
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import { RuntimeAccountController } from './runtime-account-controller'
-import { RuntimeMobileSpeechCatalog } from './runtime-mobile-speech-catalog'
-import { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
 import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 import { addRemoteRepoFromPath } from '../ipc/repos/remote-repo-registration'
 import { RuntimeProjectGroupController } from './runtime-project-group-controller'
@@ -240,10 +238,6 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected ptyControllerInventoryGenerationByProvider = new Map<string, number>()
 
   protected readonly accounts = new RuntimeAccountController()
-
-  protected readonly mobileSpeech = new RuntimeMobileSpeechCatalog(() => this.store)
-
-  protected readonly mobileDictation = new RuntimeMobileDictationController(() => this.store)
 
   protected readonly projectHostSetups = new RuntimeProjectHostSetupController({
     getStore: () => this.store,

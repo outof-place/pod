@@ -39,15 +39,9 @@ describe('NativeChatComposerActions', () => {
   it("disables the Stop control and names it Stopping while a person's Stop is ending the turn", () => {
     const props = {
       attachDisabled: false,
-      dictationDisabled: false,
       primaryAction: 'stop' as const,
       isWorking: true,
-      isDictating: false,
-      isDictationHoldMode: false,
       onAttach: vi.fn(),
-      onDictationToggle: vi.fn(),
-      onDictationHoldStart: vi.fn(),
-      onDictationHoldEnd: vi.fn(),
       onSend: vi.fn(),
       sessionOptionsSurface: null,
       sessionOptionsSnapshot: []
@@ -60,20 +54,14 @@ describe('NativeChatComposerActions', () => {
     expect(screen.getByRole('button', { name: 'Stopping…' }).hasAttribute('disabled')).toBe(true)
   })
 
-  it('places session option pickers immediately beside dictation', () => {
+  it('places session option pickers immediately beside the send button', () => {
     render(
       <NativeChatComposerActions
         attachDisabled={false}
-        dictationDisabled={false}
         sendDisabled={false}
         primaryAction="send"
         isWorking={false}
-        isDictating={false}
-        isDictationHoldMode={false}
         onAttach={vi.fn()}
-        onDictationToggle={vi.fn()}
-        onDictationHoldStart={vi.fn()}
-        onDictationHoldEnd={vi.fn()}
         onSend={vi.fn()}
         sessionOptionsSurface={null}
         sessionOptionsSnapshot={[]}
@@ -81,24 +69,18 @@ describe('NativeChatComposerActions', () => {
     )
 
     const pickers = screen.getByTestId('session-option-pickers')
-    const dictation = screen.getByRole('button', { name: 'Start dictation' })
-    expect(pickers.nextElementSibling).toBe(dictation)
+    const send = screen.getByRole('button', { name: 'Send' })
+    expect(pickers.nextElementSibling).toBe(send)
   })
 
   it('marks the streaming Stop control as the critical hit target', () => {
     render(
       <NativeChatComposerActions
         attachDisabled={false}
-        dictationDisabled={false}
         sendDisabled={false}
         primaryAction="stop"
         isWorking
-        isDictating={false}
-        isDictationHoldMode={false}
         onAttach={vi.fn()}
-        onDictationToggle={vi.fn()}
-        onDictationHoldStart={vi.fn()}
-        onDictationHoldEnd={vi.fn()}
         onSend={vi.fn()}
         onStop={vi.fn()}
         sessionOptionsSurface={null}
@@ -119,16 +101,10 @@ describe('NativeChatComposerActions', () => {
     render(
       <NativeChatComposerActions
         attachDisabled={false}
-        dictationDisabled={false}
         sendDisabled={false}
         primaryAction="stop"
         isWorking
-        isDictating={false}
-        isDictationHoldMode={false}
         onAttach={vi.fn()}
-        onDictationToggle={vi.fn()}
-        onDictationHoldStart={vi.fn()}
-        onDictationHoldEnd={vi.fn()}
         onSend={onSend}
         onStop={onStop}
         sessionOptionsSurface={null}
@@ -146,17 +122,11 @@ describe('NativeChatComposerActions', () => {
     render(
       <NativeChatComposerActions
         attachDisabled={false}
-        dictationDisabled={false}
         sendDisabled
         primaryAction="send"
         sendBlockedReason="An image couldn't be brought back. Remove it to send."
         isWorking={false}
-        isDictating={false}
-        isDictationHoldMode={false}
         onAttach={vi.fn()}
-        onDictationToggle={vi.fn()}
-        onDictationHoldStart={vi.fn()}
-        onDictationHoldEnd={vi.fn()}
         onSend={vi.fn()}
         sessionOptionsSurface={null}
         sessionOptionsSnapshot={[]}
@@ -172,16 +142,10 @@ describe('NativeChatComposerActions', () => {
   it('marks a draft that could not be saved only after storage refused it', () => {
     const props = {
       attachDisabled: false,
-      dictationDisabled: false,
       sendDisabled: false,
       primaryAction: 'send' as const,
       isWorking: false,
-      isDictating: false,
-      isDictationHoldMode: false,
       onAttach: vi.fn(),
-      onDictationToggle: vi.fn(),
-      onDictationHoldStart: vi.fn(),
-      onDictationHoldEnd: vi.fn(),
       onSend: vi.fn(),
       sessionOptionsSurface: null,
       sessionOptionsSnapshot: []
@@ -201,16 +165,10 @@ describe('NativeChatComposerActions', () => {
       render(
         <NativeChatComposerActions
           attachDisabled={false}
-          dictationDisabled={false}
           sendDisabled={false}
           primaryAction={isWorking ? 'stop' : onResume ? 'resume' : 'send'}
           isWorking={isWorking}
-          isDictating={false}
-          isDictationHoldMode={false}
           onAttach={vi.fn()}
-          onDictationToggle={vi.fn()}
-          onDictationHoldStart={vi.fn()}
-          onDictationHoldEnd={vi.fn()}
           {...callbacks}
           {...(onResume ? { onResume } : {})}
           sessionOptionsSurface={null}
