@@ -120,6 +120,7 @@ describe('Linear issue batch and rate limits', () => {
     )
 
     expect(result.issues.map((issue) => issue.identifier)).toEqual(['ENG-12', 'ENG-9'])
+    expect(result.issues[0]?.suggestedWorktreeName).toBe('eng-12-fix-eng-12')
     expect(result.missing).toEqual(['issue-404'])
     const sent = server?.requests.slice(before) ?? []
     expect(sent).toHaveLength(1)
