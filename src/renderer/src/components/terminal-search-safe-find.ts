@@ -1,4 +1,5 @@
 import type { SearchAddon } from '@xterm/addon-search'
+import { isInvalidTerminalSearchRegex } from '@/pod/terminal-search/pod-terminal-search-invalid-regex'
 
 type SearchOptions = Parameters<SearchAddon['findNext']>[1]
 
@@ -23,6 +24,10 @@ export function safeFind(
   term: string,
   options?: SearchOptions
 ): boolean {
+  // Fork-only (Pod): an invalid regex finds nothing instead of throwing.
+  if (isInvalidTerminalSearchRegex(term, options)) {
+    return false
+  }
   try {
     return search(term, options)
   } catch (error) {

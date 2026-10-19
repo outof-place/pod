@@ -7,6 +7,7 @@ import type { SearchState } from '@/components/terminal-pane/keyboard-handlers'
 import { translate } from '@/i18n/i18n'
 import { getFindRequestQuery } from '@/lib/find-query-bounds'
 import { safeFind } from './terminal-search-safe-find'
+import { isInvalidTerminalSearchRegex } from '@/pod/terminal-search/pod-terminal-search-invalid-regex'
 
 type TerminalSearchProps = {
   isOpen: boolean
@@ -40,6 +41,8 @@ export default function TerminalSearch({
   const [regex, setRegex] = useState(false)
   const [results, setResults] = useState(EMPTY_RESULTS)
   const requestQuery = getFindRequestQuery(query)
+  const invalidRegex =
+    requestQuery !== null && isInvalidTerminalSearchRegex(requestQuery, { regex })
 
   // xterm needs hex colors; explicit highlights stay visible over terminal themes (#612).
   const searchOptions = useCallback(
@@ -106,7 +109,7 @@ export default function TerminalSearch({
     // Global match-navigation shortcuts read the same query as the panel.
     searchStateRef.current = { query: requestQuery ?? '', caseSensitive, regex }
 
-    if (!isOpen || !requestQuery) {
+    if (!isOpen || !requestQuery || isInvalidTerminalSearchRegex(requestQuery, { regex })) {
       clearTerminalSearch(searchAddon)
       return
     }
@@ -140,7 +143,7 @@ export default function TerminalSearch({
 
   const matchStatus = !requestQuery
     ? '0/0'
-    : results.resultCount === 0
+    : invalidRegex || results.resultCount === 0
       ? translate('auto.components.TerminalSearch.10e039b591', 'No results')
       : results.resultIndex === -1
         ? `${results.resultCount}+`
@@ -158,8 +161,9 @@ export default function TerminalSearch({
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        aria-invalid={invalidRegex}
         placeholder={translate('auto.components.TerminalSearch.e07012f26e', 'Search...')}
-        className="min-w-0 flex-1 border-none bg-transparent text-sm text-popover-foreground outline-none placeholder:text-muted-foreground"
+        className="min-w-0 flex-1 border-none bg-transparent text-sm text-popover-foreground outline-none placeholder:text-muted-foreground aria-invalid:text-destructive"
       />
 
       <Button
