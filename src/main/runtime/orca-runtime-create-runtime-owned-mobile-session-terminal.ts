@@ -81,6 +81,10 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
           opts.createMutation.id
         )
       : undefined
+    // The old pty's exit retires the pane's surface while the new one spawns, so the name is read first.
+    const givenName = opts.identity
+      ? customTitleOfTab(this.mobileSessionTabsByWorktree.get(worktreeId), opts.identity.tabId)
+      : undefined
     const create = (preAllocatedHandle?: string) =>
       this.createTerminal(`id:${worktreeId}`, {
         focus: false,
@@ -214,8 +218,11 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       ptyId: livePty.pty.ptyId,
       incarnationId: livePty.pty.incarnationId,
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
-      // A restarted or rematerialized pane of a named tab keeps the name its old surface carried.
-      ...customTitleField(customTitleOfTab(existing, parentTabId)),
+      // A restarted, woken or rematerialized pane of a named tab keeps the name its old surface carried.
+      ...customTitleField(
+        customTitleOfTab(existing, parentTabId) ??
+          (parentTabId === opts.identity?.tabId ? givenName : undefined)
+      ),
       ...(cwd ? { startupCwd: cwd } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),

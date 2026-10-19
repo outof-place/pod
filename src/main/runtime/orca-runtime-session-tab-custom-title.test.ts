@@ -11,6 +11,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
 import type { RuntimeMobileSessionClientTab } from '../../shared/runtime-types'
+import { makePaneKey } from '../../shared/stable-pane-id'
 import {
   recordPodTerminalExit,
   resetPodTerminalExitsForTests
@@ -179,6 +180,60 @@ describe('a terminal tab name on session tabs (customTitle)', () => {
     const surfaces = await listedSurfaces(runtime)
     expect(surfaces).toHaveLength(1)
     expect(surfaces[0]).toMatchObject({ terminal, customTitle: 'Auth refactor' })
+  })
+
+  it('keeps the name when a restored agent pane resumes its session on a host with no window', async () => {
+    const paneKey = makePaneKey('host-tab', HEADLESS_LEAF_ID)
+    const session = makeWorkspaceSessionWithHeadlessTerminal({
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'session-lost' },
+          prompt: '',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1,
+          connectionId: null,
+          origin: 'live'
+        }
+      }
+    })
+    const [hostTab] = session.tabsByWorktree[TEST_WORKTREE_ID]!
+    session.tabsByWorktree[TEST_WORKTREE_ID] = [{ ...hostTab!, customTitle: 'Auth refactor' }]
+    const { runtime } = headlessRuntime(session)
+    const controller = ptyController()
+    runtime.setPtyController({
+      ...controller,
+      // The woken pane re-enters its old session: that pty's exit retires the pane's surface while the new one spawns.
+      spawn: vi.fn(async (...args: Parameters<typeof controller.spawn>) => {
+        const stored = runtime['mobileSessionTabsByWorktree'].get(TEST_WORKTREE_ID)!
+        runtime['storeMobileSessionSnapshot'](TEST_WORKTREE_ID, {
+          ...stored,
+          tabs: stored.tabs.filter(
+            (tab) => tab.type !== 'terminal' || tab.parentTabId !== 'host-tab'
+          )
+        })
+        return controller.spawn(...args)
+      })
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    expect((await listedSurfaces(runtime))[0]).toMatchObject({
+      status: 'pending-handle',
+      customTitle: 'Auth refactor'
+    })
+
+    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', HEADLESS_LEAF_ID, {
+      notifyClients: false,
+      navigation: 'caller',
+      intent: 'user'
+    })
+
+    const surfaces = await listedSurfaces(runtime)
+    expect(surfaces).toHaveLength(1)
+    expect(surfaces[0]).toMatchObject({ status: 'ready', customTitle: 'Auth refactor' })
   })
 
   it('follows a rename that reaches a window not yet holding its pane graph', async () => {
