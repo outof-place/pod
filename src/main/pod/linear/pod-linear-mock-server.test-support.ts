@@ -136,3 +136,55 @@ export function guardFetchToLoopback(): { blocked: string[]; restore: () => void
   }
   return { blocked, restore: () => (globalThis.fetch = original) }
 }
+
+export function linearMockIssueNode(id: string, identifier: string) {
+  return {
+    id,
+    identifier,
+    title: `Fix ${identifier}`,
+    url: `https://linear.app/mock-co/issue/${identifier}`,
+    priority: 0,
+    updatedAt: '2026-10-19T00:00:00.000Z',
+    state: { name: 'Todo', type: 'unstarted', color: '#999999' },
+    team: { id: 'team-1', name: 'Engineering', key: identifier.split('-')[0] ?? '' },
+    labels: { nodes: [] }
+  }
+}
+
+type LinearMockIssueNode = ReturnType<typeof linearMockIssueNode>
+
+function field(value: unknown, key: string): unknown {
+  return typeof value === 'object' && value !== null ? Reflect.get(value, key) : undefined
+}
+
+// As the API documents it: id.in takes issue UUIDs (an "ENG-9" there matches nothing), and an
+// identifier is its team key plus its number.
+function issueMatches(node: LinearMockIssueNode, clause: unknown): boolean {
+  const ids = field(field(clause, 'id'), 'in')
+  if (Array.isArray(ids)) {
+    return ids.includes(node.id)
+  }
+  const key = field(field(field(clause, 'team'), 'key'), 'eq')
+  const numbers = field(field(clause, 'number'), 'in')
+  return (
+    typeof key === 'string' &&
+    Array.isArray(numbers) &&
+    node.team.key === key &&
+    numbers.includes(Number(node.identifier.split('-')[1]))
+  )
+}
+
+/** issues(filter: {or: [...]}) over `nodes`, for linear.getIssues; anything else as the default. */
+export function linearMockIssuesReply(
+  nodes: LinearMockIssueNode[]
+): (request: LinearMockRequest) => LinearMockReply {
+  return (request) => {
+    if (!request.query.includes('PodLinearIssuesByIds')) {
+      return defaultLinearMockReply(request)
+    }
+    const or = field(field(request.variables, 'filter'), 'or')
+    const clauses: unknown[] = Array.isArray(or) ? or : []
+    const matched = nodes.filter((node) => clauses.some((clause) => issueMatches(node, clause)))
+    return { body: { data: { issues: { nodes: matched } } } }
+  }
+}
