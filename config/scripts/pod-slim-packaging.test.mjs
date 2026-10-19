@@ -60,24 +60,23 @@ describe('Pod slim packaging', () => {
       { from: 'out/relay', to: 'relay', filter: ['**/*', '!win32-*{,/**/*}', '!wsl{,/**/*}'] },
       'resources/skills'
     ])
-    expect(slim.electronLanguages).toEqual(['en'])
+    // Pod keeps every Chromium locale pak: the app locale, and with it Accept-Language, comes from them.
+    expect(slim.electronLanguages).toBeUndefined()
     expect(slim.win).toBe(base.win)
     expect(applyPodSlimPackaging(base, 'orca')).toEqual(base)
   })
 
   it('drops cut runtime packages and win32 ripgrep before the upstream config loads', () => {
     const pod = inspectSlimConfig('pod')
-    for (const dropped of [
-      'node_modules/@linear/sdk',
-      'node_modules/serve-sim',
-      'node_modules/sonner'
-    ]) {
+    for (const dropped of ['node_modules/serve-sim', 'node_modules/sonner']) {
       expect(pod.targets).not.toContain(dropped)
     }
+    // PodNative calls linear.* in every Pod build, so the SDK ships whatever the linear flag says.
+    expect(pod.targets).toContain('node_modules/@linear/sdk')
     expect(pod.sources.some((source) => source.includes('sherpa-onnx'))).toBe(false)
     expect(pod.ripgrepPlatforms).toEqual(['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'])
     expect(pod.ripgrepFilter.some((pattern) => pattern.startsWith('win32-'))).toBe(false)
-    expect(pod.electronLanguages).toEqual(['en'])
+    expect(pod.electronLanguages).toBeNull()
     expect(pod.sameAfterPack).toBe(true)
     expect(pod.mobileWebGuard).toBe('')
 

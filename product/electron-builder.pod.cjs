@@ -8,6 +8,11 @@
 //   POD_ARCH      arm64 (default) or x64
 //   POD_RELEASE=1 dmg + zip, notarized (with ORCA_MAC_RELEASE=1 for upstream's strict signing);
 //                 otherwise a signed but unnotarized .app (`dir`) for local installs
+
+// Fork-only (Pod): the release takes the Pod profile's packaging cuts (src/shared/product/features.ts).
+// Why first: the upstream config derives the packaged node_modules closure and the ripgrep platforms
+// from shared lists at require time, so the cuts must edit them before anything loads it.
+require('./pod-slim-packaging.cjs').preparePodSlimPackaging()
 const { execFileSync } = require('node:child_process')
 const { existsSync, readFileSync, writeFileSync } = require('node:fs')
 const { join } = require('node:path')
@@ -22,7 +27,8 @@ const podGoCache = require('./gocache/install-pod-gocache.cjs')
 // Built by config/scripts/build-pod-peer-identity-macos.mjs (release.sh).
 const POD_PEER_IDENTITY_BUILD =
   'native/pod-peer-identity-macos/.build/release/pod-peer-identity.node'
-// Why destructure: drop every non-mac platform and target section of the upstream config.
+// Why destructure: drop every non-mac platform and target section of the upstream config, which
+// the slim config (Orca's config with the Pod profile's packaging cuts) still carries.
 const {
   win: _win,
   nsis: _nsis,
@@ -31,7 +37,7 @@ const {
   deb: _deb,
   rpm: _rpm,
   ...base
-} = require('../config/electron-builder.config.cjs')
+} = require('./electron-builder.slim.cjs')
 
 const {
   assertAppAsar,

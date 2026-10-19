@@ -7,6 +7,10 @@ const {
   podFeatureFlags
 } = require('../src/shared/product/features.ts')
 
+// Runtime packages every Pod build ships whatever a feature flag says: PodNative calls the runtime's
+// linear.* methods, which load @linear/sdk on first use (src/main/linear/linear-sdk.ts).
+const ALWAYS_PACKAGED_RUNTIME_ROOTS = new Set(['@linear/sdk'])
+
 function readPodBuildProfile(env = process.env) {
   return env.POD_BUILD_PROFILE === 'orca' ? 'orca' : 'pod'
 }
@@ -37,7 +41,9 @@ function preparePodSlimPackaging(profile = readPodBuildProfile()) {
   }
   prepared = true
   const cuts = podPackagingCuts(profile)
-  const runtimeRoots = cuts.flatMap((cut) => cut.dropRuntimePackageRoots ?? [])
+  const runtimeRoots = cuts
+    .flatMap((cut) => cut.dropRuntimePackageRoots ?? [])
+    .filter((root) => !ALWAYS_PACKAGED_RUNTIME_ROOTS.has(root))
   const ripgrepPlatforms = cuts.flatMap((cut) => cut.dropRipgrepPlatforms ?? [])
   const runtime = require('../config/packaged-runtime-node-modules.cjs')
   removeListedItems(runtime.PACKAGED_RUNTIME_PACKAGE_ROOTS, runtimeRoots, 'runtime package roots')
