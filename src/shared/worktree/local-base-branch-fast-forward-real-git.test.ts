@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseWorktreeList } from '../git-worktree-porcelain-parser'
+import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../git-output-locale'
 import {
   fastForwardLocalBaseBranch,
   type LocalBaseBranchGit
@@ -20,7 +21,9 @@ function isolatedGitEnv(root: string): NodeJS.ProcessEnv {
     USERPROFILE: root,
     XDG_CONFIG_HOME: root,
     GIT_CONFIG_NOSYSTEM: '1',
-    GIT_CONFIG_GLOBAL: join(root, 'empty-gitconfig')
+    GIT_CONFIG_GLOBAL: join(root, 'empty-gitconfig'),
+    // The product runner pins these too (git-process-env.ts); the failure parsers read English.
+    ...UNTRANSLATED_GIT_OUTPUT_ENV
   }
 }
 
