@@ -43,6 +43,7 @@ import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-stat
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
 import { startPodAccFromStartup } from '../pod/acc/acc-startup'
 import { installPodGoCache } from '../pod/gocache/install-pod-gocache'
+import { installPodLinear } from '../pod/linear/install-pod-linear'
 import { installPodWorkspace } from '../pod/workspace/install-pod-workspace'
 import { installPodUiHost } from '../pod/ui-host/pod-ui-host'
 import { installPodUiHostSleep } from '../pod/ui-host/pod-ui-host-sleep'
@@ -83,6 +84,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   installMcpLazy(store)
   // Fork-only (Pod): GOCACHEPROG from the first spawn; the helper installs after the first window.
   installPodGoCache(store)
+  // Fork-only (Pod): podLinearAgentAccess for the RPC admission check; reads the setting per call.
+  installPodLinear(store)
   // Fork-only (Pod): keybindings.effective on KeybindingService's file; watches only while a client opts in.
   const podKeybindingsPath = (): string =>
     state.keybindings?.getPath() ?? getUserKeybindingsPath(app.getPath('home'))

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import { CONTROL_GRANTED_SSH_BRIDGE_SCOPE } from './ssh-bridge-caller-scope.test-fixture'
+import { withLinearAgentAccessOn } from '../pod/linear/pod-linear-access.test-support'
 
 function createRuntime() {
   const linearSaveIssue = vi.fn(async (request: unknown) => ({
@@ -27,6 +28,9 @@ function createRuntime() {
 }
 
 describe('SSH remote Linear save issue', () => {
+  // Fork-only (Pod): agents' linear.* methods answer only with agent access on.
+  withLinearAgentAccessOn()
+
   it('forwards update fields, clears, stdin, and SSH context without losing types', async () => {
     const { runtime, linearSaveIssue } = createRuntime()
     const result = await runRemoteOrcaCli(runtime, {

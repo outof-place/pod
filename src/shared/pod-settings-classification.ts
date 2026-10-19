@@ -76,6 +76,8 @@ export const POD_SETTINGS_HIDDEN = {
   codexTerminalServerIsolation: 'kill-switch',
   experimentalNativeTerminalParseOnce: 'kill-switch',
   experimentalPodWorkspace: 'owned',
+  // Set only through linear.setAgentAccess, from Pod's window or PodNative (pod-linear-access.ts).
+  podLinearAgentAccess: 'owned',
   podWorkspaceRoot: 'owned',
   worktreeVisibilityDefaults: 'owned',
   hostSettingOverrides: 'owned',

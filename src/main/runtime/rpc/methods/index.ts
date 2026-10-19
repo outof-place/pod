@@ -32,6 +32,7 @@ import { GITLAB_METHODS } from './gitlab'
 import { HOSTED_REVIEW_METHODS } from './hosted-review'
 import { LINEAR_METHODS } from './linear'
 import { LINEAR_AGENT_ACCESS_METHODS } from './linear-agent-access'
+import { POD_LINEAR_METHODS } from '../../../pod/linear/pod-linear-rpc-methods'
 import { JIRA_METHODS } from './jira'
 import { SSH_METHODS } from './ssh'
 import { POD_SSH_TARGET_METHODS } from './pod-ssh-targets'
@@ -137,6 +138,8 @@ export const ALL_RPC_METHODS = [
   ...HOSTED_REVIEW_METHODS,
   ...LINEAR_METHODS,
   ...LINEAR_AGENT_ACCESS_METHODS,
+  // Fork-only (Pod): agent access to Linear, set from Pod's window or PodNative only.
+  ...POD_LINEAR_METHODS,
   ...JIRA_METHODS,
   ...SSH_METHODS,
   // Fork-only (Pod): SSH settings' host list, Add, Save, Remove, config sync and Disconnect.

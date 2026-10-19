@@ -14,6 +14,8 @@ export type PodGlobalSettings = {
   podGoCacheEnabled?: boolean
   /** Fork-only (Pod): lets main's terminal model go dormant; Pod builds default it off. */
   podTerminalMainModelDormancy?: boolean
+  /** Fork-only (Pod): agents' linear.* methods (CLI, MCP, SSH bridge) answer; absent means off. */
+  podLinearAgentAccess?: boolean
   /** Pod (macOS): user-scope stdio MCP servers of ~/.claude.json started on first use (src/main/pod/mcp-lazy). */
   mcpLazyStart?: { enabled: boolean; servers: string[] }
 }

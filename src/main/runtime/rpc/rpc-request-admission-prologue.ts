@@ -19,6 +19,8 @@ import {
   OWNER_RPC_CALLER_SCOPE,
   type RpcCallerScope
 } from './rpc-caller-scope'
+import { resolveRpcCallerIdentity } from './rpc-caller-identity'
+import { podLinearRpcRefusal } from '../../pod/linear/pod-linear-access'
 import {
   needsOrchestrationCallerResolution,
   resolveOrchestrationSessionCaller,
@@ -45,6 +47,15 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
   const denial = denyRpcMethodForCaller(callerScope, rawRequest.method, method?.permission)
   if (denial) {
     return reject(errorResponse(rawRequest.id, meta, 'forbidden', denial))
+  }
+  // Fork-only (Pod): Linear's admin methods only from Pod's window or PodNative, agents' only when allowed.
+  const linearRefusal = podLinearRpcRefusal(rawRequest.method, {
+    scope: callerScope,
+    identity: resolveRpcCallerIdentity(options),
+    podNativePeer: options?.podNativePeer
+  })
+  if (linearRefusal) {
+    return reject(errorResponse(rawRequest.id, meta, linearRefusal.code, linearRefusal.message))
   }
   if (!method) {
     return reject(
