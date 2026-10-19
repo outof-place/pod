@@ -2,6 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { AgentAwakeService } from './agent-awake-service'
 import type { AgentAwakeStatus } from './agent-awake-service'
 
+// Fork-only (Pod): never a real caffeinate from this file (it would outlive the test worker and
+// keep this Mac awake); a test that reaches the default spawn fails instead.
+vi.mock('node:child_process', () => ({
+  spawn: vi.fn(() => {
+    throw new Error('real spawn')
+  })
+}))
+
 vi.mock('electron', () => ({
   powerMonitor: {
     on: vi.fn(),
@@ -25,7 +33,8 @@ function workingStatus(): AgentAwakeStatus {
 
 describe('AgentAwakeService status array ownership', () => {
   it('does not observe rows appended to the caller array after setStatuses', () => {
-    const service = new AgentAwakeService()
+    // Fork-only (Pod): stubs throughout; the default macOS assertion spawned a real caffeinate here.
+    const service = createService()
     service.setMode('auto')
     const statuses: AgentAwakeStatus[] = [workingStatus()]
 

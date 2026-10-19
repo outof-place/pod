@@ -5,6 +5,14 @@ import {
   MacosSystemSleepAssertion
 } from './macos-system-sleep-assertion'
 
+// Fork-only (Pod): a test that forgets to inject its spawn fails here instead of starting a real
+// caffeinate, which would keep this Mac awake.
+vi.mock('node:child_process', () => ({
+  spawn: vi.fn(() => {
+    throw new Error('real spawn')
+  })
+}))
+
 class FakeCaffeinateProcess extends EventEmitter {
   pid = 123
   kill = vi.fn(() => {
@@ -26,16 +34,31 @@ describe('MacosSystemSleepAssertion', () => {
     const spawn = vi.fn(() => child)
     const assertion = new MacosSystemSleepAssertion({
       logger: createLogger(),
+      ownerPid: 4242,
       platform: 'darwin',
       spawn
     })
 
     assertion.start('status-change')
 
-    expect(spawn).toHaveBeenCalledWith('/usr/bin/caffeinate', ['-i', '-s'], {
+    // Fork-only (Pod): -w <owner>, so the assertion goes when its owner does, however it ends.
+    expect(spawn).toHaveBeenCalledWith('/usr/bin/caffeinate', ['-i', '-s', '-w', '4242'], {
       stdio: 'ignore',
       windowsHide: true
     })
+  })
+
+  it('ties caffeinate to this process when no owner is given (Fork-only, Pod)', () => {
+    const spawn = vi.fn(() => new FakeCaffeinateProcess())
+    new MacosSystemSleepAssertion({ logger: createLogger(), platform: 'darwin', spawn }).start(
+      'status-change'
+    )
+
+    expect(spawn).toHaveBeenCalledWith(
+      '/usr/bin/caffeinate',
+      ['-i', '-s', '-w', String(process.pid)],
+      expect.anything()
+    )
   })
 
   it('is a no-op off macOS', () => {

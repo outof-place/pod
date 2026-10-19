@@ -26,6 +26,8 @@ type MacosSystemSleepAssertionOptions = {
   logger?: Logger
   now?: () => number
   onUnexpectedFailure?: (reason: string) => void
+  /** Fork-only (Pod): the process whose exit releases the assertion (caffeinate -w). */
+  ownerPid?: number
   platform?: NodeJS.Platform
   spawn?: CaffeinateSpawn
 }
@@ -34,6 +36,7 @@ export class MacosSystemSleepAssertion {
   private readonly logger: Logger
   private readonly now: () => number
   private readonly onUnexpectedFailure: (reason: string) => void
+  private readonly ownerPid: number
   private readonly platform: NodeJS.Platform
   private readonly spawn: CaffeinateSpawn
   private child: CaffeinateProcess | null = null
@@ -49,6 +52,7 @@ export class MacosSystemSleepAssertion {
     this.logger = options.logger ?? console
     this.now = options.now ?? Date.now
     this.onUnexpectedFailure = options.onUnexpectedFailure ?? (() => {})
+    this.ownerPid = options.ownerPid ?? process.pid
     this.platform = options.platform ?? process.platform
     this.spawn = options.spawn ?? nodeSpawn
   }
@@ -67,7 +71,9 @@ export class MacosSystemSleepAssertion {
 
     let child: CaffeinateProcess
     try {
-      child = this.spawn('/usr/bin/caffeinate', ['-i', '-s'], {
+      // Fork-only (Pod): -w ties the assertion to its owner, so a hard-killed or crashed runtime
+      // leaves no orphaned caffeinate keeping the Mac awake.
+      child = this.spawn('/usr/bin/caffeinate', ['-i', '-s', '-w', String(this.ownerPid)], {
         stdio: 'ignore',
         windowsHide: true
       })
