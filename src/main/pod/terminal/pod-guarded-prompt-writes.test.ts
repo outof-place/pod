@@ -4,6 +4,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../../shared/agent-prompt-injection'
 import { createAgentPromptSubmissionRuntime } from '../../runtime/agent-prompt-submission-runtime-test-fixture'
+import { sendAgentTurn } from '../../runtime/orchestration/send-agent-turn'
 import type { TerminalAgentForegroundProof } from './pod-terminal-foreground-fence'
 
 const fence = vi.hoisted((): { groupNow: number | null } => ({ groupNow: null }))
@@ -230,6 +231,50 @@ describe('the default gate of an unguarded agent prompt', () => {
 
     const sent = pane.runtime.sendTerminalAgentPrompt(pane.handle, 'review this', {
       inputKind: 'driving'
+    })
+    await vi.runAllTimersAsync()
+    await sent
+
+    expect(pane.writes[0]).toContain(AGENT_PROMPT_BRACKETED_PASTE_END)
+    expect(pane.writes).toContain('\r')
+  })
+})
+
+// What dispatch --inject (dispatch-methods.ts) and a coordinator's task (coordinator-task-dispatch.ts)
+// send: a terminal turn through sendAgentTurn, with no guard of their own.
+describe('a dispatch turn into an SSH pane', () => {
+  const turn = {
+    purpose: 'dispatch-preamble',
+    body: 'Task: review this',
+    operationId: 'dispatch-1'
+  } as const
+
+  it('writes nothing while the relay names a shell in front', async () => {
+    vi.useFakeTimers()
+    const pane = await sshPromptPane(() => '-zsh')
+
+    const sent = sendAgentTurn({
+      kind: 'terminal',
+      runtime: pane.runtime,
+      handle: pane.handle,
+      turn
+    })
+    const refused = expect(sent).rejects.toThrow('agent_not_in_foreground: shell')
+    await vi.runAllTimersAsync()
+    await refused
+
+    expect(pane.writes).toEqual([])
+  })
+
+  it('pastes the turn and submits it while the agent is in front', async () => {
+    vi.useFakeTimers()
+    const pane = await sshPromptPane(() => 'codex')
+
+    const sent = sendAgentTurn({
+      kind: 'terminal',
+      runtime: pane.runtime,
+      handle: pane.handle,
+      turn
     })
     await vi.runAllTimersAsync()
     await sent

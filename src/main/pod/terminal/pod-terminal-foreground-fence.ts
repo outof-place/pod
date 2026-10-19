@@ -89,6 +89,8 @@ function judgeFrontGroup(
  * The proof on the pane's own host. A Windows pane has none (null), and neither has an SSH pane,
  * which keeps its async guard, unless `relayShell` asks its relay who is in front: a shell named
  * there proves the shell, and anything else stays unproven (null). No fence on SSH: the read is async.
+ * The relay names a process, not its command line, so `sudo`, a REPL or a nested `ssh` in front of an
+ * SSH pane stays unproven too: a node REPL reads like a node-based agent. Phase 2 reads argv there.
  */
 export async function proveTerminalAgentForegroundOnHost(
   controller: Pick<RuntimePtyController, 'listProcesses' | 'getForegroundProcess'> | null,
