@@ -20042,6 +20042,9 @@
       "description": "Where repositories live, and how Spotlight, Time Machine and the volume treat that folder."
     }
   },
+  "podPasteGuard": {
+    "refused": "Not sent: the agent isn't in front in this terminal ({{reason}})"
+  },
   "podOrbstack": {
     "containers": {
       "title": "Docker containers",

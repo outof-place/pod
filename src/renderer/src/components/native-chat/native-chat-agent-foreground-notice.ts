@@ -3,9 +3,9 @@
 import { translate } from '@/i18n/i18n'
 
 export function nativeChatAgentNotInForegroundNotice(reason: string): string {
-  const notSent = translate(
-    'components.native-chat.failureWords.writeFailed',
-    "Orca couldn't hand this message to the agent, so it was not sent."
+  return translate(
+    'podPasteGuard.refused',
+    "Not sent: the agent isn't in front in this terminal ({{reason}})",
+    { reason }
   )
-  return `${notSent} (agent_not_in_foreground: ${reason})`
 }

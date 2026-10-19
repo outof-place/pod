@@ -103,9 +103,9 @@ describe('an answer to an agent’s question', () => {
 })
 
 describe('the refusal notice', () => {
-  it('keeps the existing "not sent" text and names the reason', () => {
+  it('says the message was not sent and names the reason', () => {
     expect(nativeChatAgentNotInForegroundNotice('shell')).toBe(
-      "Orca couldn't hand this message to the agent, so it was not sent. (agent_not_in_foreground: shell)"
+      "Not sent: the agent isn't in front in this terminal (shell)"
     )
   })
 })

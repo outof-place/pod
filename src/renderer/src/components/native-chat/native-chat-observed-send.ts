@@ -80,6 +80,8 @@ export function sendNativeChatObservedWrites(
                 return
               }
               // Fork-only (Pod): a guarded write main refused wrote nothing; stop, and say why.
+              // Known and safe: an accepted body whose Enter is refused sits unexecuted in the
+              // agent's input, so sending the restored draft again can repeat it there.
               const refusal = readAgentForegroundRefusal(error)
               if (refusal) {
                 if (options.onAgentNotInForeground) {
