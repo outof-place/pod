@@ -1,6 +1,6 @@
 // Fork-only (Pod): when Linear rejects a key, Pod keeps it and marks the workspace "needs a new key"
 // across a restart; a passing test or a new key clears the mark, and only Disconnect deletes the key.
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -37,6 +37,18 @@ function restoreEnv(
   } else {
     process.env[name] = value
   }
+}
+
+/** Every file under dir with its bytes, recursively. */
+function storeBytes(dir: string): Record<string, string> {
+  return Object.fromEntries(
+    readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name)
+      return statSync(path).isDirectory()
+        ? Object.entries(storeBytes(path)).map(([file, bytes]) => [`${name}/${file}`, bytes])
+        : [[name, readFileSync(path).toString('base64')]]
+    })
+  )
 }
 
 describe('a key Linear rejects', () => {
@@ -177,5 +189,31 @@ describe('a key Linear rejects', () => {
     const tokens = await import('../../linear/linear-token-store')
     tokens.clearToken()
     expect(linear.getStatus().workspaces?.[1]).not.toHaveProperty('needsNewKey')
+  })
+
+  it('tests a workspace without storing anything or moving the selection', async () => {
+    const second = {
+      ...LINEAR_MOCK_ORGANIZATION,
+      id: 'org-mock-2',
+      name: 'Other Co',
+      urlKey: 'other'
+    }
+    reply = (request) =>
+      request.authorization === NEW_KEY && /\borganization\b/.test(request.query)
+        ? { body: { data: { organization: second } } }
+        : defaultLinearMockReply(request)
+    const linear = await freshClient()
+    await linear.connect(KEY)
+    await linear.connect(NEW_KEY)
+    const storeDir = join(userData, 'integrations', 'linear')
+    const before = storeBytes(storeDir)
+
+    expect(await linear.testConnection(ORG)).toMatchObject({ ok: true, workspace: { id: ORG } })
+
+    expect(linear.getStatus()).toMatchObject({
+      selectedWorkspaceId: 'org-mock-2',
+      activeWorkspaceId: 'org-mock-2'
+    })
+    expect(storeBytes(storeDir)).toEqual(before)
   })
 })
