@@ -53,6 +53,7 @@ import { buildStartupCommandSubmission } from '../shared/startup-command-submiss
 import {
   discardStagedStartupCommand,
   stageStartupCommand,
+  startupLineRefusal,
   startupStagingFailureNotice,
   type StartupCommandStaging
 } from '../shared/startup-command-staging'
@@ -178,6 +179,30 @@ function resolveRelaySpawnShell(
   const requestedEnvShell =
     process.platform !== 'win32' && typeof env?.SHELL === 'string' ? env.SHELL.trim() : ''
   return resolveRevivedShellOverride(shellOverride) || requestedEnvShell || resolveDefaultShell()
+}
+
+/**
+ * Fork-only (Pod): whether `pty.spawn` with these params would refuse its startup line
+ * (`stageStartupCommand`'s `refuseUnstaged`), asked by the client before it makes a tab or PTY.
+ */
+function podStartupLineRefusal(params: Record<string, unknown>): {
+  reason: ReturnType<typeof startupLineRefusal>
+} {
+  if (typeof params.command !== 'string') {
+    return { reason: null }
+  }
+  const env = params.env
+  const envShell =
+    typeof env === 'object' && env !== null && 'SHELL' in env && typeof env.SHELL === 'string'
+      ? { SHELL: env.SHELL }
+      : undefined
+  return {
+    reason: startupLineRefusal({
+      command: params.command,
+      shellPath: resolveRelaySpawnShell(params, envShell),
+      orcaBuiltLine: isTuiAgent(params.launchAgent)
+    })
+  }
 }
 
 /**
@@ -1051,6 +1076,10 @@ export class PtyHandler {
       { bracketedPasteSafe: startup.waitForShellReady }
     )
     managed.startupCommand = undefined
+    // Fork-only (Pod): a refused line is never typed (startup-command-staging.ts).
+    if (managed.stagedStartupCommand?.delivery === 'refused') {
+      return
+    }
     managed.pty.write(payload)
   }
 
@@ -1265,6 +1294,7 @@ export class PtyHandler {
     }))
     this.dispatcher.onRequest('pty.listProcesses', (params) => this.listProcesses(params))
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
+    this.dispatcher.onRequest('pty.startupLineRefusal', async (p) => podStartupLineRefusal(p))
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
     this.dispatcher.onRequest('pty.revive', (p) => this.revive(p))
     this.dispatcher.onRequest('pty.getProfiles', async () => listShellProfiles())
@@ -2259,11 +2289,14 @@ export class PtyHandler {
       managed.stagedStartupCommand = stageStartupCommand({
         command: managed.startupCommand.command,
         shellPath: shell,
-        orcaBuiltLine: launchAgent !== undefined
+        orcaBuiltLine: launchAgent !== undefined,
+        refuseUnstaged: true
       })
-      if (managed.stagedStartupCommand.failure) {
+      const { delivery, failure } = managed.stagedStartupCommand
+      if (failure || delivery === 'refused') {
+        const typed = delivery === 'refused' ? 'not typing it' : 'typing it in full'
         process.stderr.write(
-          `[pty-handler] Could not stage startup command for ${id}; typing it in full: ${managed.stagedStartupCommand.failure}\n`
+          `[pty-handler] Could not stage startup command for ${id}; ${typed}: ${failure ?? 'shell cannot source it'}\n`
         )
       }
     }

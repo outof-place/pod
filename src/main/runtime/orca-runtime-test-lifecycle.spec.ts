@@ -160,7 +160,10 @@ function resetRuntimeTestMocks(): void {
     }
   })
   muxRequestMock.mockReset()
-  muxRequestMock.mockResolvedValue(undefined)
+  // Pod: a current relay, which stages the startup line (pod-startup-line-gate.ts).
+  muxRequestMock.mockImplementation(async (method: string) =>
+    method === 'pty.startupLineRefusal' ? { reason: null } : undefined
+  )
   applyAgentStatusHooksEnabledMock.mockReset().mockResolvedValue([])
   getActiveMultiplexerMock.mockReset()
   getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })

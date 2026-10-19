@@ -154,4 +154,22 @@ describe('SshPlainShellPtyProvider', () => {
     )
     expect(opened).toEqual([])
   })
+
+  // Pod: nothing stages a plain SSH shell's line, so one that needs staging is never typed.
+  it('types a short provider-delivered command and refuses one that needs staging', async () => {
+    const { provider, channels, data } = createProvider()
+    await provider.spawn({ cols: 80, rows: 24, command: 'echo short', commandDelivery: 'provider' })
+    expect(channels[0]?.writes).toEqual(['echo short\n'])
+
+    await provider.spawn({
+      cols: 80,
+      rows: 24,
+      command: `echo 'one\ntwo'`,
+      commandDelivery: 'provider'
+    })
+    expect(channels[1]?.writes).toEqual([])
+    expect(data.at(-1)?.data).toContain(
+      'it has more than one line, and this shell cannot run it staged'
+    )
+  })
 })

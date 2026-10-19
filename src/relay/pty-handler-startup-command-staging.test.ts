@@ -99,16 +99,58 @@ describePosix('relay startup command staging', () => {
     expect(readdirSync(stagingDir)).toEqual([])
   })
 
-  it('prints a notice in the terminal when it types a line it could not stage', async () => {
-    vi.stubEnv('TMPDIR', join(stagingDir, 'missing'))
-    const command = `claude '${'x'.repeat(600)}'`
-    await spawn(command)
-    await vi.advanceTimersByTimeAsync(50)
-    expect(mockPtySpawn.mock.results[0]?.value.write).toHaveBeenCalledWith(`${command}\r`)
-    const output = dispatcher._notifications
+  // Pod: the relay follows the local hosts; a line that needs staging is never typed in full.
+  function terminalOutput(): string {
+    return dispatcher._notifications
       .filter((notification) => notification.method === 'pty.data')
       .map((notification) => String(notification.params?.data))
       .join('')
-    expect(output).toContain('[orca] Could not stage the launch command (ENOENT')
+  }
+
+  it('types nothing, and says why, when it cannot stage a line that needs it', async () => {
+    vi.stubEnv('TMPDIR', join(stagingDir, 'missing'))
+    await spawn(`claude '${'x'.repeat(600)}'`)
+    await vi.advanceTimersByTimeAsync(1600)
+    expect(mockPtySpawn.mock.results[0]?.value.write).not.toHaveBeenCalled()
+    expect(terminalOutput()).toContain(
+      '[orca] Did not type the launch command: it is over 512 bytes, and staging it failed (ENOENT'
+    )
+  })
+
+  it('types nothing for a multi-line command in a shell that cannot source a script', async () => {
+    await dispatcher.callRequest('pty.spawn', {
+      command: `echo 'one\ntwo'`,
+      commandDelivery: 'provider',
+      env: { SHELL: '/bin/ksh' }
+    })
+    await vi.advanceTimersByTimeAsync(1600)
+    expect(mockPtySpawn.mock.results[0]?.value.write).not.toHaveBeenCalled()
+    expect(readdirSync(stagingDir)).toEqual([])
+    expect(terminalOutput()).toContain(
+      'it has more than one line, and this shell cannot run it staged'
+    )
+  })
+
+  it('answers pty.startupLineRefusal the way pty.spawn decides, before any PTY', async () => {
+    const ask = (params: Record<string, unknown>) =>
+      dispatcher.callRequest('pty.startupLineRefusal', params)
+    const multiLine = `echo 'one\ntwo'`
+    expect(await ask({ command: multiLine, env: { SHELL: '/bin/ksh' } })).toEqual({
+      reason: 'multi-line'
+    })
+    expect(await ask({ command: multiLine, env: { SHELL: '/bin/zsh' } })).toEqual({ reason: null })
+    expect(
+      await ask({ command: multiLine, launchAgent: 'claude', env: { SHELL: '/bin/ksh' } })
+    ).toEqual({ reason: null })
+    expect(await ask({ command: 'echo short', env: { SHELL: '/bin/ksh' } })).toEqual({
+      reason: null
+    })
+    expect(await ask({})).toEqual({ reason: null })
+    expect(readdirSync(stagingDir)).toEqual([])
+    vi.stubEnv('TMPDIR', join(stagingDir, 'missing'))
+    expect(await ask({ command: multiLine, env: { SHELL: '/bin/zsh' } })).toEqual({
+      reason: 'multi-line'
+    })
+    expect(mockPtySpawn).not.toHaveBeenCalled()
   })
 })

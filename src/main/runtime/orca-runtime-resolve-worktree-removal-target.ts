@@ -35,7 +35,7 @@ import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-table'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { resolveQoderTerminalCommandForWorkspace } from './qoder-terminal-command-resolution'
 import { buildRuntimeAgentTerminalStartupOptions } from './runtime-agent-terminal-startup'
-import { assertLocalStartupLineTypeable } from './pod-startup-line-gate'
+import { assertStartupLineTypeable } from './pod-startup-line-gate'
 
 export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
   protected async resolveWorktreeRemovalTarget(
@@ -254,12 +254,13 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       this.getAgentLaunchPlatformForWorkspace(workspace)
     )
     // Fork-only (Pod): both createTerminal lanes pass here before a tab or PTY exists.
-    assertLocalStartupLineTypeable({
+    await assertStartupLineTypeable({
       command: resolved.command,
       launchAgent: resolved.launchAgent,
-      isRemote: Boolean(workspace.connectionId),
+      connectionId: workspace.connectionId,
       shellOverride: resolved.shellOverride,
-      defaultShellSetting: this.store?.getSettings?.().terminalDefaultShell
+      defaultShellSetting: this.store?.getSettings?.().terminalDefaultShell,
+      envShell: resolved.env?.SHELL
     })
     return resolved
   }

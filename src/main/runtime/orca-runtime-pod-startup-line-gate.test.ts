@@ -9,17 +9,24 @@ import {
   computeWorktreePathMock,
   electronMocks,
   ensurePathWithinWorkspaceMock,
-  listWorktrees
+  getActiveMultiplexerMock,
+  listWorktrees,
+  muxRequestMock,
+  registerSshGitProvider,
+  unregisterSshGitProvider
 } from './orca-runtime-test-mocks.spec'
 import type { WorktreeMeta } from './orca-runtime-test-mocks.spec'
 import {
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
+  isLocalBranchCatalogQuery,
+  isOriginMainBaseRefProbe,
   makeWorktreeMeta,
   store
 } from './orca-runtime-test-fixtures.spec'
 import { createWorktreeWithStartupAgent } from '../agent-launch/startup-agent-worktree-create'
 import { stageStartupCommand } from '../../shared/startup-command-staging'
+import { RELAY_STARTUP_LINE_REFUSAL_METHOD } from './pod-startup-line-gate'
 
 // Pod: a startup line the PTY host will not type is refused before any tab or PTY exists
 // (`agent_prompt_needs_paste`); where staging works, nothing changes.
@@ -213,5 +220,126 @@ describePosix('where staging works, nothing changes', () => {
     await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, { command })
 
     expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ command }))
+  })
+})
+
+describePosix('an SSH workspace: refused before the remote worktree or PTY', () => {
+  const remoteRepo = {
+    id: TEST_REPO_ID,
+    path: '/remote/repo',
+    displayName: 'repo',
+    badgeColor: 'blue',
+    addedAt: 1,
+    connectionId: 'ssh-1'
+  }
+  const created = {
+    path: '/remote/pod-gate-ssh',
+    head: 'def',
+    branch: 'refs/heads/pod-gate-ssh',
+    isBare: false,
+    isMainWorktree: false
+  }
+
+  function makeSshRuntime() {
+    const metaById: Record<string, WorktreeMeta> = {}
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({ ...store.getSettings(), agentCmdOverrides: {}, disabledTuiAgents: [] }),
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    } as never)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-gate' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const provider = {
+      exec: vi.fn(async (args: string[]) => {
+        if (args[0] === 'config') {
+          return { stdout: 'Remote User\n', stderr: '' }
+        }
+        if (args[0] === 'branch' || isLocalBranchCatalogQuery(args)) {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+          return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
+        }
+        if (isOriginMainBaseRefProbe(args)) {
+          return { stdout: 'main-sha\n', stderr: '' }
+        }
+        if (args[0] === 'fetch') {
+          return { stdout: '', stderr: '' }
+        }
+        throw new Error(`unexpected git call: ${args.join(' ')}`)
+      }),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([created])
+    }
+    registerSshGitProvider('ssh-1', provider as never)
+    return { runtime, spawn, provider }
+  }
+
+  afterEach(() => {
+    unregisterSshGitProvider('ssh-1')
+  })
+
+  const methodNotFound = () =>
+    Promise.reject(
+      Object.assign(new Error(`Method not found: ${RELAY_STARTUP_LINE_REFUSAL_METHOD}`), {
+        code: -32601
+      })
+    )
+
+  it.each([
+    ['a relay from before the check', () => ({ request: vi.fn(methodNotFound), notify: vi.fn() })],
+    ['plain SSH, with no relay', () => undefined]
+  ])('worktree.create with %s: no remote worktree and no PTY', async (_label, mux) => {
+    const { runtime, spawn, provider } = makeSshRuntime()
+    getActiveMultiplexerMock.mockReturnValue(mux())
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: TEST_REPO_ID,
+        name: 'pod-gate-ssh',
+        startupAgent: 'claude',
+        startupPrompt: 'one\ntwo'
+      })
+    ).rejects.toMatchObject(needsPaste('multi-line'))
+    expect(provider.addWorktree).not.toHaveBeenCalled()
+    expect(provider.exec).not.toHaveBeenCalled()
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('worktree.create with a relay that stages: the long multi-line prompt spawns', async () => {
+    const { runtime, spawn, provider } = makeSshRuntime()
+    const request = vi.fn((method: string, params?: Record<string, unknown>) =>
+      method === RELAY_STARTUP_LINE_REFUSAL_METHOD
+        ? Promise.resolve({ reason: null })
+        : muxRequestMock(method, params)
+    )
+    getActiveMultiplexerMock.mockReturnValue({ request, notify: vi.fn() })
+
+    await runtime.createManagedWorktree({
+      repoSelector: TEST_REPO_ID,
+      name: 'pod-gate-ssh',
+      startupAgent: 'claude',
+      startupPrompt: LONG_MULTI_LINE_PROMPT
+    })
+
+    expect(request).toHaveBeenCalledWith(
+      RELAY_STARTUP_LINE_REFUSAL_METHOD,
+      expect.objectContaining({ launchAgent: 'claude' })
+    )
+    expect(provider.addWorktree).toHaveBeenCalled()
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expect(spawn.mock.calls[0][0].command).toContain('Then report.')
   })
 })

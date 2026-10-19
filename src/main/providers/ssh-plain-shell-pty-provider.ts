@@ -7,6 +7,10 @@ import { randomUUID } from 'node:crypto'
 import { StringDecoder } from 'node:string_decoder'
 import type { ClientChannel, PseudoTtyOptions } from 'ssh2'
 import { WRITE_ACCEPTED, type WriteSettlement } from '../../shared/pty-write-settlement'
+import {
+  startupLineStagingReason,
+  startupStagingFailureNotice
+} from '../../shared/startup-command-staging'
 import { PlainSshUnsupportedError } from '../ssh/ssh-plain-ssh-mode'
 import type { SshPlainSshMode } from '../../shared/ssh-types'
 import { toAppSshPtyId } from './ssh-pty-id'
@@ -107,7 +111,17 @@ export class SshPlainShellPtyProvider implements IPtyProvider {
       channel.write(` cd -- ${posixCdTarget(opts.cwd)}\n`)
     }
     if (opts.command && opts.commandDelivery === 'provider') {
-      channel.write(`${opts.command}\n`)
+      // Fork-only (Pod): nothing stages here, so a line only staging delivers whole is not typed.
+      const refusal = startupLineStagingReason(opts.command)
+      if (refusal) {
+        this.emitData(
+          id,
+          shell,
+          startupStagingFailureNotice({ command: '', delivery: 'refused', refusal }) ?? ''
+        )
+      } else {
+        channel.write(`${opts.command}\n`)
+      }
     }
     return {
       id,
