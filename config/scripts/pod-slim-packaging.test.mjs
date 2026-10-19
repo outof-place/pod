@@ -67,13 +67,11 @@ describe('Pod slim packaging', () => {
 
   it('drops cut runtime packages and win32 ripgrep before the upstream config loads', () => {
     const pod = inspectSlimConfig('pod')
-    for (const dropped of [
-      'node_modules/@linear/sdk',
-      'node_modules/serve-sim',
-      'node_modules/sonner'
-    ]) {
+    for (const dropped of ['node_modules/serve-sim', 'node_modules/sonner']) {
       expect(pod.targets).not.toContain(dropped)
     }
+    // Pod compiles Linear in for PodNative; the runtime gates it with the podLinear setting.
+    expect(pod.targets).toContain('node_modules/@linear/sdk')
     expect(pod.sources.some((source) => source.includes('sherpa-onnx'))).toBe(false)
     expect(pod.ripgrepPlatforms).toEqual(['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'])
     expect(pod.ripgrepFilter.some((pattern) => pattern.startsWith('win32-'))).toBe(false)
