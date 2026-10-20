@@ -110,6 +110,7 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
           'terminalJISYenToBackslash',
           'terminalMouseHideWhileTyping',
           'terminalFocusFollowsMouse',
+          'terminalShortcutPolicy',
           'terminalWordSeparator',
           'terminalScrollSensitivity',
           'terminalFastScrollSensitivity',

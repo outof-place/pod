@@ -161,9 +161,6 @@ export const POD_SETTINGS_HIDDEN = {
   nativeChatShellEnvironmentVariables: 'later',
   // Routes Orca's browser tabs through SSH; PodNative's browser doesn't yet.
   browserSshWorkspaceRoutingEnabled: 'later',
-  // Row bounds lived in pod-settings-schema.ts at commit ed129568dd; restore them with the control.
-  // N1 (native settings): PodNative reads none of these yet, so a row would change nothing.
-  terminalShortcutPolicy: 'later',
   // N1: the middle-click paste is fixed behavior in PodNative's terminal, not driven by this key.
   primarySelectionMiddleClickPaste: 'later',
   // N1: PodNative's Open In menu has no custom apps; its "Edit in Pod" row opens the classic window.

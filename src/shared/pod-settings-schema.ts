@@ -18,6 +18,7 @@ import {
 } from './terminal-minimum-contrast-settings'
 import { POD_SETTINGS_AGENT_FIELDS } from './pod-settings-agent-fields'
 import { POD_SETTINGS_TAB_FIELDS } from './pod-settings-tab-fields'
+import { POD_SETTINGS_TERMINAL_SHORTCUT_FIELDS } from './pod-settings-terminal-shortcut-field'
 import { row } from './pod-settings-row'
 import { normalizeExecutionHostId } from './execution-host'
 import { TuiAgentSchema } from './pod-settings-tui-agent-schema'
@@ -215,6 +216,7 @@ export const POD_SETTINGS_FIELDS = {
     'Right-click to paste',
     'Copies a selection, or pastes without one. Control-click opens the menu.'
   ),
+  ...POD_SETTINGS_TERMINAL_SHORTCUT_FIELDS,
   terminalWordSeparator: row(z.string().max(256), 'Word separators'),
   terminalClipboardOnSelect: row(z.boolean(), 'Copy on select'),
   terminalCopyTrimsGutter: row(z.boolean(), "Copy without agents' left gutter"),
