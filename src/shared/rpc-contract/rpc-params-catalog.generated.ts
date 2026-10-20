@@ -459,6 +459,10 @@ import {
   SshSubmitCredentialParams
 } from './pod-ssh-credential-params'
 import {
+  ProjectGroupImportNestedRemoteParams,
+  ProjectGroupScanNestedRemoteParams
+} from './pod-ssh-nested-repo-params'
+import {
   SshAddPortForwardParams,
   SshListDetectedPortsParams,
   SshListPortForwardsParams,
@@ -1215,9 +1219,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'projectGroup.create': ProjectGroupCreate,
   'projectGroup.delete': ProjectGroupSelector,
   'projectGroup.importNested': ProjectGroupImportNested,
+  'projectGroup.importNestedRemote': ProjectGroupImportNestedRemoteParams,
   'projectGroup.list': null,
   'projectGroup.moveProject': ProjectGroupMoveProject,
   'projectGroup.scanNested': ProjectGroupScanNested,
+  'projectGroup.scanNestedRemote': ProjectGroupScanNestedRemoteParams,
   'projectGroup.update': ProjectGroupUpdate,
   'projectHostSetup.clone': ProjectHostSetupClone,
   'projectHostSetup.create': ProjectHostSetupCreate,

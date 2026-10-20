@@ -39,6 +39,7 @@ import { POD_SSH_TARGET_METHODS } from './pod-ssh-targets'
 import { POD_SSH_CREDENTIAL_METHODS } from './pod-ssh-credentials'
 import { POD_SSH_PORT_FORWARD_METHODS } from './pod-ssh-port-forwards'
 import { POD_SSH_REMOTE_PROJECT_METHODS } from './pod-ssh-remote-projects'
+import { POD_SSH_NESTED_REPO_METHODS } from './pod-ssh-nested-repos'
 import { MANAGED_SERVER_METHODS } from './managed-server'
 import { CLIENT_UI_METHODS } from './client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events'
@@ -149,6 +150,8 @@ export const ALL_RPC_METHODS = [
   ...POD_SSH_TARGET_METHODS,
   // Fork-only (Pod): Add Project on an SSH host: browse its folders, register one.
   ...POD_SSH_REMOTE_PROJECT_METHODS,
+  // Fork-only (Pod): the same Add Project's nested repository scan and import on that host.
+  ...POD_SSH_NESTED_REPO_METHODS,
   // Fork-only (Pod): SSH connect prompts (passphrase, password, keyboard-interactive).
   ...POD_SSH_CREDENTIAL_METHODS,
   // Fork-only (Pod): SSH port forwarding and the ports a host's relay detects.

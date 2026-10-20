@@ -69,13 +69,11 @@ export async function importNestedReposForStore(
     repoPaths: selection.selectedPaths,
     createGroup: (input) => store.createProjectGroup(input)
   })
-  const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map(
-    (repoPath) => ({
-      path: repoPath,
-      status: 'failed',
-      error: 'Repository was not found in the nested repo scan result'
-    })
-  )
+  const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map((repoPath) => ({
+    path: repoPath,
+    status: 'failed',
+    error: 'Repository was not found in the nested repo scan result'
+  }))
   const importedProjectIdsByRepoPath = new Map<string, string>()
   const importTargetResolver = createNestedRepoImportTargetResolver()
 
@@ -107,8 +105,7 @@ export async function importNestedReposForStore(
         importRepoPath = await importTargetResolver.resolveLocal(repoPath)
       }
       const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
-      const alreadyImportedProjectId =
-        importedProjectIdsByRepoPath.get(normalizedImportRepoPath)
+      const alreadyImportedProjectId = importedProjectIdsByRepoPath.get(normalizedImportRepoPath)
       if (alreadyImportedProjectId) {
         results.push({
           path: repoPath,
