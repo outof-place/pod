@@ -21,8 +21,9 @@ const APPLIED_FOR_PODNATIVE = [
   'computerAwakeMode',
   'skipDeleteWorktreeConfirm',
   'skipCloseTerminalWithRunningProcessConfirm',
-  // PodNative's ⌃⇥ switcher and pinned tabs (pn-acc's PN branch, landed in a pair)
+  // PodNative's ⌃⇥ switcher, preview tabs and pinned tabs (pn-acc's PN branches, landed in pairs)
   'ctrlTabOrderMode',
+  'editorPreviewTabsEnabled',
   'confirmClosePinnedTab',
   // The runtime publishes it; PodNative only edits it
   'machineName',

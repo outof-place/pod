@@ -125,6 +125,7 @@ export const POD_SETTINGS_FIELDS = {
     'Close busy terminals without asking'
   ),
   ctrlTabOrderMode: row(z.enum(['mru', 'sequential']), 'Tab order for ⌃⇥', 'Recent or tab strip.'),
+  editorPreviewTabsEnabled: row(z.boolean(), 'Reuse a preview tab when browsing files'),
   confirmClosePinnedTab: row(z.boolean(), 'Confirm before closing pinned tabs'),
   // Published by status.get and to an SSH workspace's clients; blank: runtime-machine-name.ts.
   machineName: row(
