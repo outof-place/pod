@@ -19,6 +19,7 @@ import {
   type PodSettingsReadOnly
 } from '../../../shared/pod-settings-read-only'
 import { clearOverridesOnThemePick } from './pod-settings-theme-pick'
+import { storedTerminalSetting } from './pod-settings-terminal-stored'
 
 export type PodSettingsStore = {
   getSettings(): GlobalSettings
@@ -285,14 +286,8 @@ function stored(settings: GlobalSettings, key: PodSettingsKey): unknown {
   if (key === 'sourceControlAi') {
     return normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi)
   }
-  if (key === 'terminalLinkClickBehavior') {
-    // The renderer's terminalLinkClickBehaviorFor: a profile from before this setting kept only
-    // the popover switch.
-    const behavior = settings.terminalLinkClickBehavior
-    if (behavior === 'open' || behavior === 'none') {
-      return behavior
-    }
-    return settings.terminalLinkActionPopoverEnabled === false ? 'none' : 'actions'
+  if (key === 'terminalLinkClickBehavior' || key === 'terminalColorOverrides') {
+    return storedTerminalSetting(settings, key)
   }
   return settings[key]
 }

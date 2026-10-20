@@ -42,6 +42,8 @@ const APPLIED_FOR_PODNATIVE = [
   'terminalThemeDark',
   'terminalUseSeparateLightTheme',
   'terminalThemeLight',
+  // The runtime resolves them into the snapshot's terminalTheme, which PodNative draws
+  'terminalColorOverrides',
   'terminalBackgroundOpacity',
   'terminalMinimumContrastRatio',
   'terminalPaddingX',

@@ -20,6 +20,7 @@ import { POD_SETTINGS_AGENT_FIELDS } from './pod-settings-agent-fields'
 import { row } from './pod-settings-row'
 import { normalizeExecutionHostId } from './execution-host'
 import { TuiAgentSchema } from './pod-settings-tui-agent-schema'
+import { TERMINAL_COLOR_OVERRIDES_FIELD } from './pod-settings-terminal-colors'
 
 const UiLanguageSchema = z.union([
   z.enum(['system', 'en', 'zh', 'ko', 'ja', 'es', 'fr']),
@@ -179,6 +180,7 @@ export const POD_SETTINGS_FIELDS = {
   terminalThemeDark: row(z.string().min(1).max(256), 'Theme'),
   terminalUseSeparateLightTheme: row(z.boolean(), 'Another theme in light mode'),
   terminalThemeLight: row(z.string().min(1).max(256), 'Light theme'),
+  terminalColorOverrides: TERMINAL_COLOR_OVERRIDES_FIELD,
   terminalBackgroundOpacity: row(opacity, 'Background opacity'),
   terminalMinimumContrastRatio: row(
     z.number().min(MIN_TERMINAL_CONTRAST_RATIO).max(MAX_TERMINAL_CONTRAST_RATIO),

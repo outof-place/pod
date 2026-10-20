@@ -81,8 +81,8 @@ export const POD_SETTINGS_HIDDEN = {
   podWorkspaceRoot: 'owned',
   worktreeVisibilityDefaults: 'owned',
   hostSettingOverrides: 'owned',
+  // Made only by the classic window's imports; podSettings' readOnly lists them for a theme picker.
   terminalCustomThemes: 'owned',
-  terminalColorOverrides: 'owned',
   terminalQuickCommands: 'owned',
   nativeChatSessionOptions: 'owned',
   artifactSharingEnabled: 'owned',
