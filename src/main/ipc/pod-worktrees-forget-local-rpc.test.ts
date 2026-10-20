@@ -208,6 +208,21 @@ describe('worktree.forgetLocal through the desktop forget', () => {
     expectHostUntouched()
   })
 
+  it('lets the next forget and a removal go ahead after a refusal', async () => {
+    getSshPtyProviderMock.mockReturnValue(connectedSshProvider)
+    await expect(forget()).rejects.toMatchObject({ data: { reason: 'host_connected' } })
+    // A removal refuses only while the workspace's key is in the registry; the refusal left none.
+    expect(
+      getPodWorktreeRemovalRegistry().has(getWorktreeRemovalInFlightKey(worktreeId, hostId))
+    ).toBe(false)
+
+    getSshPtyProviderMock.mockReturnValue(undefined)
+    await expect(forget()).resolves.toBeUndefined()
+    expect(store.removeWorktreeMeta).toHaveBeenCalledExactlyOnceWith(worktreeId, hostId)
+    expect(getPodWorktreeRemovalRegistry().size).toBe(0)
+    expectHostUntouched()
+  })
+
   it('joins a forget the window already runs, so the workspace is purged once', async () => {
     let release = (): void => {}
     killAllProcessesForWorktreeMock.mockReturnValueOnce(

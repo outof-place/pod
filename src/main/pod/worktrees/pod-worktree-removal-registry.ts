@@ -15,6 +15,8 @@ export function setPodWorktreeRemovalRegistry(
 /**
  * The registry the window's removals and forgets use, so an RPC forget joins or refuses them. A
  * headless runtime has no window yet and gets its own, which a window attaching later replaces.
+ * A forget the RPC started in that one before the window attached is then not seen by the window's
+ * removals. Rare, and that forget changes only Pod's own state, so nothing tracks it across.
  */
 export function getPodWorktreeRemovalRegistry(): Map<string, WorktreeRemovalInFlight> {
   current ??= createWorktreeRemovalRegistry()

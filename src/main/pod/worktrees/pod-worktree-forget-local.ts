@@ -1,6 +1,9 @@
 // Fork-only (Pod): worktrees:forgetLocal's body, moved here unchanged so the runtime RPC
 // worktree.forgetLocal runs the same forget. Pod's own state for the workspace goes; its directory,
 // its Git registration and the host's files are never touched.
+//
+// Upstream: the sync with Orca ended on 2026-10-13 (CONTRIBUTING.md). Should a change to Orca's
+// worktrees:forgetLocal ever be taken, its body is here, not in register-worktree-forget-handlers.ts.
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import { parseWorktreeId } from '../../ipc/worktree-logic'
 import { resolveWorktreeRemovalRepoOwner } from '../../worktree-removal-repo-owner'
@@ -38,7 +41,12 @@ export type ForgetLocalWorktreeDeps = {
   removalsInFlight: Map<string, WorktreeRemovalInFlight>
   /** After the purge: the window's IPC tells its window and RPC clients; the RPC tells every client. */
   notifyChanged: (repoId: string) => void
-  /** The RPC's forget: refuses a host whose SSH provider is connected, before anything changes. */
+  /**
+   * The RPC's forget: refuses a host whose SSH provider is connected, before anything changes. A
+   * forget of the same workspace already running from the window is joined before that check, so
+   * with a connected host the RPC returns that forget's result, which Pod's dialog confirmed; the
+   * RPC itself still touches nothing on the host.
+   */
   offlineHostOnly?: true
 }
 
