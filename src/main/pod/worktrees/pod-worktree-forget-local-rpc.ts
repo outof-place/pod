@@ -9,18 +9,13 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { forgetLocalWorktree } from './pod-worktree-forget-local'
 import { getPodWorktreeRemovalRegistry } from './pod-worktree-removal-registry'
 import { podWorktreeForgetRefusal } from './pod-worktree-forget-refusal'
-
-export type PodWorktreeForgetLocalParams = { worktreeId: string; hostId: string }
-export type PodWorktreeForgetLocal = (params: PodWorktreeForgetLocalParams) => Promise<void>
-
-let installed: PodWorktreeForgetLocal | null = null
-
-export function getPodWorktreeForgetLocal(): PodWorktreeForgetLocal | null {
-  return installed
-}
+import {
+  setPodWorktreeForgetLocal,
+  type PodWorktreeForgetLocalParams
+} from './pod-worktree-forget-local-installed'
 
 export function installPodWorktreeForgetLocal(store: Store, runtime: OrcaRuntimeService): void {
-  installed = async (params) => {
+  setPodWorktreeForgetLocal(async (params) => {
     const hostId = resolveForgetHost(store, params)
     await forgetLocalWorktree(
       { worktreeId: params.worktreeId, hostId },
@@ -33,7 +28,7 @@ export function installPodWorktreeForgetLocal(store: Store, runtime: OrcaRuntime
         offlineHostOnly: true
       }
     )
-  }
+  })
 }
 
 /**

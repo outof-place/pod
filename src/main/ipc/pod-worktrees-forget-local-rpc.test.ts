@@ -16,10 +16,8 @@ import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import { getWorktreeRemovalInFlightKey } from './worktrees/removal/worktree-removal-coordinator'
 import { deleteRemoteWorktreeHistory } from '../remote-worktree-history-cleanup'
-import {
-  getPodWorktreeForgetLocal,
-  installPodWorktreeForgetLocal
-} from '../pod/worktrees/pod-worktree-forget-local-rpc'
+import { installPodWorktreeForgetLocal } from '../pod/worktrees/pod-worktree-forget-local-rpc'
+import { getPodWorktreeForgetLocal } from '../pod/worktrees/pod-worktree-forget-local-installed'
 import { getPodWorktreeRemovalRegistry } from '../pod/worktrees/pod-worktree-removal-registry'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'

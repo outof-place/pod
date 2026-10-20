@@ -10,12 +10,12 @@ import type { RpcDispatchStreamingOptions } from '../../runtime/rpc/dispatcher-s
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../runtime/runtime-rpc/runtime-rpc-mobile-method-allowlist'
 import { POD_RUNTIME_CAPABILITIES } from '../../../shared/pod-runtime-capabilities'
-import { getPodWorktreeForgetLocal } from './pod-worktree-forget-local-rpc'
+import { getPodWorktreeForgetLocal } from './pod-worktree-forget-local-installed'
 import { podWorktreeForgetRefusal } from './pod-worktree-forget-refusal'
 import { POD_WORKTREE_FORGET_LOCAL_METHODS } from './pod-worktree-forget-local-rpc-methods'
 
 // The installed forget is a stub here: the method's own job is who may call it and with what.
-vi.mock('./pod-worktree-forget-local-rpc', () => ({ getPodWorktreeForgetLocal: vi.fn() }))
+vi.mock('./pod-worktree-forget-local-installed', () => ({ getPodWorktreeForgetLocal: vi.fn() }))
 
 const forget = vi.fn(async () => {})
 const params = { worktreeId: 'repo-1::/workspace/feature', hostId: 'ssh:gone' }

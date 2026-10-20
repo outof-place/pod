@@ -3,7 +3,7 @@
 import { defineMethod } from '../../runtime/rpc/core'
 import { assertLocalRpcCaller } from '../../runtime/rpc/methods/pod-local-caller'
 import { WorktreeForgetLocalParams } from '../../../shared/rpc-contract/pod-worktree-forget-params'
-import { getPodWorktreeForgetLocal } from './pod-worktree-forget-local-rpc'
+import { getPodWorktreeForgetLocal } from './pod-worktree-forget-local-installed'
 
 // Why host-admin: it purges a workspace from Pod, and an SSH host's CLI with remote control on holds
 // `workspace`; the local-caller check refuses any paired device as well. PodNative calls as local-cli
