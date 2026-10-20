@@ -170,6 +170,12 @@ if [ -f config/scripts/fetch-pod-search-payload.mjs ]; then
   node config/scripts/fetch-pod-search-payload.mjs --if-pinned
 fi
 
+# The orcad deployment template SSH relays deploy from (design D2), built on this commit by
+# .github/workflows/pod-orcad-template.yml; with ORCA_REQUIRE_ORCAD_TEMPLATE packaging fails without it.
+log "fetch the orcad template built on $(git rev-parse --short HEAD)"
+product/scripts/fetch-orcad-template.sh
+export ORCA_REQUIRE_ORCAD_TEMPLATE=1
+
 log "package, sign and notarize the app (electron-builder staples it)"
 rm -rf dist
 # A release version (X.Y.Z or X.Y.Z-rcN) gets the integer CFBundleVersion its outer carries too;
