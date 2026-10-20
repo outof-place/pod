@@ -60,6 +60,8 @@ import { installPodSshTargetSettings } from '../pod/ssh/install-pod-ssh-target-s
 import { setPodSshTargetSettingsOps } from '../pod/ssh/pod-ssh-target-settings'
 import { installPodSshRemoteBrowse } from '../pod/ssh/install-pod-ssh-remote-browse'
 import { setPodSshRemoteBrowse } from '../pod/ssh/pod-ssh-remote-browse'
+import { installPodSshNestedRepos } from '../pod/ssh/install-pod-ssh-nested-repos'
+import { setPodSshNestedRepos } from '../pod/ssh/pod-ssh-nested-repos'
 import { installPodSshPortForwards } from '../pod/ssh/install-pod-ssh-port-forwards'
 import { setPodSshPortForwardOps } from '../pod/ssh/pod-ssh-port-forwards'
 import {
@@ -233,6 +235,8 @@ export function registerSshHandlers(
   installPodSshTargetSettings()
   // Fork-only (Pod): the remote folder browser for PodNative's Add Project on an SSH host.
   installPodSshRemoteBrowse()
+  // Fork-only (Pod): the nested repo scan and import on an SSH host, for the same Add Project.
+  installPodSshNestedRepos(store)
   registerSshConnectionHandlers()
   registerSshPortForwardHandlers()
   // Fork-only (Pod): the same port forwarding for PodNative over runtime RPC.
@@ -284,6 +288,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   setSshTargetRegistryHandlers({ connect: null, getState: null })
   setPodSshTargetSettingsOps(null)
   setPodSshRemoteBrowse(null)
+  setPodSshNestedRepos(null)
   setPodSshPortForwardOps(null)
   setCurrentGetMainWindow(() => null)
   setCurrentRuntime(undefined)
