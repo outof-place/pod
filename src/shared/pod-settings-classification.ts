@@ -161,8 +161,6 @@ export const POD_SETTINGS_HIDDEN = {
   nativeChatShellEnvironmentVariables: 'later',
   // Routes Orca's browser tabs through SSH; PodNative's browser doesn't yet.
   browserSshWorkspaceRoutingEnabled: 'later',
-  // PodNative's editor has no preview tabs.
-  editorPreviewTabsEnabled: 'later',
   // Row bounds lived in pod-settings-schema.ts at commit ed129568dd; restore them with the control.
   // N1 (native settings): PodNative reads none of these yet, so a row would change nothing.
   terminalShortcutPolicy: 'later',
