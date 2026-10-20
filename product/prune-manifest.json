@@ -150,8 +150,6 @@
         "config/scripts/linux-wayland-renderer-diagnostics.mjs",
         "config/scripts/linux-wayland-terminal-exercise.mjs",
         "config/scripts/linux-wayland-validation-watchdog.mjs",
-        "config/scripts/merge-orcad-prebuilds.mjs",
-        "config/scripts/merge-orcad-prebuilds.test.mjs",
         "config/scripts/mobile-launch-contract-workflow.test.mjs",
         "config/scripts/mobile-release-check-scope.mjs",
         "config/scripts/mobile-release-check-scope.test.mjs",
