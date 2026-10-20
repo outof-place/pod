@@ -2,6 +2,7 @@
 
 import { spawn, spawnSync } from 'node:child_process'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
+import { MACOS_NATIVE_BUILD_SCRIPTS } from './macos-native-build-scripts.mjs'
 
 if (process.platform === 'win32') {
   runNodeScript('config/scripts/build-windows-cli-launcher.mjs')
@@ -36,12 +37,7 @@ for (const target of [process.stdout, process.stderr]) {
 }
 
 const exitCodes = await Promise.all(
-  [
-    'build:computer-macos',
-    'build:keyboard-layout-macos',
-    'build:notification-status-macos',
-    'build:ghostty-terminal-macos'
-  ].map((scriptName) => runPnpmScript(scriptName))
+  MACOS_NATIVE_BUILD_SCRIPTS.map((scriptName) => runPnpmScript(scriptName))
 )
 clearTimeout(forceTimer)
 for (const [signal, handler] of signalHandlers) {
