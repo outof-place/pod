@@ -56,6 +56,9 @@ export type RuntimeRepositoryCommandSurface = {
   deleteFolderWorkspace: RuntimeProjectGroupController['deleteFolderWorkspace']
   scanNestedRepos: RuntimeNestedRepoImport['scan']
   importNestedRepos: RuntimeNestedRepoImport['import']
+  // Fork-only (Pod): PodNative's nested repository review on an SSH host.
+  scanNestedReposOnSshHost: RuntimeNestedRepoImport['scanOnSshHost']
+  importNestedReposOnSshHost: RuntimeNestedRepoImport['importOnSshHost']
   browseServerDir: RuntimeServerEnvironmentCommands['browseDirectory']
   isGitAvailable: RuntimeServerEnvironmentCommands['isGitAvailable']
   listSparsePresets: RuntimeRepositorySparsePresets['list']
@@ -134,6 +137,8 @@ export function installRuntimeRepositoryCommandSurface(
     deleteFolderWorkspace: groups.deleteFolderWorkspace.bind(groups),
     scanNestedRepos: nested.scan.bind(nested),
     importNestedRepos: nested.import.bind(nested),
+    scanNestedReposOnSshHost: nested.scanOnSshHost.bind(nested),
+    importNestedReposOnSshHost: nested.importOnSshHost.bind(nested),
     browseServerDir: server.browseDirectory.bind(server),
     isGitAvailable: server.isGitAvailable.bind(server),
     listSparsePresets: sparse.list.bind(sparse),

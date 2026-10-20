@@ -28,6 +28,12 @@ export const POD_SSH_TARGET_SETTINGS_RUNTIME_CAPABILITY = 'pod.ssh.target-settin
 export const POD_SSH_REMOTE_PROJECTS_RUNTIME_CAPABILITY = 'pod.ssh.remote-projects.v1' as const
 
 /**
+ * projectGroup.scanNestedRemote and importNestedRemote: Add Project on an SSH host offers the nested
+ * repository review Pod's window shows. A client scans a host's folder only on a host that lists this.
+ */
+export const POD_SSH_NESTED_SCAN_RUNTIME_CAPABILITY = 'pod.ssh.nested-scan.v1' as const
+
+/**
  * ssh.credentialPrompts.subscribe and ssh.submitCredential: SSH connect prompts without Pod's
  * window. A host without them answers a prompt it cannot show with a cancel, so a client connects
  * hosts that need a passphrase or password only where this is listed.
@@ -126,6 +132,7 @@ export const POD_RUNTIME_CAPABILITIES = [
   POD_TERMINAL_OPENED_BEFORE_CLAUDE_ACCOUNTS_RUNTIME_CAPABILITY,
   POD_SSH_TARGET_SETTINGS_RUNTIME_CAPABILITY,
   POD_SSH_REMOTE_PROJECTS_RUNTIME_CAPABILITY,
+  POD_SSH_NESTED_SCAN_RUNTIME_CAPABILITY,
   POD_SSH_CREDENTIAL_PROMPTS_RUNTIME_CAPABILITY,
   POD_SSH_PORT_FORWARDS_RUNTIME_CAPABILITY,
   POD_AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY,

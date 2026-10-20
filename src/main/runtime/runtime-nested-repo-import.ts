@@ -16,6 +16,11 @@ import {
   resolveNestedRepoSelection
 } from '../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
+import {
+  importPodSshNestedRepos,
+  scanPodSshNestedRepos,
+  type PodSshNestedImportArgs
+} from '../pod/ssh/pod-ssh-nested-repos'
 import type { RuntimeStore } from './runtime-store-contract'
 
 type RuntimeNestedRepoImportDependencies = {
@@ -39,6 +44,24 @@ export class RuntimeNestedRepoImport {
     }
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
+  }
+
+  // Fork-only (Pod): a folder on a connected SSH host, through the desktop's own scan and import
+  // (pod-ssh-nested-repos.ts), then this runtime's caches and clients.
+  async scanOnSshHost(targetId: string, path: string): Promise<NestedRepoScanResult> {
+    return scanPodSshNestedRepos(targetId, path)
+  }
+
+  async importOnSshHost(args: PodSshNestedImportArgs): Promise<ProjectGroupImportResult> {
+    const result = await importPodSshNestedRepos(args)
+    this.deps.invalidateResolvedWorktrees()
+    for (const project of result.projects) {
+      if (project.projectId) {
+        this.deps.invalidateWorktreeScan(project.projectId)
+      }
+    }
+    this.deps.notifyReposChanged()
+    return result
   }
 
   async import(args: {

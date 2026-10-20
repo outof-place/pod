@@ -8,9 +8,13 @@ import {
 } from './pod-ssh-nested-repos'
 import { installPodSshNestedRepos } from './install-pod-ssh-nested-repos'
 import { scanNestedRepos } from '../../project-groups/nested-repo-discovery'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import type * as gitRepoModule from '../../git/repo'
+import type * as fsPromisesModule from 'node:fs/promises'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
+  listTargets: vi.fn(),
   readDir: vi.fn(),
   readFile: vi.fn(),
   stat: vi.fn(),
@@ -25,7 +29,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn(), removeHandler: vi.fn() } }))
 vi.mock('../../ssh/ssh-target-registry', () => ({
-  getSshConnectionManager: () => ({ getState: mocks.getState })
+  getSshConnectionManager: () => ({ getState: mocks.getState }),
+  listRegisteredSshTargets: mocks.listTargets
 }))
 vi.mock('../../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: () => ({
@@ -45,7 +50,7 @@ vi.mock('../../ipc/ssh', () => ({
 }))
 vi.mock('../../repo-icon-autodetect', () => ({ detectRepoIconAndUpstream: async () => ({}) }))
 vi.mock('../../git/repo', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../git/repo')>()),
+  ...(await importOriginal<typeof gitRepoModule>()),
   isGitRepo: () => false
 }))
 vi.mock('../../ipc/registered-worktree-roots-cache', () => ({
@@ -54,7 +59,7 @@ vi.mock('../../ipc/registered-worktree-roots-cache', () => ({
 vi.mock('../../ipc/repos/repo-added-telemetry', () => ({ emitRepoAdded: vi.fn() }))
 // Why: an SSH scan or import must never read this Mac's disk; any local call fails the test.
 vi.mock('node:fs/promises', async (importOriginal) => {
-  const original = await importOriginal<typeof import('node:fs/promises')>()
+  const original = await importOriginal<typeof fsPromisesModule>()
   return {
     ...original,
     default: original,
@@ -83,9 +88,12 @@ function dir(name: string) {
 
 beforeEach(() => {
   repos.length = 0
+  mocks.listTargets.mockReturnValue([{ id: 'ssh-1', label: 'box' }])
   mocks.getState.mockReturnValue({ status: 'connected' })
   mocks.readDir.mockImplementation(async (path: string) =>
-    path === '/home/me/nest' ? [dir('api'), dir('web'), { name: 'notes.md', isDirectory: false, isSymlink: false }] : []
+    path === '/home/me/nest'
+      ? [dir('api'), dir('web'), { name: 'notes.md', isDirectory: false, isSymlink: false }]
+      : []
   )
   mocks.readFile.mockRejectedValue(new Error('no file'))
   mocks.stat.mockImplementation(async (path: string) => {
@@ -94,7 +102,9 @@ beforeEach(() => {
     }
     throw new Error('missing')
   })
-  mocks.isGitRepoAsync.mockImplementation(async (path: string) => ({ isRepo: path !== '/home/me/nest' }))
+  mocks.isGitRepoAsync.mockImplementation(async (path: string) => ({
+    isRepo: path !== '/home/me/nest'
+  }))
   mocks.listWorktrees.mockResolvedValue([])
   installPodSshNestedRepos(store)
 })
@@ -134,23 +144,32 @@ describe('installPodSshNestedRepos', () => {
     expect(result.importedCount).toBe(1)
     expect(result.group?.id).toBe('group-1')
     expect(repos).toMatchObject([{ path: '/home/me/nest/api', connectionId: 'ssh-1' }])
-    expect(mocks.notify).toHaveBeenCalledWith('session.registerRoot', { rootPath: '/home/me/nest/api' })
+    // The host's partition, never this Mac's.
+    expect(getRepoExecutionHostId(repos[0] ?? {})).toBe('ssh:ssh-1')
+    expect(mocks.notify).toHaveBeenCalledWith('session.registerRoot', {
+      rootPath: '/home/me/nest/api'
+    })
     expectNoLocalRead()
   })
 
-  it('refuses a host that is not connected before reading anything', async () => {
+  it('refuses a host that is not connected, or not configured, before reading anything', async () => {
     mocks.getState.mockReturnValue({ status: 'reconnecting' })
-    await expect(scanPodSshNestedRepos('ssh-1', '/home/me/nest')).rejects.toThrow('ssh_connection_unavailable')
-    mocks.getState.mockReturnValue(null)
+    await expect(scanPodSshNestedRepos('ssh-1', '/home/me/nest')).rejects.toMatchObject({
+      code: 'ssh_not_connected'
+    })
     await expect(
       importPodSshNestedRepos({
-        connectionId: 'ssh-9',
+        connectionId: 'ssh-1',
         parentPath: '/home/me/nest',
         groupName: '',
         projectPaths: ['/home/me/nest/api'],
         mode: 'separate'
       })
-    ).rejects.toThrow('ssh_connection_unavailable')
+    ).rejects.toMatchObject({ code: 'ssh_not_connected' })
+    mocks.getState.mockReturnValue({ status: 'connected' })
+    await expect(scanPodSshNestedRepos('ssh-9', '/home/me/nest')).rejects.toThrow(
+      'selector_not_found'
+    )
 
     expect(mocks.readDir).not.toHaveBeenCalled()
     expect(mocks.stat).not.toHaveBeenCalled()
@@ -190,6 +209,8 @@ describe('installPodSshNestedRepos', () => {
   it('answers runtime_unavailable where the SSH layer never registered', async () => {
     setPodSshNestedRepos(null)
     expect(getPodSshNestedRepos()).toBeNull()
-    await expect(scanPodSshNestedRepos('ssh-1', '/home/me/nest')).rejects.toThrow('runtime_unavailable')
+    await expect(scanPodSshNestedRepos('ssh-1', '/home/me/nest')).rejects.toThrow(
+      'runtime_unavailable'
+    )
   })
 })
