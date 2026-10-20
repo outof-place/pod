@@ -123,6 +123,17 @@ describe('the custom terminal themes in podSettings readOnly', () => {
     expect(write).not.toHaveBeenCalled()
   })
 
+  it('bounds a name, and leaves out a theme whose selection the theme fields would refuse', () => {
+    const long = { ...dusk, id: 'warp:long', name: `${'🌙'.repeat(300)}` }
+    const tooLong = { ...dusk, id: `warp:${'x'.repeat(300)}`, name: 'Too long' }
+    const { service } = setup({ terminalCustomThemes: [long, tooLong] })
+    const [shown, ...rest] = service.get().readOnly.terminalCustomThemes
+    expect(rest).toEqual([])
+    expect(shown.selection).toBe('custom:warp:long')
+    expect([...shown.name]).toHaveLength(256)
+    expect(shown.name).toBe('🌙'.repeat(256))
+  })
+
   it('a picked custom theme is a selection the theme fields take', async () => {
     const { operations, service } = setup({ terminalCustomThemes: [dusk] })
     const [theme] = service.get().readOnly.terminalCustomThemes

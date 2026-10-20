@@ -11,6 +11,10 @@ import {
   normalizeTerminalCustomThemes
 } from './terminal-custom-themes'
 
+// What terminalThemeDark/Light take (pod-settings-schema.ts), and a name's bound.
+const MAX_THEME_SELECTION = 256
+const MAX_THEME_NAME = 256
+
 export const PodSettingsReadOnlySchema = z
   .object({
     // Where a terminal's web link opens: Pod's own browser, Shift the other way when it inverts.
@@ -26,8 +30,8 @@ export const PodSettingsReadOnlySchema = z
       .array(
         z
           .object({
-            selection: z.string(),
-            name: z.string(),
+            selection: z.string().max(MAX_THEME_SELECTION),
+            name: z.string().max(MAX_THEME_NAME),
             source: z.enum(['warp', 'ghostty', 'manual'])
           })
           .strict()
@@ -60,12 +64,14 @@ export function projectPodSettingsReadOnly(
       typeof ttl === 'number' && Number.isInteger(ttl) && ttl > 0
         ? ttl
         : DEFAULT_PROMPT_CACHE_TTL_MS,
-    terminalCustomThemes: normalizeTerminalCustomThemes(settings.terminalCustomThemes).map(
-      (theme) => ({
+    terminalCustomThemes: normalizeTerminalCustomThemes(settings.terminalCustomThemes)
+      .map((theme) => ({
         selection: makeCustomTerminalThemeSelection(theme.id),
-        name: theme.name,
+        // By code points, so no surrogate pair is cut in half.
+        name: [...theme.name].slice(0, MAX_THEME_NAME).join(''),
         source: theme.source
-      })
-    )
+      }))
+      // A selection the theme fields refuse is no choice.
+      .filter((theme) => theme.selection.length <= MAX_THEME_SELECTION)
   }
 }
