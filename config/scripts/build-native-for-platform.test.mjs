@@ -4,11 +4,16 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
+import { MACOS_NATIVE_BUILD_SCRIPTS } from './macos-native-build-scripts.mjs'
 
 const buildScript = fileURLToPath(new URL('./build-native-for-platform.mjs', import.meta.url))
 const directories = []
 const children = []
 const buildPids = new Set()
+// Fork-only (Pod): the script's own list, so the counts below follow it. The fake pnpm fails only
+// the build whose name has `computer`; its siblings are the others.
+const BUILD_COUNT = MACOS_NATIVE_BUILD_SCRIPTS.length
+const SIBLING_COUNT = BUILD_COUNT - 1
 
 afterEach(() => {
   for (const child of children.splice(0)) {
@@ -136,7 +141,11 @@ function startBuild(mode, options = {}) {
     for (const pid of pids) {
       buildPids.add(pid)
     }
-    if (pids.length === 3 && (!mode.startsWith('descendant') || descendantPids.length === 3)) {
+    // At least, not exactly: one chunk can carry several ready lines.
+    if (
+      pids.length >= BUILD_COUNT &&
+      (!mode.startsWith('descendant') || descendantPids.length >= BUILD_COUNT)
+    ) {
       readyResolve()
     }
   })
@@ -175,14 +184,27 @@ async function waitFor(condition, timeoutMs = 5_000) {
   }
 }
 
+describe('the macOS native build list', () => {
+  it('has the one computer build the fake pnpm fails, among builds that each run once', () => {
+    expect(MACOS_NATIVE_BUILD_SCRIPTS.filter((name) => name.includes('computer'))).toHaveLength(1)
+    expect(new Set(MACOS_NATIVE_BUILD_SCRIPTS).size).toBe(BUILD_COUNT)
+  })
+})
+
 describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
   it('starts every independent build before any completes', async () => {
     const build = startBuild('success')
     await build.ready
-    expect(build.events().map(({ event }) => event)).toEqual(['started', 'started', 'started'])
+    expect(build.events().map(({ event }) => event)).toEqual(Array(BUILD_COUNT).fill('started'))
+    expect(
+      build
+        .events()
+        .map(({ name }) => name)
+        .sort()
+    ).toEqual([...MACOS_NATIVE_BUILD_SCRIPTS].sort())
     build.release()
     expect(await build.closed).toMatchObject({ code: 0, signal: null })
-    expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(3)
+    expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(BUILD_COUNT)
   })
 
   it.each(['SIGINT', 'SIGTERM', 'SIGHUP'])(
@@ -192,7 +214,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
       await build.ready
       build.child.kill(signal)
       expect(await build.closed).toMatchObject({ code: null, signal })
-      expect(build.events().filter(({ event }) => event === signal)).toHaveLength(3)
+      expect(build.events().filter(({ event }) => event === signal)).toHaveLength(BUILD_COUNT)
     }
   )
 
@@ -201,7 +223,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.release()
     expect(await build.closed).toMatchObject({ code: 7, signal: null })
-    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(2)
+    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(SIBLING_COUNT)
   })
 
   it('reports the first failure, not the status of siblings it cancelled', async () => {
@@ -209,7 +231,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.release()
     expect(await build.closed).toMatchObject({ code: 7, signal: null })
-    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(2)
+    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(SIBLING_COUNT)
   })
 
   it('re-raises the signal that killed a build', async () => {
@@ -217,7 +239,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.release()
     expect(await build.closed).toMatchObject({ code: null, signal: 'SIGALRM' })
-    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(2)
+    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(SIBLING_COUNT)
   })
 
   it('fails when the signal that killed a build is one the launcher ignores', async () => {
@@ -225,7 +247,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.release()
     expect(await build.closed).toMatchObject({ code: 1, signal: null })
-    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(2)
+    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(SIBLING_COUNT)
   })
 
   it('lets siblings finish SIGINT cleanup when one child uses the default handler', async () => {
@@ -233,7 +255,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.child.kill('SIGINT')
     expect(await build.closed).toMatchObject({ code: null, signal: 'SIGINT' })
-    expect(build.events().filter(({ event }) => event === 'SIGINT')).toHaveLength(2)
+    expect(build.events().filter(({ event }) => event === 'SIGINT')).toHaveLength(SIBLING_COUNT)
   })
 
   it('forces a sibling that ignores graceful cancellation to exit', async () => {
@@ -273,7 +295,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
       const result = await build.closed
       expect(result).toMatchObject({ code: 1, signal: null })
       expect(result.stderr).not.toContain('Unhandled')
-      expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(3)
+      expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(BUILD_COUNT)
     }
   )
 
@@ -297,7 +319,7 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.release()
     expect(await build.closed).toMatchObject({ code: 0, signal: null })
-    expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(3)
+    expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(BUILD_COUNT)
     for (const pid of build.descendants()) {
       expect(() => process.kill(pid, 0)).toThrow()
     }
