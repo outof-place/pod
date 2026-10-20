@@ -14,12 +14,14 @@ function inspectSlimConfig(profile) {
     const slim = require('./product/electron-builder.slim.cjs')
     const upstream = require('./config/electron-builder.config.cjs')
     const ripgrep = require('./config/bundled-ripgrep-resources.cjs')
+    const template = require('./config/scripts/packaged-orcad-template.cjs')
     const target = (entry) => (typeof entry === 'string' ? entry : entry.to)
     process.stdout.write(JSON.stringify({
       targets: slim.mac.extraResources.map(target),
       sources: slim.mac.extraResources.map((entry) => (typeof entry === 'string' ? entry : entry.from)),
       ripgrepFilter: slim.mac.extraResources.find((entry) => entry.to === 'ripgrep').filter,
       ripgrepPlatforms: ripgrep.BUNDLED_RIPGREP_PLATFORMS,
+      templateTargets: template.PACKAGED_ORCAD_TEMPLATE_TARGETS,
       electronLanguages: slim.electronLanguages ?? null,
       sameAfterPack: slim.afterPack === upstream.afterPack
     }))
@@ -89,7 +91,7 @@ describe('Pod slim packaging', () => {
     expect(applyPodSlimPackaging(base, 'orca')).toEqual(base)
   })
 
-  it('drops cut runtime packages and win32 ripgrep before the upstream config loads', () => {
+  it('drops cut runtime packages, win32 ripgrep and win32 orcad slots before the upstream config loads', () => {
     const pod = inspectSlimConfig('pod')
     for (const dropped of ['node_modules/serve-sim', 'node_modules/sonner']) {
       expect(pod.targets).not.toContain(dropped)
@@ -99,12 +101,21 @@ describe('Pod slim packaging', () => {
     expect(pod.sources.some((source) => source.includes('sherpa-onnx'))).toBe(false)
     expect(pod.ripgrepPlatforms).toEqual(['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'])
     expect(pod.ripgrepFilter.some((pattern) => pattern.startsWith('win32-'))).toBe(false)
+    expect(pod.templateTargets).toEqual([
+      'darwin-arm64',
+      'darwin-x64',
+      'linux-arm64-glibc',
+      'linux-x64-glibc',
+      'linux-arm64-musl',
+      'linux-x64-musl'
+    ])
     expect(pod.electronLanguages).toEqual(['en'])
     expect(pod.sameAfterPack).toBe(true)
 
     const orca = inspectSlimConfig('orca')
     expect(orca.targets).toContain('node_modules/@linear/sdk')
     expect(orca.ripgrepPlatforms).toContain('win32-x64')
+    expect(orca.templateTargets).toEqual(expect.arrayContaining(['win32-x64', 'win32-arm64']))
     expect(orca.electronLanguages).toBeNull()
   })
 })

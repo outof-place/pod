@@ -327,6 +327,15 @@ describe('assembleOrcadArtifact', () => {
       'manifest omits orcad.js'
     )
   })
+
+  // Fork-only (Pod): the Pod template ships no win32 slots (windowsSshHosts cut).
+  it('refuses a target the packaged template has no slot for', async () => {
+    const fixture = createTemplate()
+
+    await expect(assembleOrcadArtifact({ ...fixture, target: 'win32-x64' })).rejects.toThrow(
+      'Packaged orcad template does not support win32-x64'
+    )
+  })
 })
 
 describe('materializeOrcadArtifact cancellation', () => {

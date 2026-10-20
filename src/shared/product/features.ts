@@ -46,6 +46,8 @@ type PodPackagingCut = {
   readonly dropRuntimePackageRoots?: readonly string[]
   /** Bundled ripgrep platforms the macOS app does not ship. */
   readonly dropRipgrepPlatforms?: readonly string[]
+  /** orcad deployment template targets the macOS app does not ship. */
+  readonly dropOrcadTemplateTargets?: readonly string[]
   /** Electron (Chromium) locales the app keeps. */
   readonly electronLanguages?: readonly string[]
 }
@@ -91,9 +93,11 @@ export const POD_FEATURES: Readonly<Record<PodFeatureId, PodFeature>> = {
   },
   windowsSshHosts: {
     pod: false,
-    reason: 'No SSH to Windows hosts: the win32 relay and ripgrep stay out of the macOS app',
+    reason:
+      'No SSH to Windows hosts: the win32 relay, ripgrep and orcad template slots stay out of the macOS app',
     packaging: {
       dropRipgrepPlatforms: ['win32-x64', 'win32-arm64'],
+      dropOrcadTemplateTargets: ['win32-x64', 'win32-arm64'],
       filterExtraResources: { 'out/relay': ['!win32-*{,/**/*}'] }
     }
   },

@@ -11,6 +11,7 @@ function inspectReleaseConfig(profile) {
     const pod = require('./product/electron-builder.pod.cjs')
     const runtime = require('./config/packaged-runtime-node-modules.cjs')
     const ripgrep = require('./config/bundled-ripgrep-resources.cjs')
+    const template = require('./config/scripts/packaged-orcad-template.cjs')
     const entry = (target) => pod.mac.extraResources.find((e) => typeof e !== 'string' && e.to === target)
     process.stdout.write(JSON.stringify({
       files: pod.files,
@@ -19,6 +20,7 @@ function inspectReleaseConfig(profile) {
       ripgrepFilter: entry('ripgrep').filter,
       ripgrepPlatforms: ripgrep.BUNDLED_RIPGREP_PLATFORMS,
       runtimeRoots: runtime.PACKAGED_RUNTIME_PACKAGE_ROOTS,
+      templateTargets: template.PACKAGED_ORCAD_TEMPLATE_TARGETS,
       electronLanguages: pod.electronLanguages ?? null,
       platformSections: ['win', 'nsis', 'linux', 'appImage', 'deb', 'rpm'].filter((key) => key in pod)
     }))
@@ -57,6 +59,18 @@ describe('Pod release packaging (electron-builder.pod.cjs)', () => {
     expect(pod.ripgrepFilter.some((pattern) => pattern.startsWith('win32-'))).toBe(false)
     expect(pod.ripgrepPlatforms.some((platform) => platform.startsWith('win32-'))).toBe(false)
     expect(pod.platformSections).toEqual([])
+  })
+
+  it('ships the orcad template and verifies it against the non-Windows targets', () => {
+    const pod = inspectReleaseConfig('pod')
+    expect(pod.targets).toEqual(
+      expect.arrayContaining(['orcad-template', 'orcad-template/node_modules'])
+    )
+    expect(pod.templateTargets).toHaveLength(6)
+    expect(pod.templateTargets.some((target) => target.startsWith('win32-'))).toBe(false)
+    expect(inspectReleaseConfig('orca').templateTargets).toEqual(
+      expect.arrayContaining(['win32-x64', 'win32-arm64'])
+    )
   })
 
   it('keeps the en Chromium locale pak only', () => {

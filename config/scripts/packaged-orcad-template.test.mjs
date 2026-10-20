@@ -12,6 +12,7 @@ import { writeOrcadTemplateTestFixture } from './orcad-template-test-fixture.mjs
 
 const require = createRequire(import.meta.url)
 const {
+  PACKAGED_ORCAD_TEMPLATE_TARGETS,
   assertOrcadTemplateBuilt,
   finalizePackagedOrcadTemplate,
   findOrcadTemplateMachOFiles,
@@ -136,5 +137,33 @@ describe('packaged orcad template', () => {
     )
 
     expect(() => resealSignedWindowsApp(appDir, list)).not.toThrow()
+  })
+
+  // Fork-only (Pod): product/pod-slim-packaging.cjs removes the win32 slots from this list.
+  it('verifies the package against the targets left in its packaged list', async () => {
+    quietly()
+    const { resourcesDir, templateDir, manifestPath } = await createResources()
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    for (const target of ['win32-x64', 'win32-arm64']) {
+      delete manifest.targets[target]
+      await rm(join(templateDir, ORCAD_TEMPLATE_TARGETS_DIR, target), { recursive: true })
+    }
+    await writeFile(manifestPath, JSON.stringify(manifest))
+    const options = { platform: 'linux', signMacBinary: vi.fn() }
+
+    await expect(finalizePackagedOrcadTemplate(resourcesDir, options)).rejects.toThrow(
+      'target manifest inventory mismatch'
+    )
+    const all = [...PACKAGED_ORCAD_TEMPLATE_TARGETS]
+    try {
+      PACKAGED_ORCAD_TEMPLATE_TARGETS.splice(
+        0,
+        all.length,
+        ...all.filter((target) => !target.startsWith('win32-'))
+      )
+      await expect(finalizePackagedOrcadTemplate(resourcesDir, options)).resolves.toBeUndefined()
+    } finally {
+      PACKAGED_ORCAD_TEMPLATE_TARGETS.splice(0, PACKAGED_ORCAD_TEMPLATE_TARGETS.length, ...all)
+    }
   })
 })

@@ -22,6 +22,7 @@ const {
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
   ORCAD_TEMPLATE_TARGETS_DIR
 } = require('../../src/shared/orcad-artifacts.ts')
+const { ORCAD_TEMPLATE_TARGETS } = require('../../src/shared/node-runtime-pin.ts')
 const { verifyPackagedOrcadTemplate } = require('./verify-packaged-orcad-template.cjs')
 
 const ORCAD_TEMPLATE_RESOURCE_DIR = 'orcad-template'
@@ -34,6 +35,9 @@ const orcadTemplateNodeModulesExtraResource = {
 // Why the whole tree: codesign rejects its ELF/PE payloads, and the darwin ones are signed in
 // afterPack so their new hashes can be resealed into the manifest before the app is sealed.
 const orcadTemplateMacSignIgnore = ['/orcad-template/']
+// Fork-only (Pod): the targets the packaged template must carry; product/pod-slim-packaging.cjs
+// removes the ones a product profile cuts before packaging starts.
+const PACKAGED_ORCAD_TEMPLATE_TARGETS = [...ORCAD_TEMPLATE_TARGETS]
 
 // Mach-O thin (both byte orders, 32/64-bit) and fat headers.
 const MACH_O_MAGICS = new Set(['feedface', 'feedfacf', 'cefaedfe', 'cffaedfe', 'cafebabe'])
@@ -136,7 +140,7 @@ async function finalizePackagedOrcadTemplate(resourcesDir, options) {
     }
     resealOrcadTemplateManifest(templateDir, machO)
   }
-  verifyPackagedOrcadTemplate(resourcesDir)
+  verifyPackagedOrcadTemplate(resourcesDir, PACKAGED_ORCAD_TEMPLATE_TARGETS)
 }
 
 /** `inner-signing-list.txt` lines are app-relative Windows paths; keep the template's. */
@@ -156,12 +160,13 @@ function resealSignedWindowsApp(appDir, signedListFile) {
     return
   }
   resealOrcadTemplateManifest(join(resourcesDir, ORCAD_TEMPLATE_RESOURCE_DIR), signed)
-  verifyPackagedOrcadTemplate(resourcesDir)
+  verifyPackagedOrcadTemplate(resourcesDir, PACKAGED_ORCAD_TEMPLATE_TARGETS)
   console.log(`[packaged-orcad-template] resealed ${signed.length} signed template file(s)`)
 }
 
 module.exports = {
   ORCAD_TEMPLATE_RESOURCE_DIR,
+  PACKAGED_ORCAD_TEMPLATE_TARGETS,
   assertOrcadTemplateBuilt,
   finalizePackagedOrcadTemplate,
   findOrcadTemplateMachOFiles,
