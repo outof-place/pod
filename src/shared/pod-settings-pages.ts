@@ -87,6 +87,7 @@ export const POD_SETTINGS_PAGES: readonly PodSettingsPage[] = [
           'terminalThemeDark',
           'terminalUseSeparateLightTheme',
           'terminalThemeLight',
+          'terminalColorOverrides',
           'terminalBackgroundOpacity',
           'terminalMinimumContrastRatio',
           'terminalPaddingX',

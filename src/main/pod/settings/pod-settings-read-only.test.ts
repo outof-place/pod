@@ -57,7 +57,8 @@ describe('the read-only mirror older native clients follow', () => {
       openLinksInAppModifierInverts: false,
       sourceControlAi: { enabled: true },
       promptCacheTimerEnabled: false,
-      promptCacheTtlMs: 300_000
+      promptCacheTtlMs: 300_000,
+      terminalCustomThemes: []
     })
     expect(clientSettings.get()).toMatchObject({
       openLinksInApp: true,
