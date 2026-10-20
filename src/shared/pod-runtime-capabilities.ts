@@ -60,6 +60,12 @@ export const POD_COMPUTER_USE_PERMISSIONS_RESET_RUNTIME_CAPABILITY =
   'pod.computer-use.permissions-reset.v1' as const
 
 /**
+ * worktree.forgetLocal: the desktop's forget of a workspace whose SSH host was removed or is
+ * disconnected, for this machine's own clients. A client offers it only on a host that lists this.
+ */
+export const POD_WORKTREE_FORGET_LOCAL_RUNTIME_CAPABILITY = 'pod.worktree.forget-local.v1' as const
+
+/**
  * plugins.install, remove and the marketplace calls: Settings › Plugins without Pod's window. A
  * client offers them only on a host that lists this.
  */
@@ -138,6 +144,7 @@ export const POD_RUNTIME_CAPABILITIES = [
   POD_SESSION_TABS_CUSTOM_TITLE_RUNTIME_CAPABILITY,
   POD_ORCA_IMPORT_RUNTIME_CAPABILITY,
   POD_COMPUTER_USE_PERMISSIONS_RESET_RUNTIME_CAPABILITY,
+  POD_WORKTREE_FORGET_LOCAL_RUNTIME_CAPABILITY,
   POD_BROWSER_COBROWSE_RUNTIME_CAPABILITY,
   POD_BROWSER_COBROWSE_POINT_MARK_RUNTIME_CAPABILITY
 ] as const

@@ -486,6 +486,7 @@ import {
   PodWorkspaceValidateRootParams
 } from './pod-workspace-params'
 import { HostSetDisplayLabelParams, RepoSparsePresetRemove } from './pod-workspace-rows-params'
+import { WorktreeForgetLocalParams } from './pod-worktree-forget-params'
 import {
   PreflightAgentDetection,
   PreflightCheck,
@@ -1359,6 +1360,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.create': WorktreeCreate,
   'worktree.detectedList': WorktreeDetectedListParams,
   'worktree.forceDeleteBranch': WorktreeForceDeleteBranch,
+  'worktree.forgetLocal': WorktreeForgetLocalParams,
   'worktree.lineageList': null,
   'worktree.list': WorktreeListParams,
   'worktree.listRetiredNames': WorktreeDetectedListParams,

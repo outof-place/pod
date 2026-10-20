@@ -57,6 +57,7 @@ import { getUserKeybindingsPath } from '../keybindings/keybinding-file'
 import { installPodHookWriteGate } from '../pod/instance/pod-instance'
 import { installPodNativePeerCheck } from '../pod/rpc/install-pod-native-peer'
 import { installPodAiVaultSessionDelete } from '../pod/ai-vault/install-pod-ai-vault-session-delete'
+import { installPodWorktreeForgetLocal } from '../pod/worktrees/pod-worktree-forget-local-rpc'
 import { installPodUiHostPaneRestart } from '../pod/ui-host/pod-ui-host-pane-restart'
 import { installPodUiHostPaneLayout } from '../pod/ui-host/pod-ui-host-pane-layout'
 
@@ -108,6 +109,8 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   installPodNativePeerCheck()
   // Fork-only (Pod): aiVault.deleteSession, which needs Electron's Trash; no window needed.
   installPodAiVaultSessionDelete()
+  // Fork-only (Pod): worktree.forgetLocal, the desktop's forget of an SSH workspace; no window needed.
+  installPodWorktreeForgetLocal(store, runtime)
   // Fork-only (Pod): session.tabs.restartTerminal reaches a one-app window's pane.
   installPodUiHostPaneRestart()
   installPodUiHostPaneLayout()

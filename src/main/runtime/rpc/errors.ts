@@ -38,6 +38,7 @@ import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-c
 import { AGENT_LAUNCH_TARGET_FORBIDDEN_CODE } from '../../../shared/agent-launch-target-forbidden'
 import { POD_CLAUDE_ACCOUNTS_MANAGED_CODE } from '../../../shared/pod-claude-accounts-managed'
 import { POD_SSH_NOT_CONNECTED_CODE } from '../../../shared/pod-ssh-port-events'
+import { POD_WORKTREE_FORGET_REFUSED_CODE } from '../../../shared/pod-worktree-forget'
 import { AGENT_PROMPT_NEEDS_PASTE_CODE } from '../../../shared/pod-agent-prompt-needs-paste'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
@@ -175,7 +176,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   // Fork-only (Pod): a port forward call on an SSH host that is not connected.
   POD_SSH_NOT_CONNECTED_CODE,
   // Fork-only (Pod): a startup line Pod will not type; `data.reason` says why.
-  AGENT_PROMPT_NEEDS_PASTE_CODE
+  AGENT_PROMPT_NEEDS_PASTE_CODE,
+  // Fork-only (Pod): worktree.forgetLocal refused before changing anything; `data.reason` says why.
+  POD_WORKTREE_FORGET_REFUSED_CODE
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {

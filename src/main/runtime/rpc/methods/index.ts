@@ -75,6 +75,7 @@ import { POD_BROWSER_COBROWSE_METHODS } from '../../../pod/browser-cobrowse/pod-
 import { observePodComputerActions } from '../../../pod/computer-actions/pod-computer-actions'
 import { POD_COMPUTER_ACTIONS_METHODS } from '../../../pod/computer-actions/pod-computer-actions-rpc-methods'
 import { POD_COMPUTER_USE_RESET_METHODS } from '../../../pod/computer-use/pod-computer-use-reset-rpc-methods'
+import { POD_WORKTREE_FORGET_LOCAL_METHODS } from '../../../pod/worktrees/pod-worktree-forget-local-rpc-methods'
 import { POD_TERMINAL_PROCESSES_METHODS } from '../../../pod/terminal-processes/pod-terminal-processes-rpc-methods'
 import { POD_CLAUDE_OLD_TERMINAL_METHODS } from '../../../pod/claude-old-terminal/pod-claude-old-terminal-rpc-methods'
 
@@ -127,6 +128,7 @@ export const ALL_RPC_METHODS = [
   ...observePodComputerActions(COMPUTER_METHODS),
   ...POD_COMPUTER_ACTIONS_METHODS,
   ...POD_COMPUTER_USE_RESET_METHODS,
+  ...POD_WORKTREE_FORGET_LOCAL_METHODS,
   ...SESSION_TAB_METHODS,
   // Fork-only (Pod): Restart on a failed local shell's kept pane.
   ...POD_SESSION_TAB_RESTART_METHODS,

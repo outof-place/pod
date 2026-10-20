@@ -21,6 +21,7 @@ import {
   createWorktreeRemovalRegistry,
   type WorktreeIpcContext
 } from './worktrees/worktree-ipc-context'
+import { setPodWorktreeRemovalRegistry } from '../pod/worktrees/pod-worktree-removal-registry'
 
 registerDetectedWorktreeScanInvalidation()
 
@@ -70,7 +71,8 @@ export function registerWorktreeHandlers(
     runtime,
     ...(options ? { options } : {}),
     detectedWorktreeCancellations: createSenderScopedRequestCancellations(),
-    worktreeRemovalsInFlight: createWorktreeRemovalRegistry()
+    // Fork-only (Pod): recorded, so worktree.forgetLocal shares this window's removal registry.
+    worktreeRemovalsInFlight: setPodWorktreeRemovalRegistry(createWorktreeRemovalRegistry())
   }
 
   // Remove all stale registrations before installing any replacement handler.
