@@ -145,6 +145,14 @@ describe('the custom terminal themes in podSettings readOnly', () => {
     expect(PodSettingsReadOnlySchema.safeParse(service.get().readOnly).success).toBe(true)
   })
 
+  it('cuts a plain name of 300 characters to 256', () => {
+    const plain = { ...dusk, id: 'warp:plain', name: 'x'.repeat(300) }
+    const { service } = setup({ terminalCustomThemes: [plain] })
+    const [shown] = service.get().readOnly.terminalCustomThemes
+    expect(shown.name).toBe('x'.repeat(256))
+    expect(PodSettingsReadOnlySchema.safeParse(service.get().readOnly).success).toBe(true)
+  })
+
   it('a picked custom theme is a selection the theme fields take', async () => {
     const { operations, service } = setup({ terminalCustomThemes: [dusk] })
     const [theme] = service.get().readOnly.terminalCustomThemes
