@@ -10,7 +10,9 @@ import { failedSetup } from './acc-lifecycle-record'
  * payload's setup.sh (with `--owner pod`) when the payload's VERSION, the owner or the app path
  * differ from `owner.json`, and never otherwise. setup.sh writes owner.json itself, after which
  * Homebrew's claude-acc-setup refuses to overwrite Pod's copy. Pod never installs a payload older
- * than the installed claude-acc, and stays aside once claude-acc was handed back (a tombstone).
+ * than the installed claude-acc, nor over one it does not own whose version it cannot order (a
+ * `dev` or `1.35.0-rc1` build of the user's), and stays aside once claude-acc was handed back (a
+ * tombstone). Pod's own copy still follows the payload, whatever its version string.
  */
 
 export const ACC_STATE_DIR = '.local/share/claude-acc'
@@ -57,6 +59,7 @@ export type AccLifecycleSkipReason =
   | 'setup-backoff'
   | 'handed-back'
   | 'newer-installed'
+  | 'incomparable-installed'
 
 type AccInstallReason =
   | 'first-install'
@@ -66,7 +69,13 @@ type AccInstallReason =
   | 'setup-failed'
 
 export type AccLifecycleDecision =
-  | { action: 'skip'; reason: AccLifecycleSkipReason }
+  | {
+      action: 'skip'
+      reason: AccLifecycleSkipReason
+      /** incomparable-installed: the two versions, for the log. */
+      installed?: string
+      payload?: string
+    }
   | { action: 'up-to-date'; version: string }
   | {
       action: 'install'
@@ -166,8 +175,16 @@ export function decideAccLifecycle(input: AccLifecycleInput): AccLifecycleDecisi
   }
   // never a downgrade: rc1's 1.31.15 replaced an install.sh 1.33.0 that had no owner.json (2026-10-15)
   const installed = owner?.owner === OWNER ? owner.version : readInstalledAppVersion(input.home)
-  if (installed && compareAccVersions(version, installed) === -1) {
-    return { action: 'skip', reason: 'newer-installed' }
+  if (installed && installed !== version) {
+    const order = compareAccVersions(version, installed)
+    if (order === -1) {
+      return { action: 'skip', reason: 'newer-installed' }
+    }
+    // A `dev` or `-rc1` build the user installed can't be ordered, so installing over it may be the
+    // same downgrade. Pod's own copy came from an earlier payload, so it follows this one.
+    if (order === null && owner?.owner !== OWNER) {
+      return { action: 'skip', reason: 'incomparable-installed', installed, payload: version }
+    }
   }
   const reason = installReason(owner, version, input.appPath)
   // a setup that failed may have written owner.json before it stopped (test3, 2026-10-10)
