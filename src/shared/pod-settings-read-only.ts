@@ -80,7 +80,9 @@ export function projectPodSettingsReadOnly(
 function boundThemeName(name: string): string {
   let bounded = ''
   for (const point of name) {
-    if (bounded.length + point.length > MAX_THEME_NAME) break
+    if (bounded.length + point.length > MAX_THEME_NAME) {
+      break
+    }
     bounded += point
   }
   return bounded
