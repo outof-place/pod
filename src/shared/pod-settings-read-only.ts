@@ -67,11 +67,21 @@ export function projectPodSettingsReadOnly(
     terminalCustomThemes: normalizeTerminalCustomThemes(settings.terminalCustomThemes)
       .map((theme) => ({
         selection: makeCustomTerminalThemeSelection(theme.id),
-        // By code points, so no surrogate pair is cut in half.
-        name: [...theme.name].slice(0, MAX_THEME_NAME).join(''),
+        name: boundThemeName(theme.name),
         source: theme.source
       }))
       // A selection the theme fields refuse is no choice.
       .filter((theme) => theme.selection.length <= MAX_THEME_SELECTION)
   }
+}
+
+// At most MAX_THEME_NAME UTF-16 units, as the schema's z.string().max counts them, cut between code
+// points, so no surrogate pair is cut in half.
+function boundThemeName(name: string): string {
+  let bounded = ''
+  for (const point of name) {
+    if (bounded.length + point.length > MAX_THEME_NAME) break
+    bounded += point
+  }
+  return bounded
 }

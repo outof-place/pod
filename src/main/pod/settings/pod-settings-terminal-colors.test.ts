@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { PodSettingsReadOnlySchema } from '../../../shared/pod-settings-read-only'
 import type { TerminalCustomTheme } from '../../../shared/terminal-custom-themes'
 import { updateSettings } from '../../persistence/applying-settings/settings-update'
 import {
@@ -130,8 +131,18 @@ describe('the custom terminal themes in podSettings readOnly', () => {
     const [shown, ...rest] = service.get().readOnly.terminalCustomThemes
     expect(rest).toEqual([])
     expect(shown.selection).toBe('custom:warp:long')
-    expect([...shown.name]).toHaveLength(256)
-    expect(shown.name).toBe('🌙'.repeat(256))
+    // 256 UTF-16 units, as the schema counts: 128 moons of two each.
+    expect(shown.name).toBe('🌙'.repeat(128))
+    expect(PodSettingsReadOnlySchema.safeParse(service.get().readOnly).success).toBe(true)
+  })
+
+  it('never cuts a surrogate pair in half to bound a name', () => {
+    const odd = { ...dusk, id: 'warp:odd', name: `a${'🌙'.repeat(200)}` }
+    const { service } = setup({ terminalCustomThemes: [odd] })
+    const [shown] = service.get().readOnly.terminalCustomThemes
+    // 'a' and 127 moons are 255 units; one more moon would be 257.
+    expect(shown.name).toBe(`a${'🌙'.repeat(127)}`)
+    expect(PodSettingsReadOnlySchema.safeParse(service.get().readOnly).success).toBe(true)
   })
 
   it('a picked custom theme is a selection the theme fields take', async () => {
